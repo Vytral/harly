@@ -1,0 +1,16 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: openhire-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: openhire
+      POSTGRES_PASSWORD: openhire
+      POSTGRES_DB: openhire
+    ports:
+      - "5432:5432"
+    volumes:
+      - openhire_postgres:/var/lib/postgresql/data
+
+volumes:
+  openhire_postgres:    
