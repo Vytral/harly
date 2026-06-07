@@ -1,0 +1,360 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * OpenHire admin theme — "paper + evergreen".
+ * The world: kraft resume folders, ink, green felt on a recruiter's desk.
+ * Canvas is a warm paper (not cold zinc); pine is the single accent, reserved
+ * for primary actions, active nav, focus rings and key signals — never floods.
+ * Domain-named base palette below; shadcn semantic vars map onto it so every
+ * primitive keeps working unchanged.
+ */
+:root {
+  color-scheme: light;
+  --radius: 0.75rem;
+
+  /* ── Domain base — reads like OpenHire, not "any project" ── */
+  --paper: #f6f5f1;        /* warm canvas */
+  --paper-raised: #ffffff; /* cards lift off the paper */
+  --kraft: #eceae3;        /* muted surface — kraft paper */
+  --ink: #1d1b16;          /* warm near-black */
+  --ink-soft: #6b665e;     /* warm muted text */
+  --pine: #1f6f53;         /* evergreen accent */
+  --pine-strong: #1a5e47;  /* pressed/hover */
+  --sage: #e7efe9;         /* soft active/hover tint */
+  --sage-ink: #225f48;     /* text on sage */
+  --clay: #b4540a;         /* warning — terracotta */
+  --slate-info: #3f5d8a;   /* info — dusty blue */
+  --rust: #b83f2c;         /* destructive — warm red */
+  --hairline: #e6e2d9;     /* borders disappear until looked for */
+
+  /* ── shadcn semantics → domain base (primitives untouched) ── */
+  --background: var(--paper);
+  --foreground: var(--ink);
+
+  --card: var(--paper-raised);
+  --card-foreground: var(--ink);
+
+  --popover: var(--paper-raised);
+  --popover-foreground: var(--ink);
+
+  --primary: var(--pine);
+  --primary-foreground: #ffffff;
+
+  --secondary: var(--kraft);
+  --secondary-foreground: #2c2a24;
+
+  --muted: var(--kraft);
+  --muted-foreground: var(--ink-soft);
+
+  --accent: var(--sage);
+  --accent-foreground: var(--sage-ink);
+
+  --destructive: var(--rust);
+  --destructive-foreground: #ffffff;
+
+  --success: var(--pine);
+  --success-foreground: #ffffff;
+  --warning: var(--clay);
+  --warning-foreground: #ffffff;
+  --info: var(--slate-info);
+  --info-foreground: #ffffff;
+
+  --border: var(--hairline);
+  --input: var(--hairline);
+  --ring: var(--pine);
+
+  --chart-1: var(--pine);
+  --chart-2: var(--slate-info);
+  --chart-3: var(--clay);
+  --chart-4: #7a5ea8;
+  --chart-5: var(--rust);
+
+  /* Sidebar tokens retained for any residual consumers; warm-aligned. */
+  --sidebar: #f1efe8;
+  --sidebar-foreground: #2c2a24;
+  --sidebar-primary: var(--pine);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: var(--sage);
+  --sidebar-accent-foreground: var(--sage-ink);
+  --sidebar-border: var(--hairline);
+  --sidebar-ring: var(--pine);
+
+  /* ── Public job board (candidate-facing). Workspaces override via inline style. ── */
+  --board-primary: #18181b;
+  --board-primary-foreground: #ffffff;
+  --board-primary-soft: #f4f4f5;
+  --board-surface: #ffffff;
+  --board-surface-muted: #fafafa;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-kraft: var(--kraft);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-pine: var(--pine);
+  --color-pine-strong: var(--pine-strong);
+  --color-sage: var(--sage);
+  --color-sage-ink: var(--sage-ink);
+  --color-clay: var(--clay);
+  --color-slate-info: var(--slate-info);
+  --color-rust: var(--rust);
+
+  --color-board-primary: var(--board-primary);
+  --color-board-primary-foreground: var(--board-primary-foreground);
+  --color-board-primary-soft: var(--board-primary-soft);
+  --color-board-surface: var(--board-surface);
+  --color-board-surface-muted: var(--board-surface-muted);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono:
+    var(--font-geist-mono), ui-monospace, "SF Mono", "Menlo", "Consolas",
+    monospace;
+  /* Cal Sans display face — wordmark + page/section headings. Body stays sans. */
+  --font-display:
+    var(--font-cal), var(--font-geist-sans), ui-sans-serif, system-ui,
+    sans-serif;
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  html {
+    min-height: 100%;
+    background: var(--background);
+  }
+  body {
+    min-height: 100vh;
+    margin: 0;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  a {
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+/* Public board pages opt into a neutral white canvas regardless of admin chrome. */
+.board-canvas {
+  background: var(--board-surface);
+  color: var(--foreground);
+}
+
+@keyframes board-page-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.board-page-enter {
+  animation: board-page-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Tiptap editor ── */
+.tiptap {
+  outline: none;
+  padding: 0.625rem 0.75rem;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--ink);
+}
+.tiptap p { margin-bottom: 0.5rem; }
+.tiptap p:last-child { margin-bottom: 0; }
+.tiptap h1 { font-size: 1.15rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.4rem; }
+.tiptap h2 { font-size: 1.05rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.35rem; }
+.tiptap h3 { font-size: 0.95rem; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; }
+.tiptap ul { list-style: disc; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+.tiptap ol { list-style: decimal; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+.tiptap li { margin-bottom: 0.2rem; }
+.tiptap li > p { margin-bottom: 0; }
+.tiptap blockquote { border-left: 3px solid var(--hairline); padding-left: 0.75rem; color: var(--ink-soft); margin-bottom: 0.5rem; }
+.tiptap strong { font-weight: 600; }
+.tiptap em { font-style: italic; }
+.tiptap s { text-decoration: line-through; }
+.tiptap code { background: var(--kraft); border-radius: 3px; padding: 0.1em 0.35em; font-size: 0.8em; font-family: var(--font-mono); }
+.tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--ink-soft);
+  opacity: 0.6;
+  pointer-events: none;
+  height: 0;
+}
+
+/* ── Job content prose (public board) ── */
+.prose-job p { margin-bottom: 0.5rem; }
+.prose-job p:last-child { margin-bottom: 0; }
+.prose-job h1 { font-size: 1.1rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.4rem; }
+.prose-job h2 { font-size: 1rem; font-weight: 700; margin-top: 0.75rem; margin-bottom: 0.35rem; }
+.prose-job h3 { font-size: 0.9rem; font-weight: 600; margin-top: 0.5rem; margin-bottom: 0.25rem; }
+.prose-job ul { list-style: disc; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+.prose-job ol { list-style: decimal; padding-left: 1.25rem; margin-bottom: 0.5rem; }
+.prose-job li { margin-bottom: 0.2rem; }
+.prose-job li > p { margin-bottom: 0; }
+.prose-job blockquote { border-left: 3px solid var(--hairline); padding-left: 0.75rem; color: var(--ink-soft); margin-bottom: 0.5rem; }
+.prose-job strong { font-weight: 600; }
+.prose-job em { font-style: italic; }
+.prose-job s { text-decoration: line-through; }
+.prose-job code { background: var(--kraft); border-radius: 3px; padding: 0.1em 0.35em; font-size: 0.85em; font-family: var(--font-mono); }
+
+/*
+ * Dark mode — warm near-black paper, lifted evergreen.
+ * Complete-enough for the shell + overview; per-screen QA lands in a later pass.
+ */
+.dark {
+  color-scheme: dark;
+
+  --paper: #14130f;
+  --paper-raised: #1c1a15;
+  --kraft: #252219;
+  --ink: #f3f1ea;
+  --ink-soft: #a8a298;
+  --pine: #4fae86;
+  --pine-strong: #5cba92;
+  --sage: #1e2a23;
+  --sage-ink: #8fd3b4;
+  --clay: #d98248;
+  --slate-info: #7e9bc7;
+  --rust: #e0715a;
+  --hairline: #2e2a20;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --card: var(--paper-raised);
+  --card-foreground: var(--ink);
+  --popover: var(--paper-raised);
+  --popover-foreground: var(--ink);
+  --primary: var(--pine);
+  --primary-foreground: #0c1410;
+  --secondary: var(--kraft);
+  --secondary-foreground: #ece9e1;
+  --muted: var(--kraft);
+  --muted-foreground: var(--ink-soft);
+  --accent: var(--sage);
+  --accent-foreground: var(--sage-ink);
+  --destructive: var(--rust);
+  --destructive-foreground: #1a0f0c;
+  --success: var(--pine);
+  --warning: var(--clay);
+  --info: var(--slate-info);
+  --border: var(--hairline);
+  --input: #322d22;
+  --ring: var(--pine);
+
+  --sidebar: #17150f;
+  --sidebar-foreground: #ece9e1;
+  --sidebar-primary: var(--pine);
+  --sidebar-primary-foreground: #0c1410;
+  --sidebar-accent: var(--sage);
+  --sidebar-accent-foreground: var(--sage-ink);
+  --sidebar-border: var(--hairline);
+  --sidebar-ring: var(--pine);
+}
+
+/* ── Sidebar fluid collapse — premium bezier + text animation ── */
+
+/* Sidebar container + gap: smooth width transition */
+[data-slot="sidebar-gap"],
+[data-slot="sidebar-container"] {
+  transition-duration: 380ms !important;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* Sidebar group label: sync fade */
+[data-slot="sidebar-group-label"] {
+  transition-duration: 300ms !important;
+  transition-timing-function: cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+[data-collapsible="icon"] [data-slot="sidebar-group-label"][data-dash] {
+  opacity: 1 !important;
+  margin-top: 0;
+}
+
+/* Text inside sidebar buttons: fade + slide when collapsing/expanding */
+[data-slot="sidebar-menu-button"] > span:last-child {
+  transition: opacity 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 320ms cubic-bezier(0.16, 1, 0.3, 1),
+    max-width 320ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+[data-collapsible="icon"] [data-slot="sidebar-menu-button"] > span:last-child {
+  opacity: 0;
+  transform: translateX(-6px);
+  max-width: 0;
+}
+
+[data-collapsible=""] [data-slot="sidebar-menu-button"] > span:last-child {
+  transition-delay: 60ms;
+}
+
+/* Sidebar badge (inbox count): fade on collapse */
+[data-slot="sidebar-menu-badge"] {
+  transition: opacity 200ms cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+[data-collapsible="icon"] [data-slot="sidebar-menu-badge"] {
+  opacity: 0;
+}
