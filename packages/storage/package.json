@@ -1,0 +1,19 @@
+{
+  "name": "@openhire/storage",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.1053.0",
+    "@aws-sdk/s3-request-presigner": "^3.1053.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20"
+  }
+}

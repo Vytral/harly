@@ -1,26 +1,43 @@
 {
-  "name": "openhired",
+  "name": "openhire",
   "private": true,
   "version": "0.1.0",
   "description": "Open-source applicant tracking system for modern teams.",
   "license": "MIT",
   "scripts": {
-    "dev": "turbo dev",
-    "build": "turbo build",
+    "dev": "pnpm db:up && pnpm db:migrate && DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo dev",
+    "dev:web": "DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo dev",
+    "build": "DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
-    "db:generate": "turbo db:generate",
-    "db:migrate": "turbo db:migrate",
-    "db:studio": "turbo db:studio"
+    "test": "turbo test",
+    "clean": "rm -rf .next dist .turbo",
+    "db:up": "docker-compose up -d",
+    "db:down": "docker-compose down",
+    "db:generate": "pnpm --filter @openhire/db db:generate",
+    "db:migrate": "pnpm --filter @openhire/db db:migrate",
+    "db:studio": "pnpm --filter @openhire/db db:studio",
+    "db:push": "pnpm --filter @openhire/db db:push",
+    "db:seed": "pnpm --filter @openhire/db db:seed"
   },
   "devDependencies": {
     "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
+    "drizzle-orm": "^0.45.2",
     "eslint": "^10.4.0",
     "prettier": "^3.8.3",
     "tsx": "^4.22.3",
     "turbo": "^2.9.14",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@9.15.0"
+  "packageManager": "pnpm@9.15.0",
+  "pnpm": {
+    "packageExtensions": {
+      "drizzle-orm": {
+        "dependencies": {
+          "@opentelemetry/api": "^1.9.1"
+        }
+      }
+    }
+  }
 }

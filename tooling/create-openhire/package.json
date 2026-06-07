@@ -1,0 +1,8 @@
+{
+  "name": "@openhire/create",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "create-openhire": "./src/index.ts"
+  }
+}

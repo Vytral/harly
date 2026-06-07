@@ -34,6 +34,7 @@ pnpm-debug.log*
 # uploads
 uploads
 tmp
+*.zip
 
 # coverage
 coverage
@@ -46,3 +47,19 @@ postgres-data
 
 # drizzle
 drizzle/*.sqlite
+
+# internal things
+PROGRESO.md
+criticas.md
+criticas-v2.md
+listadedeseos.md
+planesafuturo-ignorar.md
+
+# screenshots / design references (kept on disk, not committed)
+/*.png
+
+# agent + dev tool scratch dirs
+.claude
+.playwright-mcp
+.superpowers
+.antigravitycli

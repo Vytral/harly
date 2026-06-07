@@ -1,0 +1,20 @@
+{
+  "name": "@openhire/auth",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client.ts",
+    "./cookies": "./src/cookies.ts",
+    "./next": "./src/next.ts",
+    "./server": "./src/auth.ts"
+  },
+  "dependencies": {
+    "@openhire/db": "workspace:*",
+    "better-auth": "^1.6.11",
+    "resend": "^6.12.3"
+  },
+  "devDependencies": {
+    "@better-auth/cli": "^1.4.21"
+  }
+}

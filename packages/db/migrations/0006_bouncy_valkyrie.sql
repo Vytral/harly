@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "cal_booking_url" text;

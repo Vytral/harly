@@ -1,0 +1,24 @@
+{
+  "name": "@openhire/emails",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@react-email/components": "^1.0.12",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "resend": "^6.12.3"
+  },
+  "devDependencies": {
+    "@react-email/render": "^2.0.8",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19"
+  }
+}

@@ -1,0 +1,47 @@
+import { readFile, rm } from "node:fs/promises";
+import path from "node:path";
+
+import type { StorageAdapter } from "../types";
+
+function safeKey(key: string) {
+  return key
+    .split("/")
+    .filter(Boolean)
+    .map((part) => part.replace(/[^a-zA-Z0-9._-]/g, "-"))
+    .join("/");
+}
+
+export function getLocalUploadPath(key: string) {
+  const uploadsRoot = path.resolve(process.cwd(), "uploads");
+  const resolvedPath = path.resolve(uploadsRoot, safeKey(key));
+
+  if (!resolvedPath.startsWith(`${uploadsRoot}${path.sep}`)) {
+    throw new Error("Invalid storage key.");
+  }
+
+  return resolvedPath;
+}
+
+export class LocalAdapter implements StorageAdapter {
+  async getPresignedUploadUrl(params: {
+    key: string;
+    contentType: string;
+    contentLength: number;
+  }) {
+    const key = safeKey(params.key);
+    const encodedKey = encodeURIComponent(key);
+
+    return {
+      uploadUrl: `/api/storage/upload?key=${encodedKey}`,
+      fileUrl: `/uploads/${key}`,
+    };
+  }
+
+  async read(key: string) {
+    return readFile(getLocalUploadPath(key));
+  }
+
+  async delete(key: string) {
+    await rm(getLocalUploadPath(key), { force: true });
+  }
+}

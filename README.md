@@ -44,3 +44,30 @@ packages/ui     Shared UI components
 packages/emails Email templates
 packages/config Shared config
 packages/validators Shared validation schemas
+```
+
+## Local Development
+
+Copy `.env.example` to `.env` if you need to customize connection settings.
+With the default local Postgres values, start the app from the repo root:
+
+```bash
+pnpm dev
+```
+
+The dev script starts Docker Postgres, applies Drizzle migrations, then starts
+the Next.js app. If you are already running an external database such as Neon,
+set `DATABASE_URL` and use:
+
+```bash
+pnpm dev:web
+```
+
+Useful database commands:
+
+```bash
+pnpm db:up
+pnpm db:migrate
+pnpm db:seed
+pnpm db:down
+```
