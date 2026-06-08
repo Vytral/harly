@@ -30,7 +30,7 @@ export async function addHiringTeamMember(input: {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to add member.",
+      error: "Unable to add member.",
     };
   }
 }
@@ -56,7 +56,7 @@ export async function updateHiringTeamRole(input: {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to update role.",
+      error: "Unable to update role.",
     };
   }
 }
@@ -80,7 +80,7 @@ export async function removeHiringTeamMember(input: {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to remove member.",
+      error: "Unable to remove member.",
     };
   }
 }

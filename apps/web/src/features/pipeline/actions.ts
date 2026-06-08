@@ -236,17 +236,29 @@ export async function moveApplicationInPipeline(
           ),
         );
 
-      for (const [index, applicationId] of input.orderedApplicationIds.entries()) {
+      if (input.orderedApplicationIds.length > 0) {
         await tx
           .update(applications)
-          .set({ pipelineOrder: index + 1, updatedAt: now })
+          .set({ updatedAt: now })
           .where(
             and(
-              eq(applications.id, applicationId),
+              inArray(applications.id, input.orderedApplicationIds),
               eq(applications.workspaceId, input.workspaceId),
               eq(applications.currentStageId, input.toStageId),
             ),
           );
+
+        for (const [index, applicationId] of input.orderedApplicationIds.entries()) {
+          await tx
+            .update(applications)
+            .set({ pipelineOrder: index + 1 })
+            .where(
+              and(
+                eq(applications.id, applicationId),
+                eq(applications.workspaceId, input.workspaceId),
+              ),
+            );
+        }
       }
 
       if (!changedStage) {
@@ -313,7 +325,7 @@ export async function moveApplicationInPipeline(
     return { success: true };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to move application.";
+      "Unable to move application.";
 
     console.error("Failed to move application in pipeline", error);
 
@@ -358,21 +370,29 @@ export async function bulkMoveApplications(
       ];
       const now = new Date();
 
-      for (const applicationId of input.applicationIds) {
-        const [application] = await tx
-          .select({ currentStageId: applications.currentStageId })
-          .from(applications)
-          .where(
-            and(
-              eq(applications.id, applicationId),
-              eq(applications.workspaceId, input.workspaceId),
-            ),
-          )
-          .limit(1);
+      const allApplications = await tx
+        .select({ id: applications.id, currentStageId: applications.currentStageId })
+        .from(applications)
+        .where(
+          and(
+            eq(applications.workspaceId, input.workspaceId),
+            inArray(applications.id, input.applicationIds),
+          ),
+        );
 
-        if (!application || application.currentStageId === input.toStageId) {
-          continue;
-        }
+      const applicationsByStage = new Map<string, string[]>();
+      const stageByApplication = new Map<string, string>();
+
+      for (const app of allApplications) {
+        if (app.currentStageId === input.toStageId) continue;
+        stageByApplication.set(app.id, app.currentStageId);
+        const stageApps = applicationsByStage.get(app.currentStageId) ?? [];
+        stageApps.push(app.id);
+        applicationsByStage.set(app.currentStageId, stageApps);
+      }
+
+      for (const [fromStageId, appIds] of applicationsByStage) {
+        if (appIds.length === 0) continue;
 
         await tx
           .update(applications)
@@ -382,31 +402,35 @@ export async function bulkMoveApplications(
           })
           .where(
             and(
-              eq(applications.id, applicationId),
+              inArray(applications.id, appIds),
               eq(applications.workspaceId, input.workspaceId),
             ),
           );
 
-        await tx.insert(applicationStageHistory).values({
-          workspaceId: input.workspaceId,
-          applicationId,
-          fromStageId: application.currentStageId,
-          toStageId: input.toStageId,
-          movedById: user.id,
-        });
-
-        await tx.insert(activityEvents).values({
-          workspaceId: input.workspaceId,
-          actorId: user.id,
-          entityType: "application",
-          entityId: applicationId,
-          type: "stage.changed",
-          metadata: {
-            fromStageId: application.currentStageId,
+        await tx.insert(applicationStageHistory).values(
+          appIds.map((applicationId) => ({
+            workspaceId: input.workspaceId,
+            applicationId,
+            fromStageId,
             toStageId: input.toStageId,
-            bulk: true,
-          },
-        });
+            movedById: user.id,
+          })),
+        );
+
+        await tx.insert(activityEvents).values(
+          appIds.map((applicationId) => ({
+            workspaceId: input.workspaceId,
+            actorId: user.id,
+            entityType: "application" as const,
+            entityId: applicationId,
+            type: "stage.changed",
+            metadata: {
+              fromStageId,
+              toStageId: input.toStageId,
+              bulk: true,
+            },
+          })),
+        );
       }
 
       for (const [index, applicationId] of orderedIds.entries()) {
@@ -428,7 +452,7 @@ export async function bulkMoveApplications(
     return { success: true };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to move applications.";
+      "Unable to move applications.";
 
     console.error("Failed to bulk move applications", error);
 
@@ -497,7 +521,7 @@ export async function updateApplicationStatus(
     return { success: true };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to update status.";
+      "Unable to update status.";
 
     console.error("Failed to update application status", error);
 
@@ -535,7 +559,7 @@ export async function updateStageEmailSettings(
     return { success: true };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to update stage email.";
+      "Unable to update stage email.";
 
     console.error("Failed to update stage email settings", error);
 

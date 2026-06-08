@@ -172,7 +172,7 @@ export async function scheduleInterview(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to schedule interview.",
+      error: "Unable to schedule interview.",
     };
   }
 }
@@ -218,7 +218,7 @@ export async function setInterviewStatus(input: {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to update interview.",
+      error: "Unable to update interview.",
     };
   }
 }

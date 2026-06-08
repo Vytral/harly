@@ -11,6 +11,9 @@ export async function updateUserProfileAction(data: {
   phone?: string | null;
   location?: string | null;
   bio?: string | null;
+  linkedinUrl?: string | null;
+  githubUrl?: string | null;
+  websiteUrl?: string | null;
 }) {
   const session = await auth.api.getSession({
     headers: await import("next/headers").then((h) => h.headers()),
@@ -29,6 +32,9 @@ export async function updateUserProfileAction(data: {
         phone: data.phone ?? null,
         location: data.location ?? null,
         bio: data.bio ?? null,
+        linkedinUrl: data.linkedinUrl ?? null,
+        githubUrl: data.githubUrl ?? null,
+        websiteUrl: data.websiteUrl ?? null,
       })
       .where(eq(schema.user.id, session.user.id));
 

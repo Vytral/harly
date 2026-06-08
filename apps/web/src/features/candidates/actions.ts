@@ -246,7 +246,7 @@ export async function createCandidateNote(input: {
     return result;
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to create note.";
+      "Unable to create note.";
 
     console.error("Failed to create candidate note", error);
 
@@ -329,7 +329,7 @@ export async function updateCandidateProfile(input: {
     return { success: true };
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to update candidate.";
+      "Unable to update candidate.";
 
     console.error("Failed to update candidate profile", error);
 
@@ -442,7 +442,7 @@ export async function attachCandidateFile(input: {
     return result;
   } catch (error) {
     const message =
-      error instanceof Error ? error.message : "Unable to upload file.";
+      "Unable to upload file.";
 
     console.error("Failed to attach candidate file", error);
 
@@ -500,7 +500,7 @@ export async function createScorecard(input: {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to save evaluation.",
+      error: "Unable to save evaluation.",
     };
   }
 }
@@ -543,7 +543,7 @@ export async function addCandidateTag(input: {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to add tag.",
+      error: "Unable to add tag.",
     };
   }
 }
@@ -566,7 +566,7 @@ export async function removeCandidateTag(input: {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to remove tag.",
+      error: "Unable to remove tag.",
     };
   }
 }
@@ -640,7 +640,7 @@ export async function sendCandidateMessage(input: {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to send message.",
+      error: "Unable to send message.",
     };
   }
 }

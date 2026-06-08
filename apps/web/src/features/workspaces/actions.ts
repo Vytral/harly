@@ -235,7 +235,7 @@ export async function updateWorkspaceProfileAction(
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "Unable to update workspace.",
+        "Unable to update workspace.",
     };
   }
 }
@@ -360,7 +360,7 @@ export async function inviteWorkspaceMemberAction(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to invite member.",
+      error: "Unable to invite member.",
     };
   }
 }
@@ -423,7 +423,7 @@ export async function updateWorkspaceMemberRoleAction(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to update member.",
+      error: "Unable to update member.",
     };
   }
 }
@@ -507,7 +507,7 @@ export async function updateMemberRolesAction(input: {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to update roles.",
+      error: "Unable to update roles.",
     };
   }
 }
@@ -563,7 +563,7 @@ export async function removeWorkspaceMemberAction(
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to remove member.",
+      error: "Unable to remove member.",
     };
   }
 }
@@ -591,7 +591,7 @@ export async function cancelWorkspaceInvitationAction(
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "Unable to cancel invitation.",
+        "Unable to cancel invitation.",
     };
   }
 }
@@ -691,7 +691,7 @@ export async function acceptWorkspaceInvitationAction(
     return {
       success: false,
       error:
-        error instanceof Error ? error.message : "Unable to accept invitation.",
+        "Unable to accept invitation.",
     };
   }
 }
@@ -731,7 +731,7 @@ export async function leaveWorkspaceAction(): Promise<ActionResult> {
   } catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Unable to leave workspace.",
+      error: "Unable to leave workspace.",
     };
   }
 }

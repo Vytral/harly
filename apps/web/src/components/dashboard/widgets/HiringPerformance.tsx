@@ -47,14 +47,6 @@ export function HiringPerformance({
           Hiring performance
         </h2>
         <div className="flex items-center gap-2">
-          <Select value="14" onValueChange={() => {}}>
-            <SelectTrigger size="sm" className="w-[140px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="14">{data.rangeLabel}</SelectItem>
-            </SelectContent>
-          </Select>
           <Select value={metric} onValueChange={(v) => setMetric(v as ChartMetric)}>
             <SelectTrigger size="sm" className="w-[140px]">
               <SelectValue />

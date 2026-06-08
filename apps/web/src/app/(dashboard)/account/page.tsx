@@ -24,6 +24,9 @@ export default async function AccountPage() {
           phone: (user as Record<string, unknown>).phone as string | null ?? null,
           location: (user as Record<string, unknown>).location as string | null ?? null,
           bio: (user as Record<string, unknown>).bio as string | null ?? null,
+          linkedinUrl: (user as Record<string, unknown>).linkedinUrl as string | null ?? null,
+          githubUrl: (user as Record<string, unknown>).githubUrl as string | null ?? null,
+          websiteUrl: (user as Record<string, unknown>).websiteUrl as string | null ?? null,
           createdAt: (user as Record<string, unknown>).createdAt as Date | undefined,
         }}
       />

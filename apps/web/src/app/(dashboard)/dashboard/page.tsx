@@ -53,7 +53,7 @@ export default async function DashboardPage({
   const openJobs = pipeline.jobs.length;
   const interviewsToday = interviews.length;
 
-  let insight = "Here&apos;s what&apos;s happening with your hiring today.";
+  let insight = "Here's what's happening with your hiring today.";
   if (overdueCount > 0 && reviewCount > 0) {
     insight = `${overdueCount} ${overdueCount === 1 ? "item" : "items"} need your attention and ${reviewCount} ${reviewCount === 1 ? "candidate" : "candidates"} await${reviewCount === 1 ? "s" : ""} review.`;
   } else if (overdueCount > 0) {
@@ -61,7 +61,7 @@ export default async function DashboardPage({
   } else if (reviewCount > 0) {
     insight = `${reviewCount} ${reviewCount === 1 ? "candidate" : "candidates"} ${reviewCount === 1 ? "is" : "are"} waiting for your feedback.`;
   } else if (interviewsToday > 0) {
-    insight = `${interviewsToday} interview${interviewsToday > 1 ? "s" : ""} scheduled today. Let&apos;s go!`;
+    insight = `${interviewsToday} interview${interviewsToday > 1 ? "s" : ""} scheduled today. Let's go!`;
   } else if (openJobs > 0) {
     insight = `${openJobs} open ${openJobs === 1 ? "position" : "positions"} — keep the pipeline moving.`;
   }

@@ -174,7 +174,7 @@ export async function generateJobDraftAction(input: {
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : "Generation failed.",
+      error: "Generation failed.",
     };
   }
 }

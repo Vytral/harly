@@ -165,7 +165,7 @@ const TIPS: Record<string, { heading: string; items: string[] }> = {
 let sectionSeq = 0;
 function newSectionId() {
   sectionSeq += 1;
-  return `section-${Date.now()}-${sectionSeq}`;
+  return `section-${sectionSeq}`;
 }
 
 function FieldHint({ children }: { children: React.ReactNode }) {

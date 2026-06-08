@@ -8,7 +8,7 @@ import type { CandidateNoteItem, NoteMention } from "@/features/candidates/data"
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { formatRelative } from "@/lib/date";
+import { RelativeTime } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
 type NoteFormProps = {
@@ -267,7 +267,7 @@ export function NoteForm({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">{note.authorName}</p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {note.pending ? "Saving…" : formatRelative(note.createdAt)}
+                    {note.pending ? "Saving…" : <RelativeTime value={note.createdAt} />}
                   </p>
                 </div>
               </div>

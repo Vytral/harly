@@ -10,7 +10,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { PipelineApplication } from "@/features/pipeline/data";
-import { daysSince, formatShort } from "@/lib/date";
+import { DaysSince, ShortDate } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
 type CandidateCardProps = {
@@ -37,7 +37,6 @@ const accentStyles: Record<PipelineApplication["status"], string> = {
 function CandidateCardContent({ application }: CandidateCardOverlayProps) {
   const fullName = `${application.candidateFirstName} ${application.candidateLastName}`;
   const stageStartedAt = application.lastStageMovedAt ?? application.createdAt;
-  const daysInStage = daysSince(stageStartedAt);
 
   return (
     <div className="min-w-0 flex-1">
@@ -54,11 +53,11 @@ function CandidateCardContent({ application }: CandidateCardOverlayProps) {
       <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
         <span className="inline-flex items-center gap-1">
           <CalendarDays className="size-3.5" />
-          {formatShort(application.appliedAt)}
+          <ShortDate value={application.appliedAt} />
         </span>
         <span className="inline-flex items-center gap-1">
           <Clock className="size-3.5" />
-          {daysInStage}d in stage
+          <DaysSince value={stageStartedAt} />d in stage
         </span>
       </div>
     </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { Suspense, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRightLeft,
@@ -34,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { formatShort } from "@/lib/date";
+import { ShortDate } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
 type PipelineListProps = {
@@ -154,7 +154,9 @@ export function PipelineList({
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <PipelineJobSelect jobs={jobs} selectedJobId={selectedJob.id} />
+        <Suspense>
+          <PipelineJobSelect jobs={jobs} selectedJobId={selectedJob.id} />
+        </Suspense>
         <div className="relative ml-auto w-full max-w-xs">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -286,7 +288,7 @@ export function PipelineList({
                     className="mt-1.5 max-w-40"
                   />
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Applied {formatShort(a.appliedAt)}
+                    Applied <ShortDate value={a.appliedAt} />
                   </p>
                 </div>
                 <div className="col-start-2 sm:col-auto sm:self-center">

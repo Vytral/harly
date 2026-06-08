@@ -15,7 +15,7 @@ export async function searchWorkspaceAction(
   rawQuery: string,
 ): Promise<SearchResults> {
   const query = rawQuery.trim();
-  if (query.length < 1) {
+  if (query.length < 1 || query.length > 100) {
     return { jobs: [], candidates: [] };
   }
 

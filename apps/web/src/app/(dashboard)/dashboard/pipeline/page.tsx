@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { PipelineBoard } from "@/features/pipeline/PipelineBoard";
@@ -55,7 +56,9 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
     return (
       <div className="space-y-6">
         {header}
-        <PipelineJobSelect jobs={data.jobs} selectedJobId={data.selectedJob.id} />
+        <Suspense>
+          <PipelineJobSelect jobs={data.jobs} selectedJobId={data.selectedJob.id} />
+        </Suspense>
         <p className="rounded-lg border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
           This job has no pipeline stages yet.
         </p>
@@ -67,7 +70,9 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
     return (
       <div className="space-y-6">
         {header}
-        <PipelineJobSelect jobs={data.jobs} selectedJobId={data.selectedJob.id} />
+        <Suspense>
+          <PipelineJobSelect jobs={data.jobs} selectedJobId={data.selectedJob.id} />
+        </Suspense>
         <p className="rounded-lg border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
           No candidates have applied to this job yet.
         </p>

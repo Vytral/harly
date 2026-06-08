@@ -41,7 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatRelative, formatShort } from "@/lib/date";
+import { ShortDate, RelativeTime } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
 type CandidateProfileApplication = {
@@ -165,30 +165,30 @@ export function CandidateProfileTabs({
   members,
 }: CandidateProfileTabsProps) {
   return (
-    <Tabs defaultValue="perfil">
+    <Tabs defaultValue="profile">
       <TabsList className="w-full justify-start overflow-x-auto">
-        <TabsTrigger value="perfil">Profile</TabsTrigger>
-        <TabsTrigger value="entrevistas">
+        <TabsTrigger value="profile">Profile</TabsTrigger>
+        <TabsTrigger value="interviews">
           Interviews
           <TabCount value={interviews.length} />
         </TabsTrigger>
-        <TabsTrigger value="historial">History</TabsTrigger>
-        <TabsTrigger value="comunicacion">
+        <TabsTrigger value="history">History</TabsTrigger>
+        <TabsTrigger value="communication">
           Communication
           <TabCount value={messages.length} />
         </TabsTrigger>
-        <TabsTrigger value="evaluacion">
+        <TabsTrigger value="evaluation">
           Evaluation
           <TabCount value={scorecards.length} />
         </TabsTrigger>
-        <TabsTrigger value="comentarios">
+        <TabsTrigger value="comments">
           Comments
           <TabCount value={notes.length} />
         </TabsTrigger>
       </TabsList>
 
       {/* ── Profile ── */}
-      <TabsContent value="perfil" className="mt-4 space-y-4">
+      <TabsContent value="profile" className="mt-4 space-y-4">
         {applications.length === 0 ? (
           <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
             No applications yet.
@@ -202,7 +202,7 @@ export function CandidateProfileTabs({
                     <h2 className="font-semibold">{application.jobTitle}</h2>
                     <p className="mt-1 text-sm text-muted-foreground">
                       {application.currentStageName ?? "No stage"} · Applied{" "}
-                      {formatShort(application.appliedAt)}
+                      <ShortDate value={application.appliedAt} />
                     </p>
                   </div>
                   <ApplicationStatusBadge status={application.status} />
@@ -249,7 +249,7 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── Interviews ── */}
-      <TabsContent value="entrevistas" className="mt-4 space-y-3">
+      <TabsContent value="interviews" className="mt-4 space-y-3">
         {interviews.length === 0 ? (
           <EmptyTab
             icon={CalendarClock}
@@ -267,7 +267,7 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── History ── */}
-      <TabsContent value="historial" className="mt-4">
+      <TabsContent value="history" className="mt-4">
         {activity.length === 0 ? (
           <EmptyTab icon={MessageSquare} text="No activity yet." />
         ) : (
@@ -288,7 +288,7 @@ export function CandidateProfileTabs({
                   <p className="text-sm font-medium">{event.label}</p>
                   <p className="mt-0.5 text-xs text-muted-foreground">
                     {event.actorName ? `${event.actorName} · ` : ""}
-                    {formatRelative(event.createdAt)}
+                    <RelativeTime value={event.createdAt} />
                   </p>
                 </div>
               </div>
@@ -298,7 +298,7 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── Communication ── */}
-      <TabsContent value="comunicacion" className="mt-4 space-y-3">
+      <TabsContent value="communication" className="mt-4 space-y-3">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">
             <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
@@ -326,7 +326,7 @@ export function CandidateProfileTabs({
                 <p className="text-xs text-muted-foreground">
                   To {message.toEmail}
                   {message.authorName ? ` · ${message.authorName}` : ""} ·{" "}
-                  {formatRelative(message.createdAt)}
+                  <RelativeTime value={message.createdAt} />
                 </p>
               </CardContent>
             </Card>
@@ -335,7 +335,7 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── Evaluation: real scorecards ── */}
-      <TabsContent value="evaluacion" className="mt-4 space-y-4">
+      <TabsContent value="evaluation" className="mt-4 space-y-4">
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
             {scorecards.length === 0
@@ -372,7 +372,7 @@ export function CandidateProfileTabs({
                   <p className="whitespace-pre-line text-sm">{scorecard.comment}</p>
                 ) : null}
                 <p className="text-xs text-muted-foreground">
-                  {scorecard.authorName ?? "Someone"} · {formatRelative(scorecard.createdAt)}
+                  {scorecard.authorName ?? "Someone"} · <RelativeTime value={scorecard.createdAt} />
                 </p>
               </CardContent>
             </Card>
@@ -381,7 +381,7 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── Comments ── */}
-      <TabsContent value="comentarios" className="mt-4">
+      <TabsContent value="comments" className="mt-4">
         <NoteForm
           candidateId={candidateId}
           workspaceId={workspaceId}

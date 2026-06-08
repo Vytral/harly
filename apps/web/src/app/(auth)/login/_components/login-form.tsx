@@ -180,7 +180,7 @@ export function LoginForm() {
 
         <button
           type="submit"
-          disabled={isPending || !email || !password}
+          disabled={isPending || !email || !password || undefined}
           className="w-full rounded-lg bg-primary py-3.5 text-sm font-semibold text-white transition hover:bg-pine-strong disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
         >
           {isPending ? "Signing in…" : "Continue"}

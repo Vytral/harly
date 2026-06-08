@@ -19,6 +19,7 @@ const timestamps = () => ({
     .notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .defaultNow()
+    .$onUpdate(() => new Date())
     .notNull(),
 });
 
@@ -120,6 +121,9 @@ export const user = pgTable("user", {
   phone: text("phone"),
   location: text("location"),
   bio: text("bio"),
+  linkedinUrl: text("linkedin_url"),
+  githubUrl: text("github_url"),
+  websiteUrl: text("website_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()

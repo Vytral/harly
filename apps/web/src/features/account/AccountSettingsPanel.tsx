@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AtSign,
@@ -51,6 +51,9 @@ type AccountUser = {
   phone: string | null;
   location: string | null;
   bio: string | null;
+  linkedinUrl: string | null;
+  githubUrl: string | null;
+  websiteUrl: string | null;
   createdAt?: Date;
 };
 
@@ -201,8 +204,16 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
   const [phone, setPhone] = useState(user.phone ?? "");
   const [location, setLocation] = useState(user.location ?? "");
   const [bio, setBio] = useState(user.bio ?? "");
+  const [linkedinUrl, setLinkedinUrl] = useState(user.linkedinUrl ?? "");
+  const [githubUrl, setGithubUrl] = useState(user.githubUrl ?? "");
+  const [websiteUrl, setWebsiteUrl] = useState(user.websiteUrl ?? "");
   const [savingProfile, startProfile] = useTransition();
   const [profileDirty, setProfileDirty] = useState(false);
+  const [userAgent, setUserAgent] = useState("—");
+
+  useEffect(() => {
+    setUserAgent(navigator.userAgent.slice(0, 60));
+  }, []);
 
   const [newEmail, setNewEmail] = useState("");
   const [savingEmail, startEmail] = useTransition();
@@ -238,6 +249,9 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
         phone: phone.trim() || null,
         location: location.trim() || null,
         bio: bio.trim() || null,
+        linkedinUrl: linkedinUrl.trim() || null,
+        githubUrl: githubUrl.trim() || null,
+        websiteUrl: websiteUrl.trim() || null,
       });
 
       if (!result.success) {
@@ -508,16 +522,22 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
                     icon={Link}
                     label="LinkedIn"
                     placeholder="https://linkedin.com/in/username"
+                    value={linkedinUrl}
+                    onChange={(v) => { setLinkedinUrl(v); markDirty(); }}
                   />
                   <SocialLinkField
                     icon={Link}
                     label="GitHub"
                     placeholder="https://github.com/username"
+                    value={githubUrl}
+                    onChange={(v) => { setGithubUrl(v); markDirty(); }}
                   />
                   <SocialLinkField
                     icon={Globe}
                     label="Website"
                     placeholder="https://yoursite.com"
+                    value={websiteUrl}
+                    onChange={(v) => { setWebsiteUrl(v); markDirty(); }}
                   />
                 </div>
               </SectionCard>
@@ -542,6 +562,9 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
                     setPhone(user.phone ?? "");
                     setLocation(user.location ?? "");
                     setBio(user.bio ?? "");
+                    setLinkedinUrl(user.linkedinUrl ?? "");
+                    setGithubUrl(user.githubUrl ?? "");
+                    setWebsiteUrl(user.websiteUrl ?? "");
                     setProfileDirty(false);
                   }}
                   disabled={savingProfile}
@@ -710,9 +733,7 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">Current browser</p>
                   <p className="text-xs text-muted-foreground">
-                    {typeof navigator !== "undefined"
-                      ? navigator.userAgent.slice(0, 60)
-                      : "—"}
+                    {userAgent}
                   </p>
                 </div>
                 <Badge variant="secondary" className="shrink-0">
@@ -762,13 +783,15 @@ function SocialLinkField({
   icon: Icon,
   label,
   placeholder,
+  value,
+  onChange,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
 }) {
-  const [value, setValue] = useState("");
-
   return (
     <div className="space-y-1.5">
       <Label className="text-xs text-muted-foreground">{label}</Label>
@@ -778,7 +801,7 @@ function SocialLinkField({
         </span>
         <Input
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           className="pl-10 text-sm"
         />

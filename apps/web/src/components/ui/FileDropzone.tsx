@@ -74,7 +74,7 @@ export function FileDropzone({
       const url = await uploadImage(file);
       onChange(url);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Upload failed.");
+      toast.error("Upload failed.");
     } finally {
       setUploading(false);
     }

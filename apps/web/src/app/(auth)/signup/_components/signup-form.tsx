@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
-import { sendWelcomeEmailAction } from "@/features/auth/actions";
 
 export function SignupForm() {
   const [name, setName] = useState("");
@@ -43,7 +42,6 @@ export function SignupForm() {
         return;
       }
 
-      void sendWelcomeEmailAction(trimmedEmail, trimmedName);
       window.location.replace("/onboarding");
     } finally {
       setIsPending(false);
@@ -173,7 +171,7 @@ export function SignupForm() {
 
         <button
           type="submit"
-          disabled={isPending || !canSubmit}
+          disabled={isPending || !canSubmit || undefined}
           className="w-full rounded-lg bg-primary py-3.5 text-sm font-semibold text-white transition hover:bg-pine-strong disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
         >
           {isPending ? "Creating account…" : "Continue"}
