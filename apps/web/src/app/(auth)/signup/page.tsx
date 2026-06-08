@@ -7,7 +7,7 @@ export default function SignupPage() {
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between px-8 py-6">
         <Link href="/" className="font-display text-lg tracking-tight text-pine">
-          OpenHire
+          Harly
         </Link>
         <Link
           href="/login"

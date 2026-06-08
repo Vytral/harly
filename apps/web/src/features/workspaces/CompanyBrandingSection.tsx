@@ -126,7 +126,7 @@ export function CompanyBrandingSection({
           <CardHeader>
             <CardTitle>Identity</CardTitle>
             <CardDescription>
-              Logo and name shown across OpenHire and your careers page.
+              Logo and name shown across Harly and your careers page.
             </CardDescription>
           </CardHeader>
           <CardContent>

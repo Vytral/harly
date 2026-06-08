@@ -144,7 +144,7 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
         <EmptyState
           icon={Briefcase}
           title="No jobs yet"
-          description="Create your first opening — OpenHire adds the default hiring stages automatically."
+          description="Create your first opening — Harly adds the default hiring stages automatically."
           action={{ href: "/dashboard/jobs/new", label: "Create job" }}
         />
       )}

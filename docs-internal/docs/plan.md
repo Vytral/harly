@@ -6,13 +6,13 @@ Does not exist. No documentation beyond the future README.
 
 ## Target state
 
-A Mintlify (or Docusaurus) site at docs.openhire.dev with:
+A Mintlify (or Docusaurus) site at docs.harly.dev with:
 
 ```
 Structure:
   Getting Started
     - Introduction
-    - Quick start (npx @openhire/create)
+    - Quick start (npx @harly/create)
     - Environment variables reference
     - First login and workspace setup
 
@@ -47,7 +47,7 @@ Structure:
 ## Milestones
 
 ### M1 — Launch basics (Week 10)
-- [ ] Set up Mintlify or Docusaurus in a separate repo (openhire/openhire-docs)
+- [ ] Set up Mintlify or Docusaurus in a separate repo (harly/harly-docs)
 - [ ] Introduction page
 - [ ] Quick start guide (tested end-to-end)
 - [ ] Environment variables reference
@@ -68,7 +68,7 @@ Structure:
 
 - **Mintlify** preferred: better default design, easier to maintain, free for open-source.
   Alternative: Docusaurus if Mintlify limits become a problem.
-- Separate repo: openhire/openhire-docs — keeps docs CI independent from app CI
+- Separate repo: harly/harly-docs — keeps docs CI independent from app CI
 - Versioning: not in v1, add when breaking changes become frequent
 
 ## Open questions
@@ -79,8 +79,8 @@ Structure:
 
 ## Next actions
 
-1. Register docs.openhire.dev subdomain (after domain is bought)
-2. Create openhire/openhire-docs repo
+1. Register docs.harly.dev subdomain (after domain is bought)
+2. Create harly/harly-docs repo
 3. Set up Mintlify with OpenHire branding
 4. Write quick start guide first — it's the most important one
 5. Write Railway and Fly.io deploy guides before launch

@@ -25,7 +25,7 @@ import { cn } from "@/lib/utils";
 import type { WorkspaceOption } from "@/features/workspaces/data";
 
 const VERSION = "v0.1.0";
-const REPO_URL = "https://github.com/openhire/openhire";
+const REPO_URL = "https://github.com/harly/harly";
 
 type UserMenuProps = {
   user: { name: string; email: string; image: string | null };

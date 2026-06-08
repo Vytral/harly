@@ -1,4 +1,4 @@
-# @openhire/ui
+# @harly/ui
 
 Future home for shared UI.
 

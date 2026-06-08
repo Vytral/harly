@@ -16,10 +16,16 @@ export type JobApplicationQuestion = {
   options?: readonly string[];
 };
 
+/** Per-platform link setting: show it at all, and whether candidates must fill it. */
+export type JobProfileLinkSetting = {
+  enabled: boolean;
+  required: boolean;
+};
+
 export type JobProfileLinks = {
-  linkedin: boolean;
-  github: boolean;
-  website: boolean;
+  linkedin: JobProfileLinkSetting;
+  github: JobProfileLinkSetting;
+  website: JobProfileLinkSetting;
 };
 
 export type JobApplicationConfig = {
@@ -121,10 +127,15 @@ export function parseKeywords(value: unknown): string[] {
   ).slice(0, 30);
 }
 
+const defaultLinkSetting: JobProfileLinkSetting = {
+  enabled: true,
+  required: false,
+};
+
 export const defaultProfileLinks: JobProfileLinks = {
-  linkedin: true,
-  github: true,
-  website: true,
+  linkedin: { ...defaultLinkSetting },
+  github: { ...defaultLinkSetting },
+  website: { ...defaultLinkSetting },
 };
 
 export const defaultJobApplicationConfig: JobApplicationConfig = {
@@ -135,7 +146,12 @@ export const defaultJobApplicationConfig: JobApplicationConfig = {
 
 /** True when at least one candidate link field is enabled. */
 export function hasAnyProfileLink(links: JobProfileLinks) {
-  return links.linkedin || links.github || links.website;
+  return links.linkedin.enabled || links.github.enabled || links.website.enabled;
+}
+
+/** True when at least one enabled link is required from candidates. */
+export function hasRequiredProfileLink(links: JobProfileLinks) {
+  return links.linkedin.required || links.github.required || links.website.required;
 }
 
 export const defaultJobBoardConfig: JobBoardConfig = {
@@ -181,10 +197,26 @@ const questionSchema = z
     "Select questions require at least one option.",
   );
 
+// Accepts the new {enabled, required} shape or a legacy bare boolean
+// (older configs stored just `linkedin: true`).
+const linkSettingSchema = z.union([
+  z.boolean().transform((enabled): JobProfileLinkSetting => ({ enabled, required: false })),
+  z
+    .object({
+      enabled: z.boolean().default(true),
+      required: z.boolean().default(false),
+    })
+    .transform((value): JobProfileLinkSetting => ({
+      enabled: value.enabled,
+      // A required link must also be shown.
+      required: value.enabled && value.required,
+    })),
+]);
+
 const profileLinksSchema = z.object({
-  linkedin: z.boolean().default(true),
-  github: z.boolean().default(true),
-  website: z.boolean().default(true),
+  linkedin: linkSettingSchema.default({ ...defaultLinkSetting }),
+  github: linkSettingSchema.default({ ...defaultLinkSetting }),
+  website: linkSettingSchema.default({ ...defaultLinkSetting }),
 });
 
 const applicationConfigSchema = z
@@ -204,9 +236,9 @@ const applicationConfigSchema = z
       (config.profileLinksEnabled === undefined
         ? { ...defaultProfileLinks }
         : {
-            linkedin: config.profileLinksEnabled,
-            github: config.profileLinksEnabled,
-            website: config.profileLinksEnabled,
+            linkedin: { enabled: config.profileLinksEnabled, required: false },
+            github: { enabled: config.profileLinksEnabled, required: false },
+            website: { enabled: config.profileLinksEnabled, required: false },
           });
 
     return {

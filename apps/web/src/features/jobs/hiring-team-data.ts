@@ -7,7 +7,7 @@ import {
   jobHiringTeam,
   member as authMembers,
   user as authUsers,
-} from "@openhire/db";
+} from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export type HiringTeamRole = "recruiter" | "hiring_manager" | "interviewer";

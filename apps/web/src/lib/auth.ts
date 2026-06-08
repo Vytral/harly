@@ -1,1 +1,1 @@
-export { auth } from "@openhire/auth/server";
+export { auth } from "@harly/auth/server";

@@ -1,4 +1,4 @@
-# @openhire/emails
+# @harly/emails
 
 Future home for transactional email templates and sending.
 

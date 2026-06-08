@@ -30,7 +30,7 @@ export default async function BoardPage({ params }: BoardPageProps) {
   return (
     <BoardShell workspace={workspace} boardRoot={boardRoot}>
       {isHero ? (
-        <BoardHero workspace={workspace} boardRoot={boardRoot} showCta={jobs.length > 0} />
+        <BoardHero workspace={workspace} showCta={jobs.length > 0} />
       ) : (
         <BoardMinimalHeader workspace={workspace} />
       )}

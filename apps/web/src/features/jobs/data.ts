@@ -3,7 +3,7 @@ import "server-only";
 import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
 
 import { slugify } from "@/lib/utils";
-import { db } from "@openhire/db";
+import { db } from "@harly/db";
 import {
   applicationQuestions,
   applications,
@@ -11,7 +11,7 @@ import {
   jobs,
   organization,
   workspaceSettings,
-} from "@openhire/db";
+} from "@harly/db";
 import {
   normalizeBoardStyle,
   normalizeLogoStyle,

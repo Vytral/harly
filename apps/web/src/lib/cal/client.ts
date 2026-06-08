@@ -88,7 +88,7 @@ export async function createCalBooking(
   });
 }
 
-/** Register a webhook so Cal.com pushes booking events back to OpenHire. */
+/** Register a webhook so Cal.com pushes booking events back to Harly. */
 export async function registerCalWebhook(
   config: WorkspaceCalConfig,
   input: { subscriberUrl: string; secret: string },

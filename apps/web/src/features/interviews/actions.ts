@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@openhire/db";
-import { activityEvents, applications, candidates, interviews } from "@openhire/db";
+import { db } from "@harly/db";
+import { activityEvents, applications, candidates, interviews } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 const interviewTypes = [

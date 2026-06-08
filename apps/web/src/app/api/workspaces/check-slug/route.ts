@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { eq } from "drizzle-orm";
 
-import { db, organization } from "@openhire/db";
+import { db, organization } from "@harly/db";
 import { auth } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {

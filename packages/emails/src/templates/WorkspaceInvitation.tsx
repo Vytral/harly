@@ -22,7 +22,7 @@ export function workspaceInvitationSubject({
 }: {
   workspaceName: string;
 }) {
-  return `You've been invited to join ${workspaceName} on OpenHire`;
+  return `You've been invited to join ${workspaceName} on Harly`;
 }
 
 export function WorkspaceInvitation({
@@ -44,15 +44,15 @@ export function WorkspaceInvitation({
     <Html>
       <Body style={main}>
         <Container style={container}>
-          <Heading style={heading}>You&apos;re invited to OpenHire</Heading>
+          <Heading style={heading}>You&apos;re invited to Harly</Heading>
           <Text style={text}>Hi there,</Text>
           <Text style={text}>
             <strong>{inviterName}</strong> has invited you to join{" "}
             <strong>{workspaceName}</strong> as a{" "}
-            <strong>{roleLabel}</strong> on OpenHire.
+            <strong>{roleLabel}</strong> on Harly.
           </Text>
           <Text style={text}>
-            OpenHire is an open-source applicant tracking system. Click the
+            Harly is an open-source applicant tracking system. Click the
             button below to accept your invitation and get started.
           </Text>
           <Section style={{ marginTop: "24px" }}>

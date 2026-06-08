@@ -1,4 +1,4 @@
-# @openhire/storage
+# @harly/storage
 
 Future home for CV and attachment storage.
 

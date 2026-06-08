@@ -1,14 +1,14 @@
-# OpenHire
+# Harly
 
-OpenHire is an open-source applicant tracking system for modern teams.
+Harly is an open-source applicant tracking system for modern teams.
 
 Beautiful, fast, self-hostable recruiting software with a public job board, candidate pipeline, notes, emails, analytics, and developer-friendly APIs.
 
-## Why OpenHire?
+## Why Harly?
 
 Most ATS products are expensive, slow, closed, and painful to customize.
 
-OpenHire is built for startups, agencies, and technical teams that want:
+Harly is built for startups, agencies, and technical teams that want:
 
 - A beautiful recruiter experience
 - A public job board with SEO

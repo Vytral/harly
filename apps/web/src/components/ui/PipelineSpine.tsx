@@ -1,7 +1,7 @@
 import { cn } from "@/lib/utils";
 
 /**
- * The pipeline spine — OpenHire's signature stage indicator.
+ * The pipeline spine — Harly's signature stage indicator.
  * A segmented bar of the hiring pipeline with the current stage filled in pine.
  * Shown anywhere a candidate appears (overview, rows, cards, profile headers)
  * so the ATS's core metaphor is always legible at a glance.

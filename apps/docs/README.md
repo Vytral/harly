@@ -1,6 +1,6 @@
 # OpenHire Docs
 
-Future home for `docs.openhire.dev`.
+Future home for `docs.harly.dev`.
 
 This is a placeholder while the docs stack is undecided. Candidates include
 Mintlify, Docusaurus, or a lightweight Next.js docs app.

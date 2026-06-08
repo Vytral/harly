@@ -6,11 +6,11 @@ import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
-import { db } from "@openhire/db";
+import { db } from "@harly/db";
 import {
   member as authMembers,
   organization as authOrganizations,
-} from "@openhire/db";
+} from "@harly/db";
 import {
   normalizeWorkspaceRole,
   type WorkspaceRole,

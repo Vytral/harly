@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getSessionCookie } from "@openhire/auth/cookies";
+import { getSessionCookie } from "@harly/auth/cookies";
 
 const PUBLIC_PATHS = [
   "/",

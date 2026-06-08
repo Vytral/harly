@@ -47,11 +47,10 @@ export function BoardShell({ workspace, boardRoot, children }: BoardShellProps) 
 
 type BoardHeroProps = {
   workspace: WorkspaceLike;
-  boardRoot: string;
   showCta?: boolean;
 };
 
-export function BoardHero({ workspace, boardRoot, showCta = false }: BoardHeroProps) {
+export function BoardHero({ workspace, showCta = false }: BoardHeroProps) {
   const initials = workspace.name.slice(0, 2).toUpperCase();
   const hasHeroImage = Boolean(workspace.heroImageUrl);
 
@@ -277,7 +276,7 @@ export function BoardFooter({
         <span className="text-zinc-400">
           Powered by{" "}
           <Link href={"/" as Route} className="font-medium text-zinc-700">
-            OpenHire
+            Harly
           </Link>
         </span>
       </div>

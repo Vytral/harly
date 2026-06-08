@@ -17,7 +17,7 @@ export default function OnboardingLayout({
 
       <header className="relative z-10 flex items-center justify-center pt-10">
         <span className="font-display text-2xl tracking-tight text-pine">
-          OpenHire
+          Harly
         </span>
       </header>
 

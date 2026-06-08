@@ -2,13 +2,13 @@ import "server-only";
 
 import { and, asc, desc, eq, gte } from "drizzle-orm";
 
-import { db } from "@openhire/db";
+import { db } from "@harly/db";
 import {
   candidates,
   interviews,
   jobs,
   user as authUsers,
-} from "@openhire/db";
+} from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import type {
   CandidateInterviewItem,

@@ -1,5 +1,5 @@
 {
-  "name": "@openhire/validators",
+  "name": "@harly/validators",
   "version": "0.1.0",
   "private": true,
   "exports": {

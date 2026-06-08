@@ -4,7 +4,7 @@ import { defineConfig } from "drizzle-kit";
 
 const databaseUrl =
   process.env.DATABASE_URL ??
-  "postgresql://openhire:openhire@localhost:5432/openhire";
+  "postgresql://harly:harly@localhost:5432/harly";
 
 export default defineConfig({
   out: "./packages/db/migrations",

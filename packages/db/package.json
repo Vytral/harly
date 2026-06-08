@@ -1,5 +1,5 @@
 {
-  "name": "@openhire/db",
+  "name": "@harly/db",
   "version": "0.1.0",
   "private": true,
   "scripts": {

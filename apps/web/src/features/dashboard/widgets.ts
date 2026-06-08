@@ -13,7 +13,7 @@ import {
   jobStages,
   scorecards,
   user,
-} from "@openhire/db";
+} from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { daysSince, formatShort } from "@/lib/date";
 

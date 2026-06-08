@@ -15,7 +15,7 @@ export type WelcomeEmailProps = {
   workspaceName?: string;
 };
 
-export const welcomeEmailSubject = "Welcome to OpenHire";
+export const welcomeEmailSubject = "Welcome to Harly";
 
 export function WelcomeEmail({ userName, workspaceName }: WelcomeEmailProps) {
   const workspaceLabel = workspaceName ? ` for ${workspaceName}` : "";
@@ -24,10 +24,10 @@ export function WelcomeEmail({ userName, workspaceName }: WelcomeEmailProps) {
     <Html>
       <Body style={main}>
         <Container style={container}>
-          <Heading style={heading}>Welcome to OpenHire</Heading>
+          <Heading style={heading}>Welcome to Harly</Heading>
           <Text style={text}>Hi {userName},</Text>
           <Text style={text}>
-            Welcome to OpenHire{workspaceLabel}. You can now create your first
+            Welcome to Harly{workspaceLabel}. You can now create your first
             job posting, publish it to your job board, and start tracking
             candidates.
           </Text>
@@ -37,7 +37,7 @@ export function WelcomeEmail({ userName, workspaceName }: WelcomeEmailProps) {
             </Button>
           </Section>
           <Text style={{ ...muted, marginTop: "28px" }}>
-            OpenHire is open source and self-hostable by default.
+            Harly is open source and self-hostable by default.
           </Text>
         </Container>
       </Body>

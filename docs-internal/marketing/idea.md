@@ -1,17 +1,17 @@
-# OpenHire Marketing — Idea
+# Harly Marketing — Idea
 
 ## What is this?
 
-The public website at openhire.dev. A standalone app (or site) whose only job is to
-make someone who lands on it understand what OpenHire is, want to use it, and take
+The public website at harly.dev. A standalone app (or site) whose only job is to
+make someone who lands on it understand what Harly is, want to use it, and take
 action — either self-hosting or joining the cloud waitlist.
 
 ## Who is it for?
 
-Anyone who discovers OpenHire for the first time via:
+Anyone who discovers Harly for the first time via:
 - Product Hunt
 - Hacker News
-- GitHub (links back to openhire.dev)
+- GitHub (links back to harly.dev)
 - Google ("open source ATS self-hosted")
 - Twitter / X
 
@@ -35,7 +35,7 @@ nail the marketing site.
 ## Non-goals
 
 - Not a blog (no CMS needed in v1)
-- Not a docs site (that's docs.openhire.dev)
+- Not a docs site (that's docs.harly.dev)
 - Not a dashboard (no auth, no user state)
 - Does not need to be multilingual in v1
 

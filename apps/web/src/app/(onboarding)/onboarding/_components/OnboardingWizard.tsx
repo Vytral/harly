@@ -15,7 +15,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { authClient } from "@openhire/auth/client";
+import { authClient } from "@harly/auth/client";
 import { BoardPreview } from "@/features/workspaces/BoardPreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -444,7 +444,7 @@ function StepWorkspace({
 
         <div className="flex items-center gap-1.5 text-xs">
           <span className="text-muted-foreground">Careers page:</span>
-          <span className="font-mono text-muted-foreground">openhire.app/board/</span>
+          <span className="font-mono text-muted-foreground">harly.app/board/</span>
           {editingSlug ? (
             <input
               autoFocus
@@ -530,7 +530,7 @@ function StepExtensions({
     <div>
       <StepHeading
         title="Connect your tools"
-        subtitle="OpenHire plugs into the apps you already use. Connect them anytime from Settings → Integrations."
+        subtitle="Harly plugs into the apps you already use. Connect them anytime from Settings → Integrations."
       />
 
       <ul className="mt-6 space-y-2.5">
@@ -687,7 +687,7 @@ function ExtensionsPreview() {
           <span className="size-2 rounded-full bg-clay/50" />
           <span className="size-2 rounded-full bg-pine/40" />
           <span className="ml-2 truncate rounded bg-card px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-            openhire.app/settings/integrations
+            harly.app/settings/integrations
           </span>
         </div>
         <div className="space-y-2 p-3">

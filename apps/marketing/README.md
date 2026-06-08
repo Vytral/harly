@@ -1,6 +1,6 @@
-# OpenHire Marketing
+# Harly Marketing
 
-Future home for `openhire.dev`.
+Future home for `harly.dev`.
 
 This app should contain only marketing pages, launch assets, pricing, changelog,
 SEO pages, and comparison pages. It should not import product server logic from

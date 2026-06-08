@@ -1,4 +1,4 @@
-# create-openhire — Plan
+# create-harly — Plan
 
 ## Current state
 
@@ -6,7 +6,7 @@ Does not exist. No CLI, no package, no wizard.
 
 ## Target state
 
-A published npm package `@openhire/create` that:
+A published npm package `@harly/create` that:
 
 1. Runs a wizard with these steps:
    ```
@@ -34,22 +34,22 @@ A published npm package `@openhire/create` that:
    2. Run: docker compose up -d
    3. Visit https://hiring.acme.com to complete setup
    
-   Deploy guides: docs.openhire.dev/self-hosting
+   Deploy guides: docs.harly.dev/self-hosting
    ```
 
 ## Milestones
 
 ### M1 — MVP CLI (Week 8–9)
-- [ ] Create `packages/create-openhire` in monorepo (or separate repo)
+- [ ] Create `packages/create-harly` in monorepo (or separate repo)
 - [ ] Set up as a bin package with `#!/usr/bin/env node`
 - [ ] Implement wizard with `@clack/prompts` (best DX for interactive CLIs)
 - [ ] Generate `.env` file from wizard answers
 - [ ] Basic validation: test DB connection before proceeding
 - [ ] Print next steps based on detected or chosen deploy target
-- [ ] Publish to npm as `@openhire/create`
+- [ ] Publish to npm as `@harly/create`
 
 ### M2 — Upgrade command (post-launch)
-- [ ] `npx @openhire/create upgrade` — checks current version vs latest, runs migrations
+- [ ] `npx @harly/create upgrade` — checks current version vs latest, runs migrations
 - [ ] Changelogs shown inline during upgrade
 
 ### M3 — Smarter detection (post-launch)
@@ -69,7 +69,7 @@ A published npm package `@openhire/create` that:
 ## Wizard flow (detailed)
 
 ```
-┌ Welcome to OpenHire setup
+┌ Welcome to Harly setup
 │
 ├ Organization
 │  └ name → used as default workspace name
@@ -111,6 +111,6 @@ A published npm package `@openhire/create` that:
 ## Next actions
 
 1. This is a Week 8–9 task — do not start before core is working
-2. Set up `packages/create-openhire` directory with package.json and bin entry
+2. Set up `packages/create-harly` directory with package.json and bin entry
 3. Implement the wizard step by step, testing each prompt
 4. Publish to npm (even as 0.1.0-beta) before Product Hunt launch

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { asc } from "drizzle-orm";
 
-import { db, organization } from "@openhire/db";
+import { db, organization } from "@harly/db";
 
 export default async function SetupPage() {
   const [existing] = await db
@@ -22,7 +22,7 @@ export default async function SetupPage() {
           <span className="font-mono text-sm font-bold text-white">OH</span>
         </div>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
-          Welcome to OpenHire
+          Welcome to Harly
         </h1>
         <p className="mt-3 text-sm leading-6 text-zinc-500">
           No workspace configured yet. Create an account to set up your hiring
@@ -43,7 +43,7 @@ export default async function SetupPage() {
           </Link>
         </div>
         <p className="mt-8 text-xs text-zinc-400">
-          OpenHire — open-source applicant tracking system
+          Harly — open-source applicant tracking system
         </p>
       </div>
     </div>

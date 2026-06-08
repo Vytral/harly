@@ -1,4 +1,4 @@
-# @openhire/api
+# @harly/api
 
 Future home for API contracts and integrations.
 

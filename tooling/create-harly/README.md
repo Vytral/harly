@@ -1,14 +1,14 @@
-# @openhire/create
+# @harly/create
 
 Future bootstrap CLI.
 
 Target experience:
 
 ```bash
-npx @openhire/create
+npx @harly/create
 ```
 
-The CLI should help users deploy or self-host OpenHire with a guided setup for:
+The CLI should help users deploy or self-host Harly with a guided setup for:
 
 - Database
 - Storage

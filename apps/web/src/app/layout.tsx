@@ -19,7 +19,7 @@ const calSans = localFont({
 });
 
 export const metadata: Metadata = {
-  title: "OpenHire",
+  title: "Harly",
   description: "Open-source applicant tracking system for modern teams.",
 };
 

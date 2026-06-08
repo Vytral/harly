@@ -1,4 +1,4 @@
-# @openhire/db
+# @harly/db
 
 Future home for:
 
@@ -9,5 +9,5 @@ Future home for:
 - Tenant-aware query helpers
 
 The schema, Drizzle client, and generated migrations now live in this package.
-Application code should import from `@openhire/db` instead of app-local DB
+Application code should import from `@harly/db` instead of app-local DB
 modules.

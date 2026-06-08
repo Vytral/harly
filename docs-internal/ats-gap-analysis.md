@@ -20,7 +20,7 @@ Estado de OpenHire frente a un ATS open-source self-hostable de referencia (mode
 
 ### P0 — Bloqueante para lanzar OSS
 1. **Self-hosting serio**
-   - Wizard `create-openhire` (hoy placeholder en `tooling/create-openhire`).
+   - Wizard `create-harly` (hoy placeholder en `tooling/create-harly`).
    - Dockerfile de la app + `docker-compose` completo (app + Postgres + Redis).
    - Healthcheck endpoint, validación de env (zod) al boot, seed limpio.
    - Botones one-click deploy (Vercel + Neon/Railway) en README.

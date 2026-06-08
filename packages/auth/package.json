@@ -1,5 +1,5 @@
 {
-  "name": "@openhire/auth",
+  "name": "@harly/auth",
   "version": "0.1.0",
   "private": true,
   "exports": {
@@ -10,7 +10,7 @@
     "./server": "./src/auth.ts"
   },
   "dependencies": {
-    "@openhire/db": "workspace:*",
+    "@harly/db": "workspace:*",
     "better-auth": "^1.6.11",
     "resend": "^6.12.3"
   },

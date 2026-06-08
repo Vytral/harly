@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { generateText } from "ai";
 import { z } from "zod";
 
-import { db, workspaceSettings } from "@openhire/db";
+import { db, workspaceSettings } from "@harly/db";
 
 import { requireWorkspaceRole } from "@/features/workspaces/context";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";

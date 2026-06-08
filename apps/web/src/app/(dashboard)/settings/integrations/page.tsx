@@ -48,7 +48,7 @@ export default async function IntegrationsSettingsPage() {
       <div>
         <h2 className="font-display text-lg font-semibold tracking-tight">Integrations</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          Connect OpenHire to the tools your team already uses.
+          Connect Harly to the tools your team already uses.
         </p>
       </div>
 

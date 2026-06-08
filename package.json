@@ -1,5 +1,5 @@
 {
-  "name": "openhire",
+  "name": "harly",
   "private": true,
   "version": "0.1.0",
   "description": "Open-source applicant tracking system for modern teams.",
@@ -14,11 +14,11 @@
     "clean": "rm -rf .next dist .turbo",
     "db:up": "docker-compose up -d",
     "db:down": "docker-compose down",
-    "db:generate": "pnpm --filter @openhire/db db:generate",
-    "db:migrate": "pnpm --filter @openhire/db db:migrate",
-    "db:studio": "pnpm --filter @openhire/db db:studio",
-    "db:push": "pnpm --filter @openhire/db db:push",
-    "db:seed": "pnpm --filter @openhire/db db:seed"
+    "db:generate": "pnpm --filter @harly/db db:generate",
+    "db:migrate": "pnpm --filter @harly/db db:migrate",
+    "db:studio": "pnpm --filter @harly/db db:studio",
+    "db:push": "pnpm --filter @harly/db db:push",
+    "db:seed": "pnpm --filter @harly/db db:seed"
   },
   "devDependencies": {
     "dotenv": "^17.4.2",

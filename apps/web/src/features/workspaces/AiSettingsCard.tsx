@@ -114,7 +114,7 @@ export function AiSettingsCard({
             <CardTitle>AI</CardTitle>
             <CardDescription>
               Bring your own provider key to power CV parsing and job-description
-              drafting. Without it, OpenHire uses built-in heuristics.
+              drafting. Without it, Harly uses built-in heuristics.
             </CardDescription>
           </div>
         </div>
@@ -411,7 +411,7 @@ function AiSettingsForm({
           <div>
             <p className="text-sm font-medium">Enable AI</p>
             <p className="text-xs text-muted-foreground">
-              When off, OpenHire uses heuristics only.
+              When off, Harly uses heuristics only.
             </p>
           </div>
           <Switch checked={enabled} onCheckedChange={setEnabled} />

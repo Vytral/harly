@@ -1,4 +1,4 @@
-import type { Job } from "@openhire/db";
+import type { Job } from "@harly/db";
 import { Archive, FileEdit, Send } from "lucide-react";
 
 import { updateJobStatusAction } from "./actions";

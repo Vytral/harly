@@ -39,7 +39,24 @@ export async function GET(request: NextRequest) {
     return new Response("Upstream fetch failed", { status: 502 });
   }
 
-  if (!upstream.ok || !upstream.body) {
+  if (!upstream.ok) {
+    if (upstream.status === 404) {
+      const pixel = Uint8Array.from(
+        atob("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7"),
+        (c) => c.charCodeAt(0)
+      );
+      return new Response(pixel, {
+        status: 200,
+        headers: {
+          "Content-Type": "image/gif",
+          "Cache-Control": "public, max-age=86400, immutable",
+        },
+      });
+    }
+    return new Response("Upstream error", { status: 502 });
+  }
+
+  if (!upstream.body) {
     return new Response("Upstream error", { status: 502 });
   }
 

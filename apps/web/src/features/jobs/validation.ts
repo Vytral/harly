@@ -75,8 +75,11 @@ export const jobFormSchema = z
     officePhotosJson: z.string().optional(),
     resumeRequired: checkboxBoolean(defaultJobApplicationConfig.resumeRequired),
     profileLinkLinkedin: checkboxBoolean(true),
+    profileLinkLinkedinRequired: checkboxBoolean(false),
     profileLinkGithub: checkboxBoolean(true),
+    profileLinkGithubRequired: checkboxBoolean(false),
     profileLinkWebsite: checkboxBoolean(true),
+    profileLinkWebsiteRequired: checkboxBoolean(false),
     applicationQuestionsJson: z.string().optional(),
   })
   .superRefine((values, ctx) => {
@@ -97,9 +100,18 @@ export const jobFormSchema = z
     const applicationConfig: JobApplicationConfig = {
       resumeRequired: values.resumeRequired,
       profileLinks: {
-        linkedin: values.profileLinkLinkedin,
-        github: values.profileLinkGithub,
-        website: values.profileLinkWebsite,
+        linkedin: {
+          enabled: values.profileLinkLinkedin,
+          required: values.profileLinkLinkedin && values.profileLinkLinkedinRequired,
+        },
+        github: {
+          enabled: values.profileLinkGithub,
+          required: values.profileLinkGithub && values.profileLinkGithubRequired,
+        },
+        website: {
+          enabled: values.profileLinkWebsite,
+          required: values.profileLinkWebsite && values.profileLinkWebsiteRequired,
+        },
       },
       questions: parseJobApplicationQuestions(values.applicationQuestionsJson),
     };

@@ -1,13 +1,28 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import { FileText, Upload } from "lucide-react";
+import { Download, ExternalLink, FileText, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { attachCandidateFile } from "@/features/candidates/actions";
 import { getResumeFileValidationError } from "@/lib/storage-validation";
 import { formatFileSize } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+function isPdfFile(file: { fileType: string | null; fileName: string }) {
+  return (
+    file.fileType === "application/pdf" ||
+    file.fileName.toLowerCase().endsWith(".pdf")
+  );
+}
 
 type CandidateFileItem = {
   id: string;
@@ -167,17 +182,8 @@ export function CandidateFileUpload({
         </p>
       ) : (
         <div className="space-y-2">
-          {files.map((file) => (
-            <a
-              key={file.id}
-              href={file.fileUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-3 rounded-lg border bg-card p-3 transition hover:border-ring/40 hover:bg-accent/40"
-            >
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                <FileText className="size-4" />
-              </span>
+          {files.map((file) => {
+            const meta = (
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{file.fileName}</p>
                 <p className="text-xs text-muted-foreground">
@@ -185,8 +191,66 @@ export function CandidateFileUpload({
                   {file.uploadedByName ? ` · ${file.uploadedByName}` : ""}
                 </p>
               </div>
-            </a>
-          ))}
+            );
+            const icon = (
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                <FileText className="size-4" />
+              </span>
+            );
+
+            if (isPdfFile(file)) {
+              return (
+                <Dialog key={file.id}>
+                  <DialogTrigger asChild>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition hover:border-ring/40 hover:bg-accent/40"
+                    >
+                      {icon}
+                      {meta}
+                    </button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-3xl">
+                    <DialogHeader>
+                      <DialogTitle className="flex items-center justify-between gap-3 pr-8">
+                        <span className="truncate">{file.fileName}</span>
+                        <Button asChild size="sm" variant="outline">
+                          <a href={file.fileUrl} target="_blank" rel="noreferrer">
+                            <Download className="size-4" />
+                            Download
+                          </a>
+                        </Button>
+                      </DialogTitle>
+                      <DialogDescription className="sr-only">
+                        Preview for {file.fileName}
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="h-[75vh] overflow-hidden rounded-lg border">
+                      <iframe
+                        src={file.fileUrl}
+                        title={file.fileName}
+                        className="size-full"
+                      />
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              );
+            }
+
+            return (
+              <a
+                key={file.id}
+                href={file.fileUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-3 rounded-lg border bg-card p-3 transition hover:border-ring/40 hover:bg-accent/40"
+              >
+                {icon}
+                {meta}
+                <ExternalLink className="ml-auto size-4 shrink-0 text-muted-foreground" />
+              </a>
+            );
+          })}
         </div>
       )}
     </div>

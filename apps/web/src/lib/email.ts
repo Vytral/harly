@@ -1,6 +1,6 @@
 import type React from "react";
 
-import { createEmailSender } from "@openhire/emails";
+import { createEmailSender } from "@harly/emails";
 
 export const emailSender = createEmailSender();
 
@@ -16,6 +16,6 @@ export async function sendEmail(options: {
   try {
     await emailSender.send(options);
   } catch (error) {
-    console.error("[OpenHire] Failed to send email:", error);
+    console.error("[Harly] Failed to send email:", error);
   }
 }

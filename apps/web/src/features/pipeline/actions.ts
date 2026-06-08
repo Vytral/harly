@@ -8,9 +8,9 @@ import {
   CandidateStageUpdate,
   candidateRejectedSubject,
   candidateStageUpdateSubject,
-} from "@openhire/emails";
+} from "@harly/emails";
 
-import { db } from "@openhire/db";
+import { db } from "@harly/db";
 import {
   activityEvents,
   applications,
@@ -19,7 +19,7 @@ import {
   jobs,
   jobStages,
   organization,
-} from "@openhire/db";
+} from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { sendEmail } from "@/lib/email";
 

@@ -1,4 +1,4 @@
-# @openhire/auth
+# @harly/auth
 
 Future home for authentication and authorization.
 

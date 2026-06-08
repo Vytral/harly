@@ -8,7 +8,7 @@ import {
   candidates,
   interviews,
   workspaceSettings,
-} from "@openhire/db";
+} from "@harly/db";
 import { verifyCalSignature } from "@/lib/cal/client";
 
 export const runtime = "nodejs";

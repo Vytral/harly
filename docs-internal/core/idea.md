@@ -1,4 +1,4 @@
-# OpenHire Core — Idea
+# Harly Core — Idea
 
 ## What is this?
 
@@ -36,7 +36,7 @@ option that produces a beautiful, functional result.
 
 ## Success criteria
 
-- A developer can go from `npx @openhire/create` to a working ATS in under 10 minutes
+- A developer can go from `npx @harly/create` to a working ATS in under 10 minutes
 - A non-developer (with a Railway account) can deploy it in under 20 minutes
 - The UI passes a "would I be embarrassed to show this to a candidate?" test
 - All core hiring flows work: post job → candidate applies → recruiter reviews → hire or reject

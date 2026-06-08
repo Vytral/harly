@@ -46,7 +46,7 @@ export function ApplicationReceivedRecruiter({
             </Button>
           </Section>
           <Text style={{ ...muted, marginTop: "28px" }}>
-            OpenHire notification
+            Harly notification
           </Text>
         </Container>
       </Body>

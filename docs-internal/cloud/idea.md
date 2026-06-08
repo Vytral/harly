@@ -1,14 +1,14 @@
-# OpenHire Cloud — Idea
+# Harly Cloud — Idea
 
 ## What is this?
 
-The managed version of OpenHire. Same codebase as the core, deployed and operated by
-the OpenHire team at app.openhire.dev. Users sign up, create a workspace, and get a
+The managed version of Harly. Same codebase as the core, deployed and operated by
+the Harly team at app.harly.dev. Users sign up, create a workspace, and get a
 working ATS without touching a server.
 
 ## Who is it for?
 
-Teams who want the OpenHire experience but don't want to manage infrastructure.
+Teams who want the Harly experience but don't want to manage infrastructure.
 They might be: non-technical founders, small agencies, companies without a DevOps person,
 or developers who just don't want the hassle.
 

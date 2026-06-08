@@ -2,7 +2,7 @@ import "server-only";
 
 import { asc } from "drizzle-orm";
 
-import { db, organization } from "@openhire/db";
+import { db, organization } from "@harly/db";
 import { listOpenJobsForWorkspaceSlug } from "@/features/jobs/data";
 
 export async function getPublicWorkspaceSlug(): Promise<string | null> {

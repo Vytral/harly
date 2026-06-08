@@ -1,4 +1,4 @@
-# OpenHire Cloud — Plan
+# Harly Cloud — Plan
 
 ## Current state
 
@@ -6,7 +6,7 @@ Does not exist yet. Cloud is post-MVP.
 
 ## Target state
 
-A hosted instance of OpenHire running at app.openhire.dev with:
+A hosted instance of Harly running at app.harly.dev with:
 - Stripe billing integration
 - Usage limits enforced per plan
 - Admin panel for managing workspaces
@@ -23,9 +23,9 @@ A hosted instance of OpenHire running at app.openhire.dev with:
 - [ ] Waitlist → invite → onboard flow
 - [ ] Basic admin dashboard to view workspaces and usage
 - [ ] Data export available for all plans
-- [ ] Support email setup (e.g., careers@openhire.dev)
+- [ ] Support email setup (e.g., careers@harly.dev)
 - [ ] Documentation for cloud offering and pricing
-- [ ] Custom Domain support for all plans (CNAME to app.openhire.dev)
+- [ ] Custom Domain support for all plans (CNAME to app.harly.dev)
 
 ### Phase 2 — Growth (Q1 2026)
 - [ ] Admin dashboard (internal): list workspaces, usage, MRR

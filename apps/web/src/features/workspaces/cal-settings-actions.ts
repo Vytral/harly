@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db, workspaceSettings } from "@openhire/db";
+import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
@@ -123,7 +123,7 @@ export async function disableCalAction(): Promise<CalSettingsActionResult> {
 }
 
 /**
- * Register OpenHire's webhook endpoint with Cal.com so bookings sync back. Uses
+ * Register Harly's webhook endpoint with Cal.com so bookings sync back. Uses
  * the stored signing secret and the app's public URL.
  */
 export async function registerCalWebhookAction(): Promise<CalSettingsActionResult> {

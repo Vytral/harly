@@ -1,4 +1,4 @@
-# @openhire/validators
+# @harly/validators
 
 Future home for shared validation schemas.
 

@@ -2,14 +2,14 @@ import "server-only";
 
 import { and, asc, desc, eq, max } from "drizzle-orm";
 
-import { db } from "@openhire/db";
+import { db } from "@harly/db";
 import {
   applications,
   applicationStageHistory,
   candidates,
   jobs,
   jobStages,
-} from "@openhire/db";
+} from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export type PipelineJobOption = {

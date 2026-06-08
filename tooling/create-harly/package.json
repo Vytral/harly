@@ -1,0 +1,8 @@
+{
+  "name": "@harly/create",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "create-harly": "./src/index.ts"
+  }
+}

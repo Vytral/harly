@@ -1,7 +1,7 @@
 "use server";
 
 import { createElement } from "react";
-import { WelcomeEmail, welcomeEmailSubject } from "@openhire/emails";
+import { WelcomeEmail, welcomeEmailSubject } from "@harly/emails";
 
 import { sendEmail } from "@/lib/email";
 

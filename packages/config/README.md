@@ -1,4 +1,4 @@
-# @openhire/config
+# @harly/config
 
 Future home for shared configuration.
 

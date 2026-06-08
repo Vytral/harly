@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { sendEmail } from "@/lib/email";
-import { db } from "@openhire/db";
+import { db } from "@harly/db";
 import {
   customRoles,
   invitation,
@@ -18,12 +18,12 @@ import {
   session as authSessions,
   user as authUsers,
   workspaceSettings,
-} from "@openhire/db";
+} from "@harly/db";
 import { isBuiltinRole } from "@/features/workspaces/permissions";
 import {
   WorkspaceInvitation,
   workspaceInvitationSubject,
-} from "@openhire/emails";
+} from "@harly/emails";
 import {
   getWorkspaceContext,
   requireWorkspaceRole,

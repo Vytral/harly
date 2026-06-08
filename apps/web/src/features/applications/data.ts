@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 
-import { db } from "@openhire/db";
+import { db } from "@harly/db";
 import {
   activityEvents,
   applicationAnswers,
@@ -16,7 +16,7 @@ import {
   member as authMembers,
   organization,
   user as authUsers,
-} from "@openhire/db";
+} from "@harly/db";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { buildQuestionAnswerRows } from "@/features/applications/questions";
 import type { ApplicationFormValues } from "@/lib/validations/applications";

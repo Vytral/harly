@@ -10,6 +10,7 @@ import {
 import type { ResumeAutofillFields } from "@/features/applications/resume-autofill";
 import {
   hasAnyProfileLink,
+  hasRequiredProfileLink,
   type JobApplicationConfig,
 } from "@/features/jobs/config";
 import type { ApplicationFormValues } from "@/lib/validations/applications";
@@ -205,7 +206,19 @@ export function ApplyForm({
     const nextErrors: Partial<Record<keyof ApplicationFormValues, string[]>> = {};
     const nextQuestionErrors: Record<string, string[]> = {};
 
+    const linkPlatforms = {
+      linkedinUrl: applicationConfig.profileLinks.linkedin,
+      githubUrl: applicationConfig.profileLinks.github,
+      websiteUrl: applicationConfig.profileLinks.website,
+    } as const;
+
     for (const field of ["linkedinUrl", "githubUrl", "websiteUrl"] as const) {
+      const setting = linkPlatforms[field];
+      const value = fields[field].trim();
+      if (setting.required && !value) {
+        nextErrors[field] = ["This field is required."];
+        continue;
+      }
       const error = validateHttpsUrl(fields[field]);
       if (error) {
         nextErrors[field] = [error];
@@ -498,26 +511,61 @@ export function ApplyForm({
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-900">
-              Autofill application
+              Resume
             </p>
             <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-600">
-              Save time by importing your resume. Accepted formats: .pdf, .doc,
-              .docx. Maximum size 10MB.
+              Upload once — we&apos;ll attach it to your application and use it
+              to pre-fill the form below.{" "}
+              {applicationConfig.resumeRequired
+                ? "Required."
+                : "Optional."}{" "}
+              Accepted formats: .pdf, .doc, .docx. Maximum size 10MB.
             </p>
           </div>
-          <label
-            htmlFor="resumeFile"
-            className="inline-flex h-10 cursor-pointer items-center justify-center rounded-md px-5 text-sm font-medium text-white transition hover:brightness-110"
-            style={{ backgroundColor: "var(--board-primary)" }}
-          >
-            Import resume
-          </label>
+          {resumeFile ? (
+            <label
+              htmlFor="resumeFile"
+              className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-zinc-200 bg-white px-5 text-sm font-medium text-zinc-700 transition hover:border-zinc-400"
+            >
+              Replace file
+            </label>
+          ) : (
+            <label
+              htmlFor="resumeFile"
+              className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md px-5 text-sm font-medium text-white transition hover:brightness-110"
+              style={{ backgroundColor: "var(--board-primary)" }}
+            >
+              Upload resume
+            </label>
+          )}
         </div>
         {resumeFile ? (
-          <p className="mt-3 text-sm font-medium text-zinc-700">
-            Selected: {resumeFile.name} ({formatFileSize(resumeFile.size)})
+          <p className="mt-3 flex items-center gap-2 text-sm font-medium text-zinc-700">
+            <span
+              className="inline-flex size-5 items-center justify-center rounded-full text-white"
+              style={{ backgroundColor: "var(--board-primary)" }}
+              aria-hidden
+            >
+              ✓
+            </span>
+            Uploaded: {resumeFile.name} ({formatFileSize(resumeFile.size)})
           </p>
-        ) : null}
+        ) : (
+          <label
+            htmlFor="resumeFile"
+            className="mt-4 flex cursor-pointer flex-col items-center rounded-md border border-dashed border-zinc-300 bg-zinc-50/50 px-6 py-8 text-center transition hover:border-zinc-400 hover:bg-zinc-50"
+          >
+            <p className="text-sm text-zinc-700">
+              <span
+                className="font-medium"
+                style={{ color: "var(--board-primary)" }}
+              >
+                Choose a file
+              </span>{" "}
+              or drag and drop here
+            </p>
+          </label>
+        )}
         {isUploading ? (
           <p className="mt-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600">
             Reading your resume…
@@ -654,7 +702,7 @@ export function ApplyForm({
 
         {hasAnyProfileLink(applicationConfig.profileLinks) ? (
           <div className="mt-5">
-            {!showLinks ? (
+            {!showLinks && !hasRequiredProfileLink(applicationConfig.profileLinks) ? (
               <button
                 type="button"
                 onClick={() => setShowLinks(true)}
@@ -664,9 +712,14 @@ export function ApplyForm({
               </button>
             ) : (
               <div className="grid gap-4 sm:grid-cols-3">
-                {applicationConfig.profileLinks.linkedin ? (
+                {applicationConfig.profileLinks.linkedin.enabled ? (
                   <label className="block">
-                    <span className={labelClass}>LinkedIn</span>
+                    <span className={labelClass}>
+                      {applicationConfig.profileLinks.linkedin.required ? (
+                        <span className={requiredMarkClass}>*</span>
+                      ) : null}{" "}
+                      LinkedIn
+                    </span>
                     <input
                       name="linkedinUrl"
                       type="url"
@@ -685,9 +738,14 @@ export function ApplyForm({
                     />
                   </label>
                 ) : null}
-                {applicationConfig.profileLinks.github ? (
+                {applicationConfig.profileLinks.github.enabled ? (
                   <label className="block">
-                    <span className={labelClass}>GitHub</span>
+                    <span className={labelClass}>
+                      {applicationConfig.profileLinks.github.required ? (
+                        <span className={requiredMarkClass}>*</span>
+                      ) : null}{" "}
+                      GitHub
+                    </span>
                     <input
                       name="githubUrl"
                       type="url"
@@ -706,9 +764,14 @@ export function ApplyForm({
                     />
                   </label>
                 ) : null}
-                {applicationConfig.profileLinks.website ? (
+                {applicationConfig.profileLinks.website.enabled ? (
                   <label className="block">
-                    <span className={labelClass}>Website</span>
+                    <span className={labelClass}>
+                      {applicationConfig.profileLinks.website.required ? (
+                        <span className={requiredMarkClass}>*</span>
+                      ) : null}{" "}
+                      Website
+                    </span>
                     <input
                       name="websiteUrl"
                       type="url"
@@ -731,47 +794,6 @@ export function ApplyForm({
             )}
           </div>
         ) : null}
-      </section>
-
-      <section className="rounded-lg border border-zinc-200 bg-white p-5">
-        <div className="border-b border-zinc-100 pb-4">
-          <h2 className="text-base font-semibold text-zinc-900">Profile</h2>
-        </div>
-        <label
-          htmlFor="resumeFile"
-          className="mt-5 flex cursor-pointer flex-col items-center rounded-md border border-dashed border-zinc-300 bg-zinc-50/50 px-6 py-10 text-center transition hover:border-zinc-400 hover:bg-zinc-50"
-        >
-          <div className="flex h-10 w-10 items-center justify-center rounded-full border border-zinc-200 bg-white">
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="text-zinc-700"
-            >
-              <path d="M8 11V3M4 7l4-4 4 4M2 13h12" />
-            </svg>
-          </div>
-          <p className="mt-3 text-sm text-zinc-700">
-            <span
-              className="font-medium"
-              style={{ color: "var(--board-primary)" }}
-            >
-              Choose file
-            </span>{" "}
-            or drag and drop here
-          </p>
-          <p className="mt-1 text-xs text-zinc-500">
-            {applicationConfig.resumeRequired
-              ? "Resume is required."
-              : "Resume is optional."}{" "}
-            PDF, DOC, or DOCX. Maximum 10MB.
-          </p>
-        </label>
       </section>
 
       {applicationConfig.questions.length > 0 ? (

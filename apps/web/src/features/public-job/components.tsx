@@ -143,7 +143,7 @@ export function PublicJobFooter({ brand }: { brand: PublicJobBrand }) {
           View all jobs
         </Link>
         <a
-          href="mailto:help@openhire.io"
+          href="mailto:help@harly.io"
           className="text-xs text-zinc-500 transition hover:text-zinc-900"
         >
           Help
@@ -154,7 +154,7 @@ export function PublicJobFooter({ brand }: { brand: PublicJobBrand }) {
             href={"/" as Route}
             className="font-semibold text-zinc-600 transition hover:text-zinc-900"
           >
-            OpenHire
+            Harly
           </Link>
         </span>
       </div>

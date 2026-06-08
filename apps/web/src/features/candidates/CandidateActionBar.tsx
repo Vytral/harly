@@ -1,12 +1,22 @@
 "use client";
 
+import type { ComponentType } from "react";
+import { useTransition } from "react";
+
+import { useRouter } from "next/navigation";
 import {
   CalendarClock,
+  CheckCircle2,
+  ChevronDown,
   ClipboardCheck,
+  Download,
   FileText,
   Mail,
   Pencil,
+  Trash2,
+  XCircle,
 } from "lucide-react";
+import { toast } from "sonner";
 
 import {
   EditCandidateDrawer,
@@ -20,12 +30,122 @@ import {
   type ScheduleCalConfig,
   type ScheduleMemberOption,
 } from "@/features/candidates/ScheduleDrawer";
+import { bulkUpdateCandidateStatusAction } from "@/features/candidates/actions";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+function isPdfResume(url: string, fileType: string | null, fileName: string | null) {
+  return (
+    fileType === "application/pdf" ||
+    (fileName ?? url).toLowerCase().endsWith(".pdf")
+  );
+}
+
+type CandidateStatus = "active" | "hired" | "rejected" | "withdrawn";
+
+const STATUS_ACTIONS: Array<{
+  status: CandidateStatus;
+  label: string;
+  icon: ComponentType<{ className?: string }>;
+  confirm: string;
+  destructive?: boolean;
+}> = [
+  {
+    status: "hired",
+    label: "Mark as hired",
+    icon: CheckCircle2,
+    confirm: "Mark {name} as hired? This updates every active application.",
+  },
+  {
+    status: "rejected",
+    label: "Reject candidate",
+    icon: XCircle,
+    confirm: "Reject {name}? They'll be moved out of active pipelines.",
+    destructive: true,
+  },
+  {
+    status: "withdrawn",
+    label: "Move to trash",
+    icon: Trash2,
+    confirm: "Move {name} to trash (withdrawn)? You can restore them later from filters.",
+    destructive: true,
+  },
+];
+
+function CandidateStatusMenu({
+  name,
+  applicationIds,
+}: {
+  name: string;
+  applicationIds: string[];
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function handleSelect(status: CandidateStatus, label: string, confirmMessage: string) {
+    if (applicationIds.length === 0) {
+      toast.error("This candidate has no application to update.");
+      return;
+    }
+    if (!window.confirm(confirmMessage.replace("{name}", name))) return;
+
+    startTransition(async () => {
+      const result = await bulkUpdateCandidateStatusAction({
+        applicationIds,
+        status,
+      });
+      if (result.success) {
+        toast.success(`${name} ${label.toLowerCase()}.`);
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Could not update candidate status.");
+      }
+    });
+  }
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" variant="outline" disabled={isPending}>
+          Status
+          <ChevronDown className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        {STATUS_ACTIONS.map(({ status, label, icon: Icon, confirm, destructive }) => (
+          <DropdownMenuItem
+            key={status}
+            variant={destructive ? "destructive" : "default"}
+            onSelect={() => handleSelect(status, label, confirm)}
+          >
+            <Icon className="size-4" />
+            {label}
+          </DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 export function CandidateActionBar({
   candidate,
   name,
   resumeUrl,
+  resumeFileName = null,
+  resumeFileType = null,
   stageName,
   applications,
   members,
@@ -34,11 +154,15 @@ export function CandidateActionBar({
   candidate: EditableCandidate;
   name: string;
   resumeUrl: string | null;
+  resumeFileName?: string | null;
+  resumeFileType?: string | null;
   stageName: string | null;
   applications: ScheduleApplicationOption[];
   members: ScheduleMemberOption[];
   cal: ScheduleCalConfig;
 }) {
+  const applicationIds = applications.map((application) => application.applicationId);
+
   return (
     <div className="flex flex-wrap items-center gap-2">
       <EvaluationDrawer
@@ -79,6 +203,7 @@ export function CandidateActionBar({
           </Button>
         }
       />
+      <CandidateStatusMenu name={name} applicationIds={applicationIds} />
       <EditCandidateDrawer
         candidate={candidate}
         trigger={
@@ -89,12 +214,42 @@ export function CandidateActionBar({
         }
       />
       {resumeUrl ? (
-        <Button asChild size="sm" variant="outline">
-          <a href={resumeUrl} target="_blank" rel="noreferrer">
-            <FileText className="size-4" />
-            Resume
-          </a>
-        </Button>
+        isPdfResume(resumeUrl, resumeFileType, resumeFileName) ? (
+          <Dialog>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline">
+                <FileText className="size-4" />
+                Resume
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-3xl">
+              <DialogHeader>
+                <DialogTitle className="flex items-center justify-between gap-3 pr-8">
+                  <span className="truncate">{resumeFileName ?? `${name}'s resume`}</span>
+                  <Button asChild size="sm" variant="outline">
+                    <a href={resumeUrl} target="_blank" rel="noreferrer">
+                      <Download className="size-4" />
+                      Download
+                    </a>
+                  </Button>
+                </DialogTitle>
+                <DialogDescription className="sr-only">
+                  Resume preview for {name}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="h-[75vh] overflow-hidden rounded-lg border">
+                <iframe src={resumeUrl} title={resumeFileName ?? "Resume"} className="size-full" />
+              </div>
+            </DialogContent>
+          </Dialog>
+        ) : (
+          <Button asChild size="sm" variant="outline">
+            <a href={resumeUrl} target="_blank" rel="noreferrer">
+              <FileText className="size-4" />
+              Resume
+            </a>
+          </Button>
+        )
       ) : null}
     </div>
   );

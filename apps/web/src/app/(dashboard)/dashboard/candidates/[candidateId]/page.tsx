@@ -137,6 +137,8 @@ export default async function CandidateDetailPage({
                     }}
                     name={fullName}
                     resumeUrl={latestResume?.fileUrl ?? null}
+                    resumeFileName={latestResume?.fileName ?? null}
+                    resumeFileType={latestResume?.fileType ?? null}
                     stageName={latestApplication?.currentStageName ?? null}
                     applications={scheduleApplications}
                     members={members}

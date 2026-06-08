@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 
-import { db, jobHiringTeam } from "@openhire/db";
+import { db, jobHiringTeam } from "@harly/db";
 import { requireWorkspaceRole } from "@/features/workspaces/context";
 import type { HiringTeamRole } from "@/features/jobs/hiring-team-data";
 

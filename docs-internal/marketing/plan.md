@@ -1,4 +1,4 @@
-# OpenHire Marketing — Plan
+# Harly Marketing — Plan
 
 ## Current state
 
@@ -6,14 +6,14 @@ Does not exist. No landing page, no domain, no brand assets.
 
 ## Target state
 
-A live site at openhire.dev with:
+A live site at harly.dev with:
 
 ```
 Sections:
   1. Hero — headline + subheading + CTA (self-host / cloud waitlist) + screenshot/GIF
   2. Problem — why existing ATS tools are broken for small teams
-  3. Features — what OpenHire gives you (pipeline, job board, branding, self-hosted)
-  4. Comparison — OpenHire vs Workable vs Greenhouse (price + features table)
+  3. Features — what Harly gives you (pipeline, job board, branding, self-hosted)
+  4. Comparison — Harly vs Workable vs Greenhouse (price + features table)
   5. Quick start — 3 steps: install → configure → done
   6. Cloud — managed option for those who don't want to self-host (waitlist)
   7. Open source — MIT license, GitHub link, star count, contributors
@@ -23,7 +23,7 @@ Sections:
 ## Milestones
 
 ### M1 — Before launch (Week 9)
-- [ ] Register openhire.dev domain
+- [ ] Register harly.dev domain
 - [ ] Design and build landing page (Next.js or Astro, deployed on Vercel)
 - [ ] Write headline, subheading, and feature copy
 - [ ] Take product screenshots / record demo GIF
@@ -39,7 +39,7 @@ Sections:
 ### M3 — Post-launch
 - [ ] Changelog page (public roadmap + version history)
 - [ ] Testimonials section (once we have users)
-- [ ] Blog post: "Why I built OpenHire" (founder story, great for SEO)
+- [ ] Blog post: "Why I built Harly" (founder story, great for SEO)
 
 ## Technical decisions
 
@@ -53,7 +53,7 @@ Sections:
 Headline ideas:
 - "The ATS you actually want to use. Open source. Self-hosted. Free."
 - "Hire better. Own your data. Pay nothing."
-- "Workable costs $250/mo. OpenHire costs $0."
+- "Workable costs $250/mo. Harly costs $0."
 
 Tone: direct, confident, slightly irreverent. Like the founder is talking to you, not
 a marketing agency.
@@ -66,7 +66,7 @@ a marketing agency.
 
 ## Next actions
 
-1. Register openhire.dev (or openhire.app if .dev is taken)
+1. Register harly.dev (or harly.app if .dev is taken)
 2. Decide: Astro vs Next.js
 3. Write the hero copy first — everything else follows from the headline
 4. Build the site in one focused sprint during Week 9

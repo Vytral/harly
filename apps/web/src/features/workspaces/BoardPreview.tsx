@@ -65,7 +65,7 @@ export function BoardPreview({
         <span className="size-2 rounded-full bg-clay/50" />
         <span className="size-2 rounded-full bg-pine/40" />
         <span className="ml-2 truncate rounded bg-card px-2 py-0.5 font-mono text-[10px] text-muted-foreground">
-          openhire.app/board/{slug || "your-company"}
+          harly.app/board/{slug || "your-company"}
         </span>
       </div>
 

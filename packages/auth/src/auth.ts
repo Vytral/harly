@@ -3,12 +3,12 @@ import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { magicLink, organization } from "better-auth/plugins";
 
-import { db, schema } from "@openhire/db";
+import { db, schema } from "@harly/db";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-const emailFrom = process.env.EMAIL_FROM ?? "OpenHire <noreply@openhire.dev>";
+const emailFrom = process.env.EMAIL_FROM ?? "Harly <noreply@harly.dev>";
 
 async function sendMagicLinkEmail(email: string, url: string) {
   const apiKey = process.env.RESEND_API_KEY;
@@ -25,11 +25,11 @@ async function sendMagicLinkEmail(email: string, url: string) {
     await resend.emails.send({
       from: emailFrom,
       to: email,
-      subject: "Sign in to OpenHire",
-      text: `Use this link to sign in to OpenHire:\n\n${url}\n\nIf you did not request this, you can ignore this email.`,
+      subject: "Sign in to Harly",
+      text: `Use this link to sign in to Harly:\n\n${url}\n\nIf you did not request this, you can ignore this email.`,
     });
   } catch (error) {
-    console.error("[OpenHire] Failed to send magic link email:", error);
+    console.error("[Harly] Failed to send magic link email:", error);
     console.log(`Magic link for ${email}: ${url}`);
   }
 }
@@ -79,7 +79,7 @@ export const auth = betterAuth({
   },
   emailVerification: {
     sendVerificationEmail: async ({ user, url }) => {
-      // TODO: wire to @openhire/emails in a future step.
+      // TODO: wire to @harly/emails in a future step.
       console.log(`Verification email for ${user.email}: ${url}`);
     },
   },

@@ -6,7 +6,7 @@ import * as schema from "./schema";
 export function getDatabaseUrl() {
   return (
     process.env.DATABASE_URL ??
-    "postgresql://openhire:openhire@localhost:5432/openhire"
+    "postgresql://harly:harly@localhost:5432/harly"
   );
 }
 
@@ -23,13 +23,13 @@ export function createDatabaseClient(connectionString = getDatabaseUrl()) {
 type DatabaseClient = ReturnType<typeof createDatabaseClient>;
 
 declare global {
-  var openhireDatabase: DatabaseClient | undefined;
+  var harlyDatabase: DatabaseClient | undefined;
 }
 
-const globalDatabase = globalThis.openhireDatabase ?? createDatabaseClient();
+const globalDatabase = globalThis.harlyDatabase ?? createDatabaseClient();
 
 if (process.env.NODE_ENV !== "production") {
-  globalThis.openhireDatabase = globalDatabase;
+  globalThis.harlyDatabase = globalDatabase;
 }
 
 export const db = globalDatabase.db;

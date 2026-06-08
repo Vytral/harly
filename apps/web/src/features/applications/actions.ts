@@ -7,7 +7,7 @@ import {
   ApplicationReceivedRecruiter,
   applicationReceivedCandidateSubject,
   applicationReceivedRecruiterSubject,
-} from "@openhire/emails";
+} from "@harly/emails";
 
 import { createPublicApplication } from "@/features/applications/data";
 import {

@@ -2,8 +2,8 @@ import "server-only";
 
 import { and, eq } from "drizzle-orm";
 
-import { db } from "@openhire/db";
-import { customRoles, member as authMembers } from "@openhire/db";
+import { db } from "@harly/db";
+import { customRoles, member as authMembers } from "@harly/db";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import {

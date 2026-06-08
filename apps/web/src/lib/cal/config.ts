@@ -2,7 +2,7 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 
-import { db, workspaceSettings } from "@openhire/db";
+import { db, workspaceSettings } from "@harly/db";
 
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 

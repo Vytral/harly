@@ -17,7 +17,7 @@ export function createEmailSender(): EmailSender | null {
     return null;
   }
 
-  const from = process.env.EMAIL_FROM ?? "OpenHire <noreply@openhire.dev>";
+  const from = process.env.EMAIL_FROM ?? "Harly <noreply@harly.dev>";
 
   return {
     async send({ to, subject, react }) {

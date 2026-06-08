@@ -1,4 +1,4 @@
-import { createStorage, type StorageConfig } from "@openhire/storage";
+import { createStorage, type StorageConfig } from "@harly/storage";
 
 function requiredEnv(name: string) {
   const value = process.env[name];

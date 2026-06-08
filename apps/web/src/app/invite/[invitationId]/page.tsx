@@ -32,7 +32,7 @@ export default async function InvitePage({ params }: InvitePageProps) {
     <main className="flex min-h-screen items-center justify-center bg-[#f7f5f1] px-4 py-10">
       <section className="w-full max-w-lg rounded-3xl border border-stone-200 bg-white p-8 shadow-sm">
         <p className="text-sm font-semibold uppercase tracking-[0.24em] text-red-500">
-          OpenHire
+          Harly
         </p>
         <h1 className="mt-3 text-3xl font-semibold tracking-tight text-stone-950">
           Join {invitation.organizationName}

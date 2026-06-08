@@ -40,7 +40,7 @@ export function CandidateRejected({
             search.
           </Text>
           <Text style={{ ...muted, marginTop: "28px" }}>
-            Sent by OpenHire on behalf of {companyName}.
+            Sent by Harly on behalf of {companyName}.
           </Text>
         </Container>
       </Body>

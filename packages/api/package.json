@@ -1,5 +1,5 @@
 {
-  "name": "@openhire/api",
+  "name": "@harly/api",
   "version": "0.1.0",
   "private": true,
   "exports": {

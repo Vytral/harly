@@ -62,16 +62,16 @@ importers:
       '@dnd-kit/utilities':
         specifier: ^3.2.2
         version: 3.2.2(react@19.2.4)
-      '@openhire/auth':
+      '@harly/auth':
         specifier: workspace:*
         version: link:../../packages/auth
-      '@openhire/db':
+      '@harly/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@openhire/emails':
+      '@harly/emails':
         specifier: workspace:*
         version: link:../../packages/emails
-      '@openhire/storage':
+      '@harly/storage':
         specifier: workspace:*
         version: link:../../packages/storage
       '@openrouter/ai-sdk-provider':
@@ -194,7 +194,7 @@ importers:
 
   packages/auth:
     dependencies:
-      '@openhire/db':
+      '@harly/db':
         specifier: workspace:*
         version: link:../db
       better-auth:
@@ -277,7 +277,7 @@ importers:
 
   packages/validators: {}
 
-  tooling/create-openhire: {}
+  tooling/create-harly: {}
 
 packages:
 

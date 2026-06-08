@@ -7,7 +7,7 @@ export default function CalendarsPage() {
     <ComingSoon
       icon={CalendarDays}
       title="Calendars"
-      description="Connect Google or Outlook to schedule and track interviews without leaving OpenHire."
+      description="Connect Google or Outlook to schedule and track interviews without leaving Harly."
     />
   );
 }

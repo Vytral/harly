@@ -2,7 +2,7 @@
 
 import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 
-import { candidates, db, jobs } from "@openhire/db";
+import { candidates, db, jobs } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export type SearchResults = {

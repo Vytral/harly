@@ -1,4 +1,4 @@
-# create-openhire — Idea
+# create-harly — Idea
 
 ## What is this?
 
@@ -6,7 +6,7 @@ An npm package that lets anyone bootstrap a self-hosted OpenHire instance with a
 command:
 
 ```bash
-npx @openhire/create
+npx @harly/create
 ```
 
 It walks the user through a short interactive wizard, generates a ready-to-run `.env`
@@ -30,7 +30,7 @@ eliminates that friction.
 - Validates credentials before writing the .env (can we reach the DB? does the R2
   bucket exist?)
 - Generates a final checklist of what to do next
-- `npx @openhire/create upgrade` for updating an existing install
+- `npx @harly/create upgrade` for updating an existing install
 
 ## Non-goals
 
@@ -40,6 +40,6 @@ eliminates that friction.
 
 ## Success criteria
 
-- Median time from `npx @openhire/create` to working .env: under 3 minutes
+- Median time from `npx @harly/create` to working .env: under 3 minutes
 - Zero "what does this variable mean?" support requests for wizard-covered fields
 - Works on macOS, Linux, and Windows (WSL)

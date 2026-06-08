@@ -25,7 +25,7 @@ export default async function HomePage() {
   return (
     <BoardShell workspace={workspace} boardRoot={boardRoot}>
       {isHero ? (
-        <BoardHero workspace={workspace} boardRoot={boardRoot} showCta={jobs.length > 0} />
+        <BoardHero workspace={workspace} showCta={jobs.length > 0} />
       ) : (
         <BoardMinimalHeader workspace={workspace} />
       )}

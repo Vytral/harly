@@ -1,19 +1,56 @@
 import "dotenv/config";
 
-import { createDatabaseClient } from "../src";
+import { createDatabaseClient, schema } from "../src";
 
-/**
- * Identity (users, organizations, members) is owned by Better Auth and created
- * through the signup + onboarding flow, so there is nothing to seed here.
- * Sign up at /signup and create a workspace at /onboarding to get started.
- */
 async function main() {
-  const { sql } = createDatabaseClient();
+  const { db, sql } = createDatabaseClient();
+  const now = new Date();
 
   try {
-    console.log(
-      "Seed is a no-op. Create your first workspace via /signup → /onboarding.",
-    );
+    await db
+      .insert(schema.user)
+      .values({
+        id: "seed-user-local",
+        name: "Harly Admin",
+        email: "admin@harly.test",
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing();
+
+    await db
+      .insert(schema.organization)
+      .values({
+        id: "seed-org-local",
+        name: "Harly Demo",
+        slug: "harly-demo",
+        createdAt: now,
+      })
+      .onConflictDoNothing();
+
+    await db
+      .insert(schema.member)
+      .values({
+        id: "seed-member-local",
+        organizationId: "seed-org-local",
+        userId: "seed-user-local",
+        role: "owner",
+        createdAt: now,
+      })
+      .onConflictDoNothing();
+
+    await db
+      .insert(schema.workspaceSettings)
+      .values({
+        organizationId: "seed-org-local",
+        tagline: "Open recruiting workspace",
+        description: "Local development workspace for Harly.",
+        primaryColor: "#2563eb",
+      })
+      .onConflictDoNothing();
+
+    console.log("Seeded local Harly workspace.");
   } finally {
     await sql.end();
   }

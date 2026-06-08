@@ -65,11 +65,8 @@ export function CommandMenu({
   useEffect(() => {
     const q = query.trim();
     if (q.length < 1) {
-      setResults(emptyResults);
-      setLoading(false);
       return;
     }
-    setLoading(true);
     let cancelled = false;
     const timer = setTimeout(async () => {
       const next = await searchWorkspaceAction(q);
@@ -83,6 +80,16 @@ export function CommandMenu({
       clearTimeout(timer);
     };
   }, [query]);
+
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    if (value.trim().length < 1) {
+      setResults(emptyResults);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+  }
 
   function go(href: string) {
     onOpenChange(false);
@@ -98,7 +105,7 @@ export function CommandMenu({
       <CommandInput
         placeholder="Search jobs, candidates, or jump to…"
         value={query}
-        onValueChange={setQuery}
+        onValueChange={handleQueryChange}
       />
       <CommandList>
         {query.trim().length > 0 && !hasResults && !loading ? (

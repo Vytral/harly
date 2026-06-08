@@ -1,4 +1,4 @@
-import { toNextJsHandler } from "@openhire/auth/next";
+import { toNextJsHandler } from "@harly/auth/next";
 
 import { auth } from "@/lib/auth";
 

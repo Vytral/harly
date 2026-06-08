@@ -1,7 +1,7 @@
 "use server";
 
 import { auth } from "@/lib/auth";
-import { db, schema } from "@openhire/db";
+import { db, schema } from "@harly/db";
 import { eq } from "drizzle-orm";
 
 export async function updateUserProfileAction(data: {

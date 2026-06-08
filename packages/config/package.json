@@ -1,5 +1,5 @@
 {
-  "name": "@openhire/config",
+  "name": "@harly/config",
   "version": "0.1.0",
   "private": true,
   "exports": {

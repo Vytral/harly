@@ -2,14 +2,14 @@ import "server-only";
 
 import { and, desc, eq, sql } from "drizzle-orm";
 
-import { db } from "@openhire/db";
+import { db } from "@harly/db";
 import {
   invitation,
   member as authMembers,
   organization as authOrganizations,
   user as authUsers,
   workspaceSettings,
-} from "@openhire/db";
+} from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
   normalizeWorkspaceRole,

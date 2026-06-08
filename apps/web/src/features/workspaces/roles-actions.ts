@@ -4,8 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { db } from "@openhire/db";
-import { customRoles, member as authMembers } from "@openhire/db";
+import { db } from "@harly/db";
+import { customRoles, member as authMembers } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import {

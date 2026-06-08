@@ -6,8 +6,8 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import { createEmailSender } from "@openhire/emails";
-import { db } from "@openhire/db";
+import { createEmailSender } from "@harly/emails";
+import { db } from "@harly/db";
 import {
   activityEvents,
   candidates,
@@ -17,7 +17,7 @@ import {
   candidateTags,
   member as authMembers,
   scorecards,
-} from "@openhire/db";
+} from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
 import {

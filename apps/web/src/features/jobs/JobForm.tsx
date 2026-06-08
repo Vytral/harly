@@ -15,7 +15,7 @@ import {
   Wand2,
   X,
 } from "lucide-react";
-import type { Job } from "@openhire/db";
+import type { Job } from "@harly/db";
 
 import {
   normalizeJobApplicationConfig,
@@ -724,9 +724,24 @@ export function JobForm({ action, job, submitLabel, departments }: JobFormProps)
                     Pick which profile links to offer — candidates can leave any of them blank.
                   </p>
                   <div className="grid gap-3 sm:grid-cols-3">
-                    <LinkToggle name="profileLinkLinkedin" label="LinkedIn" defaultChecked={applicationConfig.profileLinks.linkedin} />
-                    <LinkToggle name="profileLinkGithub" label="GitHub" defaultChecked={applicationConfig.profileLinks.github} />
-                    <LinkToggle name="profileLinkWebsite" label="Website / Portfolio" defaultChecked={applicationConfig.profileLinks.website} />
+                    <LinkToggle
+                      name="profileLinkLinkedin"
+                      requiredName="profileLinkLinkedinRequired"
+                      label="LinkedIn"
+                      setting={applicationConfig.profileLinks.linkedin}
+                    />
+                    <LinkToggle
+                      name="profileLinkGithub"
+                      requiredName="profileLinkGithubRequired"
+                      label="GitHub"
+                      setting={applicationConfig.profileLinks.github}
+                    />
+                    <LinkToggle
+                      name="profileLinkWebsite"
+                      requiredName="profileLinkWebsiteRequired"
+                      label="Website / Portfolio"
+                      setting={applicationConfig.profileLinks.website}
+                    />
                   </div>
                 </div>
 
@@ -896,11 +911,37 @@ function ReviewRow({ label, value }: { label: string; value: string }) {
   );
 }
 
-function LinkToggle({ name, label, defaultChecked }: { name: string; label: string; defaultChecked: boolean }) {
+function LinkToggle({
+  name,
+  requiredName,
+  label,
+  setting,
+}: {
+  name: string;
+  requiredName: string;
+  label: string;
+  setting: { enabled: boolean; required: boolean };
+}) {
+  const [enabled, setEnabled] = useState(setting.enabled);
+
   return (
-    <label className="flex items-center justify-between gap-3 rounded-lg border bg-muted/40 px-4 py-3">
-      <span className="text-sm font-medium">{label}</span>
-      <Switch name={name} defaultChecked={defaultChecked} />
-    </label>
+    <div className="rounded-lg border bg-muted/40 px-4 py-3">
+      <label className="flex items-center justify-between gap-3">
+        <span className="text-sm font-medium">{label}</span>
+        <Switch
+          name={name}
+          checked={enabled}
+          onCheckedChange={setEnabled}
+        />
+      </label>
+      {enabled ? (
+        <label className="mt-2.5 flex items-center justify-between gap-3 border-t pt-2.5">
+          <span className="text-xs text-muted-foreground">
+            Require candidates to fill this in
+          </span>
+          <Switch name={requiredName} defaultChecked={setting.required} />
+        </label>
+      ) : null}
+    </div>
   );
 }
