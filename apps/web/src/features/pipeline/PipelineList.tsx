@@ -34,7 +34,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import { ShortDate } from "@/lib/date";
+import { ShortDate } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
 type PipelineListProps = {

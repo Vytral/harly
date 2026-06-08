@@ -41,7 +41,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ShortDate, RelativeTime } from "@/lib/date";
+import { ShortDate, RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
 type CandidateProfileApplication = {

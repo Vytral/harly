@@ -10,7 +10,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { PipelineApplication } from "@/features/pipeline/data";
-import { DaysSince, ShortDate } from "@/lib/date";
+import { DaysSince, ShortDate } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
 type CandidateCardProps = {

@@ -8,7 +8,7 @@ import type { CandidateNoteItem, NoteMention } from "@/features/candidates/data"
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { RelativeTime } from "@/lib/date";
+import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
 type NoteFormProps = {
