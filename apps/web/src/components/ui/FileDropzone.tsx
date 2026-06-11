@@ -4,7 +4,6 @@ import { useRef, useState } from "react";
 import { ImageUp, Loader2, RefreshCw, X } from "lucide-react";
 import { toast } from "sonner";
 
-import { proxiedImageUrl } from "@/lib/image-proxy";
 import { getImageFileValidationError } from "@/lib/storage-validation";
 import { cn } from "@/lib/utils";
 
@@ -104,7 +103,7 @@ export function FileDropzone({
           <>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={proxiedImageUrl(value) ?? value}
+              src={value}
               alt="Uploaded preview"
               className="size-full object-cover"
             />

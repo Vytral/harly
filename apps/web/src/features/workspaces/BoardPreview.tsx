@@ -1,4 +1,3 @@
-import { proxiedImageUrl } from "@/lib/image-proxy";
 import { cn } from "@/lib/utils";
 import type { BoardStyle, LogoStyle } from "@/features/workspaces/board";
 
@@ -47,7 +46,7 @@ export function BoardPreview({
       {logoUrl ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={proxiedImageUrl(logoUrl) ?? logoUrl}
+          src={logoUrl}
           alt={name}
           className="size-full object-cover"
         />

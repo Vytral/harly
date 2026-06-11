@@ -4,9 +4,9 @@ import { ArrowRight, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-/** Warm paper tile — the shared surface for every dashboard widget. */
+/** Soft white tile — 24px radius, separation by shadow rather than border. */
 export const tileClass =
-  "rounded-2xl border border-border/70 bg-card shadow-[0_1px_2px_rgba(28,27,22,0.04)]";
+  "rounded-3xl border border-border/50 bg-card shadow-[0_1px_2px_rgba(23,23,23,0.04),0_4px_16px_rgba(23,23,23,0.03)]";
 
 export function Tile({
   className,

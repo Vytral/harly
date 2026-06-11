@@ -4,31 +4,33 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * OpenHire admin theme — "paper + evergreen".
- * The world: kraft resume folders, ink, green felt on a recruiter's desk.
- * Canvas is a warm paper (not cold zinc); pine is the single accent, reserved
- * for primary actions, active nav, focus rings and key signals — never floods.
- * Domain-named base palette below; shadcn semantic vars map onto it so every
- * primitive keeps working unchanged.
+ * Harly admin theme — "off-white + lime" (Remote.com-inspired soft UI).
+ * Near-white warm canvas, pure-white surfaces lifted by shadow (not borders),
+ * ink-black as the action color, and a single chartreuse accent used with an
+ * eyedropper. Domain var names are kept from the previous theme so every
+ * existing consumer (bg-sage, text-pine, …) inherits the retheme untouched:
+ * pine now reads as "ink action", sage as "lime wash".
  */
 :root {
   color-scheme: light;
-  --radius: 0.75rem;
+  --radius: 1rem;
 
-  /* ── Domain base — reads like OpenHire, not "any project" ── */
-  --paper: #f6f5f1;        /* warm canvas */
-  --paper-raised: #ffffff; /* cards lift off the paper */
-  --kraft: #eceae3;        /* muted surface — kraft paper */
-  --ink: #1d1b16;          /* warm near-black */
-  --ink-soft: #6b665e;     /* warm muted text */
-  --pine: #1f6f53;         /* evergreen accent */
-  --pine-strong: #1a5e47;  /* pressed/hover */
-  --sage: #e7efe9;         /* soft active/hover tint */
-  --sage-ink: #225f48;     /* text on sage */
-  --clay: #b4540a;         /* warning — terracotta */
-  --slate-info: #3f5d8a;   /* info — dusty blue */
-  --rust: #b83f2c;         /* destructive — warm red */
-  --hairline: #e6e2d9;     /* borders disappear until looked for */
+  /* ── Domain base ── */
+  --paper: #f5f5f4;        /* warm off-white canvas */
+  --paper-raised: #ffffff; /* pure white surfaces */
+  --kraft: #efefed;        /* muted surface — soft grey */
+  --ink: #171717;          /* near-black */
+  --ink-soft: #8a8a86;     /* mid grey text */
+  --pine: #3f6212;         /* action color — dark olive, same tonal family as lime */
+  --pine-strong: #365314;  /* pressed/hover */
+  --sage: #eaf6c8;         /* lime wash — soft active/highlight tint */
+  --sage-ink: #44520f;     /* text on lime wash */
+  --lime: #c8f560;         /* chartreuse accent — use sparingly */
+  --lime-ink: #2a330d;     /* text on lime */
+  --clay: #b45309;         /* warning — amber */
+  --slate-info: #64748b;   /* info — neutral slate */
+  --rust: #d6453a;         /* destructive — warm red */
+  --hairline: #ececea;     /* borders disappear until looked for */
 
   /* ── shadcn semantics → domain base (primitives untouched) ── */
   --background: var(--paper);
@@ -55,7 +57,7 @@
   --destructive: var(--rust);
   --destructive-foreground: #ffffff;
 
-  --success: var(--pine);
+  --success: #4d7c0f;
   --success-foreground: #ffffff;
   --warning: var(--clay);
   --warning-foreground: #ffffff;
@@ -67,18 +69,18 @@
   --ring: var(--pine);
 
   --chart-1: var(--pine);
-  --chart-2: var(--slate-info);
-  --chart-3: var(--clay);
-  --chart-4: #7a5ea8;
+  --chart-2: #a3cc3a;
+  --chart-3: var(--slate-info);
+  --chart-4: var(--clay);
   --chart-5: var(--rust);
 
-  /* Sidebar tokens retained for any residual consumers; warm-aligned. */
-  --sidebar: #f1efe8;
-  --sidebar-foreground: #2c2a24;
+  /* Sidebar sits flat on the canvas; separation comes from the hairline. */
+  --sidebar: var(--paper);
+  --sidebar-foreground: #2a2a28;
   --sidebar-primary: var(--pine);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: var(--sage);
-  --sidebar-accent-foreground: var(--sage-ink);
+  --sidebar-accent: #eaeae8;
+  --sidebar-accent-foreground: var(--ink);
   --sidebar-border: var(--hairline);
   --sidebar-ring: var(--pine);
 
@@ -139,6 +141,8 @@
   --color-pine-strong: var(--pine-strong);
   --color-sage: var(--sage);
   --color-sage-ink: var(--sage-ink);
+  --color-lime: var(--lime);
+  --color-lime-ink: var(--lime-ink);
   --color-clay: var(--clay);
   --color-slate-info: var(--slate-info);
   --color-rust: var(--rust);
@@ -155,15 +159,14 @@
   --radius-xl: calc(var(--radius) + 4px);
 
   --font-sans:
-    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system,
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   --font-mono:
     var(--font-geist-mono), ui-monospace, "SF Mono", "Menlo", "Consolas",
     monospace;
-  /* Cal Sans display face — wordmark + page/section headings. Body stays sans. */
+  /* Display = Inter bold w/ tight tracking (see .font-display rule below). */
   --font-display:
-    var(--font-cal), var(--font-geist-sans), ui-sans-serif, system-ui,
-    sans-serif;
+    var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 @layer base {
@@ -188,6 +191,11 @@
   a {
     color: inherit;
     text-decoration: none;
+  }
+  /* Display text: same family, heavier + tighter — the "Good morning" look. */
+  .font-display {
+    font-weight: 700;
+    letter-spacing: -0.02em;
   }
 }
 
@@ -260,25 +268,27 @@
 .prose-job code { background: var(--kraft); border-radius: 3px; padding: 0.1em 0.35em; font-size: 0.85em; font-family: var(--font-mono); }
 
 /*
- * Dark mode — warm near-black paper, lifted evergreen.
+ * Dark mode — soft near-black, white-ink actions, lime unchanged (it glows).
  * Complete-enough for the shell + overview; per-screen QA lands in a later pass.
  */
 .dark {
   color-scheme: dark;
 
-  --paper: #14130f;
-  --paper-raised: #1c1a15;
-  --kraft: #252219;
-  --ink: #f3f1ea;
-  --ink-soft: #a8a298;
-  --pine: #4fae86;
-  --pine-strong: #5cba92;
-  --sage: #1e2a23;
-  --sage-ink: #8fd3b4;
-  --clay: #d98248;
-  --slate-info: #7e9bc7;
+  --paper: #161614;
+  --paper-raised: #1d1d1b;
+  --kraft: #262624;
+  --ink: #f2f2f0;
+  --ink-soft: #9c9c98;
+  --pine: #c3d98e;
+  --pine-strong: #d6e8ab;
+  --sage: #2a331a;
+  --sage-ink: #d8f18f;
+  --lime: #c8f560;
+  --lime-ink: #2a330d;
+  --clay: #e8964b;
+  --slate-info: #94a3b8;
   --rust: #e0715a;
-  --hairline: #2e2a20;
+  --hairline: #2c2c2a;
 
   --background: var(--paper);
   --foreground: var(--ink);
@@ -287,28 +297,29 @@
   --popover: var(--paper-raised);
   --popover-foreground: var(--ink);
   --primary: var(--pine);
-  --primary-foreground: #0c1410;
+  --primary-foreground: #171717;
   --secondary: var(--kraft);
-  --secondary-foreground: #ece9e1;
+  --secondary-foreground: #ececea;
   --muted: var(--kraft);
   --muted-foreground: var(--ink-soft);
   --accent: var(--sage);
   --accent-foreground: var(--sage-ink);
   --destructive: var(--rust);
   --destructive-foreground: #1a0f0c;
-  --success: var(--pine);
+  --success: #84cc16;
+  --success-foreground: #14190a;
   --warning: var(--clay);
   --info: var(--slate-info);
   --border: var(--hairline);
-  --input: #322d22;
+  --input: #323230;
   --ring: var(--pine);
 
-  --sidebar: #17150f;
-  --sidebar-foreground: #ece9e1;
+  --sidebar: var(--paper);
+  --sidebar-foreground: #ececea;
   --sidebar-primary: var(--pine);
-  --sidebar-primary-foreground: #0c1410;
-  --sidebar-accent: var(--sage);
-  --sidebar-accent-foreground: var(--sage-ink);
+  --sidebar-primary-foreground: #171717;
+  --sidebar-accent: #2a2a28;
+  --sidebar-accent-foreground: var(--ink);
   --sidebar-border: var(--hairline);
   --sidebar-ring: var(--pine);
 }

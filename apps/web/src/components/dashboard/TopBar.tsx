@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Activity, Bell, Search, type LucideIcon } from "lucide-react";
+import { Activity, Search, type LucideIcon } from "lucide-react";
 
 import { CommandMenu } from "@/components/dashboard/CommandMenu";
+import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
 import { QuickCreateMenu } from "@/components/dashboard/QuickCreateMenu";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import type { NotificationItem } from "@/features/notifications/data";
 import type { WorkspaceOption } from "@/features/workspaces/data";
 
 type TopBarProps = {
@@ -20,10 +22,17 @@ type TopBarProps = {
   role: string;
   workspace: { id: string; name: string; logoUrl: string | null };
   workspaceOptions: WorkspaceOption[];
+  notifications: NotificationItem[];
 };
 
 /** Slim utility strip: sidebar toggle + search + create + alerts + theme + user. */
-export function TopBar({ user, role, workspace, workspaceOptions }: TopBarProps) {
+export function TopBar({
+  user,
+  role,
+  workspace,
+  workspaceOptions,
+  notifications,
+}: TopBarProps) {
   const [commandOpen, setCommandOpen] = useState(false);
 
   return (
@@ -58,12 +67,7 @@ export function TopBar({ user, role, workspace, workspaceOptions }: TopBarProps)
           title="Activity"
           body="Recent moves across your pipeline will show up here."
         />
-        <IconPopover
-          icon={Bell}
-          label="Notifications"
-          title="Notifications"
-          body="You're all caught up — no new notifications."
-        />
+        <NotificationsBell notifications={notifications} />
         <ThemeToggle />
         <div className="ml-1.5 pl-1.5">
           <UserMenu

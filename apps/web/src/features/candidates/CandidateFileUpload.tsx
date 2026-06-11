@@ -151,37 +151,49 @@ export function CandidateFileUpload({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="rounded-lg border border-dashed bg-muted/40 p-6 text-center">
-        <input
-          ref={inputRef}
-          type="file"
-          accept=".pdf,.doc,.docx"
-          className="sr-only"
-          onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
-        />
-        <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
-          <Upload className="size-5" />
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          disabled={isPending}
-          onClick={() => inputRef.current?.click()}
-        >
-          {isPending ? "Uploading…" : "Upload resume or file"}
-        </Button>
-        <p className="mt-2 text-xs text-muted-foreground">
-          PDF, DOC, or DOCX · max 10MB
-        </p>
-      </div>
+    <div className="space-y-3">
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf,.doc,.docx"
+        className="sr-only"
+        onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
+      />
 
       {files.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          No files uploaded yet.
-        </p>
+        // First file: roomy dropzone-style call to action.
+        <div className="rounded-lg border border-dashed bg-muted/40 p-6 text-center">
+          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
+            <Upload className="size-5" />
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isPending}
+            onClick={() => inputRef.current?.click()}
+          >
+            {isPending ? "Uploading…" : "Upload resume or file"}
+          </Button>
+          <p className="mt-2 text-xs text-muted-foreground">
+            PDF, DOC, or DOCX · max 10MB
+          </p>
+        </div>
       ) : (
+        // Files exist: compact list + small add button, no giant dropzone.
         <div className="space-y-2">
+          <div className="flex justify-end">
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              disabled={isPending}
+              onClick={() => inputRef.current?.click()}
+            >
+              <Upload className="size-4" />
+              {isPending ? "Uploading…" : "Add file"}
+            </Button>
+          </div>
           {files.map((file) => {
             const meta = (
               <div className="min-w-0">

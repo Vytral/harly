@@ -5,7 +5,6 @@ import { useState, useTransition } from "react";
 import { Check, ChevronsUpDown, Loader2, Plus } from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
-import { proxiedImageUrl } from "@/lib/image-proxy";
 import {
   Dialog,
   DialogContent,
@@ -50,13 +49,11 @@ export function WorkspaceMark({
   className?: string;
   priority?: boolean;
 }) {
-  const proxiedLogoUrl = proxiedImageUrl(logoUrl);
-
-  if (proxiedLogoUrl) {
+  if (logoUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
-        src={proxiedLogoUrl}
+        src={logoUrl}
         alt={name}
         className={cn(
           "aspect-square size-8 shrink-0 rounded-lg object-cover",

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
-import { GeistSans } from "geist/font/sans";
 import { GeistMono } from "geist/font/mono";
-import localFont from "next/font/local";
+import { Inter } from "next/font/google";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
@@ -9,13 +8,12 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import "./globals.css";
 
-// Cal Sans — geometric display face for the wordmark + headings (self-hosted,
-// OFL). Body text stays on Geist; this carries brand voice only.
-const calSans = localFont({
-  src: "./fonts/CalSans.woff2",
-  variable: "--font-cal",
+// Inter carries both body and display roles (bold + tight tracking for
+// headings) — single-family system per the off-white/lime design language.
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
   display: "swap",
-  weight: "400 600",
 });
 
 export const metadata: Metadata = {
@@ -32,7 +30,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${GeistSans.variable} ${GeistMono.variable} ${calSans.variable} h-full antialiased`}
+      className={`${inter.variable} ${GeistMono.variable} h-full antialiased`}
     >
       <head>
         <link rel="preconnect" href="https://lh3.googleusercontent.com" />

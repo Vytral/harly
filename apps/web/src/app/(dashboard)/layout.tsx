@@ -1,7 +1,10 @@
+import { cookies } from "next/headers";
+
 import { AppSidebar } from "@/components/dashboard/AppSidebar";
 import { TopBar } from "@/components/dashboard/TopBar";
+import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { getInboxCount } from "@/features/dashboard/widgets";
+import { listNotifications } from "@/features/notifications/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { listUserWorkspaceOptions } from "@/features/workspaces/data";
 
@@ -10,11 +13,16 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const cookieStore = await cookies();
+  // Manual toggle persists via the sidebar_state cookie; default expanded.
+  const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false";
+
   const { organization, user, role } = await getWorkspaceContext();
-  const [workspaceOptions, inboxCount] = await Promise.all([
+  const [workspaceOptions, notifications] = await Promise.all([
     listUserWorkspaceOptions(),
-    getInboxCount(),
+    listNotifications(8),
   ]);
+  const inboxCount = notifications.filter((n) => !n.read).length;
 
   const workspace = {
     id: organization.id,
@@ -23,7 +31,7 @@ export default async function DashboardLayout({
   };
 
   return (
-    <SidebarProvider defaultOpen={false}>
+    <SidebarProvider defaultOpen={sidebarOpen}>
       <AppSidebar
         workspace={workspace}
         workspaceOptions={workspaceOptions}
@@ -36,7 +44,9 @@ export default async function DashboardLayout({
           role={role}
           workspace={workspace}
           workspaceOptions={workspaceOptions}
+          notifications={notifications}
         />
+        {!user.emailVerified ? <VerifyEmailBanner email={user.email} /> : null}
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-6 lg:px-8 lg:py-8">
           {children}
         </main>
