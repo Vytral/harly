@@ -6,6 +6,8 @@ const PUBLIC_PATHS = [
   "/",
   "/login",
   "/signup",
+  "/forgot-password",
+  "/reset-password",
   "/setup",
   "/api/auth",
   // Inbound integration webhooks authenticate via signature, not session.

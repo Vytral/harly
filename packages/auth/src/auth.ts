@@ -4,11 +4,50 @@ import { nextCookies } from "better-auth/next-js";
 import { magicLink, organization } from "better-auth/plugins";
 
 import { db, schema } from "@harly/db";
+import {
+  createEmailSender,
+  ResetPasswordEmail,
+  resetPasswordSubject,
+  VerifyEmail,
+  verifyEmailSubject,
+  type SendEmailOptions,
+} from "@harly/emails";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const emailFrom = process.env.EMAIL_FROM ?? "Harly <noreply@harly.dev>";
+
+/**
+ * Send an auth email via Resend, falling back to a server-console log when no
+ * RESEND_API_KEY is configured (dev / fresh self-host) — the URL in the log
+ * keeps the flow usable end-to-end.
+ */
+async function sendAuthEmail(options: {
+  to: string;
+  subject: string;
+  react: SendEmailOptions["react"];
+  /** Logged (and used as plain-text context) when no sender is configured. */
+  fallbackLog: string;
+}) {
+  const sender = createEmailSender();
+
+  if (!sender) {
+    console.log(options.fallbackLog);
+    return;
+  }
+
+  try {
+    await sender.send({
+      to: options.to,
+      subject: options.subject,
+      react: options.react,
+    });
+  } catch (error) {
+    console.error(`[Harly] Failed to send "${options.subject}":`, error);
+    console.log(options.fallbackLog);
+  }
+}
 
 async function sendMagicLinkEmail(email: string, url: string) {
   const apiKey = process.env.RESEND_API_KEY;
@@ -61,8 +100,21 @@ export const auth = betterAuth({
       : {},
   emailAndPassword: {
     enabled: true,
+    // Verification is encouraged via the dashboard banner, not enforced —
+    // self-hosters can flip this once their email sender is configured.
     requireEmailVerification: false,
     minPasswordLength: 8,
+    sendResetPassword: async ({ user, url }) => {
+      await sendAuthEmail({
+        to: user.email,
+        subject: resetPasswordSubject,
+        react: ResetPasswordEmail({
+          userName: user.name || user.email,
+          resetUrl: url,
+        }),
+        fallbackLog: `Password reset for ${user.email}: ${url}`,
+      });
+    },
   },
   user: {
     changeEmail: {
@@ -78,9 +130,18 @@ export const auth = betterAuth({
     },
   },
   emailVerification: {
+    sendOnSignUp: true,
+    autoSignInAfterVerification: true,
     sendVerificationEmail: async ({ user, url }) => {
-      // TODO: wire to @harly/emails in a future step.
-      console.log(`Verification email for ${user.email}: ${url}`);
+      await sendAuthEmail({
+        to: user.email,
+        subject: verifyEmailSubject,
+        react: VerifyEmail({
+          userName: user.name || user.email,
+          verifyUrl: url,
+        }),
+        fallbackLog: `Verification email for ${user.email}: ${url}`,
+      });
     },
   },
   trustedOrigins: [appUrl],

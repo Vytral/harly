@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 import { authClient } from "@/lib/auth-client";
 
@@ -140,12 +141,20 @@ export function LoginForm() {
         </div>
 
         <div>
-          <label
-            htmlFor="password"
-            className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
-          >
-            Password
-          </label>
+          <div className="flex items-baseline justify-between">
+            <label
+              htmlFor="password"
+              className="block text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground"
+            >
+              Password
+            </label>
+            <Link
+              href="/forgot-password"
+              className="text-xs font-medium text-muted-foreground transition hover:text-pine"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <div className="relative mt-2">
             <input
               id="password"

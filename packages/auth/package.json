@@ -12,7 +12,8 @@
   "dependencies": {
     "@harly/db": "workspace:*",
     "better-auth": "^1.6.11",
-    "resend": "^6.12.3"
+    "resend": "^6.12.3",
+    "@harly/emails": "workspace:*"
   },
   "devDependencies": {
     "@better-auth/cli": "^1.4.21"

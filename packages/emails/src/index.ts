@@ -5,3 +5,5 @@ export * from "./templates/CandidateRejected";
 export * from "./templates/CandidateStageUpdate";
 export * from "./templates/WelcomeEmail";
 export * from "./templates/WorkspaceInvitation";
+export * from "./templates/ResetPassword";
+export * from "./templates/VerifyEmail";
