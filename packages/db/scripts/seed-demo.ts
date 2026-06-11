@@ -1,8 +1,12 @@
 import "dotenv/config";
 
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+
 import { eq, sql as dsql } from "drizzle-orm";
 
 import { createDatabaseClient, schema } from "../src";
+import { buildResumeLines, linesToPdf } from "./fake-resumes";
 
 /**
  * Demo data seed — populates the workspace owned by SEED_EMAIL with realistic
@@ -15,6 +19,9 @@ import { createDatabaseClient, schema } from "../src";
  */
 
 const SEED_EMAIL = process.env.SEED_EMAIL ?? "maxi@acme.test";
+// Where the web app serves local uploads from (its LocalAdapter resolves
+// `uploads/` against the app's cwd, i.e. apps/web).
+const webUploadsRoot = path.resolve(process.cwd(), "../../apps/web/uploads");
 // The dev account name carried a typo ("Maximliano"); normalise it on seed.
 const OWNER_NAME = "Maximiliano Moldenhauer";
 
@@ -490,6 +497,26 @@ async function main() {
         })
         .returning({ id: schema.candidates.id });
       candidateIds.push(created.id);
+
+      // Fictional resume PDF → web app's local uploads dir + candidate_files row.
+      const { lines, fileName } = buildResumeLines(cand, c);
+      const pdf = linesToPdf(lines);
+      const key = `resumes/seed-${cand.firstName.toLowerCase()}-${c}.pdf`
+        .normalize("NFD")
+        .replace(/[̀-ͯ]/g, "");
+      const absolute = path.join(webUploadsRoot, key);
+      await mkdir(path.dirname(absolute), { recursive: true });
+      await writeFile(absolute, pdf);
+      await db.insert(schema.candidateFiles).values({
+        workspaceId,
+        candidateId: created.id,
+        fileName,
+        fileUrl: `/uploads/${key}`,
+        fileType: "application/pdf",
+        fileSize: pdf.byteLength,
+        uploadedById: user.id,
+        createdAt: daysAgo(28 - c),
+      });
     }
 
     // ── Applications + stage history + activity ──

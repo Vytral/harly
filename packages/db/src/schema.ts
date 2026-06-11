@@ -110,6 +110,23 @@ export const interviewStatusEnum = pgEnum("interview_status", [
   "canceled",
 ]);
 
+export const aiRecommendationEnum = pgEnum("ai_recommendation", [
+  "strong_yes",
+  "yes",
+  "maybe",
+  "no",
+]);
+
+export const offerStatusEnum = pgEnum("offer_status", [
+  "draft",
+  "sent",
+  "accepted",
+  "declined",
+  "withdrawn",
+]);
+
+export const salaryPeriodEnum = pgEnum("salary_period", ["annual", "monthly"]);
+
 // Better Auth
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -751,6 +768,172 @@ export const scorecards = pgTable(
   ],
 );
 
+// Job offers — formal compensation offers extended to a candidate's
+// application. Multiple offers per application are allowed (re-offer after a
+// decline); the UI treats the most recent as active.
+export const offers = pgTable(
+  "offers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    status: offerStatusEnum("status").default("draft").notNull(),
+    // Offered role title — may differ from the job posting title.
+    title: text("title").notNull(),
+    salaryAmount: integer("salary_amount"),
+    currency: text("currency"),
+    salaryPeriod: salaryPeriodEnum("salary_period"),
+    equity: text("equity"),
+    startDate: timestamp("start_date", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    notes: text("notes"),
+    createdById: text("created_by_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("offers_workspace_created_at_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    index("offers_application_idx").on(table.applicationId),
+    index("offers_candidate_idx").on(table.candidateId),
+    index("offers_workspace_status_idx").on(table.workspaceId, table.status),
+  ],
+);
+
+export type Offer = typeof offers.$inferSelect;
+export type NewOffer = typeof offers.$inferInsert;
+
+// Reusable outbound email templates with {{variable}} placeholders.
+export const emailTemplates = pgTable(
+  "email_templates",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    subject: text("subject").notNull(),
+    body: text("body").notNull(),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("email_templates_workspace_name_idx").on(
+      table.workspaceId,
+      sql`lower(${table.name})`,
+    ),
+    index("email_templates_workspace_updated_idx").on(
+      table.workspaceId,
+      table.updatedAt,
+    ),
+  ],
+);
+
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type NewEmailTemplate = typeof emailTemplates.$inferInsert;
+
+// In-app notifications (mentions, and later: assignments, interviews, …)
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // Recipient.
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    actorId: text("actor_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    // Dot-delimited kind, e.g. note.mentioned.
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body"),
+    // In-app destination, e.g. /dashboard/candidates/<id>.
+    href: text("href"),
+    metadata: jsonb("metadata"),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("notifications_user_read_created_idx").on(
+      table.userId,
+      table.readAt,
+      table.createdAt,
+    ),
+    index("notifications_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;
+
+// AI candidate-vs-job evaluations — one latest row per application, regenerating upserts.
+export const aiEvaluations = pgTable(
+  "ai_evaluations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    modelId: text("model_id").notNull(),
+    score: integer("score").notNull(),
+    recommendation: aiRecommendationEnum("recommendation").notNull(),
+    summary: text("summary").notNull(),
+    // string[]
+    strengths: jsonb("strengths").default(sql`'[]'::jsonb`).notNull(),
+    // string[]
+    gaps: jsonb("gaps").default(sql`'[]'::jsonb`).notNull(),
+    // [{ label, score (0-100), evidence }]
+    criteria: jsonb("criteria").default(sql`'[]'::jsonb`).notNull(),
+    // True when the evaluation had resume text available (not just profile fields).
+    usedResume: boolean("used_resume").default(false).notNull(),
+    generatedById: text("generated_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("ai_evaluations_workspace_application_idx").on(
+      table.workspaceId,
+      table.applicationId,
+    ),
+    index("ai_evaluations_candidate_idx").on(table.candidateId),
+    index("ai_evaluations_workspace_idx").on(table.workspaceId),
+    index("ai_evaluations_job_idx").on(table.jobId),
+  ],
+);
+
 // Candidate tags
 export const candidateTags = pgTable(
   "candidate_tags",
@@ -922,6 +1105,8 @@ export const interviewsRelations = relations(interviews, ({ one }) => ({
 
 export type Scorecard = typeof scorecards.$inferSelect;
 export type NewScorecard = typeof scorecards.$inferInsert;
+export type AiEvaluation = typeof aiEvaluations.$inferSelect;
+export type NewAiEvaluation = typeof aiEvaluations.$inferInsert;
 export type CandidateTag = typeof candidateTags.$inferSelect;
 export type NewCandidateTag = typeof candidateTags.$inferInsert;
 export type JobHiringTeamMember = typeof jobHiringTeam.$inferSelect;
