@@ -22,11 +22,23 @@ import {
   scorecards,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
+import {
+  permanentlyDeleteCandidate,
+  restoreCandidate,
+  trashCandidate,
+  trashCandidates,
+} from "./data";
 import {
   allowedResumeContentTypes,
   maxResumeFileSize,
 } from "@/lib/storage-validation";
+
+export type CandidateActionState = {
+  success: boolean;
+  error?: string;
+};
 
 const bulkStatusSchema = z.object({
   applicationIds: z.array(z.string().min(1)).min(1).max(200),
@@ -42,6 +54,8 @@ export async function bulkUpdateCandidateStatusAction(input: {
   if (!parsed.success) {
     return { success: false, error: "Invalid selection." };
   }
+
+  await requirePermission("candidates:edit");
 
   const { organization: workspace } = await getWorkspaceContext();
   const result = await updateApplicationStatus({
@@ -795,4 +809,79 @@ export async function sendCandidateMessage(input: {
       error: "Unable to send message.",
     };
   }
+}
+
+// ── Candidate trash (soft delete) ──
+
+const candidateIdsSchema = z.array(z.string().min(1)).min(1).max(200);
+
+/** Move a candidate to the trash — reversible. */
+export async function trashCandidateAction(
+  candidateId: string,
+): Promise<CandidateActionState> {
+  await requirePermission("candidates:delete");
+  const result = await trashCandidate(candidateId);
+
+  if (!result.ok) {
+    return { success: false, error: result.error };
+  }
+
+  revalidatePath("/dashboard/candidates");
+  revalidatePath(`/dashboard/candidates/${candidateId}`);
+  revalidatePath("/dashboard/pipeline");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+/** Move multiple candidates to the trash — reversible. */
+export async function bulkTrashCandidatesAction(
+  candidateIds: string[],
+): Promise<CandidateActionState & { count?: number }> {
+  const parsed = candidateIdsSchema.safeParse(candidateIds);
+  if (!parsed.success) {
+    return { success: false, error: "Invalid selection." };
+  }
+
+  await requirePermission("candidates:delete");
+  const result = await trashCandidates(parsed.data);
+
+  revalidatePath("/dashboard/candidates");
+  revalidatePath("/dashboard/pipeline");
+  revalidatePath("/dashboard");
+  return { success: true, count: result.count };
+}
+
+/** Restore a candidate out of the trash. */
+export async function restoreCandidateAction(
+  candidateId: string,
+): Promise<CandidateActionState> {
+  await requirePermission("candidates:delete");
+  const result = await restoreCandidate(candidateId);
+
+  if (!result.ok) {
+    return { success: false, error: result.error };
+  }
+
+  revalidatePath("/dashboard/candidates");
+  revalidatePath(`/dashboard/candidates/${candidateId}`);
+  revalidatePath("/dashboard/pipeline");
+  revalidatePath("/dashboard");
+  return { success: true };
+}
+
+/** Permanently delete a trashed candidate and all related records. */
+export async function permanentlyDeleteCandidateAction(
+  candidateId: string,
+): Promise<CandidateActionState> {
+  await requirePermission("candidates:delete");
+  const result = await permanentlyDeleteCandidate(candidateId);
+
+  if (!result.ok) {
+    return { success: false, error: result.error };
+  }
+
+  revalidatePath("/dashboard/candidates");
+  revalidatePath("/dashboard/pipeline");
+  revalidatePath("/dashboard");
+  return { success: true };
 }

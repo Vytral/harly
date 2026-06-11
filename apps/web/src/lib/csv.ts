@@ -48,3 +48,19 @@ export function parseCsv(text: string): string[][] {
 
   return rows.filter((r) => !(r.length === 1 && r[0] === ""));
 }
+
+/**
+ * Serializes rows to RFC 4180 CSV — quotes fields containing commas, quotes,
+ * or newlines, doubling embedded quotes. Uses CRLF line endings for Excel
+ * compatibility. Pairs with parseCsv.
+ */
+export function toCsv(rows: string[][]): string {
+  return rows.map((row) => row.map(escapeCsvField).join(",")).join("\r\n");
+}
+
+function escapeCsvField(value: string): string {
+  if (/[",\r\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}

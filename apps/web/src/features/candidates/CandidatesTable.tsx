@@ -4,17 +4,25 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
+  Download,
   Mail,
   MoreHorizontal,
   RotateCcw,
   Search,
   Sparkles,
+  Trash2,
   User,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { bulkUpdateCandidateStatusAction } from "@/features/candidates/actions";
+import {
+  bulkTrashCandidatesAction,
+  bulkUpdateCandidateStatusAction,
+  restoreCandidateAction,
+  trashCandidateAction,
+} from "@/features/candidates/actions";
+import { toCsv } from "@/lib/csv";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
 import {
@@ -69,6 +77,50 @@ function uniqueSorted(values: (string | null)[]) {
   return Array.from(new Set(values.filter((v): v is string => Boolean(v)))).sort(
     (a, b) => a.localeCompare(b),
   );
+}
+
+const CSV_HEADERS = [
+  "Full name",
+  "Email",
+  "Phone",
+  "Location",
+  "Role",
+  "Department",
+  "Stage",
+  "Status",
+  "Source",
+  "Tags",
+  "Applied at",
+];
+
+function candidateToCsvRow(row: CandidateRow): string[] {
+  return [
+    row.fullName,
+    row.email,
+    row.phone ?? "",
+    row.location ?? "",
+    row.role ?? "",
+    row.department ?? "",
+    row.stage ?? "",
+    row.status ?? "",
+    row.source ?? "",
+    row.tags.join("; "),
+    row.appliedAt ? new Date(row.appliedAt).toISOString().slice(0, 10) : "",
+  ];
+}
+
+// Leading BOM helps Excel detect UTF-8 (accented names, etc.) on download.
+const UTF8_BOM = String.fromCharCode(0xfeff);
+
+function downloadCsv(filename: string, rows: string[][]) {
+  const csv = toCsv(rows);
+  const blob = new Blob([UTF8_BOM + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
 }
 
 export function CandidatesTable({
@@ -210,7 +262,86 @@ export function CandidatesTable({
     });
   }
 
+  function runDelete(row: CandidateRow) {
+    if (
+      !window.confirm(
+        `Move ${row.fullName} to trash? You can restore them later from the Trash tab.`,
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const result = await trashCandidateAction(row.id);
+      if (result.success) {
+        toast.success(`${row.fullName} moved to trash.`, {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              startTransition(async () => {
+                await restoreCandidateAction(row.id);
+                router.refresh();
+              });
+            },
+          },
+        });
+        setSelected((prev) => {
+          const next = new Set(prev);
+          next.delete(row.id);
+          return next;
+        });
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Could not delete candidate.");
+      }
+    });
+  }
+
+  function runBulkDelete() {
+    const ids = filtered.filter((r) => selected.has(r.id)).map((r) => r.id);
+    if (ids.length === 0) return;
+    if (
+      !window.confirm(
+        `Move ${ids.length} candidate${ids.length === 1 ? "" : "s"} to trash? You can restore them later from the Trash tab.`,
+      )
+    ) {
+      return;
+    }
+    startTransition(async () => {
+      const result = await bulkTrashCandidatesAction(ids);
+      if (result.success) {
+        const count = result.count ?? ids.length;
+        toast.success(`Moved ${count} candidate${count === 1 ? "" : "s"} to trash.`, {
+          action: {
+            label: "Undo",
+            onClick: () => {
+              startTransition(async () => {
+                await Promise.all(ids.map((id) => restoreCandidateAction(id)));
+                router.refresh();
+              });
+            },
+          },
+        });
+        setSelected(new Set());
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Could not delete candidates.");
+      }
+    });
+  }
+
   const selectedCount = filtered.filter((r) => selected.has(r.id)).length;
+
+  function exportCsv() {
+    const exportRows = selectedCount > 0 ? filtered.filter((r) => selected.has(r.id)) : filtered;
+    if (exportRows.length === 0) {
+      toast.error("No candidates to export.");
+      return;
+    }
+    downloadCsv(`candidates-${new Date().toISOString().slice(0, 10)}.csv`, [
+      CSV_HEADERS,
+      ...exportRows.map(candidateToCsvRow),
+    ]);
+  }
 
   return (
     <div className="space-y-4">
@@ -225,6 +356,10 @@ export function CandidatesTable({
             className="h-11 rounded-full pl-11"
           />
         </div>
+        <Button variant="outline" className="h-11 rounded-full" onClick={exportCsv}>
+          <Download className="size-4" />
+          {selectedCount > 0 ? `Export selected (${selectedCount})` : "Export CSV"}
+        </Button>
         <ImportCandidatesDrawer jobs={importJobs} />
       </div>
 
@@ -292,6 +427,16 @@ export function CandidatesTable({
             <Button size="sm" variant="outline" disabled={isPending} onClick={() => runBulk("active")}>
               <RotateCcw className="size-4" />
               Reactivate
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending}
+              className="text-destructive hover:text-destructive"
+              onClick={runBulkDelete}
+            >
+              <Trash2 className="size-4" />
+              Delete
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
               Clear
@@ -424,6 +569,7 @@ export function CandidatesTable({
                       disabled={isPending}
                       onView={() => router.push(`/dashboard/candidates/${row.id}`)}
                       onStatus={(next) => runRowStatus(row, next)}
+                      onDelete={() => runDelete(row)}
                     />
                   </div>
                 </div>
@@ -553,11 +699,13 @@ function RowActions({
   disabled,
   onView,
   onStatus,
+  onDelete,
 }: {
   row: CandidateRow;
   disabled: boolean;
   onView: () => void;
   onStatus: (next: "hired" | "rejected" | "active") => void;
+  onDelete: () => void;
 }) {
   return (
     <DropdownMenu>
@@ -589,6 +737,11 @@ function RowActions({
         <DropdownMenuItem onSelect={() => onStatus("active")}>
           <RotateCcw className="size-4" />
           Reactivate
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={onDelete}>
+          <Trash2 className="size-4" />
+          Delete
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

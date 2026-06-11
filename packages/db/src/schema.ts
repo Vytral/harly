@@ -505,6 +505,7 @@ export const candidates = pgTable(
     githubUrl: text("github_url"),
     websiteUrl: text("website_url"),
     headline: text("headline"),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ...timestamps(),
   },
   (table) => [
@@ -520,6 +521,10 @@ export const candidates = pgTable(
       table.workspaceId,
       table.lastName,
       table.firstName,
+    ),
+    index("candidates_workspace_deleted_idx").on(
+      table.workspaceId,
+      table.deletedAt,
     ),
   ],
 );

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ComponentType } from "react";
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 
 import { useRouter } from "next/navigation";
 import {
@@ -15,6 +15,7 @@ import {
   Pencil,
   RotateCcw,
   Trash2,
+  UserMinus,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,12 +36,17 @@ import {
   type ScheduleCalConfig,
   type ScheduleMemberOption,
 } from "@/features/candidates/ScheduleDrawer";
-import { bulkUpdateCandidateStatusAction } from "@/features/candidates/actions";
+import {
+  bulkUpdateCandidateStatusAction,
+  restoreCandidateAction,
+  trashCandidateAction,
+} from "@/features/candidates/actions";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -83,9 +89,9 @@ const STATUS_ACTIONS: Array<{
   },
   {
     status: "withdrawn",
-    label: "Move to trash",
-    icon: Trash2,
-    confirm: "Move {name} to trash (withdrawn)? You can restore them later from filters.",
+    label: "Withdraw application",
+    icon: UserMinus,
+    confirm: "Mark {name}'s application as withdrawn? They'll stay in your candidate list but be filtered out of active pipelines.",
     destructive: true,
   },
   {
@@ -148,6 +154,69 @@ function CandidateStatusMenu({
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function DeleteCandidateButton({
+  candidateId,
+  name,
+}: {
+  candidateId: string;
+  name: string;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  function deleteCandidate() {
+    startTransition(async () => {
+      const result = await trashCandidateAction(candidateId);
+      if (!result.success) {
+        toast.error(result.error ?? "Could not delete candidate.");
+        return;
+      }
+      setConfirmOpen(false);
+      toast.success(`${name} moved to trash.`, {
+        action: {
+          label: "Undo",
+          onClick: () => {
+            startTransition(async () => {
+              await restoreCandidateAction(candidateId);
+              router.refresh();
+            });
+          },
+        },
+      });
+      router.push("/dashboard/candidates");
+    });
+  }
+
+  return (
+    <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+      <DialogTrigger asChild>
+        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive">
+          <Trash2 className="size-4" />
+          Delete
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Delete candidate?</DialogTitle>
+          <DialogDescription>
+            {name} will be moved to the trash. You can restore them later, or
+            delete permanently from the Trash tab on the candidates list.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={isPending}>
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={deleteCandidate} disabled={isPending}>
+            {isPending ? "Deleting…" : "Delete candidate"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -268,6 +337,7 @@ export function CandidateActionBar({
           </Button>
         )
       ) : null}
+      <DeleteCandidateButton candidateId={candidate.id} name={name} />
     </div>
   );
 }

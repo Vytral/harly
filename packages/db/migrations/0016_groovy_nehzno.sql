@@ -1,0 +1,2 @@
+ALTER TABLE "candidates" ADD COLUMN "deleted_at" timestamp with time zone;--> statement-breakpoint
+CREATE INDEX "candidates_workspace_deleted_idx" ON "candidates" USING btree ("workspace_id","deleted_at");

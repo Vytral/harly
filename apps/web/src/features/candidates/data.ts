@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -148,7 +148,9 @@ export async function listCandidates() {
         eq(jobStages.id, applications.currentStageId),
       ),
     )
-    .where(eq(candidates.workspaceId, workspace.id))
+    .where(
+      and(eq(candidates.workspaceId, workspace.id), isNull(candidates.deletedAt)),
+    )
     .orderBy(desc(candidates.createdAt), desc(applications.appliedAt));
 
   const candidateMap = new Map<string, CandidateListItem & { createdAt: Date }>();
@@ -687,4 +689,112 @@ export async function getCandidateProfile(candidateId: string) {
       createdAt: row.createdAt.toISOString(),
     })),
   };
+}
+
+export type TrashedCandidateItem = {
+  id: string;
+  fullName: string;
+  email: string;
+  deletedAt: Date;
+};
+
+/** Candidates moved to the trash (soft-deleted), most recently deleted first. */
+export async function listTrashedCandidates(): Promise<TrashedCandidateItem[]> {
+  const { organization: workspace } = await getWorkspaceContext();
+
+  const rows = await db
+    .select({
+      id: candidates.id,
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      email: candidates.email,
+      deletedAt: candidates.deletedAt,
+    })
+    .from(candidates)
+    .where(
+      and(eq(candidates.workspaceId, workspace.id), isNotNull(candidates.deletedAt)),
+    )
+    .orderBy(desc(candidates.deletedAt));
+
+  return rows.map((row) => ({
+    id: row.id,
+    fullName: `${row.firstName} ${row.lastName}`,
+    email: row.email,
+    deletedAt: row.deletedAt as Date,
+  }));
+}
+
+/** Move a candidate to the trash (soft delete) — reversible. */
+export async function trashCandidate(candidateId: string) {
+  const { organization: workspace } = await getWorkspaceContext();
+
+  const [candidate] = await db
+    .update(candidates)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        eq(candidates.id, candidateId),
+        eq(candidates.workspaceId, workspace.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .returning({ id: candidates.id });
+
+  return candidate
+    ? ({ ok: true } as const)
+    : ({ ok: false, error: "Candidate not found." } as const);
+}
+
+/** Move multiple candidates to the trash (soft delete) — reversible. */
+export async function trashCandidates(candidateIds: string[]) {
+  const { organization: workspace } = await getWorkspaceContext();
+
+  const rows = await db
+    .update(candidates)
+    .set({ deletedAt: new Date() })
+    .where(
+      and(
+        inArray(candidates.id, candidateIds),
+        eq(candidates.workspaceId, workspace.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .returning({ id: candidates.id });
+
+  return { ok: true, count: rows.length } as const;
+}
+
+/** Restore a candidate out of the trash. */
+export async function restoreCandidate(candidateId: string) {
+  const { organization: workspace } = await getWorkspaceContext();
+
+  const [candidate] = await db
+    .update(candidates)
+    .set({ deletedAt: null })
+    .where(and(eq(candidates.id, candidateId), eq(candidates.workspaceId, workspace.id)))
+    .returning({ id: candidates.id });
+
+  return candidate
+    ? ({ ok: true } as const)
+    : ({ ok: false, error: "Candidate not found." } as const);
+}
+
+/** Permanently delete a trashed candidate and all related records (cascade). */
+export async function permanentlyDeleteCandidate(candidateId: string) {
+  const { organization: workspace } = await getWorkspaceContext();
+
+  const [deleted] = await db
+    .delete(candidates)
+    .where(
+      and(
+        eq(candidates.id, candidateId),
+        eq(candidates.workspaceId, workspace.id),
+        isNotNull(candidates.deletedAt),
+      ),
+    )
+    .returning({ id: candidates.id });
+
+  return deleted
+    ? ({ ok: true } as const)
+    : ({ ok: false, error: "Candidate not found in trash." } as const);
 }
