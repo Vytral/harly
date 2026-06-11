@@ -34,3 +34,23 @@ export const jobDraftSchema = z.object({
 });
 
 export type JobDraft = z.infer<typeof jobDraftSchema>;
+
+export const candidateScoreSchema = z.object({
+  // Overall fit 0-100. Calibrated: 80+ exceptional fit, 60-79 solid, 40-59
+  // partial, <40 weak.
+  score: z.number(),
+  recommendation: z.enum(["strong_yes", "yes", "maybe", "no"]),
+  // 2-3 sentence plain-text verdict a recruiter can read at a glance.
+  summary: z.string(),
+  strengths: z.array(z.string()),
+  gaps: z.array(z.string()),
+  criteria: z.array(
+    z.object({
+      label: z.string(),
+      score: z.number(),
+      evidence: z.string().nullable(),
+    }),
+  ),
+});
+
+export type CandidateScore = z.infer<typeof candidateScoreSchema>;
