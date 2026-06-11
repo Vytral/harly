@@ -1,6 +1,5 @@
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getAvatarColor, getInitials } from "@/lib/avatar";
-import { proxiedImageUrl } from "@/lib/image-proxy";
 import { cn } from "@/lib/utils";
 
 type UserAvatarProps = {
@@ -25,13 +24,11 @@ export function UserAvatar({
   className,
   priority,
 }: UserAvatarProps) {
-  const proxiedSrc = proxiedImageUrl(src);
-
   return (
     <Avatar className={cn(sizeStyles[size], className)}>
-      {proxiedSrc ? (
+      {src ? (
         <AvatarImage
-          src={proxiedSrc}
+          src={src}
           alt={name}
           loading={priority ? "eager" : "lazy"}
         />
