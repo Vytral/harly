@@ -4,28 +4,37 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
-  MapPin,
+  Mail,
+  MoreHorizontal,
   RotateCcw,
   Search,
   Sparkles,
-  Tag,
+  User,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { bulkUpdateCandidateStatusAction } from "@/features/candidates/actions";
+import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
+import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { PipelineSpine } from "@/components/ui/PipelineSpine";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
-  SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +67,13 @@ function uniqueSorted(values: (string | null)[]) {
   );
 }
 
-export function CandidatesTable({ rows }: { rows: CandidateRow[] }) {
+export function CandidatesTable({
+  rows,
+  emailTemplates = [],
+}: {
+  rows: CandidateRow[];
+  emailTemplates?: EmailTemplateOption[];
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("newest");
@@ -68,6 +83,7 @@ export function CandidatesTable({ rows }: { rows: CandidateRow[] }) {
   const [status, setStatus] = useState(ALL);
   const [tag, setTag] = useState(ALL);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const departments = useMemo(() => uniqueSorted(rows.map((r) => r.department)), [rows]);
@@ -169,71 +185,77 @@ export function CandidatesTable({ rows }: { rows: CandidateRow[] }) {
     });
   }
 
+  function runRowStatus(row: CandidateRow, next: "hired" | "rejected" | "active") {
+    if (!row.applicationId) {
+      toast.error("This candidate has no application to update.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await bulkUpdateCandidateStatusAction({
+        applicationIds: [row.applicationId as string],
+        status: next,
+      });
+      if (result.success) {
+        toast.success(`${row.fullName} updated.`);
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Could not update candidate.");
+      }
+    });
+  }
+
   const selectedCount = filtered.filter((r) => selected.has(r.id)).length;
 
   return (
     <div className="space-y-4">
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 size-5 -translate-y-1/2 text-muted-foreground" />
+        <Search className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search candidates by name, email, role or location…"
-          className="h-12 rounded-xl pl-12 text-base"
+          className="h-11 rounded-full pl-11"
         />
       </div>
 
-      {/* Filters */}
+      {/* Filter pills */}
       <div className="flex flex-wrap items-center gap-2">
-        <FilterSelect value={dept} onChange={setDept} placeholder="Department" allLabel="All departments" options={departments} />
-        <FilterSelect value={role} onChange={setRole} placeholder="Job" allLabel="All jobs" options={roles} />
-        <FilterSelect value={stage} onChange={setStage} placeholder="Stage" allLabel="All stages" options={stages} />
-        <FilterSelect
+        <FilterPill label="Department" value={dept} onChange={setDept} options={departments} />
+        <FilterPill label="Job" value={role} onChange={setRole} options={roles} />
+        <FilterPill label="Stage" value={stage} onChange={setStage} options={stages} />
+        <FilterPill
+          label="Status"
           value={status}
           onChange={setStatus}
-          placeholder="Status"
-          allLabel="All statuses"
           options={["active", "hired", "rejected", "withdrawn"]}
           labelMap={{ active: "Active", hired: "Hired", rejected: "Rejected", withdrawn: "Withdrawn" }}
         />
         {tagOptions.length > 0 ? (
-          <FilterSelect
-            value={tag}
-            onChange={setTag}
-            placeholder="Tags"
-            allLabel="All tags"
-            options={tagOptions}
-          />
-        ) : (
-          <span className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-dashed px-3 text-sm text-muted-foreground/70">
-            <Tag className="size-3.5" />
-            No tags yet
-          </span>
-        )}
+          <FilterPill label="Tag" value={tag} onChange={setTag} options={tagOptions} />
+        ) : null}
+        <FilterPill
+          label="Sort"
+          value={sortKey}
+          onChange={(v) => setSortKey(v as SortKey)}
+          options={["newest", "oldest", "name"]}
+          labelMap={{ newest: "Newest", oldest: "Oldest", name: "Name A–Z" }}
+          allValue="newest"
+        />
         {filtersActive ? (
-          <Button variant="ghost" size="sm" onClick={clearFilters} className="text-muted-foreground">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            className="rounded-full text-muted-foreground"
+          >
             Clear
           </Button>
         ) : null}
-      </div>
-
-      {/* Count + sort */}
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm text-muted-foreground">
+        <p className="ml-auto text-sm text-muted-foreground">
           <span className="font-semibold tabular-nums text-foreground">{filtered.length}</span>{" "}
           {filtered.length === 1 ? "candidate" : "candidates"}
         </p>
-        <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-          <SelectTrigger size="sm" className="w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="newest">Newest first</SelectItem>
-            <SelectItem value="oldest">Oldest first</SelectItem>
-            <SelectItem value="name">Name A–Z</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Bulk bar */}
@@ -241,6 +263,15 @@ export function CandidatesTable({ rows }: { rows: CandidateRow[] }) {
         <div className="flex flex-wrap items-center gap-2 rounded-xl border border-primary/25 bg-accent/40 px-3 py-2 duration-200 animate-in fade-in slide-in-from-top-1">
           <span className="text-sm font-medium">{selectedCount} selected</span>
           <div className="ml-auto flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => setBulkEmailOpen(true)}
+            >
+              <Mail className="size-4" />
+              Email
+            </Button>
             <Button size="sm" variant="outline" disabled={isPending} onClick={() => runBulk("hired")}>
               <CheckCircle2 className="size-4 text-primary" />
               Mark hired
@@ -262,18 +293,27 @@ export function CandidatesTable({ rows }: { rows: CandidateRow[] }) {
 
       {/* List + AI rail */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-card">
-          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-2.5">
-            <Checkbox checked={allVisibleSelected} onCheckedChange={toggleAll} aria-label="Select all" />
-            <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <div className="min-w-0">
+          {/* Column headers — aligned to the row grid */}
+          <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 px-4 pb-2 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_2.25rem]">
+            <Checkbox
+              checked={allVisibleSelected}
+              onCheckedChange={toggleAll}
+              aria-label="Select all"
+            />
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
               Candidate
             </span>
-            <span className="ml-auto hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:block">
-              Job status
+            <span className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 sm:block">
+              Pipeline
             </span>
+            <span className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 sm:block">
+              Status
+            </span>
+            <span aria-hidden className="hidden sm:block" />
           </div>
 
-          <div className="divide-y divide-border/60">
+          <div>
             {filtered.map((row) => {
               const isSelected = selected.has(row.id);
               return (
@@ -286,9 +326,14 @@ export function CandidatesTable({ rows }: { rows: CandidateRow[] }) {
                   onKeyDown={(e) => {
                     if (e.key === "Enter") router.push(`/dashboard/candidates/${row.id}`);
                   }}
-                  className="group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-start gap-x-3 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/40 data-[state=selected]:bg-accent/40 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_auto]"
+                  className={cn(
+                    "group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 rounded-xl border-b border-border/40 px-4 py-4 transition-all sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_2.25rem]",
+                    isSelected
+                      ? "border-transparent bg-card shadow-[0_1px_3px_rgba(28,25,23,0.08),0_0_0_1px_rgba(28,25,23,0.04)]"
+                      : "hover:bg-muted/40",
+                  )}
                 >
-                  <div onClick={(e) => e.stopPropagation()} className="pt-0.5">
+                  <div onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => toggleOne(row.id)}
@@ -297,69 +342,87 @@ export function CandidatesTable({ rows }: { rows: CandidateRow[] }) {
                   </div>
 
                   {/* Identity */}
-                  <div className="flex min-w-0 items-start gap-3">
-                    <UserAvatar name={row.fullName} src={row.avatarUrl} size="md" />
+                  <div className="flex min-w-0 items-center gap-3">
+                    <UserAvatar name={row.fullName} src={row.avatarUrl} size="lg" />
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-foreground group-hover:text-primary">
-                        {row.fullName}
-                      </p>
-                      {row.role ? (
-                        <p className="truncate text-sm text-muted-foreground">{row.role}</p>
-                      ) : null}
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                        {row.location ? (
-                          <span className="inline-flex items-center gap-1">
-                            <MapPin className="size-3" />
-                            {row.location}
-                          </span>
-                        ) : null}
-                        {row.source ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5">
-                            via {row.source}
-                          </span>
-                        ) : null}
-                        {row.tags.slice(0, 3).map((t) => (
+                      <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
+                        <p className="truncate font-medium text-foreground group-hover:text-primary">
+                          {row.fullName}
+                        </p>
+                        {row.department ? (
                           <span
-                            key={t}
-                            className="rounded-full bg-accent px-2 py-0.5 font-medium text-accent-foreground"
+                            className={cn(
+                              "rounded-md px-1.5 py-0.5 text-[11px] font-semibold",
+                              departmentChipClass(row.department),
+                            )}
                           >
-                            {t}
-                          </span>
-                        ))}
-                        {row.tags.length > 3 ? (
-                          <span className="text-muted-foreground/70">
-                            +{row.tags.length - 3}
+                            {row.department}
                           </span>
                         ) : null}
                       </div>
+                      <p className="truncate text-sm text-muted-foreground">
+                        {[row.role, row.location].filter(Boolean).join(" · ") || row.email}
+                      </p>
+                      {row.tags.length > 0 ? (
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+                          {row.tags.slice(0, 3).map((t) => (
+                            <span
+                              key={t}
+                              className="rounded-full bg-accent px-2 py-0.5 font-medium text-accent-foreground"
+                            >
+                              {t}
+                            </span>
+                          ))}
+                          {row.tags.length > 3 ? (
+                            <span className="text-muted-foreground/70">
+                              +{row.tags.length - 3}
+                            </span>
+                          ) : null}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
-                  {/* Job status */}
+                  {/* Pipeline */}
                   <div className="col-start-2 min-w-0 sm:col-auto">
                     {row.stage ? (
                       <>
                         <p className="text-xs font-medium text-foreground">{row.stage}</p>
                         <PipelineSpine current={row.stage} className="mt-1.5 max-w-40" />
+                        {row.appliedLabel ? (
+                          <p className="mt-1.5 text-xs text-muted-foreground">
+                            {row.appliedLabel}
+                          </p>
+                        ) : null}
                       </>
                     ) : (
                       <p className="text-xs text-muted-foreground">No application</p>
                     )}
-                    {row.appliedLabel ? (
-                      <p className="mt-1.5 text-xs text-muted-foreground">{row.appliedLabel}</p>
-                    ) : null}
                   </div>
 
                   {/* Status */}
-                  <div className="col-start-2 sm:col-auto sm:self-center">
+                  <div className="col-start-2 sm:col-auto">
                     {row.status ? <ApplicationStatusBadge status={row.status} /> : null}
+                  </div>
+
+                  {/* Row actions */}
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    className="col-start-3 row-start-1 sm:col-auto sm:row-auto"
+                  >
+                    <RowActions
+                      row={row}
+                      disabled={isPending}
+                      onView={() => router.push(`/dashboard/candidates/${row.id}`)}
+                      onStatus={(next) => runRowStatus(row, next)}
+                    />
                   </div>
                 </div>
               );
             })}
 
             {filtered.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 px-6 py-16 text-center">
+              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-16 text-center">
                 <Search className="size-5 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">
                   No candidates match your filters.
@@ -373,6 +436,16 @@ export function CandidatesTable({ rows }: { rows: CandidateRow[] }) {
             ) : null}
           </div>
         </div>
+
+        <BulkEmailDrawer
+          open={bulkEmailOpen}
+          onOpenChange={setBulkEmailOpen}
+          candidateIds={filtered
+            .filter((r) => selected.has(r.id))
+            .map((r) => r.id)}
+          templates={emailTemplates}
+          onSent={() => setSelected(new Set())}
+        />
 
         {/* AI sourcing rail */}
         <aside className="h-fit lg:sticky lg:top-20">
@@ -399,31 +472,47 @@ export function CandidatesTable({ rows }: { rows: CandidateRow[] }) {
   );
 }
 
-function FilterSelect({
+/**
+ * Remote-style filter pill: muted label + bold current value in one rounded
+ * chip. `allValue` marks the neutral option (no "All" item is injected when
+ * the options list already covers every state, e.g. sort).
+ */
+function FilterPill({
+  label,
   value,
   onChange,
-  placeholder,
-  allLabel,
   options,
   labelMap,
+  allValue,
 }: {
+  label: string;
   value: string;
   onChange: (value: string) => void;
-  placeholder: string;
-  allLabel: string;
   options: string[];
   labelMap?: Record<string, string>;
+  allValue?: string;
 }) {
+  const neutral = allValue ?? ALL;
+  const active = value !== neutral;
+  const display =
+    value === ALL ? "All" : (labelMap?.[value] ?? value);
+
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger
         size="sm"
-        className={cn("min-w-36", value !== ALL && "border-primary/40 bg-accent/40")}
+        className={cn(
+          "h-9 w-auto gap-1.5 rounded-full border bg-card px-3.5 shadow-none",
+          active && "border-primary/40 bg-accent/40",
+        )}
       >
-        <SelectValue placeholder={placeholder} />
+        <span className="text-muted-foreground">{label}</span>
+        <span className="max-w-32 truncate font-semibold text-foreground">
+          {display}
+        </span>
       </SelectTrigger>
       <SelectContent>
-        <SelectItem value={ALL}>{allLabel}</SelectItem>
+        {allValue === undefined ? <SelectItem value={ALL}>All</SelectItem> : null}
         {options.map((opt) => (
           <SelectItem key={opt} value={opt}>
             {labelMap?.[opt] ?? opt}
@@ -431,5 +520,68 @@ function FilterSelect({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+// Stable accent per department so the chip color is consistent across rows.
+const DEPARTMENT_CHIP_CLASSES = [
+  "bg-primary/10 text-primary",
+  "bg-clay/15 text-clay",
+  "bg-slate-info/15 text-slate-info",
+  "bg-accent text-accent-foreground",
+];
+
+function departmentChipClass(department: string) {
+  let hash = 0;
+  for (let i = 0; i < department.length; i++) {
+    hash = (hash * 31 + department.charCodeAt(i)) | 0;
+  }
+  return DEPARTMENT_CHIP_CLASSES[Math.abs(hash) % DEPARTMENT_CHIP_CLASSES.length];
+}
+
+function RowActions({
+  row,
+  disabled,
+  onView,
+  onStatus,
+}: {
+  row: CandidateRow;
+  disabled: boolean;
+  onView: () => void;
+  onStatus: (next: "hired" | "rejected" | "active") => void;
+}) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-8 text-muted-foreground"
+          aria-label={`Actions for ${row.fullName}`}
+          disabled={disabled}
+        >
+          <MoreHorizontal className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onSelect={onView}>
+          <User className="size-4" />
+          View profile
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => onStatus("hired")}>
+          <CheckCircle2 className="size-4 text-primary" />
+          Mark hired
+        </DropdownMenuItem>
+        <DropdownMenuItem variant="destructive" onSelect={() => onStatus("rejected")}>
+          <XCircle className="size-4" />
+          Reject
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onStatus("active")}>
+          <RotateCcw className="size-4" />
+          Reactivate
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

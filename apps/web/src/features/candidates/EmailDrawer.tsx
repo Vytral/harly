@@ -6,10 +6,28 @@ import { toast } from "sonner";
 
 import { sendCandidateMessage } from "@/features/candidates/actions";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
+import {
+  interpolateTemplate,
+  type TemplateValues,
+} from "@/features/email-templates/interpolate";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+
+export type EmailTemplateOption = {
+  id: string;
+  name: string;
+  subject: string;
+  body: string;
+};
 
 export function EmailDrawer({
   candidateId,
@@ -17,12 +35,17 @@ export function EmailDrawer({
   email,
   name,
   trigger,
+  templates = [],
+  templateValues = {},
 }: {
   candidateId: string;
   workspaceId: string;
   email: string;
   name: string;
   trigger: ReactNode;
+  templates?: EmailTemplateOption[];
+  /** Per-candidate values for {{variables}} when applying a template. */
+  templateValues?: TemplateValues;
 }) {
   const router = useRouter();
   const firstName = name.trim().split(/\s+/)[0] || "there";
@@ -30,6 +53,13 @@ export function EmailDrawer({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState(`Hi ${firstName},\n\n`);
   const [isPending, startTransition] = useTransition();
+
+  function applyTemplate(templateId: string) {
+    const template = templates.find((t) => t.id === templateId);
+    if (!template) return;
+    setSubject(interpolateTemplate(template.subject, templateValues));
+    setBody(interpolateTemplate(template.body, templateValues));
+  }
 
   function send() {
     startTransition(async () => {
@@ -80,6 +110,27 @@ export function EmailDrawer({
             <p className="text-[13px] font-medium tracking-tight text-foreground/90">To</p>
             <Input value={email} readOnly className="bg-muted/50" />
           </div>
+
+          {templates.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-[13px] font-medium tracking-tight text-foreground/90">
+                Template
+              </p>
+              <Select onValueChange={applyTemplate}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Start from a template (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
+
           <div className="space-y-2">
             <label htmlFor="email-subject" className="text-[13px] font-medium tracking-tight text-foreground/90">
               Subject

@@ -7,6 +7,7 @@ import {
   type CandidateRow,
 } from "@/features/candidates/CandidatesTable";
 import { listCandidates } from "@/features/candidates/data";
+import { listEmailTemplates } from "@/features/email-templates/data";
 import { gravatarUrl } from "@/lib/gravatar";
 import { formatRelative, formatShort } from "@/lib/date";
 
@@ -18,7 +19,10 @@ function appliedLabel(value: Date) {
 }
 
 export default async function CandidatesPage() {
-  const candidates = await listCandidates();
+  const [candidates, emailTemplates] = await Promise.all([
+    listCandidates(),
+    listEmailTemplates(),
+  ]);
 
   const rows: CandidateRow[] = candidates.map((candidate) => {
     const applied = candidate.latestApplication?.appliedAt ?? null;
@@ -56,7 +60,7 @@ export default async function CandidatesPage() {
           description="Share your public job board to start receiving applications."
         />
       ) : (
-        <CandidatesTable rows={rows} />
+        <CandidatesTable rows={rows} emailTemplates={emailTemplates} />
       )}
     </div>
   );
