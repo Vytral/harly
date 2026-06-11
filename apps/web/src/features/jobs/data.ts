@@ -130,6 +130,17 @@ export async function listDashboardJobs() {
     .orderBy(desc(jobs.createdAt));
 }
 
+/** Lightweight job list for pickers (e.g. CSV import). */
+export async function listJobOptions() {
+  const { organization: workspace } = await getWorkspaceContext();
+
+  return db
+    .select({ id: jobs.id, title: jobs.title, status: jobs.status })
+    .from(jobs)
+    .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)))
+    .orderBy(desc(jobs.createdAt));
+}
+
 /** Jobs list enriched with per-role applicant counts for the dashboard table. */
 export async function listJobsWithStats() {
   const { organization: workspace } = await getWorkspaceContext();

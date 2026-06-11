@@ -17,6 +17,10 @@ import { toast } from "sonner";
 import { bulkUpdateCandidateStatusAction } from "@/features/candidates/actions";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
+import {
+  ImportCandidatesDrawer,
+  type ImportJobOption,
+} from "@/features/candidates/import/ImportCandidatesDrawer";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { PipelineSpine } from "@/components/ui/PipelineSpine";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -70,9 +74,11 @@ function uniqueSorted(values: (string | null)[]) {
 export function CandidatesTable({
   rows,
   emailTemplates = [],
+  importJobs = [],
 }: {
   rows: CandidateRow[];
   emailTemplates?: EmailTemplateOption[];
+  importJobs?: ImportJobOption[];
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -209,14 +215,17 @@ export function CandidatesTable({
   return (
     <div className="space-y-4">
       {/* Search */}
-      <div className="relative">
-        <Search className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search candidates by name, email, role or location…"
-          className="h-11 rounded-full pl-11"
-        />
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search candidates by name, email, role or location…"
+            className="h-11 rounded-full pl-11"
+          />
+        </div>
+        <ImportCandidatesDrawer jobs={importJobs} />
       </div>
 
       {/* Filter pills */}

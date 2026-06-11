@@ -149,6 +149,11 @@ const MESSAGE_STATUS_LABEL: Record<CandidateMessage["status"], string> = {
   failed: "Failed",
 };
 
+const APPLICATION_SOURCE_LABEL: Record<string, string> = {
+  public_form: "Job board",
+  csv_import: "CSV import",
+};
+
 function TabCount({ value }: { value: number }) {
   if (value <= 0) return null;
   return (
@@ -222,7 +227,11 @@ export function CandidateProfileTabs({
                   <ApplicationStatusBadge status={application.status} />
                 </div>
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Badge variant="outline">{application.source ?? "unknown"}</Badge>
+                  <Badge variant="outline">
+                    {application.source
+                      ? APPLICATION_SOURCE_LABEL[application.source] ?? application.source
+                      : "Unknown"}
+                  </Badge>
                   <Button asChild variant="link" size="sm" className="text-primary">
                     <Link href={`/dashboard/pipeline?job=${application.jobId}` as Route}>
                       View in pipeline

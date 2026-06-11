@@ -506,10 +506,15 @@ export async function getCandidateProfile(candidateId: string) {
 
   const activity: CandidateActivityItem[] = events.map((event) => {
     if (event.type === "application.created") {
+      const jobTitle = applicationJobTitles.get(event.entityId) ?? "a job";
+      const source = textFromMetadata(event.metadata, "source");
       return {
         id: event.id,
         type: event.type,
-        label: `Applied to ${applicationJobTitles.get(event.entityId) ?? "a job"}`,
+        label:
+          source === "csv_import"
+            ? `Added to ${jobTitle} via CSV import`
+            : `Applied to ${jobTitle}`,
         actorName: event.actorName,
         createdAt: event.createdAt,
       };

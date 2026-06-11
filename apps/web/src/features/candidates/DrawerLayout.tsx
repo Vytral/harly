@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 
+import { cn } from "@/lib/utils";
 import {
   SheetContent,
   SheetDescription,
@@ -14,14 +15,16 @@ export function DrawerLayout({
   description,
   footer,
   children,
+  className,
 }: {
   title: ReactNode;
   description?: ReactNode;
   footer?: ReactNode;
   children: ReactNode;
+  className?: string;
 }) {
   return (
-    <SheetContent side="right" className="flex w-full flex-col gap-0 p-0 sm:max-w-md">
+    <SheetContent side="right" className={cn("flex w-full flex-col gap-0 p-0 sm:max-w-md", className)}>
       <SheetHeader className="border-b px-5 py-4">
         <SheetTitle>{title}</SheetTitle>
         {description ? <SheetDescription>{description}</SheetDescription> : null}
