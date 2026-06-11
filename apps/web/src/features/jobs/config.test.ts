@@ -22,8 +22,12 @@ describe("normalizeJobApplicationConfig", () => {
       }),
     ).toMatchObject({
       resumeRequired: false,
-      // Legacy `profileLinksEnabled: true` is migrated to per-link booleans.
-      profileLinks: { linkedin: true, github: true, website: true },
+      // Legacy `profileLinksEnabled: true` migrates to per-link {enabled, required}.
+      profileLinks: {
+        linkedin: { enabled: true, required: false },
+        github: { enabled: true, required: false },
+        website: { enabled: true, required: false },
+      },
     });
   });
 });

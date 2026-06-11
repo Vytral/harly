@@ -3,19 +3,22 @@
 import { createElement } from "react";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { createEmailSender } from "@harly/emails";
 import { db } from "@harly/db";
 import {
   activityEvents,
+  applications,
   candidates,
   candidateFiles,
   candidateMessages,
   candidateNotes,
   candidateTags,
+  jobs,
   member as authMembers,
+  notifications,
   scorecards,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
@@ -162,7 +165,11 @@ export async function createCandidateNote(input: {
 
     const result = await db.transaction(async (tx) => {
       const [candidate] = await tx
-        .select({ id: candidates.id })
+        .select({
+          id: candidates.id,
+          firstName: candidates.firstName,
+          lastName: candidates.lastName,
+        })
         .from(candidates)
         .where(
           and(
@@ -222,6 +229,20 @@ export async function createCandidateNote(input: {
               mentionedName: m.name,
               preview: parsed.data.body.slice(0, 100),
             },
+          })),
+        );
+
+        // Inbox delivery — one notification per mentioned teammate.
+        await tx.insert(notifications).values(
+          notifiable.map((m) => ({
+            workspaceId: input.workspaceId,
+            userId: m.userId,
+            actorId: user.id,
+            type: "note.mentioned",
+            title: `${user.name} mentioned you on ${candidate.firstName} ${candidate.lastName}`,
+            body: parsed.data.body.slice(0, 200),
+            href: `/dashboard/candidates/${input.candidateId}`,
+            metadata: { noteId: note.id },
           })),
         );
       }
@@ -579,6 +600,137 @@ const messageSchema = z.object({
   subject: z.string().trim().min(1).max(200),
   body: z.string().trim().min(1).max(20000),
 });
+
+const bulkEmailSchema = z.object({
+  candidateIds: z.array(z.uuid()).min(1).max(50),
+  subject: z.string().trim().min(1, "Subject is required.").max(300),
+  body: z.string().trim().min(1, "Message body is required.").max(10_000),
+});
+
+/**
+ * Send a (template-interpolated) email to up to 50 candidates. Subject/body
+ * may contain {{variables}}; they are filled per candidate server-side.
+ * Sequential sends — Resend rate limits — each recorded in candidate_messages.
+ */
+export async function sendBulkCandidateEmail(input: {
+  candidateIds: string[];
+  subject: string;
+  body: string;
+}): Promise<{ success: boolean; error?: string; sent: number; failed: number }> {
+  const parsed = bulkEmailSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid bulk email.",
+      sent: 0,
+      failed: 0,
+    };
+  }
+
+  const { interpolateTemplate } = await import(
+    "@/features/email-templates/interpolate"
+  );
+  const { organization: workspace, user } = await getWorkspaceContext();
+
+  // Workspace-scoped fetch — ids from the client are never trusted directly.
+  const rows = await db
+    .select({
+      id: candidates.id,
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      email: candidates.email,
+    })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.workspaceId, workspace.id),
+        inArray(candidates.id, parsed.data.candidateIds),
+      ),
+    );
+
+  if (rows.length === 0) {
+    return { success: false, error: "No matching candidates.", sent: 0, failed: 0 };
+  }
+
+  // Latest application job title per candidate (for {{job_title}}).
+  const jobTitleRows = await db
+    .select({
+      candidateId: applications.candidateId,
+      jobTitle: jobs.title,
+      appliedAt: applications.appliedAt,
+    })
+    .from(applications)
+    .innerJoin(
+      jobs,
+      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
+    )
+    .where(
+      and(
+        eq(applications.workspaceId, workspace.id),
+        inArray(applications.candidateId, rows.map((r) => r.id)),
+      ),
+    )
+    .orderBy(desc(applications.appliedAt));
+  const jobTitleByCandidate = new Map<string, string>();
+  for (const row of jobTitleRows) {
+    if (!jobTitleByCandidate.has(row.candidateId)) {
+      jobTitleByCandidate.set(row.candidateId, row.jobTitle);
+    }
+  }
+
+  const sender = createEmailSender();
+  let sent = 0;
+  let failed = 0;
+
+  for (const candidate of rows) {
+    const values = {
+      candidate_first_name: candidate.firstName,
+      candidate_last_name: candidate.lastName,
+      candidate_full_name: `${candidate.firstName} ${candidate.lastName}`,
+      job_title: jobTitleByCandidate.get(candidate.id) ?? "",
+      company_name: workspace.name,
+      sender_name: user.name,
+    };
+    const subject = interpolateTemplate(parsed.data.subject, values);
+    const body = interpolateTemplate(parsed.data.body, values);
+
+    let status: "sent" | "queued" | "failed" = sender ? "sent" : "queued";
+    if (sender) {
+      try {
+        await sender.send({
+          to: candidate.email,
+          subject,
+          react: createElement(
+            "div",
+            { style: { whiteSpace: "pre-wrap", fontFamily: "sans-serif" } },
+            body,
+          ),
+        });
+      } catch (sendError) {
+        console.error("Bulk email send failed", sendError);
+        status = "failed";
+      }
+    }
+
+    await db.insert(candidateMessages).values({
+      workspaceId: workspace.id,
+      candidateId: candidate.id,
+      authorId: user.id,
+      direction: "outbound",
+      toEmail: candidate.email,
+      fromEmail: process.env.EMAIL_FROM ?? null,
+      subject,
+      body,
+      status,
+    });
+
+    if (status === "failed") failed += 1;
+    else sent += 1;
+  }
+
+  revalidatePath("/dashboard/candidates");
+  return { success: true, sent, failed };
+}
 
 export async function sendCandidateMessage(input: {
   candidateId: string;

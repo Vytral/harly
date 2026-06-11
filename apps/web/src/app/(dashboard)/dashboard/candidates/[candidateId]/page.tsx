@@ -20,7 +20,11 @@ import { CandidateProfileTabs } from "@/features/candidates/CandidateProfileTabs
 import { CandidateTags } from "@/features/candidates/CandidateTags";
 import { getCandidateProfile, listCandidates } from "@/features/candidates/data";
 import { listCandidateInterviews } from "@/features/interviews/data";
+import { listEmailTemplates } from "@/features/email-templates/data";
+import { listOffersForCandidate } from "@/features/offers/data";
+import { getWorkspaceContext } from "@/features/workspaces/context";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
+import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
 import { gravatarUrl } from "@/lib/gravatar";
 
@@ -63,20 +67,29 @@ export default async function CandidateDetailPage({
   params,
 }: CandidateDetailPageProps) {
   const { candidateId } = await params;
-  const [profile, allCandidates, members, interviews] = await Promise.all([
-    getCandidateProfile(candidateId),
-    listCandidates(),
-    listWorkspaceMembers(),
-    listCandidateInterviews(candidateId),
-  ]);
+  const [profile, allCandidates, members, interviews, offers, emailTemplates] =
+    await Promise.all([
+      getCandidateProfile(candidateId),
+      listCandidates(),
+      listWorkspaceMembers(),
+      listCandidateInterviews(candidateId),
+      listOffersForCandidate(candidateId),
+      listEmailTemplates(),
+    ]);
 
   if (!profile) {
     notFound();
   }
 
-  const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags } =
+  const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags, aiEvaluations } =
     profile;
-  const calStatus = await getWorkspaceCalStatus(workspaceId);
+  const [calStatus, aiStatus, workspaceContext] = await Promise.all([
+    getWorkspaceCalStatus(workspaceId),
+    getWorkspaceAiStatus(workspaceId),
+    getWorkspaceContext(),
+  ]);
+  const workspaceName = workspaceContext.organization.name;
+  const currentUserName = workspaceContext.user.name;
   const fullName = `${candidate.firstName} ${candidate.lastName}`;
   const latestResume = files[0] ?? null;
   const latestApplication = applications[0] ?? null;
@@ -145,6 +158,15 @@ export default async function CandidateDetailPage({
                     cal={{
                       enabled: calStatus.enabled,
                       bookingUrl: calStatus.bookingUrl,
+                    }}
+                    emailTemplates={emailTemplates}
+                    emailTemplateValues={{
+                      candidate_first_name: candidate.firstName,
+                      candidate_last_name: candidate.lastName,
+                      candidate_full_name: fullName,
+                      job_title: latestApplication?.jobTitle ?? "",
+                      company_name: workspaceName,
+                      sender_name: currentUserName,
                     }}
                   />
                 </div>
@@ -238,6 +260,11 @@ export default async function CandidateDetailPage({
             messages={messages}
             interviews={interviews}
             members={members}
+            aiEvaluations={aiEvaluations}
+            aiConfigured={
+              aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
+            }
+            offers={offers}
           />
         </main>
       </div>

@@ -13,6 +13,7 @@ import {
   FileText,
   Mail,
   Pencil,
+  RotateCcw,
   Trash2,
   XCircle,
 } from "lucide-react";
@@ -22,7 +23,11 @@ import {
   EditCandidateDrawer,
   type EditableCandidate,
 } from "@/features/candidates/EditCandidateDrawer";
-import { EmailDrawer } from "@/features/candidates/EmailDrawer";
+import {
+  EmailDrawer,
+  type EmailTemplateOption,
+} from "@/features/candidates/EmailDrawer";
+import type { TemplateValues } from "@/features/email-templates/interpolate";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
 import {
   ScheduleDrawer,
@@ -82,6 +87,12 @@ const STATUS_ACTIONS: Array<{
     icon: Trash2,
     confirm: "Move {name} to trash (withdrawn)? You can restore them later from filters.",
     destructive: true,
+  },
+  {
+    status: "active",
+    label: "Reactivate",
+    icon: RotateCcw,
+    confirm: "Reactivate {name}? Their applications return to the active pipeline.",
   },
 ];
 
@@ -150,6 +161,8 @@ export function CandidateActionBar({
   applications,
   members,
   cal,
+  emailTemplates = [],
+  emailTemplateValues = {},
 }: {
   candidate: EditableCandidate;
   name: string;
@@ -160,6 +173,8 @@ export function CandidateActionBar({
   applications: ScheduleApplicationOption[];
   members: ScheduleMemberOption[];
   cal: ScheduleCalConfig;
+  emailTemplates?: EmailTemplateOption[];
+  emailTemplateValues?: TemplateValues;
 }) {
   const applicationIds = applications.map((application) => application.applicationId);
 
@@ -181,6 +196,8 @@ export function CandidateActionBar({
         workspaceId={candidate.workspaceId}
         email={candidate.email}
         name={name}
+        templates={emailTemplates}
+        templateValues={emailTemplateValues}
         trigger={
           <Button size="sm" variant="outline">
             <Mail className="size-4" />

@@ -15,6 +15,8 @@ export const PERMISSIONS = [
   "candidates:delete",
   "candidates:move",
   "collab:write", // notes, scorecards, schedule interviews, message
+  "offers:manage",
+  "templates:manage",
   "members:manage",
   "settings:edit",
   "integrations:manage",
@@ -54,6 +56,15 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         label: "Notes, evaluations & scheduling",
         hint: "Write notes, add scorecards, schedule interviews, email candidates",
       },
+      {
+        key: "offers:manage",
+        label: "Manage offers",
+        hint: "Create, send and decide job offers",
+      },
+      {
+        key: "templates:manage",
+        label: "Manage email templates",
+      },
     ],
   },
   {
@@ -90,6 +101,8 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "candidates:edit",
     "candidates:move",
     "collab:write",
+    "offers:manage",
+    "templates:manage",
   ],
   hiring_manager: ["candidates:move", "collab:write"],
 };

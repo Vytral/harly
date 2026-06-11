@@ -21,8 +21,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
+import { AiScoreCard } from "@/features/candidates/AiScoreCard";
 import { CandidateFileUpload } from "@/features/candidates/CandidateFileUpload";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
+import { OffersPanel } from "@/features/offers/OffersPanel";
+import type { CandidateOfferItem } from "@/features/offers/shared";
 import { NoteForm } from "@/features/candidates/NoteForm";
 import { setInterviewStatus } from "@/features/interviews/actions";
 import {
@@ -32,6 +35,7 @@ import {
 } from "@/features/interviews/shared";
 import type {
   CandidateActivityItem,
+  CandidateAiEvaluationItem,
   CandidateApplicationStatus,
   CandidateNoteItem,
   NoteMention,
@@ -98,6 +102,9 @@ type CandidateProfileTabsProps = {
   messages: CandidateMessage[];
   interviews: CandidateInterviewItem[];
   members: NoteMention[];
+  aiEvaluations: CandidateAiEvaluationItem[];
+  aiConfigured: boolean;
+  offers: CandidateOfferItem[];
 };
 
 const INTERVIEW_MODE_ICON = {
@@ -163,6 +170,9 @@ export function CandidateProfileTabs({
   messages,
   interviews,
   members,
+  aiEvaluations,
+  aiConfigured,
+  offers,
 }: CandidateProfileTabsProps) {
   return (
     <Tabs defaultValue="profile">
@@ -180,6 +190,10 @@ export function CandidateProfileTabs({
         <TabsTrigger value="evaluation">
           Evaluation
           <TabCount value={scorecards.length} />
+        </TabsTrigger>
+        <TabsTrigger value="offers">
+          Offers
+          <TabCount value={offers.length} />
         </TabsTrigger>
         <TabsTrigger value="comments">
           Comments
@@ -334,8 +348,16 @@ export function CandidateProfileTabs({
         )}
       </TabsContent>
 
-      {/* ── Evaluation: real scorecards ── */}
+      {/* ── Evaluation: AI score + scorecards ── */}
       <TabsContent value="evaluation" className="mt-4 space-y-4">
+        <AiScoreCard
+          applications={applications.map((application) => ({
+            id: application.id,
+            jobTitle: application.jobTitle,
+          }))}
+          evaluations={aiEvaluations}
+          aiConfigured={aiConfigured}
+        />
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-muted-foreground">
             {scorecards.length === 0
@@ -378,6 +400,17 @@ export function CandidateProfileTabs({
             </Card>
           );
         })}
+      </TabsContent>
+
+      {/* ── Offers ── */}
+      <TabsContent value="offers" className="mt-4">
+        <OffersPanel
+          offers={offers}
+          applications={applications.map((application) => ({
+            id: application.id,
+            jobTitle: application.jobTitle,
+          }))}
+        />
       </TabsContent>
 
       {/* ── Comments ── */}

@@ -5,6 +5,7 @@ import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db } from "@harly/db";
 import {
   activityEvents,
+  aiEvaluations,
   applicationAnswers,
   applications,
   applicationQuestions,
@@ -48,6 +49,27 @@ export type CandidateListItem = {
 };
 
 export type NoteMention = { userId: string; name: string };
+
+export type AiEvaluationCriterion = {
+  label: string;
+  score: number;
+  evidence: string | null;
+};
+
+export type CandidateAiEvaluationItem = {
+  id: string;
+  applicationId: string;
+  provider: string;
+  modelId: string;
+  score: number;
+  recommendation: "strong_yes" | "yes" | "maybe" | "no";
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  criteria: AiEvaluationCriterion[];
+  usedResume: boolean;
+  updatedAt: string;
+};
 
 export type CandidateNoteItem = {
   id: string;
@@ -355,6 +377,30 @@ export async function getCandidateProfile(candidateId: string) {
     )
     .orderBy(desc(scorecards.createdAt));
 
+  const aiEvaluationRows = await db
+    .select({
+      id: aiEvaluations.id,
+      applicationId: aiEvaluations.applicationId,
+      provider: aiEvaluations.provider,
+      modelId: aiEvaluations.modelId,
+      score: aiEvaluations.score,
+      recommendation: aiEvaluations.recommendation,
+      summary: aiEvaluations.summary,
+      strengths: aiEvaluations.strengths,
+      gaps: aiEvaluations.gaps,
+      criteria: aiEvaluations.criteria,
+      usedResume: aiEvaluations.usedResume,
+      updatedAt: aiEvaluations.updatedAt,
+    })
+    .from(aiEvaluations)
+    .where(
+      and(
+        eq(aiEvaluations.workspaceId, workspace.id),
+        eq(aiEvaluations.candidateId, candidate.id),
+      ),
+    )
+    .orderBy(desc(aiEvaluations.updatedAt));
+
   const tagRows = await db
     .select({ id: candidateTags.id, label: candidateTags.label })
     .from(candidateTags)
@@ -531,11 +577,42 @@ export async function getCandidateProfile(candidateId: string) {
       };
     }
 
+    if (event.type === "evaluation.ai_generated") {
+      const score = event.metadata && typeof event.metadata === "object"
+        ? (event.metadata as Record<string, unknown>).score
+        : null;
+      return {
+        id: event.id,
+        type: event.type,
+        label: `AI evaluation generated${typeof score === "number" ? ` · ${score}/100` : ""}`,
+        actorName: event.actorName,
+        createdAt: event.createdAt,
+      };
+    }
+
     if (event.type === "application.rejected") {
       return {
         id: event.id,
         type: event.type,
         label: "Marked as rejected",
+        actorName: event.actorName,
+        createdAt: event.createdAt,
+      };
+    }
+
+    if (event.type.startsWith("offer.")) {
+      const offerLabels: Record<string, string> = {
+        "offer.created": "Offer drafted",
+        "offer.sent": "Offer sent",
+        "offer.accepted": "Offer accepted",
+        "offer.declined": "Offer declined",
+        "offer.withdrawn": "Offer withdrawn",
+      };
+      const title = textFromMetadata(event.metadata, "title");
+      return {
+        id: event.id,
+        type: event.type,
+        label: `${offerLabels[event.type] ?? event.type}${title ? ` — ${title}` : ""}`,
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -576,6 +653,22 @@ export async function getCandidateProfile(candidateId: string) {
       stageName: row.stageName,
       authorName: row.authorName,
       createdAt: row.createdAt.toISOString(),
+    })),
+    aiEvaluations: aiEvaluationRows.map((row) => ({
+      id: row.id,
+      applicationId: row.applicationId,
+      provider: row.provider,
+      modelId: row.modelId,
+      score: row.score,
+      recommendation: row.recommendation,
+      summary: row.summary,
+      strengths: Array.isArray(row.strengths) ? (row.strengths as string[]) : [],
+      gaps: Array.isArray(row.gaps) ? (row.gaps as string[]) : [],
+      criteria: Array.isArray(row.criteria)
+        ? (row.criteria as AiEvaluationCriterion[])
+        : [],
+      usedResume: row.usedResume,
+      updatedAt: row.updatedAt.toISOString(),
     })),
     tags: tagRows,
     messages: messageRows.map((row) => ({
