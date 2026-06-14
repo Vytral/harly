@@ -1,14 +1,7 @@
-import {
-  Body,
-  Button,
-  Container,
-  Heading,
-  Html,
-  Section,
-  Text,
-} from "@react-email/components";
+import { Button, Section, Text } from "@react-email/components";
 
-import { button, container, heading, main, muted, text } from "./styles";
+import { buttonStyle, heading, text, HARLY_ACCENT } from "./styles";
+import { HarlyLayout } from "./HarlyLayout";
 
 export type VerifyEmailProps = {
   userName: string;
@@ -19,25 +12,20 @@ export const verifyEmailSubject = "Verify your email for Harly";
 
 export function VerifyEmail({ userName, verifyUrl }: VerifyEmailProps) {
   return (
-    <Html>
-      <Body style={main}>
-        <Container style={container}>
-          <Heading style={heading}>Verify your email</Heading>
-          <Text style={text}>Hi {userName},</Text>
-          <Text style={text}>
-            Confirm this email address to finish setting up your Harly
-            account.
-          </Text>
-          <Section style={{ marginTop: "24px" }}>
-            <Button href={verifyUrl} style={button}>
-              Verify email
-            </Button>
-          </Section>
-          <Text style={{ ...muted, marginTop: "28px" }}>
-            If you did not create a Harly account, you can ignore this email.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+    <HarlyLayout preview="Confirm your email address to finish setting up your Harly account.">
+      <Text style={heading}>Verify your email</Text>
+      <Text style={text}>Hi {userName},</Text>
+      <Text style={text}>
+        Confirm this email address to finish setting up your Harly account.
+      </Text>
+      <Section style={{ marginTop: "24px" }}>
+        <Button href={verifyUrl} style={buttonStyle(HARLY_ACCENT)}>
+          Verify email
+        </Button>
+      </Section>
+      <Text style={{ ...text, marginTop: "24px", fontSize: "13px", color: "#78716c" }}>
+        If you did not create a Harly account, you can safely ignore this email.
+      </Text>
+    </HarlyLayout>
   );
 }

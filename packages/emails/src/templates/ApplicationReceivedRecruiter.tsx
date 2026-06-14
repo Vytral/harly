@@ -1,14 +1,7 @@
-import {
-  Body,
-  Button,
-  Container,
-  Heading,
-  Html,
-  Section,
-  Text,
-} from "@react-email/components";
+import { Button, Section, Text } from "@react-email/components";
 
-import { button, container, heading, main, muted, text } from "./styles";
+import { buttonStyle, heading, text, HARLY_ACCENT } from "./styles";
+import { HarlyLayout } from "./HarlyLayout";
 
 export type ApplicationReceivedRecruiterProps = {
   candidateName: string;
@@ -31,25 +24,28 @@ export function ApplicationReceivedRecruiter({
   dashboardUrl,
 }: ApplicationReceivedRecruiterProps) {
   return (
-    <Html>
-      <Body style={main}>
-        <Container style={container}>
-          <Heading style={heading}>New application</Heading>
-          <Text style={text}>
-            <strong>{candidateName}</strong> applied for{" "}
-            <strong>{jobTitle}</strong>.
-          </Text>
-          <Text style={text}>Candidate email: {candidateEmail}</Text>
-          <Section style={{ marginTop: "24px" }}>
-            <Button href={dashboardUrl} style={button}>
-              Review candidate
-            </Button>
-          </Section>
-          <Text style={{ ...muted, marginTop: "28px" }}>
-            Harly notification
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+    <HarlyLayout
+      preview={`${candidateName} applied for ${jobTitle}. Review their application in Harly.`}
+    >
+      <Text style={heading}>New application</Text>
+      <Text style={text}>
+        <strong>{candidateName}</strong> applied for{" "}
+        <strong>{jobTitle}</strong>.
+      </Text>
+      <Text style={text}>
+        Email:{" "}
+        <a
+          href={`mailto:${candidateEmail}`}
+          style={{ color: "#44403c", textDecoration: "underline" }}
+        >
+          {candidateEmail}
+        </a>
+      </Text>
+      <Section style={{ marginTop: "24px" }}>
+        <Button href={dashboardUrl} style={buttonStyle(HARLY_ACCENT)}>
+          Review candidate
+        </Button>
+      </Section>
+    </HarlyLayout>
   );
 }

@@ -1,46 +1,39 @@
-import {
-  Body,
-  Button,
-  Container,
-  Heading,
-  Html,
-  Section,
-  Text,
-} from "@react-email/components";
+import { Button, Section, Text } from "@react-email/components";
 
-import { button, container, heading, main, muted, text } from "./styles";
+import { buttonStyle, heading, text, HARLY_ACCENT } from "./styles";
+import { HarlyLayout } from "./HarlyLayout";
 
 export type WelcomeEmailProps = {
   userName: string;
   workspaceName?: string;
+  dashboardUrl: string;
 };
 
 export const welcomeEmailSubject = "Welcome to Harly";
 
-export function WelcomeEmail({ userName, workspaceName }: WelcomeEmailProps) {
+export function WelcomeEmail({
+  userName,
+  workspaceName,
+  dashboardUrl,
+}: WelcomeEmailProps) {
   const workspaceLabel = workspaceName ? ` for ${workspaceName}` : "";
 
   return (
-    <Html>
-      <Body style={main}>
-        <Container style={container}>
-          <Heading style={heading}>Welcome to Harly</Heading>
-          <Text style={text}>Hi {userName},</Text>
-          <Text style={text}>
-            Welcome to Harly{workspaceLabel}. You can now create your first
-            job posting, publish it to your job board, and start tracking
-            candidates.
-          </Text>
-          <Section style={{ marginTop: "24px" }}>
-            <Button href="/dashboard/jobs/new" style={button}>
-              Create your first job
-            </Button>
-          </Section>
-          <Text style={{ ...muted, marginTop: "28px" }}>
-            Harly is open source and self-hostable by default.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+    <HarlyLayout preview={`Welcome to Harly${workspaceLabel}, ${userName}`}>
+      <Text style={heading}>Welcome to Harly</Text>
+      <Text style={text}>Hi {userName},</Text>
+      <Text style={text}>
+        Welcome to Harly{workspaceLabel}. Create your first job posting, publish
+        it to your job board, and start tracking candidates — all in one place.
+      </Text>
+      <Section style={{ marginTop: "24px" }}>
+        <Button href={dashboardUrl} style={buttonStyle(HARLY_ACCENT)}>
+          Go to dashboard
+        </Button>
+      </Section>
+      <Text style={{ ...text, marginTop: "24px", fontSize: "13px", color: "#78716c" }}>
+        Harly is open source and self-hostable.
+      </Text>
+    </HarlyLayout>
   );
 }

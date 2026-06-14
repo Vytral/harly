@@ -1,14 +1,7 @@
-import {
-  Body,
-  Button,
-  Container,
-  Heading,
-  Html,
-  Section,
-  Text,
-} from "@react-email/components";
+import { Button, Section, Text } from "@react-email/components";
 
-import { button, container, heading, main, muted, text } from "./styles";
+import { buttonStyle, heading, text, HARLY_ACCENT } from "./styles";
+import { HarlyLayout } from "./HarlyLayout";
 
 export type WorkspaceInvitationProps = {
   inviterName: string;
@@ -25,47 +18,41 @@ export function workspaceInvitationSubject({
   return `You've been invited to join ${workspaceName} on Harly`;
 }
 
+const ROLE_LABELS: Record<string, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  hiring_manager: "Hiring Manager",
+  recruiter: "Recruiter",
+};
+
 export function WorkspaceInvitation({
   inviterName,
   workspaceName,
   role,
   acceptUrl,
 }: WorkspaceInvitationProps) {
-  const roleLabel =
-    role === "owner"
-      ? "Owner"
-      : role === "admin"
-        ? "Admin"
-        : role === "hiring_manager"
-          ? "Hiring Manager"
-          : "Recruiter";
+  const roleLabel = ROLE_LABELS[role] ?? "Recruiter";
 
   return (
-    <Html>
-      <Body style={main}>
-        <Container style={container}>
-          <Heading style={heading}>You&apos;re invited to Harly</Heading>
-          <Text style={text}>Hi there,</Text>
-          <Text style={text}>
-            <strong>{inviterName}</strong> has invited you to join{" "}
-            <strong>{workspaceName}</strong> as a{" "}
-            <strong>{roleLabel}</strong> on Harly.
-          </Text>
-          <Text style={text}>
-            Harly is an open-source applicant tracking system. Click the
-            button below to accept your invitation and get started.
-          </Text>
-          <Section style={{ marginTop: "24px" }}>
-            <Button href={acceptUrl} style={button}>
-              Accept invitation
-            </Button>
-          </Section>
-          <Text style={{ ...muted, marginTop: "28px" }}>
-            This invitation expires in 7 days. If you were not expecting this
-            invitation, you can safely ignore this email.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+    <HarlyLayout
+      preview={`${inviterName} invited you to join ${workspaceName} on Harly as ${roleLabel}.`}
+    >
+      <Text style={heading}>You&apos;re invited</Text>
+      <Text style={text}>Hi there,</Text>
+      <Text style={text}>
+        <strong>{inviterName}</strong> has invited you to join{" "}
+        <strong>{workspaceName}</strong> as a <strong>{roleLabel}</strong> on
+        Harly — an open-source applicant tracking system.
+      </Text>
+      <Section style={{ marginTop: "24px" }}>
+        <Button href={acceptUrl} style={buttonStyle(HARLY_ACCENT)}>
+          Accept invitation
+        </Button>
+      </Section>
+      <Text style={{ ...text, marginTop: "24px", fontSize: "13px", color: "#78716c" }}>
+        This invitation expires in 7 days. If you were not expecting this, you
+        can safely ignore it.
+      </Text>
+    </HarlyLayout>
   );
 }

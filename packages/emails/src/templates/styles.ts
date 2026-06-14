@@ -1,24 +1,44 @@
+// ---------------------------------------------------------------------------
+// Shared design tokens for all Harly email templates.
+// Keep in sync with the web app's color palette (stone/zinc base).
+// ---------------------------------------------------------------------------
+
+export const HARLY_ACCENT = "#ef3e36"; // Harly brand red
+
 export const main = {
-  backgroundColor: "#f8f6f2",
-  color: "#292524",
-  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
+  backgroundColor: "#f5f5f4",
+  color: "#1c1917",
+  fontFamily:
+    '-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif',
 };
 
 export const container = {
   backgroundColor: "#ffffff",
-  border: "1px solid #e7e5e4",
-  borderRadius: "16px",
-  margin: "32px auto",
+  borderRadius: "12px",
+  margin: "40px auto",
   maxWidth: "560px",
-  padding: "32px",
+  padding: "0",
+  overflow: "hidden" as const,
+};
+
+// Header bar (logo zone)
+export const header = {
+  backgroundColor: "#ffffff",
+  borderBottom: "1px solid #e7e5e4",
+  padding: "24px 32px",
+};
+
+// Main content area
+export const body = {
+  padding: "32px 32px 24px",
 };
 
 export const heading = {
   color: "#1c1917",
-  fontSize: "24px",
+  fontSize: "22px",
   fontWeight: "700",
-  lineHeight: "32px",
-  margin: "0 0 20px",
+  lineHeight: "30px",
+  margin: "0 0 16px",
 };
 
 export const text = {
@@ -32,15 +52,67 @@ export const muted = {
   color: "#78716c",
   fontSize: "13px",
   lineHeight: "20px",
+  margin: "0",
 };
 
-export const button = {
-  backgroundColor: "#ef3e36",
-  borderRadius: "10px",
+export const hr = {
+  border: "none",
+  borderTop: "1px solid #e7e5e4",
+  margin: "24px 0",
+};
+
+// Footer below hr
+export const footer = {
+  padding: "0 32px 28px",
+};
+
+/** Primary CTA button. Pass accentColor to override for workspace-branded emails. */
+export function buttonStyle(accentColor = HARLY_ACCENT) {
+  return {
+    backgroundColor: accentColor,
+    borderRadius: "8px",
+    color: "#ffffff",
+    display: "inline-block",
+    fontSize: "14px",
+    fontWeight: "600",
+    padding: "11px 20px",
+    textDecoration: "none",
+  };
+}
+
+// Detail table (interview, offer)
+export const detailsTable = {
+  borderCollapse: "collapse" as const,
+  margin: "4px 0 20px",
+  width: "100%",
+};
+
+export const detailLabel = {
+  color: "#78716c",
+  fontSize: "13px",
+  padding: "7px 0",
+  verticalAlign: "top" as const,
+  width: "38%",
+};
+
+export const detailValue = {
+  color: "#1c1917",
+  fontSize: "14px",
+  fontWeight: 600,
+  padding: "7px 0",
+};
+
+// Logo text fallback (initials badge)
+export const logoBadge = (accentColor = HARLY_ACCENT) => ({
+  backgroundColor: accentColor,
+  borderRadius: "8px",
   color: "#ffffff",
   display: "inline-block",
   fontSize: "14px",
   fontWeight: "700",
-  padding: "12px 18px",
-  textDecoration: "none",
-};
+  height: "36px",
+  lineHeight: "36px",
+  minWidth: "36px",
+  textAlign: "center" as const,
+  padding: "0 10px",
+});

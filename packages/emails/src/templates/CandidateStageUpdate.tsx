@@ -1,12 +1,15 @@
-import { Body, Container, Heading, Html, Text } from "@react-email/components";
+import { Text } from "@react-email/components";
 
-import { container, heading, main, muted, text } from "./styles";
+import { heading, text } from "./styles";
+import { WorkspaceLayout } from "./WorkspaceLayout";
 
 export type CandidateStageUpdateProps = {
   candidateName: string;
   jobTitle: string;
   stageName: string;
   companyName: string;
+  companyLogoUrl?: string;
+  accentColor?: string;
 };
 
 export function candidateStageUpdateSubject({
@@ -20,26 +23,25 @@ export function CandidateStageUpdate({
   jobTitle,
   stageName,
   companyName,
+  companyLogoUrl,
+  accentColor,
 }: CandidateStageUpdateProps) {
   return (
-    <Html>
-      <Body style={main}>
-        <Container style={container}>
-          <Heading style={heading}>Application update</Heading>
-          <Text style={text}>Hi {candidateName},</Text>
-          <Text style={text}>
-            Your application for <strong>{jobTitle}</strong> at {companyName} has
-            moved to a new stage: <strong>{stageName}</strong>.
-          </Text>
-          <Text style={text}>
-            This is a general status update. The hiring team will reach out if
-            they need anything else from you.
-          </Text>
-          <Text style={{ ...muted, marginTop: "28px" }}>
-            Sent by Harly on behalf of {companyName}.
-          </Text>
-        </Container>
-      </Body>
-    </Html>
+    <WorkspaceLayout
+      preview={`Your application for ${jobTitle} at ${companyName} has moved to: ${stageName}.`}
+      companyName={companyName}
+      companyLogoUrl={companyLogoUrl}
+      accentColor={accentColor}
+    >
+      <Text style={heading}>Application update</Text>
+      <Text style={text}>Hi {candidateName},</Text>
+      <Text style={text}>
+        Your application for <strong>{jobTitle}</strong> at {companyName} has
+        moved to a new stage: <strong>{stageName}</strong>.
+      </Text>
+      <Text style={text}>
+        The hiring team will reach out if they need anything else from you.
+      </Text>
+    </WorkspaceLayout>
   );
 }
