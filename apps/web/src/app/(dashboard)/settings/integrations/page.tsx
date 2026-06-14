@@ -45,21 +45,14 @@ export default async function IntegrationsSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h2 className="font-display text-lg font-semibold tracking-tight">Integrations</h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Connect Harly to the tools your team already uses.
-        </p>
-      </div>
-
       <div className="grid gap-4 lg:grid-cols-2">
         <CalSettingsCard status={status} canEdit={canEdit} webhookUrl={webhookUrl} />
 
         {UPCOMING.map((integration) => {
           const Icon = integration.icon;
           return (
-            <Card key={integration.name} className="flex flex-col opacity-75">
-              <div className="flex items-start gap-3 p-5">
+            <Card key={integration.name} className="opacity-75">
+              <div className="flex items-start gap-3 px-6 py-5">
                 <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
                   <Icon className="size-4" />
                 </span>

@@ -37,6 +37,7 @@ export const workspaceNav: NavItem[] = [
   { label: "Jobs", href: "/dashboard/jobs", icon: Briefcase },
   { label: "Candidates", href: "/dashboard/candidates", icon: Users },
   { label: "Pipeline", href: "/dashboard/pipeline", icon: KanbanSquare },
+  { label: "Career Page", href: "/dashboard/career-page", icon: Globe },
   { label: "Settings", href: "/settings", icon: Settings },
 ];
 
@@ -47,7 +48,6 @@ export const moreNav: NavItem[] = [
   { label: "Reports", href: "/dashboard/reports", icon: BarChart3 },
   { label: "Talent Pool", href: "/dashboard/talent-pool", icon: UsersRound },
   { label: "Templates", href: "/dashboard/templates", icon: FileText },
-  { label: "Career Page", href: "/dashboard/career-page", icon: Globe },
 ];
 
 /** Legacy flat nav kept for the command palette / any residual consumers. */

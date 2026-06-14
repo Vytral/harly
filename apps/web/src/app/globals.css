@@ -176,6 +176,7 @@
   html {
     min-height: 100%;
     background: var(--background);
+    scroll-behavior: smooth;
   }
   body {
     min-height: 100vh;
@@ -218,6 +219,20 @@
 
 .board-page-enter {
   animation: board-page-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ── Submit button animations ── */
+@keyframes check-in {
+  0% {
+    stroke-dashoffset: 24;
+  }
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+
+.checkmark-anim {
+  animation: check-in 350ms cubic-bezier(0.23, 1, 0.32, 1) forwards;
 }
 
 /* ── Tiptap editor ── */

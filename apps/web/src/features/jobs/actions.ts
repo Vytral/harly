@@ -171,7 +171,7 @@ export async function generateJobDraftAction(input: {
       keywords: input.keywords,
     });
     return { ok: true, draft };
-  } catch (error) {
+  } catch {
     return {
       ok: false,
       error: "Generation failed.",

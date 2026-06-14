@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FileText, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -48,12 +48,18 @@ export function TemplatesManager({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
 
-  useEffect(() => {
-    if (!open) return;
-    setName(editing?.name ?? "");
-    setSubject(editing?.subject ?? "");
-    setBody(editing?.body ?? "");
-  }, [open, editing]);
+  // Sync the form to the open template at render time (React's "adjust state on
+  // prop change" pattern) instead of in an effect — avoids a cascading render.
+  const syncKey = open ? (editing?.id ?? "__new__") : "__closed__";
+  const [syncedKey, setSyncedKey] = useState<string | null>(null);
+  if (syncKey !== syncedKey) {
+    setSyncedKey(syncKey);
+    if (open) {
+      setName(editing?.name ?? "");
+      setSubject(editing?.subject ?? "");
+      setBody(editing?.body ?? "");
+    }
+  }
 
   const unknownVariables = findUnknownVariables(`${subject}\n${body}`);
 

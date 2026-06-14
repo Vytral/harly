@@ -67,7 +67,7 @@ export function CalSettingsCard({
 
   return (
     <Card className="flex flex-col">
-      <div className="flex items-start gap-3 p-5">
+      <div className="flex items-start gap-3 px-6 py-5">
         <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-sage text-sage-ink">
           <CalendarClock className="size-4" />
         </span>
@@ -95,7 +95,7 @@ export function CalSettingsCard({
         </div>
       </div>
 
-      <div className="mt-auto space-y-4 border-t px-5 py-4">
+      <div className="mt-auto space-y-4 border-t px-6 py-4">
         {!status.encryptionReady ? (
           <p className="rounded-md border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
             Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on the

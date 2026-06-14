@@ -26,6 +26,50 @@ type WorkspaceLike = Pick<
   | "logoStyle"
 >;
 
+type WorkspaceLogoProps = {
+  workspace: Pick<WorkspaceLike, "name" | "logoUrl" | "logoStyle">;
+  size?: "sm" | "md" | "lg";
+};
+
+export function WorkspaceLogo({ workspace, size = "md" }: WorkspaceLogoProps) {
+  const initials = workspace.name.slice(0, 2).toUpperCase();
+
+  const sizeMap = {
+    sm: { outer: "h-8 w-8", inner: "h-7 w-7", img: "h-8 w-8", text: "text-xs" },
+    md: { outer: "h-12 w-12", inner: "h-10 w-10", img: "h-12 w-12", text: "text-sm" },
+    lg: { outer: "h-16 w-16", inner: "h-12 w-12", img: "h-16 w-16", text: "text-lg" },
+  };
+  const s = sizeMap[size];
+
+  if (workspace.logoStyle === "full" && workspace.logoUrl) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={workspace.logoUrl}
+        alt={workspace.name}
+        className={`${s.img} object-contain`}
+      />
+    );
+  }
+
+  return (
+    <div className={`flex ${s.outer} items-center justify-center rounded-xl bg-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]`}>
+      {workspace.logoUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={workspace.logoUrl}
+          alt={workspace.name}
+          className={`${s.inner} rounded-lg object-cover`}
+        />
+      ) : (
+        <span className={`font-mono ${s.text} font-semibold text-zinc-900`}>
+          {initials}
+        </span>
+      )}
+    </div>
+  );
+}
+
 type BoardShellProps = {
   workspace: WorkspaceLike;
   boardRoot?: string;
@@ -51,7 +95,6 @@ type BoardHeroProps = {
 };
 
 export function BoardHero({ workspace, showCta = false }: BoardHeroProps) {
-  const initials = workspace.name.slice(0, 2).toUpperCase();
   const hasHeroImage = Boolean(workspace.heroImageUrl);
 
   const backgroundStyle: React.CSSProperties = hasHeroImage
@@ -68,29 +111,7 @@ export function BoardHero({ workspace, showCta = false }: BoardHeroProps) {
   return (
     <section className="relative overflow-hidden" style={backgroundStyle}>
       <div className="mx-auto flex max-w-3xl flex-col items-center px-6 py-20 text-center sm:py-24">
-        {workspace.logoStyle === "full" && workspace.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={workspace.logoUrl}
-            alt={workspace.name}
-            className="h-14 w-14 object-contain"
-          />
-        ) : (
-          <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-white shadow-[0_4px_20px_rgba(0,0,0,0.25)]">
-            {workspace.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={workspace.logoUrl}
-                alt={workspace.name}
-                className="h-10 w-10 rounded-lg object-cover"
-              />
-            ) : (
-              <span className="font-mono text-base font-semibold text-zinc-900">
-                {initials}
-              </span>
-            )}
-          </div>
-        )}
+        <WorkspaceLogo workspace={workspace} size="md" />
         <h1 className="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">
           Careers at {workspace.name}
         </h1>
@@ -113,37 +134,10 @@ export function BoardHero({ workspace, showCta = false }: BoardHeroProps) {
 }
 
 export function BoardMinimalHeader({ workspace }: { workspace: WorkspaceLike }) {
-  const initials = workspace.name.slice(0, 2).toUpperCase();
-
   return (
     <section className="border-b border-zinc-100 bg-white">
       <div className="mx-auto flex max-w-3xl flex-col items-center px-6 py-16 text-center">
-        {workspace.logoStyle === "full" && workspace.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={workspace.logoUrl}
-            alt={workspace.name}
-            className="h-16 w-16 object-contain"
-          />
-        ) : (
-          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-zinc-50 ring-1 ring-zinc-100">
-            {workspace.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={workspace.logoUrl}
-                alt={workspace.name}
-                className="h-12 w-12 rounded-xl object-cover"
-              />
-            ) : (
-              <span
-                className="font-mono text-lg font-semibold"
-                style={{ color: "var(--board-primary)" }}
-              >
-                {initials}
-              </span>
-            )}
-          </div>
-        )}
+        <WorkspaceLogo workspace={workspace} size="lg" />
         <h1 className="mt-5 text-3xl font-semibold tracking-tight text-zinc-900">
           Careers at {workspace.name}
         </h1>
@@ -293,8 +287,6 @@ export function BoardTopBar({
   boardRoot: string;
   backHref?: Route;
 }) {
-  const initials = workspace.name.slice(0, 2).toUpperCase();
-
   return (
     <header className="border-b border-zinc-100 bg-white">
       <div className="mx-auto flex max-w-3xl items-center gap-3 px-6 py-4">
@@ -302,29 +294,7 @@ export function BoardTopBar({
           href={boardRoot as Route}
           className="flex items-center gap-2"
         >
-          {workspace.logoStyle === "full" && workspace.logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={workspace.logoUrl}
-              alt={workspace.name}
-              className="h-8 w-8 object-contain"
-            />
-          ) : (
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-zinc-50 ring-1 ring-zinc-100">
-              {workspace.logoUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={workspace.logoUrl}
-                  alt={workspace.name}
-                  className="h-7 w-7 rounded object-cover"
-                />
-              ) : (
-                <span className="font-mono text-xs font-semibold text-zinc-900">
-                  {initials}
-                </span>
-              )}
-            </span>
-          )}
+          <WorkspaceLogo workspace={workspace} size="sm" />
           <span className="text-sm font-semibold text-zinc-900">
             {workspace.name}
           </span>
@@ -368,32 +338,9 @@ export function BoardJobHeader({
   return (
     <div className="border-b border-zinc-100 bg-white">
       <div className="mx-auto max-w-3xl px-6 pb-0 pt-10 text-center">
-        {workspace.logoStyle === "full" && workspace.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={workspace.logoUrl}
-            alt={workspace.name}
-            className="mx-auto mb-4 h-12 w-12 object-contain"
-          />
-        ) : (
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-xl bg-zinc-100 ring-1 ring-black/5 shadow-sm overflow-hidden">
-            {workspace.logoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={workspace.logoUrl}
-                alt={workspace.name}
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span
-                className="font-mono text-sm font-semibold"
-                style={{ color: "var(--board-primary)" }}
-              >
-                {workspace.name.slice(0, 2).toUpperCase()}
-              </span>
-            )}
-          </div>
-        )}
+        <div className="mx-auto mb-4 flex justify-center">
+          <WorkspaceLogo workspace={workspace} size="md" />
+        </div>
         <Link
           href={boardRoot as Route}
           className="text-sm font-semibold text-zinc-500 transition hover:text-zinc-900"

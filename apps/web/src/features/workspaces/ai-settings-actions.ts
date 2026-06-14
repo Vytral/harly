@@ -20,6 +20,7 @@ const saveSchema = z.object({
   modelId: z.string().trim().min(1, "Choose a model.").max(200),
   // Optional: when blank, the previously stored key is kept.
   apiKey: z.string().trim().max(500).optional(),
+  baseUrl: z.string().trim().max(500).optional(),
   enabled: z.boolean(),
 });
 
@@ -27,6 +28,7 @@ export async function saveAiSettingsAction(input: {
   provider: string;
   modelId: string;
   apiKey?: string;
+  baseUrl?: string;
   enabled: boolean;
 }): Promise<AiSettingsActionResult> {
   const context = await requireWorkspaceRole(["owner", "admin"]);
@@ -46,7 +48,7 @@ export async function saveAiSettingsAction(input: {
     };
   }
 
-  const { provider, modelId, apiKey, enabled } = parsed.data;
+  const { provider, modelId, apiKey, baseUrl, enabled } = parsed.data;
   if (!isAiProviderId(provider)) {
     return { ok: false, error: "Unknown provider." };
   }
@@ -72,6 +74,7 @@ export async function saveAiSettingsAction(input: {
       aiEnabled: enabled,
       aiProvider: provider,
       aiModelId: modelId,
+      aiBaseUrl: baseUrl || null,
       ...keyColumns,
     })
     .onConflictDoUpdate({
@@ -80,6 +83,7 @@ export async function saveAiSettingsAction(input: {
         aiEnabled: enabled,
         aiProvider: provider,
         aiModelId: modelId,
+        aiBaseUrl: baseUrl || null,
         ...keyColumns,
         updatedAt: new Date(),
       },
@@ -105,6 +109,7 @@ export async function testAiConnectionAction(input: {
   provider: string;
   modelId: string;
   apiKey?: string;
+  baseUrl?: string;
 }): Promise<AiSettingsActionResult> {
   const context = await requireWorkspaceRole(["owner", "admin"]);
 
@@ -132,6 +137,7 @@ export async function testAiConnectionAction(input: {
       provider: input.provider,
       modelId: input.modelId.trim(),
       apiKey,
+      baseUrl: input.baseUrl,
     });
     const { text } = await generateText({
       model,

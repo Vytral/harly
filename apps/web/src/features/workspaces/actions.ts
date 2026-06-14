@@ -8,7 +8,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
-import { sendEmail } from "@/lib/email";
+import { sendWorkspaceEmail } from "@/lib/email";
 import { db } from "@harly/db";
 import {
   customRoles,
@@ -231,7 +231,7 @@ export async function updateWorkspaceProfileAction(
     revalidatePath("/dashboard");
 
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error:
@@ -342,7 +342,7 @@ export async function inviteWorkspaceMemberAction(
     const protocol = host.startsWith("localhost") ? "http" : "https";
     const acceptUrl = `${protocol}://${host}/invite/${invitationId}`;
 
-    void sendEmail({
+    void sendWorkspaceEmail(context.organization.id, {
       to: parsed.data.email,
       subject: workspaceInvitationSubject({
         workspaceName: context.organization.name,
@@ -357,7 +357,7 @@ export async function inviteWorkspaceMemberAction(
 
     revalidatePath("/settings");
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to invite member.",
@@ -420,7 +420,7 @@ export async function updateWorkspaceMemberRoleAction(
 
     revalidatePath("/settings");
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to update member.",
@@ -504,7 +504,7 @@ export async function updateMemberRolesAction(input: {
 
     revalidatePath("/settings/members");
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to update roles.",
@@ -560,7 +560,7 @@ export async function removeWorkspaceMemberAction(
 
     revalidatePath("/settings");
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to remove member.",
@@ -587,7 +587,7 @@ export async function cancelWorkspaceInvitationAction(
 
     revalidatePath("/settings");
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error:
@@ -687,7 +687,7 @@ export async function acceptWorkspaceInvitationAction(
     revalidatePath("/dashboard");
     revalidatePath("/settings");
     return result;
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error:
@@ -728,7 +728,7 @@ export async function leaveWorkspaceAction(): Promise<ActionResult> {
 
     revalidatePath("/dashboard");
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to leave workspace.",

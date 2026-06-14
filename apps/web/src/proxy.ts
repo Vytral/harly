@@ -12,6 +12,12 @@ const PUBLIC_PATHS = [
   "/api/auth",
   // Inbound integration webhooks authenticate via signature, not session.
   "/api/webhooks",
+  // Public REST API + authenticated REST API: both authenticate per-request
+  // (slug / API key / cron secret), never via the session cookie.
+  "/api/public",
+  "/api/v1",
+  "/api/cron",
+  "/embed",
   "/api/applications/resume/presign",
   "/api/storage/presign",
   "/api/storage/upload",

@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     "@harly/auth",
     "@harly/storage",
     "@harly/emails",
+    "@harly/api",
   ],
 };
 

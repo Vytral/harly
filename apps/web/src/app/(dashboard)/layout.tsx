@@ -47,7 +47,7 @@ export default async function DashboardLayout({
           notifications={notifications}
         />
         {!user.emailVerified ? <VerifyEmailBanner email={user.email} /> : null}
-        <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 md:px-6 lg:px-8 lg:py-8">
+        <main className="w-full flex-1 px-4 py-6 md:px-6 lg:px-8 lg:py-8">
           {children}
         </main>
       </SidebarInset>

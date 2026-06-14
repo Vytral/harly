@@ -27,7 +27,7 @@ export async function addHiringTeamMember(input: {
       .onConflictDoNothing();
     revalidatePath(`/dashboard/jobs/${input.jobId}`);
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to add member.",
@@ -53,7 +53,7 @@ export async function updateHiringTeamRole(input: {
       );
     revalidatePath(`/dashboard/jobs/${input.jobId}`);
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to update role.",
@@ -77,7 +77,7 @@ export async function removeHiringTeamMember(input: {
       );
     revalidatePath(`/dashboard/jobs/${input.jobId}`);
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to remove member.",

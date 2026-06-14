@@ -19,6 +19,7 @@ import {
   type WorkspaceBoardBranding,
 } from "@/features/workspaces/board";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { normalizeCareerPageConfig } from "@/features/career-page/config";
 import type { JobFormValues, JobStatus } from "./validation";
 
 // Branding is sourced from the Better Auth `organization` (name/slug/logo) plus
@@ -308,6 +309,7 @@ export async function getPublicJobDetail(input: {
     .select({
       job: jobs,
       workspace: workspaceBrandingSelect,
+      careerConfig: workspaceSettings.careerPageConfig,
     })
     .from(jobs)
     .innerJoin(organization, eq(organization.id, jobs.workspaceId))
@@ -332,6 +334,7 @@ export async function getPublicJobDetail(input: {
   return {
     job: row.job,
     workspace: toBoardBranding(row.workspace),
+    config: normalizeCareerPageConfig(row.careerConfig),
   };
 }
 

@@ -11,19 +11,21 @@ import type { AiModelConfig, OpenRouterModel } from "./providers";
 
 /** Build a Vercel AI SDK LanguageModel for the given provider + key + model id. */
 export function getModel(config: AiModelConfig): LanguageModel {
-  const { provider, modelId, apiKey } = config;
+  const { provider, modelId, apiKey, baseUrl } = config;
+
+  const opts = { apiKey, baseURL: baseUrl };
 
   switch (provider) {
     case "openai":
-      return createOpenAI({ apiKey })(modelId);
+      return createOpenAI(opts)(modelId);
     case "anthropic":
-      return createAnthropic({ apiKey })(modelId);
+      return createAnthropic(opts)(modelId);
     case "google":
-      return createGoogleGenerativeAI({ apiKey })(modelId);
+      return createGoogleGenerativeAI(opts)(modelId);
     case "xai":
-      return createXai({ apiKey })(modelId);
+      return createXai(opts)(modelId);
     case "openrouter":
-      return createOpenRouter({ apiKey })(modelId);
+      return createOpenRouter({ apiKey, baseURL: baseUrl })(modelId);
     default:
       throw new Error(`Unknown AI provider: ${provider as string}`);
   }

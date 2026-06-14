@@ -22,6 +22,8 @@ export type AiProviderInfo = {
   apiKeyUrl: string;
   /** Where the user gets a key, shown under the input. */
   apiKeyHint: string;
+  /** Default API base URL (overridable via custom endpoint). */
+  baseUrl: string;
   /** Curated suggestions; free-text entry is always allowed. */
   models: AiModelOption[];
   /** OpenRouter: fetch the catalog live instead of using the static list. */
@@ -32,9 +34,38 @@ export type AiModelConfig = {
   provider: AiProviderId;
   modelId: string;
   apiKey: string;
+  /** Optional custom API base URL. */
+  baseUrl?: string;
 };
 
 export type OpenRouterModel = { id: string; name: string; free: boolean };
+
+/**
+ * Format a model ID into a human-readable label.
+ * "gpt-5.4-nano-2026-03-17" → "GPT 5.4 Nano"
+ * "claude-sonnet-4-5"       → "Claude Sonnet 4.5"
+ * "gemini-2.5-flash"        → "Gemini 2.5 Flash"
+ */
+export function formatModelLabel(id: string): string {
+  // Strip trailing date-like suffix (e.g. -2026-03-17)
+  const cleaned = id.replace(/-\d{4}-\d{2}-\d{2}$/, "");
+  return cleaned
+    .split("-")
+    .map((part, i) => {
+      // Keep numbers/version strings as-is (4o, 2.5, 5.4, etc.)
+      if (/^[\d.]+$/.test(part)) return part;
+      if (/^[\d.]+[a-z]$/i.test(part)) return part; // 4o, 3p5
+      // Always capitalize first word; capitalize subsequent semantic words
+      return i === 0
+        ? part.charAt(0).toUpperCase() + part.slice(1)
+        : ["mini", "max", "pro", "ultra", "flash", "haiku", "sonnet", "opus", "nano", "turbo"].includes(
+              part.toLowerCase(),
+            )
+          ? part.charAt(0).toUpperCase() + part.slice(1)
+          : part;
+    })
+    .join(" ");
+}
 
 export const AI_PROVIDERS: AiProviderInfo[] = [
   {
@@ -42,49 +73,66 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
     label: "OpenAI",
     apiKeyUrl: "https://platform.openai.com/api-keys",
     apiKeyHint: "Create a secret key at platform.openai.com/api-keys.",
+    baseUrl: "https://api.openai.com/v1",
     supportsModelSearch: false,
     models: [
-      { id: "gpt-5.1", label: "GPT-5.1" },
-      { id: "gpt-5.1-mini", label: "GPT-5.1 mini" },
-      { id: "gpt-4.1", label: "GPT-4.1" },
-      { id: "gpt-4o", label: "GPT-4o" },
-      { id: "gpt-4o-mini", label: "GPT-4o mini" },
+      { id: "gpt-5.4-nano", label: "GPT 5.4 Nano" },
+      { id: "gpt-5.4-mini", label: "GPT 5.4 Mini" },
+      { id: "gpt-5.1", label: "GPT 5.1" },
+      { id: "gpt-5.1-mini", label: "GPT 5.1 Mini" },
+      { id: "gpt-4.1", label: "GPT 4.1" },
+      { id: "gpt-4.1-mini", label: "GPT 4.1 Mini" },
+      { id: "gpt-4.1-nano", label: "GPT 4.1 Nano" },
+      { id: "gpt-4o", label: "GPT 4o" },
+      { id: "gpt-4o-mini", label: "GPT 4o Mini" },
+      { id: "o4-mini", label: "o4 Mini" },
+      { id: "o3", label: "o3" },
+      { id: "o3-mini", label: "o3 Mini" },
     ],
   },
   {
     id: "anthropic",
-    label: "Anthropic (Claude)",
+    label: "Anthropic",
     apiKeyUrl: "https://console.anthropic.com/settings/keys",
     apiKeyHint: "Create a key at console.anthropic.com.",
+    baseUrl: "https://api.anthropic.com/v1",
     supportsModelSearch: false,
     models: [
+      { id: "claude-opus-4-5", label: "Claude Opus 4.5" },
       { id: "claude-opus-4-1", label: "Claude Opus 4.1" },
+      { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6" },
       { id: "claude-sonnet-4-5", label: "Claude Sonnet 4.5" },
-      { id: "claude-3-5-haiku-latest", label: "Claude Haiku 3.5" },
+      { id: "claude-haiku-4-5", label: "Claude Haiku 4.5" },
+      { id: "claude-3-5-haiku", label: "Claude Haiku 3.5" },
     ],
   },
   {
     id: "google",
-    label: "Google (Gemini)",
+    label: "Google Gemini",
     apiKeyUrl: "https://aistudio.google.com/app/apikey",
     apiKeyHint: "Create a key at aistudio.google.com.",
+    baseUrl: "https://generativelanguage.googleapis.com/v1beta",
     supportsModelSearch: false,
     models: [
       { id: "gemini-2.5-pro", label: "Gemini 2.5 Pro" },
       { id: "gemini-2.5-flash", label: "Gemini 2.5 Flash" },
+      { id: "gemini-2.5-flash-lite", label: "Gemini 2.5 Flash Lite" },
       { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash" },
+      { id: "gemini-2.0-flash-lite", label: "Gemini 2.0 Flash Lite" },
     ],
   },
   {
     id: "xai",
-    label: "xAI (Grok)",
+    label: "xAI",
     apiKeyUrl: "https://console.x.ai",
     apiKeyHint: "Create a key at console.x.ai.",
+    baseUrl: "https://api.x.ai/v1",
     supportsModelSearch: false,
     models: [
       { id: "grok-4", label: "Grok 4" },
+      { id: "grok-4-mini", label: "Grok 4 Mini" },
       { id: "grok-3", label: "Grok 3" },
-      { id: "grok-3-mini", label: "Grok 3 mini" },
+      { id: "grok-3-mini", label: "Grok 3 Mini" },
     ],
   },
   {
@@ -93,6 +141,7 @@ export const AI_PROVIDERS: AiProviderInfo[] = [
     apiKeyUrl: "https://openrouter.ai/keys",
     apiKeyHint:
       "One key routes to hundreds of models (incl. free). Create it at openrouter.ai/keys.",
+    baseUrl: "https://openrouter.ai/api/v1",
     supportsModelSearch: true,
     models: [],
   },

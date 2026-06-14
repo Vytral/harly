@@ -11,6 +11,8 @@ export type WorkspaceAiStatus = {
   enabled: boolean;
   provider: string | null;
   modelId: string | null;
+  /** Optional custom API base URL. */
+  baseUrl: string | null;
   /** True only when a key is stored (never the key itself). */
   hasApiKey: boolean;
   /** False when AI_ENCRYPTION_KEY is missing/invalid — AI can't be used. */
@@ -26,6 +28,7 @@ export async function getWorkspaceAiStatus(
       aiEnabled: workspaceSettings.aiEnabled,
       aiProvider: workspaceSettings.aiProvider,
       aiModelId: workspaceSettings.aiModelId,
+      aiBaseUrl: workspaceSettings.aiBaseUrl,
       aiApiKeyCiphertext: workspaceSettings.aiApiKeyCiphertext,
     })
     .from(workspaceSettings)
@@ -36,6 +39,7 @@ export async function getWorkspaceAiStatus(
     enabled: Boolean(row?.aiEnabled),
     provider: row?.aiProvider ?? null,
     modelId: row?.aiModelId ?? null,
+    baseUrl: row?.aiBaseUrl ?? null,
     hasApiKey: Boolean(row?.aiApiKeyCiphertext),
     encryptionReady: isEncryptionConfigured(),
   };
@@ -57,6 +61,7 @@ export async function getWorkspaceAiConfig(
       aiEnabled: workspaceSettings.aiEnabled,
       aiProvider: workspaceSettings.aiProvider,
       aiModelId: workspaceSettings.aiModelId,
+      aiBaseUrl: workspaceSettings.aiBaseUrl,
       aiApiKeyCiphertext: workspaceSettings.aiApiKeyCiphertext,
       aiApiKeyIv: workspaceSettings.aiApiKeyIv,
       aiApiKeyTag: workspaceSettings.aiApiKeyTag,
@@ -85,7 +90,7 @@ export async function getWorkspaceAiConfig(
       tag: row.aiApiKeyTag,
     });
 
-    return { provider: row.aiProvider, modelId: row.aiModelId, apiKey };
+    return { provider: row.aiProvider, modelId: row.aiModelId, apiKey, baseUrl: row.aiBaseUrl ?? undefined };
   } catch {
     return null;
   }

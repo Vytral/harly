@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AtSign,
@@ -209,11 +209,13 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
   const [websiteUrl, setWebsiteUrl] = useState(user.websiteUrl ?? "");
   const [savingProfile, startProfile] = useTransition();
   const [profileDirty, setProfileDirty] = useState(false);
-  const [userAgent, setUserAgent] = useState("—");
-
-  useEffect(() => {
-    setUserAgent(navigator.userAgent.slice(0, 60));
-  }, []);
+  // Browser-only value: server snapshot is the placeholder, client snapshot the
+  // real UA — no effect/setState (avoids a cascading render on mount).
+  const userAgent = useSyncExternalStore(
+    () => () => {},
+    () => navigator.userAgent.slice(0, 60),
+    () => "—",
+  );
 
   const [newEmail, setNewEmail] = useState("");
   const [savingEmail, startEmail] = useTransition();
