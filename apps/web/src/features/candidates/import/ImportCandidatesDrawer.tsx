@@ -174,7 +174,7 @@ export function ImportCandidatesDrawer({ jobs }: { jobs: ImportJobOption[] }) {
         {jobs.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             Create a job before importing candidates — every imported row is added to
-            a job's pipeline.
+            a job&apos;s pipeline.
           </p>
         ) : (
           <div className="space-y-5">

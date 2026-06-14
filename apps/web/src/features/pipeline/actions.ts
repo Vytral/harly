@@ -21,7 +21,8 @@ import {
   organization,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { sendEmail } from "@/lib/email";
+import { sendWorkspaceEmail } from "@/lib/email";
+import { emitWebhookEvent } from "@/server/webhooks/emit";
 
 type ApplicationStatus = "active" | "hired" | "rejected" | "withdrawn";
 
@@ -86,11 +87,11 @@ function normalizeStageEmailConfig(value: unknown) {
   return { candidateUpdatesEnabled: true };
 }
 
-async function sendPipelineEmails(emails: PipelineEmail[]) {
+async function sendPipelineEmails(workspaceId: string, emails: PipelineEmail[]) {
   await Promise.allSettled(
     emails.map((email) => {
       if (email.type === "stage") {
-        return sendEmail({
+        return sendWorkspaceEmail(workspaceId, {
           to: email.candidateEmail,
           subject: candidateStageUpdateSubject({
             jobTitle: email.jobTitle,
@@ -104,7 +105,7 @@ async function sendPipelineEmails(emails: PipelineEmail[]) {
         });
       }
 
-      return sendEmail({
+      return sendWorkspaceEmail(workspaceId, {
         to: email.candidateEmail,
         subject: candidateRejectedSubject({
           jobTitle: email.jobTitle,
@@ -165,6 +166,11 @@ export async function moveApplicationInPipeline(
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
+
+    // Captured inside the transaction, emitted after commit (see data.ts note).
+    const stageEvent: {
+      current: { status: ApplicationStatus; becameRejected: boolean } | null;
+    } = { current: null };
 
     const emails = await db.transaction<PipelineEmail[]>(async (tx) => {
       const [application] = await tx
@@ -273,6 +279,11 @@ export async function moveApplicationInPipeline(
         movedById: user.id,
       });
 
+      stageEvent.current = {
+        status: nextStatus,
+        becameRejected: application.status === "active" && nextStatus === "rejected",
+      };
+
       await tx.insert(activityEvents).values({
         workspaceId: input.workspaceId,
         actorId: user.id,
@@ -320,7 +331,21 @@ export async function moveApplicationInPipeline(
     });
 
     revalidatePath("/dashboard/pipeline");
-    void sendPipelineEmails(emails);
+    void sendPipelineEmails(input.workspaceId, emails);
+
+    if (stageEvent.current) {
+      await emitWebhookEvent(input.workspaceId, "application.stage_changed", {
+        application: { id: input.applicationId },
+        fromStageId: input.fromStageId,
+        toStageId: input.toStageId,
+        status: stageEvent.current.status,
+      });
+      if (stageEvent.current.becameRejected) {
+        await emitWebhookEvent(input.workspaceId, "application.rejected", {
+          application: { id: input.applicationId },
+        });
+      }
+    }
 
     return { success: true };
   } catch (error) {
@@ -508,6 +533,7 @@ export async function updateApplicationStatus(
 
     if (input.status === "rejected") {
       void sendPipelineEmails(
+        input.workspaceId,
         applicationRows.map((application) => ({
           type: "rejected",
           candidateEmail: application.candidateEmail,

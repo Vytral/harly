@@ -19,6 +19,7 @@ import {
 } from "@harly/db";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { buildQuestionAnswerRows } from "@/features/applications/questions";
+import { emitWebhookEvent } from "@/server/webhooks/emit";
 import type { ApplicationFormValues } from "@/lib/validations/applications";
 
 export type PublicApplicationResult =
@@ -29,6 +30,7 @@ export type PublicApplicationResult =
         candidateFirstName: string;
         candidateName: string;
         jobTitle: string;
+        workspaceId: string;
         workspaceName: string;
         workspaceSlug: string;
         ownerEmails: string[];
@@ -75,7 +77,23 @@ export async function createPublicApplication(
   input: { jobSlug: string; workspaceSlug?: string },
   values: ApplicationFormValues,
 ): Promise<PublicApplicationResult> {
-  return db.transaction(async (tx) => {
+  // Captured inside the transaction, emitted after commit so a failed webhook
+  // can never roll back a successful application.
+  type CreatedEvent = {
+    workspaceId: string;
+    applicationId: string;
+    candidateId: string;
+    jobId: string;
+    jobTitle: string;
+    candidateEmail: string;
+    candidateName: string;
+  };
+  // Held in a ref object so the transaction closure can populate it without
+  // tripping TypeScript's "assigned-in-closure" narrowing of a bare `let`.
+  const createdEvent: { current: CreatedEvent | null } = { current: null };
+
+  const result = await db.transaction(
+    async (tx): Promise<PublicApplicationResult> => {
     const [job] = await tx
       .select({
         id: jobs.id,
@@ -307,6 +325,16 @@ export async function createPublicApplication(
         ),
       );
 
+    createdEvent.current = {
+      workspaceId,
+      applicationId: application.id,
+      candidateId: candidate.id,
+      jobId: job.id,
+      jobTitle: job.title,
+      candidateEmail: candidate.email,
+      candidateName: `${candidate.firstName} ${candidate.lastName}`,
+    };
+
     return {
       ok: true,
       email: {
@@ -314,10 +342,26 @@ export async function createPublicApplication(
         candidateFirstName: candidate.firstName,
         candidateName: `${candidate.firstName} ${candidate.lastName}`,
         jobTitle: job.title,
+        workspaceId,
         workspaceName: workspace.name,
         workspaceSlug: workspace.slug,
         ownerEmails: owners.map((owner) => owner.email),
       },
     };
   });
+
+  const event = createdEvent.current;
+  if (event) {
+    await emitWebhookEvent(event.workspaceId, "application.created", {
+      application: { id: event.applicationId, jobId: event.jobId },
+      candidate: {
+        id: event.candidateId,
+        email: event.candidateEmail,
+        name: event.candidateName,
+      },
+      job: { id: event.jobId, title: event.jobTitle },
+    });
+  }
+
+  return result;
 }

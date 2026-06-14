@@ -6,7 +6,6 @@ import { revalidatePath } from "next/cache";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
-import { createEmailSender } from "@harly/emails";
 import { db } from "@harly/db";
 import {
   activityEvents,
@@ -22,6 +21,7 @@ import {
   scorecards,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { getWorkspaceEmailSender } from "@/lib/email";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
 import {
@@ -532,7 +532,7 @@ export async function createScorecard(input: {
     });
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to save evaluation.",
@@ -575,7 +575,7 @@ export async function addCandidateTag(input: {
       .onConflictDoNothing();
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to add tag.",
@@ -598,7 +598,7 @@ export async function removeCandidateTag(input: {
       .where(and(eq(candidateTags.id, input.tagId), eq(candidateTags.workspaceId, input.workspaceId)));
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to remove tag.",
@@ -692,7 +692,7 @@ export async function sendBulkCandidateEmail(input: {
     }
   }
 
-  const sender = createEmailSender();
+  const sender = await getWorkspaceEmailSender(workspace.id);
   let sent = 0;
   let failed = 0;
 
@@ -766,8 +766,9 @@ export async function sendCandidateMessage(input: {
       return { success: false, error: "Candidate not found." };
     }
 
-    // Send via Resend when configured; otherwise persist as queued.
-    const sender = createEmailSender();
+    // Send via the workspace's configured provider (or platform default);
+    // otherwise persist as queued.
+    const sender = await getWorkspaceEmailSender(workspace.id);
     let status: "sent" | "queued" | "failed" = sender ? "sent" : "queued";
     if (sender) {
       try {
@@ -803,7 +804,7 @@ export async function sendCandidateMessage(input: {
       return { success: false, error: "Email failed to send.", delivered: false };
     }
     return { success: true, delivered: status === "sent" };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to send message.",

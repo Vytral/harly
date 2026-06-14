@@ -1,13 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createElement } from "react";
-import {
-  ApplicationReceivedCandidate,
-  ApplicationReceivedRecruiter,
-  applicationReceivedCandidateSubject,
-  applicationReceivedRecruiterSubject,
-} from "@harly/emails";
 
 import { createPublicApplication } from "@/features/applications/data";
 import {
@@ -16,7 +9,7 @@ import {
   validateApplicationQuestionAnswers,
 } from "@/lib/validations/applications";
 import { getPublicJobApplicationContext } from "@/features/applications/data";
-import { sendEmail } from "@/lib/email";
+import { sendApplicationReceivedEmails } from "@/features/applications/notifications";
 import { storage } from "@/lib/storage";
 import { extractResumeText } from "@/lib/resume/extract-text";
 import { maxResumeFileSize } from "@/lib/storage-validation";
@@ -174,38 +167,7 @@ export async function submitApplicationAction(
       };
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const jobBoardUrl = `${appUrl}/board/${result.email.workspaceSlug}`;
-    const dashboardUrl = `${appUrl}/dashboard/candidates`;
-    const candidateEmail = sendEmail({
-      to: result.email.candidateEmail,
-      subject: applicationReceivedCandidateSubject({
-        jobTitle: result.email.jobTitle,
-      }),
-      react: createElement(ApplicationReceivedCandidate, {
-        candidateName: result.email.candidateFirstName,
-        jobTitle: result.email.jobTitle,
-        companyName: result.email.workspaceName,
-        jobBoardUrl,
-      }),
-    });
-    const recruiterEmails = result.email.ownerEmails.map((ownerEmail) =>
-      sendEmail({
-        to: ownerEmail,
-        subject: applicationReceivedRecruiterSubject({
-          candidateName: result.email.candidateName,
-          jobTitle: result.email.jobTitle,
-        }),
-        react: createElement(ApplicationReceivedRecruiter, {
-          candidateName: result.email.candidateName,
-          candidateEmail: result.email.candidateEmail,
-          jobTitle: result.email.jobTitle,
-          dashboardUrl,
-        }),
-      }),
-    );
-
-    void Promise.allSettled([candidateEmail, ...recruiterEmails]);
+    sendApplicationReceivedEmails(result.email);
 
     revalidatePath("/dashboard/candidates");
     return {
