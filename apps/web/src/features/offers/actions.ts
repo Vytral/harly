@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createElement } from "react";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -8,14 +9,54 @@ import {
   activityEvents,
   applications,
   applicationStageHistory,
+  candidates,
   db,
   jobHiringTeam,
   jobStages,
   notifications,
   offers,
+  organization,
 } from "@harly/db";
+import {
+  OfferExtended,
+  offerExtendedSubject,
+  OfferWithdrawn,
+  offerWithdrawnSubject,
+} from "@harly/emails";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { sendWorkspaceEmail } from "@/lib/email";
+import { emitWebhookEvent } from "@/server/webhooks/emit";
+
+const dateFormatter = new Intl.DateTimeFormat("en", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
+function formatOfferDate(value: Date | null): string | undefined {
+  return value ? dateFormatter.format(value) : undefined;
+}
+
+/** Human-readable compensation line, e.g. "$120,000 / year". */
+function formatOfferSalary(
+  amount: number | null,
+  currency: string | null,
+  period: "annual" | "monthly" | null,
+): string | undefined {
+  if (!amount) return undefined;
+  let money: string;
+  try {
+    money = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "USD",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    money = `${amount.toLocaleString()} ${currency ?? ""}`.trim();
+  }
+  return period === "monthly" ? `${money} / month` : `${money} / year`;
+}
 
 const offerFieldsSchema = z.object({
   title: z.string().trim().min(1, "Offer title is required.").max(200),
@@ -264,6 +305,33 @@ export async function sendOffer(input: { offerId: string }): Promise<ActionResul
     metadata: { title: offer.title, salaryAmount: offer.salaryAmount },
   });
 
+  // Email the candidate their offer. Fire-and-forget so a mail hiccup never
+  // blocks the state change — matches the apply / stage-change flows.
+  const recipient = await getOfferRecipient(workspaceId, offer.candidateId);
+
+  if (recipient?.email) {
+    void sendWorkspaceEmail(workspaceId, {
+      to: recipient.email,
+      subject: offerExtendedSubject({
+        companyName: recipient.companyName,
+        jobTitle: offer.title,
+      }),
+      react: createElement(OfferExtended, {
+        candidateName: recipient.firstName,
+        companyName: recipient.companyName,
+        jobTitle: offer.title,
+        salary: formatOfferSalary(
+          offer.salaryAmount,
+          offer.currency,
+          offer.salaryPeriod,
+        ),
+        startDate: formatOfferDate(offer.startDate),
+        expiresAt: formatOfferDate(offer.expiresAt),
+        equity: offer.equity ?? undefined,
+      }),
+    });
+  }
+
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
   return { success: true };
 }
@@ -366,6 +434,14 @@ export async function decideOffer(input: {
     }
   });
 
+  if (decision === "accepted") {
+    await emitWebhookEvent(workspaceId, "application.hired", {
+      application: { id: offer.applicationId, jobId: offer.jobId },
+      candidate: { id: offer.candidateId },
+      offer: { id: offer.id, title: offer.title },
+    });
+  }
+
   await logOfferActivity({
     workspaceId,
     actorId: context.user.id,
@@ -424,6 +500,42 @@ export async function withdrawOffer(input: {
     metadata: { title: offer.title },
   });
 
+  // Only notify the candidate if they had actually received the offer.
+  if (offer.status === "sent") {
+    const recipient = await getOfferRecipient(workspaceId, offer.candidateId);
+    if (recipient?.email) {
+      void sendWorkspaceEmail(workspaceId, {
+        to: recipient.email,
+        subject: offerWithdrawnSubject({ companyName: recipient.companyName }),
+        react: createElement(OfferWithdrawn, {
+          candidateName: recipient.firstName,
+          companyName: recipient.companyName,
+          jobTitle: offer.title,
+        }),
+      });
+    }
+  }
+
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
   return { success: true };
+}
+
+/** Candidate contact + company name for offer emails, workspace-scoped. */
+async function getOfferRecipient(workspaceId: string, candidateId: string) {
+  const [row] = await db
+    .select({
+      email: candidates.email,
+      firstName: candidates.firstName,
+      companyName: organization.name,
+    })
+    .from(candidates)
+    .innerJoin(organization, eq(organization.id, candidates.workspaceId))
+    .where(
+      and(
+        eq(candidates.id, candidateId),
+        eq(candidates.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+  return row ?? null;
 }

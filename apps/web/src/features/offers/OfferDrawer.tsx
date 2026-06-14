@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -58,31 +58,25 @@ export function OfferDrawer({
   const [expiresAt, setExpiresAt] = useState("");
   const [notes, setNotes] = useState("");
 
-  // Hydrate fields when switching into edit mode (or reset for create).
-  useEffect(() => {
-    if (!open) return;
-    if (offer) {
-      setApplicationId(offer.applicationId);
-      setTitle(offer.title);
-      setSalary(offer.salaryAmount?.toString() ?? "");
-      setCurrency(offer.currency ?? "USD");
-      setPeriod(offer.salaryPeriod ?? "annual");
-      setEquity(offer.equity ?? "");
-      setStartDate(isoToDateInput(offer.startDate));
-      setExpiresAt(isoToDateInput(offer.expiresAt));
-      setNotes(offer.notes ?? "");
-    } else {
-      setApplicationId(applications[0]?.id ?? "");
-      setTitle("");
-      setSalary("");
-      setCurrency("USD");
-      setPeriod("annual");
-      setEquity("");
-      setStartDate("");
-      setExpiresAt("");
-      setNotes("");
+  // Hydrate fields when switching into edit mode (or reset for create). Done as
+  // a render-time sync keyed on the drawer target — the React-recommended
+  // "adjust state when a prop changes" pattern, no effect/cascading render.
+  const syncKey = open ? (offer?.id ?? "__new__") : "__closed__";
+  const [syncedKey, setSyncedKey] = useState<string | null>(null);
+  if (syncKey !== syncedKey) {
+    setSyncedKey(syncKey);
+    if (open) {
+      setApplicationId(offer?.applicationId ?? applications[0]?.id ?? "");
+      setTitle(offer?.title ?? "");
+      setSalary(offer?.salaryAmount?.toString() ?? "");
+      setCurrency(offer?.currency ?? "USD");
+      setPeriod(offer?.salaryPeriod ?? "annual");
+      setEquity(offer?.equity ?? "");
+      setStartDate(offer ? isoToDateInput(offer.startDate) : "");
+      setExpiresAt(offer ? isoToDateInput(offer.expiresAt) : "");
+      setNotes(offer?.notes ?? "");
     }
-  }, [open, offer, applications]);
+  }
 
   function submit() {
     if (!title.trim()) {

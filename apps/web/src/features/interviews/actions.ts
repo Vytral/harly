@@ -1,12 +1,46 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { createElement } from "react";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@harly/db";
-import { activityEvents, applications, candidates, interviews } from "@harly/db";
+import {
+  activityEvents,
+  applications,
+  candidates,
+  interviews,
+  jobs,
+  organization,
+} from "@harly/db";
+import {
+  InterviewCanceled,
+  interviewCanceledSubject,
+  InterviewScheduled,
+  interviewScheduledSubject,
+} from "@harly/emails";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { sendWorkspaceEmail } from "@/lib/email";
+
+const INTERVIEW_TYPE_LABEL: Record<string, string> = {
+  screening: "Screening interview",
+  culture_fit: "Culture fit interview",
+  technical: "Technical interview",
+  onsite: "On-site interview",
+  final: "Final interview",
+};
+
+const INTERVIEW_MODE_LABEL: Record<string, string> = {
+  video: "Video call",
+  phone: "Phone call",
+  onsite: "On-site",
+};
+
+const interviewWhenFormatter = new Intl.DateTimeFormat("en", {
+  dateStyle: "long",
+  timeStyle: "short",
+});
 
 const interviewTypes = [
   "screening",
@@ -163,13 +197,56 @@ export async function scheduleInterview(
     });
 
     if (result.success) {
+      // Notify the candidate. Fire-and-forget — never block scheduling on mail.
+      const [recipient] = await db
+        .select({
+          email: candidates.email,
+          firstName: candidates.firstName,
+          companyName: organization.name,
+          jobTitle: jobs.title,
+        })
+        .from(applications)
+        .innerJoin(candidates, eq(candidates.id, applications.candidateId))
+        .innerJoin(jobs, eq(jobs.id, applications.jobId))
+        .innerJoin(organization, eq(organization.id, applications.workspaceId))
+        .where(
+          and(
+            eq(applications.id, data.applicationId),
+            eq(applications.workspaceId, workspace.id),
+          ),
+        )
+        .limit(1);
+
+      if (recipient?.email) {
+        void sendWorkspaceEmail(workspace.id, {
+          to: recipient.email,
+          subject: interviewScheduledSubject({
+            companyName: recipient.companyName,
+            jobTitle: recipient.jobTitle,
+          }),
+          react: createElement(InterviewScheduled, {
+            candidateName: recipient.firstName,
+            companyName: recipient.companyName,
+            jobTitle: recipient.jobTitle,
+            interviewType:
+              INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
+            when: interviewWhenFormatter.format(when),
+            mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
+            location: data.location ?? undefined,
+            duration: data.durationMins
+              ? `${data.durationMins} min`
+              : undefined,
+          }),
+        });
+      }
+
       revalidatePath(`/dashboard/candidates/${data.candidateId}`);
       revalidatePath("/dashboard");
       revalidatePath("/dashboard/calendars");
     }
 
     return result;
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to schedule interview.",
@@ -211,11 +288,54 @@ export async function setInterviewStatus(input: {
       return { success: false, error: "Interview not found." };
     }
 
+    // Let the candidate know when an interview is called off.
+    if (parsed.data.status === "canceled") {
+      const [info] = await db
+        .select({
+          email: candidates.email,
+          firstName: candidates.firstName,
+          companyName: organization.name,
+          jobTitle: jobs.title,
+          type: interviews.type,
+          scheduledAt: interviews.scheduledAt,
+        })
+        .from(interviews)
+        .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
+        .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+        .innerJoin(organization, eq(organization.id, interviews.workspaceId))
+        .where(
+          and(
+            eq(interviews.id, parsed.data.interviewId),
+            eq(interviews.workspaceId, workspace.id),
+          ),
+        )
+        .limit(1);
+
+      if (info?.email) {
+        void sendWorkspaceEmail(workspace.id, {
+          to: info.email,
+          subject: interviewCanceledSubject({
+            companyName: info.companyName,
+            jobTitle: info.jobTitle,
+          }),
+          react: createElement(InterviewCanceled, {
+            candidateName: info.firstName,
+            companyName: info.companyName,
+            jobTitle: info.jobTitle,
+            interviewType: INTERVIEW_TYPE_LABEL[info.type] ?? "Interview",
+            when: info.scheduledAt
+              ? interviewWhenFormatter.format(info.scheduledAt)
+              : undefined,
+          }),
+        });
+      }
+    }
+
     revalidatePath(`/dashboard/candidates/${parsed.data.candidateId}`);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/calendars");
     return { success: true };
-  } catch (error) {
+  } catch {
     return {
       success: false,
       error: "Unable to update interview.",
