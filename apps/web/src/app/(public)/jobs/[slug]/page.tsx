@@ -10,6 +10,9 @@ import {
   parseKeywords,
   parseOfficePhotos,
 } from "@/features/jobs/config";
+import { isCareerPageConfigured } from "@/features/career-page/config";
+import { JobChrome } from "@/features/career-page/job/JobChrome";
+import { JobOverviewBody } from "@/features/career-page/job/JobOverviewBody";
 
 export const dynamic = "force-dynamic";
 
@@ -23,16 +26,32 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
 
   if (!detail) notFound();
 
-  const { job, workspace } = detail;
-  const boardConfig = normalizeJobBoardConfig(job.boardConfig);
+  const { job, workspace, config } = detail;
+  const boardRoot = "/";
 
+  // A configured career template renders its own per-template job chrome so the
+  // detail page matches the public board look (minimal/playful/ashby/greenhouse).
+  if (isCareerPageConfigured(config)) {
+    return (
+      <JobChrome
+        config={config}
+        workspace={workspace}
+        job={job}
+        boardRoot={boardRoot}
+        activeTab="overview"
+      >
+        <JobOverviewBody job={job} />
+      </JobChrome>
+    );
+  }
+
+  // Legacy board fallback (no template chosen yet).
+  const boardConfig = normalizeJobBoardConfig(job.boardConfig);
   const brandedWorkspace = {
     ...workspace,
     name: boardConfig.brandName ?? workspace.name,
     primaryColor: boardConfig.accentColor ?? workspace.primaryColor,
   };
-
-  const boardRoot = "/";
 
   const sections = parseJobContentSections(job.contentSections);
   const officePhotos = parseOfficePhotos(job.officePhotos);

@@ -4,6 +4,8 @@ import { ApplyForm } from "@/features/applications/ApplyForm";
 import { BoardShell, BoardTopBar, BoardJobHeader } from "@/features/board/components";
 import { getPublicJobDetail } from "@/features/jobs/data";
 import { normalizeJobApplicationConfig, normalizeJobBoardConfig } from "@/features/jobs/config";
+import { isCareerPageConfigured } from "@/features/career-page/config";
+import { JobChrome } from "@/features/career-page/job/JobChrome";
 
 export const dynamic = "force-dynamic";
 
@@ -17,17 +19,37 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
 
   if (!detail) notFound();
 
-  const { job, workspace } = detail;
-  const boardConfig = normalizeJobBoardConfig(job.boardConfig);
+  const { job, workspace, config } = detail;
   const applicationConfig = normalizeJobApplicationConfig(job.applicationConfig);
+  const boardRoot = "/";
 
+  // Configured career template → per-template apply chrome wrapping the form.
+  if (isCareerPageConfigured(config)) {
+    return (
+      <JobChrome
+        config={config}
+        workspace={workspace}
+        job={job}
+        boardRoot={boardRoot}
+        activeTab="application"
+      >
+        <ApplyForm
+          jobSlug={job.slug}
+          workspaceSlug={workspace.slug}
+          applicationConfig={applicationConfig}
+          variant={config.template === "ashby" ? "ashby" : "default"}
+        />
+      </JobChrome>
+    );
+  }
+
+  // Legacy board fallback.
+  const boardConfig = normalizeJobBoardConfig(job.boardConfig);
   const brandedWorkspace = {
     ...workspace,
     name: boardConfig.brandName ?? workspace.name,
     primaryColor: boardConfig.accentColor ?? workspace.primaryColor,
   };
-
-  const boardRoot = "/";
 
   return (
     <BoardShell workspace={brandedWorkspace} boardRoot={boardRoot}>
