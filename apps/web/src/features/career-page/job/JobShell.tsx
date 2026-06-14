@@ -12,7 +12,7 @@ import { isLightColor, type CareerPageConfig } from "../config";
 import { buildJobMeta, type JobLike } from "./jobMeta";
 
 const reveal =
-  "duration-500 animate-in fade-in slide-in-from-bottom-3 fill-mode-backwards motion-reduce:animate-none";
+  "duration-300 animate-in fade-in fill-mode-backwards motion-reduce:animate-none";
 
 /**
  * Unified public job chrome, built on the Ashby distribution: title top-left, a
@@ -56,7 +56,7 @@ export function JobShell({
   // ── Animated tab indicator ──
   const navRef = useRef<HTMLElement>(null);
   const tabRefs = useRef<Record<string, HTMLAnchorElement | null>>({});
-  const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
+  const indicatorRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const prevJob = sessionStorage.getItem("harly_prev_tab_job");
@@ -77,33 +77,46 @@ export function JobShell({
     }
 
     const activeLink = tabRefs.current[activeTab];
-    if (activeLink && navRef.current) {
+    if (activeLink && navRef.current && indicatorRef.current) {
       const navRect = navRef.current.getBoundingClientRect();
       const currentRect = activeLink.getBoundingClientRect();
-      const target = {
-        left: currentRect.left - navRect.left,
-        width: currentRect.width,
-      };
+      const targetLeft = currentRect.left - navRect.left;
+      const targetWidth = currentRect.width;
 
       if (prevTab && prevTab !== activeTab) {
         const prevLink = tabRefs.current[prevTab];
         if (prevLink) {
           const prevRect = prevLink.getBoundingClientRect();
-          // Place indicator at the previous tab first (no transition on mount)
-          setIndicatorStyle({
-            left: prevRect.left - navRect.left,
-            width: prevRect.width,
-          });
-          // Next frame: animate to current tab (CSS transition kicks in)
+          const prevLeft = prevRect.left - navRect.left;
+          const prevWidth = prevRect.width;
+
+          // 1. Set to previous position instantly (transition: none)
+          indicatorRef.current.style.transition = "none";
+          indicatorRef.current.style.left = `${prevLeft}px`;
+          indicatorRef.current.style.width = `${prevWidth}px`;
+
+          // 2. Force reflow to flush styles to DOM
+          indicatorRef.current.offsetHeight;
+
+          // 3. Animate to target in the next frame
           requestAnimationFrame(() => {
-            setIndicatorStyle(target);
+            if (indicatorRef.current) {
+              indicatorRef.current.style.transition =
+                "left 300ms cubic-bezier(0.23, 1, 0.32, 1), width 300ms cubic-bezier(0.23, 1, 0.32, 1)";
+              indicatorRef.current.style.left = `${targetLeft}px`;
+              indicatorRef.current.style.width = `${targetWidth}px`;
+            }
           });
         } else {
-          setIndicatorStyle(target);
+          indicatorRef.current.style.transition = "none";
+          indicatorRef.current.style.left = `${targetLeft}px`;
+          indicatorRef.current.style.width = `${targetWidth}px`;
         }
       } else {
         // Direct set: fresh page load or same tab
-        setIndicatorStyle(target);
+        indicatorRef.current.style.transition = "none";
+        indicatorRef.current.style.left = `${targetLeft}px`;
+        indicatorRef.current.style.width = `${targetWidth}px`;
       }
     }
 
@@ -250,12 +263,12 @@ export function JobShell({
               })}
               {/* Animated indicator bar */}
               <div
+                ref={indicatorRef}
                 className="absolute bottom-0 h-0.5 rounded-full"
                 style={{
-                  left: indicatorStyle.left,
-                  width: indicatorStyle.width,
                   backgroundColor: accent,
-                  transition: "left 300ms cubic-bezier(0.23, 1, 0.32, 1), width 300ms cubic-bezier(0.23, 1, 0.32, 1)",
+                  left: 0,
+                  width: 0,
                 }}
               />
             </nav>
