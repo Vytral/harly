@@ -31,6 +31,7 @@ export default function RootLayout({
       lang="en"
       suppressHydrationWarning
       className={`${inter.variable} ${GeistMono.variable} h-full antialiased`}
+      data-scroll-behavior="smooth"
     >
       <head>
         <link rel="preconnect" href="https://lh3.googleusercontent.com" />

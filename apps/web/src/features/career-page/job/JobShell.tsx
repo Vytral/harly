@@ -59,39 +59,59 @@ export function JobShell({
   const [indicatorStyle, setIndicatorStyle] = useState({ left: 0, width: 0 });
 
   useEffect(() => {
+    const prevJob = sessionStorage.getItem("harly_prev_tab_job");
     const prevTab = sessionStorage.getItem("harly_prev_tab");
+    
+    sessionStorage.setItem("harly_prev_tab_job", job.slug);
     sessionStorage.setItem("harly_prev_tab", activeTab);
 
+    // If it's a tab switch on the same job, temporarily disable page reveal animations
+    let cleanupTimer: NodeJS.Timeout | null = null;
+    if (prevJob === job.slug && prevTab && prevTab !== activeTab) {
+      document.documentElement.setAttribute("data-tab-switch", "true");
+      cleanupTimer = setTimeout(() => {
+        document.documentElement.removeAttribute("data-tab-switch");
+      }, 800);
+    } else {
+      document.documentElement.removeAttribute("data-tab-switch");
+    }
+
     const activeLink = tabRefs.current[activeTab];
-    if (!activeLink || !navRef.current) return;
+    if (activeLink && navRef.current) {
+      const navRect = navRef.current.getBoundingClientRect();
+      const currentRect = activeLink.getBoundingClientRect();
+      const target = {
+        left: currentRect.left - navRect.left,
+        width: currentRect.width,
+      };
 
-    const navRect = navRef.current.getBoundingClientRect();
-    const currentRect = activeLink.getBoundingClientRect();
-    const target = {
-      left: currentRect.left - navRect.left,
-      width: currentRect.width,
-    };
-
-    if (prevTab && prevTab !== activeTab) {
-      const prevLink = tabRefs.current[prevTab];
-      if (prevLink) {
-        const prevRect = prevLink.getBoundingClientRect();
-        // Place indicator at the previous tab first (no transition on mount)
-        setIndicatorStyle({
-          left: prevRect.left - navRect.left,
-          width: prevRect.width,
-        });
-        // Next frame: animate to current tab (CSS transition kicks in)
-        requestAnimationFrame(() => {
+      if (prevTab && prevTab !== activeTab) {
+        const prevLink = tabRefs.current[prevTab];
+        if (prevLink) {
+          const prevRect = prevLink.getBoundingClientRect();
+          // Place indicator at the previous tab first (no transition on mount)
+          setIndicatorStyle({
+            left: prevRect.left - navRect.left,
+            width: prevRect.width,
+          });
+          // Next frame: animate to current tab (CSS transition kicks in)
+          requestAnimationFrame(() => {
+            setIndicatorStyle(target);
+          });
+        } else {
           setIndicatorStyle(target);
-        });
-        return;
+        }
+      } else {
+        // Direct set: fresh page load or same tab
+        setIndicatorStyle(target);
       }
     }
 
-    // Direct set: fresh page load or same tab
-    setIndicatorStyle(target);
-  }, [activeTab]);
+    return () => {
+      if (cleanupTimer) clearTimeout(cleanupTimer);
+      document.documentElement.removeAttribute("data-tab-switch");
+    };
+  }, [activeTab, job.slug]);
 
   const tabs = [
     { tab: "overview", label: "Overview", href: overviewHref },

@@ -384,3 +384,9 @@
 [data-collapsible="icon"] [data-slot="sidebar-menu-badge"] {
   opacity: 0;
 }
+
+/* Disable animate-in during public job board tab switching to keep it instant */
+html[data-tab-switch="true"] .animate-in {
+  animation: none !important;
+}
+
