@@ -3,9 +3,11 @@
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { Code2 } from "lucide-react";
 
 import {
   BuildingsIcon,
+  EnvelopeIcon,
   PlugIcon,
   SparkleIcon,
   UsersThreeIcon,
@@ -37,9 +39,19 @@ const sections: SettingsSection[] = [
     icon: SparkleIcon,
   },
   {
+    href: "/settings/email" as Route,
+    label: "Email",
+    icon: EnvelopeIcon,
+  },
+  {
     href: "/settings/integrations" as Route,
     label: "Integrations",
     icon: PlugIcon,
+  },
+  {
+    href: "/settings/developers" as Route,
+    label: "Developers & API",
+    icon: Code2,
   },
 ];
 

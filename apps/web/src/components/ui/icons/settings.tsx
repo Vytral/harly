@@ -82,6 +82,25 @@ export function PlugIcon({ className }: IconProps) {
   );
 }
 
+export function EnvelopeIcon({ className }: IconProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 256 256"
+      className={className}
+      aria-hidden="true"
+    >
+      <g fill="currentColor">
+        <path
+          d="M224 56v144a8 8 0 0 1-8 8H40a8 8 0 0 1-8-8V56Z"
+          opacity=".2"
+        />
+        <path d="M224 48H32a8 8 0 0 0-8 8v144a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a8 8 0 0 0-8-8m-8.42 16L128 133.15L40.42 64ZM216 200H40V74.19l82.59 75.71a8 8 0 0 0 10.82 0L216 74.19Z" />
+      </g>
+    </svg>
+  );
+}
+
 export function SparkleIcon({ className }: IconProps) {
   return (
     <svg
