@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "career_page_config" jsonb DEFAULT '{}'::jsonb NOT NULL;

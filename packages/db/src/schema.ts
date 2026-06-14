@@ -327,6 +327,8 @@ export const workspaceSettings = pgTable("workspace_settings", {
   aiEnabled: boolean("ai_enabled").default(false).notNull(),
   aiProvider: text("ai_provider"),
   aiModelId: text("ai_model_id"),
+  // Optional custom API base URL for self-hosted / proxy endpoints.
+  aiBaseUrl: text("ai_base_url"),
   aiApiKeyCiphertext: text("ai_api_key_ciphertext"),
   aiApiKeyIv: text("ai_api_key_iv"),
   aiApiKeyTag: text("ai_api_key_tag"),
@@ -345,6 +347,26 @@ export const workspaceSettings = pgTable("workspace_settings", {
   calApiKeyTag: text("cal_api_key_tag"),
   // Shared secret used to verify inbound Cal.com webhook signatures.
   calWebhookSecret: text("cal_webhook_secret"),
+  // Outbound email config (bring-your-own Resend key or SMTP). Same
+  // AES-256-GCM encryption as the AI/Cal.com keys above. When disabled, the
+  // platform falls back to the RESEND_API_KEY/EMAIL_FROM env vars.
+  emailEnabled: boolean("email_enabled").default(false).notNull(),
+  emailProvider: text("email_provider"), // 'resend' | 'smtp'
+  emailFrom: text("email_from"),
+  emailApiKeyCiphertext: text("email_api_key_ciphertext"),
+  emailApiKeyIv: text("email_api_key_iv"),
+  emailApiKeyTag: text("email_api_key_tag"),
+  // SMTP-only fields (host/port/secure/user). Password is stored in the
+  // emailApiKey* columns above, alongside the Resend API key.
+  emailSmtpHost: text("email_smtp_host"),
+  emailSmtpPort: integer("email_smtp_port"),
+  emailSmtpSecure: boolean("email_smtp_secure"),
+  emailSmtpUser: text("email_smtp_user"),
+  // Career-page builder config (template choice + per-section overrides).
+  // Shape lives in apps/web/src/features/career-page/config.ts.
+  careerPageConfig: jsonb("career_page_config")
+    .default(sql`'{}'::jsonb`)
+    .notNull(),
   ...timestamps(),
 });
 
@@ -1159,3 +1181,128 @@ export type AuthMember = typeof member.$inferSelect;
 export type NewAuthMember = typeof member.$inferInsert;
 export type AuthInvitation = typeof invitation.$inferSelect;
 export type NewAuthInvitation = typeof invitation.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Developer platform: API keys + outbound webhooks (public API v1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Workspace-scoped API credentials.
+ *
+ * Two kinds: `publishable` (pk_, safe in browsers / embed widget — read jobs +
+ * submit applications only) and `secret` (sk_, server-to-server full CRUD).
+ * The raw key is shown once at creation and never stored; we keep a SHA-256
+ * `hashedKey` for O(1) constant-time lookup, plus `prefix`/`last4` for display.
+ */
+export const apiKeys = pgTable(
+  "api_keys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // "publishable" | "secret"
+    type: text("type").notNull(),
+    // "live" | "test"
+    environment: text("environment").default("live").notNull(),
+    // Human-readable masked prefix shown in the dashboard, e.g. "harly_sk_live_a1b2".
+    prefix: text("prefix").notNull(),
+    last4: text("last4").notNull(),
+    // SHA-256 hex digest of the full raw key. Lookups query this directly.
+    hashedKey: text("hashed_key").notNull(),
+    // Array of granted scope strings (see packages/api scopes).
+    scopes: jsonb("scopes").default(sql`'[]'::jsonb`).notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    // Non-null = revoked, key no longer authenticates.
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("api_keys_hashed_key_idx").on(table.hashedKey),
+    index("api_keys_workspace_idx").on(table.workspaceId),
+    index("api_keys_workspace_type_idx").on(table.workspaceId, table.type),
+  ],
+);
+
+/**
+ * Outbound webhook subscriptions. Each endpoint has its own signing secret,
+ * encrypted at rest (AES-256-GCM, same scheme as other workspace secrets), and
+ * subscribes to a set of event types.
+ */
+export const webhookEndpoints = pgTable(
+  "webhook_endpoints",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    description: text("description"),
+    // Encrypted per-endpoint signing secret (decrypted to sign each delivery).
+    secretCiphertext: text("secret_ciphertext").notNull(),
+    secretIv: text("secret_iv").notNull(),
+    secretTag: text("secret_tag").notNull(),
+    // Array of subscribed event types (see server/webhooks/events).
+    events: jsonb("events").default(sql`'[]'::jsonb`).notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("webhook_endpoints_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+/**
+ * Per-attempt delivery log for outbound webhooks. The dispatcher picks rows
+ * whose `nextRetryAt` is due and re-sends with exponential backoff until they
+ * succeed or are exhausted.
+ */
+export const webhookDeliveries = pgTable(
+  "webhook_deliveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    endpointId: uuid("endpoint_id")
+      .notNull()
+      .references(() => webhookEndpoints.id, { onDelete: "cascade" }),
+    event: text("event").notNull(),
+    payload: jsonb("payload").default(sql`'{}'::jsonb`).notNull(),
+    // "pending" | "success" | "failed" | "exhausted"
+    status: text("status").default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    responseStatus: integer("response_status"),
+    responseBody: text("response_body"),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    // Dispatcher scans by (status, nextRetryAt) to find due deliveries.
+    index("webhook_deliveries_status_next_retry_idx").on(
+      table.status,
+      table.nextRetryAt,
+    ),
+    index("webhook_deliveries_endpoint_idx").on(
+      table.endpointId,
+      table.createdAt,
+    ),
+    index("webhook_deliveries_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+export type ApiKey = typeof apiKeys.$inferSelect;
+export type NewApiKey = typeof apiKeys.$inferInsert;
+export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
+export type NewWebhookEndpoint = typeof webhookEndpoints.$inferInsert;
+export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
+export type NewWebhookDelivery = typeof webhookDeliveries.$inferInsert;
