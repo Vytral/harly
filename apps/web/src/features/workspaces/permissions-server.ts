@@ -1,5 +1,7 @@
 import "server-only";
 
+import type { Route } from "next";
+import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@harly/db";
@@ -86,6 +88,25 @@ export async function requirePermission(permission: Permission) {
 export async function can(permission: Permission): Promise<boolean> {
   const perms = await getCurrentPermissions();
   return perms.includes(permission);
+}
+
+/**
+ * Page-level guard: redirect to the dashboard unless the current user holds
+ * `permission`. Use at the top of server components for settings/admin routes
+ * so a recruiter can't reach them by typing the URL — defense in depth on top
+ * of the per-action `requirePermission` checks.
+ */
+export async function requirePagePermission(permission: Permission) {
+  const context = await getWorkspaceContext();
+  if (roleIsAllPowerful(context.roleKey)) return context;
+  const perms = await getRolePermissions(
+    context.organization.id,
+    context.roleKey,
+  );
+  if (!perms.includes(permission)) {
+    redirect("/dashboard" as Route);
+  }
+  return context;
 }
 
 export type WorkspaceRoleSummary = {

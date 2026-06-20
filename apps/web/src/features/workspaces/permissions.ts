@@ -130,3 +130,19 @@ export function hasPermission(
 export function roleLabel(role: string): string {
   return role.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
+
+/**
+ * Which permission gates each settings section. Single source of truth shared
+ * by the nav (to hide what you can't open) and each page (to redirect direct
+ * URL access). Sections not listed here are open to any member.
+ */
+export const SETTINGS_SECTION_PERMISSION: Record<string, Permission> = {
+  "/settings": "settings:edit",
+  "/settings/members": "members:manage",
+  "/settings/roles": "roles:manage",
+  "/settings/ai": "settings:edit",
+  "/settings/email": "settings:edit",
+  "/settings/integrations": "integrations:manage",
+  "/settings/developers": "integrations:manage",
+  "/settings/security": "members:manage",
+};

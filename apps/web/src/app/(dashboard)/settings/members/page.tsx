@@ -3,11 +3,13 @@ import { getWorkspaceSettingsData } from "@/features/workspaces/data";
 import {
   can,
   listWorkspaceRoles,
+  requirePagePermission,
 } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function MembersSettingsPage() {
+  await requirePagePermission("members:manage");
   const [{ members, invitations }, roles, canMembers, canRoles] =
     await Promise.all([
       getWorkspaceSettingsData(),
