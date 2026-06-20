@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "sidebar_logo_style" "logo_style" DEFAULT 'bordered' NOT NULL;
