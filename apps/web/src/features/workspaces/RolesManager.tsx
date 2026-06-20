@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Lock, Pencil, Shield, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -15,13 +14,21 @@ import {
   type Permission,
 } from "@/features/workspaces/permissions";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
+import {
+  LockDuotoneIcon,
+  PencilIcon,
+  ShieldCheckDuotoneIcon,
+  SpinnerIcon,
+  TrashIcon,
+} from "@/components/ui/icons/phosphor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
+import { cn } from "@/lib/utils";
 
 export type RoleSummary = {
   key: string;
@@ -42,16 +49,21 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
   const [editing, setEditing] = useState<RoleSummary | null>(null);
 
   return (
-    <div className="space-y-2.5">
-        {roles.map((role) => (
-          <Card key={role.key}>
-            <CardContent className="flex items-center justify-between gap-4 py-4">
+    <div className="grid gap-3 sm:grid-cols-2">
+      {roles.map((role) => {
+        const fullAccess = role.key === "owner" || role.key === "admin";
+        const pct = fullAccess
+          ? 100
+          : Math.round((role.permissions.length / TOTAL_PERMISSIONS) * 100);
+        return (
+          <Card key={role.key} className="gap-0 p-5">
+            <div className="flex items-start justify-between gap-3">
               <div className="flex items-start gap-3">
-                <span className="mt-0.5 flex size-9 items-center justify-center rounded-lg bg-sage text-sage-ink">
+                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-sage text-pine ring-1 ring-pine/10">
                   {role.isOwner ? (
-                    <Lock className="size-4" strokeWidth={1.8} />
+                    <LockDuotoneIcon className="size-5" />
                   ) : (
-                    <Shield className="size-4" strokeWidth={1.8} />
+                    <ShieldCheckDuotoneIcon className="size-5" />
                   )}
                 </span>
                 <div>
@@ -62,43 +74,60 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
                     </Badge>
                   </div>
                   <p className="mt-0.5 text-xs text-muted-foreground">
-                    {role.key === "owner" || role.key === "admin"
-                      ? "Full access"
-                      : `${role.permissions.length} of ${TOTAL_PERMISSIONS} permissions`}{" "}
-                    · {role.memberCount}{" "}
+                    {role.memberCount}{" "}
                     {role.memberCount === 1 ? "member" : "members"}
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-1.5">
-                <Sheet
-                  open={editing?.key === role.key}
-                  onOpenChange={(o) => setEditing(o ? role : null)}
-                >
-                  <SheetTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      {role.editable ? (
-                        <>
-                          <Pencil className="size-4" />
-                          Edit
-                        </>
-                      ) : (
-                        "View"
-                      )}
-                    </Button>
-                  </SheetTrigger>
-                  <RoleEditor
-                    mode={role.editable ? "edit" : "view"}
-                    role={role}
-                    onDone={() => setEditing(null)}
-                  />
-                </Sheet>
+              <Sheet
+                open={editing?.key === role.key}
+                onOpenChange={(o) => setEditing(o ? role : null)}
+              >
+                <SheetTrigger asChild>
+                  <Button variant="outline" size="sm">
+                    {role.editable ? (
+                      <>
+                        <PencilIcon className="size-4" />
+                        Edit
+                      </>
+                    ) : (
+                      "View"
+                    )}
+                  </Button>
+                </SheetTrigger>
+                <RoleEditor
+                  mode={role.editable ? "edit" : "view"}
+                  role={role}
+                  onDone={() => setEditing(null)}
+                />
+              </Sheet>
+            </div>
+
+            {/* Permission meter */}
+            <div className="mt-4 space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">Permissions</span>
+                <span className="font-medium tabular-nums">
+                  {fullAccess
+                    ? "Full access"
+                    : `${role.permissions.length} / ${TOTAL_PERMISSIONS}`}
+                </span>
               </div>
-            </CardContent>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    fullAccess ? "bg-pine" : "bg-pine/70",
+                  )}
+                  style={{ width: `${Math.max(pct, 4)}%` }}
+                />
+              </div>
+            </div>
           </Card>
-        ))}
-      </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -191,7 +220,11 @@ export function RoleEditor({
                 disabled={deleting || saving}
                 onClick={remove}
               >
-                {deleting ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />}
+                {deleting ? (
+                  <SpinnerIcon className="size-4" />
+                ) : (
+                  <TrashIcon className="size-4" />
+                )}
                 Delete
               </Button>
             ) : null}
@@ -201,7 +234,7 @@ export function RoleEditor({
               </Button>
             </SheetClose>
             <Button onClick={save} disabled={saving || name.trim().length < 2}>
-              {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+              {saving ? <SpinnerIcon className="size-4" /> : null}
               Save
             </Button>
           </>
@@ -230,7 +263,11 @@ export function RoleEditor({
                 {group.permissions.map((perm) => (
                   <label
                     key={perm.key}
-                    className="flex items-start gap-3 rounded-lg border px-3 py-2.5"
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+                      !readOnly && "hover:border-foreground/15",
+                      selected.has(perm.key) && "border-pine/30 bg-sage/30",
+                    )}
                   >
                     <Checkbox
                       checked={selected.has(perm.key)}
@@ -239,7 +276,9 @@ export function RoleEditor({
                       className="mt-0.5"
                     />
                     <span className="min-w-0">
-                      <span className="block text-sm font-medium">{perm.label}</span>
+                      <span className="block text-sm font-medium">
+                        {perm.label}
+                      </span>
                       {perm.hint ? (
                         <span className="mt-0.5 block text-xs text-muted-foreground">
                           {perm.hint}

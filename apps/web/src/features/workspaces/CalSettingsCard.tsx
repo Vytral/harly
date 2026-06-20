@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { CalendarClock, Copy, KeyRound, Loader2, Webhook } from "lucide-react";
 
 import {
   disableCalAction,
@@ -11,15 +10,26 @@ import {
   saveCalSettingsAction,
 } from "@/features/workspaces/cal-settings-actions";
 import type { WorkspaceCalStatus } from "@/lib/cal/config";
+import {
+  SectionHeader,
+  StatCell,
+  StatusPill,
+} from "@/features/workspaces/settings-ui";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
-import { Badge } from "@/components/ui/badge";
+import { CalcomLogo } from "@/components/ui/icons/brands";
+import {
+  CopyIcon,
+  KeyDuotoneIcon,
+  SpinnerIcon,
+  WarningCircleIcon,
+  WebhooksDuotoneIcon,
+} from "@/components/ui/icons/phosphor";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
 
 export function CalSettingsCard({
   status,
@@ -65,115 +75,110 @@ export function CalSettingsCard({
     });
   }
 
+  const badge = status.hasApiKey ? (
+    <StatusPill tone={status.enabled ? "on" : "off"}>
+      {status.enabled ? "Connected" : "Disabled"}
+    </StatusPill>
+  ) : (
+    <StatusPill tone="neutral">Not connected</StatusPill>
+  );
+
   return (
-    <Card className="flex flex-col">
-      <div className="flex items-start gap-3 px-6 py-5">
-        <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-sage text-sage-ink">
-          <CalendarClock className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold tracking-tight">Cal.com</h3>
-            {status.hasApiKey ? (
-              <Badge
-                className={cn(
-                  status.enabled
-                    ? "bg-sage text-sage-ink"
-                    : "bg-muted text-muted-foreground",
-                )}
-              >
-                {status.enabled ? "Connected" : "Disabled"}
-              </Badge>
-            ) : (
-              <Badge variant="outline">Not connected</Badge>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Let candidates self-schedule interviews. Bookings sync back into the
-            pipeline automatically via webhook.
-          </p>
-        </div>
-      </div>
-
-      <div className="mt-auto space-y-4 border-t px-6 py-4">
-        {!status.encryptionReady ? (
-          <p className="rounded-md border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
-            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on the
-            server to store the Cal.com key.
-          </p>
-        ) : null}
-
-        {status.hasApiKey ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            {status.bookingUrl ? (
-              <Badge variant="outline" className="max-w-full truncate font-mono">
-                {status.bookingUrl}
-              </Badge>
-            ) : null}
-            {status.defaultEventTypeId ? (
-              <Badge variant="secondary">event #{status.defaultEventTypeId}</Badge>
-            ) : null}
-            <Badge variant={status.hasWebhookSecret ? "secondary" : "outline"}>
-              {status.hasWebhookSecret ? "Webhook secret set" : "No webhook secret"}
-            </Badge>
-          </div>
-        ) : null}
-
-        {canEdit ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <Sheet open={open} onOpenChange={setOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!status.encryptionReady}
-                >
-                  <KeyRound className="size-4" />
-                  {status.hasApiKey ? "Manage" : "Connect"}
-                </Button>
-              </SheetTrigger>
-              <CalSettingsForm
-                status={status}
-                webhookUrl={webhookUrl}
-                onSaved={() => {
-                  setOpen(false);
-                  router.refresh();
-                }}
-              />
-            </Sheet>
-
-            {status.hasApiKey ? (
+    <Card className="gap-0 overflow-hidden p-0">
+      <div className="p-6">
+        <SectionHeader
+          icon={CalcomLogo}
+          title="Cal.com"
+          badge={badge}
+          description="Let candidates self-schedule interviews. Bookings sync back into the pipeline automatically via webhook."
+          action={
+            canEdit ? (
               <>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={status.enabled}
-                    disabled={togglePending}
-                    onCheckedChange={toggleEnabled}
-                    aria-label="Enable Cal.com"
+                <Sheet open={open} onOpenChange={setOpen}>
+                  <SheetTrigger asChild>
+                    <Button
+                      variant={status.hasApiKey ? "outline" : "default"}
+                      disabled={!status.encryptionReady}
+                    >
+                      <KeyDuotoneIcon className="size-4" />
+                      {status.hasApiKey ? "Manage" : "Connect"}
+                    </Button>
+                  </SheetTrigger>
+                  <CalSettingsForm
+                    status={status}
+                    webhookUrl={webhookUrl}
+                    onSaved={() => {
+                      setOpen(false);
+                      router.refresh();
+                    }}
                   />
-                  <span className="text-sm text-muted-foreground">
-                    {status.enabled ? "On" : "Off"}
-                  </span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={registerWebhook}
-                  disabled={registering}
-                  className="text-muted-foreground"
-                >
-                  {registering ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Webhook className="size-4" />
-                  )}
-                  Register webhook
-                </Button>
+                </Sheet>
+                {status.hasApiKey ? (
+                  <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                    <Switch
+                      checked={status.enabled}
+                      disabled={togglePending}
+                      onCheckedChange={toggleEnabled}
+                      aria-label="Enable Cal.com"
+                    />
+                    <span className="text-muted-foreground">
+                      {status.enabled ? "On" : "Off"}
+                    </span>
+                  </label>
+                ) : null}
               </>
-            ) : null}
+            ) : null
+          }
+        />
+
+        {!status.encryptionReady ? (
+          <div className="mt-4 flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
+            <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
+            <p>
+              Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
+              the server to store the Cal.com key.
+            </p>
           </div>
         ) : null}
       </div>
+
+      {status.hasApiKey ? (
+        <div className="grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <StatCell label="Booking page">
+            <span className="truncate text-muted-foreground">
+              {status.bookingUrl ?? "Not set"}
+            </span>
+          </StatCell>
+          <StatCell label="Event type">
+            <span className="font-mono text-[13px]">
+              {status.defaultEventTypeId
+                ? `#${status.defaultEventTypeId}`
+                : "—"}
+            </span>
+          </StatCell>
+          <StatCell label="Webhook">
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={registerWebhook}
+                disabled={registering}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-pine transition-colors hover:text-pine-strong disabled:opacity-60"
+              >
+                {registering ? (
+                  <SpinnerIcon className="size-3.5" />
+                ) : (
+                  <WebhooksDuotoneIcon className="size-3.5" />
+                )}
+                {status.hasWebhookSecret ? "Re-register" : "Register"}
+              </button>
+            ) : status.hasWebhookSecret ? (
+              "Active"
+            ) : (
+              "Not set"
+            )}
+          </StatCell>
+        </div>
+      ) : null}
     </Card>
   );
 }
@@ -232,7 +237,7 @@ function CalSettingsForm({
             </Button>
           </SheetClose>
           <Button onClick={save} disabled={saving}>
-            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+            {saving ? <SpinnerIcon className="size-4" /> : null}
             Save
           </Button>
         </>
@@ -296,12 +301,17 @@ function CalSettingsForm({
         </div>
 
         {webhookUrl ? (
-          <div className="space-y-2 rounded-md border bg-muted/30 p-3">
+          <div className="space-y-2 rounded-xl border bg-muted/30 p-3">
             <Label>Webhook URL</Label>
             <div className="flex gap-2">
               <Input readOnly value={webhookUrl} className="font-mono text-xs" />
-              <Button type="button" variant="outline" size="icon" onClick={copyWebhook}>
-                <Copy className="size-4" />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                onClick={copyWebhook}
+              >
+                <CopyIcon className="size-4" />
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -311,7 +321,7 @@ function CalSettingsForm({
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
           <div>
             <p className="text-sm font-medium">Enable Cal.com</p>
             <p className="text-xs text-muted-foreground">

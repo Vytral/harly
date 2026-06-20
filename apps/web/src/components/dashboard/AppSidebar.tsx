@@ -3,15 +3,6 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-  Check,
-  ChevronsUpDown,
-  Loader2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Plus,
-  UserPlus,
-} from "lucide-react";
 
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -25,6 +16,14 @@ import {
   workspaceNav,
   type NavItem,
 } from "@/components/dashboard/nav-items";
+import {
+  CaretUpDownIcon,
+  CheckIcon,
+  PlusIcon,
+  SidebarIcon,
+  SpinnerIcon,
+  UserPlusIcon,
+} from "@/components/ui/icons/phosphor";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -48,20 +47,31 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import type { WorkspaceOption } from "@/features/workspaces/data";
+import type { Permission } from "@/features/workspaces/permissions";
 
 type AppSidebarProps = {
   workspace: { id: string; name: string; logoUrl: string | null };
   workspaceOptions: WorkspaceOption[];
   inboxCount: number;
+  userPermissions: Permission[];
 };
 
 export function AppSidebar({
   workspace,
   workspaceOptions,
   inboxCount,
+  userPermissions,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { open } = useSidebar();
+
+  const visibleWorkspaceNav = workspaceNav.filter(
+    (item) =>
+      !item.requiredPermission ||
+      userPermissions.includes(item.requiredPermission),
+  );
+
+  const canInvite = userPermissions.includes("members:manage");
 
   return (
     <Sidebar collapsible="icon">
@@ -90,15 +100,17 @@ export function AppSidebar({
         </SidebarGroup>
 
         <SidebarGroup>
-          <SidebarGroupLabel
-            className={cn(!open && "justify-center px-0")}
-            data-dash={!open ? "" : undefined}
-          >
-            {open ? "Workspace" : "—"}
-          </SidebarGroupLabel>
+          {open ? (
+            <SidebarGroupLabel>Workspace</SidebarGroupLabel>
+          ) : (
+            <div
+              aria-hidden
+              className="mx-auto my-1 h-px w-6 rounded-full bg-sidebar-border"
+            />
+          )}
           <SidebarGroupContent>
             <SidebarMenu>
-              {workspaceNav.map((item) => (
+              {visibleWorkspaceNav.map((item) => (
                 <NavMenuItem key={item.href} item={item} pathname={pathname} />
               ))}
             </SidebarMenu>
@@ -106,18 +118,20 @@ export function AppSidebar({
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton asChild tooltip="Invite team">
-              <Link href="/settings/members">
-                <UserPlus strokeWidth={1.8} />
-                <span>Invite team</span>
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
-      </SidebarFooter>
+      {canInvite ? (
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild tooltip="Invite team">
+                <Link href="/settings/members">
+                  <UserPlusIcon />
+                  <span>Invite team</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      ) : null}
     </Sidebar>
   );
 }
@@ -192,16 +206,15 @@ function SidebarBrand({
           />
           <button
             type="button"
-            onClick={toggleSidebar}
+            onClick={(event) => {
+              toggleSidebar();
+              event.currentTarget.blur();
+            }}
             aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
             title={open ? "Collapse sidebar" : "Expand sidebar"}
             className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground opacity-0 transition-opacity duration-150 hover:border-sidebar-ring/40 hover:text-sidebar-foreground group-hover/logo:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           >
-            {open ? (
-              <PanelLeftClose className="size-5" strokeWidth={1.8} />
-            ) : (
-              <PanelLeftOpen className="size-5" strokeWidth={1.8} />
-            )}
+            <SidebarIcon className="size-5" />
           </button>
         </div>
 
@@ -216,9 +229,9 @@ function SidebarBrand({
                   {workspace.name}
                 </span>
                 {isPending ? (
-                  <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
+                  <SpinnerIcon className="size-4 shrink-0 text-muted-foreground" />
                 ) : (
-                  <ChevronsUpDown className="size-4 shrink-0 text-muted-foreground/70" />
+                  <CaretUpDownIcon className="size-4 shrink-0 text-muted-foreground/70" />
                 )}
               </button>
             </DropdownMenuTrigger>
@@ -238,7 +251,7 @@ function SidebarBrand({
                     className="size-7"
                   />
                   <span className="flex-1 truncate">{ws.name}</span>
-                  <Check
+                  <CheckIcon
                     className={cn(
                       "size-4 shrink-0 text-primary",
                       ws.isActive ? "opacity-100" : "opacity-0",
@@ -252,7 +265,7 @@ function SidebarBrand({
                 className="gap-2.5 text-muted-foreground"
               >
                 <span className="flex size-7 items-center justify-center rounded-lg border border-dashed">
-                  <Plus className="size-3.5" />
+                  <PlusIcon className="size-3.5" />
                 </span>
                 New workspace
               </DropdownMenuItem>

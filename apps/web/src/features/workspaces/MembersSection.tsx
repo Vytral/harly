@@ -10,7 +10,6 @@ import {
 } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Crown, Mail, Plus, Search, Trash2, UserPlus } from "lucide-react";
 
 import {
   cancelWorkspaceInvitationAction,
@@ -23,7 +22,23 @@ import type {
   WorkspaceMemberItem,
 } from "@/features/workspaces/data";
 import { roleLabel } from "@/features/workspaces/permissions";
-import { RoleEditor, RolesManager, type RoleSummary } from "@/features/workspaces/RolesManager";
+import {
+  RoleEditor,
+  RolesManager,
+  type RoleSummary,
+} from "@/features/workspaces/RolesManager";
+import {
+  CrownDuotoneIcon,
+  PlusIcon,
+  SearchIcon,
+  ShieldCheckDuotoneIcon,
+  TrashIcon,
+  UserPlusIcon,
+} from "@/components/ui/icons/phosphor";
+import {
+  EnvelopeIcon,
+  UsersThreeIcon,
+} from "@/components/ui/icons/settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -36,9 +51,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { cn } from "@/lib/utils";
 
 export type AssignableRole = { key: string; name: string };
 
@@ -87,18 +110,32 @@ export function MembersAndRoles({
   const [tab, setTab] = useState("members");
 
   return (
-    <Tabs value={tab} onValueChange={setTab} className="space-y-6">
-      <div className="flex items-center justify-between">
-        <TabsList>
-          <TabsTrigger value="members">Members</TabsTrigger>
-          <span className="text-xs text-muted-foreground/30">|</span>
-          <TabsTrigger value="roles">Roles</TabsTrigger>
+    <Tabs value={tab} onValueChange={setTab} className="gap-6">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <TabsList className="h-11 gap-1 rounded-xl bg-muted/70 p-1">
+          <TabsTrigger
+            value="members"
+            className="gap-2 rounded-lg px-4 data-[state=active]:shadow-sm"
+          >
+            <UsersThreeIcon className="size-4" />
+            Members
+            <CountChip active={tab === "members"}>{members.length}</CountChip>
+          </TabsTrigger>
+          <TabsTrigger
+            value="roles"
+            className="gap-2 rounded-lg px-4 data-[state=active]:shadow-sm"
+          >
+            <ShieldCheckDuotoneIcon className="size-4" />
+            Roles
+            <CountChip active={tab === "roles"}>{roles.length}</CountChip>
+          </TabsTrigger>
         </TabsList>
+
         {canManageRoles && tab === "roles" ? (
           <Sheet open={creatingRole} onOpenChange={setCreatingRole}>
             <SheetTrigger asChild>
-              <Button size="sm">
-                <Plus className="size-4" />
+              <Button>
+                <PlusIcon className="size-4" />
                 New role
               </Button>
             </SheetTrigger>
@@ -128,6 +165,25 @@ export function MembersAndRoles({
 // Back-compat alias — the page may import either name.
 export const MembersSection = MembersAndRoles;
 
+function CountChip({
+  children,
+  active,
+}: {
+  children: React.ReactNode;
+  active?: boolean;
+}) {
+  return (
+    <span
+      className={cn(
+        "rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums",
+        active ? "bg-sage text-sage-ink" : "bg-foreground/10 text-muted-foreground",
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
 function MembersPanel({
   members,
   invitations,
@@ -146,9 +202,6 @@ function MembersPanel({
   );
   useActionToast(inviteState, "Invitation sent.");
 
-  // Only pending overrides are tracked (id -> new roleKey); the displayed role
-  // is `overrides[id] ?? member.role`. Cleared on save/discard — no effect, so
-  // a server refresh after save just falls through to the fresh member.role.
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -170,7 +223,6 @@ function MembersPanel({
           roleFilter === "all" || (overrides[m.id] ?? m.role) === roleFilter;
         return matchesText && matchesRole;
       })
-      // Owners first (the keyholders), then alphabetical.
       .sort((a, b) => {
         const ao = a.role === "owner" ? 0 : 1;
         const bo = b.role === "owner" ? 0 : 1;
@@ -204,25 +256,20 @@ function MembersPanel({
 
   return (
     <div className="space-y-5">
-      {/* Invite + filters toolbar */}
+      {/* Toolbar: search + filter + invite */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex items-center gap-3">
-          <div className="relative max-w-xs flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search name or email…"
-              className="pl-9"
-            />
-          </div>
-          <p className="hidden shrink-0 text-xs text-muted-foreground/60 md:block">
-            Showing {visible.length} member{visible.length !== 1 ? "s" : ""}
-          </p>
+        <div className="relative w-full max-w-sm">
+          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search name or email…"
+            className="pl-9"
+          />
         </div>
         <div className="flex items-center gap-2">
           <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-40">
+            <SelectTrigger className="w-44">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -245,27 +292,38 @@ function MembersPanel({
       </div>
 
       {/* Roster */}
-      <Card className="py-0">
+      <Card className="gap-0 overflow-hidden py-0">
+        <div className="flex items-center justify-between border-b bg-muted/20 px-5 py-2.5">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
+            {visible.length} {visible.length === 1 ? "member" : "members"}
+          </p>
+          <p className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground/70 sm:block">
+            Role
+          </p>
+        </div>
         <CardContent className="p-0">
           <ul className="divide-y">
             {visible.map((member) => {
-              const isLockedOwner = member.isCurrentUser && member.role === "owner";
+              const isLockedOwner =
+                member.isCurrentUser && member.role === "owner";
               const draft = draftFor(member);
               const changed = draft !== member.role;
               return (
                 <li
                   key={member.id}
-                  className="flex flex-wrap items-center gap-3 px-4 py-3"
+                  className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-muted/20"
                 >
                   <UserAvatar name={member.name} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 text-sm font-medium">
-                      {member.name}
+                      <span className="truncate">{member.name}</span>
                       {member.role === "owner" ? (
-                        <Crown className="size-3.5 text-clay" />
+                        <CrownDuotoneIcon className="size-4 shrink-0 text-clay" />
                       ) : null}
                       {member.isCurrentUser ? (
-                        <Badge variant="secondary">You</Badge>
+                        <Badge variant="secondary" className="shrink-0">
+                          You
+                        </Badge>
                       ) : null}
                     </p>
                     <p className="truncate text-xs text-muted-foreground">
@@ -280,11 +338,18 @@ function MembersPanel({
                       <Select
                         value={draft}
                         onValueChange={(value) =>
-                          setOverrides((prev) => ({ ...prev, [member.id]: value }))
+                          setOverrides((prev) => ({
+                            ...prev,
+                            [member.id]: value,
+                          }))
                         }
                       >
                         <SelectTrigger
-                          className={changed ? "w-40 border-pine/50 bg-sage/40" : "w-40"}
+                          className={
+                            changed
+                              ? "w-40 border-pine/50 bg-sage/40"
+                              : "w-40"
+                          }
                         >
                           <SelectValue />
                         </SelectTrigger>
@@ -297,7 +362,10 @@ function MembersPanel({
                         </SelectContent>
                       </Select>
                       {!member.isCurrentUser ? (
-                        <RemoveMemberButton memberId={member.id} name={member.name} />
+                        <RemoveMemberButton
+                          memberId={member.id}
+                          name={member.name}
+                        />
                       ) : null}
                     </div>
                   )}
@@ -305,8 +373,14 @@ function MembersPanel({
               );
             })}
             {visible.length === 0 ? (
-              <li className="px-4 py-10 text-center text-sm text-muted-foreground">
-                No members match your filters.
+              <li className="flex flex-col items-center gap-2 px-4 py-12 text-center">
+                <span className="flex size-11 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                  <UsersThreeIcon className="size-5" />
+                </span>
+                <p className="text-sm font-medium">No members match</p>
+                <p className="text-xs text-muted-foreground">
+                  Try a different search or role filter.
+                </p>
               </li>
             ) : null}
           </ul>
@@ -315,38 +389,44 @@ function MembersPanel({
 
       {/* Pending invitations */}
       {pendingInvitations.length > 0 ? (
-        <div className="space-y-2">
+        <div className="space-y-2.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Pending invitations
           </p>
-          {pendingInvitations.map((item) => (
-            <div
-              key={item.id}
-              className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
-            >
-              <div className="flex items-center gap-3">
-                <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  <Mail className="size-4" />
-                </span>
-                <div>
-                  <p className="text-sm font-medium">{item.email}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {roleName(item.role)} · expires{" "}
-                    {formatInvitationDate(item.expiresAt)}
-                  </p>
-                </div>
-              </div>
-              {canManageMembers ? (
-                <CancelInvitationButton invitationId={item.id} />
-              ) : null}
-            </div>
-          ))}
+          <Card className="gap-0 overflow-hidden py-0">
+            <ul className="divide-y">
+              {pendingInvitations.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex items-center justify-between gap-3 px-5 py-3.5"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="flex size-9 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                      <EnvelopeIcon className="size-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium">
+                        {item.email}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {roleName(item.role)} · expires{" "}
+                        {formatInvitationDate(item.expiresAt)}
+                      </p>
+                    </div>
+                  </div>
+                  {canManageMembers ? (
+                    <CancelInvitationButton invitationId={item.id} />
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          </Card>
         </div>
       ) : null}
 
-      {/* Global save bar — one Save for every pending role change */}
+      {/* Global save bar */}
       {canManageMembers && dirty.length > 0 ? (
-        <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-xl border border-pine/30 bg-card px-4 py-3 shadow-[0_8px_24px_-12px_rgba(31,41,38,0.25)]">
+        <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-pine/30 bg-card px-4 py-3 shadow-[0_8px_24px_-12px_rgba(31,41,38,0.25)]">
           <p className="text-sm">
             <span className="font-medium">{dirty.length}</span> unsaved role{" "}
             {dirty.length === 1 ? "change" : "changes"}
@@ -382,8 +462,8 @@ function InviteSheet({
   return (
     <Sheet>
       <SheetTrigger asChild>
-        <Button size="sm">
-          <UserPlus className="size-4" />
+        <Button>
+          <UserPlusIcon className="size-4" />
           Invite
         </Button>
       </SheetTrigger>
@@ -396,37 +476,37 @@ function InviteSheet({
             They&apos;ll get an email to join this workspace.
           </SheetDescription>
         </SheetHeader>
-          <form action={action} className="flex-1 space-y-5 px-5 py-5">
-            <div className="space-y-2">
-              <Label htmlFor="invite-email">Email</Label>
-              <Input
-                id="invite-email"
-                name="email"
-                type="email"
-                placeholder="teammate@company.com"
-                disabled={isInviting}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="invite-role">Role</Label>
-              <Select name="role" defaultValue="recruiter">
-                <SelectTrigger id="invite-role" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {assignableRoles.map((r) => (
-                    <SelectItem key={r.key} value={r.key}>
-                      {r.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Button type="submit" disabled={isInviting} className="w-full">
-              <UserPlus className="size-4" />
-              {isInviting ? "Inviting…" : "Send invite"}
-            </Button>
-          </form>
+        <form action={action} className="flex-1 space-y-5 px-5 py-5">
+          <div className="space-y-2">
+            <Label htmlFor="invite-email">Email</Label>
+            <Input
+              id="invite-email"
+              name="email"
+              type="email"
+              placeholder="teammate@company.com"
+              disabled={isInviting}
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="invite-role">Role</Label>
+            <Select name="role" defaultValue="recruiter">
+              <SelectTrigger id="invite-role" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {assignableRoles.map((r) => (
+                  <SelectItem key={r.key} value={r.key}>
+                    {r.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <Button type="submit" disabled={isInviting} className="w-full">
+            <UserPlusIcon className="size-4" />
+            {isInviting ? "Inviting…" : "Send invite"}
+          </Button>
+        </form>
       </SheetContent>
     </Sheet>
   );
@@ -467,7 +547,7 @@ function RemoveMemberButton({
         disabled={isPending}
         aria-label={`Remove ${name}`}
       >
-        <Trash2 className="size-4" />
+        <TrashIcon className="size-4" />
       </Button>
     </form>
   );

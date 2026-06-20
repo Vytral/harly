@@ -3,14 +3,6 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import {
-  Copy,
-  KeyRound,
-  Loader2,
-  Plus,
-  Trash2,
-  Webhook,
-} from "lucide-react";
 
 import {
   createApiKeyAction,
@@ -20,6 +12,16 @@ import {
   testWebhookAction,
   updateWebhookAction,
 } from "@/features/developers/actions";
+import { SectionHeader } from "@/features/workspaces/settings-ui";
+import {
+  CodeDuotoneIcon,
+  CopyIcon,
+  KeyDuotoneIcon,
+  PlusIcon,
+  SpinnerIcon,
+  TrashIcon,
+  WebhooksDuotoneIcon,
+} from "@/components/ui/icons/phosphor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -93,6 +95,32 @@ function copy(value: string) {
   );
 }
 
+/** Toggle chip used for scope/event multi-select. */
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition-colors",
+        active
+          ? "border-pine/40 bg-sage/50 text-sage-ink"
+          : "bg-card text-muted-foreground hover:border-foreground/15 hover:text-foreground",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
+
 function SecretBanner({
   label,
   value,
@@ -103,17 +131,17 @@ function SecretBanner({
   onDismiss: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-pine/30 bg-sage/40 p-3 text-sm">
+    <div className="rounded-2xl border border-pine/30 bg-sage/40 p-3 text-sm">
       <p className="font-medium text-sage-ink">{label}</p>
       <p className="mt-1 text-xs text-muted-foreground">
         Copy it now — you won&apos;t be able to see it again.
       </p>
       <div className="mt-2 flex items-center gap-2">
-        <code className="flex-1 overflow-x-auto rounded bg-background px-2 py-1.5 font-mono text-xs">
+        <code className="flex-1 overflow-x-auto rounded-lg bg-background px-2 py-1.5 font-mono text-xs">
           {value}
         </code>
         <Button size="sm" variant="outline" onClick={() => copy(value)}>
-          <Copy className="size-3.5" /> Copy
+          <CopyIcon className="size-3.5" /> Copy
         </Button>
         <Button size="sm" variant="ghost" onClick={onDismiss}>
           Done
@@ -196,134 +224,142 @@ function ApiKeysSection({
   }
 
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-sage text-sage-ink">
-            <KeyRound className="size-4" />
-          </span>
-          <div>
-            <h3 className="font-semibold tracking-tight">API keys</h3>
-            <p className="text-sm text-muted-foreground">
-              Secret keys for server integrations, publishable keys for the embed
-              widget.
-            </p>
-          </div>
-        </div>
-        {canManage && (
-          <Button size="sm" onClick={() => setShowForm((v) => !v)}>
-            <Plus className="size-4" /> New key
-          </Button>
-        )}
-      </div>
+    <Card className="gap-5 p-6">
+      <SectionHeader
+        icon={KeyDuotoneIcon}
+        title="API keys"
+        description="Secret keys for server integrations, publishable keys for the embed widget."
+        action={
+          canManage ? (
+            <Button onClick={() => setShowForm((v) => !v)}>
+              <PlusIcon className="size-4" /> New key
+            </Button>
+          ) : null
+        }
+      />
 
       {created && (
-        <div className="mt-4">
-          <SecretBanner
-            label="Your new API key"
-            value={created}
-            onDismiss={() => setCreated(null)}
-          />
-        </div>
+        <SecretBanner
+          label="Your new API key"
+          value={created}
+          onDismiss={() => setCreated(null)}
+        />
       )}
 
       {showForm && canManage && (
-        <div className="mt-4 space-y-3 rounded-lg border p-4">
-          <div className="space-y-1.5">
-            <Label>Name</Label>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Production server"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>Type</Label>
-            <div className="flex gap-2">
-              {(["secret", "publishable"] as const).map((t) => (
-                <button
-                  key={t}
-                  type="button"
-                  onClick={() => {
-                    setType(t);
-                    setSelectedScopes([]);
-                  }}
-                  className={cn(
-                    "rounded-lg border px-3 py-1.5 text-sm",
-                    type === t
-                      ? "border-pine bg-sage text-sage-ink"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {t === "secret" ? "Secret (sk)" : "Publishable (pk)"}
-                </button>
-              ))}
+        <div className="space-y-4 rounded-2xl border bg-muted/20 p-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Production server"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <div className="flex gap-2">
+                {(["secret", "publishable"] as const).map((t) => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => {
+                      setType(t);
+                      setSelectedScopes([]);
+                    }}
+                    className={cn(
+                      "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors",
+                      type === t
+                        ? "border-pine bg-sage text-sage-ink"
+                        : "text-muted-foreground hover:border-foreground/15",
+                    )}
+                  >
+                    {t === "secret" ? "Secret (sk)" : "Publishable (pk)"}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="space-y-1.5">
             <Label>Scopes</Label>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {availableScopes.map((scope) => (
-                <label
+                <Chip
                   key={scope}
-                  className="flex items-center gap-2 text-sm"
+                  active={selectedScopes.includes(scope)}
+                  onClick={() => toggleScope(scope)}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedScopes.includes(scope)}
-                    onChange={() => toggleScope(scope)}
-                  />
-                  <code className="font-mono text-xs">{scope}</code>
-                </label>
+                  <code className="font-mono">{scope}</code>
+                </Chip>
               ))}
             </div>
           </div>
           <Button size="sm" onClick={submit} disabled={pending}>
-            {pending && <Loader2 className="size-4 animate-spin" />} Create key
+            {pending && <SpinnerIcon className="size-4" />} Create key
           </Button>
         </div>
       )}
 
-      <div className="mt-4 divide-y">
+      <div className="overflow-hidden rounded-2xl border">
         {apiKeys.length === 0 && (
-          <p className="py-4 text-sm text-muted-foreground">No API keys yet.</p>
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+            No API keys yet.
+          </p>
         )}
-        {apiKeys.map((key) => (
-          <div
-            key={key.id}
-            className="flex items-center justify-between gap-3 py-3"
-          >
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="font-medium">{key.name}</span>
-                <Badge className="bg-muted text-muted-foreground">
-                  {key.type === "secret" ? "sk" : "pk"}
-                </Badge>
-                {key.revokedAt && (
-                  <Badge className="bg-destructive/10 text-destructive">
-                    revoked
-                  </Badge>
-                )}
+        <ul className="divide-y">
+          {apiKeys.map((key) => (
+            <li
+              key={key.id}
+              className="flex items-center justify-between gap-3 px-4 py-3.5"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground">
+                  <KeyDuotoneIcon className="size-4" />
+                </span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{key.name}</span>
+                    <Badge variant="secondary" className="font-mono text-[11px]">
+                      {key.type === "secret" ? "sk" : "pk"}
+                    </Badge>
+                    {key.revokedAt && (
+                      <Badge className="bg-destructive/10 text-destructive">
+                        Revoked
+                      </Badge>
+                    )}
+                  </div>
+                  <code className="mt-0.5 block font-mono text-xs text-muted-foreground">
+                    {key.prefix}…{key.last4}
+                  </code>
+                  {key.scopes.length > 0 && (
+                    <div className="mt-1.5 flex flex-wrap gap-1">
+                      {key.scopes.map((scope) => (
+                        <span
+                          key={scope}
+                          className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                        >
+                          {scope}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
-              <code className="font-mono text-xs text-muted-foreground">
-                {key.prefix}…{key.last4}
-              </code>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {key.scopes.join(", ")}
-              </p>
-            </div>
-            {canManage && !key.revokedAt && (
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => revoke(key.id)}
-                disabled={pending}
-              >
-                Revoke
-              </Button>
-            )}
-          </div>
-        ))}
+              {canManage && !key.revokedAt && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => revoke(key.id)}
+                  disabled={pending}
+                >
+                  Revoke
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
     </Card>
   );
@@ -403,108 +439,118 @@ function WebhooksSection({
   }
 
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-lg bg-sage text-sage-ink">
-            <Webhook className="size-4" />
-          </span>
-          <div>
-            <h3 className="font-semibold tracking-tight">Webhooks</h3>
-            <p className="text-sm text-muted-foreground">
-              Receive signed events when applications and jobs change.
-            </p>
-          </div>
-        </div>
-        {canManage && (
-          <Button size="sm" onClick={() => setShowForm((v) => !v)}>
-            <Plus className="size-4" /> Add endpoint
-          </Button>
-        )}
-      </div>
+    <Card className="gap-5 p-6">
+      <SectionHeader
+        icon={WebhooksDuotoneIcon}
+        title="Webhooks"
+        description="Receive signed events when applications and jobs change."
+        action={
+          canManage ? (
+            <Button onClick={() => setShowForm((v) => !v)}>
+              <PlusIcon className="size-4" /> Add endpoint
+            </Button>
+          ) : null
+        }
+      />
 
       {secret && (
-        <div className="mt-4">
-          <SecretBanner
-            label="Signing secret"
-            value={secret}
-            onDismiss={() => setSecret(null)}
-          />
-        </div>
+        <SecretBanner
+          label="Signing secret"
+          value={secret}
+          onDismiss={() => setSecret(null)}
+        />
       )}
 
       {showForm && canManage && (
-        <div className="mt-4 space-y-3 rounded-lg border p-4">
+        <div className="space-y-4 rounded-2xl border bg-muted/20 p-4">
           <div className="space-y-1.5">
             <Label>Endpoint URL</Label>
             <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
               placeholder="https://example.com/webhooks/harly"
+              className="font-mono text-sm"
             />
           </div>
           <div className="space-y-1.5">
             <Label>Events</Label>
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {events.map((event) => (
-                <label
+                <Chip
                   key={event.value}
-                  className="flex items-center gap-2 text-sm"
+                  active={selectedEvents.includes(event.value)}
+                  onClick={() => toggleEvent(event.value)}
                 >
-                  <input
-                    type="checkbox"
-                    checked={selectedEvents.includes(event.value)}
-                    onChange={() => toggleEvent(event.value)}
-                  />
-                  <span>{event.label}</span>
-                </label>
+                  {event.label}
+                </Chip>
               ))}
             </div>
           </div>
           <Button size="sm" onClick={submit} disabled={pending}>
-            {pending && <Loader2 className="size-4 animate-spin" />} Create
-            endpoint
+            {pending && <SpinnerIcon className="size-4" />} Create endpoint
           </Button>
         </div>
       )}
 
-      <div className="mt-4 divide-y">
+      <div className="overflow-hidden rounded-2xl border">
         {webhooks.length === 0 && (
-          <p className="py-4 text-sm text-muted-foreground">
+          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
             No webhook endpoints yet.
           </p>
         )}
-        {webhooks.map((hook) => (
-          <div
-            key={hook.id}
-            className="flex items-center justify-between gap-3 py-3"
-          >
-            <div className="min-w-0">
-              <p className="truncate font-medium">{hook.url}</p>
-              <p className="text-xs text-muted-foreground">
-                {hook.events.join(", ")}
-              </p>
-            </div>
-            {canManage && (
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={hook.enabled}
-                  onCheckedChange={(v) => toggleEnabled(hook.id, v)}
-                />
-                <Button size="sm" variant="ghost" onClick={() => test(hook.id)}>
-                  Test
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => remove(hook.id)}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
+        <ul className="divide-y">
+          {webhooks.map((hook) => (
+            <li
+              key={hook.id}
+              className="flex items-center justify-between gap-3 px-4 py-3.5"
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-muted-foreground">
+                  <WebhooksDuotoneIcon className="size-4" />
+                </span>
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-sm font-medium">
+                    {hook.url}
+                  </p>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {hook.events.map((event) => (
+                      <span
+                        key={event}
+                        className="rounded-md bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground"
+                      >
+                        {event}
+                      </span>
+                    ))}
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        ))}
+              {canManage && (
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <Switch
+                    checked={hook.enabled}
+                    onCheckedChange={(v) => toggleEnabled(hook.id, v)}
+                  />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => test(hook.id)}
+                  >
+                    Test
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-destructive"
+                    onClick={() => remove(hook.id)}
+                    aria-label="Delete webhook"
+                  >
+                    <TrashIcon className="size-4" />
+                  </Button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
     </Card>
   );
@@ -530,29 +576,29 @@ function EmbedSection({
 ></script>`;
 
   return (
-    <Card className="p-5">
-      <h3 className="font-semibold tracking-tight">Embed widget</h3>
-      <p className="text-sm text-muted-foreground">
-        Drop this into any careers page to render your open roles with inline
-        apply.
-      </p>
-      <pre className="mt-3 overflow-x-auto rounded-lg bg-muted p-3 text-xs">
+    <Card className="gap-5 p-6">
+      <SectionHeader
+        icon={CodeDuotoneIcon}
+        title="Embed widget"
+        description="Drop this into any careers page to render your open roles with inline apply."
+        action={
+          <Button variant="outline" onClick={() => copy(snippet)}>
+            <CopyIcon className="size-4" /> Copy snippet
+          </Button>
+        }
+      />
+
+      <pre className="overflow-x-auto rounded-2xl border bg-muted/40 p-4 text-xs leading-relaxed">
         <code>{snippet}</code>
       </pre>
-      <Button
-        size="sm"
-        variant="outline"
-        className="mt-2"
-        onClick={() => copy(snippet)}
-      >
-        <Copy className="size-3.5" /> Copy snippet
-      </Button>
+
       {publishableKey ? (
-        <p className="mt-2 text-xs text-muted-foreground">
-          Replace the masked <code>data-pk</code> with your full publishable key.
+        <p className="text-xs text-muted-foreground">
+          Replace the masked <code className="font-mono">data-pk</code> with your
+          full publishable key.
         </p>
       ) : (
-        <p className="mt-2 text-xs text-muted-foreground">
+        <p className="text-xs text-muted-foreground">
           Create a publishable key above for per-embed analytics and revocation
           (optional — the widget also works with just the workspace slug).
         </p>

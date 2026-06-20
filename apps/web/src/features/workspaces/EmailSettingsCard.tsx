@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Check, KeyRound, Loader2, Mail } from "lucide-react";
 
 import {
   disableEmailAction,
@@ -11,8 +10,20 @@ import {
   sendTestEmailAction,
 } from "@/features/workspaces/email-settings-actions";
 import type { EmailProviderId, WorkspaceEmailStatus } from "@/lib/email/config";
+import {
+  SectionHeader,
+  StatCell,
+  StatusPill,
+} from "@/features/workspaces/settings-ui";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
-import { Badge } from "@/components/ui/badge";
+import { ResendLogo } from "@/components/ui/icons/brands";
+import {
+  KeyDuotoneIcon,
+  PaperPlaneDuotoneIcon,
+  SpinnerIcon,
+  WarningCircleIcon,
+} from "@/components/ui/icons/phosphor";
+import { EnvelopeIcon } from "@/components/ui/icons/settings";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,7 +37,6 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
-import { cn } from "@/lib/utils";
 
 const PROVIDER_LABEL: Record<EmailProviderId, string> = {
   resend: "Resend",
@@ -68,94 +78,98 @@ export function EmailSettingsCard({
     });
   }
 
-  return (
-    <Card className="flex flex-col">
-      <div className="flex items-start gap-3 px-6 py-5">
-        <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-sage text-sage-ink">
-          <Mail className="size-4" />
-        </span>
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold tracking-tight">Email</h3>
-            {isConfigured ? (
-              <Badge
-                className={cn(
-                  status.enabled
-                    ? "bg-sage text-sage-ink"
-                    : "bg-muted text-muted-foreground",
-                )}
-              >
-                {status.enabled ? "Connected" : "Disabled"}
-              </Badge>
-            ) : status.usingPlatformDefault ? (
-              <Badge variant="outline">Using Harly default</Badge>
-            ) : (
-              <Badge variant="outline">Not connected</Badge>
-            )}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            Send candidate and recruiter emails from your own domain via Resend or
-            SMTP. Without it, Harly sends from a shared address.
-          </p>
-        </div>
-      </div>
+  const badge = isConfigured ? (
+    <StatusPill tone={status.enabled ? "on" : "off"}>
+      {status.enabled ? "Connected" : "Disabled"}
+    </StatusPill>
+  ) : status.usingPlatformDefault ? (
+    <StatusPill tone="neutral">Harly default</StatusPill>
+  ) : (
+    <StatusPill tone="neutral">Not connected</StatusPill>
+  );
 
-      <div className="mt-auto space-y-4 border-t px-6 py-4">
-        {!status.encryptionReady ? (
-          <p className="rounded-md border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
-            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on the
-            server to store email credentials.
-          </p>
-        ) : null}
+  return (
+    <div className="space-y-5">
+      {!status.encryptionReady ? <EncryptionWarning /> : null}
+
+      <Card className="gap-0 overflow-hidden p-0">
+        <div className="p-6">
+          <SectionHeader
+            icon={EnvelopeIcon}
+            title="Email"
+            badge={badge}
+            description="Send candidate and recruiter emails from your own domain via Resend or SMTP. Without it, Harly sends from a shared address."
+            action={
+              canEdit ? (
+                <>
+                  <Sheet open={open} onOpenChange={setOpen}>
+                    <SheetTrigger asChild>
+                      <Button
+                        variant={isConfigured ? "outline" : "default"}
+                        disabled={!status.encryptionReady}
+                      >
+                        <KeyDuotoneIcon className="size-4" />
+                        {isConfigured ? "Manage" : "Connect"}
+                      </Button>
+                    </SheetTrigger>
+                    <EmailSettingsForm
+                      status={status}
+                      onSaved={() => {
+                        setOpen(false);
+                        router.refresh();
+                      }}
+                    />
+                  </Sheet>
+                  {isConfigured ? (
+                    <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                      <Switch
+                        checked={status.enabled}
+                        disabled={togglePending}
+                        onCheckedChange={toggleEnabled}
+                        aria-label="Enable email"
+                      />
+                      <span className="text-muted-foreground">
+                        {status.enabled ? "On" : "Off"}
+                      </span>
+                    </label>
+                  ) : null}
+                </>
+              ) : null
+            }
+          />
+        </div>
 
         {isConfigured ? (
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <Badge variant="secondary">{PROVIDER_LABEL[status.provider!]}</Badge>
-            <Badge variant="outline" className="max-w-full truncate font-mono">
-              {status.from}
-            </Badge>
+          <div className="grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+            <StatCell label="Provider">
+              {status.provider === "resend" ? (
+                <ResendLogo className="size-3.5" />
+              ) : (
+                <EnvelopeIcon className="size-4 text-muted-foreground" />
+              )}
+              {PROVIDER_LABEL[status.provider!]}
+            </StatCell>
+            <StatCell label="From address">
+              <span className="truncate font-mono text-[13px]">
+                {status.from}
+              </span>
+            </StatCell>
           </div>
         ) : null}
+      </Card>
+    </div>
+  );
+}
 
-        {canEdit ? (
-          <div className="flex flex-wrap items-center gap-3">
-            <Sheet open={open} onOpenChange={setOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!status.encryptionReady}
-                >
-                  <KeyRound className="size-4" />
-                  {isConfigured ? "Manage" : "Connect"}
-                </Button>
-              </SheetTrigger>
-              <EmailSettingsForm
-                status={status}
-                onSaved={() => {
-                  setOpen(false);
-                  router.refresh();
-                }}
-              />
-            </Sheet>
-
-            {isConfigured ? (
-              <div className="flex items-center gap-2">
-                <Switch
-                  checked={status.enabled}
-                  disabled={togglePending}
-                  onCheckedChange={toggleEnabled}
-                  aria-label="Enable email"
-                />
-                <span className="text-sm text-muted-foreground">
-                  {status.enabled ? "On" : "Off"}
-                </span>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </Card>
+function EncryptionWarning() {
+  return (
+    <div className="flex items-start gap-2 rounded-2xl border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">
+      <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
+      <p>
+        Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on the
+        server to store email credentials.
+      </p>
+    </div>
   );
 }
 
@@ -243,7 +257,7 @@ function EmailSettingsForm({
             </Button>
           </SheetClose>
           <Button onClick={save} disabled={saving || !from.trim()}>
-            {saving ? <Loader2 className="size-4 animate-spin" /> : null}
+            {saving ? <SpinnerIcon className="size-4" /> : null}
             Save
           </Button>
         </>
@@ -350,7 +364,7 @@ function EmailSettingsForm({
               />
             </div>
 
-            <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+            <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
               <div>
                 <p className="text-sm font-medium">Use TLS</p>
                 <p className="text-xs text-muted-foreground">
@@ -362,7 +376,7 @@ function EmailSettingsForm({
           </>
         )}
 
-        <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
           <div>
             <p className="text-sm font-medium">Enable</p>
             <p className="text-xs text-muted-foreground">
@@ -380,11 +394,11 @@ function EmailSettingsForm({
           disabled={testing || !canTest}
         >
           {testing ? (
-            <Loader2 className="size-4 animate-spin" />
+            <SpinnerIcon className="size-4" />
           ) : (
-            <Check className="size-4" />
+            <PaperPlaneDuotoneIcon className="size-4" />
           )}
-          Test connection
+          {provider === "smtp" ? "Test connection" : "Send test email"}
         </Button>
       </div>
     </DrawerLayout>
