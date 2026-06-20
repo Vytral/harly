@@ -2,8 +2,11 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { Globe } from "lucide-react";
 import { toast } from "sonner";
 
+import { GithubIcon } from "@/components/ui/icons/GithubIcon";
+import { LinkedinLogo } from "@/components/ui/icons/brands";
 import { updateCandidateProfile } from "@/features/candidates/actions";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Button } from "@/components/ui/button";
@@ -93,9 +96,9 @@ export function EditCandidateDrawer({
             <Field name="phone" label="Phone" defaultValue={candidate.phone ?? ""} />
             <Field name="location" label="Location" defaultValue={candidate.location ?? ""} />
           </div>
-          <Field name="linkedinUrl" label="LinkedIn" type="url" defaultValue={candidate.linkedinUrl ?? ""} placeholder="https://linkedin.com/in/…" />
-          <Field name="githubUrl" label="GitHub" type="url" defaultValue={candidate.githubUrl ?? ""} placeholder="https://github.com/…" />
-          <Field name="websiteUrl" label="Website" type="url" defaultValue={candidate.websiteUrl ?? ""} placeholder="https://…" />
+          <Field name="linkedinUrl" label="LinkedIn" type="url" defaultValue={candidate.linkedinUrl ?? ""} placeholder="https://linkedin.com/in/…" icon={<LinkedinLogo className="size-3.5" />} />
+          <Field name="githubUrl" label="GitHub" type="url" defaultValue={candidate.githubUrl ?? ""} placeholder="https://github.com/…" icon={<GithubIcon className="size-3.5" />} />
+          <Field name="websiteUrl" label="Website" type="url" defaultValue={candidate.websiteUrl ?? ""} placeholder="https://…" icon={<Globe className="size-3.5" />} />
         </form>
       </DrawerLayout>
     </Sheet>
@@ -108,16 +111,21 @@ function Field({
   defaultValue,
   type,
   placeholder,
+  icon,
 }: {
   name: string;
   label: string;
   defaultValue: string;
   type?: string;
   placeholder?: string;
+  icon?: ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
-      <Label htmlFor={`edit-${name}`}>{label}</Label>
+      <Label htmlFor={`edit-${name}`} className={icon ? "inline-flex items-center gap-1.5" : undefined}>
+        {icon}
+        {label}
+      </Label>
       <Input id={`edit-${name}`} name={name} type={type} defaultValue={defaultValue} placeholder={placeholder} />
     </div>
   );

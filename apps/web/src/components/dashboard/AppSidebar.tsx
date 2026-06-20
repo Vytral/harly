@@ -178,8 +178,8 @@ function SidebarBrand({
     <>
       <div
         className={cn(
-          "flex items-center gap-2.5 p-1",
-          !open && "justify-center p-0",
+          "flex h-10 items-center gap-2.5 px-1",
+          !open && "justify-center px-0",
         )}
       >
         {/* Logo ⇄ collapse toggle on hover */}

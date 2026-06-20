@@ -1,29 +1,32 @@
 "use client";
 
-import { useState, useSyncExternalStore, useTransition } from "react";
+import { useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AtSign,
   CalendarDays,
+  Camera,
   Copy,
   Eye,
   EyeOff,
   Globe,
   Hash,
-  Link,
   LogOut,
+  LockKeyhole,
   MapPin,
+  Mail,
   PencilLine,
   Phone,
   UserRound,
-  Mail,
-  LockKeyhole,
-  ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { authClient, signOut } from "@/lib/auth-client";
+import { getImageFileValidationError } from "@/lib/storage-validation";
 import { updateUserProfileAction } from "@/features/account/actions";
+import { AvatarCropDialog } from "@/components/ui/AvatarCropDialog";
+import { GithubIcon } from "@/components/ui/icons/GithubIcon";
+import { LinkedinLogo } from "@/components/ui/icons/brands";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,7 +38,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -63,28 +65,6 @@ function formatDate(date: Date | undefined) {
     month: "long",
     year: "numeric",
   }).format(new Date(date));
-}
-
-function DetailRow({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="flex items-center gap-3">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-        <Icon className="size-4" />
-      </span>
-      <div className="min-w-0">
-        <p className="text-xs text-muted-foreground">{label}</p>
-        <p className="truncate text-sm font-medium">{value}</p>
-      </div>
-    </div>
-  );
 }
 
 function SectionCard({
@@ -116,7 +96,7 @@ function SectionCard({
         </div>
         {action ? <CardAction>{action}</CardAction> : null}
       </CardHeader>
-      <CardContent className={cn("px-6", compact ? "py-3" : "py-4")}>
+      <CardContent className={cn("px-6", compact ? "py-3" : "py-5")}>
         {children}
       </CardContent>
     </Card>
@@ -185,6 +165,37 @@ function PasswordField({
   );
 }
 
+function SocialLinkField({
+  icon: Icon,
+  label,
+  placeholder,
+  value,
+  onChange,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  placeholder: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50">
+          <Icon className="size-4" />
+        </span>
+        <Input
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="pl-10 text-sm"
+        />
+      </div>
+    </div>
+  );
+}
+
 function splitPersonName(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   return {
@@ -193,8 +204,46 @@ function splitPersonName(name: string) {
   };
 }
 
-export function AccountSettingsPanel({ user }: { user: AccountUser }) {
+async function uploadImage(file: File | Blob): Promise<string> {
+  const filename = file instanceof File ? file.name : "avatar.jpg";
+  const presign = await fetch("/api/storage/presign", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      kind: "image",
+      filename,
+      contentType: file.type || "image/jpeg",
+      contentLength: file.size,
+    }),
+  });
+
+  if (!presign.ok) throw new Error("Could not prepare the upload.");
+
+  const data = (await presign.json()) as {
+    uploadUrl: string;
+    fileUrl: string;
+    key: string;
+  };
+
+  const put = await fetch(data.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": file.type || "image/jpeg" },
+    body: file,
+  });
+
+  if (!put.ok) throw new Error("Upload failed. Try again.");
+  return data.fileUrl;
+}
+
+export function AccountSettingsPanel({
+  user,
+  securitySlot,
+}: {
+  user: AccountUser;
+  securitySlot?: React.ReactNode;
+}) {
   const router = useRouter();
+  const avatarInputRef = useRef<HTMLInputElement>(null);
 
   const initialName = splitPersonName(user.name);
   const [firstName, setFirstName] = useState(initialName.firstName);
@@ -209,8 +258,10 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
   const [websiteUrl, setWebsiteUrl] = useState(user.websiteUrl ?? "");
   const [savingProfile, startProfile] = useTransition();
   const [profileDirty, setProfileDirty] = useState(false);
-  // Browser-only value: server snapshot is the placeholder, client snapshot the
-  // real UA — no effect/setState (avoids a cascading render on mount).
+
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [cropOpen, setCropOpen] = useState(false);
+
   const userAgent = useSyncExternalStore(
     () => () => {},
     () => navigator.userAgent.slice(0, 60),
@@ -233,7 +284,6 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
     newPassword === confirmPassword;
 
   const [signingOut, startSignOut] = useTransition();
-  const [copied, setCopied] = useState(false);
 
   const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
   const displayName = fullName || user.name;
@@ -268,6 +318,77 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
 
       toast.success("Profile updated.");
       setProfileDirty(false);
+      router.refresh();
+    });
+  }
+
+  function handleAvatarFileSelect(file: File | null) {
+    if (!file) return;
+    const error = getImageFileValidationError(file);
+    if (error) {
+      toast.error(error);
+      return;
+    }
+    const objectUrl = URL.createObjectURL(file);
+    setCropSrc(objectUrl);
+    setCropOpen(true);
+  }
+
+  function handleCropComplete(blob: Blob) {
+    setCropOpen(false);
+    startProfile(async () => {
+      try {
+        const url = await uploadImage(blob);
+        setImage(url);
+        const result = await updateUserProfileAction({
+          name: displayName,
+          image: url,
+          jobTitle: jobTitle.trim() || null,
+          phone: phone.trim() || null,
+          location: location.trim() || null,
+          bio: bio.trim() || null,
+        });
+
+        if (!result.success) {
+          toast.error(result.error ?? "Could not update avatar.");
+          return;
+        }
+
+        await authClient.updateUser({
+          name: displayName,
+          image: url,
+        });
+
+        toast.success("Avatar updated.");
+        router.refresh();
+      } catch {
+        toast.error("Upload failed.");
+      } finally {
+        if (cropSrc) URL.revokeObjectURL(cropSrc);
+        setCropSrc(null);
+      }
+    });
+  }
+
+  function removeAvatar() {
+    setImage("");
+    startProfile(async () => {
+      const result = await updateUserProfileAction({
+        name: displayName,
+        image: null,
+        jobTitle: jobTitle.trim() || null,
+        phone: phone.trim() || null,
+        location: location.trim() || null,
+        bio: bio.trim() || null,
+      });
+
+      if (!result.success) {
+        toast.error(result.error ?? "Could not remove avatar.");
+        return;
+      }
+
+      await authClient.updateUser({ name: displayName, image: undefined });
+      toast.success("Avatar removed.");
       router.refresh();
     });
   }
@@ -319,85 +440,83 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
   async function copyUserId() {
     try {
       await navigator.clipboard.writeText(user.id);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      toast.success("Account ID copied.");
     } catch {
       // silent
     }
   }
 
-  async function handleAvatarChange(url: string | null) {
-    setImage(url ?? "");
-    if (url === null && !user.image) return;
-    startProfile(async () => {
-      const result = await updateUserProfileAction({
-        name: displayName,
-        image: url || null,
-        jobTitle: jobTitle.trim() || null,
-        phone: phone.trim() || null,
-        location: location.trim() || null,
-        bio: bio.trim() || null,
-      });
-
-      if (!result.success) {
-        toast.error(result.error ?? "Could not update avatar.");
-        return;
-      }
-
-      await authClient.updateUser({
-        name: displayName,
-        image: url || undefined,
-      });
-
-      toast.success("Avatar updated.");
-      router.refresh();
-    });
-  }
-
   return (
-    <div className="space-y-8">
-      {/* Profile header */}
-      <Card className="overflow-hidden border-none bg-gradient-to-r from-primary/[0.03] to-transparent shadow-sm">
-        <CardContent className="flex flex-col gap-5 p-6 sm:flex-row sm:items-center sm:gap-6">
-          <UserAvatar name={displayName} src={image || null} size="xl" />
-          <div className="min-w-0 flex-1">
-            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-              <h2 className="truncate text-xl font-semibold tracking-tight">
-                {displayName}
-              </h2>
-              {user.jobTitle ? (
-                <Badge variant="secondary" className="w-fit shrink-0">
-                  {user.jobTitle}
-                </Badge>
-              ) : null}
-            </div>
-            <p className="mt-0.5 text-sm text-muted-foreground">{user.email}</p>
-            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1.5">
-              <DetailRow
-                icon={CalendarDays}
-                label="Member since"
-                value={formatDate(user.createdAt)}
-              />
-              <button
-                type="button"
-                onClick={copyUserId}
-                className="group flex items-center gap-3 text-left"
-              >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  <Hash className="size-4" />
-                </span>
-                <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground">Account ID</p>
-                  <p className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground/60 transition group-hover:text-foreground">
-                    {user.id.slice(0, 12) + "…"}
-                    <Copy className="size-3 opacity-0 transition group-hover:opacity-100" />
-                  </p>
-                </div>
-              </button>
-            </div>
+    <div className="mx-auto max-w-3xl space-y-8">
+      {/* ─── Profile header ─── */}
+      <div className="flex flex-col items-center gap-4 pt-2 sm:flex-row sm:items-center sm:gap-6">
+        <div className="group relative shrink-0">
+          <UserAvatar
+            name={displayName}
+            src={image || null}
+            size="xl"
+            className="size-20 text-2xl ring-2 ring-border/50 ring-offset-2 ring-offset-background"
+          />
+          <button
+            type="button"
+            onClick={() => avatarInputRef.current?.click()}
+            disabled={savingProfile}
+            aria-label="Change avatar"
+            className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 text-white/0 transition-all duration-150 ease-out hover:bg-black/40 hover:text-white/90 focus-visible:bg-black/40 focus-visible:text-white/90 focus-visible:outline-none active:scale-[0.97]"
+          >
+            <Camera className="size-5" strokeWidth={1.8} />
+          </button>
+          {image && (
+            <button
+              type="button"
+              onClick={removeAvatar}
+              aria-label="Remove avatar"
+              className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-destructive/10 hover:text-destructive"
+            >
+              <span className="text-xs leading-none">×</span>
+            </button>
+          )}
+          <input
+            ref={avatarInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/svg+xml,image/webp"
+            className="sr-only"
+            onChange={(e) => {
+              handleAvatarFileSelect(e.target.files?.[0] ?? null);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
+        <div className="min-w-0 flex-1 text-center sm:text-left">
+          <div className="flex flex-col items-center gap-1.5 sm:flex-row sm:items-center sm:gap-3">
+            <h2 className="truncate text-xl font-semibold tracking-tight">
+              {displayName}
+            </h2>
+            {user.jobTitle ? (
+              <Badge variant="secondary" className="w-fit shrink-0">
+                {user.jobTitle}
+              </Badge>
+            ) : null}
           </div>
-        </CardContent>
-      </Card>
+          <p className="mt-0.5 text-sm text-muted-foreground">{user.email}</p>
+          <div className="mt-2.5 flex flex-wrap items-center justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground sm:justify-start">
+            <span className="flex items-center gap-1.5">
+              <CalendarDays className="size-3.5" />
+              Member since {formatDate(user.createdAt)}
+            </span>
+            <button
+              type="button"
+              onClick={copyUserId}
+              className="group flex items-center gap-1.5 transition hover:text-foreground"
+            >
+              <Hash className="size-3.5" />
+              <span>{user.id.slice(0, 12)}…</span>
+              <Copy className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+            </button>
+          </div>
+        </div>
+      </div>
 
       <Tabs defaultValue="profile">
         <TabsList>
@@ -407,147 +526,108 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
         </TabsList>
 
         {/* ─── PROFILE TAB ─── */}
-        <TabsContent value="profile" className="mt-6">
-          <div className="grid gap-6 lg:grid-cols-2">
-            <div className="space-y-6">
-              <SectionCard title="Personal info" description="Your name and how others see you on the platform.">
-                <div className="grid gap-5 lg:grid-cols-[160px_minmax(0,1fr)] lg:items-start">
-                  <div className="space-y-2">
-                    <Label>Avatar</Label>
-                    <FileDropzone
-                      value={image || null}
-                      onChange={(url) => handleAvatarChange(url ?? null)}
-                      aspect="square"
-                      hint="PNG, JPG, SVG or WEBP · up to 5MB"
-                    />
-                  </div>
-                  <div className="space-y-5">
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="acc-first-name">First name</Label>
-                        <Input
-                          id="acc-first-name"
-                          value={firstName}
-                          onChange={(e) => {
-                            setFirstName(e.target.value);
-                            markDirty();
-                          }}
-                          placeholder="Ada"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="acc-last-name">Last name</Label>
-                        <Input
-                          id="acc-last-name"
-                          value={lastName}
-                          onChange={(e) => {
-                            setLastName(e.target.value);
-                            markDirty();
-                          }}
-                          placeholder="Lovelace"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="acc-job-title">Job title</Label>
-                      <IconInput
-                        icon={UserRound}
-                        id="acc-job-title"
-                        value={jobTitle}
-                        onChange={(e) => {
-                          setJobTitle(e.target.value);
-                          markDirty();
-                        }}
-                        placeholder="e.g. Engineering Manager"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="acc-phone">Phone</Label>
-                      <IconInput
-                        icon={Phone}
-                        id="acc-phone"
-                        type="tel"
-                        value={phone}
-                        onChange={(e) => {
-                          setPhone(e.target.value);
-                          markDirty();
-                        }}
-                        placeholder="+1 (555) 123-4567"
-                      />
-                    </div>
-                  </div>
+        <TabsContent value="profile" className="mt-6 space-y-6">
+          <SectionCard
+            title="Personal info"
+            description="Your name and how others see you on the platform."
+          >
+            <div className="space-y-5">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="acc-first-name">First name</Label>
+                  <Input
+                    id="acc-first-name"
+                    value={firstName}
+                    onChange={(e) => { setFirstName(e.target.value); markDirty(); }}
+                    placeholder="Ada"
+                  />
                 </div>
-              </SectionCard>
+                <div className="space-y-2">
+                  <Label htmlFor="acc-last-name">Last name</Label>
+                  <Input
+                    id="acc-last-name"
+                    value={lastName}
+                    onChange={(e) => { setLastName(e.target.value); markDirty(); }}
+                    placeholder="Lovelace"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="acc-job-title">Job title</Label>
+                  <IconInput
+                    icon={UserRound}
+                    id="acc-job-title"
+                    value={jobTitle}
+                    onChange={(e) => { setJobTitle(e.target.value); markDirty(); }}
+                    placeholder="e.g. Engineering Manager"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="acc-phone">Phone</Label>
+                  <IconInput
+                    icon={Phone}
+                    id="acc-phone"
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => { setPhone(e.target.value); markDirty(); }}
+                    placeholder="+1 (555) 123-4567"
+                  />
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="acc-location">Location</Label>
+                  <IconInput
+                    icon={MapPin}
+                    id="acc-location"
+                    value={location}
+                    onChange={(e) => { setLocation(e.target.value); markDirty(); }}
+                    placeholder="San Francisco, CA"
+                  />
+                </div>
+              </div>
             </div>
+          </SectionCard>
 
-            <div className="space-y-6">
-              <SectionCard title="Details">
-                <div className="space-y-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="acc-location">Location</Label>
-                    <IconInput
-                      icon={MapPin}
-                      id="acc-location"
-                      value={location}
-                      onChange={(e) => {
-                        setLocation(e.target.value);
-                        markDirty();
-                      }}
-                      placeholder="San Francisco, CA"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="acc-bio">Bio</Label>
-                    <Textarea
-                      id="acc-bio"
-                      value={bio}
-                      onChange={(e) => {
-                        setBio(e.target.value);
-                        markDirty();
-                      }}
-                      placeholder="A short description about yourself…"
-                      className="min-h-[100px] resize-y"
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Shown on your profile and hiring team views.
-                    </p>
-                  </div>
-                </div>
-              </SectionCard>
+          <SectionCard title="Bio" description="A short description shown on your profile and hiring team views.">
+            <Textarea
+              id="acc-bio"
+              value={bio}
+              onChange={(e) => { setBio(e.target.value); markDirty(); }}
+              placeholder="Tell your team a bit about yourself…"
+              className="min-h-[100px] resize-y"
+            />
+          </SectionCard>
 
-              <SectionCard title="Links">
-                <div className="space-y-4">
-                  <p className="text-xs text-muted-foreground">
-                    Connected profiles and personal links.
-                  </p>
-                  <SocialLinkField
-                    icon={Link}
-                    label="LinkedIn"
-                    placeholder="https://linkedin.com/in/username"
-                    value={linkedinUrl}
-                    onChange={(v) => { setLinkedinUrl(v); markDirty(); }}
-                  />
-                  <SocialLinkField
-                    icon={Link}
-                    label="GitHub"
-                    placeholder="https://github.com/username"
-                    value={githubUrl}
-                    onChange={(v) => { setGithubUrl(v); markDirty(); }}
-                  />
-                  <SocialLinkField
-                    icon={Globe}
-                    label="Website"
-                    placeholder="https://yoursite.com"
-                    value={websiteUrl}
-                    onChange={(v) => { setWebsiteUrl(v); markDirty(); }}
-                  />
-                </div>
-              </SectionCard>
+          <SectionCard title="Links" description="Connected profiles and personal links.">
+            <div className="space-y-4">
+              <SocialLinkField
+                icon={LinkedinLogo}
+                label="LinkedIn"
+                placeholder="https://linkedin.com/in/username"
+                value={linkedinUrl}
+                onChange={(v) => { setLinkedinUrl(v); markDirty(); }}
+              />
+              <SocialLinkField
+                icon={GithubIcon}
+                label="GitHub"
+                placeholder="https://github.com/username"
+                value={githubUrl}
+                onChange={(v) => { setGithubUrl(v); markDirty(); }}
+              />
+              <SocialLinkField
+                icon={Globe}
+                label="Website"
+                placeholder="https://yoursite.com"
+                value={websiteUrl}
+                onChange={(v) => { setWebsiteUrl(v); markDirty(); }}
+              />
             </div>
-          </div>
+          </SectionCard>
 
           {profileDirty ? (
-            <div className="sticky bottom-4 z-10 mt-6 flex items-center justify-between rounded-xl border border-pine/30 bg-card px-5 py-3.5 shadow-[0_8px_24px_-12px_rgba(31,41,38,0.25)]">
+            <div className="sticky bottom-4 z-10 flex items-center justify-between rounded-xl border border-pine/30 bg-card px-5 py-3.5 shadow-[0_8px_24px_-12px_rgba(31,41,38,0.25)]">
               <p className="text-sm text-muted-foreground">
                 You have unsaved changes.
               </p>
@@ -659,73 +739,24 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
                   icon={LockKeyhole}
                 />
               </div>
-              <div>
-                <p
-                  className={cn(
-                    "text-xs",
-                    passwordsMismatch ? "text-destructive" : "text-muted-foreground",
-                  )}
-                >
-                  {passwordsMismatch
-                    ? "New password and confirmation don't match."
-                    : "Use 8+ characters."}
-                </p>
-              </div>
+              <p
+                className={cn(
+                  "text-xs",
+                  passwordsMismatch ? "text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {passwordsMismatch
+                  ? "New password and confirmation don't match."
+                  : "Use 8+ characters."}
+              </p>
             </div>
           </SectionCard>
 
-          <SectionCard
-            title="Two-factor authentication"
-            description="Add an extra layer of security to your account."
-          >
-            <div className="flex items-center gap-4">
-              <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                <ShieldCheck className="size-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium">Coming soon</p>
-                <p className="text-xs text-muted-foreground">
-                  Two-factor authentication is not yet available.
-                </p>
-              </div>
-              <Badge variant="outline" className="shrink-0">
-                Not available
-              </Badge>
-            </div>
-          </SectionCard>
+          {securitySlot}
         </TabsContent>
 
         {/* ─── SESSION TAB ─── */}
         <TabsContent value="session" className="mt-6 space-y-6">
-          <SectionCard title="Account info">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg border px-4 py-3">
-                <div className="min-w-0 flex-1">
-                  <p className="text-xs text-muted-foreground">Account ID</p>
-                  <code className="mt-0.5 block truncate font-mono text-sm">
-                    {user.id}
-                  </code>
-                </div>
-                <Button variant="ghost" size="sm" onClick={copyUserId}>
-                  <Copy className="size-4" />
-                  {copied ? "Copied" : "Copy"}
-                </Button>
-              </div>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="rounded-lg border px-4 py-3">
-                  <p className="text-xs text-muted-foreground">Member since</p>
-                  <p className="mt-0.5 text-sm font-medium">
-                    {formatDate(user.createdAt)}
-                  </p>
-                </div>
-                <div className="rounded-lg border px-4 py-3">
-                  <p className="text-xs text-muted-foreground">Current session</p>
-                  <p className="mt-0.5 text-sm font-medium">Active now</p>
-                </div>
-              </div>
-            </div>
-          </SectionCard>
-
           <SectionCard title="Active sessions">
             <div className="space-y-3">
               <div className="flex items-center gap-3 rounded-lg border bg-muted/20 px-4 py-3">
@@ -777,37 +808,13 @@ export function AccountSettingsPanel({ user }: { user: AccountUser }) {
           </Card>
         </TabsContent>
       </Tabs>
-    </div>
-  );
-}
 
-function SocialLinkField({
-  icon: Icon,
-  label,
-  placeholder,
-  value,
-  onChange,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  placeholder: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">{label}</Label>
-      <div className="relative">
-        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50">
-          <Icon className="size-4" />
-        </span>
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          placeholder={placeholder}
-          className="pl-10 text-sm"
-        />
-      </div>
+      <AvatarCropDialog
+        open={cropOpen}
+        onOpenChange={setCropOpen}
+        imageSrc={cropSrc}
+        onCropComplete={handleCropComplete}
+      />
     </div>
   );
 }

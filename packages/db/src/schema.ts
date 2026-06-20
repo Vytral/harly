@@ -526,6 +526,7 @@ export const candidates = pgTable(
     linkedinUrl: text("linkedin_url"),
     githubUrl: text("github_url"),
     websiteUrl: text("website_url"),
+    avatarUrl: text("avatar_url"),
     headline: text("headline"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ...timestamps(),

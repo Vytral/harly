@@ -1,10 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Activity, Search, type LucideIcon } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { Activity, ChevronRight, Search, type LucideIcon } from "lucide-react";
 
 import { CommandMenu } from "@/components/dashboard/CommandMenu";
+import {
+  isNavActive,
+  primaryNav,
+  workspaceNav,
+  moreNav,
+} from "@/components/dashboard/nav-items";
 import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
+import { usePageTitle } from "@/components/dashboard/PageTitleContext";
 import { QuickCreateMenu } from "@/components/dashboard/QuickCreateMenu";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { Button } from "@/components/ui/button";
@@ -25,7 +33,6 @@ type TopBarProps = {
   notifications: NotificationItem[];
 };
 
-/** Slim utility strip: sidebar toggle + search + create + alerts + theme + user. */
 export function TopBar({
   user,
   role,
@@ -34,13 +41,36 @@ export function TopBar({
   notifications,
 }: TopBarProps) {
   const [commandOpen, setCommandOpen] = useState(false);
+  const { title, breadcrumb } = usePageTitle();
+  const pathname = usePathname();
+
+  const allNav = [...primaryNav, ...workspaceNav, ...moreNav];
+  const activeNav = allNav.find((item) => isNavActive(pathname, item));
+  const SectionIcon = activeNav?.icon;
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border/80 bg-background/80 px-4 backdrop-blur-md md:px-6">
+      {title ? (
+        <div className="ml-1 flex min-w-0 items-center gap-1.5">
+          {SectionIcon ? (
+            <SectionIcon className="size-[18px] shrink-0 text-muted-foreground" strokeWidth={1.5} />
+          ) : null}
+          {breadcrumb ? (
+            <>
+              <span className="hidden truncate text-[15px] text-muted-foreground/70 sm:block">
+                {breadcrumb}
+              </span>
+              <ChevronRight className="hidden size-3 shrink-0 text-muted-foreground/40 sm:block" />
+            </>
+          ) : null}
+          <h1 className="truncate text-base font-semibold tracking-tight">{title}</h1>
+        </div>
+      ) : null}
+
       <button
         type="button"
         onClick={() => setCommandOpen(true)}
-        className="group ml-1 hidden h-9 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground transition hover:border-ring/40 hover:bg-accent/40 sm:flex sm:w-72"
+        className="group ml-auto hidden h-9 items-center gap-2 rounded-lg border bg-card px-3 text-sm text-muted-foreground transition hover:border-ring/40 hover:bg-accent/40 sm:flex sm:w-72"
         aria-label="Search"
       >
         <Search className="size-4 shrink-0" strokeWidth={1.5} />
@@ -52,14 +82,14 @@ export function TopBar({
       <Button
         variant="ghost"
         size="icon"
-        className="text-muted-foreground sm:hidden"
+        className="ml-auto text-muted-foreground sm:hidden"
         aria-label="Search"
         onClick={() => setCommandOpen(true)}
       >
         <Search className="size-[18px]" strokeWidth={1.5} />
       </Button>
 
-      <div className="ml-auto flex items-center gap-1">
+      <div className="flex items-center gap-1 sm:ml-0">
         <QuickCreateMenu />
         <IconPopover
           icon={Activity}

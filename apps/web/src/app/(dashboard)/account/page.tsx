@@ -1,19 +1,30 @@
-import { PageHeader } from "@/components/ui/PageHeader";
-import { AccountSettingsPanel } from "@/features/account/AccountSettingsPanel";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { getSecurityPasskeys } from "@/features/security/data";
+import { PageTitle } from "@/components/dashboard/PageTitleContext";
+import { AccountSettingsPanel } from "@/features/account/AccountSettingsPanel";
+import { TwoFactorCard } from "@/features/security/TwoFactorCard";
+import { PasskeysCard } from "@/features/security/PasskeysCard";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
   const { user } = await getWorkspaceContext();
 
+  let userPasskeys: Awaited<ReturnType<typeof getSecurityPasskeys>> = [];
+  try {
+    userPasskeys = await getSecurityPasskeys(user.id);
+  } catch {
+    // passkeys table may not exist yet
+  }
+
+  const twoFactorEnabled =
+    "twoFactorEnabled" in user && typeof user.twoFactorEnabled === "boolean"
+      ? user.twoFactorEnabled
+      : false;
+
   return (
     <div className="space-y-6">
-      <PageHeader
-        eyebrow="Account"
-        title="Your account"
-        description="Manage your personal profile, email, and password."
-      />
+      <PageTitle title="Account" />
       <AccountSettingsPanel
         user={{
           id: user.id,
@@ -29,6 +40,12 @@ export default async function AccountPage() {
           websiteUrl: (user as Record<string, unknown>).websiteUrl as string | null ?? null,
           createdAt: (user as Record<string, unknown>).createdAt as Date | undefined,
         }}
+        securitySlot={
+          <>
+            <TwoFactorCard enabled={twoFactorEnabled} />
+            <PasskeysCard initialPasskeys={userPasskeys} />
+          </>
+        }
       />
     </div>
   );

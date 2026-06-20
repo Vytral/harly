@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     "@harly/emails",
     "@harly/api",
   ],
+  serverExternalPackages: ["postgres"],
 };
 
 export default nextConfig;

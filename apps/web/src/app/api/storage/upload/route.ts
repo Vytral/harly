@@ -12,8 +12,12 @@ import {
 
 export const runtime = "nodejs";
 
+function getUploadsRoot() {
+  return process.env.UPLOADS_DIR || path.resolve(process.cwd(), "uploads");
+}
+
 function getUploadPath(key: string) {
-  const uploadsRoot = path.resolve(process.cwd(), "uploads");
+  const uploadsRoot = getUploadsRoot();
   const resolvedPath = path.resolve(uploadsRoot, key);
 
   if (!resolvedPath.startsWith(`${uploadsRoot}${path.sep}`)) {

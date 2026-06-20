@@ -3,16 +3,17 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import {
   ArrowLeft,
-  Code2,
   Globe,
-  Link2,
   Mail,
   MapPin,
   Phone,
 } from "lucide-react";
 
+import { GithubIcon } from "@/components/ui/icons/GithubIcon";
+import { LinkedinLogo } from "@/components/ui/icons/brands";
+
 import { PipelineSpine } from "@/components/ui/PipelineSpine";
-import { UserAvatar } from "@/components/ui/UserAvatar";
+import { CandidateAvatarEdit } from "@/features/candidates/CandidateAvatarEdit";
 import { Button } from "@/components/ui/button";
 import { CandidateActionBar } from "@/features/candidates/CandidateActionBar";
 import { CandidateListRail } from "@/features/candidates/CandidateListRail";
@@ -127,11 +128,12 @@ export default async function CandidateDetailPage({
             <div className="h-20 bg-gradient-to-r from-sage via-kraft to-card" />
             <div className="-mt-10 px-5 pb-5">
               <div className="flex flex-wrap items-end justify-between gap-3">
-                <UserAvatar
+                <CandidateAvatarEdit
+                  candidateId={candidate.id}
+                  workspaceId={workspaceId}
                   name={fullName}
-                  src={avatarSrc}
-                  size="xl"
-                  className="ring-4 ring-card"
+                  avatarUrl={candidate.avatarUrl ?? null}
+                  fallbackSrc={avatarSrc}
                 />
                 <div className="pb-1">
                   <CandidateActionBar
@@ -221,12 +223,12 @@ export default async function CandidateDetailPage({
                     <ExternalProfileLink
                       href={candidate.linkedinUrl}
                       label="LinkedIn"
-                      icon={<Link2 className="size-4" />}
+                      icon={<LinkedinLogo className="size-4" />}
                     />
                     <ExternalProfileLink
                       href={candidate.githubUrl}
                       label="GitHub"
-                      icon={<Code2 className="size-4" />}
+                      icon={<GithubIcon className="size-4" />}
                     />
                     <ExternalProfileLink
                       href={candidate.websiteUrl}

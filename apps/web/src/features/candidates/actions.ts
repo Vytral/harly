@@ -372,6 +372,43 @@ export async function updateCandidateProfile(input: {
   }
 }
 
+export async function updateCandidateAvatarAction(input: {
+  candidateId: string;
+  workspaceId: string;
+  avatarUrl: string | null;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const { organization: workspace } = await getWorkspaceContext();
+    if (workspace.id !== input.workspaceId) {
+      return { success: false, error: "Workspace access denied." };
+    }
+
+    const [candidate] = await db
+      .update(candidates)
+      .set({
+        avatarUrl: input.avatarUrl,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(candidates.id, input.candidateId),
+          eq(candidates.workspaceId, input.workspaceId),
+        ),
+      )
+      .returning({ id: candidates.id });
+
+    if (!candidate) {
+      return { success: false, error: "Candidate not found." };
+    }
+
+    revalidatePath(`/dashboard/candidates/${input.candidateId}`);
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to update candidate avatar", error);
+    return { success: false, error: "Unable to update avatar." };
+  }
+}
+
 export async function attachCandidateFile(input: {
   candidateId: string;
   workspaceId: string;

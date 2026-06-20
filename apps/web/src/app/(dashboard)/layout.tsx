@@ -1,6 +1,7 @@
 import { cookies } from "next/headers";
 
 import { AppSidebar } from "@/components/dashboard/AppSidebar";
+import { PageTitleProvider } from "@/components/dashboard/PageTitleContext";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -47,9 +48,11 @@ export default async function DashboardLayout({
           notifications={notifications}
         />
         {!user.emailVerified ? <VerifyEmailBanner email={user.email} /> : null}
-        <main className="w-full flex-1 px-4 py-6 md:px-6 lg:px-8 lg:py-8">
-          {children}
-        </main>
+        <PageTitleProvider>
+          <main className="w-full flex-1 px-4 py-6 md:px-6 lg:px-8 lg:py-8">
+            {children}
+          </main>
+        </PageTitleProvider>
       </SidebarInset>
     </SidebarProvider>
   );
