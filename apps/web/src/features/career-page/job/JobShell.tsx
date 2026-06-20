@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { ArrowLeft } from "lucide-react";
@@ -96,7 +96,7 @@ export function JobShell({
           indicatorRef.current.style.width = `${prevWidth}px`;
 
           // 2. Force reflow to flush styles to DOM
-          indicatorRef.current.offsetHeight;
+          void indicatorRef.current.offsetHeight;
 
           // 3. Animate to target in the next frame
           requestAnimationFrame(() => {
@@ -163,6 +163,7 @@ export function JobShell({
           <div className="mx-auto max-w-5xl px-6">
             <div className="relative -mt-9 flex size-[72px] items-center justify-center overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
               {logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={logo} alt={workspace.name} className="size-full object-cover" />
               ) : (
                 <span className="text-2xl font-semibold" style={{ color: accent }}>
@@ -181,6 +182,7 @@ export function JobShell({
             >
               <ArrowLeft className="size-4" strokeWidth={1.8} />
               {logo ? (
+                // eslint-disable-next-line @next/next/no-img-element
                 <img src={logo} alt={workspace.name} className="size-6 rounded object-contain" />
               ) : null}
               {workspace.name}

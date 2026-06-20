@@ -65,7 +65,7 @@ export async function POST(req: NextRequest) {
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
     });
-  } catch (err) {
+  } catch {
     return NextResponse.json(
       { error: "Verification failed" },
       { status: 400 },
