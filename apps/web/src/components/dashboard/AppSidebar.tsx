@@ -12,8 +12,8 @@ import {
   type NavItem,
 } from "@/components/dashboard/nav-items";
 import {
-  ArrowLineLeftIcon,
-  ArrowLineRightIcon,
+  CaretLineLeftIcon,
+  CaretLineRightIcon,
   UserPlusIcon,
 } from "@/components/ui/icons/phosphor";
 import {
@@ -182,7 +182,7 @@ function SidebarBrand({
             src={sidebarLogo.lightUrl ?? undefined}
             alt={workspace.name}
             className={cn(
-              "h-9 max-w-[160px] object-contain object-left",
+              "h-7 max-w-[150px] object-contain object-left",
               sidebarLogo.darkUrl && "dark:hidden",
             )}
           />
@@ -191,7 +191,7 @@ function SidebarBrand({
             <img
               src={sidebarLogo.darkUrl}
               alt={workspace.name}
-              className="hidden h-9 max-w-[160px] object-contain object-left dark:block"
+              className="hidden h-7 max-w-[150px] object-contain object-left dark:block"
             />
           ) : null}
         </Link>
@@ -205,7 +205,7 @@ function SidebarBrand({
           title="Collapse sidebar"
           className={toggleButtonClass}
         >
-          <ArrowLineLeftIcon className="size-5" />
+          <CaretLineLeftIcon className="size-4" />
         </button>
       </div>
     );
@@ -237,9 +237,9 @@ function SidebarBrand({
           className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground opacity-0 transition-opacity duration-150 hover:border-sidebar-ring/40 hover:text-sidebar-foreground group-hover/logo:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         >
           {open ? (
-            <ArrowLineLeftIcon className="size-5" />
+            <CaretLineLeftIcon className="size-4" />
           ) : (
-            <ArrowLineRightIcon className="size-5" />
+            <CaretLineRightIcon className="size-4" />
           )}
         </button>
       </div>

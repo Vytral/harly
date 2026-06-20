@@ -47,7 +47,6 @@ export default async function DashboardLayout({
         sidebarLogo={sidebarLogo}
       />
       <SidebarInset>
-        <div className="h-0.5 w-full bg-gradient-to-r from-primary/60 to-primary/10" />
         <TopBar
           user={{ name: user.name, email: user.email, image: user.image ?? null }}
           role={role}

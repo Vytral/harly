@@ -587,3 +587,27 @@ export function ArrowLineRightIcon(props: IconProps) {
     </Svg>
   );
 }
+
+/** "|◁" — collapse the sidebar (caret to a bar on the left). */
+export function CaretLineLeftIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path
+        fill="currentColor"
+        d="M197.66 202.34a8 8 0 0 1-11.32 11.32l-80-80a8 8 0 0 1 0-11.32l80-80a8 8 0 0 1 11.32 11.32L123.31 128ZM72 40a8 8 0 0 0-8 8v160a8 8 0 0 0 16 0V48a8 8 0 0 0-8-8"
+      />
+    </Svg>
+  );
+}
+
+/** "▷|" — expand the sidebar (caret to a bar on the right). */
+export function CaretLineRightIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path
+        fill="currentColor"
+        d="M149.66 122.34a8 8 0 0 1 0 11.32l-80 80a8 8 0 0 1-11.32-11.32L132.69 128L58.34 53.66a8 8 0 0 1 11.32-11.32ZM184 40a8 8 0 0 0-8 8v160a8 8 0 0 0 16 0V48a8 8 0 0 0-8-8"
+      />
+    </Svg>
+  );
+}
