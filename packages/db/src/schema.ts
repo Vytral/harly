@@ -141,6 +141,10 @@ export const user = pgTable("user", {
   linkedinUrl: text("linkedin_url"),
   githubUrl: text("github_url"),
   websiteUrl: text("website_url"),
+  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+  onboardingCompletedAt: timestamp("onboarding_completed_at", {
+    withTimezone: true,
+  }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -362,11 +366,29 @@ export const workspaceSettings = pgTable("workspace_settings", {
   emailSmtpPort: integer("email_smtp_port"),
   emailSmtpSecure: boolean("email_smtp_secure"),
   emailSmtpUser: text("email_smtp_user"),
+  // Require all workspace members to enable two-factor authentication.
+  require2fa: boolean("require_2fa").default(false).notNull(),
   // Career-page builder config (template choice + per-section overrides).
   // Shape lives in apps/web/src/features/career-page/config.ts.
   careerPageConfig: jsonb("career_page_config")
     .default(sql`'{}'::jsonb`)
     .notNull(),
+  // Turnstile CAPTCHA (Cloudflare). Site key is public; secret is
+  // AES-256-GCM encrypted at rest, same scheme as the AI/Cal.com keys.
+  turnstileEnabled: boolean("turnstile_enabled").default(false).notNull(),
+  turnstileSiteKey: text("turnstile_site_key"),
+  turnstileSecretCiphertext: text("turnstile_secret_ciphertext"),
+  turnstileSecretIv: text("turnstile_secret_iv"),
+  turnstileSecretTag: text("turnstile_secret_tag"),
+  // Chat notifications (Slack / Discord incoming-webhook). The webhook URL
+  // is the only secret — encrypted at rest (AES-256-GCM).
+  chatEnabled: boolean("chat_enabled").default(false).notNull(),
+  chatProvider: text("chat_provider"), // 'slack' | 'discord'
+  chatWebhookCiphertext: text("chat_webhook_ciphertext"),
+  chatWebhookIv: text("chat_webhook_iv"),
+  chatWebhookTag: text("chat_webhook_tag"),
+  chatEvents: jsonb("chat_events").default(sql`'[]'::jsonb`),
+  acquisitionSource: text("acquisition_source"),
   ...timestamps(),
 });
 
@@ -1184,6 +1206,53 @@ export type AuthInvitation = typeof invitation.$inferSelect;
 export type NewAuthInvitation = typeof invitation.$inferInsert;
 
 // ---------------------------------------------------------------------------
+// Tasks — workspace-scoped to-dos assigned to team members
+// ---------------------------------------------------------------------------
+
+export const tasks = pgTable(
+  "tasks",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    // "pending" | "in_progress" | "completed" | "canceled"
+    status: text("status").default("pending").notNull(),
+    // "low" | "medium" | "high" | "urgent"
+    priority: text("priority").default("medium").notNull(),
+    dueDate: timestamp("due_date", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ownerId: text("owner_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id").references(() => candidates.id, {
+      onDelete: "set null",
+    }),
+    applicationId: uuid("application_id").references(() => applications.id, {
+      onDelete: "set null",
+    }),
+    jobId: uuid("job_id").references(() => jobs.id, { onDelete: "set null" }),
+    interviewId: uuid("interview_id").references(() => interviews.id, {
+      onDelete: "set null",
+    }),
+    createdById: text("created_by_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("tasks_workspace_idx").on(table.workspaceId),
+    index("tasks_owner_idx").on(table.ownerId),
+    index("tasks_workspace_status_idx").on(table.workspaceId, table.status),
+  ],
+);
+
+export type Task = typeof tasks.$inferSelect;
+export type NewTask = typeof tasks.$inferInsert;
+
+// ---------------------------------------------------------------------------
 // Developer platform: API keys + outbound webhooks (public API v1)
 // ---------------------------------------------------------------------------
 
@@ -1307,3 +1376,105 @@ export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
 export type NewWebhookEndpoint = typeof webhookEndpoints.$inferInsert;
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
 export type NewWebhookDelivery = typeof webhookDeliveries.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Security: WebAuthn passkeys + audit logs
+// ---------------------------------------------------------------------------
+
+/**
+ * WebAuthn passkeys registered by individual users. Each row stores the
+ * credential data returned by `@simplewebauthn/server` during registration.
+ */
+export const passkeys = pgTable(
+  "passkeys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    credentialId: text("credential_id").notNull().unique(),
+    credentialPublicKey: text("credential_public_key").notNull(),
+    counter: integer("counter").default(0).notNull(),
+    deviceType: text("device_type").notNull(),
+    backedUp: boolean("backed_up").default(false).notNull(),
+    transports: text("transports"),
+    name: text("name").default("Passkey").notNull(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("passkeys_credential_id_idx").on(table.credentialId),
+    index("passkeys_user_idx").on(table.userId),
+  ],
+);
+
+/**
+ * Short-lived WebAuthn challenges used during registration and authentication.
+ * Purged on consumption or expiry.
+ */
+export const passkeyChallenge = pgTable(
+  "passkey_challenge",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    challenge: text("challenge").notNull(),
+    type: text("type").notNull(), // "registration" | "authentication"
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("passkey_challenge_user_type_idx").on(table.userId, table.type),
+  ],
+);
+
+/** Severity levels for audit log entries. */
+export const auditSeverityEnum = pgEnum("audit_severity", [
+  "info",
+  "warning",
+  "critical",
+]);
+
+/**
+ * Workspace-scoped audit log. Captures security-relevant and admin actions
+ * for compliance and visibility.
+ */
+export const auditLogs = pgTable(
+  "audit_logs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id").references(() => organization.id, {
+      onDelete: "set null",
+    }),
+    actorId: text("actor_id"),
+    actorEmail: text("actor_email"),
+    action: text("action").notNull(),
+    resourceType: text("resource_type"),
+    resourceId: text("resource_id"),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    metadata: jsonb("metadata"),
+    severity: auditSeverityEnum("severity").default("info").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("audit_logs_workspace_created_at_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    index("audit_logs_actor_idx").on(table.actorId),
+    index("audit_logs_action_idx").on(table.workspaceId, table.action),
+  ],
+);
+
+export type Passkey = typeof passkeys.$inferSelect;
+export type NewPasskey = typeof passkeys.$inferInsert;
+export type PasskeyChallenge = typeof passkeyChallenge.$inferSelect;
+export type NewPasskeyChallenge = typeof passkeyChallenge.$inferInsert;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;

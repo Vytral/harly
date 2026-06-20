@@ -171,9 +171,11 @@ export function TalentPoolView({
         <Card className="gap-0 divide-y divide-border/60 overflow-hidden py-0">
           {entries.map((entry, index) => {
             const evaluation = entry.evaluation;
-            const meta = evaluation
-              ? RECOMMENDATION_META[evaluation.recommendation]
-              : null;
+            const rec = evaluation?.recommendation;
+            const meta =
+              rec && rec in RECOMMENDATION_META
+                ? RECOMMENDATION_META[rec as keyof typeof RECOMMENDATION_META]
+                : null;
             return (
               <div
                 key={entry.applicationId}

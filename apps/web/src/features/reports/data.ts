@@ -42,11 +42,15 @@ export type SourceRow = {
   conversion: number;
 };
 
+export type TimeToHireBucket = { bucket: string; count: number };
+
 export type ReportsData = {
   summary: ReportsSummary;
   applicationsByMonth: MonthlyPoint[];
+  hiresByMonth: MonthlyPoint[];
   funnel: FunnelStage[];
   sources: SourceRow[];
+  timeToHire: TimeToHireBucket[];
 };
 
 function monthKey(date: Date): string {
@@ -74,6 +78,8 @@ export async function getReportsData(): Promise<ReportsData> {
     monthRows,
     funnelRows,
     sourceRows,
+    hireMonthRows,
+    timeToHireDaysRows,
   ] = await Promise.all([
     db
       .select({ n: sql<number>`count(*)::int` })
@@ -141,6 +147,34 @@ export async function getReportsData(): Promise<ReportsData> {
       .from(applications)
       .where(eq(applications.workspaceId, ws))
       .groupBy(sql`coalesce(${applications.source}, 'unknown')`),
+    // Hires by month (trailing 12 months)
+    db
+      .select({
+        month: sql<string>`to_char(${applications.updatedAt}, 'YYYY-MM')`,
+        n: sql<number>`count(*)::int`,
+      })
+      .from(applications)
+      .where(
+        and(
+          eq(applications.workspaceId, ws),
+          eq(applications.status, "hired"),
+          gte(applications.updatedAt, new Date(now.getTime() - 365 * DAY_SECONDS * 1000)),
+        ),
+      )
+      .groupBy(sql`to_char(${applications.updatedAt}, 'YYYY-MM')`),
+    // Time-to-hire distribution in day-range buckets
+    db
+      .select({
+        days: sql<number>`extract(epoch from (${applications.updatedAt} - ${applications.appliedAt}))::int / ${DAY_SECONDS}`,
+      })
+      .from(applications)
+      .where(
+        and(
+          eq(applications.workspaceId, ws),
+          eq(applications.status, "hired"),
+          sql`${applications.appliedAt} is not null`,
+        ),
+      ),
   ]);
 
   // Summary
@@ -188,5 +222,36 @@ export async function getReportsData(): Promise<ReportsData> {
     }))
     .sort((a, b) => b.candidates - a.candidates);
 
-  return { summary, applicationsByMonth, funnel, sources };
+  // Hires by month, trailing 12, zero-filled.
+  const hireCounts = new Map(hireMonthRows.map((r) => [r.month, r.n]));
+  const hiresByMonth: MonthlyPoint[] = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const key = monthKey(d);
+    hiresByMonth.push({
+      month: key,
+      label: MONTH_LABELS[d.getUTCMonth()],
+      count: hireCounts.get(key) ?? 0,
+    });
+  }
+
+  // Time-to-hire histogram buckets.
+  const TTH_BUCKETS: [string, number, number][] = [
+    ["0–14d", 0, 14],
+    ["15–30d", 15, 30],
+    ["31–60d", 31, 60],
+    ["61–90d", 61, 90],
+    ["90d+", 91, Infinity],
+  ];
+  const timeToHire: TimeToHireBucket[] = TTH_BUCKETS.map(([bucket]) => ({
+    bucket,
+    count: 0,
+  }));
+  for (const row of timeToHireDaysRows) {
+    const d = row.days;
+    const idx = TTH_BUCKETS.findIndex(([, lo, hi]) => d >= lo && d <= hi);
+    if (idx >= 0) timeToHire[idx].count++;
+  }
+
+  return { summary, applicationsByMonth, hiresByMonth, funnel, sources, timeToHire };
 }

@@ -10,7 +10,7 @@ export function CareerGallery({
   rounded?: string;
   aspectClass?: string;
 }) {
-  const images = gallery.images.map(safeImageUrl).filter(Boolean);
+  const images = gallery.images.map(safeImageUrl).filter((u): u is string => u !== null);
   if (!gallery.enabled || images.length === 0) return null;
 
   if (gallery.autoplay && images.length >= 2) {

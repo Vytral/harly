@@ -1,5 +1,5 @@
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { requirePagePermission } from "@/features/workspaces/permissions-server";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAuditLogs, getWorkspaceSecuritySettings } from "@/features/security/data";
 import { SsoCard } from "@/features/security/SsoCard";
 import { AuditLogsCard } from "@/features/security/AuditLogsCard";
@@ -8,7 +8,7 @@ import { Force2FACard } from "@/features/security/Force2FACard";
 export const dynamic = "force-dynamic";
 
 export default async function SecuritySettingsPage() {
-  await requirePagePermission("members:manage");
+  await requirePermission("members:manage");
   const { organization, roleKey } = await getWorkspaceContext();
 
   const [securitySettings, auditLogRows] = await Promise.all([

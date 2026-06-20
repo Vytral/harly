@@ -66,7 +66,6 @@ export function TestimonialsSection({ config, update }: SectionProps) {
                 Avatar (optional — falls back to initials)
               </span>
               <FileDropzone
-                variant="avatar"
                 value={item.avatar || null}
                 onChange={(url) =>
                   update((d) => (d.testimonials.items[i].avatar = url ?? ""))

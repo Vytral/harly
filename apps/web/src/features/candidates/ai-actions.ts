@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -256,4 +256,80 @@ export async function generateAiEvaluationAction(input: {
         "The AI evaluation failed. Check the provider key in Settings → AI and try again.",
     };
   }
+}
+
+// ── Bulk scoring ────────────────────────────────────────────────────────────
+
+export type BulkGenerateResult =
+  | { success: true; succeeded: number; failed: number; remaining: number }
+  | { success: false; error?: string; reason?: "not_configured" };
+
+const BULK_BATCH_SIZE = 25;
+
+const bulkSchema = z.object({ jobId: z.uuid() });
+
+/**
+ * Score up to BULK_BATCH_SIZE unscored applicants for a given job.
+ * Returns how many remain so the caller can loop until 0.
+ */
+export async function bulkGenerateAiEvaluationsForJobAction(input: {
+  jobId: string;
+}): Promise<BulkGenerateResult> {
+  const parsed = bulkSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: "Invalid job." };
+  }
+
+  let context;
+  try {
+    context = await requirePermission("collab:write");
+  } catch {
+    return { success: false, error: "Permission denied." };
+  }
+  const workspaceId = context.organization.id;
+
+  const aiConfig = await getWorkspaceAiConfig(workspaceId);
+  if (!aiConfig) {
+    return {
+      success: false,
+      error: "AI is not configured for this workspace.",
+      reason: "not_configured",
+    };
+  }
+
+  // Find application IDs that don't have an evaluation yet.
+  const scoredIds = db
+    .select({ applicationId: aiEvaluations.applicationId })
+    .from(aiEvaluations)
+    .where(eq(aiEvaluations.workspaceId, workspaceId));
+
+  const unscoredApps = await db
+    .select({ applicationId: applications.id })
+    .from(applications)
+    .where(
+      and(
+        eq(applications.workspaceId, workspaceId),
+        eq(applications.jobId, parsed.data.jobId),
+        eq(applications.status, "active"),
+        notInArray(applications.id, scoredIds),
+      ),
+    )
+    .limit(BULK_BATCH_SIZE + 1); // +1 to know if there are more
+
+  const remaining = Math.max(0, unscoredApps.length - BULK_BATCH_SIZE);
+  const batch = unscoredApps.slice(0, BULK_BATCH_SIZE);
+
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const { applicationId } of batch) {
+    const result = await generateAiEvaluationAction({ applicationId });
+    if (result.success) {
+      succeeded++;
+    } else {
+      failed++;
+    }
+  }
+
+  return { success: true, succeeded, failed, remaining };
 }

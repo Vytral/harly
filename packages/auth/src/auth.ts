@@ -1,7 +1,7 @@
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
-import { magicLink, organization } from "better-auth/plugins";
+import { magicLink, organization, twoFactor } from "better-auth/plugins";
 
 import { db, schema } from "@harly/db";
 import {
@@ -82,6 +82,7 @@ export const auth = betterAuth({
   }),
   plugins: [
     organization(),
+    twoFactor(),
     magicLink({
       sendMagicLink: async ({ email, url }) => {
         await sendMagicLinkEmail(email, url);

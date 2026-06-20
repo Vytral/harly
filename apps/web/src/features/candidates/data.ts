@@ -95,6 +95,21 @@ export type CandidateActivityItem = {
   createdAt: Date;
 };
 
+export type TalentPoolEntry = {
+  applicationId: string;
+  candidateId: string;
+  fullName: string;
+  email: string | null;
+  headline: string | null;
+  currentStageName: string | null;
+  evaluation: {
+    recommendation: "strong_yes" | "yes" | "maybe" | "no";
+    summary: string;
+    score: number;
+    usedResume: boolean;
+  } | null;
+};
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }

@@ -17,6 +17,22 @@ export type ColorMode = (typeof colorModes)[number];
 export type CareerChip = { label: string; icon?: string };
 export type CareerStat = { label: string; value: string; icon?: string };
 export type CareerValue = { title: string; body: string; art?: string };
+export type CareerFaqItem = { q: string; a: string };
+export type CareerTestimonial = { quote: string; name: string; role: string; avatar: string };
+
+export const socialPlatforms = [
+  "x",
+  "linkedin",
+  "github",
+  "instagram",
+  "youtube",
+  "facebook",
+  "discord",
+  "website",
+] as const;
+export type SocialPlatform = (typeof socialPlatforms)[number];
+
+export type CareerSocialLink = { platform: SocialPlatform; url: string };
 
 export type CareerPageConfig = {
   /** Empty string = not configured yet → public board falls back to legacy. */
@@ -38,11 +54,14 @@ export type CareerPageConfig = {
   };
   intro: { body: string; chips: CareerChip[] };
   overview: { enabled: boolean; title: string; stats: CareerStat[] };
-  gallery: { enabled: boolean; images: string[] };
+  gallery: { enabled: boolean; images: string[]; autoplay: boolean; speed: "slow" | "normal" };
   values: { enabled: boolean; title: string; items: CareerValue[] };
+  testimonials: { enabled: boolean; title: string; items: CareerTestimonial[] };
+  faq: { enabled: boolean; title: string; items: CareerFaqItem[] };
   positions: { title: string; filters: Array<"department" | "location" | "type"> };
   /** `color` overrides the accent for the CTA banner. */
   cta: { enabled: boolean; title: string; body: string; color: string | null };
+  footer: { socials: CareerSocialLink[] };
   theme: {
     mode: ColorMode;
     background: string;
@@ -66,10 +85,13 @@ const EMPTY: CareerPageConfig = {
   },
   intro: { body: "", chips: [] },
   overview: { enabled: false, title: "Overview", stats: [] },
-  gallery: { enabled: false, images: [] },
+  gallery: { enabled: false, images: [], autoplay: false, speed: "slow" },
   values: { enabled: false, title: "Our values", items: [] },
+  testimonials: { enabled: false, title: "Testimonials", items: [] },
+  faq: { enabled: false, title: "Frequently asked questions", items: [] },
   positions: { title: "Our open positions", filters: ["department", "location"] },
   cta: { enabled: false, title: "", body: "", color: null },
+  footer: { socials: [] },
   theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
 };
 
@@ -81,10 +103,13 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
     hero: { ...EMPTY.hero, headline: "Careers", overlay: "none", logoPosition: "left" },
     intro: { body: "", chips: [] },
     overview: { enabled: false, title: "Overview", stats: [] },
-    gallery: { enabled: false, images: [] },
+    gallery: { enabled: false, images: [], autoplay: false, speed: "slow" },
     values: { enabled: false, title: "Our values", items: [] },
+    testimonials: { enabled: false, title: "Testimonials", items: [] },
+    faq: { enabled: false, title: "Frequently asked questions", items: [] },
     positions: { title: "Open positions", filters: ["department", "location"] },
     cta: { ...EMPTY.cta },
+    footer: { socials: [] },
     theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "sharp" },
   }),
   playful: () => ({
@@ -111,7 +136,7 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
         { label: "Locations", value: "—", icon: "map-pin" },
       ],
     },
-    gallery: { enabled: true, images: [] },
+    gallery: { enabled: true, images: [], autoplay: true, speed: "slow" },
     values: {
       enabled: true,
       title: "Our values",
@@ -122,6 +147,8 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
         { title: "Present", body: "We are proactive and we listen." },
       ],
     },
+    testimonials: { enabled: false, title: "Testimonials", items: [] },
+    faq: { enabled: false, title: "Frequently asked questions", items: [] },
     positions: {
       title: "Our open positions",
       filters: ["department", "location", "type"],
@@ -132,6 +159,7 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
       title: "Don't see a role that fits?",
       body: "We are always opening new opportunities for great people. Reach out.",
     },
+    footer: { socials: [] },
     theme: { mode: "light", background: "#FFF9E6", font: "sans", accent: "#f4c100", rounded: "soft" },
   }),
   ashby: () => ({
@@ -140,10 +168,13 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
     hero: { ...EMPTY.hero, headline: "Join us", overlay: "none", logoPosition: "left" },
     intro: { body: "", chips: [] },
     overview: { enabled: false, title: "Overview", stats: [] },
-    gallery: { enabled: false, images: [] },
+    gallery: { enabled: false, images: [], autoplay: false, speed: "slow" },
     values: { enabled: true, title: "Our values", items: [] },
+    testimonials: { enabled: false, title: "Testimonials", items: [] },
+    faq: { enabled: false, title: "Frequently asked questions", items: [] },
     positions: { title: "Open positions", filters: ["department", "location", "type"] },
     cta: { ...EMPTY.cta },
+    footer: { socials: [] },
     theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
   }),
   greenhouse: () => ({
@@ -152,10 +183,13 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
     hero: { ...EMPTY.hero, headline: "Join our team", logoPosition: "center" },
     intro: { body: "", chips: [] },
     overview: { enabled: true, title: "About us", stats: [] },
-    gallery: { enabled: false, images: [] },
+    gallery: { enabled: false, images: [], autoplay: false, speed: "slow" },
     values: { enabled: false, title: "Our values", items: [] },
+    testimonials: { enabled: false, title: "Testimonials", items: [] },
+    faq: { enabled: false, title: "Frequently asked questions", items: [] },
     positions: { title: "Open positions", filters: ["department", "location"] },
     cta: { ...EMPTY.cta },
+    footer: { socials: [] },
     theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
   }),
 };
@@ -199,11 +233,23 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
     gallery: {
       enabled: Boolean(r.gallery?.enabled),
       images: asArray<string>(r.gallery?.images),
+      autoplay: Boolean(r.gallery?.autoplay),
+      speed: r.gallery?.speed === "normal" ? "normal" : "slow",
     },
     values: {
       enabled: Boolean(r.values?.enabled),
       title: r.values?.title ?? base.values.title,
       items: asArray<CareerValue>(r.values?.items),
+    },
+    testimonials: {
+      enabled: Boolean(r.testimonials?.enabled),
+      title: r.testimonials?.title ?? base.testimonials.title,
+      items: asArray<CareerTestimonial>(r.testimonials?.items),
+    },
+    faq: {
+      enabled: Boolean(r.faq?.enabled),
+      title: r.faq?.title ?? base.faq.title,
+      items: asArray<CareerFaqItem>(r.faq?.items),
     },
     positions: {
       title: r.positions?.title ?? base.positions.title,
@@ -215,6 +261,9 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
       body: r.cta?.body ?? base.cta.body,
       color: r.cta?.color ?? base.cta.color,
     },
+    footer: {
+      socials: asArray<CareerSocialLink>(r.footer?.socials),
+    },
     theme: {
       mode: colorModes.includes(r.theme?.mode as ColorMode) ? (r.theme!.mode as ColorMode) : base.theme.mode,
       background: typeof r.theme?.background === "string" ? r.theme.background : base.theme.background,
@@ -223,6 +272,12 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
       rounded: r.theme?.rounded ?? base.theme.rounded,
     },
   };
+}
+
+/** Normalise a user-provided image URL: blank or invalid → null. */
+export function safeImageUrl(url: unknown): string | null {
+  if (typeof url !== "string" || !url.trim()) return null;
+  return url.trim();
 }
 
 /** True when a template has been chosen → render the new career page. */
@@ -276,11 +331,26 @@ export const careerPageConfigSchema = z.object({
     title: s(60),
     stats: z.array(stat).max(8),
   }),
-  gallery: z.object({ enabled: z.boolean(), images: z.array(s(600)).max(12) }),
+  gallery: z.object({
+    enabled: z.boolean(),
+    images: z.array(s(600)).max(12),
+    autoplay: z.boolean(),
+    speed: z.enum(["slow", "normal"]),
+  }),
   values: z.object({
     enabled: z.boolean(),
     title: s(60),
     items: z.array(value).max(8),
+  }),
+  testimonials: z.object({
+    enabled: z.boolean(),
+    title: s(60),
+    items: z.array(z.object({ quote: s(600), name: s(60), role: s(60), avatar: s(600) })).max(12),
+  }),
+  faq: z.object({
+    enabled: z.boolean(),
+    title: s(60),
+    items: z.array(z.object({ q: s(200), a: s(2000) })).max(20),
   }),
   positions: z.object({
     title: s(60),
@@ -291,6 +361,9 @@ export const careerPageConfigSchema = z.object({
     title: s(120),
     body: s(400),
     color: s(20).nullable(),
+  }),
+  footer: z.object({
+    socials: z.array(z.object({ platform: z.enum(socialPlatforms), url: s(600) })).max(8),
   }),
   theme: z.object({
     mode: z.enum(["light", "dark"]),
