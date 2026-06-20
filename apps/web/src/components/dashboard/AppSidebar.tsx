@@ -1,15 +1,10 @@
 "use client";
 
-import { useState, useTransition } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 
-import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
-import {
-  CreateOrganizationDialog,
-  WorkspaceMark,
-} from "@/components/dashboard/WorkspaceSwitcher";
+import { WorkspaceMark } from "@/components/dashboard/WorkspaceSwitcher";
 import {
   isNavActive,
   primaryNav,
@@ -17,21 +12,10 @@ import {
   type NavItem,
 } from "@/components/dashboard/nav-items";
 import {
-  CaretUpDownIcon,
-  CheckIcon,
-  PlusIcon,
-  SidebarIcon,
-  SpinnerIcon,
+  ArrowLineLeftIcon,
+  ArrowLineRightIcon,
   UserPlusIcon,
 } from "@/components/ui/icons/phosphor";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -46,21 +30,21 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar";
-import type { WorkspaceOption } from "@/features/workspaces/data";
+import type { SidebarBranding } from "@/features/workspaces/data";
 import type { Permission } from "@/features/workspaces/permissions";
 
 type AppSidebarProps = {
   workspace: { id: string; name: string; logoUrl: string | null };
-  workspaceOptions: WorkspaceOption[];
   inboxCount: number;
   userPermissions: Permission[];
+  sidebarLogo: SidebarBranding;
 };
 
 export function AppSidebar({
   workspace,
-  workspaceOptions,
   inboxCount,
   userPermissions,
+  sidebarLogo,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { open } = useSidebar();
@@ -76,7 +60,7 @@ export function AppSidebar({
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <SidebarBrand workspace={workspace} workspaceOptions={workspaceOptions} />
+        <SidebarBrand workspace={workspace} sidebarLogo={sidebarLogo} />
       </SidebarHeader>
 
       <SidebarContent>
@@ -161,120 +145,115 @@ function NavMenuItem({
 }
 
 /**
- * Header row: workspace logo + name. Hovering the logo swaps it for the
- * collapse/expand toggle; the name (when expanded) opens the workspace
- * switcher.
+ * Header row. Two shapes:
+ *  - "Full logo": a wide wordmark (light/dark) linking Home, with a visible
+ *    bordered collapse button beside it.
+ *  - Default: a square icon mark that swaps to a bordered collapse/expand
+ *    toggle on hover, plus the workspace name as a Home link when expanded.
+ *
+ * Switching and creating workspaces live in the top-bar account menu, so the
+ * sidebar shows no switcher — the name is just a link Home.
  */
 function SidebarBrand({
   workspace,
-  workspaceOptions,
+  sidebarLogo,
 }: {
   workspace: { id: string; name: string; logoUrl: string | null };
-  workspaceOptions: WorkspaceOption[];
+  sidebarLogo: SidebarBranding;
 }) {
   const { open, toggleSidebar } = useSidebar();
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [createOpen, setCreateOpen] = useState(false);
 
-  function switchTo(organizationId: string) {
-    if (organizationId === workspace.id) return;
-    startTransition(async () => {
-      const result = await authClient.organization.setActive({ organizationId });
-      if (!result.error) {
-        router.replace("/dashboard");
-        router.refresh();
-      }
-    });
+  const showWordmark =
+    open && sidebarLogo.style === "full" && !!sidebarLogo.lightUrl;
+
+  const toggleButtonClass =
+    "flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent/40 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring";
+
+  if (showWordmark) {
+    return (
+      <div className="flex h-10 items-center gap-2 px-1">
+        <Link
+          href="/dashboard"
+          aria-label={`${workspace.name} — go to dashboard`}
+          className="flex min-w-0 flex-1 items-center rounded-md px-1.5 py-1 transition-colors hover:bg-sidebar-accent"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={sidebarLogo.lightUrl ?? undefined}
+            alt={workspace.name}
+            className={cn(
+              "h-9 max-w-[160px] object-contain object-left",
+              sidebarLogo.darkUrl && "dark:hidden",
+            )}
+          />
+          {sidebarLogo.darkUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={sidebarLogo.darkUrl}
+              alt={workspace.name}
+              className="hidden h-9 max-w-[160px] object-contain object-left dark:block"
+            />
+          ) : null}
+        </Link>
+        <button
+          type="button"
+          onClick={(event) => {
+            toggleSidebar();
+            event.currentTarget.blur();
+          }}
+          aria-label="Collapse sidebar"
+          title="Collapse sidebar"
+          className={toggleButtonClass}
+        >
+          <ArrowLineLeftIcon className="size-5" />
+        </button>
+      </div>
+    );
   }
 
   return (
-    <>
-      <div
-        className={cn(
-          "flex h-10 items-center gap-2.5 px-1",
-          !open && "justify-center px-0",
-        )}
-      >
-        {/* Logo ⇄ collapse toggle on hover */}
-        <div className="group/logo relative size-9 shrink-0">
-          <WorkspaceMark
-            name={workspace.name}
-            logoUrl={workspace.logoUrl}
-            className="size-9 transition-opacity duration-150 group-hover/logo:opacity-0 group-focus-within/logo:opacity-0"
-            priority
-          />
-          <button
-            type="button"
-            onClick={(event) => {
-              toggleSidebar();
-              event.currentTarget.blur();
-            }}
-            aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
-            title={open ? "Collapse sidebar" : "Expand sidebar"}
-            className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground opacity-0 transition-opacity duration-150 hover:border-sidebar-ring/40 hover:text-sidebar-foreground group-hover/logo:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
-          >
-            <SidebarIcon className="size-5" />
-          </button>
-        </div>
-
-        {open ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="flex min-w-0 flex-1 cursor-pointer items-center gap-2 rounded-lg px-1.5 py-2 text-left transition-colors hover:bg-sidebar-accent"
-              >
-                <span className="min-w-0 flex-1 truncate font-display text-[15px] font-semibold tracking-tight">
-                  {workspace.name}
-                </span>
-                {isPending ? (
-                  <SpinnerIcon className="size-4 shrink-0 text-muted-foreground" />
-                ) : (
-                  <CaretUpDownIcon className="size-4 shrink-0 text-muted-foreground/70" />
-                )}
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="min-w-60">
-              <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
-                Workspaces
-              </DropdownMenuLabel>
-              {workspaceOptions.map((ws) => (
-                <DropdownMenuItem
-                  key={ws.authOrganizationId}
-                  onClick={() => switchTo(ws.authOrganizationId)}
-                  className="gap-2.5"
-                >
-                  <WorkspaceMark
-                    name={ws.name}
-                    logoUrl={ws.logoUrl}
-                    className="size-7"
-                  />
-                  <span className="flex-1 truncate">{ws.name}</span>
-                  <CheckIcon
-                    className={cn(
-                      "size-4 shrink-0 text-primary",
-                      ws.isActive ? "opacity-100" : "opacity-0",
-                    )}
-                  />
-                </DropdownMenuItem>
-              ))}
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => setCreateOpen(true)}
-                className="gap-2.5 text-muted-foreground"
-              >
-                <span className="flex size-7 items-center justify-center rounded-lg border border-dashed">
-                  <PlusIcon className="size-3.5" />
-                </span>
-                New workspace
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
+    <div
+      className={cn(
+        "flex h-10 items-center gap-2.5 px-1",
+        !open && "justify-center px-0",
+      )}
+    >
+      {/* Logo ⇄ collapse toggle on hover */}
+      <div className="group/logo relative size-9 shrink-0">
+        <WorkspaceMark
+          name={workspace.name}
+          logoUrl={workspace.logoUrl}
+          className="size-9 transition-opacity duration-150 group-hover/logo:opacity-0 group-focus-within/logo:opacity-0"
+          priority
+        />
+        <button
+          type="button"
+          onClick={(event) => {
+            toggleSidebar();
+            event.currentTarget.blur();
+          }}
+          aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
+          title={open ? "Collapse sidebar" : "Expand sidebar"}
+          className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground opacity-0 transition-opacity duration-150 hover:border-sidebar-ring/40 hover:text-sidebar-foreground group-hover/logo:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >
+          {open ? (
+            <ArrowLineLeftIcon className="size-5" />
+          ) : (
+            <ArrowLineRightIcon className="size-5" />
+          )}
+        </button>
       </div>
 
-      <CreateOrganizationDialog open={createOpen} onOpenChange={setCreateOpen} />
-    </>
+      {open ? (
+        <Link
+          href="/dashboard"
+          className="flex min-w-0 flex-1 items-center rounded-lg px-1.5 py-2 text-left transition-colors hover:bg-sidebar-accent"
+        >
+          <span className="min-w-0 flex-1 truncate font-display text-[15px] font-semibold tracking-tight">
+            {workspace.name}
+          </span>
+        </Link>
+      ) : null}
+    </div>
   );
 }

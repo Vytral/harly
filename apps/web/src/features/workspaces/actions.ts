@@ -79,6 +79,21 @@ const removeMemberSchema = z.object({
   memberId: z.string().trim().min(1),
 });
 
+// Accepts an absolute http(s) URL, a locally-uploaded /uploads/... path, or
+// empty (cleared). Normalizes empty/whitespace to "".
+const optionalAssetUrl = z
+  .string()
+  .trim()
+  .optional()
+  .transform((value) => (value && value.length > 0 ? value : ""))
+  .refine(
+    (value) =>
+      value === "" ||
+      value.startsWith("/uploads/") ||
+      /^https?:\/\//.test(value),
+    "Must be a valid URL.",
+  );
+
 const workspaceProfileSchema = z.object({
   name: z.string().trim().min(1, "Workspace name is required.").max(120),
   // Accept an absolute http(s) URL or a locally-uploaded /uploads/... path.
@@ -94,6 +109,9 @@ const workspaceProfileSchema = z.object({
         /^https?:\/\//.test(value),
       "Logo must be a valid URL.",
     ),
+  sidebarLogoStyle: z.enum(logoStyles).optional(),
+  sidebarLogoUrl: optionalAssetUrl,
+  sidebarLogoDarkUrl: optionalAssetUrl,
 });
 
 function addDays(date: Date, days: number) {
@@ -207,9 +225,17 @@ export async function updateWorkspaceProfileAction(
 ): Promise<ActionResult> {
   try {
     const context = await requireWorkspaceRole(["owner", "admin"]);
+    const rawStyle = formData.get("sidebarLogoStyle");
     const parsed = workspaceProfileSchema.safeParse({
       name: formData.get("name"),
       logoUrl: formData.get("logoUrl"),
+      sidebarLogoStyle:
+        typeof rawStyle === "string" &&
+        logoStyles.includes(rawStyle as (typeof logoStyles)[number])
+          ? rawStyle
+          : undefined,
+      sidebarLogoUrl: formData.get("sidebarLogoUrl"),
+      sidebarLogoDarkUrl: formData.get("sidebarLogoDarkUrl"),
     });
 
     if (!parsed.success) {
@@ -226,6 +252,20 @@ export async function updateWorkspaceProfileAction(
         logo: parsed.data.logoUrl || null,
       })
       .where(eq(authOrganizations.id, context.organization.id));
+
+    // Sidebar wordmark config lives in workspace_settings (upsert).
+    const sidebarValues = {
+      sidebarLogoStyle: parsed.data.sidebarLogoStyle ?? "bordered",
+      sidebarLogoUrl: parsed.data.sidebarLogoUrl || null,
+      sidebarLogoDarkUrl: parsed.data.sidebarLogoDarkUrl || null,
+    };
+    await db
+      .insert(workspaceSettings)
+      .values({ organizationId: context.organization.id, ...sidebarValues })
+      .onConflictDoUpdate({
+        target: workspaceSettings.organizationId,
+        set: { ...sidebarValues, updatedAt: new Date() },
+      });
 
     revalidatePath("/settings");
     revalidatePath("/dashboard");

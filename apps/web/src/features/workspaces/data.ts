@@ -42,6 +42,16 @@ export type WorkspaceBranding = {
   heroImageUrl: string | null;
   boardStyle: BoardStyle;
   logoStyle: LogoStyle;
+  sidebarLogoStyle: LogoStyle;
+  sidebarLogoUrl: string | null;
+  sidebarLogoDarkUrl: string | null;
+};
+
+/** Just the bits the dashboard sidebar needs to render its wordmark. */
+export type SidebarBranding = {
+  style: LogoStyle;
+  lightUrl: string | null;
+  darkUrl: string | null;
 };
 
 export type WorkspaceMemberItem = {
@@ -114,6 +124,30 @@ async function getWorkspaceBranding(
     heroImageUrl: settings?.heroImageUrl ?? null,
     boardStyle: normalizeBoardStyle(settings?.boardStyle),
     logoStyle: normalizeLogoStyle(settings?.logoStyle),
+    sidebarLogoStyle: normalizeLogoStyle(settings?.sidebarLogoStyle),
+    sidebarLogoUrl: settings?.sidebarLogoUrl ?? null,
+    sidebarLogoDarkUrl: settings?.sidebarLogoDarkUrl ?? null,
+  };
+}
+
+/** Sidebar wordmark config for the active workspace (dashboard chrome). */
+export async function getSidebarBranding(
+  organizationId: string,
+): Promise<SidebarBranding> {
+  const [settings] = await db
+    .select({
+      sidebarLogoStyle: workspaceSettings.sidebarLogoStyle,
+      sidebarLogoUrl: workspaceSettings.sidebarLogoUrl,
+      sidebarLogoDarkUrl: workspaceSettings.sidebarLogoDarkUrl,
+    })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, organizationId))
+    .limit(1);
+
+  return {
+    style: normalizeLogoStyle(settings?.sidebarLogoStyle),
+    lightUrl: settings?.sidebarLogoUrl ?? null,
+    darkUrl: settings?.sidebarLogoDarkUrl ?? null,
   };
 }
 

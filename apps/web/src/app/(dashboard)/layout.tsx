@@ -7,7 +7,11 @@ import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { listNotifications } from "@/features/notifications/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { listUserWorkspaceOptions } from "@/features/workspaces/data";
+import {
+  getSidebarBranding,
+  listUserWorkspaceOptions,
+} from "@/features/workspaces/data";
+import { getRolePermissions } from "@/features/workspaces/permissions-server";
 
 export default async function DashboardLayout({
   children,
@@ -19,10 +23,13 @@ export default async function DashboardLayout({
   const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
   const { organization, user, role } = await getWorkspaceContext();
-  const [workspaceOptions, notifications] = await Promise.all([
-    listUserWorkspaceOptions(),
-    listNotifications(8),
-  ]);
+  const [workspaceOptions, notifications, userPermissions, sidebarLogo] =
+    await Promise.all([
+      listUserWorkspaceOptions(),
+      listNotifications(8),
+      getRolePermissions(organization.id, role),
+      getSidebarBranding(organization.id),
+    ]);
   const inboxCount = notifications.filter((n) => !n.read).length;
 
   const workspace = {
@@ -35,8 +42,9 @@ export default async function DashboardLayout({
     <SidebarProvider defaultOpen={sidebarOpen}>
       <AppSidebar
         workspace={workspace}
-        workspaceOptions={workspaceOptions}
         inboxCount={inboxCount}
+        userPermissions={userPermissions}
+        sidebarLogo={sidebarLogo}
       />
       <SidebarInset>
         <div className="h-0.5 w-full bg-gradient-to-r from-primary/60 to-primary/10" />

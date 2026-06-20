@@ -326,6 +326,13 @@ export const workspaceSettings = pgTable("workspace_settings", {
   heroImageUrl: text("hero_image_url"),
   boardStyle: boardStyleEnum("board_style").default("hero").notNull(),
   logoStyle: logoStyleEnum("logo_style").default("bordered").notNull(),
+  // Dashboard sidebar branding. "bordered" = square icon + workspace name;
+  // "full" = a wide wordmark image (light/dark variants) replacing the name.
+  sidebarLogoStyle: logoStyleEnum("sidebar_logo_style")
+    .default("bordered")
+    .notNull(),
+  sidebarLogoUrl: text("sidebar_logo_url"),
+  sidebarLogoDarkUrl: text("sidebar_logo_dark_url"),
   // AI provider config (bring-your-own-key). The API key is encrypted at rest
   // (AES-256-GCM) — never stored or returned in plaintext.
   aiEnabled: boolean("ai_enabled").default(false).notNull(),
