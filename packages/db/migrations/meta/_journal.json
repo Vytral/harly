@@ -148,6 +148,83 @@
       "when": 1781391320501,
       "tag": "0020_misty_ben_urich",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1781391321501,
+      "tag": "0021_amusing_celestials",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1781391322501,
+      "tag": "0022_small_misty_knight",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1781391323501,
+      "tag": "0023_security_features",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1781391324501,
+      "tag": "0024_security_require2fa",
+      "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1781391325501,
+      "tag": "0025_chat_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1781391326501,
+      "tag": "0026_onboarding_flow",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1781391327501,
+      "tag": "0027_turnstile",
+      "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1781391328501,
+      "tag": "0028_ai_custom_provider",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1781391329501,
+      "tag": "0029_drop_ai_custom_config",
+      "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1781391330501,
+      "tag": "0030_closed_red_shift",
+      "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1781391331501,
+      "tag": "0031_mature_bishop",
+      "breakpoints": true
     }
   ]
 }

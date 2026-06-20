@@ -15,7 +15,7 @@
     "db:up": "docker-compose up -d",
     "db:down": "docker-compose down",
     "db:generate": "pnpm --filter @harly/db db:generate",
-    "db:migrate": "pnpm --filter @harly/db db:migrate:local",
+    "db:migrate": "pnpm --filter @harly/db db:migrate",
     "db:studio": "pnpm --filter @harly/db db:studio",
     "db:push": "pnpm --filter @harly/db db:push",
     "db:seed": "pnpm --filter @harly/db db:seed"
