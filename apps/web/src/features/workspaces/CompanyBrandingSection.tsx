@@ -113,6 +113,15 @@ export function CompanyBrandingSection({
   );
   const [boardStyle, setBoardStyle] = useState<BoardStyle>(workspace.boardStyle);
   const [logoStyle, setLogoStyle] = useState<LogoStyle>(workspace.logoStyle);
+  const [sidebarLogoStyle, setSidebarLogoStyle] = useState<LogoStyle>(
+    workspace.sidebarLogoStyle,
+  );
+  const [sidebarLogoUrl, setSidebarLogoUrl] = useState(
+    workspace.sidebarLogoUrl ?? "",
+  );
+  const [sidebarLogoDarkUrl, setSidebarLogoDarkUrl] = useState(
+    workspace.sidebarLogoDarkUrl ?? "",
+  );
 
   const previewColor = /^#[0-9a-fA-F]{6}$/.test(primaryColor)
     ? primaryColor
@@ -130,35 +139,101 @@ export function CompanyBrandingSection({
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form
-              action={profileAction}
-              className="flex flex-col gap-5 sm:flex-row sm:items-start"
-            >
+            <form action={profileAction} className="space-y-6">
               <input type="hidden" name="logoUrl" value={logoUrl} />
-              <div className="space-y-2">
-                <Label>Logo</Label>
-                <FileDropzone
-                  value={logoUrl || null}
-                  onChange={(url) => setLogoUrl(url ?? "")}
-                  aspect="square"
-                  disabled={!canEdit}
-                  hint="Square · PNG or SVG"
-                />
-              </div>
-              <div className="flex-1 space-y-2">
-                <Label htmlFor="ws-name">Company name</Label>
-                <Input
-                  id="ws-name"
-                  name="name"
-                  value={name}
-                  onChange={(event) => setName(event.target.value)}
-                  disabled={!canEdit || savingProfile}
-                />
-                <div className="pt-1">
-                  <Button type="submit" disabled={!canEdit || savingProfile}>
-                    {savingProfile ? "Saving…" : "Save identity"}
-                  </Button>
+              <input
+                type="hidden"
+                name="sidebarLogoStyle"
+                value={sidebarLogoStyle}
+              />
+              <input
+                type="hidden"
+                name="sidebarLogoUrl"
+                value={sidebarLogoUrl}
+              />
+              <input
+                type="hidden"
+                name="sidebarLogoDarkUrl"
+                value={sidebarLogoDarkUrl}
+              />
+
+              <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
+                <div className="space-y-2">
+                  <Label>Logo</Label>
+                  <FileDropzone
+                    value={logoUrl || null}
+                    onChange={(url) => setLogoUrl(url ?? "")}
+                    aspect="square"
+                    disabled={!canEdit}
+                    hint="Square · PNG or SVG"
+                  />
                 </div>
+                <div className="flex-1 space-y-2">
+                  <Label htmlFor="ws-name">Company name</Label>
+                  <Input
+                    id="ws-name"
+                    name="name"
+                    value={name}
+                    onChange={(event) => setName(event.target.value)}
+                    disabled={!canEdit || savingProfile}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2 border-t pt-5">
+                <Label>Sidebar logo</Label>
+                <div>
+                  <Segmented
+                    options={[
+                      { value: "bordered", label: "Icon + name" },
+                      { value: "full", label: "Full logo" },
+                    ]}
+                    value={sidebarLogoStyle}
+                    onChange={setSidebarLogoStyle}
+                    disabled={!canEdit || savingProfile}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Replace the workspace name with a wide/wordmark logo in the
+                  dashboard sidebar.
+                </p>
+              </div>
+
+              {sidebarLogoStyle === "full" ? (
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      Light mode
+                    </Label>
+                    <FileDropzone
+                      value={sidebarLogoUrl || null}
+                      onChange={(url) => setSidebarLogoUrl(url ?? "")}
+                      aspect="banner"
+                      disabled={!canEdit}
+                      hint="Wide logo · transparent PNG/SVG"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">
+                      Dark mode
+                    </Label>
+                    <div className="rounded-2xl bg-zinc-950 p-2">
+                      <FileDropzone
+                        value={sidebarLogoDarkUrl || null}
+                        onChange={(url) => setSidebarLogoDarkUrl(url ?? "")}
+                        aspect="banner"
+                        disabled={!canEdit}
+                        hint="Optional · falls back to light"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="flex justify-end">
+                <Button type="submit" disabled={!canEdit || savingProfile}>
+                  {savingProfile ? "Saving…" : "Save identity"}
+                </Button>
               </div>
             </form>
           </CardContent>

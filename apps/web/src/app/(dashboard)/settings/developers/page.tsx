@@ -8,7 +8,10 @@ import {
   serializeWebhookEndpoint,
 } from "@/features/developers/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { getRolePermissions } from "@/features/workspaces/permissions-server";
+import {
+  getRolePermissions,
+  requirePagePermission,
+} from "@/features/workspaces/permissions-server";
 import {
   WEBHOOK_EVENTS,
   WEBHOOK_EVENT_LABELS,
@@ -17,6 +20,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function DevelopersSettingsPage() {
+  await requirePagePermission("integrations:manage");
   const { organization, roleKey } = await getWorkspaceContext();
   const permissions = await getRolePermissions(organization.id, roleKey);
   const canManage = permissions.includes("integrations:manage");

@@ -16,6 +16,8 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
+import type { Permission } from "@/features/workspaces/permissions";
+
 export type NavBadge = "inbox";
 
 export type NavItem = {
@@ -24,6 +26,8 @@ export type NavItem = {
   icon: LucideIcon;
   exact?: boolean;
   badge?: NavBadge;
+  /** When set, the item is hidden unless the viewer holds this permission. */
+  requiredPermission?: Permission;
 };
 
 /** Primary sections — the recruiter's daily surfaces. */
@@ -40,7 +44,12 @@ export const workspaceNav: NavItem[] = [
   { label: "Reports", href: "/dashboard/reports", icon: BarChart3 },
   { label: "Tasks", href: "/dashboard/tasks", icon: ListTodo },
   { label: "Career Page", href: "/dashboard/career-page", icon: Globe },
-  { label: "Settings", href: "/settings", icon: Settings },
+  {
+    label: "Settings",
+    href: "/settings",
+    icon: Settings,
+    requiredPermission: "settings:edit",
+  },
 ];
 
 /** Stub sections — coming-soon pages collapsed under "More" in the sidebar. */

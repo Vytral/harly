@@ -62,6 +62,7 @@ export function MinimalTemplate({
             }`}>
               {logo ? (
                 <div className="mb-4">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={logo}
                     alt={workspace.name}
@@ -89,6 +90,7 @@ export function MinimalTemplate({
           }`}>
             {logo ? (
               <div className={config.hero.logoPosition === "center" ? "mb-8" : "mb-6"}>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={logo}
                   alt={workspace.name}

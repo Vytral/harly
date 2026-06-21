@@ -66,6 +66,7 @@ export function GreenhouseTemplate({
           config.hero.logoPosition === "right" ? "items-end text-right" : "items-start text-left"
         }`}>
           {logo && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img
               src={logo}
               alt={workspace.name}
