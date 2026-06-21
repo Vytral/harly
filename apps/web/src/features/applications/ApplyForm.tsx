@@ -28,6 +28,7 @@ import type { ApplicationFormValues } from "@/lib/validations/applications";
 import { cn, formatFileSize } from "@/lib/utils";
 import { getResumeFileValidationError } from "@/lib/storage-validation";
 import { PhoneInput } from "@/components/ui/PhoneInput";
+import { TurnstileWidget } from "@/components/TurnstileWidget";
 
 const initialState: ApplyJobActionState = {
   status: "idle",
@@ -43,6 +44,8 @@ type ApplyFormProps = {
   workspaceSlug?: string;
   applicationConfig: JobApplicationConfig;
   variant?: ApplyFormVariant;
+  /** Resolved server-side (workspace key → env fallback). Null hides the widget. */
+  turnstileSiteKey?: string | null;
 };
 
 type TextField =
@@ -285,6 +288,7 @@ export function ApplyForm({
   workspaceSlug,
   applicationConfig,
   variant = "default",
+  turnstileSiteKey = null,
 }: ApplyFormProps) {
   const isAshby = variant === "ashby";
   const input = isAshby ? inputClassAshby : inputClass;
@@ -1108,6 +1112,12 @@ export function ApplyForm({
             </section>
           ) : null}
 
+          {turnstileSiteKey ? (
+            <div className="flex justify-center">
+              <TurnstileWidget siteKey={turnstileSiteKey} />
+            </div>
+          ) : null}
+
           <button
             type="submit"
             disabled={isSubmitting}
@@ -1470,6 +1480,12 @@ export function ApplyForm({
                 ))}
               </div>
             </section>
+          ) : null}
+
+          {turnstileSiteKey ? (
+            <div className="flex justify-center">
+              <TurnstileWidget siteKey={turnstileSiteKey} />
+            </div>
           ) : null}
 
           <button

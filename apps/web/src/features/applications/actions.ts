@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { headers } from "next/headers";
 
 import { createPublicApplication } from "@/features/applications/data";
+import { verifyTurnstileToken } from "@/lib/turnstile";
 import {
   createApplicationFormSchema,
   type ApplicationFormValues,
@@ -108,6 +110,26 @@ export async function submitApplicationAction(
     return {
       status: "error",
       message: "Job not available.",
+    };
+  }
+
+  // Bot protection — verified against the workspace's Turnstile secret (or the
+  // env fallback). When neither is configured, verification is skipped.
+  const turnstileToken = formData.get("cf-turnstile-response") as string | null;
+  const requestHeaders = await headers();
+  const remoteIp =
+    requestHeaders.get("cf-connecting-ip") ??
+    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    null;
+  const turnstileValid = await verifyTurnstileToken(
+    turnstileToken,
+    jobContext.workspaceId,
+    remoteIp,
+  );
+  if (!turnstileValid) {
+    return {
+      status: "error",
+      message: "Bot verification failed. Please try again.",
     };
   }
 

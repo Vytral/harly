@@ -6,6 +6,7 @@ import { getPublicJobDetail } from "@/features/jobs/data";
 import { normalizeJobApplicationConfig, normalizeJobBoardConfig } from "@/features/jobs/config";
 import { isCareerPageConfigured } from "@/features/career-page/config";
 import { JobChrome } from "@/features/career-page/job/JobChrome";
+import { resolveTurnstileSiteKey } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
 
   const { job, workspace, config } = detail;
   const applicationConfig = normalizeJobApplicationConfig(job.applicationConfig);
+  const turnstileSiteKey = await resolveTurnstileSiteKey(workspace.id);
   const boardRoot = "/";
 
   // Configured career template → per-template apply chrome wrapping the form.
@@ -38,6 +40,7 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
           workspaceSlug={workspace.slug}
           applicationConfig={applicationConfig}
           variant={config.template === "ashby" ? "ashby" : "default"}
+          turnstileSiteKey={turnstileSiteKey}
         />
       </JobChrome>
     );
@@ -61,6 +64,7 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
           jobSlug={job.slug}
           workspaceSlug={workspace.slug}
           applicationConfig={applicationConfig}
+          turnstileSiteKey={turnstileSiteKey}
         />
       </main>
     </BoardShell>
