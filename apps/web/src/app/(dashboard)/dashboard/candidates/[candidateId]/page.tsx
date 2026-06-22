@@ -3,10 +3,18 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import {
   ArrowLeft,
+  Briefcase,
+  Building,
+  FileSpreadsheet,
   Globe,
   Mail,
   MapPin,
+  Megaphone,
+  MousePointerClick,
   Phone,
+  Upload,
+  UserPlus,
+  Users,
 } from "lucide-react";
 
 import { GithubIcon } from "@/components/ui/icons/GithubIcon";
@@ -31,38 +39,37 @@ import { gravatarUrl } from "@/lib/gravatar";
 
 export const dynamic = "force-dynamic";
 
+const SOURCE_LABEL: Record<string, string> = {
+  public_form: "Job board",
+  csv_import: "CSV import",
+  referral: "Referral",
+  linkedin: "LinkedIn",
+  career_page: "Career page",
+  agency: "Agency",
+  direct_apply: "Direct apply",
+  internal: "Internal",
+  email: "Email",
+  event: "Event",
+  manual: "Manual",
+};
+
+const SOURCE_ICON: Record<string, ReactNode> = {
+  public_form: <Briefcase className="size-3.5" />,
+  csv_import: <FileSpreadsheet className="size-3.5" />,
+  referral: <Users className="size-3.5" />,
+  linkedin: <LinkedinLogo className="size-3.5" />,
+  career_page: <Globe className="size-3.5" />,
+  agency: <Building className="size-3.5" />,
+  direct_apply: <MousePointerClick className="size-3.5" />,
+  internal: <UserPlus className="size-3.5" />,
+  email: <Mail className="size-3.5" />,
+  event: <Megaphone className="size-3.5" />,
+  manual: <Upload className="size-3.5" />,
+};
+
 type CandidateDetailPageProps = {
   params: Promise<{ candidateId: string }>;
 };
-
-function ExternalProfileLink({
-  href,
-  label,
-  icon,
-}: {
-  href: string | null;
-  label: string;
-  icon: ReactNode;
-}) {
-  if (!href) return null;
-  return (
-    <Button asChild variant="outline" size="sm">
-      <a href={href} target="_blank" rel="noreferrer">
-        {icon}
-        {label}
-      </a>
-    </Button>
-  );
-}
-
-function ContactChip({ icon, children }: { icon: ReactNode; children: ReactNode }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-3 py-1 text-sm text-foreground">
-      {icon}
-      {children}
-    </span>
-  );
-}
 
 export default async function CandidateDetailPage({
   params,
@@ -96,13 +103,21 @@ export default async function CandidateDetailPage({
   const latestApplication = applications[0] ?? null;
   const avatarSrc = candidate.email ? gravatarUrl(candidate.email) : null;
 
-  const railCandidates = allCandidates.map((c) => ({
-    id: c.id,
-    fullName: c.fullName,
-    email: c.email,
-    role: c.latestApplication?.jobTitle ?? null,
-    stage: c.latestApplication?.currentStageName ?? null,
-  }));
+  const railCandidates = allCandidates
+    .slice()
+    .sort((a, b) => {
+      const aTime = a.latestApplication?.appliedAt?.getTime() ?? 0;
+      const bTime = b.latestApplication?.appliedAt?.getTime() ?? 0;
+      return bTime - aTime;
+    })
+    .map((c) => ({
+      id: c.id,
+      fullName: c.fullName,
+      email: c.email,
+      avatarUrl: c.avatarUrl ?? null,
+      role: c.latestApplication?.jobTitle ?? null,
+      stage: c.latestApplication?.currentStageName ?? null,
+    }));
 
   const scheduleApplications = applications.map((application) => ({
     applicationId: application.id,
@@ -174,70 +189,115 @@ export default async function CandidateDetailPage({
                 </div>
               </div>
 
-              <div className="mt-3 space-y-3">
-                <div>
-                  <h1 className="font-display text-xl font-semibold tracking-tight">{fullName}</h1>
-                  {candidate.headline ? (
-                    <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                      {candidate.headline}
-                    </p>
+              {/* Two-column: identity left, contact+social right */}
+              <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:justify-between">
+                {/* Left — name, headline, source, pipeline, tags */}
+                <div className="min-w-0 space-y-2.5">
+                  <div>
+                    <h1 className="font-display text-xl font-semibold tracking-tight">{fullName}</h1>
+                    {candidate.headline ? (
+                      <p className="mt-0.5 text-sm leading-6 text-muted-foreground">
+                        {candidate.headline}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  {latestApplication?.source ? (
+                    <span className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      {SOURCE_ICON[latestApplication.source] ?? <Briefcase className="size-3.5" />}
+                      {SOURCE_LABEL[latestApplication.source] ?? latestApplication.source}
+                    </span>
                   ) : null}
+
+                  {latestApplication?.currentStageName ? (
+                    <PipelineSpine
+                      current={latestApplication.currentStageName}
+                      showLabel
+                      className="max-w-xs"
+                    />
+                  ) : null}
+
+                  <CandidateTags
+                    candidateId={candidate.id}
+                    workspaceId={workspaceId}
+                    tags={tags}
+                  />
                 </div>
 
-                {latestApplication?.currentStageName ? (
-                  <PipelineSpine
-                    current={latestApplication.currentStageName}
-                    showLabel
-                    className="max-w-xs"
-                  />
-                ) : null}
-
-                <CandidateTags
-                  candidateId={candidate.id}
-                  workspaceId={workspaceId}
-                  tags={tags}
-                />
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <ContactChip icon={<Mail className="size-3.5 text-muted-foreground" />}>
-                    <a href={`mailto:${candidate.email}`} className="hover:underline">
+                {/* Right — contact centered vertically, social at bottom */}
+                <div className="flex shrink-0 flex-col justify-center gap-4 sm:items-end">
+                  <div className="flex flex-col gap-2">
+                    <a
+                      href={`mailto:${candidate.email}`}
+                      className="inline-flex items-center gap-2.5 text-sm text-foreground transition-colors hover:text-foreground/70"
+                    >
+                      <Mail className="size-5 shrink-0" strokeWidth={1.5} />
                       {candidate.email}
                     </a>
-                  </ContactChip>
-                  {candidate.phone ? (
-                    <ContactChip icon={<Phone className="size-3.5 text-muted-foreground" />}>
-                      {candidate.phone}
-                    </ContactChip>
-                  ) : null}
-                  {candidate.location ? (
-                    <ContactChip icon={<MapPin className="size-3.5 text-muted-foreground" />}>
-                      {candidate.location}
-                    </ContactChip>
+                    {candidate.phone ? (
+                      <a
+                        href={`tel:${candidate.phone}`}
+                        className="inline-flex items-center gap-2.5 text-sm text-foreground transition-colors hover:text-foreground/70"
+                      >
+                        <Phone className="size-5 shrink-0" strokeWidth={1.5} />
+                        {candidate.phone}
+                      </a>
+                    ) : null}
+                    {candidate.location ? (
+                      <a
+                        href={`https://maps.google.com/?q=${encodeURIComponent(candidate.location)}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-2.5 text-sm text-foreground transition-colors hover:text-foreground/70"
+                      >
+                        <MapPin className="size-5 shrink-0" strokeWidth={1.5} />
+                        {candidate.location}
+                      </a>
+                    ) : null}
+                  </div>
+
+                  {candidate.linkedinUrl ||
+                  candidate.githubUrl ||
+                  candidate.websiteUrl ? (
+                    <div className="flex items-center gap-4 text-sm">
+                      {candidate.linkedinUrl ? (
+                        <a
+                          href={candidate.linkedinUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 text-foreground transition-colors hover:text-foreground/70"
+                        >
+                          <LinkedinLogo className="size-[18px]" />
+                          LinkedIn
+                        </a>
+                      ) : null}
+                      {candidate.githubUrl ? (
+                        <a
+                          href={candidate.githubUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 text-foreground transition-colors hover:text-foreground/70"
+                        >
+                          <GithubIcon className="size-[18px]" />
+                          GitHub
+                        </a>
+                      ) : null}
+                      {candidate.websiteUrl ? (
+                        <a
+                          href={candidate.websiteUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 text-foreground transition-colors hover:text-foreground/70"
+                        >
+                          <Globe className="size-[18px]" strokeWidth={1.5} />
+                          Website
+                        </a>
+                      ) : null}
+                    </div>
                   ) : null}
                 </div>
-
-                {candidate.linkedinUrl ||
-                candidate.githubUrl ||
-                candidate.websiteUrl ? (
-                  <div className="flex flex-wrap gap-2">
-                    <ExternalProfileLink
-                      href={candidate.linkedinUrl}
-                      label="LinkedIn"
-                      icon={<LinkedinLogo className="size-4" />}
-                    />
-                    <ExternalProfileLink
-                      href={candidate.githubUrl}
-                      label="GitHub"
-                      icon={<GithubIcon className="size-4" />}
-                    />
-                    <ExternalProfileLink
-                      href={candidate.websiteUrl}
-                      label="Website"
-                      icon={<Globe className="size-4" />}
-                    />
-                  </div>
-                ) : null}
               </div>
+
             </div>
           </div>
 
@@ -265,6 +325,12 @@ export default async function CandidateDetailPage({
             interviews={interviews}
             members={members}
             aiEvaluations={aiEvaluations}
+            scheduleApplications={scheduleApplications}
+            scheduleMembers={members}
+            scheduleCal={{
+              enabled: calStatus.enabled,
+              bookingUrl: calStatus.bookingUrl,
+            }}
             aiConfigured={
               aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
             }

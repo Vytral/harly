@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import {
   ArrowRight,
+  Calendar,
   CalendarClock,
   Check,
   ClipboardCheck,
@@ -14,6 +15,7 @@ import {
   MessageSquare,
   Minus,
   Phone,
+  Plus,
   ThumbsDown,
   ThumbsUp,
   Video,
@@ -24,6 +26,12 @@ import { toast } from "sonner";
 import { AiScoreCard } from "@/features/candidates/AiScoreCard";
 import { CandidateFileUpload } from "@/features/candidates/CandidateFileUpload";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
+import {
+  ScheduleDrawer,
+  type ScheduleApplicationOption,
+  type ScheduleCalConfig,
+  type ScheduleMemberOption,
+} from "@/features/candidates/ScheduleDrawer";
 import { OffersPanel } from "@/features/offers/OffersPanel";
 import type { CandidateOfferItem } from "@/features/offers/shared";
 import { NoteForm } from "@/features/candidates/NoteForm";
@@ -112,6 +120,9 @@ type CandidateProfileTabsProps = {
   offers: CandidateOfferItem[];
   emailTemplates?: EmailTemplateOption[];
   emailTemplateValues?: TemplateValues;
+  scheduleApplications: ScheduleApplicationOption[];
+  scheduleMembers: ScheduleMemberOption[];
+  scheduleCal: ScheduleCalConfig;
 };
 
 const INTERVIEW_MODE_ICON = {
@@ -159,6 +170,15 @@ const MESSAGE_STATUS_LABEL: Record<CandidateMessage["status"], string> = {
 const APPLICATION_SOURCE_LABEL: Record<string, string> = {
   public_form: "Job board",
   csv_import: "CSV import",
+  referral: "Referral",
+  linkedin: "LinkedIn",
+  career_page: "Career page",
+  agency: "Agency",
+  direct_apply: "Direct apply",
+  internal: "Internal",
+  email: "Email",
+  event: "Event",
+  manual: "Manual",
 };
 
 function TabCount({ value }: { value: number }) {
@@ -189,6 +209,9 @@ export function CandidateProfileTabs({
   offers,
   emailTemplates = [],
   emailTemplateValues = {},
+  scheduleApplications,
+  scheduleMembers,
+  scheduleCal,
 }: CandidateProfileTabsProps) {
   return (
     <Tabs defaultValue="profile">
@@ -198,7 +221,6 @@ export function CandidateProfileTabs({
           Interviews
           <TabCount value={interviews.length} />
         </TabsTrigger>
-        <TabsTrigger value="history">History</TabsTrigger>
         <TabsTrigger value="communication">
           Communication
           <TabCount value={messages.length} />
@@ -211,9 +233,9 @@ export function CandidateProfileTabs({
           Offers
           <TabCount value={offers.length} />
         </TabsTrigger>
-        <TabsTrigger value="comments">
-          Comments
-          <TabCount value={notes.length} />
+        <TabsTrigger value="activity">
+          Activity
+          <TabCount value={activity.length + notes.length} />
         </TabsTrigger>
       </TabsList>
 
@@ -224,52 +246,66 @@ export function CandidateProfileTabs({
             No applications yet.
           </p>
         ) : (
-          applications.map((application) => (
-            <Card key={application.id}>
-              <CardContent className="space-y-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                  <div>
-                    <h2 className="font-semibold">{application.jobTitle}</h2>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      {application.currentStageName ?? "No stage"} · Applied{" "}
-                      <ShortDate value={application.appliedAt} />
-                    </p>
+          <Card className="gap-0 py-0">
+            <CardContent className="p-0">
+              <div className="border-b px-4 py-2">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Applications
+                </p>
+              </div>
+              {applications.map((application, idx) => (
+                <div
+                  key={application.id}
+                  className={cn(
+                    "space-y-3 px-4 py-2.5",
+                    idx < applications.length - 1 && "border-b border-border/50",
+                  )}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <h2 className="truncate text-sm font-semibold text-foreground">{application.jobTitle}</h2>
+                        <ApplicationStatusBadge status={application.status} />
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-foreground/70">
+                        <span className="font-medium">{application.currentStageName ?? "No stage"}</span>
+                        <span className="inline-flex items-center gap-1">
+                          <Calendar className="size-3" />
+                          <ShortDate value={application.appliedAt} />
+                        </span>
+                        {application.source ? (
+                          <span>{APPLICATION_SOURCE_LABEL[application.source] ?? application.source}</span>
+                        ) : null}
+                      </div>
+                    </div>
+                    <Button asChild variant="link" size="sm" className="h-auto shrink-0 p-0 text-xs text-primary">
+                      <Link href={`/dashboard/pipeline?job=${application.jobId}` as Route}>
+                        View in pipeline
+                        <ArrowRight className="size-3.5" />
+                      </Link>
+                    </Button>
                   </div>
-                  <ApplicationStatusBadge status={application.status} />
+                  {application.answers.length > 0 ? (
+                    <div className="rounded-lg border bg-muted/40 p-4">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Application answers
+                      </p>
+                      <dl className="mt-3 space-y-3">
+                        {application.answers.map((answer) => (
+                          <div key={answer.id}>
+                            <dt className="text-xs font-semibold text-muted-foreground">
+                              {answer.label}
+                            </dt>
+                            <dd className="mt-1 whitespace-pre-line text-sm">{answer.answer}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  ) : null}
                 </div>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <Badge variant="outline">
-                    {application.source
-                      ? APPLICATION_SOURCE_LABEL[application.source] ?? application.source
-                      : "Unknown"}
-                  </Badge>
-                  <Button asChild variant="link" size="sm" className="text-primary">
-                    <Link href={`/dashboard/pipeline?job=${application.jobId}` as Route}>
-                      View in pipeline
-                      <ArrowRight className="size-4" />
-                    </Link>
-                  </Button>
-                </div>
-                {application.answers.length > 0 ? (
-                  <div className="rounded-lg border bg-muted/40 p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Application answers
-                    </p>
-                    <dl className="mt-3 space-y-3">
-                      {application.answers.map((answer) => (
-                        <div key={answer.id}>
-                          <dt className="text-xs font-semibold text-muted-foreground">
-                            {answer.label}
-                          </dt>
-                          <dd className="mt-1 whitespace-pre-line text-sm">{answer.answer}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          ))
+              ))}
+            </CardContent>
+          </Card>
         )}
 
         <CandidateFileUpload
@@ -281,10 +317,27 @@ export function CandidateProfileTabs({
 
       {/* ── Interviews ── */}
       <TabsContent value="interviews" className="mt-4 space-y-3">
+        <div className="flex justify-end">
+          <ScheduleDrawer
+            candidateId={candidateId}
+            workspaceId={workspaceId}
+            candidateName={candidateName}
+            candidateEmail={candidateEmail}
+            applications={scheduleApplications}
+            members={scheduleMembers}
+            cal={scheduleCal}
+            trigger={
+              <Button size="sm">
+                <Plus className="size-4" />
+                Schedule interview
+              </Button>
+            }
+          />
+        </div>
         {interviews.length === 0 ? (
           <EmptyTab
             icon={CalendarClock}
-            text="No interviews scheduled. Use the Schedule action above."
+            text="No interviews scheduled yet."
           />
         ) : (
           interviews.map((interview) => (
@@ -292,40 +345,62 @@ export function CandidateProfileTabs({
               key={interview.id}
               interview={interview}
               candidateId={candidateId}
+              workspaceId={workspaceId}
             />
           ))
         )}
       </TabsContent>
 
-      {/* ── History ── */}
-      <TabsContent value="history" className="mt-4">
-        {activity.length === 0 ? (
-          <EmptyTab icon={MessageSquare} text="No activity yet." />
-        ) : (
-          <div className="space-y-1">
-            {activity.map((event, index) => (
-              <div key={event.id} className="flex gap-3">
-                <div className="flex flex-col items-center">
-                  <span
-                    className={`mt-1.5 size-2.5 shrink-0 rounded-full ${
-                      activityDotStyles[event.type] ?? "bg-muted-foreground"
-                    }`}
-                  />
-                  {index < activity.length - 1 ? (
-                    <span className="my-1 w-px flex-1 bg-border" />
-                  ) : null}
+      {/* ── Activity (merged History + Comments) ── */}
+      <TabsContent value="activity" className="mt-4 space-y-4">
+        {/* Notes always on top so the form is reachable without scrolling */}
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Notes &amp; comments
+          </p>
+          <NoteForm
+            candidateId={candidateId}
+            workspaceId={workspaceId}
+            initialNotes={notes}
+            members={members}
+          />
+        </div>
+
+        {/* Timeline below */}
+        {activity.length > 0 ? (
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Timeline
+            </p>
+            <div className="space-y-1">
+              {activity.map((event, index) => (
+                <div key={event.id} className="flex gap-3">
+                  <div className="flex flex-col items-center">
+                    <span
+                      className={`mt-1.5 size-2.5 shrink-0 rounded-full ${
+                        activityDotStyles[event.type] ?? "bg-muted-foreground"
+                      }`}
+                    />
+                    {index < activity.length - 1 ? (
+                      <span className="my-1 w-px flex-1 bg-border" />
+                    ) : null}
+                  </div>
+                  <div className="pb-4">
+                    <p className="text-sm font-medium">{event.label}</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {event.actorName ? `${event.actorName} · ` : ""}
+                      <RelativeTime value={event.createdAt} />
+                    </p>
+                  </div>
                 </div>
-                <div className="pb-4">
-                  <p className="text-sm font-medium">{event.label}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    {event.actorName ? `${event.actorName} · ` : ""}
-                    <RelativeTime value={event.createdAt} />
-                  </p>
-                </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        )}
+        ) : null}
+
+        {activity.length === 0 && notes.length === 0 ? (
+          <EmptyTab icon={MessageSquare} text="No activity yet." />
+        ) : null}
       </TabsContent>
 
       {/* ── Communication ── */}
@@ -445,15 +520,6 @@ export function CandidateProfileTabs({
         />
       </TabsContent>
 
-      {/* ── Comments ── */}
-      <TabsContent value="comments" className="mt-4">
-        <NoteForm
-          candidateId={candidateId}
-          workspaceId={workspaceId}
-          initialNotes={notes}
-          members={members}
-        />
-      </TabsContent>
     </Tabs>
   );
 }
@@ -461,9 +527,11 @@ export function CandidateProfileTabs({
 function InterviewCard({
   interview,
   candidateId,
+  workspaceId,
 }: {
   interview: CandidateInterviewItem;
   candidateId: string;
+  workspaceId: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -530,29 +598,42 @@ function InterviewCard({
           </p>
         ) : null}
 
-        {interview.status === "scheduled" ? (
-          <div className="flex items-center gap-2 pt-1">
-            <Button
-              size="sm"
-              variant="outline"
-              disabled={isPending}
-              onClick={() => update("completed")}
-            >
-              <Check className="size-4" />
-              Mark complete
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              className="text-muted-foreground"
-              disabled={isPending}
-              onClick={() => update("canceled")}
-            >
-              <X className="size-4" />
-              Cancel
-            </Button>
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-2 pt-1">
+          {interview.status === "scheduled" ? (
+            <>
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={isPending}
+                onClick={() => update("completed")}
+              >
+                <Check className="size-4" />
+                Mark complete
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground"
+                disabled={isPending}
+                onClick={() => update("canceled")}
+              >
+                <X className="size-4" />
+                Cancel
+              </Button>
+            </>
+          ) : null}
+          <EvaluationDrawer
+            candidateId={candidateId}
+            workspaceId={workspaceId}
+            stageName={interview.title ?? interviewTypeLabel(interview.type)}
+            trigger={
+              <Button size="sm" variant="outline">
+                <ClipboardCheck className="size-4" />
+                Evaluate
+              </Button>
+            }
+          />
+        </div>
       </CardContent>
     </Card>
   );

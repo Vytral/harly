@@ -10,6 +10,7 @@ export type RailCandidate = {
   id: string;
   fullName: string;
   email: string;
+  avatarUrl: string | null;
   role: string | null;
   stage: string | null;
 };
@@ -46,7 +47,7 @@ export function CandidateListRail({
               >
                 <UserAvatar
                   name={c.fullName}
-                  src={c.email ? gravatarUrl(c.email) : null}
+                  src={c.avatarUrl ?? (c.email ? gravatarUrl(c.email) : null)}
                   size="sm"
                 />
                 <div className="min-w-0 flex-1">

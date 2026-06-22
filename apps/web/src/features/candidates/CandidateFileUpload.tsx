@@ -306,6 +306,17 @@ export function CandidateFileUpload({
         </Button>
       </div>
 
+      {/* Inline PDF preview for latest file */}
+      {latestFile && isPdfFile(latestFile) ? (
+        <div className="overflow-hidden rounded-lg border">
+          <iframe
+            src={latestFile.fileUrl}
+            title={latestFile.fileName}
+            className="h-[55vh] w-full"
+          />
+        </div>
+      ) : null}
+
       {files.length === 0 ? (
         <button
           type="button"

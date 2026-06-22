@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, RefreshCw, Sparkles } from "lucide-react";
+import { FileText, RefreshCw, BrainCircuit } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateAiEvaluationAction } from "@/features/candidates/ai-actions";
@@ -98,7 +98,7 @@ function GenerateButton({
       {hasEvaluation ? (
         <RefreshCw className={cn("size-4", isPending && "animate-spin")} />
       ) : (
-        <Sparkles className={cn("size-4", isPending && "animate-pulse")} />
+        <BrainCircuit className={cn("size-4", isPending && "animate-pulse")} />
       )}
       {isPending ? "Scoring…" : hasEvaluation ? "Regenerate" : "Score with AI"}
     </Button>
@@ -122,7 +122,7 @@ export function AiScoreCard({
         <CardContent className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2.5">
             <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <Sparkles className="size-4.5" strokeWidth={1.8} />
+              <BrainCircuit className="size-4.5" strokeWidth={1.8} />
             </span>
             <div>
               <p className="text-sm font-medium">AI candidate scoring</p>
@@ -152,7 +152,7 @@ export function AiScoreCard({
               <CardContent className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <Sparkles className="size-4.5" strokeWidth={1.8} />
+                    <BrainCircuit className="size-4.5" strokeWidth={1.8} />
                   </span>
                   <div>
                     <p className="text-sm font-medium">{application.jobTitle}</p>

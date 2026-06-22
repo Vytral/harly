@@ -6,7 +6,7 @@ const applicationStatusMap: Record<
   string,
   { variant: BadgeVariant; label: string }
 > = {
-  active: { variant: "info", label: "Active" },
+  active: { variant: "success", label: "Active" },
   hired: { variant: "success", label: "Hired" },
   rejected: { variant: "danger", label: "Rejected" },
   withdrawn: { variant: "neutral", label: "Withdrawn" },

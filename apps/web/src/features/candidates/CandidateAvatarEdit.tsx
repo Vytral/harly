@@ -3,11 +3,17 @@
 import { useRef, useTransition } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Camera, X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { AvatarCropDialog } from "@/components/ui/AvatarCropDialog";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getImageFileValidationError } from "@/lib/storage-validation";
 import { updateCandidateAvatarAction } from "@/features/candidates/actions";
 
@@ -122,23 +128,32 @@ export function CandidateAvatarEdit({
     });
   }
 
+  const [viewOpen, setViewOpen] = useState(false);
+
   return (
     <>
       <div className={`group relative shrink-0 ${className ?? ""}`}>
-        <UserAvatar
-          name={name}
-          src={displaySrc}
-          size="xl"
-          className="ring-4 ring-card"
-        />
         <button
           type="button"
-          onClick={() => inputRef.current?.click()}
+          onClick={() => displaySrc ? setViewOpen(true) : inputRef.current?.click()}
+          className="cursor-pointer rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label={displaySrc ? "View photo" : "Add photo"}
+        >
+          <UserAvatar
+            name={name}
+            src={displaySrc}
+            size="xl"
+            className="ring-4 ring-card"
+          />
+        </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
           disabled={saving}
           aria-label="Change avatar"
-          className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 text-white/0 transition-all duration-150 ease-out hover:bg-black/40 hover:text-white/90 focus-visible:bg-black/40 focus-visible:text-white/90 focus-visible:outline-none active:scale-[0.97]"
+          className="absolute bottom-0 right-0 flex size-7 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm opacity-0 transition-all duration-150 ease-out group-hover:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none active:scale-[0.97]"
         >
-          <Camera className="size-5" strokeWidth={1.8} />
+          <Pencil className="size-3.5" strokeWidth={1.8} />
         </button>
         {localAvatar && (
           <button
@@ -146,7 +161,7 @@ export function CandidateAvatarEdit({
             onClick={removeAvatar}
             disabled={saving}
             aria-label="Remove avatar"
-            className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-destructive/10 hover:text-destructive"
+            className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm opacity-0 transition-all duration-150 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
           >
             <X className="size-3" />
           </button>
@@ -162,6 +177,22 @@ export function CandidateAvatarEdit({
           }}
         />
       </div>
+
+      {/* Photo preview dialog */}
+      {displaySrc ? (
+        <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+          <DialogContent className="max-w-sm p-2">
+            <DialogTitle className="sr-only">{name}</DialogTitle>
+            <DialogDescription className="sr-only">Photo of {name}</DialogDescription>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={displaySrc}
+              alt={name}
+              className="w-full rounded-lg object-cover"
+            />
+          </DialogContent>
+        </Dialog>
+      ) : null}
 
       <AvatarCropDialog
         open={cropOpen}

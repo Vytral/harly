@@ -160,9 +160,11 @@ function CandidateStatusMenu({
 function DeleteCandidateButton({
   candidateId,
   name,
+  trigger,
 }: {
   candidateId: string;
   name: string;
+  trigger?: React.ReactNode;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -194,10 +196,12 @@ function DeleteCandidateButton({
   return (
     <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
       <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="text-destructive hover:text-destructive">
-          <Trash2 className="size-4" />
-          Delete
-        </Button>
+        {trigger ?? (
+          <Button size="sm" variant="outline" className="text-destructive hover:text-destructive">
+            <Trash2 className="size-4" />
+            Delete
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
@@ -249,6 +253,7 @@ export function CandidateActionBar({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
+      {/* Primary actions — always visible */}
       <EvaluationDrawer
         candidateId={candidate.id}
         workspaceId={candidate.workspaceId}
@@ -290,12 +295,14 @@ export function CandidateActionBar({
         }
       />
       <CandidateStatusMenu name={name} applicationIds={applicationIds} />
+
+      {/* Secondary actions — compact */}
       <EditCandidateDrawer
         candidate={candidate}
         trigger={
-          <Button size="sm" variant="outline">
+          <Button size="sm" variant="ghost" className="size-8 p-0" title="Edit candidate">
             <Pencil className="size-4" />
-            Edit
+            <span className="sr-only">Edit</span>
           </Button>
         }
       />
@@ -303,9 +310,9 @@ export function CandidateActionBar({
         isPdfResume(resumeUrl, resumeFileType, resumeFileName) ? (
           <Dialog>
             <DialogTrigger asChild>
-              <Button size="sm" variant="outline">
+              <Button size="sm" variant="ghost" className="size-8 p-0" title="View resume">
                 <FileText className="size-4" />
-                Resume
+                <span className="sr-only">Resume</span>
               </Button>
             </DialogTrigger>
             <DialogContent className="sm:max-w-3xl">
@@ -329,15 +336,24 @@ export function CandidateActionBar({
             </DialogContent>
           </Dialog>
         ) : (
-          <Button asChild size="sm" variant="outline">
+          <Button asChild size="sm" variant="ghost" className="size-8 p-0" title="View resume">
             <a href={resumeUrl} target="_blank" rel="noreferrer">
               <FileText className="size-4" />
-              Resume
+              <span className="sr-only">Resume</span>
             </a>
           </Button>
         )
       ) : null}
-      <DeleteCandidateButton candidateId={candidate.id} name={name} />
+      <DeleteCandidateButton
+        candidateId={candidate.id}
+        name={name}
+        trigger={
+          <Button size="sm" variant="ghost" className="size-8 p-0 text-destructive hover:text-destructive" title="Delete candidate">
+            <Trash2 className="size-4" />
+            <span className="sr-only">Delete</span>
+          </Button>
+        }
+      />
     </div>
   );
 }

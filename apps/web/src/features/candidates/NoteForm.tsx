@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
+import { Bold, Italic, Link2, Heading2, AtSign, MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 
 import { createCandidateNote } from "@/features/candidates/actions";
@@ -195,9 +196,9 @@ export function NoteForm({
   }
 
   return (
-    <div className="space-y-5">
-      <div className="rounded-lg border bg-card p-4">
-        <div className="relative">
+    <div className="space-y-4">
+      <div className="rounded-lg border bg-card">
+        <div className="relative p-4 pb-0">
           <Textarea
             ref={textareaRef}
             rows={3}
@@ -211,7 +212,7 @@ export function NoteForm({
                 e.currentTarget.selectionStart ?? 0,
               )
             }
-            placeholder="Add an internal note… use @ to mention a teammate"
+            placeholder="Write a note about this candidate…"
             className="resize-none border-0 px-0 shadow-none focus-visible:ring-0"
           />
 
@@ -240,24 +241,69 @@ export function NoteForm({
           ) : null}
         </div>
 
-        <div className="mt-2 flex items-center justify-between border-t pt-3">
-          <p className="text-xs text-muted-foreground">
-            {remaining.toLocaleString()} left
-          </p>
-          <Button
-            size="sm"
-            disabled={isPending || body.trim().length === 0}
-            onClick={submitNote}
-          >
-            {isPending ? "Saving…" : "Add note"}
-          </Button>
+        <div className="flex items-center justify-between border-t px-4 py-2">
+          <div className="flex items-center gap-0.5">
+            {[
+              { icon: Bold, label: "Bold", wrap: "**" },
+              { icon: Italic, label: "Italic", wrap: "_" },
+              { icon: Heading2, label: "Heading", wrap: "## " },
+              { icon: Link2, label: "Link", wrap: "[](url)" },
+              { icon: AtSign, label: "Mention", wrap: "@" },
+            ].map(({ icon: Icon, label, wrap }) => (
+              <button
+                key={label}
+                type="button"
+                title={label}
+                className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                onClick={() => {
+                  const ta = textareaRef.current;
+                  if (!ta) return;
+                  const start = ta.selectionStart;
+                  const end = ta.selectionEnd;
+                  const selected = body.slice(start, end);
+                  let insert: string;
+                  if (wrap === "## " || wrap === "@") {
+                    insert = `${wrap}${selected}`;
+                  } else if (wrap === "[](url)") {
+                    insert = selected ? `[${selected}](url)` : "[link text](url)";
+                  } else {
+                    insert = selected ? `${wrap}${selected}${wrap}` : `${wrap}text${wrap}`;
+                  }
+                  const next = body.slice(0, start) + insert + body.slice(end);
+                  setBody(next);
+                  requestAnimationFrame(() => {
+                    ta.focus();
+                    const caret = start + insert.length;
+                    ta.setSelectionRange(caret, caret);
+                  });
+                }}
+              >
+                <Icon className="size-3.5" strokeWidth={2} />
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3">
+            <p className="text-xs text-muted-foreground">
+              {remaining.toLocaleString()} characters remaining
+            </p>
+            <Button
+              size="sm"
+              disabled={isPending || body.trim().length === 0}
+              onClick={submitNote}
+            >
+              {isPending ? "Saving…" : "Add note"}
+            </Button>
+          </div>
         </div>
       </div>
 
       {notes.length === 0 ? (
-        <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">
-          No notes yet.
-        </p>
+        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center">
+          <MessageSquare className="size-5 text-muted-foreground" strokeWidth={1.5} />
+          <p className="text-sm text-muted-foreground">
+            No notes yet — add the first one above.
+          </p>
+        </div>
       ) : (
         <div className="space-y-3">
           {notes.map((note) => (
