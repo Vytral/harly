@@ -43,11 +43,10 @@ export type WorkspaceBranding = {
   boardStyle: BoardStyle;
   logoStyle: LogoStyle;
   sidebarLogoStyle: LogoStyle;
-  sidebarLogoUrl: string | null;
-  sidebarLogoDarkUrl: string | null;
+  sidebarLogoUrl?: string | null;
+  sidebarLogoDarkUrl?: string | null;
 };
 
-/** Just the bits the dashboard sidebar needs to render its wordmark. */
 export type SidebarBranding = {
   style: LogoStyle;
   lightUrl: string | null;
@@ -130,7 +129,6 @@ async function getWorkspaceBranding(
   };
 }
 
-/** Sidebar wordmark config for the active workspace (dashboard chrome). */
 export async function getSidebarBranding(
   organizationId: string,
 ): Promise<SidebarBranding> {
@@ -144,12 +142,13 @@ export async function getSidebarBranding(
     .where(eq(workspaceSettings.organizationId, organizationId))
     .limit(1);
 
-  return {
+    return {
     style: normalizeLogoStyle(settings?.sidebarLogoStyle),
     lightUrl: settings?.sidebarLogoUrl ?? null,
     darkUrl: settings?.sidebarLogoDarkUrl ?? null,
   };
 }
+
 
 export async function getWorkspaceSettingsData() {
   const context = await getWorkspaceContext();

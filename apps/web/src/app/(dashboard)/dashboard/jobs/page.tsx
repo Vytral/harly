@@ -3,7 +3,6 @@ import type { Route } from "next";
 import { Briefcase, MapPin, Plus, TrendingUp, Trash2, Users } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { JobStatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -43,40 +42,42 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
   const maxApplicants = Math.max(1, ...jobs.map((j) => j.applicants));
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Jobs"
-        title="Openings"
-        description="Create, edit, publish, and close roles for your careers page."
-        actions={
-          <Button asChild>
-            <Link href="/dashboard/jobs/new">
-              <Plus className="size-4" />
-              New job
-            </Link>
-          </Button>
-        }
-      />
-
+    <div className="space-y-5">
       {!isTrash && jobs.length > 0 ? (
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <StatTile label="Open roles" value={openRoles} hint={`${draftRoles} draft`} icon={Briefcase} />
-          <StatTile label="Applicants" value={totalApplicants} hint="across all roles" icon={Users} />
-          <StatTile label="New this week" value={newApplicants} hint="applied in 7d" icon={TrendingUp} accent />
-          <StatTile label="Total roles" value={jobs.length} hint={`${draftRoles} not published`} icon={Briefcase} />
+          <div className="duration-500 animate-in fade-in slide-in-from-bottom-2">
+            <StatTile label="Open roles" value={openRoles} hint={`${draftRoles} draft`} icon={Briefcase} />
+          </div>
+          <div className="delay-75 duration-500 animate-in fade-in slide-in-from-bottom-2 fill-mode-backwards">
+            <StatTile label="Applicants" value={totalApplicants} hint="across all roles" icon={Users} />
+          </div>
+          <div className="delay-150 duration-500 animate-in fade-in slide-in-from-bottom-2 fill-mode-backwards">
+            <StatTile label="New this week" value={newApplicants} hint="applied in 7d" icon={TrendingUp} accent />
+          </div>
+          <div className="delay-200 duration-500 animate-in fade-in slide-in-from-bottom-2 fill-mode-backwards">
+            <StatTile label="Total roles" value={jobs.length} hint={`${draftRoles} not published`} icon={Briefcase} />
+          </div>
         </section>
       ) : null}
 
-      <div className="flex w-fit items-center gap-1 rounded-lg border bg-card p-1 text-sm">
-        <Tab href="/dashboard/jobs" active={!isTrash}>
-          Active
-          <span className="ml-1.5 tabular-nums text-muted-foreground">{jobs.length}</span>
-        </Tab>
-        <Tab href="/dashboard/jobs?view=trash" active={isTrash}>
-          <Trash2 className="size-3.5" />
-          Trash
-          <span className="ml-1.5 tabular-nums text-muted-foreground">{trashed.length}</span>
-        </Tab>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex w-fit items-center gap-1 rounded-lg border bg-card p-1 text-sm">
+          <Tab href="/dashboard/jobs" active={!isTrash}>
+            Active
+            <span className="ml-1.5 tabular-nums text-muted-foreground">{jobs.length}</span>
+          </Tab>
+          <Tab href="/dashboard/jobs?view=trash" active={isTrash}>
+            <Trash2 className="size-3.5" />
+            Trash
+            <span className="ml-1.5 tabular-nums text-muted-foreground">{trashed.length}</span>
+          </Tab>
+        </div>
+        <Button asChild size="sm">
+          <Link href="/dashboard/jobs/new">
+            <Plus className="size-4" />
+            New job
+          </Link>
+        </Button>
       </div>
 
       {isTrash ? (
@@ -166,10 +167,23 @@ function StatTile({
   accent?: boolean;
 }) {
   return (
-    <div className={cn(tileClass, accent && "border-primary/25 bg-accent/40")}>
+    <div
+      className={cn(
+        tileClass,
+        "transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-md",
+        accent && "border-primary/25 bg-accent/40",
+      )}
+    >
       <div className="flex items-center justify-between">
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
-        <Icon className={cn("size-4", accent ? "text-primary" : "text-muted-foreground/60")} strokeWidth={1.8} />
+        <span
+          className={cn(
+            "flex size-8 items-center justify-center rounded-lg transition-colors duration-200",
+            accent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground/70",
+          )}
+        >
+          <Icon className="size-4" strokeWidth={1.8} />
+        </span>
       </div>
       <p className="mt-2 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
       <p className="mt-0.5 text-xs text-muted-foreground">{hint}</p>

@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
   useTransition,
+  type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -35,10 +36,7 @@ import {
   TrashIcon,
   UserPlusIcon,
 } from "@/components/ui/icons/phosphor";
-import {
-  EnvelopeIcon,
-  UsersThreeIcon,
-} from "@/components/ui/icons/settings";
+import { EnvelopeIcon, UsersThreeIcon } from "@/components/ui/icons/settings";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -169,7 +167,7 @@ function CountChip({
   children,
   active,
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   active?: boolean;
 }) {
   return (
@@ -256,16 +254,20 @@ function MembersPanel({
 
   return (
     <div className="space-y-5">
-      {/* Toolbar: search + filter + invite */}
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="relative w-full max-w-sm">
-          <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name or email…"
-            className="pl-9"
-          />
+        <div className="flex items-center gap-3">
+          <div className="relative w-full max-w-sm flex-1">
+            <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search name or email…"
+              className="pl-9"
+            />
+          </div>
+          <p className="hidden shrink-0 text-xs text-muted-foreground/60 md:block">
+            Showing {visible.length} member{visible.length !== 1 ? "s" : ""}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <Select value={roleFilter} onValueChange={setRoleFilter}>
@@ -291,7 +293,6 @@ function MembersPanel({
         </div>
       </div>
 
-      {/* Roster */}
       <Card className="gap-0 overflow-hidden py-0">
         <div className="flex items-center justify-between border-b bg-muted/20 px-5 py-2.5">
           <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
@@ -387,7 +388,6 @@ function MembersPanel({
         </CardContent>
       </Card>
 
-      {/* Pending invitations */}
       {pendingInvitations.length > 0 ? (
         <div className="space-y-2.5">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -405,9 +405,7 @@ function MembersPanel({
                       <EnvelopeIcon className="size-4" />
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">
-                        {item.email}
-                      </p>
+                      <p className="truncate text-sm font-medium">{item.email}</p>
                       <p className="text-xs text-muted-foreground">
                         {roleName(item.role)} · expires{" "}
                         {formatInvitationDate(item.expiresAt)}
@@ -424,7 +422,6 @@ function MembersPanel({
         </div>
       ) : null}
 
-      {/* Global save bar */}
       {canManageMembers && dirty.length > 0 ? (
         <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-pine/30 bg-card px-4 py-3 shadow-[0_8px_24px_-12px_rgba(31,41,38,0.25)]">
           <p className="text-sm">

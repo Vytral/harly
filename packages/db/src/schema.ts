@@ -326,11 +326,10 @@ export const workspaceSettings = pgTable("workspace_settings", {
   heroImageUrl: text("hero_image_url"),
   boardStyle: boardStyleEnum("board_style").default("hero").notNull(),
   logoStyle: logoStyleEnum("logo_style").default("bordered").notNull(),
-  // Dashboard sidebar branding. "bordered" = square icon + workspace name;
-  // "full" = a wide wordmark image (light/dark variants) replacing the name.
-  sidebarLogoStyle: logoStyleEnum("sidebar_logo_style")
-    .default("bordered")
-    .notNull(),
+  sidebarLogoStyle: logoStyleEnum("sidebar_logo_style").default("bordered").notNull(),
+  // Extended/wordmark logo shown in the dashboard sidebar when sidebarLogoStyle
+  // is "full". Separate light/dark assets so the mark stays legible on either
+  // sidebar theme; dark falls back to light when unset.
   sidebarLogoUrl: text("sidebar_logo_url"),
   sidebarLogoDarkUrl: text("sidebar_logo_dark_url"),
   // AI provider config (bring-your-own-key). The API key is encrypted at rest
@@ -375,7 +374,6 @@ export const workspaceSettings = pgTable("workspace_settings", {
   emailSmtpUser: text("email_smtp_user"),
   // Require all workspace members to enable two-factor authentication.
   require2fa: boolean("require_2fa").default(false).notNull(),
-  // Career-page builder config (template choice + per-section overrides).
   // Shape lives in apps/web/src/features/career-page/config.ts.
   careerPageConfig: jsonb("career_page_config")
     .default(sql`'{}'::jsonb`)
@@ -395,6 +393,21 @@ export const workspaceSettings = pgTable("workspace_settings", {
   chatWebhookIv: text("chat_webhook_iv"),
   chatWebhookTag: text("chat_webhook_tag"),
   chatEvents: jsonb("chat_events").default(sql`'[]'::jsonb`),
+  // Slack App OAuth (full API access). Bot token encrypted at rest (AES-256-GCM).
+  // Client ID is public; Client Secret encrypted same as other keys.
+  slackClientId: text("slack_client_id"),
+  slackClientSecretCiphertext: text("slack_client_secret_ciphertext"),
+  slackClientSecretIv: text("slack_client_secret_iv"),
+  slackClientSecretTag: text("slack_client_secret_tag"),
+  slackEnabled: boolean("slack_enabled").default(false).notNull(),
+  slackTeamId: text("slack_team_id"),
+  slackTeamName: text("slack_team_name"),
+  slackChannelId: text("slack_channel_id"),
+  slackChannelName: text("slack_channel_name"),
+  slackBotTokenCiphertext: text("slack_bot_token_ciphertext"),
+  slackBotTokenIv: text("slack_bot_token_iv"),
+  slackBotTokenTag: text("slack_bot_token_tag"),
+  slackEvents: jsonb("slack_events").default(sql`'[]'::jsonb`),
   acquisitionSource: text("acquisition_source"),
   ...timestamps(),
 });
@@ -743,6 +756,7 @@ export const candidateFiles = pgTable(
     fileUrl: text("file_url").notNull(),
     fileType: text("file_type"),
     fileSize: integer("file_size"),
+    contentHash: text("content_hash"),
     uploadedById: text("uploaded_by_id").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -755,6 +769,7 @@ export const candidateFiles = pgTable(
       table.createdAt,
     ),
     index("candidate_files_uploaded_by_idx").on(table.uploadedById),
+    index("candidate_files_candidate_hash_idx").on(table.candidateId, table.contentHash),
   ],
 );
 

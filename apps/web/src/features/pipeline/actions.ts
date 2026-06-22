@@ -22,6 +22,7 @@ import {
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { sendWorkspaceEmail } from "@/lib/email";
+import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 
 type ApplicationStatus = "active" | "hired" | "rejected" | "withdrawn";
@@ -88,32 +89,35 @@ function normalizeStageEmailConfig(value: unknown) {
 }
 
 async function sendPipelineEmails(workspaceId: string, emails: PipelineEmail[]) {
+  const branding = await getWorkspaceEmailBranding(workspaceId);
   await Promise.allSettled(
     emails.map((email) => {
       if (email.type === "stage") {
         return sendWorkspaceEmail(workspaceId, {
           to: email.candidateEmail,
-          subject: candidateStageUpdateSubject({
-            jobTitle: email.jobTitle,
-          }),
+          subject: candidateStageUpdateSubject({ jobTitle: email.jobTitle }),
           react: createElement(CandidateStageUpdate, {
             candidateName: email.candidateName,
             jobTitle: email.jobTitle,
             stageName: email.stageName,
             companyName: email.workspaceName,
+            companyLogoUrl: branding.logoUrl ?? undefined,
+            accentColor: branding.primaryColor ?? undefined,
+            socialLinks: branding.socialLinks,
           }),
         });
       }
 
       return sendWorkspaceEmail(workspaceId, {
         to: email.candidateEmail,
-        subject: candidateRejectedSubject({
-          jobTitle: email.jobTitle,
-        }),
+        subject: candidateRejectedSubject({ jobTitle: email.jobTitle }),
         react: createElement(CandidateRejected, {
           candidateName: email.candidateName,
           jobTitle: email.jobTitle,
           companyName: email.workspaceName,
+          companyLogoUrl: branding.logoUrl ?? undefined,
+          accentColor: branding.primaryColor ?? undefined,
+          socialLinks: branding.socialLinks,
         }),
       });
     }),

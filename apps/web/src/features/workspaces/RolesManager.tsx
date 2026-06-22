@@ -55,6 +55,7 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
         const pct = fullAccess
           ? 100
           : Math.round((role.permissions.length / TOTAL_PERMISSIONS) * 100);
+
         return (
           <Card key={role.key} className="gap-0 p-5">
             <div className="flex items-start justify-between gap-3">
@@ -80,31 +81,32 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
                 </div>
               </div>
 
-              <Sheet
-                open={editing?.key === role.key}
-                onOpenChange={(o) => setEditing(o ? role : null)}
-              >
-                <SheetTrigger asChild>
-                  <Button variant="outline" size="sm">
-                    {role.editable ? (
-                      <>
-                        <PencilIcon className="size-4" />
-                        Edit
-                      </>
-                    ) : (
-                      "View"
-                    )}
-                  </Button>
-                </SheetTrigger>
-                <RoleEditor
-                  mode={role.editable ? "edit" : "view"}
-                  role={role}
-                  onDone={() => setEditing(null)}
-                />
-              </Sheet>
+              <div className="flex items-center gap-1.5">
+                <Sheet
+                  open={editing?.key === role.key}
+                  onOpenChange={(o) => setEditing(o ? role : null)}
+                >
+                  <SheetTrigger asChild>
+                    <Button variant="outline" size="sm">
+                      {role.editable ? (
+                        <>
+                          <PencilIcon className="size-4" />
+                          Edit
+                        </>
+                      ) : (
+                        "View"
+                      )}
+                    </Button>
+                  </SheetTrigger>
+                  <RoleEditor
+                    mode={role.editable ? "edit" : "view"}
+                    role={role}
+                    onDone={() => setEditing(null)}
+                  />
+                </Sheet>
+              </div>
             </div>
 
-            {/* Permission meter */}
             <div className="mt-4 space-y-1.5">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">Permissions</span>

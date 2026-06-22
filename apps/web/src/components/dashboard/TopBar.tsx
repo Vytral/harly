@@ -47,10 +47,14 @@ export function TopBar({
   const allNav = [...primaryNav, ...workspaceNav, ...moreNav];
   const activeNav = allNav.find((item) => isNavActive(pathname, item));
   const SectionIcon = activeNav?.icon;
+  const sectionLabel = activeNav?.label;
+
+  // Use explicit PageTitle if set, otherwise fall back to the active nav label.
+  const displayTitle = title || sectionLabel;
 
   return (
     <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border/80 bg-background/80 px-4 backdrop-blur-md md:px-6">
-      {title ? (
+      {displayTitle ? (
         <div className="ml-1 flex min-w-0 items-center gap-1.5">
           {SectionIcon ? (
             <SectionIcon className="size-[18px] shrink-0 text-muted-foreground" strokeWidth={1.5} />
@@ -63,7 +67,7 @@ export function TopBar({
               <ChevronRight className="hidden size-3 shrink-0 text-muted-foreground/40 sm:block" />
             </>
           ) : null}
-          <h1 className="truncate text-base font-semibold tracking-tight">{title}</h1>
+          <h1 className="truncate text-[15px] font-semibold tracking-tight">{displayTitle}</h1>
         </div>
       ) : null}
 

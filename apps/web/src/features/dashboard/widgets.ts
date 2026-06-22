@@ -16,6 +16,7 @@ import {
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { daysSince, formatShort } from "@/lib/date";
+import { gravatarUrl } from "@/lib/gravatar";
 
 const DAY_MS = 86_400_000;
 const PERF_DAYS = 14;
@@ -190,6 +191,8 @@ export const getCandidatesNeedingReview = cache(async () => {
         candidateId: candidates.id,
         first: candidates.firstName,
         last: candidates.lastName,
+        email: candidates.email,
+        avatarUrl: candidates.avatarUrl,
         jobTitle: jobs.title,
         stageName: jobStages.name,
         appliedAt: applications.appliedAt,
@@ -250,6 +253,7 @@ export const getCandidatesNeedingReview = cache(async () => {
         id: r.applicationId,
         candidateId: r.candidateId,
         name: `${r.first} ${r.last}`,
+        avatarUrl: r.avatarUrl || gravatarUrl(r.email),
         job: r.jobTitle,
         stage: r.stageName,
         action:

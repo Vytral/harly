@@ -68,9 +68,11 @@ export type CandidateRow = {
   /** Pre-formatted label (computed server-side to avoid hydration drift). */
   appliedLabel: string | null;
   applicationId: string | null;
+  /** Epoch millis of last candidate update. */
+  updatedAt: number;
 };
 
-type SortKey = "newest" | "oldest" | "name";
+type SortKey = "recent" | "oldest" | "modified" | "name";
 const ALL = "__all__";
 
 function uniqueSorted(values: (string | null)[]) {
@@ -134,11 +136,12 @@ export function CandidatesTable({
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("newest");
+  const [sortKey, setSortKey] = useState<SortKey>("recent");
   const [dept, setDept] = useState(ALL);
   const [role, setRole] = useState(ALL);
   const [stage, setStage] = useState(ALL);
   const [status, setStatus] = useState(ALL);
+  const [source, setSource] = useState(ALL);
   const [tag, setTag] = useState(ALL);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
@@ -147,6 +150,7 @@ export function CandidatesTable({
   const departments = useMemo(() => uniqueSorted(rows.map((r) => r.department)), [rows]);
   const roles = useMemo(() => uniqueSorted(rows.map((r) => r.role)), [rows]);
   const stages = useMemo(() => uniqueSorted(rows.map((r) => r.stage)), [rows]);
+  const sources = useMemo(() => uniqueSorted(rows.map((r) => r.source)), [rows]);
   const tagOptions = useMemo(
     () => uniqueSorted(rows.flatMap((r) => r.tags)),
     [rows],
@@ -167,23 +171,28 @@ export function CandidatesTable({
       if (role !== ALL && r.role !== role) return false;
       if (stage !== ALL && r.stage !== stage) return false;
       if (status !== ALL && r.status !== status) return false;
+      if (source !== ALL && r.source !== source) return false;
       if (tag !== ALL && !r.tags.includes(tag)) return false;
       return true;
     });
 
     return [...base].sort((a, b) => {
       if (sortKey === "name") return a.fullName.localeCompare(b.fullName);
-      const at = a.appliedAt ?? 0;
-      const bt = b.appliedAt ?? 0;
-      return sortKey === "oldest" ? at - bt : bt - at;
+      if (sortKey === "modified") return b.updatedAt - a.updatedAt;
+      if (sortKey === "oldest") return (a.appliedAt ?? 0) - (b.appliedAt ?? 0);
+      // "recent" — whichever happened last wins: new application OR last modified
+      const aRecent = Math.max(a.appliedAt ?? 0, a.updatedAt);
+      const bRecent = Math.max(b.appliedAt ?? 0, b.updatedAt);
+      return bRecent - aRecent;
     });
-  }, [rows, query, dept, role, stage, status, tag, sortKey]);
+  }, [rows, query, dept, role, stage, status, source, tag, sortKey]);
 
   const filtersActive =
     dept !== ALL ||
     role !== ALL ||
     stage !== ALL ||
     status !== ALL ||
+    source !== ALL ||
     tag !== ALL ||
     query.trim() !== "";
 
@@ -193,6 +202,7 @@ export function CandidatesTable({
     setRole(ALL);
     setStage(ALL);
     setStatus(ALL);
+    setSource(ALL);
     setTag(ALL);
   }
 
@@ -375,6 +385,9 @@ export function CandidatesTable({
           options={["active", "hired", "rejected", "withdrawn"]}
           labelMap={{ active: "Active", hired: "Hired", rejected: "Rejected", withdrawn: "Withdrawn" }}
         />
+        {sources.length > 0 ? (
+          <FilterPill label="Source" value={source} onChange={setSource} options={sources} />
+        ) : null}
         {tagOptions.length > 0 ? (
           <FilterPill label="Tag" value={tag} onChange={setTag} options={tagOptions} />
         ) : null}
@@ -382,9 +395,9 @@ export function CandidatesTable({
           label="Sort"
           value={sortKey}
           onChange={(v) => setSortKey(v as SortKey)}
-          options={["newest", "oldest", "name"]}
-          labelMap={{ newest: "Newest", oldest: "Oldest", name: "Name A–Z" }}
-          allValue="newest"
+          options={["recent", "oldest", "modified", "name"]}
+          labelMap={{ recent: "Most recent", oldest: "Oldest", modified: "Last modified", name: "Name A–Z" }}
+          allValue="recent"
         />
         {filtersActive ? (
           <Button
@@ -666,7 +679,7 @@ function FilterPill({
           {display}
         </span>
       </SelectTrigger>
-      <SelectContent>
+      <SelectContent position="popper" align="start" className="max-h-60">
         {allValue === undefined ? <SelectItem value={ALL}>All</SelectItem> : null}
         {options.map((opt) => (
           <SelectItem key={opt} value={opt}>

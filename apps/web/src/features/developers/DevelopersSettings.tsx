@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -12,7 +12,10 @@ import {
   testWebhookAction,
   updateWebhookAction,
 } from "@/features/developers/actions";
-import { SectionHeader } from "@/features/workspaces/settings-ui";
+import {
+  SectionHeader,
+  StatusPill,
+} from "@/features/workspaces/settings-ui";
 import {
   CodeDuotoneIcon,
   CopyIcon,
@@ -103,7 +106,7 @@ function Chip({
 }: {
   active: boolean;
   onClick: () => void;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <button
@@ -120,6 +123,7 @@ function Chip({
     </button>
   );
 }
+
 
 function SecretBanner({
   label,
@@ -257,7 +261,7 @@ function ApiKeysSection({
                 placeholder="Production server"
               />
             </div>
-            <div className="space-y-1.5">
+             <div className="space-y-1.5">
               <Label>Type</Label>
               <div className="flex gap-2">
                 {(["secret", "publishable"] as const).map((t) => (
@@ -303,7 +307,7 @@ function ApiKeysSection({
 
       <div className="overflow-hidden rounded-2xl border">
         {apiKeys.length === 0 && (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
+           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
             No API keys yet.
           </p>
         )}
@@ -487,7 +491,8 @@ function WebhooksSection({
             </div>
           </div>
           <Button size="sm" onClick={submit} disabled={pending}>
-            {pending && <SpinnerIcon className="size-4" />} Create endpoint
+            {pending && <SpinnerIcon className="size-4" />} Create
+            endpoint
           </Button>
         </div>
       )}
@@ -551,6 +556,7 @@ function WebhooksSection({
             </li>
           ))}
         </ul>
+
       </div>
     </Card>
   );
@@ -576,7 +582,7 @@ function EmbedSection({
 ></script>`;
 
   return (
-    <Card className="gap-5 p-6">
+     <Card className="gap-5 p-6">
       <SectionHeader
         icon={CodeDuotoneIcon}
         title="Embed widget"
@@ -591,7 +597,7 @@ function EmbedSection({
       <pre className="overflow-x-auto rounded-2xl border bg-muted/40 p-4 text-xs leading-relaxed">
         <code>{snippet}</code>
       </pre>
-
+      
       {publishableKey ? (
         <p className="text-xs text-muted-foreground">
           Replace the masked <code className="font-mono">data-pk</code> with your

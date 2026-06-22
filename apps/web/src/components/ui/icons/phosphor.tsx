@@ -542,72 +542,16 @@ export function UsersThreeDuotoneIcon(props: IconProps) {
   );
 }
 
-export function SidebarIcon(props: IconProps) {
+export function PaletteDuotoneIcon(props: IconProps) {
   return (
     <Svg {...props}>
-      <path
-        fill="currentColor"
-        d="M216 40H40a16 16 0 0 0-16 16v144a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16M40 56h40v144H40Zm176 144H96V56h120z"
-      />
-    </Svg>
-  );
-}
-
-export function CaretUpDownIcon(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path
-        fill="currentColor"
-        d="M181.66 170.34a8 8 0 0 1 0 11.32l-48 48a8 8 0 0 1-11.32 0l-48-48a8 8 0 0 1 11.32-11.32L128 212.69l42.34-42.35a8 8 0 0 1 11.32 0m-96-84.68L128 43.31l42.34 42.35a8 8 0 0 0 11.32-11.32l-48-48a8 8 0 0 0-11.32 0l-48 48a8 8 0 0 0 11.32 11.32"
-      />
-    </Svg>
-  );
-}
-
-/** "|←" — collapse the sidebar (bar on the left, arrow pointing into it). */
-export function ArrowLineLeftIcon(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path
-        fill="currentColor"
-        d="M232 128a8 8 0 0 1-8 8H91.31l58.35 58.34a8 8 0 0 1-11.32 11.32l-72-72a8 8 0 0 1 0-11.32l72-72a8 8 0 0 1 11.32 11.32L91.31 120H224a8 8 0 0 1 8 8M40 32a8 8 0 0 0-8 8v176a8 8 0 0 0 16 0V40a8 8 0 0 0-8-8"
-      />
-    </Svg>
-  );
-}
-
-/** "|→" — expand the sidebar (bar on the right, arrow pointing out). */
-export function ArrowLineRightIcon(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path
-        fill="currentColor"
-        d="M189.66 122.34a8 8 0 0 1 0 11.32l-72 72a8 8 0 0 1-11.32-11.32L164.69 136H32a8 8 0 0 1 0-16h132.69l-58.35-58.34a8 8 0 0 1 11.32-11.32ZM216 32a8 8 0 0 0-8 8v176a8 8 0 0 0 16 0V40a8 8 0 0 0-8-8"
-      />
-    </Svg>
-  );
-}
-
-/** "|◁" — collapse the sidebar (caret to a bar on the left). */
-export function CaretLineLeftIcon(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path
-        fill="currentColor"
-        d="M197.66 202.34a8 8 0 0 1-11.32 11.32l-80-80a8 8 0 0 1 0-11.32l80-80a8 8 0 0 1 11.32 11.32L123.31 128ZM72 40a8 8 0 0 0-8 8v160a8 8 0 0 0 16 0V48a8 8 0 0 0-8-8"
-      />
-    </Svg>
-  );
-}
-
-/** "▷|" — expand the sidebar (caret to a bar on the right). */
-export function CaretLineRightIcon(props: IconProps) {
-  return (
-    <Svg {...props}>
-      <path
-        fill="currentColor"
-        d="M149.66 122.34a8 8 0 0 1 0 11.32l-80 80a8 8 0 0 1-11.32-11.32L132.69 128L58.34 53.66a8 8 0 0 1 11.32-11.32ZM184 40a8 8 0 0 0-8 8v160a8 8 0 0 0 16 0V48a8 8 0 0 0-8-8"
-      />
+      <g fill="currentColor">
+        <path
+          d="M224 127.17a96.5 96.5 0 0 1-2.39 22.18a24 24 0 0 1-23.4 18.65H152a24 24 0 0 0-24 24a24 24 0 0 1-32 22.61c-37.27-13.17-64-44.8-64-86.61a96 96 0 0 1 95-96c52.84-.53 96.55 42.35 97 95.17"
+          opacity=".2"
+        />
+        <path d="M200.77 53.89A103.27 103.27 0 0 0 128 24h-1.07A104 104 0 0 0 24 128c0 43 26.58 79.06 69.36 94.17A32 32 0 0 0 136 192a16 16 0 0 1 16-16h46.21a31.81 31.81 0 0 0 31.2-24.88a104.4 104.4 0 0 0 2.59-24a103.28 103.28 0 0 0-31.23-73.23m13 93.71a15.89 15.89 0 0 1-15.56 12.4H152a32 32 0 0 0-32 32a16 16 0 0 1-21.31 15.07C62.49 194.3 40 164 40 128a88 88 0 0 1 87.09-88h.9a88.35 88.35 0 0 1 88 87.25a89 89 0 0 1-2.18 20.35ZM140 76a12 12 0 1 1-12-12a12 12 0 0 1 12 12m-44 24a12 12 0 1 1-12-12a12 12 0 0 1 12 12m0 56a12 12 0 1 1-12-12a12 12 0 0 1 12 12m88-56a12 12 0 1 1-12-12a12 12 0 0 1 12 12" />
+      </g>
     </Svg>
   );
 }

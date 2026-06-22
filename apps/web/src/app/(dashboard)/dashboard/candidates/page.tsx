@@ -3,7 +3,6 @@ import type { Route } from "next";
 import { Trash2, Users } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
@@ -47,7 +46,7 @@ export default async function CandidatesPage({ searchParams }: CandidatesPagePro
       fullName: candidate.fullName,
       email: candidate.email,
       phone: candidate.phone,
-      avatarUrl: candidate.email ? gravatarUrl(candidate.email) : null,
+      avatarUrl: candidate.avatarUrl || (candidate.email ? gravatarUrl(candidate.email) : null),
       location: candidate.location,
       role: candidate.latestApplication?.jobTitle ?? null,
       department: candidate.latestApplication?.department ?? null,
@@ -58,17 +57,12 @@ export default async function CandidatesPage({ searchParams }: CandidatesPagePro
       appliedAt: applied ? applied.getTime() : null,
       appliedLabel: applied ? appliedLabel(applied) : null,
       applicationId: candidate.latestApplication?.applicationId ?? null,
+      updatedAt: candidate.updatedAt.getTime(),
     };
   });
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        eyebrow="Candidates"
-        title="Candidates"
-        description="Everyone who has applied across your job board."
-      />
-
+    <div className="space-y-5">
       <div className="flex w-fit items-center gap-1 rounded-lg border bg-card p-1 text-sm">
         <Tab href="/dashboard/candidates" active={!isTrash}>
           All

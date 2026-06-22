@@ -27,6 +27,8 @@ import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
 import { OffersPanel } from "@/features/offers/OffersPanel";
 import type { CandidateOfferItem } from "@/features/offers/shared";
 import { NoteForm } from "@/features/candidates/NoteForm";
+import { EmailDrawer, type EmailTemplateOption } from "@/features/candidates/EmailDrawer";
+import type { TemplateValues } from "@/features/email-templates/interpolate";
 import { setInterviewStatus } from "@/features/interviews/actions";
 import {
   interviewModeLabel,
@@ -65,6 +67,7 @@ type CandidateFile = {
   fileUrl: string;
   fileType: string | null;
   fileSize: number | null;
+  contentHash: string | null;
   createdAt: string;
   uploadedByName: string | null;
   uploadedByEmail: string | null;
@@ -93,6 +96,8 @@ type CandidateMessage = {
 type CandidateProfileTabsProps = {
   candidateId: string;
   workspaceId: string;
+  candidateEmail: string;
+  candidateName: string;
   stageName: string | null;
   applications: CandidateProfileApplication[];
   notes: CandidateNoteItem[];
@@ -105,6 +110,8 @@ type CandidateProfileTabsProps = {
   aiEvaluations: CandidateAiEvaluationItem[];
   aiConfigured: boolean;
   offers: CandidateOfferItem[];
+  emailTemplates?: EmailTemplateOption[];
+  emailTemplateValues?: TemplateValues;
 };
 
 const INTERVIEW_MODE_ICON = {
@@ -166,6 +173,8 @@ function TabCount({ value }: { value: number }) {
 export function CandidateProfileTabs({
   candidateId,
   workspaceId,
+  candidateEmail,
+  candidateName,
   stageName,
   applications,
   notes,
@@ -178,6 +187,8 @@ export function CandidateProfileTabs({
   aiEvaluations,
   aiConfigured,
   offers,
+  emailTemplates = [],
+  emailTemplateValues = {},
 }: CandidateProfileTabsProps) {
   return (
     <Tabs defaultValue="profile">
@@ -261,14 +272,11 @@ export function CandidateProfileTabs({
           ))
         )}
 
-        <div>
-          <h3 className="mb-3 text-sm font-semibold">Résumé &amp; files</h3>
-          <CandidateFileUpload
-            candidateId={candidateId}
-            workspaceId={workspaceId}
-            initialFiles={files}
-          />
-        </div>
+        <CandidateFileUpload
+          candidateId={candidateId}
+          workspaceId={workspaceId}
+          initialFiles={files}
+        />
       </TabsContent>
 
       {/* ── Interviews ── */}
@@ -322,6 +330,22 @@ export function CandidateProfileTabs({
 
       {/* ── Communication ── */}
       <TabsContent value="communication" className="mt-4 space-y-3">
+        <div className="flex justify-end">
+          <EmailDrawer
+            candidateId={candidateId}
+            workspaceId={workspaceId}
+            email={candidateEmail}
+            name={candidateName}
+            templates={emailTemplates}
+            templateValues={emailTemplateValues}
+            trigger={
+              <Button size="sm">
+                <Mail className="size-4" />
+                New message
+              </Button>
+            }
+          />
+        </div>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">
             <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
@@ -329,8 +353,7 @@ export function CandidateProfileTabs({
             </span>
             <p className="text-sm font-medium">No messages yet</p>
             <p className="max-w-sm text-sm text-muted-foreground">
-              Use the Email action above to message this candidate. Set
-              RESEND_API_KEY to deliver; messages are saved here either way.
+              Send your first message using the button above.
             </p>
           </div>
         ) : (

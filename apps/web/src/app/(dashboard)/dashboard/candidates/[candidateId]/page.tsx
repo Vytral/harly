@@ -244,6 +244,8 @@ export default async function CandidateDetailPage({
           <CandidateProfileTabs
             candidateId={candidate.id}
             workspaceId={workspaceId}
+            candidateEmail={candidate.email}
+            candidateName={fullName}
             stageName={latestApplication?.currentStageName ?? null}
             applications={applications.map((application) => ({
               ...application,

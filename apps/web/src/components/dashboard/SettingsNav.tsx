@@ -14,7 +14,6 @@ import {
   CodeDuotoneIcon,
   RobotDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
-import { SETTINGS_SECTION_PERMISSION } from "@/features/workspaces/permissions";
 import { cn } from "@/lib/utils";
 
 type SettingsSection = {
@@ -29,38 +28,38 @@ const sections: SettingsSection[] = [
   {
     href: "/settings" as Route,
     label: "Company & brand",
-    hint: "Logo, color, careers page",
+    hint: "Logo, colors, careers page, and other organization-wide settings.",
     icon: BuildingsIcon,
     exact: true,
   },
   {
     href: "/settings/members" as Route,
     label: "Members & roles",
-    hint: "Teammates and permissions",
+    hint: "Teammates, permissions, and access control settings.",
     icon: UsersThreeIcon,
   },
   {
     href: "/settings/ai" as Route,
     label: "AI",
-    hint: "Parsing & drafting models",
+    hint: "Parsing & drafting models, AI features, and usage insights.",
     icon: RobotDuotoneIcon,
   },
   {
     href: "/settings/email" as Route,
     label: "Email",
-    hint: "Sending domain & provider",
+    hint: "Sending options, domain, signature, and email sync settings.",
     icon: EnvelopeIcon,
   },
   {
     href: "/settings/integrations" as Route,
     label: "Integrations",
-    hint: "Calendar, chat & more",
+    hint: "Connect your tools and automate your workflow.",
     icon: PlugIcon,
   },
   {
     href: "/settings/developers" as Route,
     label: "Developers & API",
-    hint: "Keys, webhooks, embed",
+    hint: "API keys, webhooks, and developer tools.",
     icon: CodeDuotoneIcon,
   },
 ];
@@ -78,7 +77,7 @@ export function SettingsNav({ allowedHrefs }: { allowedHrefs: string[] }) {
 
   return (
     <nav className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:gap-1 lg:pb-0">
-      {visible.map((section) => {
+      {sections.map((section) => {
         const active = section.exact
           ? pathname === section.href
           : pathname === section.href ||
@@ -93,7 +92,7 @@ export function SettingsNav({ allowedHrefs }: { allowedHrefs: string[] }) {
             className={cn(
               "group relative flex shrink-0 items-center gap-3 rounded-xl px-3 py-2.5 transition-colors lg:shrink",
               active
-                ? "bg-card shadow-sm ring-1 ring-border"
+                ? "card shadow-sm ring-1 ring-border"
                 : "text-muted-foreground hover:bg-accent/60",
             )}
           >

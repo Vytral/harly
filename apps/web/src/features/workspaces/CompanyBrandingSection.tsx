@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { toast } from "sonner";
 
 import {
@@ -9,24 +10,21 @@ import {
 } from "@/features/workspaces/actions";
 import {
   DEFAULT_BOARD_PRIMARY_COLOR,
-  type BoardStyle,
   type LogoStyle,
 } from "@/features/workspaces/board";
 import type { WorkspaceBranding } from "@/features/workspaces/data";
 import type { WorkspaceRole } from "@/features/workspaces/roles";
-import { BoardPreview } from "@/features/workspaces/BoardPreview";
+import { SectionHeader } from "@/features/workspaces/settings-ui";
 import { FileDropzone } from "@/components/ui/FileDropzone";
-import { Button } from "@/components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  ArrowUpRightIcon,
+  PaletteDuotoneIcon,
+} from "@/components/ui/icons/phosphor";
+import { BuildingsIcon } from "@/components/ui/icons/settings";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
 const initialActionState = { success: false } as {
@@ -61,7 +59,7 @@ function Segmented<T extends string>({
   disabled?: boolean;
 }) {
   return (
-    <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+    <div className="inline-flex rounded-xl border bg-muted/50 p-1">
       {options.map((option) => (
         <button
           key={option.value}
@@ -69,9 +67,9 @@ function Segmented<T extends string>({
           disabled={disabled}
           onClick={() => onChange(option.value)}
           className={cn(
-            "rounded-md px-3 py-1.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60",
+            "rounded-lg px-3.5 py-1.5 text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-60",
             value === option.value
-              ? "bg-card text-foreground shadow-sm"
+              ? "bg-card text-foreground shadow-sm ring-1 ring-border"
               : "text-muted-foreground hover:text-foreground",
           )}
         >
@@ -100,19 +98,15 @@ export function CompanyBrandingSection({
     initialActionState,
   );
   useActionToast(profileState, "Identity saved.");
-  useActionToast(brandingState, "Careers page saved.");
+  useActionToast(brandingState, "Brand settings saved.");
 
   const [name, setName] = useState(workspace.name);
   const [logoUrl, setLogoUrl] = useState(workspace.logoUrl ?? "");
-  const [tagline, setTagline] = useState(workspace.tagline ?? "");
-  const [description, setDescription] = useState(workspace.description ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(workspace.websiteUrl ?? "");
   const [heroImageUrl, setHeroImageUrl] = useState(workspace.heroImageUrl ?? "");
   const [primaryColor, setPrimaryColor] = useState(
     workspace.primaryColor ?? DEFAULT_BOARD_PRIMARY_COLOR,
   );
-  const [boardStyle, setBoardStyle] = useState<BoardStyle>(workspace.boardStyle);
-  const [logoStyle, setLogoStyle] = useState<LogoStyle>(workspace.logoStyle);
   const [sidebarLogoStyle, setSidebarLogoStyle] = useState<LogoStyle>(
     workspace.sidebarLogoStyle,
   );
@@ -128,265 +122,199 @@ export function CompanyBrandingSection({
     : DEFAULT_BOARD_PRIMARY_COLOR;
 
   return (
-    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-      <div className="space-y-6">
-        {/* Identity */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Identity</CardTitle>
-            <CardDescription>
-              Logo and name shown across Harly and your careers page.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={profileAction} className="space-y-6">
-              <input type="hidden" name="logoUrl" value={logoUrl} />
-              <input
-                type="hidden"
-                name="sidebarLogoStyle"
-                value={sidebarLogoStyle}
-              />
-              <input
-                type="hidden"
-                name="sidebarLogoUrl"
-                value={sidebarLogoUrl}
-              />
-              <input
-                type="hidden"
-                name="sidebarLogoDarkUrl"
-                value={sidebarLogoDarkUrl}
-              />
+    <div className="max-w-3xl space-y-6">
+      {/* ── Identity ─────────────────────────────────────────────────── */}
+      <Card className="gap-6 p-6 sm:p-8">
+        <SectionHeader
+          icon={BuildingsIcon}
+          title="Identity"
+          description="Logo and name shown across Harly and your careers page."
+        />
 
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-                <div className="space-y-2">
-                  <Label>Logo</Label>
+        <form action={profileAction} className="space-y-6">
+          <input type="hidden" name="logoUrl" value={logoUrl} />
+          <input type="hidden" name="sidebarLogoStyle" value={sidebarLogoStyle} />
+          <input type="hidden" name="sidebarLogoUrl" value={sidebarLogoUrl} />
+          <input
+            type="hidden"
+            name="sidebarLogoDarkUrl"
+            value={sidebarLogoDarkUrl}
+          />
+
+          {/* Logo + name */}
+          <div className="flex items-center gap-5">
+            <FileDropzone
+              value={logoUrl || null}
+              onChange={(url) => setLogoUrl(url ?? "")}
+              variant="avatar"
+              disabled={!canEdit}
+              hint="Square · PNG or SVG"
+            />
+            <div className="flex-1 space-y-2">
+              <Label htmlFor="ws-name">Company name</Label>
+              <Input
+                id="ws-name"
+                name="name"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                disabled={!canEdit || savingProfile}
+              />
+              <p className="text-xs text-muted-foreground">
+                Square logo, used as the app icon and avatar.
+              </p>
+            </div>
+          </div>
+
+          {/* Sidebar logo */}
+          <div className="space-y-3 border-t pt-6">
+            <div className="space-y-1">
+              <Label>Sidebar logo</Label>
+              <p className="text-xs text-muted-foreground">
+                Replace the workspace name with a wide wordmark logo in the
+                dashboard sidebar.
+              </p>
+            </div>
+            <Segmented
+              options={[
+                { value: "bordered", label: "Icon + name" },
+                { value: "full", label: "Full logo" },
+              ]}
+              value={sidebarLogoStyle}
+              onChange={setSidebarLogoStyle}
+              disabled={!canEdit || savingProfile}
+            />
+
+            {sidebarLogoStyle === "full" ? (
+              <div className="grid gap-4 pt-1 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground">
+                    Light mode
+                  </Label>
                   <FileDropzone
-                    value={logoUrl || null}
-                    onChange={(url) => setLogoUrl(url ?? "")}
-                    aspect="square"
+                    value={sidebarLogoUrl || null}
+                    onChange={(url) => setSidebarLogoUrl(url ?? "")}
+                    aspect="banner"
                     disabled={!canEdit}
-                    hint="Square · PNG or SVG"
+                    hint="Wide logo · transparent PNG/SVG"
                   />
                 </div>
-                <div className="flex-1 space-y-2">
-                  <Label htmlFor="ws-name">Company name</Label>
-                  <Input
-                    id="ws-name"
-                    name="name"
-                    value={name}
-                    onChange={(event) => setName(event.target.value)}
-                    disabled={!canEdit || savingProfile}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2 border-t pt-5">
-                <Label>Sidebar logo</Label>
-                <div>
-                  <Segmented
-                    options={[
-                      { value: "bordered", label: "Icon + name" },
-                      { value: "full", label: "Full logo" },
-                    ]}
-                    value={sidebarLogoStyle}
-                    onChange={setSidebarLogoStyle}
-                    disabled={!canEdit || savingProfile}
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Replace the workspace name with a wide/wordmark logo in the
-                  dashboard sidebar.
-                </p>
-              </div>
-
-              {sidebarLogoStyle === "full" ? (
-                <div className="grid gap-4 sm:grid-cols-2">
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">
-                      Light mode
-                    </Label>
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground">
+                    Dark mode
+                  </Label>
+                  <div className="rounded-2xl bg-zinc-950 p-2">
                     <FileDropzone
-                      value={sidebarLogoUrl || null}
-                      onChange={(url) => setSidebarLogoUrl(url ?? "")}
+                      value={sidebarLogoDarkUrl || null}
+                      onChange={(url) => setSidebarLogoDarkUrl(url ?? "")}
                       aspect="banner"
                       disabled={!canEdit}
-                      hint="Wide logo · transparent PNG/SVG"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label className="text-xs text-muted-foreground">
-                      Dark mode
-                    </Label>
-                    <div className="rounded-2xl bg-zinc-950 p-2">
-                      <FileDropzone
-                        value={sidebarLogoDarkUrl || null}
-                        onChange={(url) => setSidebarLogoDarkUrl(url ?? "")}
-                        aspect="banner"
-                        disabled={!canEdit}
-                        hint="Optional · falls back to light"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="flex justify-end">
-                <Button type="submit" disabled={!canEdit || savingProfile}>
-                  {savingProfile ? "Saving…" : "Save identity"}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        {/* Public careers page */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Public careers page</CardTitle>
-            <CardDescription>
-              Banner, copy, color, and style candidates see at your board.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form action={brandingAction} className="space-y-5">
-              <input type="hidden" name="boardStyle" value={boardStyle} />
-              <input type="hidden" name="logoStyle" value={logoStyle} />
-              <input type="hidden" name="heroImageUrl" value={heroImageUrl} />
-
-              <div className="space-y-2">
-                <Label>Banner</Label>
-                <FileDropzone
-                  value={heroImageUrl || null}
-                  onChange={(url) => setHeroImageUrl(url ?? "")}
-                  aspect="banner"
-                  disabled={!canEdit}
-                  hint="Wide image · 1500×500 recommended"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ws-tagline">Tagline</Label>
-                <Input
-                  id="ws-tagline"
-                  name="tagline"
-                  value={tagline}
-                  onChange={(event) => setTagline(event.target.value)}
-                  maxLength={280}
-                  placeholder="One line under your company name."
-                  disabled={!canEdit || savingBranding}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="ws-description">Description</Label>
-                <Textarea
-                  id="ws-description"
-                  name="description"
-                  rows={4}
-                  value={description}
-                  onChange={(event) => setDescription(event.target.value)}
-                  maxLength={1000}
-                  placeholder="A short paragraph about your company."
-                  disabled={!canEdit || savingBranding}
-                />
-                <p className="text-right text-xs text-muted-foreground">
-                  {description.length}/1000
-                </p>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="ws-website">Website</Label>
-                  <Input
-                    id="ws-website"
-                    name="websiteUrl"
-                    type="url"
-                    value={websiteUrl}
-                    onChange={(event) => setWebsiteUrl(event.target.value)}
-                    placeholder="https://acme.com"
-                    disabled={!canEdit || savingBranding}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ws-color">Primary color</Label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="color"
-                      value={previewColor}
-                      onChange={(event) => setPrimaryColor(event.target.value)}
-                      disabled={!canEdit || savingBranding}
-                      className="size-9 shrink-0 cursor-pointer rounded-md border bg-card p-1"
-                      aria-label="Primary color picker"
-                    />
-                    <Input
-                      id="ws-color"
-                      name="primaryColor"
-                      value={primaryColor}
-                      onChange={(event) => setPrimaryColor(event.target.value)}
-                      className="font-mono"
-                      disabled={!canEdit || savingBranding}
+                      hint="Optional · falls back to light"
                     />
                   </div>
                 </div>
               </div>
+            ) : null}
+          </div>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Board style</Label>
-                  <div>
-                    <Segmented
-                      options={[
-                        { value: "hero", label: "Hero" },
-                        { value: "minimal", label: "Minimal" },
-                      ]}
-                      value={boardStyle}
-                      onChange={setBoardStyle}
-                      disabled={!canEdit || savingBranding}
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Logo style</Label>
-                  <div>
-                    <Segmented
-                      options={[
-                        { value: "bordered", label: "Bordered" },
-                        { value: "full", label: "Full" },
-                      ]}
-                      value={logoStyle}
-                      onChange={setLogoStyle}
-                      disabled={!canEdit || savingBranding}
-                    />
-                  </div>
-                </div>
-              </div>
+          <div className="flex justify-end border-t pt-6">
+            <Button type="submit" disabled={!canEdit || savingProfile}>
+              {savingProfile ? "Saving…" : "Save identity"}
+            </Button>
+          </div>
+        </form>
+      </Card>
 
-              <div className="flex justify-end">
-                <Button type="submit" disabled={!canEdit || savingBranding}>
-                  {savingBranding ? "Saving…" : "Save careers page"}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Live preview */}
-      <div className="xl:sticky xl:top-20 xl:self-start">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-          Live preview
-        </p>
-        <BoardPreview
-          name={name}
-          slug={workspace.slug}
-          logoUrl={logoUrl || null}
-          tagline={tagline || null}
-          heroImageUrl={heroImageUrl || null}
-          primaryColor={previewColor}
-          boardStyle={boardStyle}
-          logoStyle={logoStyle}
+      {/* ── Brand & links ────────────────────────────────────────────── */}
+      <Card className="gap-6 p-6 sm:p-8">
+        <SectionHeader
+          icon={PaletteDuotoneIcon}
+          title="Brand & links"
+          description={
+            <>
+              Color, website and fallback banner used across your careers pages,
+              application emails and job posts.{" "}
+              <Link
+                href="/dashboard/career-page"
+                className="inline-flex items-center gap-0.5 font-medium text-pine underline-offset-2 hover:underline"
+              >
+                Customize your careers page
+                <ArrowUpRightIcon className="size-3.5" />
+              </Link>
+            </>
+          }
         />
-      </div>
+
+        <form action={brandingAction} className="space-y-6">
+          <input type="hidden" name="heroImageUrl" value={heroImageUrl} />
+          <input type="hidden" name="tagline" value={workspace.tagline ?? ""} />
+          <input
+            type="hidden"
+            name="description"
+            value={workspace.description ?? ""}
+          />
+          <input type="hidden" name="boardStyle" value={workspace.boardStyle} />
+          <input type="hidden" name="logoStyle" value={workspace.logoStyle} />
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="ws-website">Website</Label>
+              <Input
+                id="ws-website"
+                name="websiteUrl"
+                type="url"
+                value={websiteUrl}
+                onChange={(event) => setWebsiteUrl(event.target.value)}
+                placeholder="https://acme.com"
+                disabled={!canEdit || savingBranding}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ws-color">Primary color</Label>
+              <div className="flex items-center gap-2 rounded-lg border bg-card p-1 pr-3">
+                <label
+                  className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-md ring-1 ring-border"
+                  style={{ backgroundColor: previewColor }}
+                  aria-label="Pick primary color"
+                >
+                  <input
+                    type="color"
+                    value={previewColor}
+                    onChange={(event) => setPrimaryColor(event.target.value)}
+                    disabled={!canEdit || savingBranding}
+                    className="absolute inset-0 cursor-pointer opacity-0"
+                  />
+                </label>
+                <Input
+                  id="ws-color"
+                  name="primaryColor"
+                  value={primaryColor}
+                  onChange={(event) => setPrimaryColor(event.target.value)}
+                  className="h-8 border-0 bg-transparent px-0 font-mono uppercase shadow-none focus-visible:ring-0"
+                  disabled={!canEdit || savingBranding}
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label>Default banner</Label>
+            <FileDropzone
+              value={heroImageUrl || null}
+              onChange={(url) => setHeroImageUrl(url ?? "")}
+              aspect="banner"
+              disabled={!canEdit}
+              hint="Fallback banner for your careers page · 1500×500"
+            />
+          </div>
+
+          <div className="flex justify-end border-t pt-6">
+            <Button type="submit" disabled={!canEdit || savingBranding}>
+              {savingBranding ? "Saving…" : "Save brand"}
+            </Button>
+          </div>
+        </form>
+      </Card>
     </div>
   );
 }

@@ -35,6 +35,7 @@ export type CandidateListItem = {
   email: string;
   phone: string | null;
   location: string | null;
+  avatarUrl: string | null;
   applicationCount: number;
   latestApplication: {
     applicationId: string;
@@ -134,7 +135,9 @@ export async function listCandidates() {
       email: candidates.email,
       phone: candidates.phone,
       location: candidates.location,
+      avatarUrl: candidates.avatarUrl,
       candidateCreatedAt: candidates.createdAt,
+      candidateUpdatedAt: candidates.updatedAt,
       applicationId: applications.id,
       applicationJobId: applications.jobId,
       applicationStatus: applications.status,
@@ -168,7 +171,7 @@ export async function listCandidates() {
     )
     .orderBy(desc(candidates.createdAt), desc(applications.appliedAt));
 
-  const candidateMap = new Map<string, CandidateListItem & { createdAt: Date }>();
+  const candidateMap = new Map<string, CandidateListItem & { createdAt: Date; updatedAt: Date }>();
 
   for (const row of rows) {
     const existing = candidateMap.get(row.candidateId);
@@ -182,9 +185,11 @@ export async function listCandidates() {
         email: row.email,
         phone: row.phone,
         location: row.location,
+        avatarUrl: row.avatarUrl,
         applicationCount: 0,
         latestApplication: null,
         createdAt: row.candidateCreatedAt,
+        updatedAt: row.candidateUpdatedAt,
       };
 
     if (row.applicationId) {
@@ -237,6 +242,8 @@ export async function listCandidates() {
       email: candidate.email,
       phone: candidate.phone,
       location: candidate.location,
+      avatarUrl: candidate.avatarUrl,
+      updatedAt: candidate.updatedAt,
       applicationCount: candidate.applicationCount,
       latestApplication: candidate.latestApplication,
       tags: tagsByCandidate.get(candidate.id) ?? [],
@@ -361,6 +368,7 @@ export async function getCandidateProfile(candidateId: string) {
       fileUrl: candidateFiles.fileUrl,
       fileType: candidateFiles.fileType,
       fileSize: candidateFiles.fileSize,
+      contentHash: candidateFiles.contentHash,
       createdAt: candidateFiles.createdAt,
       uploadedByName: authUsers.name,
       uploadedByEmail: authUsers.email,

@@ -26,7 +26,7 @@ export default async function SettingsLayout({
           Manage your organization profile, team, and integrations.
         </p>
       </div>
-      <div className="grid gap-6 lg:grid-cols-[212px_minmax(0,1fr)]">
+      <div className="grid gap-6 lg:grid-cols-[248px_minmax(0,1fr)] xl:gap-8">
         <aside className="lg:sticky lg:top-20 lg:self-start">
           <SettingsNav allowedHrefs={allowedHrefs} />
         </aside>

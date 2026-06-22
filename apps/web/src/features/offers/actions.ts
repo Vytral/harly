@@ -26,6 +26,7 @@ import {
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { sendWorkspaceEmail } from "@/lib/email";
+import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
@@ -310,6 +311,7 @@ export async function sendOffer(input: { offerId: string }): Promise<ActionResul
   const recipient = await getOfferRecipient(workspaceId, offer.candidateId);
 
   if (recipient?.email) {
+    const branding = await getWorkspaceEmailBranding(workspaceId);
     void sendWorkspaceEmail(workspaceId, {
       to: recipient.email,
       subject: offerExtendedSubject({
@@ -319,12 +321,11 @@ export async function sendOffer(input: { offerId: string }): Promise<ActionResul
       react: createElement(OfferExtended, {
         candidateName: recipient.firstName,
         companyName: recipient.companyName,
+        companyLogoUrl: branding.logoUrl ?? undefined,
+        accentColor: branding.primaryColor ?? undefined,
+        socialLinks: branding.socialLinks,
         jobTitle: offer.title,
-        salary: formatOfferSalary(
-          offer.salaryAmount,
-          offer.currency,
-          offer.salaryPeriod,
-        ),
+        salary: formatOfferSalary(offer.salaryAmount, offer.currency, offer.salaryPeriod),
         startDate: formatOfferDate(offer.startDate),
         expiresAt: formatOfferDate(offer.expiresAt),
         equity: offer.equity ?? undefined,
@@ -504,12 +505,16 @@ export async function withdrawOffer(input: {
   if (offer.status === "sent") {
     const recipient = await getOfferRecipient(workspaceId, offer.candidateId);
     if (recipient?.email) {
+      const branding = await getWorkspaceEmailBranding(workspaceId);
       void sendWorkspaceEmail(workspaceId, {
         to: recipient.email,
         subject: offerWithdrawnSubject({ companyName: recipient.companyName }),
         react: createElement(OfferWithdrawn, {
           candidateName: recipient.firstName,
           companyName: recipient.companyName,
+          companyLogoUrl: branding.logoUrl ?? undefined,
+          accentColor: branding.primaryColor ?? undefined,
+          socialLinks: branding.socialLinks,
           jobTitle: offer.title,
         }),
       });

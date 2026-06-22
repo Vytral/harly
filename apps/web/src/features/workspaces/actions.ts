@@ -9,6 +9,7 @@ import { z } from "zod";
 
 import { auth } from "@/lib/auth";
 import { sendWorkspaceEmail } from "@/lib/email";
+import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { db } from "@harly/db";
 import {
   customRoles,
@@ -79,20 +80,21 @@ const removeMemberSchema = z.object({
   memberId: z.string().trim().min(1),
 });
 
-// Accepts an absolute http(s) URL, a locally-uploaded /uploads/... path, or
-// empty (cleared). Normalizes empty/whitespace to "".
-const optionalAssetUrl = z
+// Accept an absolute http(s) URL or a locally-uploaded /uploads/... path;
+// empty → null so clearing an upload persists.
+const optionalUploadUrl = z
   .string()
   .trim()
   .optional()
-  .transform((value) => (value && value.length > 0 ? value : ""))
+  .transform((value) => (value && value.length > 0 ? value : null))
   .refine(
     (value) =>
-      value === "" ||
+      value === null ||
       value.startsWith("/uploads/") ||
       /^https?:\/\//.test(value),
-    "Must be a valid URL.",
+    "Logo must be a valid URL.",
   );
+
 
 const workspaceProfileSchema = z.object({
   name: z.string().trim().min(1, "Workspace name is required.").max(120),
@@ -109,9 +111,9 @@ const workspaceProfileSchema = z.object({
         /^https?:\/\//.test(value),
       "Logo must be a valid URL.",
     ),
-  sidebarLogoStyle: z.enum(logoStyles).optional(),
-  sidebarLogoUrl: optionalAssetUrl,
-  sidebarLogoDarkUrl: optionalAssetUrl,
+    sidebarLogoStyle: z.enum(logoStyles).default("bordered"),
+    sidebarLogoUrl: optionalUploadUrl,
+    sidebarLogoDarkUrl: optionalUploadUrl,
 });
 
 function addDays(date: Date, days: number) {
@@ -225,14 +227,14 @@ export async function updateWorkspaceProfileAction(
 ): Promise<ActionResult> {
   try {
     const context = await requireWorkspaceRole(["owner", "admin"]);
-    const rawStyle = formData.get("sidebarLogoStyle");
+    const rawSidebarLogoStyle = formData.get("sidebarLogoStyle");
     const parsed = workspaceProfileSchema.safeParse({
       name: formData.get("name"),
       logoUrl: formData.get("logoUrl"),
       sidebarLogoStyle:
-        typeof rawStyle === "string" &&
-        logoStyles.includes(rawStyle as (typeof logoStyles)[number])
-          ? rawStyle
+        typeof rawSidebarLogoStyle === "string" &&
+        logoStyles.includes(rawSidebarLogoStyle as (typeof logoStyles)[number])
+          ? rawSidebarLogoStyle
           : undefined,
       sidebarLogoUrl: formData.get("sidebarLogoUrl"),
       sidebarLogoDarkUrl: formData.get("sidebarLogoDarkUrl"),
@@ -252,6 +254,20 @@ export async function updateWorkspaceProfileAction(
         logo: parsed.data.logoUrl || null,
       })
       .where(eq(authOrganizations.id, context.organization.id));
+    
+    await db
+      .insert(workspaceSettings)
+      .values({
+        organizationId: context.organization.id,
+        sidebarLogoStyle: parsed.data.sidebarLogoStyle,
+      })
+      .onConflictDoUpdate({
+        target: workspaceSettings.organizationId,
+        set: {
+          sidebarLogoStyle: parsed.data.sidebarLogoStyle,
+          updatedAt: new Date(),
+        },
+      });
 
     // Sidebar wordmark config lives in workspace_settings (upsert).
     const sidebarValues = {
@@ -381,6 +397,7 @@ export async function inviteWorkspaceMemberAction(
     const host = requestHeaders.get("host") ?? "localhost:3000";
     const protocol = host.startsWith("localhost") ? "http" : "https";
     const acceptUrl = `${protocol}://${host}/invite/${invitationId}`;
+    const branding = await getWorkspaceEmailBranding(context.organization.id);
 
     void sendWorkspaceEmail(context.organization.id, {
       to: parsed.data.email,
@@ -392,6 +409,7 @@ export async function inviteWorkspaceMemberAction(
         workspaceName: context.organization.name,
         role: parsed.data.role,
         acceptUrl,
+        branding,
       }),
     });
 

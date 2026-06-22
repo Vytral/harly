@@ -77,8 +77,8 @@ export function EmailSettingsCard({
       router.refresh();
     });
   }
-
-  const badge = isConfigured ? (
+  
+    const badge = isConfigured ? (
     <StatusPill tone={status.enabled ? "on" : "off"}>
       {status.enabled ? "Connected" : "Disabled"}
     </StatusPill>
@@ -88,10 +88,10 @@ export function EmailSettingsCard({
     <StatusPill tone="neutral">Not connected</StatusPill>
   );
 
+
   return (
     <div className="space-y-5">
       {!status.encryptionReady ? <EncryptionWarning /> : null}
-
       <Card className="gap-0 overflow-hidden p-0">
         <div className="p-6">
           <SectionHeader
@@ -139,29 +139,25 @@ export function EmailSettingsCard({
           />
         </div>
 
-        {isConfigured ? (
-          <div className="grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-            <StatCell label="Provider">
-              {status.provider === "resend" ? (
-                <ResendLogo className="size-3.5" />
-              ) : (
-                <EnvelopeIcon className="size-4 text-muted-foreground" />
-              )}
-              {PROVIDER_LABEL[status.provider!]}
-            </StatCell>
-            <StatCell label="From address">
-              <span className="truncate font-mono text-[13px]">
-                {status.from}
-              </span>
-            </StatCell>
-          </div>
-        ) : null}
+        <div className="grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+          <StatCell label="Provider">
+            {status.provider === "resend" ? (
+              <ResendLogo className="size-3.5" />
+            ) : (
+              <EnvelopeIcon className="size-4 text-muted-foreground" />
+            )}
+            {PROVIDER_LABEL[status.provider!]}
+          </StatCell>
+          <StatCell label="From address">
+            <span className="truncate font-mono text-[13px]">{status.from}</span>
+          </StatCell>
+        </div>
       </Card>
     </div>
   );
 }
 
-function EncryptionWarning() {
+        function EncryptionWarning() {
   return (
     <div className="flex items-start gap-2 rounded-2xl border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">
       <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />

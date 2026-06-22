@@ -22,6 +22,7 @@ import {
 } from "@harly/emails";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { sendWorkspaceEmail } from "@/lib/email";
+import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 
 const INTERVIEW_TYPE_LABEL: Record<string, string> = {
   screening: "Screening interview",
@@ -218,6 +219,7 @@ export async function scheduleInterview(
         .limit(1);
 
       if (recipient?.email) {
+        const branding = await getWorkspaceEmailBranding(workspace.id);
         void sendWorkspaceEmail(workspace.id, {
           to: recipient.email,
           subject: interviewScheduledSubject({
@@ -227,15 +229,15 @@ export async function scheduleInterview(
           react: createElement(InterviewScheduled, {
             candidateName: recipient.firstName,
             companyName: recipient.companyName,
+            companyLogoUrl: branding.logoUrl ?? undefined,
+            accentColor: branding.primaryColor ?? undefined,
+            socialLinks: branding.socialLinks,
             jobTitle: recipient.jobTitle,
-            interviewType:
-              INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
+            interviewType: INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
             when: interviewWhenFormatter.format(when),
             mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
             location: data.location ?? undefined,
-            duration: data.durationMins
-              ? `${data.durationMins} min`
-              : undefined,
+            duration: data.durationMins ? `${data.durationMins} min` : undefined,
           }),
         });
       }
@@ -312,6 +314,7 @@ export async function setInterviewStatus(input: {
         .limit(1);
 
       if (info?.email) {
+        const branding = await getWorkspaceEmailBranding(workspace.id);
         void sendWorkspaceEmail(workspace.id, {
           to: info.email,
           subject: interviewCanceledSubject({
@@ -321,11 +324,12 @@ export async function setInterviewStatus(input: {
           react: createElement(InterviewCanceled, {
             candidateName: info.firstName,
             companyName: info.companyName,
+            companyLogoUrl: branding.logoUrl ?? undefined,
+            accentColor: branding.primaryColor ?? undefined,
+            socialLinks: branding.socialLinks,
             jobTitle: info.jobTitle,
             interviewType: INTERVIEW_TYPE_LABEL[info.type] ?? "Interview",
-            when: info.scheduledAt
-              ? interviewWhenFormatter.format(info.scheduledAt)
-              : undefined,
+            when: info.scheduledAt ? interviewWhenFormatter.format(info.scheduledAt) : undefined,
           }),
         });
       }

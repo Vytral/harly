@@ -130,17 +130,17 @@ export function CalSettingsCard({
             ) : null
           }
         />
-
-        {!status.encryptionReady ? (
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
-            <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
-            <p>
-              Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
-              the server to store the Cal.com key.
-            </p>
-          </div>
-        ) : null}
       </div>
+
+      {!status.encryptionReady ? (
+        <div className="mx-6 mb-6 flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
+          <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
+          <p>
+            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
+            the server to store the Cal.com key.
+          </p>
+        </div>
+      ) : null}
 
       {status.hasApiKey ? (
         <div className="grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
@@ -305,8 +305,7 @@ function CalSettingsForm({
             <Label>Webhook URL</Label>
             <div className="flex gap-2">
               <Input readOnly value={webhookUrl} className="font-mono text-xs" />
-              <Button
-                type="button"
+              <Button type="button"
                 variant="outline"
                 size="icon"
                 onClick={copyWebhook}
@@ -321,7 +320,7 @@ function CalSettingsForm({
           </div>
         ) : null}
 
-        <div className="flex items-center justify-between rounded-lg border px-3 py-2.5">
+        <div className="flex items-center justify-between rounded-xl border px-3 py-2.5">
           <div>
             <p className="text-sm font-medium">Enable Cal.com</p>
             <p className="text-xs text-muted-foreground">

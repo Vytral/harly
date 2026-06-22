@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ImageUp, Loader2, RefreshCw, UploadCloud, X } from "lucide-react";
+import { ImageUp, Loader2, Pencil, RefreshCw, UploadCloud, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { getImageFileValidationError } from "@/lib/storage-validation";
@@ -44,6 +44,7 @@ export function FileDropzone({
   value,
   onChange,
   aspect = "square",
+  variant = "default",
   disabled,
   hint = "PNG, JPG, SVG or WEBP · up to 5MB",
   className,
@@ -51,6 +52,8 @@ export function FileDropzone({
   value: string | null;
   onChange: (url: string | null) => void;
   aspect?: "square" | "banner";
+  /** "avatar" = compact fixed-size square with a hover edit affordance, for logos sitting next to other fields. */
+  variant?: "default" | "avatar";
   disabled?: boolean;
   hint?: string;
   className?: string;
@@ -79,6 +82,67 @@ export function FileDropzone({
     }
   }
 
+  const fileInput = (
+    <input
+      ref={inputRef}
+      type="file"
+      accept="image/png,image/jpeg,image/svg+xml,image/webp"
+      className="sr-only"
+      disabled={disabled}
+      onChange={(event) => {
+        void handleFile(event.target.files?.[0] ?? null);
+        event.target.value = "";
+      }}
+    />
+  );
+
+  // ---- Avatar: compact square with hover-to-edit overlay --------------------
+  if (variant === "avatar") {
+    return (
+      <div className={cn("relative inline-block size-20 shrink-0", className)}>
+        <div className="size-full overflow-hidden rounded-xl border bg-muted/30">
+          {value ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={value} alt="Uploaded preview" className="size-full object-cover" />
+          ) : (
+            <div className="flex size-full items-center justify-center text-muted-foreground">
+              <ImageUp className="size-5" strokeWidth={1.8} />
+            </div>
+          )}
+        </div>
+        {!disabled && (
+          <>
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              disabled={uploading}
+              aria-label={value ? "Replace image" : "Upload image"}
+              className="absolute inset-0 flex items-center justify-center rounded-xl text-white opacity-0 transition-all duration-150 ease-out hover:bg-black/45 hover:opacity-100 focus-visible:opacity-100 focus-visible:bg-black/45 focus-visible:outline-none motion-reduce:transition-none"
+            >
+              {uploading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Pencil className="size-4" strokeWidth={1.8} />
+              )}
+            </button>
+            {value && (
+              <button
+                type="button"
+                onClick={() => onChange(null)}
+                aria-label="Remove image"
+                className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-rust/10 hover:text-rust"
+              >
+                <X className="size-3" />
+              </button>
+            )}
+          </>
+        )}
+        {fileInput}
+      </div>
+    );
+  }
+
+
   // ---- Filled: image preview + floating toolbar ----------------------------
   if (value) {
     return (
@@ -93,7 +157,10 @@ export function FileDropzone({
           <img
             src={value}
             alt="Uploaded preview"
-            className="size-full object-cover"
+            className={cn(
+              "size-full",
+              aspect === "banner" ? "object-contain p-2" : "object-cover",
+            )}
           />
           {!disabled && (
             <div className="absolute right-2.5 top-2.5 flex items-center gap-1.5 rounded-xl bg-white/85 p-1 shadow-sm backdrop-blur-sm transition-all duration-200 ease-out group-hover:bg-white motion-reduce:transition-none">
