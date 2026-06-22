@@ -3,20 +3,18 @@ import { Text } from "@react-email/components";
 import { heading, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
+import type { SocialLink } from "./HarlyLayout";
 
 export type OfferExtendedProps = {
   candidateName: string;
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
+  socialLinks?: SocialLink[];
   jobTitle: string;
-  /** Pre-formatted compensation line, e.g. "$120,000 / year". Optional. */
   salary?: string;
-  /** Pre-formatted start date, e.g. "March 3, 2026". Optional. */
   startDate?: string;
-  /** Pre-formatted expiry date for the offer. Optional. */
   expiresAt?: string;
-  /** Free-form equity description. Optional. */
   equity?: string;
 };
 
@@ -32,6 +30,7 @@ export function OfferExtended({
   companyName,
   companyLogoUrl,
   accentColor,
+  socialLinks,
   jobTitle,
   salary,
   startDate,
@@ -52,6 +51,7 @@ export function OfferExtended({
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
+      socialLinks={socialLinks}
     >
       <Text style={heading}>You have an offer</Text>
       <Text style={text}>Hi {candidateName},</Text>

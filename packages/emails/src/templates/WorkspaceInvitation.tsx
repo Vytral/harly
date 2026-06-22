@@ -1,13 +1,14 @@
 import { Button, Section, Text } from "@react-email/components";
 
-import { buttonStyle, heading, text, HARLY_ACCENT } from "./styles";
-import { HarlyLayout } from "./HarlyLayout";
+import { buttonStyle, heading, text } from "./styles";
+import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
 
 export type WorkspaceInvitationProps = {
   inviterName: string;
   workspaceName: string;
   role: string;
   acceptUrl: string;
+  branding?: WorkspaceEmailBranding;
 };
 
 export function workspaceInvitationSubject({
@@ -30,12 +31,14 @@ export function WorkspaceInvitation({
   workspaceName,
   role,
   acceptUrl,
+  branding,
 }: WorkspaceInvitationProps) {
   const roleLabel = ROLE_LABELS[role] ?? "Recruiter";
 
   return (
     <HarlyLayout
       preview={`${inviterName} invited you to join ${workspaceName} on Harly as ${roleLabel}.`}
+      branding={branding}
     >
       <Text style={heading}>You&apos;re invited</Text>
       <Text style={text}>Hi there,</Text>
@@ -45,7 +48,7 @@ export function WorkspaceInvitation({
         Harly — an open-source applicant tracking system.
       </Text>
       <Section style={{ marginTop: "24px" }}>
-        <Button href={acceptUrl} style={buttonStyle(HARLY_ACCENT)}>
+        <Button href={acceptUrl} style={buttonStyle(branding?.primaryColor || undefined)}>
           Accept invitation
         </Button>
       </Section>

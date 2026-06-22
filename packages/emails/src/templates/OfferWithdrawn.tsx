@@ -2,12 +2,14 @@ import { Text } from "@react-email/components";
 
 import { heading, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
+import type { SocialLink } from "./HarlyLayout";
 
 export type OfferWithdrawnProps = {
   candidateName: string;
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
+  socialLinks?: SocialLink[];
   jobTitle: string;
 };
 
@@ -22,6 +24,7 @@ export function OfferWithdrawn({
   companyName,
   companyLogoUrl,
   accentColor,
+  socialLinks,
   jobTitle,
 }: OfferWithdrawnProps) {
   return (
@@ -30,6 +33,7 @@ export function OfferWithdrawn({
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
+      socialLinks={socialLinks}
     >
       <Text style={heading}>Update on your offer</Text>
       <Text style={text}>Hi {candidateName},</Text>

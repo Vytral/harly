@@ -2,6 +2,7 @@ import { Text } from "@react-email/components";
 
 import { heading, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
+import type { SocialLink } from "./HarlyLayout";
 
 export type CandidateStageUpdateProps = {
   candidateName: string;
@@ -10,6 +11,7 @@ export type CandidateStageUpdateProps = {
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
+  socialLinks?: SocialLink[];
 };
 
 export function candidateStageUpdateSubject({
@@ -25,6 +27,7 @@ export function CandidateStageUpdate({
   companyName,
   companyLogoUrl,
   accentColor,
+  socialLinks,
 }: CandidateStageUpdateProps) {
   return (
     <WorkspaceLayout
@@ -32,6 +35,7 @@ export function CandidateStageUpdate({
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
+      socialLinks={socialLinks}
     >
       <Text style={heading}>Application update</Text>
       <Text style={text}>Hi {candidateName},</Text>

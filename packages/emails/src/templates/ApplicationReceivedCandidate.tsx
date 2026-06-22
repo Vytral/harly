@@ -2,6 +2,7 @@ import { Button, Section, Text } from "@react-email/components";
 
 import { buttonStyle, heading, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
+import type { SocialLink } from "./HarlyLayout";
 
 export type ApplicationReceivedCandidateProps = {
   candidateName: string;
@@ -9,6 +10,7 @@ export type ApplicationReceivedCandidateProps = {
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
+  socialLinks?: SocialLink[];
   jobBoardUrl?: string;
 };
 
@@ -24,6 +26,7 @@ export function ApplicationReceivedCandidate({
   companyName,
   companyLogoUrl,
   accentColor,
+  socialLinks,
   jobBoardUrl,
 }: ApplicationReceivedCandidateProps) {
   return (
@@ -32,6 +35,7 @@ export function ApplicationReceivedCandidate({
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
+      socialLinks={socialLinks}
     >
       <Text style={heading}>Application received</Text>
       <Text style={text}>Hi {candidateName},</Text>

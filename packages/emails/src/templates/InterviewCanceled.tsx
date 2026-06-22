@@ -2,16 +2,16 @@ import { Text } from "@react-email/components";
 
 import { heading, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
+import type { SocialLink } from "./HarlyLayout";
 
 export type InterviewCanceledProps = {
   candidateName: string;
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
+  socialLinks?: SocialLink[];
   jobTitle: string;
-  /** Readable interview type, e.g. "Technical interview". */
   interviewType: string;
-  /** Optional pre-formatted original time that was canceled. */
   when?: string;
 };
 
@@ -27,6 +27,7 @@ export function InterviewCanceled({
   companyName,
   companyLogoUrl,
   accentColor,
+  socialLinks,
   jobTitle,
   interviewType,
   when,
@@ -37,6 +38,7 @@ export function InterviewCanceled({
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
+      socialLinks={socialLinks}
     >
       <Text style={heading}>Interview canceled</Text>
       <Text style={text}>Hi {candidateName},</Text>

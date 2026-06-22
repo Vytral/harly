@@ -1,25 +1,30 @@
 import { Button, Section, Text } from "@react-email/components";
 
-import { buttonStyle, heading, text, HARLY_ACCENT } from "./styles";
-import { HarlyLayout } from "./HarlyLayout";
+import { buttonStyle, heading, text } from "./styles";
+import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
 
 export type VerifyEmailProps = {
   userName: string;
   verifyUrl: string;
+  /** Optional workspace branding to customize the email appearance */
+  branding?: WorkspaceEmailBranding;
 };
 
 export const verifyEmailSubject = "Verify your email for Harly";
 
-export function VerifyEmail({ userName, verifyUrl }: VerifyEmailProps) {
+export function VerifyEmail({ userName, verifyUrl, branding }: VerifyEmailProps) {
   return (
-    <HarlyLayout preview="Confirm your email address to finish setting up your Harly account.">
+    <HarlyLayout 
+      preview="Confirm your email address to finish setting up your Harly account."
+      branding={branding}
+    >
       <Text style={heading}>Verify your email</Text>
       <Text style={text}>Hi {userName},</Text>
       <Text style={text}>
         Confirm this email address to finish setting up your Harly account.
       </Text>
       <Section style={{ marginTop: "24px" }}>
-        <Button href={verifyUrl} style={buttonStyle(HARLY_ACCENT)}>
+        <Button href={verifyUrl} style={buttonStyle(branding?.primaryColor || undefined)}>
           Verify email
         </Button>
       </Section>

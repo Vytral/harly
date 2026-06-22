@@ -3,22 +3,19 @@ import { Text } from "@react-email/components";
 import { heading, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
+import type { SocialLink } from "./HarlyLayout";
 
 export type InterviewScheduledProps = {
   candidateName: string;
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
+  socialLinks?: SocialLink[];
   jobTitle: string;
-  /** Readable interview type, e.g. "Technical interview". */
   interviewType: string;
-  /** Pre-formatted date + time, e.g. "March 3, 2026 at 2:00 PM GMT". */
   when: string;
-  /** Readable mode, e.g. "Video", "Phone", "On-site". */
   mode: string;
-  /** Optional location or meeting link. */
   location?: string;
-  /** Optional duration, e.g. "45 min". */
   duration?: string;
 };
 
@@ -34,6 +31,7 @@ export function InterviewScheduled({
   companyName,
   companyLogoUrl,
   accentColor,
+  socialLinks,
   jobTitle,
   interviewType,
   when,
@@ -54,6 +52,7 @@ export function InterviewScheduled({
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
+      socialLinks={socialLinks}
     >
       <Text style={heading}>Interview confirmed</Text>
       <Text style={text}>Hi {candidateName},</Text>

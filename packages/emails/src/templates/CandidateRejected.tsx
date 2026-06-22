@@ -2,6 +2,7 @@ import { Text } from "@react-email/components";
 
 import { heading, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
+import type { SocialLink } from "./HarlyLayout";
 
 export type CandidateRejectedProps = {
   candidateName: string;
@@ -9,6 +10,7 @@ export type CandidateRejectedProps = {
   companyName: string;
   companyLogoUrl?: string;
   accentColor?: string;
+  socialLinks?: SocialLink[];
   customMessage?: string;
 };
 
@@ -24,6 +26,7 @@ export function CandidateRejected({
   companyName,
   companyLogoUrl,
   accentColor,
+  socialLinks,
   customMessage,
 }: CandidateRejectedProps) {
   return (
@@ -32,6 +35,7 @@ export function CandidateRejected({
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
+      socialLinks={socialLinks}
     >
       <Text style={heading}>Application update</Text>
       <Text style={text}>Hi {candidateName},</Text>

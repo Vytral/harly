@@ -3,7 +3,11 @@
 // Keep in sync with the web app's color palette (stone/zinc base).
 // ---------------------------------------------------------------------------
 
-export const HARLY_ACCENT = "#ef3e36"; // Harly brand red
+// Default accent color (Harly brand red) - used as fallback
+export const HARLY_ACCENT = "#ef3e36";
+
+// Generic fallback when no workspace branding is available
+export const GENERIC_ACCENT = "#000000";
 
 export const main = {
   backgroundColor: "#f5f5f4",

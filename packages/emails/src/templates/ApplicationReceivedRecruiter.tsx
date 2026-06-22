@@ -1,13 +1,14 @@
 import { Button, Section, Text } from "@react-email/components";
 
-import { buttonStyle, heading, text, HARLY_ACCENT } from "./styles";
-import { HarlyLayout } from "./HarlyLayout";
+import { buttonStyle, heading, text } from "./styles";
+import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
 
 export type ApplicationReceivedRecruiterProps = {
   candidateName: string;
   candidateEmail: string;
   jobTitle: string;
   dashboardUrl: string;
+  branding?: WorkspaceEmailBranding;
 };
 
 export function applicationReceivedRecruiterSubject({
@@ -22,10 +23,12 @@ export function ApplicationReceivedRecruiter({
   candidateEmail,
   jobTitle,
   dashboardUrl,
+  branding,
 }: ApplicationReceivedRecruiterProps) {
   return (
     <HarlyLayout
       preview={`${candidateName} applied for ${jobTitle}. Review their application in Harly.`}
+      branding={branding}
     >
       <Text style={heading}>New application</Text>
       <Text style={text}>
@@ -42,7 +45,7 @@ export function ApplicationReceivedRecruiter({
         </a>
       </Text>
       <Section style={{ marginTop: "24px" }}>
-        <Button href={dashboardUrl} style={buttonStyle(HARLY_ACCENT)}>
+        <Button href={dashboardUrl} style={buttonStyle(branding?.primaryColor || undefined)}>
           Review candidate
         </Button>
       </Section>
