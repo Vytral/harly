@@ -225,6 +225,20 @@
       "when": 1781391331501,
       "tag": "0031_mature_bishop",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1781391332501,
+      "tag": "0032_slack_oauth",
+      "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1782097212144,
+      "tag": "0033_dark_shocker",
+      "breakpoints": true
     }
   ]
 }

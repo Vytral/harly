@@ -123,6 +123,10 @@ const candidateFileSchema = z.object({
     .int()
     .positive("File is required.")
     .max(maxResumeFileSize, "File must be 10MB or smaller."),
+  contentHash: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/i, "Invalid file hash.")
+    .optional(),
 });
 
 export async function createCandidateNote(input: {
@@ -416,6 +420,7 @@ export async function attachCandidateFile(input: {
   fileUrl: string;
   fileType: string;
   fileSize: number;
+  contentHash?: string;
 }): Promise<{
   success: boolean;
   error?: string;
@@ -425,6 +430,7 @@ export async function attachCandidateFile(input: {
     fileUrl: string;
     fileType: string | null;
     fileSize: number | null;
+    contentHash: string | null;
     createdAt: string;
     uploadedByName: string;
   };
@@ -461,6 +467,40 @@ export async function attachCandidateFile(input: {
         return { success: false, error: "Candidate not found." };
       }
 
+      if (parsed.data.contentHash) {
+        const [existing] = await tx
+          .select({
+            id: candidateFiles.id,
+            fileName: candidateFiles.fileName,
+            fileUrl: candidateFiles.fileUrl,
+            fileType: candidateFiles.fileType,
+            fileSize: candidateFiles.fileSize,
+            contentHash: candidateFiles.contentHash,
+            createdAt: candidateFiles.createdAt,
+          })
+          .from(candidateFiles)
+          .where(
+            and(
+              eq(candidateFiles.workspaceId, input.workspaceId),
+              eq(candidateFiles.candidateId, input.candidateId),
+              eq(candidateFiles.contentHash, parsed.data.contentHash.toLowerCase()),
+            ),
+          )
+          .orderBy(desc(candidateFiles.createdAt))
+          .limit(1);
+
+        if (existing) {
+          return {
+            success: true,
+            file: {
+              ...existing,
+              createdAt: existing.createdAt.toISOString(),
+              uploadedByName: user.name,
+            },
+          };
+        }
+      }
+
       const [file] = await tx
         .insert(candidateFiles)
         .values({
@@ -470,6 +510,7 @@ export async function attachCandidateFile(input: {
           fileUrl: parsed.data.fileUrl,
           fileType: parsed.data.fileType,
           fileSize: parsed.data.fileSize,
+          contentHash: parsed.data.contentHash?.toLowerCase() ?? null,
           uploadedById: user.id,
         })
         .returning({
@@ -478,6 +519,7 @@ export async function attachCandidateFile(input: {
           fileUrl: candidateFiles.fileUrl,
           fileType: candidateFiles.fileType,
           fileSize: candidateFiles.fileSize,
+          contentHash: candidateFiles.contentHash,
           createdAt: candidateFiles.createdAt,
         });
 

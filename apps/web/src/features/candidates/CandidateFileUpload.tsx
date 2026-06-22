@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { Download, ExternalLink, FileText, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { attachCandidateFile } from "@/features/candidates/actions";
 import { getResumeFileValidationError } from "@/lib/storage-validation";
 import { formatFileSize } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,6 +31,7 @@ type CandidateFileItem = {
   fileUrl: string;
   fileType: string | null;
   fileSize: number | null;
+  contentHash: string | null;
   createdAt: string;
   uploadedByName: string | null;
   uploadedByEmail: string | null;
@@ -58,6 +60,14 @@ function isPresignResponse(value: unknown): value is PresignResponse {
     typeof value.fileUrl === "string" &&
     typeof value.key === "string"
   );
+}
+
+async function sha256(file: File) {
+  const buffer = await file.arrayBuffer();
+  const digest = await crypto.subtle.digest("SHA-256", buffer);
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 async function uploadFile(file: File) {
@@ -89,6 +99,104 @@ async function uploadFile(file: File) {
   return payload;
 }
 
+type GroupedFile = {
+  latest: CandidateFileItem;
+  duplicates: CandidateFileItem[];
+};
+
+function groupFiles(files: CandidateFileItem[]): GroupedFile[] {
+  const groups = new Map<string, CandidateFileItem[]>();
+
+  for (const file of files) {
+    const key = file.contentHash ?? `${file.fileName.toLowerCase()}-${file.fileSize ?? "unknown"}`;
+    groups.set(key, [...(groups.get(key) ?? []), file]);
+  }
+
+  return Array.from(groups.values()).map((items) => {
+    const sorted = [...items].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+    );
+    return { latest: sorted[0]!, duplicates: sorted.slice(1) };
+  });
+}
+
+function FileRow({ file, duplicateCount }: { file: CandidateFileItem; duplicateCount: number }) {
+  const meta = (
+    <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 items-center gap-2">
+        <p className="truncate text-sm font-medium">{file.fileName}</p>
+        {duplicateCount > 0 ? (
+          <Badge variant="secondary" className="shrink-0 px-1.5 text-[10px]">
+            {duplicateCount + 1} copies
+          </Badge>
+        ) : null}
+        {file.contentHash ? (
+          <Badge variant="outline" className="shrink-0 px-1.5 text-[10px]">
+            SHA-256
+          </Badge>
+        ) : null}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {file.fileSize ? formatFileSize(file.fileSize) : "Unknown size"}
+        {file.uploadedByName ? ` · ${file.uploadedByName}` : ""}
+      </p>
+    </div>
+  );
+  const icon = (
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
+      <FileText className="size-4" />
+    </span>
+  );
+
+  if (isPdfFile(file)) {
+    return (
+      <Dialog>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition hover:border-ring/40 hover:bg-accent/40"
+          >
+            {icon}
+            {meta}
+          </button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between gap-3 pr-8">
+              <span className="truncate">{file.fileName}</span>
+              <Button asChild size="sm" variant="outline">
+                <a href={file.fileUrl} target="_blank" rel="noreferrer">
+                  <Download className="size-4" />
+                  Download
+                </a>
+              </Button>
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Preview for {file.fileName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="h-[75vh] overflow-hidden rounded-lg border">
+            <iframe src={file.fileUrl} title={file.fileName} className="size-full" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
+  return (
+    <a
+      href={file.fileUrl}
+      target="_blank"
+      rel="noreferrer"
+      className="flex items-center gap-3 rounded-lg border bg-card p-3 transition hover:border-ring/40 hover:bg-accent/40"
+    >
+      {icon}
+      {meta}
+      <ExternalLink className="ml-auto size-4 shrink-0 text-muted-foreground" />
+    </a>
+  );
+}
+
 export function CandidateFileUpload({
   candidateId,
   workspaceId,
@@ -97,6 +205,8 @@ export function CandidateFileUpload({
   const inputRef = useRef<HTMLInputElement>(null);
   const [files, setFiles] = useState(initialFiles);
   const [isPending, startTransition] = useTransition();
+  const groupedFiles = useMemo(() => groupFiles(files), [files]);
+  const latestFile = groupedFiles[0]?.latest ?? null;
 
   function handleFile(file: File | null) {
     if (!file) return;
@@ -109,6 +219,14 @@ export function CandidateFileUpload({
 
     startTransition(async () => {
       try {
+        const contentHash = await sha256(file);
+        const existing = files.find((current) => current.contentHash === contentHash);
+
+        if (existing) {
+          toast.info("This file already exists on the candidate profile.");
+          return;
+        }
+
         const uploaded = await uploadFile(file);
         const result = await attachCandidateFile({
           candidateId,
@@ -117,6 +235,7 @@ export function CandidateFileUpload({
           fileUrl: uploaded.fileUrl,
           fileType: file.type,
           fileSize: file.size,
+          contentHash,
         });
 
         if (!result.success || !result.file) {
@@ -124,19 +243,25 @@ export function CandidateFileUpload({
           return;
         }
 
-        setFiles((current) => [
-          {
-            id: result.file!.id,
-            fileName: result.file!.fileName,
-            fileUrl: result.file!.fileUrl,
-            fileType: result.file!.fileType,
-            fileSize: result.file!.fileSize,
-            createdAt: result.file!.createdAt,
-            uploadedByName: result.file!.uploadedByName,
-            uploadedByEmail: null,
-          },
-          ...current,
-        ]);
+        setFiles((current) => {
+          if (result.file!.contentHash && current.some((f) => f.contentHash === result.file!.contentHash)) {
+            return current;
+          }
+          return [
+            {
+              id: result.file!.id,
+              fileName: result.file!.fileName,
+              fileUrl: result.file!.fileUrl,
+              fileType: result.file!.fileType,
+              fileSize: result.file!.fileSize,
+              contentHash: result.file!.contentHash,
+              createdAt: result.file!.createdAt,
+              uploadedByName: result.file!.uploadedByName,
+              uploadedByEmail: null,
+            },
+            ...current,
+          ];
+        });
         toast.success("File uploaded.");
       } catch (uploadError) {
         toast.error(
@@ -151,7 +276,7 @@ export function CandidateFileUpload({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-3 rounded-xl border bg-card p-4">
       <input
         ref={inputRef}
         type="file"
@@ -160,109 +285,44 @@ export function CandidateFileUpload({
         onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
       />
 
-      {files.length === 0 ? (
-        // First file: roomy dropzone-style call to action.
-        <div className="rounded-lg border border-dashed bg-muted/40 p-6 text-center">
-          <div className="mx-auto mb-3 flex size-10 items-center justify-center rounded-full bg-accent text-accent-foreground">
-            <Upload className="size-5" />
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={isPending}
-            onClick={() => inputRef.current?.click()}
-          >
-            {isPending ? "Uploading…" : "Upload resume or file"}
-          </Button>
-          <p className="mt-2 text-xs text-muted-foreground">
-            PDF, DOC, or DOCX · max 10MB
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold">Résumé &amp; files</h3>
+          <p className="text-xs text-muted-foreground">
+            {latestFile
+              ? `Latest: ${latestFile.fileName}`
+              : "PDF, DOC, or DOCX · max 10MB"}
           </p>
         </div>
+        <Button
+          type="button"
+          size="sm"
+          variant={files.length === 0 ? "default" : "outline"}
+          disabled={isPending}
+          onClick={() => inputRef.current?.click()}
+        >
+          <Upload className="size-4" />
+          {isPending ? "Uploading…" : files.length === 0 ? "Upload file" : "Add file"}
+        </Button>
+      </div>
+
+      {files.length === 0 ? (
+        <button
+          type="button"
+          onClick={() => inputRef.current?.click()}
+          className="w-full rounded-lg border border-dashed bg-muted/40 p-6 text-center text-sm text-muted-foreground transition hover:border-ring/40 hover:bg-accent/40"
+        >
+          Drop in a resume or supporting file.
+        </button>
       ) : (
-        // Files exist: compact list + small add button, no giant dropzone.
         <div className="space-y-2">
-          <div className="flex justify-end">
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              className="text-muted-foreground"
-              disabled={isPending}
-              onClick={() => inputRef.current?.click()}
-            >
-              <Upload className="size-4" />
-              {isPending ? "Uploading…" : "Add file"}
-            </Button>
-          </div>
-          {files.map((file) => {
-            const meta = (
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium">{file.fileName}</p>
-                <p className="text-xs text-muted-foreground">
-                  {file.fileSize ? formatFileSize(file.fileSize) : "Unknown size"}
-                  {file.uploadedByName ? ` · ${file.uploadedByName}` : ""}
-                </p>
-              </div>
-            );
-            const icon = (
-              <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                <FileText className="size-4" />
-              </span>
-            );
-
-            if (isPdfFile(file)) {
-              return (
-                <Dialog key={file.id}>
-                  <DialogTrigger asChild>
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition hover:border-ring/40 hover:bg-accent/40"
-                    >
-                      {icon}
-                      {meta}
-                    </button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-3xl">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center justify-between gap-3 pr-8">
-                        <span className="truncate">{file.fileName}</span>
-                        <Button asChild size="sm" variant="outline">
-                          <a href={file.fileUrl} target="_blank" rel="noreferrer">
-                            <Download className="size-4" />
-                            Download
-                          </a>
-                        </Button>
-                      </DialogTitle>
-                      <DialogDescription className="sr-only">
-                        Preview for {file.fileName}
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="h-[75vh] overflow-hidden rounded-lg border">
-                      <iframe
-                        src={file.fileUrl}
-                        title={file.fileName}
-                        className="size-full"
-                      />
-                    </div>
-                  </DialogContent>
-                </Dialog>
-              );
-            }
-
-            return (
-              <a
-                key={file.id}
-                href={file.fileUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-3 rounded-lg border bg-card p-3 transition hover:border-ring/40 hover:bg-accent/40"
-              >
-                {icon}
-                {meta}
-                <ExternalLink className="ml-auto size-4 shrink-0 text-muted-foreground" />
-              </a>
-            );
-          })}
+          {groupedFiles.map(({ latest, duplicates }) => (
+            <FileRow
+              key={latest.contentHash ?? latest.id}
+              file={latest}
+              duplicateCount={duplicates.length}
+            />
+          ))}
         </div>
       )}
     </div>
