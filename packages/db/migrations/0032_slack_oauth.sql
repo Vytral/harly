@@ -1,0 +1,13 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_enabled" boolean DEFAULT false NOT NULL;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_client_id" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_client_secret_ciphertext" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_client_secret_iv" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_client_secret_tag" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_team_id" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_team_name" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_channel_id" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_channel_name" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_bot_token_ciphertext" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_bot_token_iv" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_bot_token_tag" text;
+ALTER TABLE "workspace_settings" ADD COLUMN "slack_events" jsonb DEFAULT '[]'::jsonb;

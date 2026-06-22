@@ -6,6 +6,8 @@ import { db, webhookEndpoints, webhookDeliveries } from "@harly/db";
 
 import { deliverWebhook } from "./dispatch";
 import type { WebhookEvent } from "./events";
+import { notifySlackEvent } from "@/server/notify/slack";
+import { notifyChatEvent } from "@/server/notify/dispatch";
 
 /**
  * Emit a domain event to all subscribed webhook endpoints.
@@ -58,4 +60,8 @@ export async function emitWebhookEvent(
   } catch (error) {
     console.error("[webhooks] emit failed", { workspaceId, event, error });
   }
+
+  // Fire-and-forget: chat webhook (Slack/Discord incoming-webhook) + Slack OAuth API
+  void notifyChatEvent(workspaceId, event, data).catch(() => undefined);
+  void notifySlackEvent(workspaceId, event, data).catch(() => undefined);
 }

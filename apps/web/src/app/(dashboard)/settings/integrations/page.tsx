@@ -1,12 +1,13 @@
 import { CalSettingsCard } from "@/features/workspaces/CalSettingsCard";
-import { ChatSettingsCard } from "@/features/workspaces/ChatSettingsCard";
-import { TurnstileSettingsCard } from "@/features/workspaces/TurnstileSettingsCard";
+import { SlackSettingsCard } from "@/features/workspaces/SlackSettingsCard";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
-import { getWorkspaceChatStatus } from "@/lib/notify/config";
-import { getWorkspaceTurnstileStatus } from "@/lib/turnstile";
-import { WEBHOOK_EVENTS, WEBHOOK_EVENT_LABELS } from "@/server/webhooks/events";
+import { getWorkspaceSlackStatus } from "@/lib/slack/config";
+import {
+  WEBHOOK_EVENTS,
+  WEBHOOK_EVENT_LABELS,
+} from "@/server/webhooks/events";
 import { BrandTile } from "@/features/workspaces/settings-ui";
 import {
   GmailLogo,
@@ -18,40 +19,31 @@ import { Card } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
 
-// Future integrations — inert "coming soon" tiles so the surface reads as
-// visibly extensible, each with its real brand mark. `setup` tells the user
-// what the connection will need, so the roadmap is honest about effort.
 const UPCOMING: Array<{
   name: string;
   description: string;
   logo: React.ComponentType<{ className?: string }>;
-  setup: "key" | "oauth";
   tone?: string;
 }> = [
-  {
-    name: "Greenhouse",
-    description: "Import jobs and candidates from an existing Greenhouse account.",
-    logo: GreenhouseLogo,
-    setup: "key",
-    tone: "text-[#1c8c4a]",
-  },
   {
     name: "Google Calendar",
     description: "Two-way sync interviews with recruiters' Google calendars.",
     logo: GoogleCalendarLogo,
-    setup: "oauth",
   },
   {
     name: "Gmail",
     description: "Send and log candidate emails from your own inbox.",
     logo: GmailLogo,
-    setup: "oauth",
+  },
+  {
+    name: "Greenhouse",
+    description: "Import jobs and candidates from an existing Greenhouse account.",
+    logo: GreenhouseLogo,
   },
   {
     name: "LinkedIn",
     description: "Publish jobs and receive applications from LinkedIn.",
     logo: LinkedinLogo,
-    setup: "oauth",
   },
 ];
 
@@ -63,10 +55,9 @@ const SETUP_LABEL: Record<"key" | "oauth", string> = {
 export default async function IntegrationsSettingsPage() {
   await requirePagePermission("integrations:manage");
   const { organization, role } = await getWorkspaceContext();
-  const [calStatus, chatStatus, turnstileStatus] = await Promise.all([
+  const [calStatus, slackStatus] = await Promise.all([
     getWorkspaceCalStatus(organization.id),
-    getWorkspaceChatStatus(organization.id),
-    getWorkspaceTurnstileStatus(organization.id),
+    getWorkspaceSlackStatus(organization.id),
   ]);
   const canEdit = role === "owner" || role === "admin";
 
@@ -75,7 +66,7 @@ export default async function IntegrationsSettingsPage() {
     ? `${appUrl}/api/webhooks/cal?ws=${organization.id}`
     : null;
 
-  const chatEvents = WEBHOOK_EVENTS.map((event) => ({
+  const eventOptions = WEBHOOK_EVENTS.map((event) => ({
     value: event,
     label: WEBHOOK_EVENT_LABELS[event],
   }));
@@ -88,15 +79,14 @@ export default async function IntegrationsSettingsPage() {
         webhookUrl={webhookUrl}
       />
 
-      <ChatSettingsCard
-        status={chatStatus}
-        events={chatEvents}
-        canEdit={canEdit}
-      />
+        <SlackSettingsCard
+          status={slackStatus}
+          events={eventOptions}
+          canEdit={canEdit}
+          workspaceId={organization.id}
+        />
 
-      <TurnstileSettingsCard status={turnstileStatus} canEdit={canEdit} />
-
-      <div className="space-y-3">
+        <div className="space-y-3">
         <div className="flex items-baseline justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             On the roadmap
@@ -130,10 +120,8 @@ export default async function IntegrationsSettingsPage() {
                     <p className="text-sm text-muted-foreground">
                       {integration.description}
                     </p>
-                    <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/60">
-                      {SETUP_LABEL[integration.setup]}
-                    </p>
                   </div>
+                  
                 </div>
               </Card>
             );

@@ -10,6 +10,7 @@ import {
 } from "@harly/emails";
 
 import { sendWorkspaceEmail } from "@/lib/email";
+import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import type { PublicApplicationResult } from "@/features/applications/data";
 
 type ApplicationEmail = Extract<
@@ -27,32 +28,39 @@ export function sendApplicationReceivedEmails(email: ApplicationEmail): void {
   const jobBoardUrl = `${appUrl}/board/${email.workspaceSlug}`;
   const dashboardUrl = `${appUrl}/dashboard/candidates`;
 
-  const candidateEmail = sendWorkspaceEmail(email.workspaceId, {
-    to: email.candidateEmail,
-    subject: applicationReceivedCandidateSubject({ jobTitle: email.jobTitle }),
-    react: createElement(ApplicationReceivedCandidate, {
-      candidateName: email.candidateFirstName,
-      jobTitle: email.jobTitle,
-      companyName: email.workspaceName,
-      jobBoardUrl,
-    }),
-  });
+  void (async () => {
+    const branding = await getWorkspaceEmailBranding(email.workspaceId);
 
-  const recruiterEmails = email.ownerEmails.map((ownerEmail) =>
-    sendWorkspaceEmail(email.workspaceId, {
-      to: ownerEmail,
-      subject: applicationReceivedRecruiterSubject({
-        candidateName: email.candidateName,
-        jobTitle: email.jobTitle,
+    await Promise.allSettled([
+      sendWorkspaceEmail(email.workspaceId, {
+        to: email.candidateEmail,
+        subject: applicationReceivedCandidateSubject({ jobTitle: email.jobTitle }),
+        react: createElement(ApplicationReceivedCandidate, {
+          candidateName: email.candidateFirstName,
+          jobTitle: email.jobTitle,
+          companyName: email.workspaceName,
+          companyLogoUrl: branding.logoUrl ?? undefined,
+          accentColor: branding.primaryColor ?? undefined,
+          socialLinks: branding.socialLinks,
+          jobBoardUrl,
+        }),
       }),
-      react: createElement(ApplicationReceivedRecruiter, {
-        candidateName: email.candidateName,
-        candidateEmail: email.candidateEmail,
-        jobTitle: email.jobTitle,
-        dashboardUrl,
-      }),
-    }),
-  );
-
-  void Promise.allSettled([candidateEmail, ...recruiterEmails]);
+      ...email.ownerEmails.map((ownerEmail) =>
+        sendWorkspaceEmail(email.workspaceId, {
+          to: ownerEmail,
+          subject: applicationReceivedRecruiterSubject({
+            candidateName: email.candidateName,
+            jobTitle: email.jobTitle,
+          }),
+          react: createElement(ApplicationReceivedRecruiter, {
+            candidateName: email.candidateName,
+            candidateEmail: email.candidateEmail,
+            jobTitle: email.jobTitle,
+            dashboardUrl,
+            branding,
+          }),
+        }),
+      ),
+    ]);
+  })();
 }
