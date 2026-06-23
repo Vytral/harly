@@ -157,6 +157,10 @@ export async function updateCandidateForApi(input: {
       ),
     )
     .returning();
+
+  await emitWebhookEvent(input.workspaceId, "candidate.updated", {
+    candidate: serializeCandidate(updated),
+  });
   return updated;
 }
 
