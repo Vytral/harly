@@ -89,7 +89,7 @@ export default async function CandidateDetailPage({
     notFound();
   }
 
-  const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags, aiEvaluations } =
+  const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags, aiEvaluations, inPool } =
     profile;
   const [calStatus, aiStatus, workspaceContext] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
@@ -185,6 +185,7 @@ export default async function CandidateDetailPage({
                       company_name: workspaceName,
                       sender_name: currentUserName,
                     }}
+                    inPool={inPool}
                   />
                 </div>
               </div>

@@ -125,6 +125,13 @@ export const offerStatusEnum = pgEnum("offer_status", [
   "withdrawn",
 ]);
 
+export const poolEntrySourceEnum = pgEnum("pool_entry_source", [
+  "applied",
+  "imported",
+  "sourced",
+  "referred",
+]);
+
 export const salaryPeriodEnum = pgEnum("salary_period", ["annual", "monthly"]);
 
 // Better Auth
@@ -342,6 +349,8 @@ export const workspaceSettings = pgTable("workspace_settings", {
   aiApiKeyCiphertext: text("ai_api_key_ciphertext"),
   aiApiKeyIv: text("ai_api_key_iv"),
   aiApiKeyTag: text("ai_api_key_tag"),
+  // Automatically score new applications when AI is configured.
+  aiAutoScore: boolean("ai_auto_score").default(false).notNull(),
   // Cal.com scheduling (bring-your-own-key). Same AES-256-GCM encryption as the
   // AI key — the API key is never stored or returned in plaintext.
   calEnabled: boolean("cal_enabled").default(false).notNull(),
@@ -599,6 +608,8 @@ export const candidates = pgTable(
     websiteUrl: text("website_url"),
     avatarUrl: text("avatar_url"),
     headline: text("headline"),
+    skills: jsonb("skills").default(sql`'[]'::jsonb`).notNull(),
+    experienceYears: integer("experience_years"),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ...timestamps(),
   },
@@ -620,6 +631,7 @@ export const candidates = pgTable(
       table.workspaceId,
       table.deletedAt,
     ),
+    index("candidates_skills_idx").using("gin", table.skills),
   ],
 );
 
@@ -1068,6 +1080,42 @@ export const candidateTags = pgTable(
   ],
 );
 
+// Candidate pool — tracks which candidates are in the talent pool and why
+export const poolEntries = pgTable(
+  "pool_entries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id").references(() => jobs.id, { onDelete: "set null" }),
+    reason: text("reason"),
+    source: poolEntrySourceEnum("source").default("applied").notNull(),
+    addedById: text("added_by_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    addedAt: timestamp("added_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("pool_entries_workspace_candidate_idx").on(
+      table.workspaceId,
+      table.candidateId,
+      table.removedAt,
+    ),
+    index("pool_entries_workspace_idx").on(table.workspaceId),
+    index("pool_entries_candidate_idx").on(table.candidateId),
+    index("pool_entries_job_idx").on(table.jobId),
+    index("pool_entries_added_at_idx").on(table.workspaceId, table.addedAt),
+  ],
+);
+
 // Hiring team — members assigned to a job
 export const jobHiringTeam = pgTable(
   "job_hiring_team",
@@ -1211,6 +1259,8 @@ export type AiEvaluation = typeof aiEvaluations.$inferSelect;
 export type NewAiEvaluation = typeof aiEvaluations.$inferInsert;
 export type CandidateTag = typeof candidateTags.$inferSelect;
 export type NewCandidateTag = typeof candidateTags.$inferInsert;
+export type PoolEntry = typeof poolEntries.$inferSelect;
+export type NewPoolEntry = typeof poolEntries.$inferInsert;
 export type JobHiringTeamMember = typeof jobHiringTeam.$inferSelect;
 export type NewJobHiringTeamMember = typeof jobHiringTeam.$inferInsert;
 export type CandidateMessage = typeof candidateMessages.$inferSelect;

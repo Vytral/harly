@@ -17,6 +17,7 @@ import {
   interviews,
   jobs,
   jobStages,
+  poolEntries,
   scorecards,
   user as authUsers,
 } from "@harly/db";
@@ -659,9 +660,25 @@ export async function getCandidateProfile(candidateId: string) {
     };
   });
 
+  // Check if candidate is in the pool
+  const [poolEntry] = await db
+    .select({ id: poolEntries.id })
+    .from(poolEntries)
+    .where(
+      and(
+        eq(poolEntries.workspaceId, workspace.id),
+        eq(poolEntries.candidateId, candidate.id),
+        isNull(poolEntries.removedAt),
+      ),
+    )
+    .limit(1);
+
+  const inPool = !!poolEntry;
+
   return {
     workspaceId: workspace.id,
     candidate,
+    inPool,
     applications: candidateApplications.map((application) => ({
       ...application,
       answers: answersByApplication.get(application.id) ?? [],

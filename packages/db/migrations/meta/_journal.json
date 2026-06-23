@@ -246,6 +246,20 @@
       "when": 1782105148992,
       "tag": "0034_gcal-integration",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1782241861132,
+      "tag": "0035_volatile_loa",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1782242435244,
+      "tag": "0036_fixed_rocket_raccoon",
+      "breakpoints": true
     }
   ]
 }

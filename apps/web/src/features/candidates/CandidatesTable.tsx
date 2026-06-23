@@ -10,6 +10,7 @@ import {
   RotateCcw,
   Search,
   Sparkles,
+  Star,
   Trash2,
   User,
   XCircle,
@@ -22,6 +23,7 @@ import {
   restoreCandidateAction,
   trashCandidateAction,
 } from "@/features/candidates/actions";
+import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
 import { toCsv } from "@/lib/csv";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
@@ -306,6 +308,18 @@ export function CandidatesTable({
     });
   }
 
+  function runTogglePool(row: CandidateRow) {
+    startTransition(async () => {
+      const result = await addToPoolAction({ candidateId: row.id, source: "sourced" });
+      if (result.success) {
+        toast.success(`${row.fullName} added to pool.`);
+        router.refresh();
+      } else {
+        toast.error(result.error ?? "Could not add to pool.");
+      }
+    });
+  }
+
   function runBulkDelete() {
     const ids = filtered.filter((r) => selected.has(r.id)).map((r) => r.id);
     if (ids.length === 0) return;
@@ -583,6 +597,7 @@ export function CandidatesTable({
                       onView={() => router.push(`/dashboard/candidates/${row.id}`)}
                       onStatus={(next) => runRowStatus(row, next)}
                       onDelete={() => runDelete(row)}
+                      onTogglePool={() => runTogglePool(row)}
                     />
                   </div>
                 </div>
@@ -713,12 +728,14 @@ function RowActions({
   onView,
   onStatus,
   onDelete,
+  onTogglePool,
 }: {
   row: CandidateRow;
   disabled: boolean;
   onView: () => void;
   onStatus: (next: "hired" | "rejected" | "active") => void;
   onDelete: () => void;
+  onTogglePool: () => void;
 }) {
   return (
     <DropdownMenu>
@@ -750,6 +767,11 @@ function RowActions({
         <DropdownMenuItem onSelect={() => onStatus("active")}>
           <RotateCcw className="size-4" />
           Reactivate
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onTogglePool}>
+          <Star className="size-4" />
+          Add to Pool
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={onDelete}>

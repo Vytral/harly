@@ -41,6 +41,7 @@ import {
   restoreCandidateAction,
   trashCandidateAction,
 } from "@/features/candidates/actions";
+import { CandidatePoolButton } from "@/features/pool/CandidatePoolButton";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -236,6 +237,7 @@ export function CandidateActionBar({
   cal,
   emailTemplates = [],
   emailTemplateValues = {},
+  inPool = false,
 }: {
   candidate: EditableCandidate;
   name: string;
@@ -248,12 +250,17 @@ export function CandidateActionBar({
   cal: ScheduleCalConfig;
   emailTemplates?: EmailTemplateOption[];
   emailTemplateValues?: TemplateValues;
+  inPool?: boolean;
 }) {
   const applicationIds = applications.map((application) => application.applicationId);
 
   return (
     <div className="flex flex-wrap items-center gap-2">
       {/* Primary actions — always visible */}
+      <CandidatePoolButton
+        candidateId={candidate.id}
+        inPool={inPool}
+      />
       <EvaluationDrawer
         candidateId={candidate.id}
         workspaceId={candidate.workspaceId}

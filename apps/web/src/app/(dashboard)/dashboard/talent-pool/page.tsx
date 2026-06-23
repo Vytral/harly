@@ -1,13 +1,15 @@
-import { UsersRound } from "lucide-react";
+import { listPoolCandidates, listOpenJobs } from "@/features/pool/data";
+import { PoolView } from "@/features/pool/PoolView";
 
-import { ComingSoon } from "@/components/ComingSoon";
+export default async function TalentPoolPage() {
+  const [candidates, openJobs] = await Promise.all([
+    listPoolCandidates(),
+    listOpenJobs(),
+  ]);
 
-export default function TalentPoolPage() {
   return (
-    <ComingSoon
-      icon={UsersRound}
-      title="Talent Pool"
-      description="A searchable pool of past candidates to source from for future roles."
-    />
+    <div className="space-y-6">
+      <PoolView candidates={candidates} openJobs={openJobs} />
+    </div>
   );
 }

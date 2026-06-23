@@ -1,6 +1,7 @@
 import type { Route } from "next";
 import {
   BarChart3,
+  Bookmark,
   Briefcase,
   CalendarDays,
   FileText,
@@ -12,7 +13,6 @@ import {
   ListTodo,
   Settings,
   Users,
-  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 
@@ -40,6 +40,7 @@ export const primaryNav: NavItem[] = [
 export const workspaceNav: NavItem[] = [
   { label: "Jobs", href: "/dashboard/jobs", icon: Briefcase },
   { label: "Candidates", href: "/dashboard/candidates", icon: Users },
+  { label: "Talent Pool", href: "/dashboard/talent-pool", icon: Bookmark },
   { label: "Pipeline", href: "/dashboard/pipeline", icon: KanbanSquare },
   { label: "Reports", href: "/dashboard/reports", icon: BarChart3 },
   { label: "Tasks", href: "/dashboard/tasks", icon: ListTodo },
@@ -55,7 +56,6 @@ export const workspaceNav: NavItem[] = [
 /** Stub sections — coming-soon pages collapsed under "More" in the sidebar. */
 export const moreNav: NavItem[] = [
   { label: "Calendars", href: "/dashboard/calendars", icon: CalendarDays },
-  { label: "Talent Pool", href: "/dashboard/talent-pool", icon: UsersRound },
   { label: "Templates", href: "/dashboard/templates", icon: FileText },
 ];
 
