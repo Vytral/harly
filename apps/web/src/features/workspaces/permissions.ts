@@ -146,4 +146,5 @@ export const SETTINGS_SECTION_PERMISSION: Record<string, Permission> = {
   "/settings/developers": "integrations:manage",
   "/settings/security": "members:manage",
   "/settings/legal": "settings:edit",
+  "/settings/portal": "settings:edit",
 };

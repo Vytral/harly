@@ -260,6 +260,20 @@
       "when": 1782242435244,
       "tag": "0036_fixed_rocket_raccoon",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1782247752844,
+      "tag": "0037_first_hex",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1782252117757,
+      "tag": "0038_stale_prowler",
+      "breakpoints": true
     }
   ]
 }

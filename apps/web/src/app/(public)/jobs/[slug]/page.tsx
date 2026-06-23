@@ -13,6 +13,7 @@ import {
 import { isCareerPageConfigured } from "@/features/career-page/config";
 import { JobChrome } from "@/features/career-page/job/JobChrome";
 import { JobOverviewBody } from "@/features/career-page/job/JobOverviewBody";
+import { isPortalEnabled } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,10 @@ type JobDetailPageProps = {
 
 export default async function JobDetailPage({ params }: JobDetailPageProps) {
   const { slug } = await params;
-  const detail = await getPublicJobDetail({ jobSlug: slug });
+  const [detail, portalEnabled] = await Promise.all([
+    getPublicJobDetail({ jobSlug: slug }),
+    isPortalEnabled(),
+  ]);
 
   if (!detail) notFound();
 
@@ -62,7 +66,7 @@ export default async function JobDetailPage({ params }: JobDetailPageProps) {
 
   return (
     <BoardShell workspace={brandedWorkspace} boardRoot={boardRoot}>
-      <BoardTopBar workspace={brandedWorkspace} boardRoot={boardRoot} backHref="/" />
+      <BoardTopBar workspace={brandedWorkspace} boardRoot={boardRoot} backHref="/" portalEnabled={portalEnabled} />
       <BoardJobHeader workspace={brandedWorkspace} boardRoot={boardRoot} job={job} activeTab="overview" />
 
       <main className="board-page-enter mx-auto max-w-3xl px-6 py-12">

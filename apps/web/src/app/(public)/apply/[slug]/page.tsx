@@ -7,6 +7,7 @@ import { normalizeJobApplicationConfig, normalizeJobBoardConfig } from "@/featur
 import { isCareerPageConfigured } from "@/features/career-page/config";
 import { JobChrome } from "@/features/career-page/job/JobChrome";
 import { resolveTurnstileSiteKey } from "@/lib/turnstile";
+import { isPortalEnabled } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,10 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
 
   const { job, workspace, config } = detail;
   const applicationConfig = normalizeJobApplicationConfig(job.applicationConfig);
-  const turnstileSiteKey = await resolveTurnstileSiteKey(workspace.id);
+  const [turnstileSiteKey, portalEnabled] = await Promise.all([
+    resolveTurnstileSiteKey(workspace.id),
+    isPortalEnabled(),
+  ]);
   const boardRoot = "/";
 
   // Configured career template → per-template apply chrome wrapping the form.
@@ -59,7 +63,7 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
 
   return (
     <BoardShell workspace={brandedWorkspace} boardRoot={boardRoot}>
-      <BoardTopBar workspace={brandedWorkspace} boardRoot={boardRoot} backHref="/" />
+      <BoardTopBar workspace={brandedWorkspace} boardRoot={boardRoot} backHref="/" portalEnabled={portalEnabled} />
       <BoardJobHeader workspace={brandedWorkspace} boardRoot={boardRoot} job={job} activeTab="application" />
 
       <main className="board-page-enter mx-auto max-w-2xl px-6 py-10">

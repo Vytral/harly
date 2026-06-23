@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@harly/auth";
 import { getSessionCookie } from "@harly/auth/cookies";
 
+const PORTAL_SESSION_COOKIE = "harly_portal_session";
+
 const PUBLIC_PATHS = [
   "/",
   "/login",
@@ -11,10 +13,7 @@ const PUBLIC_PATHS = [
   "/reset-password",
   "/setup",
   "/api/auth",
-  // Inbound integration webhooks authenticate via signature, not session.
   "/api/webhooks",
-  // Public REST API + authenticated REST API: both authenticate per-request
-  // (slug / API key / cron secret), never via the session cookie.
   "/api/public",
   "/api/v1",
   "/api/cron",
@@ -26,11 +25,17 @@ const PUBLIC_PATHS = [
   "/apply",
   "/board",
   "/invite",
+  // Portal public routes — pages enforce isPortalEnabled themselves
+  "/portal",
+  "/api/portal",
 ];
 
 const PROTECTED_PATH_PREFIXES = ["/dashboard", "/settings"];
 const ACCOUNT_PATH = "/account";
 const SECURITY_EXEMPT_PREFIXES = ["/settings/security", "/api"];
+
+// Portal protected paths — require portal session cookie (no DB needed)
+const PORTAL_PROTECTED = ["/portal/dashboard", "/portal/jobs", "/portal/profile"];
 
 function isProtected(pathname: string): boolean {
   return PROTECTED_PATH_PREFIXES.some((p) => pathname.startsWith(p));
@@ -40,8 +45,24 @@ function isSecurityExempt(pathname: string): boolean {
   return SECURITY_EXEMPT_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
+function isPortalProtected(pathname: string): boolean {
+  return PORTAL_PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ── Candidate portal protected routes (cookie-only, no DB) ──────────────
+  if (isPortalProtected(pathname)) {
+    const token = request.cookies.get(PORTAL_SESSION_COOKIE)?.value;
+    if (!token) {
+      const loginUrl = new URL("/portal/login", request.url);
+      loginUrl.searchParams.set("next", pathname);
+      return NextResponse.redirect(loginUrl);
+    }
+    return NextResponse.next();
+  }
+  // ────────────────────────────────────────────────────────────────────────
 
   const isPublic = PUBLIC_PATHS.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
@@ -85,7 +106,7 @@ export async function proxy(request: NextRequest) {
           }
         }
       } catch {
-        // DB query failure (e.g. edge runtime) — allow through, server-side enforces as fallback.
+        // DB query failure — allow through, server-side enforces as fallback.
       }
     }
   }

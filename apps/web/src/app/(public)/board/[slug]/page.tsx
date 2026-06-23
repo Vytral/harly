@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 
 import { getCareerPageData } from "@/features/career-page/data";
 import { PublicCareerPage } from "@/features/career-page/PublicCareerPage";
+import { isPortalEnabled } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +12,10 @@ type BoardPageProps = {
 
 export default async function BoardPage({ params }: BoardPageProps) {
   const { slug } = await params;
-  const data = await getCareerPageData(slug);
+  const [data, portalEnabled] = await Promise.all([
+    getCareerPageData(slug),
+    isPortalEnabled(),
+  ]);
 
   if (!data) {
     notFound();
@@ -31,6 +35,7 @@ export default async function BoardPage({ params }: BoardPageProps) {
       }))}
       config={data.config}
       boardRoot={`/board/${data.workspace.slug}`}
+      portalEnabled={portalEnabled}
     />
   );
 }

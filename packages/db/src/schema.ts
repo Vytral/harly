@@ -447,6 +447,20 @@ export const workspaceSettings = pgTable("workspace_settings", {
   //   candidateNotice: string, aiTransparencyNotice: string }
   legalPages: jsonb("legal_pages").default(sql`'{}'::jsonb`).notNull(),
   legalConfigured: boolean("legal_configured").default(false).notNull(),
+  // Candidate portal — self-service portal for candidates to view their applications.
+  candidatePortalEnabled: boolean("candidate_portal_enabled").default(false).notNull(),
+  // Portal OAuth — Google. Client secret encrypted at rest (AES-256-GCM).
+  portalGoogleClientId: text("portal_google_client_id"),
+  portalGoogleClientSecretCiphertext: text("portal_google_client_secret_ciphertext"),
+  portalGoogleClientSecretIv: text("portal_google_client_secret_iv"),
+  portalGoogleClientSecretTag: text("portal_google_client_secret_tag"),
+  // Portal OAuth — GitHub. Client secret encrypted at rest (AES-256-GCM).
+  portalGithubClientId: text("portal_github_client_id"),
+  portalGithubClientSecretCiphertext: text("portal_github_client_secret_ciphertext"),
+  portalGithubClientSecretIv: text("portal_github_client_secret_iv"),
+  portalGithubClientSecretTag: text("portal_github_client_secret_tag"),
+  // Portal UI options.
+  portalShowApplicationStatus: boolean("portal_show_application_status").default(true).notNull(),
   ...timestamps(),
 });
 
@@ -1580,3 +1594,59 @@ export type PasskeyChallenge = typeof passkeyChallenge.$inferSelect;
 export type NewPasskeyChallenge = typeof passkeyChallenge.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type NewAuditLog = typeof auditLogs.$inferInsert;
+
+// ---------------------------------------------------------------------------
+// Candidate portal auth — lightweight JWT-based sessions for the self-service
+// candidate portal. Completely separate from recruiter better-auth sessions.
+// ---------------------------------------------------------------------------
+
+export const candidatePortalSessions = pgTable(
+  "candidate_portal_sessions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    // SHA-256 hash of the raw token stored in the cookie — never store raw.
+    tokenHash: text("token_hash").notNull().unique(),
+    // Device/browser hint for "active sessions" list.
+    userAgent: text("user_agent"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("portal_sessions_candidate_idx").on(table.candidateId),
+    index("portal_sessions_token_hash_idx").on(table.tokenHash),
+  ],
+);
+
+// One-time magic link tokens for portal login.
+export const candidatePortalMagicLinks = pgTable(
+  "candidate_portal_magic_links",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    email: text("email").notNull(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    tokenHash: text("token_hash").notNull().unique(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    usedAt: timestamp("used_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("portal_magic_links_email_idx").on(table.email, table.workspaceId),
+    index("portal_magic_links_token_hash_idx").on(table.tokenHash),
+  ],
+);
+
+export type CandidatePortalSession = typeof candidatePortalSessions.$inferSelect;
+export type NewCandidatePortalSession = typeof candidatePortalSessions.$inferInsert;
+export type CandidatePortalMagicLink = typeof candidatePortalMagicLinks.$inferSelect;

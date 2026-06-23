@@ -29,11 +29,13 @@ export function PublicCareerPage({
   jobs,
   config,
   boardRoot,
+  portalEnabled,
 }: {
   workspace: WorkspaceBoardBranding & { id: string };
   jobs: Job[];
   config: CareerPageConfig;
   boardRoot: string;
+  portalEnabled?: boolean;
 }) {
   if (isCareerPageConfigured(config)) {
     return (
@@ -52,7 +54,7 @@ export function PublicCareerPage({
       {isHero ? (
         <BoardHero workspace={workspace} showCta={jobs.length > 0} />
       ) : (
-        <BoardMinimalHeader workspace={workspace} />
+        <BoardMinimalHeader workspace={workspace} portalEnabled={portalEnabled} />
       )}
 
       {workspace.description && isHero ? (

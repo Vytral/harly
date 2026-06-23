@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/icons/settings";
 import {
   CodeDuotoneIcon,
+  IdentificationCardDuotoneIcon,
   RobotDuotoneIcon,
   SealCheckDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
@@ -39,6 +40,12 @@ const sections: SettingsSection[] = [
     label: "Members & roles",
     hint: "Teammates, permissions, and access control settings.",
     icon: UsersThreeIcon,
+  },
+  {
+    href: "/settings/portal" as Route,
+    label: "Candidate Portal",
+    hint: "Self-service portal for candidates to view applications and update their profile.",
+    icon: IdentificationCardDuotoneIcon,
   },
   {
     href: "/settings/ai" as Route,

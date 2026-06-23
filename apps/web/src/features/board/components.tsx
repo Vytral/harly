@@ -133,10 +133,22 @@ export function BoardHero({ workspace, showCta = false }: BoardHeroProps) {
   );
 }
 
-export function BoardMinimalHeader({ workspace }: { workspace: WorkspaceLike }) {
+export function BoardMinimalHeader({ workspace, portalEnabled }: { workspace: WorkspaceLike; portalEnabled?: boolean }) {
   return (
     <section className="border-b border-zinc-100 bg-white">
-      <div className="mx-auto flex max-w-3xl flex-col items-center px-6 py-16 text-center">
+      <div className="relative mx-auto flex max-w-3xl flex-col items-center px-6 py-16 text-center">
+        {portalEnabled ? (
+          <Link
+            href={"/portal" as Route}
+            aria-label="Candidate portal"
+            className="absolute right-6 top-4 flex size-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="size-5">
+              <circle cx="12" cy="8" r="3.5" />
+              <path d="M4.5 20.5c0-4.14 3.36-7.5 7.5-7.5s7.5 3.36 7.5 7.5" />
+            </svg>
+          </Link>
+        ) : null}
         <WorkspaceLogo workspace={workspace} size="lg" />
         <h1 className="mt-5 text-3xl font-semibold tracking-tight text-zinc-900">
           Careers at {workspace.name}
@@ -282,10 +294,12 @@ export function BoardTopBar({
   workspace,
   boardRoot,
   backHref,
+  portalEnabled,
 }: {
   workspace: WorkspaceLike;
   boardRoot: string;
   backHref?: Route;
+  portalEnabled?: boolean;
 }) {
   return (
     <header className="border-b border-zinc-100 bg-white">
@@ -299,14 +313,28 @@ export function BoardTopBar({
             {workspace.name}
           </span>
         </Link>
-        {backHref ? (
-          <Link
-            href={backHref}
-            className="ml-auto text-sm text-zinc-500 transition hover:text-zinc-900"
-          >
-            View all jobs
-          </Link>
-        ) : null}
+        <div className="ml-auto flex items-center gap-3">
+          {backHref ? (
+            <Link
+              href={backHref}
+              className="text-sm text-zinc-500 transition hover:text-zinc-900"
+            >
+              View all jobs
+            </Link>
+          ) : null}
+          {portalEnabled ? (
+            <Link
+              href={"/portal" as Route}
+              aria-label="Candidate portal"
+              className="flex size-8 items-center justify-center rounded-full text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round" className="size-5">
+                <circle cx="12" cy="8" r="3.5" />
+                <path d="M4.5 20.5c0-4.14 3.36-7.5 7.5-7.5s7.5 3.36 7.5 7.5" />
+              </svg>
+            </Link>
+          ) : null}
+        </div>
       </div>
     </header>
   );

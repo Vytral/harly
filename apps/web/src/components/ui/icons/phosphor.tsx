@@ -555,3 +555,14 @@ export function PaletteDuotoneIcon(props: IconProps) {
     </Svg>
   );
 }
+
+export function IdentificationCardDuotoneIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <g fill="currentColor">
+        <path d="M216 48H40a8 8 0 0 0-8 8v144a8 8 0 0 0 8 8h176a8 8 0 0 0 8-8V56a8 8 0 0 0-8-8m-8 144H48V64h160Z" opacity=".2"/>
+        <path d="M216 40H40a16 16 0 0 0-16 16v144a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a16 16 0 0 0-16-16m0 160H40V56h176ZM80 120a36 36 0 1 1 36 36a36 36 0 0 1-36-36m36 20a20 20 0 1 0-20-20a20 20 0 0 0 20 20m49.6 44H66.4a8 8 0 0 1-7.8-9.6C62.63 156.84 80.12 144 100 144h32c19.88 0 37.37 12.84 41.4 30.4a8 8 0 0 1-7.8 9.6M80.85 168h62.3C139 158.75 128.89 152 116 152s-23 6.75-35.15 16m87.15-56h32a8 8 0 0 1 0 16h-32a8 8 0 0 1 0-16m0 32h32a8 8 0 0 1 0 16h-32a8 8 0 0 1 0-16"/>
+      </g>
+    </Svg>
+  );
+}
