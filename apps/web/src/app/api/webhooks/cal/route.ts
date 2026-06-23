@@ -10,6 +10,11 @@ import {
   workspaceSettings,
 } from "@harly/db";
 import { verifyCalSignature } from "@/lib/cal/client";
+import {
+  syncInterviewToGCal,
+  cancelInterviewGCalEvent,
+  updateInterviewGCalEvent,
+} from "@/lib/gcal/sync";
 
 export const runtime = "nodejs";
 
@@ -80,9 +85,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "no booking uid" });
   }
 
-  // Cancellation: flip status, no resolution needed.
+  // Cancellation: flip status, delete GCal event if synced.
   if (event === "BOOKING_CANCELLED") {
-    await db
+    const [canceled] = await db
       .update(interviews)
       .set({ status: "canceled", updatedAt: new Date() })
       .where(
@@ -90,7 +95,17 @@ export async function POST(request: NextRequest) {
           eq(interviews.workspaceId, workspaceId),
           eq(interviews.calBookingUid, uid),
         ),
-      );
+      )
+      .returning({ id: interviews.id, gcalEventId: interviews.gcalEventId });
+
+    if (canceled?.gcalEventId) {
+      void cancelInterviewGCalEvent({
+        workspaceId,
+        interviewId: canceled.id,
+        gcalEventId: canceled.gcalEventId,
+      });
+    }
+
     return NextResponse.json({ ok: true });
   }
 
@@ -112,7 +127,7 @@ export async function POST(request: NextRequest) {
         )
       : 45;
 
-  // Reschedule of an interview we already track: just move it.
+  // Reschedule of an interview we already track: move it and sync to GCal.
   if (event === "BOOKING_RESCHEDULED") {
     const moved = await db
       .update(interviews)
@@ -123,8 +138,16 @@ export async function POST(request: NextRequest) {
           eq(interviews.calBookingUid, uid),
         ),
       )
-      .returning({ id: interviews.id });
+      .returning({ id: interviews.id, gcalEventId: interviews.gcalEventId });
     if (moved.length > 0) {
+      if (moved[0].gcalEventId) {
+        void updateInterviewGCalEvent({
+          workspaceId,
+          gcalEventId: moved[0].gcalEventId,
+          start: when,
+          durationMins,
+        });
+      }
       return NextResponse.json({ ok: true });
     }
     // Unknown booking → fall through and create it.
@@ -190,7 +213,7 @@ export async function POST(request: NextRequest) {
 
   const mode = inferMode(asString(payload.location));
 
-  await db
+  const [created] = await db
     .insert(interviews)
     .values({
       workspaceId,
@@ -212,7 +235,23 @@ export async function POST(request: NextRequest) {
       // across workspaces can never resolve onto another tenant's row.
       target: [interviews.workspaceId, interviews.calBookingUid],
       set: { scheduledAt: when, durationMins, status: "scheduled", updatedAt: new Date() },
+    })
+    .returning({ id: interviews.id, gcalEventId: interviews.gcalEventId });
+
+  if (created?.id && !created.gcalEventId) {
+    const attendeeEmails = (payload.attendees ?? [])
+      .map((a) => a.email)
+      .filter((e): e is string => Boolean(e));
+    void syncInterviewToGCal({
+      workspaceId,
+      interviewId: created.id,
+      summary: asString(payload.title) ?? "Interview",
+      start: when,
+      durationMins,
+      attendees: attendeeEmails.length > 0 ? attendeeEmails : undefined,
+      location: asString(payload.location) ?? undefined,
     });
+  }
 
   return NextResponse.json({ ok: true });
 }

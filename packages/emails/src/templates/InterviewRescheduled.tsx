@@ -1,4 +1,4 @@
-import { Text, Link } from "@react-email/components";
+import { Text } from "@react-email/components";
 
 import { heading, text, buttonStyle } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
@@ -6,7 +6,7 @@ import { DetailTable } from "./DetailTable";
 import { buildCalendarLinks } from "./calendarLinks";
 import type { SocialLink } from "./HarlyLayout";
 
-export type InterviewScheduledProps = {
+export type InterviewRescheduledProps = {
   candidateName: string;
   companyName: string;
   companyLogoUrl?: string;
@@ -23,14 +23,14 @@ export type InterviewScheduledProps = {
   notes?: string;
 };
 
-export function interviewScheduledSubject({
+export function interviewRescheduledSubject({
   companyName,
   jobTitle,
-}: Pick<InterviewScheduledProps, "companyName" | "jobTitle">) {
-  return `Interview scheduled — ${jobTitle} at ${companyName}`;
+}: Pick<InterviewRescheduledProps, "companyName" | "jobTitle">) {
+  return `Interview rescheduled — ${jobTitle} at ${companyName}`;
 }
 
-export function InterviewScheduled({
+export function InterviewRescheduled({
   candidateName,
   companyName,
   companyLogoUrl,
@@ -45,9 +45,9 @@ export function InterviewScheduled({
   startIso,
   durationMins,
   notes,
-}: InterviewScheduledProps) {
+}: InterviewRescheduledProps) {
   const rows = [
-    { label: "When", value: when },
+    { label: "New time", value: when },
     { label: "Format", value: mode },
     ...(location ? [{ label: "Where", value: location }] : []),
     ...(duration ? [{ label: "Duration", value: duration }] : []),
@@ -66,17 +66,17 @@ export function InterviewScheduled({
 
   return (
     <WorkspaceLayout
-      preview={`Your ${interviewType.toLowerCase()} for ${jobTitle} at ${companyName} is confirmed — ${when}.`}
+      preview={`Your ${interviewType.toLowerCase()} for ${jobTitle} at ${companyName} has been rescheduled to ${when}.`}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text style={heading}>Interview confirmed</Text>
+      <Text style={heading}>Interview rescheduled</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
         Your <strong>{interviewType.toLowerCase()}</strong> for{" "}
-        <strong>{jobTitle}</strong> at {companyName} is confirmed.
+        <strong>{jobTitle}</strong> at {companyName} has been rescheduled.
       </Text>
       <DetailTable rows={rows} />
       {calendarLinks ? (
@@ -98,7 +98,7 @@ export function InterviewScheduled({
         </table>
       ) : null}
       <Text style={text}>
-        If you need to reschedule or have any questions, just reply to this
+        If you have any questions or need to adjust further, just reply to this
         email.
       </Text>
     </WorkspaceLayout>

@@ -6,6 +6,7 @@ export * from "./templates/CandidateStageUpdate";
 export * from "./templates/DetailTable";
 export * from "./templates/HarlyLayout";
 export * from "./templates/InterviewCanceled";
+export * from "./templates/InterviewRescheduled";
 export * from "./templates/InterviewScheduled";
 export * from "./templates/OfferExtended";
 export * from "./templates/OfferWithdrawn";

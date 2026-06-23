@@ -14,12 +14,14 @@ import {
   candidateMessages,
   candidateNotes,
   candidateTags,
+  interviews,
   jobs,
   jobStages,
   scorecards,
   user as authUsers,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { cancelInterviewGCalEvent } from "@/lib/gcal/sync";
 
 export type CandidateApplicationStatus =
   | "active"
@@ -805,6 +807,29 @@ export async function restoreCandidate(candidateId: string) {
 /** Permanently delete a trashed candidate and all related records (cascade). */
 export async function permanentlyDeleteCandidate(candidateId: string) {
   const { organization: workspace } = await getWorkspaceContext();
+
+  // Cancel any Google Calendar events for this candidate's interviews before
+  // the cascade delete removes the rows (and we lose the gcalEventId refs).
+  const linkedInterviews = await db
+    .select({ id: interviews.id, gcalEventId: interviews.gcalEventId })
+    .from(interviews)
+    .where(
+      and(
+        eq(interviews.candidateId, candidateId),
+        eq(interviews.workspaceId, workspace.id),
+        isNotNull(interviews.gcalEventId),
+      ),
+    );
+
+  for (const iv of linkedInterviews) {
+    if (iv.gcalEventId) {
+      void cancelInterviewGCalEvent({
+        workspaceId: workspace.id,
+        interviewId: iv.id,
+        gcalEventId: iv.gcalEventId,
+      });
+    }
+  }
 
   const [deleted] = await db
     .delete(candidates)

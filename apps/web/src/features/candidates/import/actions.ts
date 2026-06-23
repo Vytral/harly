@@ -15,6 +15,7 @@ import {
 } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { emitWebhookEvent } from "@/server/webhooks/emit";
 
 const optionalText = z
   .string()
@@ -120,6 +121,7 @@ export async function importCandidatesAction(input: {
   let imported = 0;
   let alreadyInPipeline = 0;
   const errors: { row: number; email: string; reason: string }[] = [];
+  const importedApplicationIds: string[] = [];
 
   for (const [index, raw] of parsed.data.rows.entries()) {
     const row = importRowSchema.safeParse(raw);
@@ -230,6 +232,7 @@ export async function importCandidatesAction(input: {
         });
 
         imported += 1;
+        importedApplicationIds.push(application.id);
       });
     } catch {
       errors.push({ row: index + 1, email: values.email, reason: "Could not import this row." });
@@ -238,6 +241,13 @@ export async function importCandidatesAction(input: {
 
   revalidatePath("/dashboard/candidates");
   revalidatePath("/dashboard/pipeline");
+
+  for (const applicationId of importedApplicationIds) {
+    void emitWebhookEvent(workspaceId, "application.created", {
+      application: { id: applicationId },
+      source: "csv_import",
+    });
+  }
 
   return { success: true, imported, alreadyInPipeline, errors };
 }

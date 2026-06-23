@@ -10,6 +10,7 @@ import {
   CalendarClock,
   Check,
   ClipboardCheck,
+  ExternalLink,
   Mail,
   MapPin,
   MessageSquare,
@@ -35,6 +36,7 @@ import {
 import { OffersPanel } from "@/features/offers/OffersPanel";
 import type { CandidateOfferItem } from "@/features/offers/shared";
 import { NoteForm } from "@/features/candidates/NoteForm";
+import { RescheduleDrawer } from "@/features/candidates/RescheduleDrawer";
 import { EmailDrawer, type EmailTemplateOption } from "@/features/candidates/EmailDrawer";
 import type { TemplateValues } from "@/features/email-templates/interpolate";
 import { setInterviewStatus } from "@/features/interviews/actions";
@@ -601,6 +603,19 @@ function InterviewCard({
         <div className="flex flex-wrap items-center gap-2 pt-1">
           {interview.status === "scheduled" ? (
             <>
+              <RescheduleDrawer
+                interviewId={interview.id}
+                candidateId={candidateId}
+                currentScheduledAt={interview.scheduledAt}
+                currentDurationMins={interview.durationMins}
+                currentLocation={interview.location}
+                trigger={
+                  <Button size="sm" variant="outline" disabled={isPending}>
+                    <CalendarClock className="size-4" />
+                    Reschedule
+                  </Button>
+                }
+              />
               <Button
                 size="sm"
                 variant="outline"
@@ -621,6 +636,23 @@ function InterviewCard({
                 Cancel
               </Button>
             </>
+          ) : null}
+          {interview.gcalEventId ? (
+            <Button asChild size="sm" variant="ghost" className="text-muted-foreground">
+              <a
+                href={`https://calendar.google.com/calendar/r/search?q=${encodeURIComponent(interview.gcalEventId)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink className="size-4" />
+                View in Google Calendar
+              </a>
+            </Button>
+          ) : interview.status === "scheduled" ? (
+            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+              <span className="size-1.5 rounded-full bg-amber-400" />
+              Not synced to GCal
+            </span>
           ) : null}
           <EvaluationDrawer
             candidateId={candidateId}
