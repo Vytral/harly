@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { db, notifications } from "@harly/db";
@@ -9,8 +9,14 @@ import { db, notifications } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 const idSchema = z.object({ notificationId: z.uuid() });
+const idsSchema = z.object({ notificationIds: z.array(z.uuid()).min(1).max(100) });
 
-/** Mark one of the current user's notifications as read. */
+function revalidateInbox() {
+  revalidatePath("/dashboard/inbox");
+  revalidatePath("/dashboard", "layout");
+}
+
+/** Mark one notification as read. */
 export async function markNotificationRead(input: {
   notificationId: string;
 }): Promise<{ success: boolean }> {
@@ -30,11 +36,35 @@ export async function markNotificationRead(input: {
       ),
     );
 
-  revalidatePath("/dashboard/inbox");
+  revalidateInbox();
   return { success: true };
 }
 
-/** Mark all of the current user's notifications in this workspace as read. */
+/** Mark one notification as unread. */
+export async function markNotificationUnread(input: {
+  notificationId: string;
+}): Promise<{ success: boolean }> {
+  const parsed = idSchema.safeParse(input);
+  if (!parsed.success) return { success: false };
+
+  const { organization: workspace, user } = await getWorkspaceContext();
+
+  await db
+    .update(notifications)
+    .set({ readAt: null })
+    .where(
+      and(
+        eq(notifications.id, parsed.data.notificationId),
+        eq(notifications.workspaceId, workspace.id),
+        eq(notifications.userId, user.id),
+      ),
+    );
+
+  revalidateInbox();
+  return { success: true };
+}
+
+/** Mark all unread notifications as read. */
 export async function markAllNotificationsRead(): Promise<{ success: boolean }> {
   const { organization: workspace, user } = await getWorkspaceContext();
 
@@ -49,6 +79,52 @@ export async function markAllNotificationsRead(): Promise<{ success: boolean }> 
       ),
     );
 
-  revalidatePath("/dashboard/inbox");
+  revalidateInbox();
+  return { success: true };
+}
+
+/** Delete a single notification. */
+export async function deleteNotification(input: {
+  notificationId: string;
+}): Promise<{ success: boolean }> {
+  const parsed = idSchema.safeParse(input);
+  if (!parsed.success) return { success: false };
+
+  const { organization: workspace, user } = await getWorkspaceContext();
+
+  await db
+    .delete(notifications)
+    .where(
+      and(
+        eq(notifications.id, parsed.data.notificationId),
+        eq(notifications.workspaceId, workspace.id),
+        eq(notifications.userId, user.id),
+      ),
+    );
+
+  revalidateInbox();
+  return { success: true };
+}
+
+/** Delete multiple notifications. */
+export async function deleteNotifications(input: {
+  notificationIds: string[];
+}): Promise<{ success: boolean }> {
+  const parsed = idsSchema.safeParse(input);
+  if (!parsed.success) return { success: false };
+
+  const { organization: workspace, user } = await getWorkspaceContext();
+
+  await db
+    .delete(notifications)
+    .where(
+      and(
+        inArray(notifications.id, parsed.data.notificationIds),
+        eq(notifications.workspaceId, workspace.id),
+        eq(notifications.userId, user.id),
+      ),
+    );
+
+  revalidateInbox();
   return { success: true };
 }

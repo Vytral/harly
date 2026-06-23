@@ -1,0 +1,183 @@
+import "server-only";
+
+import { eq } from "drizzle-orm";
+
+import {
+  db,
+  notifications,
+  member,
+  jobHiringTeam,
+} from "@harly/db";
+
+import {
+  WEBHOOK_EVENT_LABELS,
+  type WebhookEvent,
+} from "@/server/webhooks/events";
+
+type NotifyParams = {
+  workspaceId: string;
+  recipientIds: string[];
+  actorId?: string;
+  type: string;
+  title: string;
+  body?: string;
+  href?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export async function createNotification(
+  params: NotifyParams,
+): Promise<void> {
+  const { recipientIds, ...rest } = params;
+  if (recipientIds.length === 0) return;
+
+  const unique = [...new Set(recipientIds)];
+
+  await db.insert(notifications).values(
+    unique.map((userId) => ({
+      ...rest,
+      userId,
+      actorId: rest.actorId ?? null,
+      body: rest.body ?? null,
+      href: rest.href ?? null,
+      metadata: rest.metadata ?? null,
+    })),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Recipient resolution
+// ---------------------------------------------------------------------------
+
+async function getWorkspaceMemberIds(
+  workspaceId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ userId: member.userId })
+    .from(member)
+    .where(eq(member.organizationId, workspaceId));
+  return rows.map((r) => r.userId);
+}
+
+async function getJobTeamMemberIds(
+  jobId: string,
+): Promise<string[]> {
+  const rows = await db
+    .select({ userId: jobHiringTeam.userId })
+    .from(jobHiringTeam)
+    .where(eq(jobHiringTeam.jobId, jobId));
+  return rows.map((r) => r.userId);
+}
+
+// ---------------------------------------------------------------------------
+// Event → in-app notification bridge
+// ---------------------------------------------------------------------------
+
+type EventPayload = Record<string, unknown>;
+
+function extractIds(data: EventPayload) {
+  const candidate = data.candidate as Record<string, unknown> | undefined;
+  const application = data.application as Record<string, unknown> | undefined;
+  const job = data.job as Record<string, unknown> | undefined;
+  const interview = data.interview as Record<string, unknown> | undefined;
+
+  const candidateName =
+    (candidate?.name as string) ??
+    (application?.candidateName as string) ??
+    (data.candidateName as string) ??
+    null;
+  const jobTitle =
+    (job?.title as string) ??
+    (application?.jobTitle as string) ??
+    (data.jobTitle as string) ??
+    null;
+  const jobId =
+    (job?.id as string) ??
+    (application?.jobId as string) ??
+    (interview?.jobId as string) ??
+    (data.jobId as string) ??
+    null;
+  const candidateId =
+    (candidate?.id as string) ??
+    (application?.candidateId as string) ??
+    (data.candidateId as string) ??
+    null;
+
+  return { candidateName, jobTitle, jobId, candidateId };
+}
+
+function buildDetail(candidateName: string | null, jobTitle: string | null): string | null {
+  if (candidateName && jobTitle) return `${candidateName} → ${jobTitle}`;
+  return candidateName ?? jobTitle ?? null;
+}
+
+function buildHref(event: WebhookEvent, data: EventPayload): string | null {
+  const { candidateId } = extractIds(data);
+  if (candidateId) return `/dashboard/candidates/${candidateId}`;
+  if (event === "job.published") {
+    const job = data.job as Record<string, unknown> | undefined;
+    if (job?.id) return `/dashboard/jobs/${job.id}`;
+  }
+  return "/dashboard/inbox";
+}
+
+async function resolveRecipients(
+  workspaceId: string,
+  event: WebhookEvent,
+  data: EventPayload,
+  actorId?: string,
+): Promise<string[]> {
+  const { jobId } = extractIds(data);
+
+  let ids: string[];
+
+  if (jobId && event !== "job.published") {
+    ids = await getJobTeamMemberIds(jobId);
+    if (ids.length === 0) {
+      ids = await getWorkspaceMemberIds(workspaceId);
+    }
+  } else {
+    ids = await getWorkspaceMemberIds(workspaceId);
+  }
+
+  // Never notify the actor about their own action.
+  if (actorId) {
+    ids = ids.filter((id) => id !== actorId);
+  }
+
+  return ids;
+}
+
+/**
+ * Create in-app notifications for a webhook event.
+ * Fire-and-forget — never throws.
+ */
+export async function notifyInboxEvent(
+  workspaceId: string,
+  event: WebhookEvent,
+  data: EventPayload,
+  actorId?: string,
+): Promise<void> {
+  try {
+    const recipientIds = await resolveRecipients(workspaceId, event, data, actorId);
+    if (recipientIds.length === 0) return;
+
+    const { candidateName, jobTitle } = extractIds(data);
+    const title = WEBHOOK_EVENT_LABELS[event] ?? event;
+    const body = buildDetail(candidateName, jobTitle);
+    const href = buildHref(event, data);
+
+    await createNotification({
+      workspaceId,
+      recipientIds,
+      actorId,
+      type: event,
+      title,
+      body: body ?? undefined,
+      href: href ?? undefined,
+      metadata: { event },
+    });
+  } catch (error) {
+    console.error("[notify] inbox notify failed", { workspaceId, event, error });
+  }
+}

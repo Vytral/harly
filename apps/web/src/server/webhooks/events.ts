@@ -10,6 +10,11 @@ export const WEBHOOK_EVENTS = [
   "application.hired",
   "application.rejected",
   "candidate.created",
+  "candidate.updated",
+  "interview.scheduled",
+  "interview.canceled",
+  "interview.completed",
+  "interview.rescheduled",
   "job.published",
 ] as const;
 
@@ -21,6 +26,11 @@ export const WEBHOOK_EVENT_LABELS: Record<WebhookEvent, string> = {
   "application.hired": "Candidate hired",
   "application.rejected": "Application rejected",
   "candidate.created": "Candidate created",
+  "candidate.updated": "Candidate updated",
+  "interview.scheduled": "Interview scheduled",
+  "interview.canceled": "Interview canceled",
+  "interview.completed": "Interview completed",
+  "interview.rescheduled": "Interview rescheduled",
   "job.published": "Job published",
 };
 

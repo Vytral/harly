@@ -15,6 +15,11 @@ const EVENT_EMOJI: Record<WebhookEvent, string> = {
   "application.hired": "🎉",
   "application.rejected": "🚫",
   "candidate.created": "👤",
+  "candidate.updated": "✏️",
+  "interview.scheduled": "📅",
+  "interview.canceled": "❌",
+  "interview.completed": "✅",
+  "interview.rescheduled": "🔄",
   "job.published": "📣",
 };
 
