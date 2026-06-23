@@ -9,10 +9,12 @@ import {
   EnvelopeIcon,
   PlugIcon,
   UsersThreeIcon,
+  ShieldIcon,
 } from "@/components/ui/icons/settings";
 import {
   CodeDuotoneIcon,
   RobotDuotoneIcon,
+  SealCheckDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
 
@@ -57,6 +59,18 @@ const sections: SettingsSection[] = [
     icon: PlugIcon,
   },
   {
+    href: "/settings/security" as Route,
+    label: "Security",
+    hint: "2FA, SSO, passkeys, and access audit logs.",
+    icon: ShieldIcon,
+  },
+  {
+    href: "/settings/legal" as Route,
+    label: "Legal & Compliance",
+    hint: "Legal entity, retention policies, privacy policy, and terms.",
+    icon: SealCheckDuotoneIcon,
+  },
+  {
     href: "/settings/developers" as Route,
     label: "Developers & API",
     hint: "API keys, webhooks, and developer tools.",
@@ -67,17 +81,13 @@ const sections: SettingsSection[] = [
 export function SettingsNav({ allowedHrefs }: { allowedHrefs: string[] }) {
   const pathname = usePathname();
 
-  // A section shows when it isn't permission-gated (absent from the map) or the
-  // viewer holds the required permission (its href is in allowedHrefs).
   const visible = sections.filter(
-    (section) =>
-      !(section.href in SETTINGS_SECTION_PERMISSION) ||
-      allowedHrefs.includes(section.href),
+    (section) => allowedHrefs.includes(section.href),
   );
 
   return (
     <nav className="flex gap-1.5 overflow-x-auto pb-1 lg:flex-col lg:gap-1 lg:pb-0">
-      {sections.map((section) => {
+      {visible.map((section) => {
         const active = section.exact
           ? pathname === section.href
           : pathname === section.href ||
