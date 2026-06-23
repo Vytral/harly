@@ -1,9 +1,10 @@
 import type { Job } from "@harly/db";
-import { Plus, Sparkles, Trash2, Wand2 } from "lucide-react";
+import { Plus, Trash2, Wand2 } from "lucide-react";
 import { toast } from "sonner";
 
 import type { JobContentSection } from "../config";
 import { generateJobDraftAction } from "../actions";
+import { AiButton } from "@/components/ui/AiButton";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -156,15 +157,15 @@ export function DescriptionSection({
         <div className="flex items-center justify-between border-b px-5 py-3">
           <p className="text-sm font-semibold">Description</p>
           <div className="flex items-center gap-2">
-            <Button
+            <AiButton
               type="button"
               size="sm"
               onClick={generateWithAI}
-              disabled={aiPending}
+              loading={aiPending}
+              loadingText="Generating"
             >
-              <Sparkles className="size-4" />
-              {aiPending ? "Generating..." : "Generate with AI"}
-            </Button>
+              Generate with AI
+            </AiButton>
             <Button type="button" variant="outline" size="sm" onClick={scaffoldDraft}>
               <Wand2 className="size-4" />
               Draft for me

@@ -221,3 +221,38 @@ export async function generateJobDraftAction(input: {
     };
   }
 }
+
+export type GenerateQuestionsResult =
+  | { ok: true; questions: Array<{ label: string; type: "text" | "textarea"; placeholder: string }> }
+  | { ok: false; error: string; reason?: "not_configured" };
+
+export async function generateScreeningQuestionsAction(input: {
+  title: string;
+  description?: string | null;
+  keywords?: string[];
+}): Promise<GenerateQuestionsResult> {
+  const context = await requirePermission("jobs:create");
+
+  if (!input.title?.trim()) {
+    return { ok: false, error: "Add a job title first." };
+  }
+
+  const config = await getWorkspaceAiConfig(context.organization.id);
+  if (!config) {
+    return { ok: false, error: "Enable AI in Settings to generate questions.", reason: "not_configured" };
+  }
+
+  try {
+    const { generateScreeningQuestionsWithAI } = await import(
+      "@/lib/ai/surfaces/generate-questions"
+    );
+    const questions = await generateScreeningQuestionsWithAI(config, {
+      title: input.title.trim(),
+      description: input.description,
+      keywords: input.keywords,
+    });
+    return { ok: true, questions };
+  } catch {
+    return { ok: false, error: "Generation failed." };
+  }
+}

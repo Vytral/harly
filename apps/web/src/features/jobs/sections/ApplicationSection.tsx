@@ -37,8 +37,14 @@ function LinkToggle({
 
 export function ApplicationSection({
   applicationConfig,
+  aiContext,
 }: {
   applicationConfig: JobApplicationConfig;
+  aiContext?: {
+    title: string;
+    description: string;
+    keywords: string[];
+  };
 }) {
   return (
     <div className="space-y-5">
@@ -85,7 +91,10 @@ export function ApplicationSection({
 
       <div>
         <h3 className="mb-3 text-sm font-semibold">Custom questions</h3>
-        <JobQuestionBuilder initialQuestions={applicationConfig.questions} />
+        <JobQuestionBuilder
+          initialQuestions={applicationConfig.questions}
+          aiContext={aiContext}
+        />
       </div>
     </div>
   );

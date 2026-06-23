@@ -321,7 +321,10 @@ export function JobForm({ action, job, submitLabel, departments }: JobFormProps)
               open={openSections.application}
               onToggle={() => toggleSection("application")}
             >
-              <ApplicationSection applicationConfig={applicationConfig} />
+              <ApplicationSection
+                applicationConfig={applicationConfig}
+                aiContext={{ title, description, keywords }}
+              />
             </Disclosure>
 
             <Disclosure
