@@ -91,7 +91,7 @@ export function AppSidebar({
           {open ? (
             <SidebarGroupLabel>Workspace</SidebarGroupLabel>
           ) : (
-            <SidebarSeparator className="mx-2 my-1" />
+            <SidebarSeparator className="my-1" />
           )}
           <SidebarGroupContent>
             <SidebarMenu>
@@ -105,7 +105,7 @@ export function AppSidebar({
 
       {canInvite ? (
         <>
-          <SidebarSeparator className="mx-2" />
+          <SidebarSeparator />
           <SidebarFooter>
             <SidebarMenu>
               <SidebarMenuItem>
@@ -161,7 +161,7 @@ function SidebarBrand({
     open && sidebarLogo.style === "full" && !!sidebarLogo.lightUrl;
 
   const toggleButtonClass =
-    "flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent/40 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring";
+    "flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent/40 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring";
 
   if (showWordmark) {
     return (
@@ -176,7 +176,7 @@ function SidebarBrand({
             src={sidebarLogo.lightUrl ?? undefined}
             alt={workspace.name}
             className={cn(
-              "h-7 max-w-[150px] object-contain object-left",
+              "h-8 max-w-[155px] object-contain object-left",
               sidebarLogo.darkUrl && "dark:hidden",
             )}
           />
@@ -185,7 +185,7 @@ function SidebarBrand({
             <img
               src={sidebarLogo.darkUrl}
               alt={workspace.name}
-              className="hidden h-7 max-w-[150px] object-contain object-left dark:block"
+              className="hidden h-8 max-w-[155px] object-contain object-left dark:block"
             />
           ) : null}
         </Link>
@@ -199,7 +199,7 @@ function SidebarBrand({
           title="Collapse sidebar"
           className={toggleButtonClass}
         >
-          <PanelLeftClose className="size-4" strokeWidth={1.8} />
+          <PanelLeftClose className="size-5" strokeWidth={1.8} />
         </button>
       </div>
     );
@@ -230,9 +230,9 @@ function SidebarBrand({
           className="absolute inset-0 flex cursor-pointer items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent text-sidebar-accent-foreground opacity-0 transition-opacity duration-150 hover:border-sidebar-ring/40 hover:text-sidebar-foreground group-hover/logo:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
         >
           {open ? (
-            <PanelLeftClose className="size-4" strokeWidth={1.8} />
+            <PanelLeftClose className="size-5" strokeWidth={1.8} />
           ) : (
-            <PanelLeftOpen className="size-4" strokeWidth={1.8} />
+            <PanelLeftOpen className="size-5" strokeWidth={1.8} />
           )}
         </button>
       </div>

@@ -1,13 +1,14 @@
-import { ListTodo } from "lucide-react";
+import { listTasks, getTaskCounts, listWorkspaceMembers } from "@/features/tasks/data";
+import { TasksView } from "@/features/tasks/TasksView";
 
-import { ComingSoon } from "@/components/ComingSoon";
+export const dynamic = "force-dynamic";
 
-export default function TasksPage() {
-  return (
-    <ComingSoon
-      icon={ListTodo}
-      title="Tasks"
-      description="Reminders and to-dos for your hiring, with due dates and owners across your team."
-    />
-  );
+export default async function TasksPage() {
+  const [tasks, counts, members] = await Promise.all([
+    listTasks(),
+    getTaskCounts(),
+    listWorkspaceMembers(),
+  ]);
+
+  return <TasksView tasks={tasks} members={members} counts={counts} />;
 }

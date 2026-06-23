@@ -145,6 +145,7 @@ export const getTodayInterviews = cache(async () => {
       last: candidates.lastName,
       jobTitle: jobs.title,
       interviewer: user.name,
+      gcalEventId: interviews.gcalEventId,
     })
     .from(interviews)
     .innerJoin(
@@ -176,6 +177,7 @@ export const getTodayInterviews = cache(async () => {
     candidate: `${r.first} ${r.last}`,
     job: r.jobTitle,
     interviewer: r.interviewer ?? null,
+    gcalEventId: r.gcalEventId,
   }));
 });
 

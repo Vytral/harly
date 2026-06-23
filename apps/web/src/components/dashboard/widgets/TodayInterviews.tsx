@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { CalendarClock, CalendarPlus } from "lucide-react";
+import { CalendarClock, CalendarPlus, ExternalLink } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,17 @@ export function TodayInterviews({
                 <Badge variant="secondary" className="shrink-0">
                   {iv.label}
                 </Badge>
+                {iv.gcalEventId ? (
+                  <a
+                    href={`https://calendar.google.com/calendar/event?eid=${btoa(iv.gcalEventId).replace(/=/g, "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="shrink-0 text-muted-foreground hover:text-foreground"
+                    title="View in Google Calendar"
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                ) : null}
               </li>
             ))}
           </ul>
