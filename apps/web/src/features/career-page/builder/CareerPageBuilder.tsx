@@ -14,6 +14,7 @@ import {
   Check,
   ChevronDown,
   Eye,
+  HelpCircle,
   Image as ImageIcon,
   Images,
   Layout,
@@ -22,7 +23,9 @@ import {
   Monitor,
   Palette,
   Plus,
+  Quote,
   Search,
+  Share2,
   Smartphone,
   Sparkles,
   Trash2,
@@ -46,8 +49,10 @@ import {
   careerTemplates,
   isLightColor,
   MODE_BG,
+  socialPlatforms,
   type CareerPageConfig,
   type CareerTemplate,
+  type SocialPlatform,
 } from "@/features/career-page/config";
 import { CareerPageRender } from "@/features/career-page/CareerPageRender";
 import {
@@ -56,6 +61,7 @@ import {
   CareerIcon,
   careerIcon,
 } from "@/features/career-page/icons";
+import { SocialIcon, SOCIAL_ICONS } from "@/features/career-page/social-icons";
 
 type Job = {
   id: string;
@@ -151,7 +157,7 @@ export function CareerPageBuilder({
           </a>
           <Button
             onClick={save}
-            disabled={saving || !dirty}
+            disabled={!!(saving || !dirty)}
             aria-label={
               saving
                 ? "Saving changes"
@@ -192,7 +198,7 @@ export function CareerPageBuilder({
                       active
                         ? "border-pine bg-sage/40 ring-2 ring-pine/20"
                         : meta.ready
-                          ? "hover:border-zinc-300 hover:bg-zinc-50"
+                          ? "hover:border-border hover:bg-muted/60"
                           : "cursor-not-allowed opacity-50",
                     )}
                   >
@@ -201,7 +207,7 @@ export function CareerPageBuilder({
                       {meta.blurb}
                     </span>
                     {!meta.ready && (
-                      <span className="mt-1.5 inline-block rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-800">
+                      <span className="mt-1.5 inline-block rounded bg-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-warning">
                         Coming soon
                       </span>
                     )}
@@ -287,7 +293,7 @@ export function CareerPageBuilder({
                           onClick={() => update((d) => { d.hero.logoPosition = pos; })}
                           className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${
                             config.hero.logoPosition === pos
-                              ? "bg-white text-foreground shadow-sm"
+                              ? "bg-card text-foreground shadow-sm"
                               : "text-muted-foreground hover:text-foreground"
                           }`}
                         >
@@ -400,6 +406,31 @@ export function CareerPageBuilder({
                   checked={config.gallery.enabled}
                   onCheckedChange={(v) => update((d) => (d.gallery.enabled = v))}
                 />
+                <ToggleRow
+                  label="Autoplay"
+                  checked={config.gallery.autoplay}
+                  onCheckedChange={(v) => update((d) => (d.gallery.autoplay = v))}
+                />
+                {config.gallery.autoplay && (
+                  <Field label="Speed">
+                    <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+                      {(["slow", "normal"] as const).map((s) => (
+                        <button
+                          key={s}
+                          type="button"
+                          onClick={() => update((d) => { d.gallery.speed = s; })}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize transition ${
+                            config.gallery.speed === s
+                              ? "bg-card text-foreground shadow-sm"
+                              : "text-muted-foreground hover:text-foreground"
+                          }`}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  </Field>
+                )}
                 <ListEditor
                   label="Images"
                   items={config.gallery.images}
@@ -528,6 +559,150 @@ export function CareerPageBuilder({
                 />
               </Section>
 
+              {/* Testimonials */}
+              <Section title="Testimonials" icon={Quote}>
+                <ToggleRow
+                  label="Show testimonials"
+                  checked={config.testimonials.enabled}
+                  onCheckedChange={(v) => update((d) => (d.testimonials.enabled = v))}
+                />
+                <Field label="Title">
+                  <Input
+                    value={config.testimonials.title}
+                    onChange={(e) => update((d) => (d.testimonials.title = e.target.value))}
+                  />
+                </Field>
+                <ListEditor
+                  label="Items"
+                  items={config.testimonials.items}
+                  onAdd={() =>
+                    update((d) =>
+                      d.testimonials.items.push({ quote: "", name: "", role: "", avatar: "" }),
+                    )
+                  }
+                  onRemove={(i) => update((d) => d.testimonials.items.splice(i, 1))}
+                  onMove={(i, dir) => update((d) => move(d.testimonials.items, i, dir))}
+                  render={(item, i) => (
+                    <div className="space-y-2">
+                      <Textarea
+                        rows={3}
+                        value={item.quote}
+                        onChange={(e) =>
+                          update((d) => (d.testimonials.items[i].quote = e.target.value))
+                        }
+                        placeholder="Quote"
+                      />
+                      <div className="flex gap-2">
+                        <Input
+                          value={item.name}
+                          onChange={(e) =>
+                            update((d) => (d.testimonials.items[i].name = e.target.value))
+                          }
+                          placeholder="Name"
+                          className="min-w-0 flex-1"
+                        />
+                        <Input
+                          value={item.role}
+                          onChange={(e) =>
+                            update((d) => (d.testimonials.items[i].role = e.target.value))
+                          }
+                          placeholder="Role"
+                          className="min-w-0 flex-1"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[11px] text-muted-foreground">
+                          Avatar (optional — falls back to initials)
+                        </span>
+                        <FileDropzone
+                          value={item.avatar || null}
+                          onChange={(url) =>
+                            update((d) => (d.testimonials.items[i].avatar = url ?? ""))
+                          }
+                        />
+                      </div>
+                    </div>
+                  )}
+                />
+              </Section>
+
+              {/* FAQ */}
+              <Section title="FAQ" icon={HelpCircle}>
+                <ToggleRow
+                  label="Show FAQ"
+                  checked={config.faq.enabled}
+                  onCheckedChange={(v) => update((d) => (d.faq.enabled = v))}
+                />
+                <Field label="Title">
+                  <Input
+                    value={config.faq.title}
+                    onChange={(e) => update((d) => (d.faq.title = e.target.value))}
+                  />
+                </Field>
+                <ListEditor
+                  label="Questions"
+                  items={config.faq.items}
+                  onAdd={() =>
+                    update((d) => d.faq.items.push({ q: "Question", a: "" }))
+                  }
+                  onRemove={(i) => update((d) => d.faq.items.splice(i, 1))}
+                  onMove={(i, dir) => update((d) => move(d.faq.items, i, dir))}
+                  render={(item, i) => (
+                    <div className="space-y-2">
+                      <Input
+                        value={item.q}
+                        onChange={(e) =>
+                          update((d) => (d.faq.items[i].q = e.target.value))
+                        }
+                        placeholder="Question"
+                      />
+                      <Textarea
+                        rows={3}
+                        value={item.a}
+                        onChange={(e) =>
+                          update((d) => (d.faq.items[i].a = e.target.value))
+                        }
+                        placeholder="Answer"
+                      />
+                    </div>
+                  )}
+                />
+              </Section>
+
+              {/* Footer socials */}
+              <Section title="Footer & socials" icon={Share2}>
+                <p className="text-[11px] text-muted-foreground">
+                  Shown bottom-right with real brand icons.
+                </p>
+                <ListEditor
+                  label="Social links"
+                  items={config.footer.socials}
+                  onAdd={() =>
+                    update((d) => d.footer.socials.push({ platform: "x", url: "" }))
+                  }
+                  onRemove={(i) => update((d) => d.footer.socials.splice(i, 1))}
+                  onMove={(i, dir) => update((d) => move(d.footer.socials, i, dir))}
+                  render={(item, i) => (
+                    <div className="flex gap-2">
+                      <SocialPlatformSelect
+                        value={item.platform}
+                        onChange={(p) =>
+                          update((d) => (d.footer.socials[i].platform = p))
+                        }
+                      />
+                      <Input
+                        value={item.url}
+                        onChange={(e) =>
+                          update((d) => (d.footer.socials[i].url = e.target.value))
+                        }
+                        placeholder="https://…"
+                        className="min-w-0 flex-1"
+                      />
+                    </div>
+                  )}
+                />
+              </Section>
+
               {/* Theme */}
               <Section title="Theme" icon={Palette}>
                 <Field label="Mode">
@@ -548,7 +723,7 @@ export function CareerPageBuilder({
                         "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-all duration-150 ease-out",
                         config.theme.mode === "light"
                           ? "border-pine bg-sage/40 text-sage-ink"
-                          : "text-muted-foreground hover:border-zinc-300",
+                          : "text-muted-foreground hover:border-border",
                       )}
                     >
                       Light
@@ -567,7 +742,7 @@ export function CareerPageBuilder({
                         "flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-all duration-150 ease-out",
                         config.theme.mode === "dark"
                           ? "border-pine bg-sage/40 text-sage-ink"
-                          : "text-muted-foreground hover:border-zinc-300",
+                          : "text-muted-foreground hover:border-border",
                       )}
                     >
                       Dark
@@ -588,7 +763,7 @@ export function CareerPageBuilder({
                         (d) => (d.theme.font = e.target.value as "sans" | "serif" | "display" | "mono"),
                       )
                     }
-                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors duration-150 ease hover:border-zinc-300 focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/20"
+                    className="w-full rounded-lg border bg-background px-3 py-2 text-sm transition-colors duration-150 ease hover:border-border focus:border-pine focus:outline-none focus:ring-2 focus:ring-pine/20"
                   >
                     <option value="sans">Sans-serif</option>
                     <option value="serif">Serif</option>
@@ -610,7 +785,7 @@ export function CareerPageBuilder({
 
         {/* Live preview */}
         <div className="lg:sticky lg:top-20 lg:self-start">
-          <div className="overflow-hidden rounded-2xl border bg-zinc-50 shadow-sm">
+          <div className="overflow-hidden rounded-2xl border bg-muted/30 shadow-sm">
             <div className="flex items-center justify-between gap-3 border-b bg-card px-4 py-2.5">
               <div className="flex items-center gap-1.5">
                 <span className="size-2.5 rounded-full bg-red-500" />
@@ -645,7 +820,7 @@ export function CareerPageBuilder({
               </div>
             </div>
 
-            <div className="max-h-[calc(100dvh-12rem)] overflow-auto bg-zinc-50">
+            <div className="max-h-[calc(100dvh-12rem)] overflow-auto bg-muted/30">
               {config.template === "" ? (
                 <div className="flex h-96 items-center justify-center text-sm text-muted-foreground">
                   Choose a template to see the preview.
@@ -664,6 +839,64 @@ export function CareerPageBuilder({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function SocialPlatformSelect({
+  value,
+  onChange,
+}: {
+  value: SocialPlatform;
+  onChange: (v: SocialPlatform) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", onDoc);
+    return () => document.removeEventListener("mousedown", onDoc);
+  }, [open]);
+
+  return (
+    <div ref={rootRef} className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        className="flex size-10 items-center justify-center rounded-md border bg-background text-muted-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine/40"
+        title={SOCIAL_ICONS[value]?.label ?? value}
+      >
+        <SocialIcon platform={value} className="size-4" />
+      </button>
+      {open && (
+        <div
+          role="listbox"
+          className="absolute left-0 z-30 mt-1.5 w-44 origin-top-left rounded-xl border bg-popover p-1.5 shadow-lg duration-150 animate-in fade-in slide-in-from-top-1 motion-reduce:animate-none"
+        >
+          {socialPlatforms.map((p) => (
+            <button
+              key={p}
+              type="button"
+              role="option"
+              aria-selected={value === p}
+              onClick={() => { onChange(p); setOpen(false); }}
+              className={cn(
+                "flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-sm transition-colors hover:bg-muted",
+                value === p ? "font-medium text-foreground" : "text-muted-foreground",
+              )}
+            >
+              <SocialIcon platform={p} className="size-4 shrink-0" />
+              {SOCIAL_ICONS[p].label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
