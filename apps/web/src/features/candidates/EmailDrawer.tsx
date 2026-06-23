@@ -3,13 +3,15 @@
 import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import Link from "next/link";
 
-import { sendCandidateMessage } from "@/features/candidates/actions";
+import { sendCandidateMessage, generateEmailDraftAction } from "@/features/candidates/actions";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import {
   interpolateTemplate,
   type TemplateValues,
 } from "@/features/email-templates/interpolate";
+import { AiButton } from "@/components/ui/AiButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -21,6 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 export type EmailTemplateOption = {
   id: string;
@@ -28,6 +31,16 @@ export type EmailTemplateOption = {
   subject: string;
   body: string;
 };
+
+type DraftType = "screening" | "interview_invite" | "rejection" | "offer" | "followup";
+
+const DRAFT_TYPES: { id: DraftType; label: string }[] = [
+  { id: "screening", label: "Screening" },
+  { id: "interview_invite", label: "Interview" },
+  { id: "rejection", label: "Rejection" },
+  { id: "offer", label: "Offer" },
+  { id: "followup", label: "Follow-up" },
+];
 
 export function EmailDrawer({
   candidateId,
@@ -37,6 +50,7 @@ export function EmailDrawer({
   trigger,
   templates = [],
   templateValues = {},
+  aiConfigured = false,
 }: {
   candidateId: string;
   workspaceId: string;
@@ -44,21 +58,45 @@ export function EmailDrawer({
   name: string;
   trigger: ReactNode;
   templates?: EmailTemplateOption[];
-  /** Per-candidate values for {{variables}} when applying a template. */
   templateValues?: TemplateValues;
+  aiConfigured?: boolean;
 }) {
   const router = useRouter();
   const firstName = name.trim().split(/\s+/)[0] || "there";
   const [open, setOpen] = useState(false);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState(`Hi ${firstName},\n\n`);
+  const [selectedDraftType, setSelectedDraftType] = useState<DraftType>("screening");
   const [isPending, startTransition] = useTransition();
+  const [isDrafting, startDraft] = useTransition();
 
   function applyTemplate(templateId: string) {
     const template = templates.find((t) => t.id === templateId);
     if (!template) return;
     setSubject(interpolateTemplate(template.subject, templateValues));
     setBody(interpolateTemplate(template.body, templateValues));
+  }
+
+  function draftWithAI() {
+    startDraft(async () => {
+      const result = await generateEmailDraftAction({
+        candidateId,
+        type: selectedDraftType,
+      });
+      if (!result.ok) {
+        if (result.reason === "not_configured") {
+          toast.error(result.error, {
+            action: { label: "Set up AI", onClick: () => router.push("/settings/ai") },
+          });
+        } else {
+          toast.error(result.error);
+        }
+        return;
+      }
+      setSubject(result.subject);
+      setBody(result.body);
+      toast.success("Draft ready");
+    });
   }
 
   function send() {
@@ -99,18 +137,78 @@ export function EmailDrawer({
                 Cancel
               </Button>
             </SheetClose>
-            <Button onClick={send} disabled={isPending}>
+            <Button onClick={send} disabled={isPending || !subject.trim() || !body.trim()}>
               {isPending ? "Sending…" : "Send email"}
             </Button>
           </>
         }
       >
         <div className="space-y-4">
+          {/* To */}
           <div className="space-y-2">
             <p className="text-[13px] font-medium tracking-tight text-foreground/90">To</p>
             <Input value={email} readOnly className="bg-muted/50" />
           </div>
 
+          {/* AI draft */}
+          {aiConfigured ? (
+            <div
+              className="rounded-xl border bg-muted/30 p-3.5 space-y-3"
+              style={{ animation: "fadeUp 200ms cubic-bezier(0.23,1,0.32,1) both" }}
+            >
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Draft with AI
+              </p>
+
+              {/* Type chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {DRAFT_TYPES.map(({ id, label }, i) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setSelectedDraftType(id)}
+                    style={{
+                      animation: `fadeUp 180ms cubic-bezier(0.23,1,0.32,1) ${i * 40}ms both`,
+                    }}
+                    className={cn(
+                      "rounded-full border px-2.5 py-0.5 text-xs font-medium transition-all duration-150",
+                      "active:scale-[0.96]",
+                      selectedDraftType === id
+                        ? "border-primary/40 bg-primary text-primary-foreground shadow-sm"
+                        : "bg-background text-muted-foreground hover:border-foreground/20 hover:text-foreground",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <AiButton
+                size="sm"
+                variant="outline"
+                onClick={draftWithAI}
+                loading={isDrafting}
+                loadingText="Drafting"
+                className="w-full justify-center"
+              >
+                Generate draft
+              </AiButton>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between rounded-xl border border-dashed px-3.5 py-2.5">
+              <p className="text-[13px] text-muted-foreground">
+                AI drafts available when AI is configured.
+              </p>
+              <Link
+                href="/settings/ai"
+                className="text-[13px] font-medium text-primary underline-offset-2 hover:underline"
+              >
+                Set up
+              </Link>
+            </div>
+          )}
+
+          {/* Template picker */}
           {templates.length > 0 ? (
             <div className="space-y-2">
               <p className="text-[13px] font-medium tracking-tight text-foreground/90">
@@ -131,8 +229,12 @@ export function EmailDrawer({
             </div>
           ) : null}
 
+          {/* Subject */}
           <div className="space-y-2">
-            <label htmlFor="email-subject" className="text-[13px] font-medium tracking-tight text-foreground/90">
+            <label
+              htmlFor="email-subject"
+              className="text-[13px] font-medium tracking-tight text-foreground/90"
+            >
               Subject
             </label>
             <Input
@@ -142,15 +244,23 @@ export function EmailDrawer({
               placeholder="A quick update on your application"
             />
           </div>
+
+          {/* Body */}
           <div className="space-y-2">
-            <label htmlFor="email-body" className="text-[13px] font-medium tracking-tight text-foreground/90">
+            <label
+              htmlFor="email-body"
+              className="text-[13px] font-medium tracking-tight text-foreground/90"
+            >
               Message
             </label>
             <Textarea
               id="email-body"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              className="min-h-44"
+              className={cn(
+                "min-h-48 transition-all duration-300 ease-out",
+                isDrafting && "opacity-50",
+              )}
             />
           </div>
         </div>

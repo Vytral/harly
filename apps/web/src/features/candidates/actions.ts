@@ -834,6 +834,103 @@ export async function sendBulkCandidateEmail(input: {
   return { success: true, sent, failed };
 }
 
+// ── AI email draft ──────────────────────────────────────────────────────────
+
+const draftEmailSchema = z.object({
+  candidateId: z.string().min(1),
+  type: z.enum(["screening", "interview_invite", "rejection", "offer", "followup"]),
+});
+
+export type GenerateEmailDraftResult =
+  | { ok: true; subject: string; body: string }
+  | { ok: false; error: string; reason?: "not_configured" };
+
+export async function generateEmailDraftAction(input: {
+  candidateId: string;
+  type: "screening" | "interview_invite" | "rejection" | "offer" | "followup";
+}): Promise<GenerateEmailDraftResult> {
+  const parsed = draftEmailSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: "Invalid input." };
+  }
+
+  const { organization: workspace, user } = await getWorkspaceContext();
+
+  const { getWorkspaceAiConfig } = await import("@/lib/ai/config");
+  const config = await getWorkspaceAiConfig(workspace.id);
+  if (!config) {
+    return {
+      ok: false,
+      error: "Enable AI in Settings to draft with AI.",
+      reason: "not_configured",
+    };
+  }
+
+  // Load candidate + their most recent application context.
+  const [row] = await db
+    .select({
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      jobTitle: jobs.title,
+      stageName: jobs.title, // overridden below via application join
+    })
+    .from(candidates)
+    .leftJoin(
+      applications,
+      and(
+        eq(applications.workspaceId, workspace.id),
+        eq(applications.candidateId, candidates.id),
+      ),
+    )
+    .leftJoin(
+      jobs,
+      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
+    )
+    .where(
+      and(
+        eq(candidates.workspaceId, workspace.id),
+        eq(candidates.id, parsed.data.candidateId),
+      ),
+    )
+    .orderBy(desc(applications.appliedAt))
+    .limit(1);
+
+  if (!row) {
+    return { ok: false, error: "Candidate not found." };
+  }
+
+  // Also grab latest AI evaluation for context.
+  const { aiEvaluations } = await import("@harly/db");
+  const [evalRow] = await db
+    .select({ score: aiEvaluations.score, recommendation: aiEvaluations.recommendation })
+    .from(aiEvaluations)
+    .where(
+      and(
+        eq(aiEvaluations.workspaceId, workspace.id),
+        eq(aiEvaluations.candidateId, parsed.data.candidateId),
+      ),
+    )
+    .orderBy(desc(aiEvaluations.updatedAt))
+    .limit(1);
+
+  try {
+    const { draftEmailWithAI } = await import("@/lib/ai/surfaces/draft-email");
+    const draft = await draftEmailWithAI(config, {
+      type: parsed.data.type,
+      candidateName: `${row.firstName} ${row.lastName}`,
+      jobTitle: row.jobTitle ?? "the role",
+      companyName: workspace.name,
+      senderName: user.name,
+      aiScore: evalRow?.score ?? null,
+      aiRecommendation: evalRow?.recommendation ?? null,
+    });
+    return { ok: true, subject: draft.subject, body: draft.body };
+  } catch (error) {
+    console.error("Email draft AI failed", error);
+    return { ok: false, error: "Draft generation failed. Check your AI settings." };
+  }
+}
+
 export async function sendCandidateMessage(input: {
   candidateId: string;
   workspaceId: string;
