@@ -451,13 +451,14 @@ export async function decideOffer(input: {
     metadata: { title: offer.title },
   });
 
+  const decisionRecipient = await getOfferRecipient(workspaceId, offer.candidateId);
   await notifyHiringTeam({
     workspaceId,
     actorId: context.user.id,
     actorName: context.user.name,
     jobId: offer.jobId,
     candidateId: offer.candidateId,
-    candidateName: offer.title,
+    candidateName: decisionRecipient?.firstName ?? "Candidate",
     type: decision === "accepted" ? "offer.accepted" : "offer.declined",
     title: `Offer ${decision} — ${offer.title}`,
   });
