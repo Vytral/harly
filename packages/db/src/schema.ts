@@ -408,7 +408,36 @@ export const workspaceSettings = pgTable("workspace_settings", {
   slackBotTokenIv: text("slack_bot_token_iv"),
   slackBotTokenTag: text("slack_bot_token_tag"),
   slackEvents: jsonb("slack_events").default(sql`'[]'::jsonb`),
+  // Google Calendar OAuth (per-user-who-connected). Refresh token encrypted at
+  // rest (AES-256-GCM). Client ID/Secret come from env vars.
+  gcalEnabled: boolean("gcal_enabled").default(false).notNull(),
+  gcalAccountEmail: text("gcal_account_email"),
+  gcalCalendarId: text("gcal_calendar_id"),
+  gcalRefreshTokenCiphertext: text("gcal_refresh_token_ciphertext"),
+  gcalRefreshTokenIv: text("gcal_refresh_token_iv"),
+  gcalRefreshTokenTag: text("gcal_refresh_token_tag"),
   acquisitionSource: text("acquisition_source"),
+  // Legal & compliance settings — per-workspace legal entity info, retention
+  // policies, and customizable legal page content (Privacy Policy, Terms of
+  // Service, Cookie Policy, Candidate Notice, AI Transparency Notice).
+  legalEntityName: text("legal_entity_name"),
+  legalEntityAddress: text("legal_entity_address"),
+  legalEntityEmail: text("legal_entity_email"),
+  legalEntityWebsite: text("legal_entity_website"),
+  legalJurisdiction: text("legal_jurisdiction"), // 'eu' | 'us' | 'other'
+  dpoEmail: text("dpo_email"), // Data Protection Officer email
+  dataRetentionApplicantsMonths: integer("data_retention_applicants_months")
+    .default(6)
+    .notNull(),
+  dataRetentionTalentPoolMonths: integer("data_retention_talent_pool_months")
+    .default(24)
+    .notNull(),
+  consentCheckboxText: text("consent_checkbox_text"),
+  // JSONB storing legal page content keyed by page type:
+  // { privacyPolicy: string, termsOfService: string, cookiePolicy: string,
+  //   candidateNotice: string, aiTransparencyNotice: string }
+  legalPages: jsonb("legal_pages").default(sql`'{}'::jsonb`).notNull(),
+  legalConfigured: boolean("legal_configured").default(false).notNull(),
   ...timestamps(),
 });
 
@@ -1134,6 +1163,7 @@ export const interviews = pgTable(
     // Cal.com booking UID — set when the interview originates from / is synced
     // with a Cal.com booking. Lets the webhook upsert instead of duplicating.
     calBookingUid: text("cal_booking_uid"),
+    gcalEventId: text("gcal_event_id"),
     ...timestamps(),
   },
   (table) => [

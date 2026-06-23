@@ -1,6 +1,6 @@
 {
-  "id": "de93ba47-1d86-478a-bbec-3a875bb6dfdc",
-  "prevId": "d838ae83-1b56-4fc7-b8cc-6fdbb5a22e54",
+  "id": "0bb6aece-8220-49cc-95d1-9cd0fb58d772",
+  "prevId": "d62a9c7b-b507-4616-859e-47231d29672d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -1729,6 +1729,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "content_hash": {
+          "name": "content_hash",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "uploaded_by_id": {
           "name": "uploaded_by_id",
           "type": "text",
@@ -1792,6 +1798,27 @@
           "columns": [
             {
               "expression": "uploaded_by_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "candidate_files_candidate_hash_idx": {
+          "name": "candidate_files_candidate_hash_idx",
+          "columns": [
+            {
+              "expression": "candidate_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "content_hash",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -2921,6 +2948,12 @@
         },
         "cal_booking_uid": {
           "name": "cal_booking_uid",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gcal_event_id": {
+          "name": "gcal_event_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -5874,6 +5907,26 @@
           "notNull": true,
           "default": "'bordered'"
         },
+        "sidebar_logo_style": {
+          "name": "sidebar_logo_style",
+          "type": "logo_style",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'bordered'"
+        },
+        "sidebar_logo_url": {
+          "name": "sidebar_logo_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "sidebar_logo_dark_url": {
+          "name": "sidebar_logo_dark_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "ai_enabled": {
           "name": "ai_enabled",
           "type": "boolean",
@@ -6109,6 +6162,123 @@
           "primaryKey": false,
           "notNull": false,
           "default": "'[]'::jsonb"
+        },
+        "slack_client_id": {
+          "name": "slack_client_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_client_secret_ciphertext": {
+          "name": "slack_client_secret_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_client_secret_iv": {
+          "name": "slack_client_secret_iv",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_client_secret_tag": {
+          "name": "slack_client_secret_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_enabled": {
+          "name": "slack_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "slack_team_id": {
+          "name": "slack_team_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_team_name": {
+          "name": "slack_team_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_channel_id": {
+          "name": "slack_channel_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_channel_name": {
+          "name": "slack_channel_name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_bot_token_ciphertext": {
+          "name": "slack_bot_token_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_bot_token_iv": {
+          "name": "slack_bot_token_iv",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_bot_token_tag": {
+          "name": "slack_bot_token_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "slack_events": {
+          "name": "slack_events",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false,
+          "default": "'[]'::jsonb"
+        },
+        "gcal_enabled": {
+          "name": "gcal_enabled",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "gcal_account_email": {
+          "name": "gcal_account_email",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gcal_calendar_id": {
+          "name": "gcal_calendar_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gcal_refresh_token_ciphertext": {
+          "name": "gcal_refresh_token_ciphertext",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gcal_refresh_token_iv": {
+          "name": "gcal_refresh_token_iv",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "gcal_refresh_token_tag": {
+          "name": "gcal_refresh_token_tag",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "acquisition_source": {
           "name": "acquisition_source",

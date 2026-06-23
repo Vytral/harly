@@ -239,6 +239,13 @@
       "when": 1782097212144,
       "tag": "0033_dark_shocker",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1782105148992,
+      "tag": "0034_gcal-integration",
+      "breakpoints": true
     }
   ]
 }
