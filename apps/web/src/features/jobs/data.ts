@@ -37,6 +37,9 @@ const workspaceBrandingSelect = {
   heroImageUrl: workspaceSettings.heroImageUrl,
   boardStyle: workspaceSettings.boardStyle,
   logoStyle: workspaceSettings.logoStyle,
+  legalConfigured: workspaceSettings.legalConfigured,
+  consentCheckboxText: workspaceSettings.consentCheckboxText,
+  legalPages: sql<Record<string, string> | null>`(${workspaceSettings.legalPages}::jsonb)`,
 } as const;
 
 type WorkspaceBrandingRow = {
@@ -51,6 +54,9 @@ type WorkspaceBrandingRow = {
   heroImageUrl: string | null;
   boardStyle: string | null;
   logoStyle: string | null;
+  legalConfigured: boolean | null;
+  consentCheckboxText: string | null;
+  legalPages: Record<string, string> | null;
 };
 
 export function toBoardBranding(
@@ -68,6 +74,9 @@ export function toBoardBranding(
     heroImageUrl: row.heroImageUrl,
     boardStyle: normalizeBoardStyle(row.boardStyle),
     logoStyle: normalizeLogoStyle(row.logoStyle),
+    legalConfigured: row.legalConfigured ?? false,
+    consentCheckboxText: row.consentCheckboxText ?? null,
+    legalPages: row.legalPages ?? null,
   };
 }
 

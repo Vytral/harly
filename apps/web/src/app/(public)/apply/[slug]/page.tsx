@@ -41,6 +41,9 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
           applicationConfig={applicationConfig}
           variant={config.template === "ashby" ? "ashby" : "default"}
           turnstileSiteKey={turnstileSiteKey}
+          legalConfigured={workspace.legalConfigured}
+          consentCheckboxText={workspace.consentCheckboxText}
+          legalPages={workspace.legalPages}
         />
       </JobChrome>
     );
@@ -65,6 +68,9 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
           workspaceSlug={workspace.slug}
           applicationConfig={applicationConfig}
           turnstileSiteKey={turnstileSiteKey}
+          legalConfigured={workspace.legalConfigured}
+          consentCheckboxText={workspace.consentCheckboxText}
+          legalPages={workspace.legalPages}
         />
       </main>
     </BoardShell>

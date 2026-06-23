@@ -19,6 +19,9 @@ export type WorkspaceBoardBranding = {
   heroImageUrl: string | null;
   boardStyle: BoardStyle;
   logoStyle: LogoStyle;
+  legalConfigured: boolean;
+  consentCheckboxText: string | null;
+  legalPages: Record<string, string> | null;
 };
 
 const hexColor = z

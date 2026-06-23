@@ -46,6 +46,10 @@ type ApplyFormProps = {
   variant?: ApplyFormVariant;
   /** Resolved server-side (workspace key → env fallback). Null hides the widget. */
   turnstileSiteKey?: string | null;
+  /** Legal settings from workspace. When legalConfigured is true, consent checkbox is shown. */
+  legalConfigured?: boolean;
+  consentCheckboxText?: string | null;
+  legalPages?: Record<string, string> | null;
 };
 
 type TextField =
@@ -289,6 +293,9 @@ export function ApplyForm({
   applicationConfig,
   variant = "default",
   turnstileSiteKey = null,
+  legalConfigured = false,
+  consentCheckboxText = null,
+  legalPages = null,
 }: ApplyFormProps) {
   const isAshby = variant === "ashby";
   const input = isAshby ? inputClassAshby : inputClass;
@@ -314,8 +321,16 @@ export function ApplyForm({
     Record<string, string[]>
   >({});
   const [isUploading, setIsUploading] = useState(false);
+  const [consentGiven, setConsentGiven] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
   const [, startTransition] = useTransition();
   const isSubmitting = isPending || isUploading;
+
+  const showConsentCheckbox = legalConfigured;
+  const privacyPolicyUrl = legalPages?.privacyPolicy
+    ? `/board/${workspaceSlug}/legal/privacy-policy`
+    : null;
+  const consentText = consentCheckboxText || "I agree to the privacy policy and consent to the processing of my personal data.";
 
   function updateField(field: TextField, value: string) {
     setFields((current) => ({ ...current, [field]: value }));
@@ -565,6 +580,11 @@ export function ApplyForm({
 
     if (validationError) {
       setResumeError(validationError);
+      return;
+    }
+
+    if (showConsentCheckbox && !consentGiven) {
+      setConsentError("You must agree to the privacy policy to submit your application.");
       return;
     }
 
@@ -1118,6 +1138,43 @@ export function ApplyForm({
             </div>
           ) : null}
 
+          {showConsentCheckbox ? (
+            <div className="space-y-2">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentGiven}
+                  onChange={(e) => {
+                    setConsentGiven(e.target.checked);
+                    setConsentError(null);
+                  }}
+                  className="mt-1 size-4 rounded border-zinc-300 text-[var(--board-primary)] focus:ring-[var(--board-primary)]"
+                />
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                  {privacyPolicyUrl ? (
+                    <>
+                      {consentText.replace(/privacy policy/gi, "").trim() || "I agree to the "}
+                      <a
+                        href={privacyPolicyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-zinc-900 dark:hover:text-zinc-100"
+                      >
+                        privacy policy
+                      </a>
+                    </>
+                  ) : (
+                    consentText
+                  )}
+                  {" *"}
+                </span>
+              </label>
+              {consentError ? (
+                <p className="text-sm text-red-500">{consentError}</p>
+              ) : null}
+            </div>
+          ) : null}
+
           <button
             type="submit"
             disabled={isSubmitting}
@@ -1485,6 +1542,43 @@ export function ApplyForm({
           {turnstileSiteKey ? (
             <div className="flex justify-center">
               <TurnstileWidget siteKey={turnstileSiteKey} />
+            </div>
+          ) : null}
+
+          {showConsentCheckbox ? (
+            <div className="space-y-2">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentGiven}
+                  onChange={(e) => {
+                    setConsentGiven(e.target.checked);
+                    setConsentError(null);
+                  }}
+                  className="mt-1 size-4 rounded border-zinc-300 text-[var(--board-primary)] focus:ring-[var(--board-primary)]"
+                />
+                <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                  {privacyPolicyUrl ? (
+                    <>
+                      {consentText.replace(/privacy policy/gi, "").trim() || "I agree to the "}
+                      <a
+                        href={privacyPolicyUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:text-zinc-900 dark:hover:text-zinc-100"
+                      >
+                        privacy policy
+                      </a>
+                    </>
+                  ) : (
+                    consentText
+                  )}
+                  {" *"}
+                </span>
+              </label>
+              {consentError ? (
+                <p className="text-sm text-red-500">{consentError}</p>
+              ) : null}
             </div>
           ) : null}
 
