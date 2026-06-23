@@ -2,10 +2,11 @@
 
 import { useMemo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Link2, MapPin, Phone, Video } from "lucide-react";
+import { AlertTriangle, Link2, MapPin, Phone, Video } from "lucide-react";
 import { toast } from "sonner";
 
 import { scheduleInterview } from "@/features/interviews/actions";
+import { checkAvailability } from "@/lib/gcal/availability";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { buildCalBookingLink } from "@/lib/cal/link";
 import { Button } from "@/components/ui/button";
@@ -89,6 +90,8 @@ export function ScheduleDrawer({
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
   const [isPending, startTransition] = useTransition();
+  const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(null);
+  const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   const hasApplication = applications.length > 0;
   const locationLabel = useMemo(
@@ -97,6 +100,48 @@ export function ScheduleDrawer({
   );
 
   const calLinkAvailable = cal.enabled && Boolean(cal.bookingUrl);
+
+  async function checkTimeAvailability(
+    newDate: string,
+    newTime: string,
+    duration: string,
+    interviewer?: string,
+  ) {
+    if (!newDate || !newTime) {
+      setAvailabilityWarning(null);
+      return;
+    }
+    setCheckingAvailability(true);
+    try {
+      const start = new Date(`${newDate}T${newTime}`);
+      const end = new Date(start.getTime() + Number(duration) * 60_000);
+      const result = await checkAvailability({
+        timeMin: start,
+        timeMax: end,
+        interviewerId: interviewer ?? (interviewerId || undefined),
+      });
+      const warnings: string[] = [];
+      if (result.gcalBusy.length > 0) {
+        warnings.push(
+          `${result.gcalBusy.length} existing calendar event${result.gcalBusy.length > 1 ? "s" : ""}`,
+        );
+      }
+      if (result.internalConflicts.length > 0) {
+        warnings.push(
+          `${result.internalConflicts.length} overlapping interview${result.internalConflicts.length > 1 ? "s" : ""} in this workspace`,
+        );
+      }
+      setAvailabilityWarning(
+        warnings.length > 0
+          ? `This time conflicts with ${warnings.join(" and ")}.`
+          : null,
+      );
+    } catch {
+      // Silently fail — don't block scheduling on availability check.
+    } finally {
+      setCheckingAvailability(false);
+    }
+  }
 
   function copyBookingLink() {
     if (!cal.bookingUrl) return;
@@ -123,6 +168,7 @@ export function ScheduleDrawer({
     setInterviewerId("");
     setLocation("");
     setNotes("");
+    setAvailabilityWarning(null);
   }
 
   function submit() {
@@ -281,7 +327,10 @@ export function ScheduleDrawer({
                   id="schedule-date"
                   type="date"
                   value={date}
-                  onChange={(e) => setDate(e.target.value)}
+                  onChange={(e) => {
+                    setDate(e.target.value);
+                    checkTimeAvailability(e.target.value, time, durationMins);
+                  }}
                 />
               </Field>
               <Field label="Time" htmlFor="schedule-time">
@@ -289,14 +338,33 @@ export function ScheduleDrawer({
                   id="schedule-time"
                   type="time"
                   value={time}
-                  onChange={(e) => setTime(e.target.value)}
+                  onChange={(e) => {
+                    setTime(e.target.value);
+                    checkTimeAvailability(date, e.target.value, durationMins);
+                  }}
                 />
               </Field>
             </div>
 
+            {availabilityWarning ? (
+              <div className="flex items-start gap-2 rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2.5 text-sm text-amber-600 dark:text-amber-400">
+                <AlertTriangle className="mt-0.5 size-4 shrink-0" />
+                <span>{availabilityWarning}</span>
+              </div>
+            ) : null}
+            {checkingAvailability ? (
+              <p className="text-xs text-muted-foreground">Checking availability…</p>
+            ) : null}
+
             <div className="grid grid-cols-2 gap-3">
               <Field label="Duration">
-                <Select value={durationMins} onValueChange={setDurationMins}>
+                <Select
+                  value={durationMins}
+                  onValueChange={(value) => {
+                    setDurationMins(value);
+                    checkTimeAvailability(date, time, value);
+                  }}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
@@ -312,9 +380,13 @@ export function ScheduleDrawer({
               <Field label="Interviewer">
                 <Select
                   value={interviewerId || "unassigned"}
-                  onValueChange={(value) =>
-                    setInterviewerId(value === "unassigned" ? "" : value)
-                  }
+                  onValueChange={(value) => {
+                    const newId = value === "unassigned" ? "" : value;
+                    setInterviewerId(newId);
+                    if (date && time) {
+                      checkTimeAvailability(date, time, durationMins, newId);
+                    }
+                  }}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />

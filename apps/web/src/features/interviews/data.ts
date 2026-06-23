@@ -34,6 +34,7 @@ export async function listCandidateInterviews(
       notes: interviews.notes,
       interviewerName: authUsers.name,
       jobTitle: jobs.title,
+      gcalEventId: interviews.gcalEventId,
     })
     .from(interviews)
     .innerJoin(
@@ -61,6 +62,7 @@ export async function listCandidateInterviews(
     notes: row.notes,
     interviewerName: row.interviewerName,
     jobTitle: row.jobTitle,
+    gcalEventId: row.gcalEventId,
   }));
 }
 
@@ -85,6 +87,7 @@ export async function listUpcomingInterviews(): Promise<UpcomingInterviewItem[]>
       candidateId: candidates.id,
       first: candidates.firstName,
       last: candidates.lastName,
+      gcalEventId: interviews.gcalEventId,
     })
     .from(interviews)
     .innerJoin(
@@ -122,5 +125,6 @@ export async function listUpcomingInterviews(): Promise<UpcomingInterviewItem[]>
     jobTitle: row.jobTitle,
     candidateId: row.candidateId,
     candidateName: `${row.first} ${row.last}`,
+    gcalEventId: row.gcalEventId,
   }));
 }

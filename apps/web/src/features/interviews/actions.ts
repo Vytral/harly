@@ -13,16 +13,21 @@ import {
   interviews,
   jobs,
   organization,
+  user as authUsers,
 } from "@harly/db";
 import {
   InterviewCanceled,
   interviewCanceledSubject,
+  InterviewRescheduled,
+  interviewRescheduledSubject,
   InterviewScheduled,
   interviewScheduledSubject,
 } from "@harly/emails";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
+import { syncInterviewToGCal, cancelInterviewGCalEvent, updateInterviewGCalEvent } from "@/lib/gcal/sync";
+import { emitWebhookEvent } from "@/server/webhooks/emit";
 
 const INTERVIEW_TYPE_LABEL: Record<string, string> = {
   screening: "Screening interview",
@@ -194,11 +199,11 @@ export async function scheduleInterview(
         },
       });
 
-      return { success: true as const };
+      return { success: true as const, interviewId: interview.id };
     });
 
     if (result.success) {
-      // Notify the candidate. Fire-and-forget — never block scheduling on mail.
+      // Resolve participant emails for GCal attendees + candidate notification.
       const [recipient] = await db
         .select({
           email: candidates.email,
@@ -217,6 +222,33 @@ export async function scheduleInterview(
           ),
         )
         .limit(1);
+
+      let interviewerEmail: string | undefined;
+      if (data.interviewerId) {
+        const [interviewer] = await db
+          .select({ email: authUsers.email })
+          .from(authUsers)
+          .where(eq(authUsers.id, data.interviewerId))
+          .limit(1);
+        interviewerEmail = interviewer?.email ?? undefined;
+      }
+
+      const attendees = [recipient?.email, interviewerEmail].filter(
+        (e): e is string => Boolean(e),
+      );
+
+      // Sync to Google Calendar (fire-and-forget).
+      // Google sends official calendar invitations to all attendees.
+      void syncInterviewToGCal({
+        workspaceId: workspace.id,
+        interviewId: result.interviewId,
+        summary: data.title ?? INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
+        description: data.notes ?? undefined,
+        start: when,
+        durationMins: data.durationMins,
+        attendees: attendees.length > 0 ? attendees : undefined,
+        location: data.location ?? undefined,
+      });
 
       if (recipient?.email) {
         const branding = await getWorkspaceEmailBranding(workspace.id);
@@ -238,6 +270,9 @@ export async function scheduleInterview(
             mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
             location: data.location ?? undefined,
             duration: data.durationMins ? `${data.durationMins} min` : undefined,
+            startIso: when.toISOString(),
+            durationMins: data.durationMins,
+            notes: data.notes ?? undefined,
           }),
         });
       }
@@ -245,6 +280,19 @@ export async function scheduleInterview(
       revalidatePath(`/dashboard/candidates/${data.candidateId}`);
       revalidatePath("/dashboard");
       revalidatePath("/dashboard/calendars");
+
+      // Emit outbound webhook event.
+      void emitWebhookEvent(workspace.id, "interview.scheduled", {
+        interviewId: result.interviewId,
+        candidateId: data.candidateId,
+        applicationId: data.applicationId,
+        type: data.type,
+        mode: data.mode,
+        scheduledAt: when.toISOString(),
+        durationMins: data.durationMins,
+        location: data.location,
+        interviewerId: data.interviewerId,
+      });
     }
 
     return result;
@@ -284,10 +332,18 @@ export async function setInterviewStatus(input: {
           eq(interviews.workspaceId, workspace.id),
         ),
       )
-      .returning({ id: interviews.id });
+      .returning({ id: interviews.id, gcalEventId: interviews.gcalEventId });
 
     if (updated.length === 0) {
       return { success: false, error: "Interview not found." };
+    }
+
+    if (parsed.data.status === "canceled" && updated[0]?.gcalEventId) {
+      void cancelInterviewGCalEvent({
+        workspaceId: workspace.id,
+        interviewId: parsed.data.interviewId,
+        gcalEventId: updated[0].gcalEventId,
+      });
     }
 
     // Let the candidate know when an interview is called off.
@@ -338,11 +394,197 @@ export async function setInterviewStatus(input: {
     revalidatePath(`/dashboard/candidates/${parsed.data.candidateId}`);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/calendars");
+
+    // Emit outbound webhook event.
+    if (parsed.data.status === "canceled") {
+      void emitWebhookEvent(workspace.id, "interview.canceled", {
+        interviewId: parsed.data.interviewId,
+        candidateId: parsed.data.candidateId,
+      });
+    } else if (parsed.data.status === "completed") {
+      void emitWebhookEvent(workspace.id, "interview.completed", {
+        interviewId: parsed.data.interviewId,
+        candidateId: parsed.data.candidateId,
+      });
+    }
+
     return { success: true };
   } catch {
     return {
       success: false,
       error: "Unable to update interview.",
+    };
+  }
+}
+
+const rescheduleSchema = z.object({
+  interviewId: z.string().min(1),
+  candidateId: z.string().min(1),
+  scheduledAt: z
+    .string()
+    .min(1, "Pick a date and time.")
+    .refine((value) => !Number.isNaN(Date.parse(value)), "Invalid date/time."),
+  durationMins: z.coerce.number().int().min(5).max(480).default(45),
+  location: z
+    .string()
+    .trim()
+    .max(500)
+    .transform((value) => (value.length > 0 ? value : null))
+    .nullable()
+    .optional(),
+});
+
+/** Reschedule an interview to a new date/time and update the GCal event. */
+export async function rescheduleInterview(input: {
+  interviewId: string;
+  candidateId: string;
+  scheduledAt: string;
+  durationMins: number;
+  location?: string | null;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const parsed = rescheduleSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      };
+    }
+
+    const { organization: workspace } = await getWorkspaceContext();
+    const data = parsed.data;
+    const when = new Date(data.scheduledAt);
+
+    const updated = await db
+      .update(interviews)
+      .set({
+        scheduledAt: when,
+        durationMins: data.durationMins,
+        location: data.location ?? null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(interviews.id, data.interviewId),
+          eq(interviews.workspaceId, workspace.id),
+        ),
+      )
+      .returning({
+        id: interviews.id,
+        gcalEventId: interviews.gcalEventId,
+        title: interviews.title,
+        type: interviews.type,
+      });
+
+    if (updated.length === 0) {
+      return { success: false, error: "Interview not found." };
+    }
+
+    const row = updated[0];
+
+    // Fetch interview context for GCal attendees + candidate notification.
+    const [info] = await db
+      .select({
+        email: candidates.email,
+        firstName: candidates.firstName,
+        companyName: organization.name,
+        jobTitle: jobs.title,
+        type: interviews.type,
+        mode: interviews.mode,
+        interviewerId: interviews.interviewerId,
+      })
+      .from(interviews)
+      .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
+      .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+      .innerJoin(organization, eq(organization.id, interviews.workspaceId))
+      .where(
+        and(
+          eq(interviews.id, data.interviewId),
+          eq(interviews.workspaceId, workspace.id),
+        ),
+      )
+      .limit(1);
+
+    // Resolve attendee emails for GCal invitations.
+    let interviewerEmail: string | undefined;
+    if (info?.interviewerId) {
+      const [interviewer] = await db
+        .select({ email: authUsers.email })
+        .from(authUsers)
+        .where(eq(authUsers.id, info.interviewerId))
+        .limit(1);
+      interviewerEmail = interviewer?.email ?? undefined;
+    }
+    const attendees = [info?.email, interviewerEmail].filter(
+      (e): e is string => Boolean(e),
+    );
+
+    // Sync to Google Calendar if the event was previously synced.
+    if (row?.gcalEventId) {
+      void updateInterviewGCalEvent({
+        workspaceId: workspace.id,
+        gcalEventId: row.gcalEventId,
+        start: when,
+        durationMins: data.durationMins,
+        attendees: attendees.length > 0 ? attendees : undefined,
+        location: data.location ?? undefined,
+      });
+    } else {
+      void syncInterviewToGCal({
+        workspaceId: workspace.id,
+        interviewId: row!.id,
+        summary: row?.title ?? INTERVIEW_TYPE_LABEL[row?.type ?? "screening"] ?? "Interview",
+        start: when,
+        durationMins: data.durationMins,
+        attendees: attendees.length > 0 ? attendees : undefined,
+        location: data.location ?? undefined,
+      });
+    }
+
+    if (info?.email) {
+      const branding = await getWorkspaceEmailBranding(workspace.id);
+      void sendWorkspaceEmail(workspace.id, {
+        to: info.email,
+        subject: interviewRescheduledSubject({
+          companyName: info.companyName,
+          jobTitle: info.jobTitle,
+        }),
+        react: createElement(InterviewRescheduled, {
+          candidateName: info.firstName,
+          companyName: info.companyName,
+          companyLogoUrl: branding.logoUrl ?? undefined,
+          accentColor: branding.primaryColor ?? undefined,
+          socialLinks: branding.socialLinks,
+          jobTitle: info.jobTitle,
+          interviewType: INTERVIEW_TYPE_LABEL[info.type] ?? "Interview",
+          when: interviewWhenFormatter.format(when),
+          mode: INTERVIEW_MODE_LABEL[info.mode] ?? info.mode,
+          location: data.location ?? undefined,
+          duration: data.durationMins ? `${data.durationMins} min` : undefined,
+          startIso: when.toISOString(),
+          durationMins: data.durationMins,
+        }),
+      });
+    }
+
+    revalidatePath(`/dashboard/candidates/${data.candidateId}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/calendars");
+
+    // Emit outbound webhook event.
+    void emitWebhookEvent(workspace.id, "interview.rescheduled", {
+      interviewId: data.interviewId,
+      candidateId: data.candidateId,
+      scheduledAt: when.toISOString(),
+      durationMins: data.durationMins,
+      location: data.location,
+    });
+
+    return { success: true };
+  } catch {
+    return {
+      success: false,
+      error: "Unable to reschedule interview.",
     };
   }
 }

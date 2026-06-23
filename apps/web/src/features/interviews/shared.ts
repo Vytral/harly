@@ -25,6 +25,7 @@ export type CandidateInterviewItem = {
   notes: string | null;
   interviewerName: string | null;
   jobTitle: string;
+  gcalEventId: string | null;
 };
 
 export type UpcomingInterviewItem = CandidateInterviewItem & {

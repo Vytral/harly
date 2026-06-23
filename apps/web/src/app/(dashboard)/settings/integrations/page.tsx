@@ -1,8 +1,10 @@
 import { CalSettingsCard } from "@/features/workspaces/CalSettingsCard";
+import { GCalSettingsCard } from "@/features/workspaces/GCalSettingsCard";
 import { SlackSettingsCard } from "@/features/workspaces/SlackSettingsCard";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
+import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
 import { getWorkspaceSlackStatus } from "@/lib/slack/config";
 import {
   WEBHOOK_EVENTS,
@@ -11,11 +13,11 @@ import {
 import { BrandTile } from "@/features/workspaces/settings-ui";
 import {
   GmailLogo,
-  GoogleCalendarLogo,
   GreenhouseLogo,
   LinkedinLogo,
 } from "@/components/ui/icons/brands";
 import { Card } from "@/components/ui/card";
+import { OAuthFeedback } from "@/components/OAuthFeedback";
 
 export const dynamic = "force-dynamic";
 
@@ -25,11 +27,6 @@ const UPCOMING: Array<{
   logo: React.ComponentType<{ className?: string }>;
   tone?: string;
 }> = [
-  {
-    name: "Google Calendar",
-    description: "Two-way sync interviews with recruiters' Google calendars.",
-    logo: GoogleCalendarLogo,
-  },
   {
     name: "Gmail",
     description: "Send and log candidate emails from your own inbox.",
@@ -47,16 +44,12 @@ const UPCOMING: Array<{
   },
 ];
 
-const SETUP_LABEL: Record<"key" | "oauth", string> = {
-  key: "API key — no setup",
-  oauth: "OAuth",
-};
-
 export default async function IntegrationsSettingsPage() {
   await requirePagePermission("integrations:manage");
   const { organization, role } = await getWorkspaceContext();
-  const [calStatus, slackStatus] = await Promise.all([
+  const [calStatus, gcalStatus, slackStatus] = await Promise.all([
     getWorkspaceCalStatus(organization.id),
+    getWorkspaceGCalStatus(organization.id),
     getWorkspaceSlackStatus(organization.id),
   ]);
   const canEdit = role === "owner" || role === "admin";
@@ -73,10 +66,18 @@ export default async function IntegrationsSettingsPage() {
 
   return (
     <div className="space-y-6">
+      <OAuthFeedback />
+
       <CalSettingsCard
         status={calStatus}
         canEdit={canEdit}
         webhookUrl={webhookUrl}
+      />
+
+      <GCalSettingsCard
+        status={gcalStatus}
+        canEdit={canEdit}
+        workspaceId={organization.id}
       />
 
         <SlackSettingsCard
