@@ -21,6 +21,7 @@ import {
   extractResumeAutofillFields,
   type ResumeAutofillFields,
 } from "@/features/applications/resume-autofill";
+import { scheduleAutoScore } from "@/features/applications/auto-score";
 
 export type ParseResumeResult =
   | { ok: true; fields: ResumeAutofillFields }
@@ -156,6 +157,23 @@ export async function submitApplicationAction(
         String(formData.get(question.id) ?? ""),
       ]),
     ),
+    skills: (() => {
+      try {
+        const raw = formData.get("skills");
+        if (typeof raw === "string" && raw.startsWith("[")) {
+          return JSON.parse(raw) as string[];
+        }
+      } catch {}
+      return undefined;
+    })(),
+    experienceYears: (() => {
+      const raw = formData.get("experienceYears");
+      if (typeof raw === "string" && raw.trim()) {
+        const n = Number(raw);
+        if (!isNaN(n) && n >= 0) return n;
+      }
+      return undefined;
+    })(),
   });
 
   if (!parsed.success) {
@@ -190,6 +208,9 @@ export async function submitApplicationAction(
     }
 
     sendApplicationReceivedEmails(result.email);
+
+    // Fire-and-forget auto-score — never blocks the apply response.
+    void scheduleAutoScore(result.applicationId, jobContext.workspaceId);
 
     revalidatePath("/dashboard/candidates");
     return {

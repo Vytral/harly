@@ -734,6 +734,9 @@ export function ApplyForm({
           void handleResumeChange(event.target.files?.[0] ?? null);
         }}
       />
+      {/* Hidden fields for resume-parsed data */}
+      <input type="hidden" name="skills" value={detected?.skills ? JSON.stringify(detected.skills) : "[]"} />
+      <input type="hidden" name="experienceYears" value={detected?.experienceYears ?? ""} />
 
       {state.status === "error" && state.message ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">

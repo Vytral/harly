@@ -25,6 +25,7 @@ import type { ApplicationFormValues } from "@/lib/validations/applications";
 export type PublicApplicationResult =
   | {
       ok: true;
+      applicationId: string;
       email: {
         candidateEmail: string;
         candidateFirstName: string;
@@ -153,6 +154,12 @@ export async function createPublicApplication(
               linkedinUrl: values.linkedinUrl,
               githubUrl: values.githubUrl,
               websiteUrl: values.websiteUrl,
+              ...(values.skills && values.skills.length > 0
+                ? { skills: values.skills }
+                : {}),
+              ...(values.experienceYears != null
+                ? { experienceYears: values.experienceYears }
+                : {}),
               updatedAt: new Date(),
             })
             .where(eq(candidates.id, existingCandidate.id))
@@ -171,6 +178,8 @@ export async function createPublicApplication(
               linkedinUrl: values.linkedinUrl,
               githubUrl: values.githubUrl,
               websiteUrl: values.websiteUrl,
+              skills: values.skills ?? [],
+              experienceYears: values.experienceYears ?? null,
             })
             .returning()
         )[0];
@@ -337,6 +346,7 @@ export async function createPublicApplication(
 
     return {
       ok: true,
+      applicationId: application.id,
       email: {
         candidateEmail: candidate.email,
         candidateFirstName: candidate.firstName,

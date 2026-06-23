@@ -128,6 +128,8 @@ export type ApplicationFormValues = {
     | "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   resumeFileSize?: number;
   questionAnswers: Record<string, string>;
+  skills?: string[];
+  experienceYears?: number;
 };
 
 export function validateApplicationQuestionAnswers(
