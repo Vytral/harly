@@ -3,11 +3,12 @@
 import { useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { FileText, RefreshCw, BrainCircuit } from "lucide-react";
+import { FileText, BrainCircuit } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateAiEvaluationAction } from "@/features/candidates/ai-actions";
 import type { CandidateAiEvaluationItem } from "@/features/candidates/data";
+import { AiButton } from "@/components/ui/AiButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -88,20 +89,15 @@ function GenerateButton({
   }
 
   return (
-    <Button
+    <AiButton
       size="sm"
       variant={hasEvaluation ? "ghost" : "default"}
       onClick={run}
-      disabled={isPending}
-      className={cn(hasEvaluation && "text-muted-foreground")}
+      loading={isPending}
+      loadingText="Scoring"
     >
-      {hasEvaluation ? (
-        <RefreshCw className={cn("size-4", isPending && "animate-spin")} />
-      ) : (
-        <BrainCircuit className={cn("size-4", isPending && "animate-pulse")} />
-      )}
-      {isPending ? "Scoring…" : hasEvaluation ? "Regenerate" : "Score with AI"}
-    </Button>
+      {hasEvaluation ? "Regenerate" : "Score with AI"}
+    </AiButton>
   );
 }
 
