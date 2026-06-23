@@ -21,6 +21,7 @@ import {
   scorecards,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceEmailSender } from "@/lib/email";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
@@ -772,6 +773,14 @@ export async function sendBulkCandidateEmail(input: {
   }
 
   const sender = await getWorkspaceEmailSender(workspace.id);
+  if (!sender) {
+    return {
+      success: false,
+      error: "Email sending is not configured. Go to Settings → Email to set up your sender.",
+      sent: 0,
+      failed: 0,
+    };
+  }
   let sent = 0;
   let failed = 0;
 
@@ -906,6 +915,17 @@ export async function trashCandidateAction(
     return { success: false, error: result.error };
   }
 
+  const { organization, user } = await getWorkspaceContext();
+  await logAuditEvent({
+    workspaceId: organization.id,
+    actorId: user.id,
+    actorEmail: user.email,
+    action: "candidate.trashed",
+    resourceType: "candidate",
+    resourceId: candidateId,
+    severity: "warning",
+  });
+
   revalidatePath("/dashboard/candidates");
   revalidatePath(`/dashboard/candidates/${candidateId}`);
   revalidatePath("/dashboard/pipeline");
@@ -959,6 +979,17 @@ export async function permanentlyDeleteCandidateAction(
   if (!result.ok) {
     return { success: false, error: result.error };
   }
+
+  const { organization, user } = await getWorkspaceContext();
+  await logAuditEvent({
+    workspaceId: organization.id,
+    actorId: user.id,
+    actorEmail: user.email,
+    action: "candidate.deleted",
+    resourceType: "candidate",
+    resourceId: candidateId,
+    severity: "critical",
+  });
 
   revalidatePath("/dashboard/candidates");
   revalidatePath("/dashboard/pipeline");

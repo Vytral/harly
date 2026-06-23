@@ -13,6 +13,7 @@ import {
 } from "./data";
 import { jobFormSchema, jobStatusSchema } from "./validation";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { generateJobDraftWithAI } from "@/lib/ai/surfaces/generate-job";
 import type { JobDraft } from "@/lib/ai/schemas";
@@ -50,9 +51,20 @@ export type JobActionState = {
 };
 
 export async function createJobAction(formData: FormData) {
-  await requirePermission("jobs:create");
+  const context = await requirePermission("jobs:create");
   const values = parseJobFormData(formData);
   const job = await createJob(values);
+
+  await logAuditEvent({
+    workspaceId: context.organization.id,
+    actorId: context.user.id,
+    actorEmail: context.user.email,
+    action: "job.created",
+    resourceType: "job",
+    resourceId: job.id,
+    severity: "info",
+    metadata: { title: values.title, slug: values.slug },
+  });
 
   revalidatePath("/dashboard/jobs");
   redirect(`/dashboard/jobs/${job.id}`);
@@ -91,6 +103,17 @@ export async function updateJobStatusAction(formData: FormData) {
     notFound();
   }
 
+  await logAuditEvent({
+    workspaceId: context.organization.id,
+    actorId: context.user.id,
+    actorEmail: context.user.email,
+    action: "job.status_changed",
+    resourceType: "job",
+    resourceId: job.id,
+    severity: "info",
+    metadata: { status, title: job.title },
+  });
+
   const boardBase = `/board/${context.organization.slug}`;
   revalidatePath("/dashboard/jobs");
   revalidatePath(`/dashboard/jobs/${job.id}`);
@@ -99,12 +122,22 @@ export async function updateJobStatusAction(formData: FormData) {
 }
 
 export async function trashJobAction(jobId: string): Promise<JobActionState> {
-  await requirePermission("jobs:delete");
+  const ctx = await requirePermission("jobs:delete");
   const result = await trashJob(jobId);
 
   if (!result.ok) {
     return { success: false, error: result.error };
   }
+
+  await logAuditEvent({
+    workspaceId: ctx.organization.id,
+    actorId: ctx.user.id,
+    actorEmail: ctx.user.email,
+    action: "job.trashed",
+    resourceType: "job",
+    resourceId: jobId,
+    severity: "warning",
+  });
 
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard");
@@ -127,12 +160,22 @@ export async function restoreJobAction(jobId: string): Promise<JobActionState> {
 export async function permanentlyDeleteJobAction(
   jobId: string,
 ): Promise<JobActionState> {
-  await requirePermission("jobs:delete");
+  const ctx = await requirePermission("jobs:delete");
   const result = await permanentlyDeleteJob(jobId);
 
   if (!result.ok) {
     return { success: false, error: result.error };
   }
+
+  await logAuditEvent({
+    workspaceId: ctx.organization.id,
+    actorId: ctx.user.id,
+    actorEmail: ctx.user.email,
+    action: "job.deleted",
+    resourceType: "job",
+    resourceId: jobId,
+    severity: "critical",
+  });
 
   revalidatePath("/dashboard/jobs");
   return { success: true };

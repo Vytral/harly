@@ -77,7 +77,7 @@ export async function toggleForce2FAAction(
   require2fa: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { organization, roleKey } = await getWorkspaceContext();
+    const { organization, roleKey, user } = await getWorkspaceContext();
     if (roleKey !== "owner") throw new Error("Only owners can change this setting.");
 
     await db
@@ -87,6 +87,15 @@ export async function toggleForce2FAAction(
         target: workspaceSettings.organizationId,
         set: { require2fa },
       });
+
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      actorEmail: user.email,
+      action: require2fa ? "settings.2fa_enforced" : "settings.2fa_unenforced",
+      severity: "critical",
+      metadata: { require2fa },
+    });
 
     return { ok: true };
   } catch (error) {

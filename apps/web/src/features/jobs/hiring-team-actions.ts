@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 
 import { db, jobHiringTeam } from "@harly/db";
 import { requireWorkspaceRole } from "@/features/workspaces/context";
+import { logAuditEvent } from "@/lib/audit-log";
 import type { HiringTeamRole } from "@/features/jobs/hiring-team-data";
 
 type Result = { success: boolean; error?: string };
@@ -25,6 +26,16 @@ export async function addHiringTeamMember(input: {
         role: input.role,
       })
       .onConflictDoNothing();
+    await logAuditEvent({
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      action: "hiring_team.member_added",
+      resourceType: "job",
+      resourceId: input.jobId,
+      severity: "info",
+      metadata: { userId: input.userId, role: input.role },
+    });
     revalidatePath(`/dashboard/jobs/${input.jobId}`);
     return { success: true };
   } catch {
@@ -75,6 +86,16 @@ export async function removeHiringTeamMember(input: {
           eq(jobHiringTeam.workspaceId, context.organization.id),
         ),
       );
+    await logAuditEvent({
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      action: "hiring_team.member_removed",
+      resourceType: "job",
+      resourceId: input.jobId,
+      severity: "info",
+      metadata: { memberId: input.id },
+    });
     revalidatePath(`/dashboard/jobs/${input.jobId}`);
     return { success: true };
   } catch {

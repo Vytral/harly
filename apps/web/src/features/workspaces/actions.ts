@@ -8,6 +8,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import { logAuditEvent } from "@/lib/audit-log";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { db } from "@harly/db";
@@ -286,6 +287,15 @@ export async function updateWorkspaceProfileAction(
     revalidatePath("/settings");
     revalidatePath("/dashboard");
 
+    await logAuditEvent({
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      action: "settings.profile_updated",
+      severity: "info",
+      metadata: { name: parsed.data.name },
+    });
+
     return { success: true };
   } catch {
     return {
@@ -359,6 +369,14 @@ export async function inviteWorkspaceMemberAction(
           ),
         );
 
+      await logAuditEvent({
+        workspaceId: context.organization.id,
+        actorId: context.user.id,
+        actorEmail: context.user.email,
+        action: "member.invited",
+        severity: "info",
+        metadata: { email: parsed.data.email, role: parsed.data.role },
+      });
       revalidatePath("/settings");
       return { success: true };
     }
@@ -413,6 +431,14 @@ export async function inviteWorkspaceMemberAction(
       }),
     });
 
+    await logAuditEvent({
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      action: "member.invited",
+      severity: "info",
+      metadata: { email: parsed.data.email, role: parsed.data.role },
+    });
     revalidatePath("/settings");
     return { success: true };
   } catch {
@@ -476,6 +502,16 @@ export async function updateWorkspaceMemberRoleAction(
       .set({ role: parsed.data.role })
       .where(eq(authMembers.id, parsed.data.memberId));
 
+    await logAuditEvent({
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      action: "member.role_changed",
+      resourceType: "member",
+      resourceId: parsed.data.memberId,
+      severity: "warning",
+      metadata: { newRole: parsed.data.role },
+    });
     revalidatePath("/settings");
     return { success: true };
   } catch {
@@ -616,6 +652,16 @@ export async function removeWorkspaceMemberAction(
 
     await db.delete(authMembers).where(eq(authMembers.id, targetMember.id));
 
+    await logAuditEvent({
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      action: "member.removed",
+      resourceType: "member",
+      resourceId: targetMember.id,
+      severity: "warning",
+      metadata: { userId: targetMember.userId, role: targetMember.role },
+    });
     revalidatePath("/settings");
     return { success: true };
   } catch {
@@ -643,6 +689,14 @@ export async function cancelWorkspaceInvitationAction(
         ),
       );
 
+    await logAuditEvent({
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      action: "member.invitation_canceled",
+      severity: "info",
+      metadata: { invitationId },
+    });
     revalidatePath("/settings");
     return { success: true };
   } catch {
