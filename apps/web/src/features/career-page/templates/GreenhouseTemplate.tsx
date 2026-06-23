@@ -5,6 +5,9 @@ import { MapPin } from "lucide-react";
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 import type { CareerPageConfig } from "@/features/career-page/config";
+import { CareerTestimonials } from "@/features/career-page/CareerTestimonials";
+import { CareerFaq } from "@/features/career-page/CareerFaq";
+import { CareerFooter } from "@/features/career-page/CareerFooter";
 
 type Job = {
   id: string;
@@ -182,17 +185,33 @@ export function GreenhouseTemplate({
         </section>
       )}
 
+      {/* Testimonials */}
+      {config.testimonials.enabled && config.testimonials.items.length > 0 && (
+        <section className="border-t border-zinc-200 dark:border-zinc-800">
+          <div className="mx-auto max-w-3xl px-6 py-14">
+            <h2 className="mb-8 text-2xl font-semibold tracking-tight">
+              {config.testimonials.title}
+            </h2>
+            <CareerTestimonials items={config.testimonials.items} accent={accent} />
+          </div>
+        </section>
+      )}
+
+      {/* FAQ */}
+      {config.faq.enabled && config.faq.items.length > 0 && (
+        <section className="border-t border-zinc-200 dark:border-zinc-800">
+          <div className="mx-auto max-w-3xl px-6 py-14">
+            <h2 className="mb-8 text-2xl font-semibold tracking-tight">
+              {config.faq.title}
+            </h2>
+            <CareerFaq items={config.faq.items} accent={accent} />
+          </div>
+        </section>
+      )}
+
       <footer className="border-t border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto max-w-3xl px-6 py-8 text-center text-sm text-zinc-400 dark:text-zinc-500">
-          {workspace.name} · Powered by{" "}
-          <a
-            href="https://github.com/vytral/harly"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          >
-            Harly
-          </a>
+        <div className="py-8">
+          <CareerFooter config={config} logo={workspace.logoUrl} workspaceName={workspace.name} maxWidth="max-w-3xl" iconRounded="rounded-md" />
         </div>
       </footer>
     </div>

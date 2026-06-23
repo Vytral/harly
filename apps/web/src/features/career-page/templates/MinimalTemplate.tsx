@@ -1,5 +1,9 @@
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 import { CareerPositions } from "@/features/career-page/CareerPositions";
+import { CareerTestimonials } from "@/features/career-page/CareerTestimonials";
+import { CareerFaq } from "@/features/career-page/CareerFaq";
+import { CareerGallery } from "@/features/career-page/CareerGallery";
+import { CareerFooter } from "@/features/career-page/CareerFooter";
 import { careerIcon } from "@/features/career-page/icons";
 import type { CareerPageConfig } from "@/features/career-page/config";
 
@@ -199,19 +203,11 @@ export function MinimalTemplate({
         </section>
       ) : null}
 
-      {/* Gallery — clean image grid */}
+      {/* Gallery — uses CareerGallery for autoplay support */}
       {config.gallery.enabled && config.gallery.images.length > 0 ? (
         <section className="border-b border-zinc-200 dark:border-zinc-800">
           <div className="mx-auto max-w-5xl px-6 py-12 sm:py-16">
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {config.gallery.images.map((src, i) => (
-                <div
-                  key={i}
-                  className="aspect-[4/3] bg-zinc-100 dark:bg-zinc-900"
-                  style={{ backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center" }}
-                />
-              ))}
-            </div>
+            <CareerGallery gallery={config.gallery} rounded="rounded-none" />
           </div>
         </section>
       ) : null}
@@ -225,6 +221,30 @@ export function MinimalTemplate({
           <CareerPositions jobs={jobs} boardRoot={boardRoot} accent={accent} />
         </div>
       </section>
+
+      {/* Testimonials */}
+      {config.testimonials.enabled && config.testimonials.items.length > 0 && (
+        <section className="border-t border-zinc-200 py-12 dark:border-zinc-800 sm:py-16">
+          <div className="mx-auto max-w-4xl px-6">
+            <h2 className="mb-8 text-2xl font-semibold tracking-tight">
+              {config.testimonials.title}
+            </h2>
+            <CareerTestimonials items={config.testimonials.items} accent={accent} />
+          </div>
+        </section>
+      )}
+
+      {/* FAQ */}
+      {config.faq.enabled && config.faq.items.length > 0 && (
+        <section className="border-t border-zinc-200 py-12 dark:border-zinc-800 sm:py-16">
+          <div className="mx-auto max-w-4xl px-6">
+            <h2 className="mb-8 text-2xl font-semibold tracking-tight">
+              {config.faq.title}
+            </h2>
+            <CareerFaq items={config.faq.items} accent={accent} />
+          </div>
+        </section>
+      )}
 
       {/* CTA (optional) */}
       {config.cta.enabled && config.cta.title ? (
@@ -255,17 +275,7 @@ export function MinimalTemplate({
 
       {/* Footer */}
       <footer className="border-t border-zinc-200 py-8 dark:border-zinc-800">
-        <div className="mx-auto max-w-4xl px-6 text-center text-sm text-zinc-400 dark:text-zinc-500">
-          {workspace.name} · Powered by{" "}
-          <a
-            href="https://github.com/vytral/harly"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          >
-            Harly
-          </a>
-        </div>
+        <CareerFooter config={config} logo={workspace.logoUrl} workspaceName={workspace.name} maxWidth="max-w-4xl" iconRounded="rounded-lg" />
       </footer>
     </div>
   );

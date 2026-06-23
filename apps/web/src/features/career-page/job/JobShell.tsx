@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
 import { isLightColor, type CareerPageConfig } from "../config";
+import { CareerFooter } from "../CareerFooter";
 import { buildJobMeta, type JobLike } from "./jobMeta";
 
 const reveal =
@@ -281,32 +282,13 @@ export function JobShell({
       </div>
 
       <footer className="border-t border-zinc-200 dark:border-zinc-800">
-        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 px-6 py-8 text-sm text-zinc-400 dark:text-zinc-500 sm:flex-row">
-          <span>
-            {workspace.name} · Powered by{" "}
-            <a
-              href="https://github.com/vytral/harly"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="font-semibold text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-            >
-              Harly
-            </a>
-          </span>
-          <nav className="flex items-center gap-5">
-            <Link
-              href={(boardRoot || "/") as Route}
-              className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
-            >
-              All roles
-            </Link>
-            <Link
-              href={overviewHref}
-              className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
-            >
-              About this role
-            </Link>
-          </nav>
+        <div className="py-6">
+          <CareerFooter
+            config={config}
+            logo={workspace.logoUrl}
+            workspaceName={workspace.name}
+            maxWidth="max-w-5xl"
+          />
         </div>
       </footer>
     </div>

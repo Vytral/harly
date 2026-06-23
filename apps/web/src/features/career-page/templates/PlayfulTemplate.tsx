@@ -2,6 +2,10 @@ import { Briefcase } from "lucide-react";
 
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 import { CareerPositions } from "@/features/career-page/CareerPositions";
+import { CareerTestimonials } from "@/features/career-page/CareerTestimonials";
+import { CareerFaq } from "@/features/career-page/CareerFaq";
+import { CareerGallery } from "@/features/career-page/CareerGallery";
+import { CareerFooter } from "@/features/career-page/CareerFooter";
 import { careerIcon } from "@/features/career-page/icons";
 import type { CareerPageConfig } from "@/features/career-page/config";
 
@@ -168,15 +172,7 @@ export function PlayfulTemplate({
       {/* Gallery */}
       {config.gallery.enabled && config.gallery.images.length > 0 && (
         <section className="mx-auto mt-14 max-w-6xl px-6">
-          <div className="flex gap-4 overflow-x-auto pb-2">
-            {config.gallery.images.map((src, i) => (
-              <div
-                key={i}
-                className="h-64 w-80 shrink-0 rounded-3xl bg-zinc-100 dark:bg-zinc-800"
-                style={{ backgroundImage: `url(${src})`, backgroundSize: "cover", backgroundPosition: "center" }}
-              />
-            ))}
-          </div>
+          <CareerGallery gallery={config.gallery} />
         </section>
       )}
 
@@ -231,6 +227,30 @@ export function PlayfulTemplate({
         </div>
       </section>
 
+      {/* Testimonials */}
+      {config.testimonials.enabled && config.testimonials.items.length > 0 && (
+        <section className="mx-auto mt-16 max-w-5xl px-6">
+          <h2 className="text-3xl font-semibold tracking-tight">
+            {config.testimonials.title}
+          </h2>
+          <div className="mt-8">
+            <CareerTestimonials items={config.testimonials.items} accent={accent} />
+          </div>
+        </section>
+      )}
+
+      {/* FAQ */}
+      {config.faq.enabled && config.faq.items.length > 0 && (
+        <section className="mx-auto mt-16 max-w-5xl px-6">
+          <h2 className="text-3xl font-semibold tracking-tight">
+            {config.faq.title}
+          </h2>
+          <div className="mt-8">
+            <CareerFaq items={config.faq.items} accent={accent} />
+          </div>
+        </section>
+      )}
+
       {/* CTA banner */}
       {config.cta.enabled && (
         <section className="mx-auto mt-14 max-w-5xl px-6">
@@ -268,16 +288,8 @@ export function PlayfulTemplate({
       )}
 
       <footer className="mx-auto mt-20 max-w-5xl px-6 pb-12">
-        <div className="border-t border-zinc-100 pt-6 text-center text-sm text-zinc-400 dark:border-zinc-800 dark:text-zinc-500">
-          {workspace.name} · Powered by{" "}
-          <a
-            href="https://github.com/vytral/harly"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-semibold text-zinc-600 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
-          >
-            Harly
-          </a>
+        <div className="border-t border-zinc-100 pt-6 dark:border-zinc-800">
+          <CareerFooter config={config} logo={workspace.logoUrl} workspaceName={workspace.name} maxWidth="max-w-5xl" />
         </div>
       </footer>
     </div>
