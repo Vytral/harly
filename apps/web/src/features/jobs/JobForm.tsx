@@ -1,20 +1,8 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
-import {
-  Check,
-  GripVertical,
-  Lightbulb,
-  MapPin,
-  Megaphone,
-  Plus,
-  Share2,
-  Sparkles,
-  Trash2,
-  Wand2,
-  X,
-} from "lucide-react";
+import { Check, ChevronDown, Banknote, ClipboardList, Settings2, Lightbulb } from "lucide-react";
 import type { Job } from "@harly/db";
 
 import {
@@ -24,36 +12,14 @@ import {
   parseOfficePhotos,
   type JobContentSection,
 } from "./config";
-import { DepartmentCombobox } from "./DepartmentCombobox";
-import { JobQuestionBuilder } from "./JobQuestionBuilder";
-import { RichTextEditor } from "@/components/ui/RichTextEditor";
+import { jobFormSchema } from "./validation";
+import { EssentialsSection } from "./sections/EssentialsSection";
+import { DescriptionSection } from "./sections/DescriptionSection";
+import { CompensationSection } from "./sections/CompensationSection";
+import { ApplicationSection } from "./sections/ApplicationSection";
+import { AdvancedSection } from "./sections/AdvancedSection";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
-import { generateJobDraftAction } from "./actions";
 
 type JobFormProps = {
   action: (formData: FormData) => Promise<void>;
@@ -62,76 +28,29 @@ type JobFormProps = {
   departments: string[];
 };
 
-const employmentTypes = [
-  { value: "full_time", label: "Full-time" },
-  { value: "part_time", label: "Part-time" },
-  { value: "contract", label: "Contract" },
-  { value: "internship", label: "Internship" },
+const GENERIC_SECTIONS: JobContentSection[] = [
+  { id: "scaffold-1", title: "Responsibilities", body: "" },
+  { id: "scaffold-2", title: "Requirements", body: "" },
+  { id: "scaffold-3", title: "Benefits", body: "" },
 ];
 
-const workplaceTypes = [
-  { value: "remote", label: "Remote" },
-  { value: "hybrid", label: "Hybrid" },
-  { value: "onsite", label: "Onsite" },
-];
-
-const currencies = ["USD", "EUR", "GBP", "CLP", "MXN", "ARS", "BRL", "COP"];
-
-const SECTION_TEMPLATES: Record<string, { title: string; body: string }[]> = {
-  Engineering: [
-    { title: "What you'll do", body: "<ul><li>Ship features end to end</li><li>Collaborate on architecture</li></ul>" },
-    { title: "Requirements", body: "<ul><li>3+ years building web apps</li><li>Strong in TypeScript</li></ul>" },
-    { title: "Benefits", body: "<ul><li>Remote-first</li><li>Equity</li></ul>" },
-  ],
-  Sales: [
-    { title: "About the role", body: "<p>Own a pipeline and close deals.</p>" },
-    { title: "Requirements", body: "<ul><li>2+ years in B2B sales</li><li>CRM fluency</li></ul>" },
-    { title: "Compensation", body: "<p>Base + uncapped commission.</p>" },
-  ],
-  Generic: [
-    { title: "Responsibilities", body: "" },
-    { title: "Requirements", body: "" },
-    { title: "Benefits", body: "" },
-  ],
-};
-
-/** Escape user text before it goes into stored HTML (rendered with html-react-parser). */
-function escapeHtml(value: string) {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
-}
-
-/** Pick the closest built-in template from the job title (no-AI heuristic). */
-function pickTemplateKey(title: string): keyof typeof SECTION_TEMPLATES {
-  const t = title.toLowerCase();
-  if (
-    /(engineer|developer|programmer|software|backend|front[\s-]?end|full[\s-]?stack|data|devops|sre|qa)/.test(
-      t,
-    )
-  ) {
-    return "Engineering";
+function initialSectionsFor(job?: Job): JobContentSection[] {
+  const existing = parseJobContentSections(job?.contentSections);
+  if (existing.length > 0) return existing;
+  if (job) {
+    const migrated: JobContentSection[] = [];
+    if (job.requirements) migrated.push({ id: "migrated-req", title: "Requirements", body: job.requirements });
+    if (job.benefits) migrated.push({ id: "migrated-ben", title: "Benefits", body: job.benefits });
+    return migrated;
   }
-  if (/(sales|account executive|business development|bdr|sdr|revenue)/.test(t)) {
-    return "Sales";
-  }
-  return "Generic";
+  return GENERIC_SECTIONS.map((s) => ({ ...s }));
 }
-
-/** Wizard steps. One form underneath — steps just gate what's visible. */
-const STEPS = [
-  { key: "details", label: "Job details", hint: "Role, location & pay" },
-  { key: "description", label: "Description", hint: "About the role" },
-  { key: "application", label: "Application form", hint: "What candidates fill in" },
-  { key: "publish", label: "Publish", hint: "Review & share" },
-] as const;
 
 const TIPS: Record<string, { heading: string; items: string[] }> = {
-  details: {
+  essentials: {
     heading: "Writing a strong posting",
     items: [
-      "Use a common job title — “Backend Engineer”, not “Code Ninja”. It lifts search visibility.",
+      'Use a common job title — "Backend Engineer", not "Code Ninja". It lifts search visibility.',
       "One role per posting. Hiring two? Create two jobs.",
       "Listing a salary range measurably increases applications.",
     ],
@@ -144,664 +63,297 @@ const TIPS: Record<string, { heading: string; items: string[] }> = {
       "Keep must-haves short — long lists scare off good candidates.",
     ],
   },
+  compensation: {
+    heading: "Pay transparency",
+    items: [
+      "Jobs with salary ranges get up to 30% more applicants.",
+      "Many jurisdictions now require pay disclosure — adding it keeps you compliant.",
+    ],
+  },
   application: {
     heading: "Designing the form",
     items: [
-      "Ask only what you'll actually use to decide.",
+      "Ask only what you’ll actually use to decide.",
       "Every extra required field lowers completion rate.",
       "Make profile links optional — not everyone has a GitHub.",
     ],
   },
-  publish: {
-    heading: "Getting candidates",
+  advanced: {
+    heading: "Fine-tuning",
     items: [
-      "Share the public link on LinkedIn, Slack and your network.",
-      "Publishing adds it to your careers page instantly.",
-      "Job-board and LinkedIn integrations are coming soon.",
+      "Keywords improve search on your careers page and future job-board syndication.",
+      "A custom slug lets you share cleaner URLs.",
     ],
   },
 };
 
-let sectionSeq = 0;
-function newSectionId() {
-  sectionSeq += 1;
-  return `section-${sectionSeq}`;
-}
+const FIELD_TO_SECTION: Record<string, string> = {
+  title: "essentials",
+  department: "essentials",
+  location: "essentials",
+  workplaceType: "essentials",
+  employmentType: "essentials",
+  description: "description",
+  contentSectionsJson: "description",
+  salaryMin: "compensation",
+  salaryMax: "compensation",
+  currency: "compensation",
+  salaryPeriod: "compensation",
+  resumeRequired: "application",
+  profileLinkLinkedin: "application",
+  profileLinkGithub: "application",
+  profileLinkWebsite: "application",
+  applicationQuestionsJson: "application",
+  slug: "advanced",
+  experienceLevel: "advanced",
+  education: "advanced",
+  keywordsJson: "advanced",
+  officeAddress: "advanced",
+  officePhotosJson: "advanced",
+};
 
-function FieldHint({ children }: { children: React.ReactNode }) {
-  return <p className="text-xs text-muted-foreground">{children}</p>;
-}
-
-/** Build initial sections: existing content, else migrate legacy requirements/benefits. */
-function initialSectionsFor(job?: Job): JobContentSection[] {
-  const existing = parseJobContentSections(job?.contentSections);
-  if (existing.length > 0) return existing;
-
-  const migrated: JobContentSection[] = [];
-  if (job?.requirements) {
-    migrated.push({ id: newSectionId(), title: "Requirements", body: job.requirements });
-  }
-  if (job?.benefits) {
-    migrated.push({ id: newSectionId(), title: "Benefits", body: job.benefits });
-  }
-  return migrated;
-}
+type DisclosureKey = "compensation" | "application" | "advanced";
 
 export function JobForm({ action, job, submitLabel, departments }: JobFormProps) {
+  const formRef = useRef<HTMLFormElement>(null);
   const applicationConfig = normalizeJobApplicationConfig(job?.applicationConfig);
 
-  const [title, setTitle] = useState<string>(job?.title ?? "");
+  const [title, setTitle] = useState(job?.title ?? "");
   const [titleError, setTitleError] = useState(false);
-  const [step, setStep] = useState(0);
-
-  const [description, setDescription] = useState<string>(job?.description ?? "");
-  const [sections, setSections] = useState<JobContentSection[]>(() =>
-    initialSectionsFor(job),
-  );
-  const [keywords, setKeywords] = useState<string[]>(() => parseKeywords(job?.keywords));
-  const [keywordDraft, setKeywordDraft] = useState("");
-  const [photos, setPhotos] = useState<string[]>(() => parseOfficePhotos(job?.officePhotos));
-  const [photoDraft, setPhotoDraft] = useState("");
   const [workplace, setWorkplace] = useState<string>(job?.workplaceType ?? "remote");
-  const [office, setOffice] = useState(job?.officeAddress ?? "");
-  // Bumped when we programmatically rewrite the main description, to remount
-  // the uncontrolled editor with the new value (scaffold / AI generation).
+
+  const [description, setDescription] = useState(
+    job?.description ?? "<p>Describe the role, the team, and the impact this person will have.</p>",
+  );
+  const [sections, setSections] = useState<JobContentSection[]>(() => initialSectionsFor(job));
+  const [keywords, setKeywords] = useState<string[]>(() => parseKeywords(job?.keywords));
+  const [photos, setPhotos] = useState<string[]>(() => parseOfficePhotos(job?.officePhotos));
   const [descriptionVersion, setDescriptionVersion] = useState(0);
   const [aiPending, startAi] = useTransition();
 
-  const lastStep = STEPS.length - 1;
-  const showOffice = workplace === "onsite" || workplace === "hybrid";
-  const mapSrc = useMemo(() => {
-    const q = office.trim();
-    if (!q) return null;
-    return `https://maps.google.com/maps?q=${encodeURIComponent(q)}&z=14&output=embed`;
-  }, [office]);
+  // Collapsible section state — auto-expand on edit if data present
+  const [openSections, setOpenSections] = useState<Record<DisclosureKey, boolean>>({
+    compensation: Boolean(job?.salaryMin || job?.salaryMax),
+    application: applicationConfig.questions.length > 0 || !applicationConfig.resumeRequired,
+    advanced: Boolean(
+      job?.slug || job?.experienceLevel || job?.education || parseKeywords(job?.keywords).length > 0,
+    ),
+  });
 
-  function titleIsValid() {
-    return title.trim().length >= 3;
-  }
-  function jumpTo(n: number) {
-    setStep(Math.max(0, Math.min(lastStep, n)));
-    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-  function goNext() {
-    if (!titleIsValid()) {
-      setTitleError(true);
-      jumpTo(0);
-      return;
-    }
-    jumpTo(step + 1);
-  }
-  /** Guard submits (draft + publish): a missing title would fail server-side. */
-  function guardSubmit(event: React.MouseEvent) {
-    if (!titleIsValid()) {
-      event.preventDefault();
-      setTitleError(true);
-      jumpTo(0);
-    }
+  function toggleSection(key: DisclosureKey) {
+    setOpenSections((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
-  function updateSection(id: string, patch: Partial<JobContentSection>) {
-    setSections((prev) => prev.map((s) => (s.id === id ? { ...s, ...patch } : s)));
-  }
-  function addSection() {
-    setSections((prev) => [...prev, { id: newSectionId(), title: "", body: "" }]);
-  }
-  function removeSection(id: string) {
-    setSections((prev) => prev.filter((s) => s.id !== id));
-  }
-  function applyTemplate(name: keyof typeof SECTION_TEMPLATES) {
-    setSections(SECTION_TEMPLATES[name].map((s) => ({ ...s, id: newSectionId() })));
+  function expandSection(key: DisclosureKey) {
+    setOpenSections((prev) => ({ ...prev, [key]: true }));
   }
 
-  /** No-AI "draft for me": template chosen by title + keywords injected as requirements. */
-  function scaffoldDraft() {
-    const base = SECTION_TEMPLATES[pickTemplateKey(title)].map((s) => ({
-      ...s,
-      id: newSectionId(),
-    }));
+  // Scroll-aware tips
+  const [activeSection, setActiveSection] = useState("essentials");
 
-    if (keywords.length > 0) {
-      const list = `<ul>${keywords
-        .map((keyword) => `<li>${escapeHtml(keyword)}</li>`)
-        .join("")}</ul>`;
-      const requirementsIndex = base.findIndex((s) => /require/i.test(s.title));
-      if (requirementsIndex >= 0) {
-        base[requirementsIndex] = { ...base[requirementsIndex], body: list };
-      } else {
-        base.push({ id: newSectionId(), title: "Requirements", body: list });
-      }
-    }
+  useEffect(() => {
+    const nodes = document.querySelectorAll<HTMLElement>("[data-section]");
+    if (nodes.length === 0) return;
 
-    const roleName = title.trim() || "this role";
-    setSections(base);
-    setDescription(
-      `<p>We're hiring a <strong>${escapeHtml(roleName)}</strong> to join our team. Outline the mission, the team, and the impact of this role.</p>`,
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let best: { key: string; ratio: number } | null = null;
+        for (const entry of entries) {
+          const key = entry.target.getAttribute("data-section");
+          if (key && entry.intersectionRatio > (best?.ratio ?? 0)) {
+            best = { key, ratio: entry.intersectionRatio };
+          }
+        }
+        if (best) setActiveSection(best.key);
+      },
+      { threshold: [0, 0.3, 0.6, 1], rootMargin: "-80px 0px -40% 0px" },
     );
-    setDescriptionVersion((version) => version + 1);
-  }
 
-  /** AI "generate": calls the workspace's configured provider; falls back to a toast if AI is off. */
-  function generateWithAI() {
-    if (!titleIsValid()) {
-      setTitleError(true);
-      jumpTo(0);
-      toast.error("Add a job title first.");
-      return;
-    }
+    nodes.forEach((n) => observer.observe(n));
+    return () => observer.disconnect();
+  }, []);
 
-    startAi(async () => {
-      const result = await generateJobDraftAction({
-        title,
-        workplaceType: workplace,
-        keywords,
+  const tip = TIPS[activeSection] ?? TIPS.essentials;
+
+  // Validation
+  const validateBeforeSubmit = useCallback(
+    (event: React.MouseEvent) => {
+      if (!formRef.current) return;
+
+      const fd = new FormData(formRef.current);
+      const result = jobFormSchema.safeParse({
+        title: fd.get("title"),
+        slug: fd.get("slug"),
+        department: fd.get("department"),
+        location: fd.get("location"),
+        employmentType: fd.get("employmentType"),
+        workplaceType: fd.get("workplaceType"),
+        experienceLevel: fd.get("experienceLevel"),
+        education: fd.get("education"),
+        keywordsJson: fd.get("keywordsJson"),
+        description: fd.get("description"),
+        contentSectionsJson: fd.get("contentSectionsJson"),
+        salaryMin: fd.get("salaryMin"),
+        salaryMax: fd.get("salaryMax"),
+        currency: fd.get("currency"),
+        salaryPeriod: fd.get("salaryPeriod"),
+        officeAddress: fd.get("officeAddress"),
+        officePhotosJson: fd.get("officePhotosJson"),
+        resumeRequired: fd.get("resumeRequired"),
+        profileLinkLinkedin: fd.get("profileLinkLinkedin"),
+        profileLinkGithub: fd.get("profileLinkGithub"),
+        profileLinkWebsite: fd.get("profileLinkWebsite"),
+        applicationQuestionsJson: fd.get("applicationQuestionsJson"),
       });
 
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
+      if (result.success) return;
+
+      event.preventDefault();
+      const issue = result.error.issues[0];
+      if (!issue) return;
+
+      toast.error(issue.message);
+
+      const fieldName = String(issue.path[0] ?? "");
+      const sectionKey = FIELD_TO_SECTION[fieldName];
+      if (sectionKey && sectionKey !== "essentials" && sectionKey !== "description") {
+        expandSection(sectionKey as DisclosureKey);
       }
 
-      const { draft } = result;
-      setSections(
-        draft.sections.map((section) => ({
-          id: newSectionId(),
-          title: section.title,
-          body: `<ul>${section.bullets
-            .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
-            .join("")}</ul>`,
-        })),
-      );
-      setDescription(`<p>${escapeHtml(draft.summary)}</p>`);
-      setDescriptionVersion((version) => version + 1);
-      toast.success("Draft generated with AI");
-    });
-  }
+      // Scroll to section after a tick (allow expand animation)
+      setTimeout(() => {
+        const el = document.querySelector(`[data-section="${sectionKey ?? "essentials"}"]`);
+        el?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 50);
 
-  function addKeyword() {
-    const value = keywordDraft.trim();
-    if (!value || keywords.includes(value)) return setKeywordDraft("");
-    setKeywords((prev) => [...prev, value]);
-    setKeywordDraft("");
-  }
-  function addPhoto() {
-    const value = photoDraft.trim();
-    if (!value || photos.includes(value)) return setPhotoDraft("");
-    setPhotos((prev) => [...prev, value]);
-    setPhotoDraft("");
-  }
-
-  const tip = TIPS[STEPS[step].key];
+      if (fieldName === "title") {
+        setTitleError(true);
+      }
+    },
+    [],
+  );
 
   return (
-    <form action={action} className="pb-28">
+    <form ref={formRef} action={action} className="relative">
       {job ? <input type="hidden" name="jobId" value={job.id} /> : null}
       <input type="hidden" name="contentSectionsJson" value={JSON.stringify(sections)} />
       <input type="hidden" name="keywordsJson" value={JSON.stringify(keywords)} />
       <input type="hidden" name="officePhotosJson" value={JSON.stringify(photos)} />
 
-      <StepNav current={step} onJump={jumpTo} canAdvance={titleIsValid()} />
+      {/* Sticky header */}
+      <div className="sticky top-0 z-20 -mx-4 border-b bg-background/90 px-4 py-2.5 backdrop-blur md:-mx-6 md:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <p className="truncate text-sm font-medium text-muted-foreground">
+            {title || "New job"}
+          </p>
+          <div className="flex shrink-0 items-center gap-2">
+            <Button
+              type="submit"
+              name="intent"
+              value="draft"
+              variant="ghost"
+              size="sm"
+              onClick={validateBeforeSubmit}
+            >
+              Save as draft
+            </Button>
+            <Button
+              type="submit"
+              name="intent"
+              value="continue"
+              size="sm"
+              onClick={validateBeforeSubmit}
+            >
+              {submitLabel}
+            </Button>
+          </div>
+        </div>
+      </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
-        <div className="min-w-0 space-y-6">
-          {/* ── Step 1 · Job details ── */}
-          <StepPanel active={step === 0}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Role details</CardTitle>
-                <CardDescription>
-                  The basics candidates see first on your careers page.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-5 md:grid-cols-2">
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="title">
-                    Job title <span className="text-destructive">*</span>
-                  </Label>
-                  <Input
-                    id="title"
-                    name="title"
-                    value={title}
-                    onChange={(e) => {
-                      setTitle(e.target.value);
-                      if (titleError) setTitleError(false);
-                    }}
-                    aria-invalid={titleError}
-                    placeholder="Senior Full Stack Engineer"
-                  />
-                  {titleError ? (
-                    <p className="text-xs text-destructive">
-                      Add a job title (at least 3 characters) to continue.
-                    </p>
-                  ) : null}
-                </div>
+      <div className="mt-5 grid gap-6 lg:grid-cols-[minmax(0,1fr)_16rem]">
+        {/* Main column */}
+        <div className="min-w-0 space-y-5">
+          {/* Essentials card */}
+          <div className="rounded-2xl border border-border/70 bg-card p-5">
+            <EssentialsSection
+              job={job}
+              departments={departments}
+              title={title}
+              setTitle={setTitle}
+              titleError={titleError}
+              setTitleError={setTitleError}
+              workplace={workplace}
+              setWorkplace={setWorkplace}
+            />
+          </div>
 
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="slug">Public slug</Label>
-                  <Input
-                    id="slug"
-                    name="slug"
-                    defaultValue={job?.slug ?? ""}
-                    placeholder="senior-full-stack-engineer"
-                  />
-                  <FieldHint>Leave blank to generate it from the title.</FieldHint>
-                </div>
+          {/* Description card */}
+          <DescriptionSection
+            job={job}
+            description={description}
+            setDescription={setDescription}
+            descriptionVersion={descriptionVersion}
+            setDescriptionVersion={setDescriptionVersion}
+            sections={sections}
+            setSections={setSections}
+            title={title}
+            keywords={keywords}
+            aiPending={aiPending}
+            startAi={startAi}
+          />
 
-                <div className="space-y-2">
-                  <Label>Department</Label>
-                  <DepartmentCombobox
-                    name="department"
-                    departments={departments}
-                    defaultValue={job?.department}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="location">Location</Label>
-                  <Input id="location" name="location" defaultValue={job?.location ?? ""} placeholder="Remote, LATAM" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="experienceLevel">Experience</Label>
-                  <Input id="experienceLevel" name="experienceLevel" defaultValue={job?.experienceLevel ?? ""} placeholder="Mid / Senior · 3-5 years" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="education">Education</Label>
-                  <Input id="education" name="education" defaultValue={job?.education ?? ""} placeholder="Not required / Bachelor's" />
-                </div>
+          {/* Collapsible config */}
+          <div className="space-y-3">
+            <Disclosure
+              sectionId="compensation"
+              title="Compensation"
+              icon={Banknote}
+              open={openSections.compensation}
+              onToggle={() => toggleSection("compensation")}
+            >
+              <CompensationSection job={job} />
+            </Disclosure>
 
-                <div className="space-y-2">
-                  <Label htmlFor="employmentType">Employment type</Label>
-                  <Select name="employmentType" defaultValue={job?.employmentType ?? "full_time"}>
-                    <SelectTrigger id="employmentType" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {employmentTypes.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="workplaceType">Workplace type</Label>
-                  <Select name="workplaceType" value={workplace} onValueChange={setWorkplace}>
-                    <SelectTrigger id="workplaceType" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {workplaceTypes.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
+            <Disclosure
+              sectionId="application"
+              title="Application form"
+              icon={ClipboardList}
+              open={openSections.application}
+              onToggle={() => toggleSection("application")}
+            >
+              <ApplicationSection applicationConfig={applicationConfig} />
+            </Disclosure>
 
-            {showOffice ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Office</CardTitle>
-                  <CardDescription>
-                    Help candidates picture where they&apos;ll work.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-5">
-                  <div className="space-y-2">
-                    <Label htmlFor="officeAddress">Office address</Label>
-                    <Input
-                      id="officeAddress"
-                      name="officeAddress"
-                      value={office}
-                      onChange={(e) => setOffice(e.target.value)}
-                      placeholder="221B Baker Street, London"
-                    />
-                    <FieldHint>
-                      <MapPin className="mr-1 inline size-3" />
-                      We&apos;ll show an interactive map from this address — no API key needed.
-                    </FieldHint>
-                  </div>
-                  {mapSrc ? (
-                    <iframe key={mapSrc} src={mapSrc} title="Office location" className="h-64 w-full rounded-lg border" loading="lazy" />
-                  ) : null}
-
-                  <div className="space-y-2">
-                    <Label>Office photos</Label>
-                    <div className="flex gap-2">
-                      <Input
-                        value={photoDraft}
-                        onChange={(e) => setPhotoDraft(e.target.value)}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            addPhoto();
-                          }
-                        }}
-                        placeholder="https://…/office.jpg"
-                      />
-                      <Button type="button" variant="outline" onClick={addPhoto}>
-                        Add
-                      </Button>
-                    </div>
-                    {photos.length > 0 ? (
-                      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                        {photos.map((url) => (
-                          <div key={url} className="group relative overflow-hidden rounded-lg border">
-                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={url} alt="Office" className="aspect-video w-full object-cover" />
-                            <button
-                              type="button"
-                              onClick={() => setPhotos((prev) => prev.filter((p) => p !== url))}
-                              className="absolute right-1.5 top-1.5 rounded-md bg-black/60 p-1 text-white opacity-0 transition group-hover:opacity-100"
-                              aria-label="Remove photo"
-                            >
-                              <X className="size-3.5" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                </CardContent>
-              </Card>
-            ) : null}
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Compensation</CardTitle>
-                <CardDescription>
-                  Optional — listing a range improves application rates.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-5 md:grid-cols-4">
-                <div className="space-y-2">
-                  <Label htmlFor="salaryMin">Salary min</Label>
-                  <Input id="salaryMin" name="salaryMin" type="number" min="0" defaultValue={job?.salaryMin ?? ""} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="salaryMax">Salary max</Label>
-                  <Input id="salaryMax" name="salaryMax" type="number" min="0" defaultValue={job?.salaryMax ?? ""} />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="currency">Currency</Label>
-                  <Select name="currency" defaultValue={job?.currency ?? "USD"}>
-                    <SelectTrigger id="currency" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {currencies.map((c) => (
-                        <SelectItem key={c} value={c}>
-                          {c}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="salaryPeriod">Period</Label>
-                  <Select name="salaryPeriod" defaultValue={job?.salaryPeriod ?? "annual"}>
-                    <SelectTrigger id="salaryPeriod" className="w-full">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="annual">Per year</SelectItem>
-                      <SelectItem value="monthly">Per month</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Keywords</CardTitle>
-                <CardDescription>
-                  Tags that help candidates and search find this role.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-3">
-                <div className="flex gap-2">
-                  <Input
-                    value={keywordDraft}
-                    onChange={(e) => setKeywordDraft(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addKeyword();
-                      }
-                    }}
-                    placeholder="react, remote, fintech…"
-                  />
-                  <Button type="button" variant="outline" onClick={addKeyword}>
-                    Add
-                  </Button>
-                </div>
-                {keywords.length > 0 ? (
-                  <div className="flex flex-wrap gap-2">
-                    {keywords.map((kw) => (
-                      <span key={kw} className="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 text-sm">
-                        {kw}
-                        <button
-                          type="button"
-                          onClick={() => setKeywords((prev) => prev.filter((k) => k !== kw))}
-                          className="text-muted-foreground hover:text-foreground"
-                          aria-label={`Remove ${kw}`}
-                        >
-                          <X className="size-3.5" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          </StepPanel>
-
-          {/* ── Step 2 · Description ── */}
-          <StepPanel active={step === 1}>
-            <Card>
-              <CardHeader className="flex-row items-start justify-between space-y-0">
-                <div className="space-y-1.5">
-                  <CardTitle>Description</CardTitle>
-                  <CardDescription>
-                    Tell candidates about the role. Add as many sections as you like — the structure is yours.
-                  </CardDescription>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    type="button"
-                    size="sm"
-                    onClick={generateWithAI}
-                    disabled={aiPending}
-                  >
-                    <Sparkles className="size-4" />
-                    {aiPending ? "Generating…" : "Generate with AI"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={scaffoldDraft}
-                  >
-                    <Wand2 className="size-4" />
-                    Draft for me
-                  </Button>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button type="button" variant="outline" size="sm">
-                        <Sparkles className="size-4" />
-                        Templates
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Replace with template</DropdownMenuLabel>
-                      {Object.keys(SECTION_TEMPLATES).map((name) => (
-                        <DropdownMenuItem key={name} onClick={() => applyTemplate(name as keyof typeof SECTION_TEMPLATES)}>
-                          {name}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  <Label>About the role</Label>
-                  <input type="hidden" name="description" value={description} />
-                  <RichTextEditor
-                    key={`description-${descriptionVersion}`}
-                    defaultValue={
-                      descriptionVersion === 0 ? job?.description : description
-                    }
-                    placeholder="Describe the role, team, and impact."
-                    minHeight="11rem"
-                    onChange={setDescription}
-                  />
-                </div>
-
-                {sections.map((section) => (
-                  <div key={section.id} className="rounded-lg border bg-muted/30 p-4">
-                    <div className="flex items-center gap-2">
-                      <GripVertical className="size-4 shrink-0 text-muted-foreground/60" />
-                      <Input
-                        value={section.title}
-                        onChange={(e) => updateSection(section.id, { title: e.target.value })}
-                        placeholder="Section title (e.g. Requirements)"
-                        className="h-9 bg-card font-medium"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8 shrink-0 text-muted-foreground hover:text-destructive"
-                        onClick={() => removeSection(section.id)}
-                        aria-label="Remove section"
-                      >
-                        <Trash2 className="size-4" />
-                      </Button>
-                    </div>
-                    <RichTextEditor
-                      defaultValue={section.body}
-                      placeholder="Write this section…"
-                      minHeight="7rem"
-                      onChange={(html) => updateSection(section.id, { body: html })}
-                    />
-                  </div>
-                ))}
-
-                <Button type="button" variant="outline" onClick={addSection}>
-                  <Plus className="size-4" />
-                  Add section
-                </Button>
-              </CardContent>
-            </Card>
-          </StepPanel>
-
-          {/* ── Step 3 · Application form ── */}
-          <StepPanel active={step === 2}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Application settings</CardTitle>
-                <CardDescription>Control what candidates see when applying.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <label className="flex items-start justify-between gap-4 rounded-lg border bg-muted/40 p-4">
-                  <span>
-                    <span className="block text-sm font-medium">Require CV / resume</span>
-                    <span className="mt-1 block text-sm text-muted-foreground">
-                      Candidates must upload a PDF, DOC, or DOCX.
-                    </span>
-                  </span>
-                  <Switch name="resumeRequired" defaultChecked={applicationConfig.resumeRequired} />
-                </label>
-
-                <div className="space-y-3">
-                  <p className="text-sm font-semibold">Candidate links (optional)</p>
-                  <p className="text-sm text-muted-foreground">
-                    Pick which profile links to offer — candidates can leave any of them blank.
-                  </p>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <LinkToggle
-                      name="profileLinkLinkedin"
-                      requiredName="profileLinkLinkedinRequired"
-                      label="LinkedIn"
-                      setting={applicationConfig.profileLinks.linkedin}
-                    />
-                    <LinkToggle
-                      name="profileLinkGithub"
-                      requiredName="profileLinkGithubRequired"
-                      label="GitHub"
-                      setting={applicationConfig.profileLinks.github}
-                    />
-                    <LinkToggle
-                      name="profileLinkWebsite"
-                      requiredName="profileLinkWebsiteRequired"
-                      label="Website / Portfolio"
-                      setting={applicationConfig.profileLinks.website}
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="mb-3 text-sm font-semibold">Custom questions</h3>
-                  <JobQuestionBuilder initialQuestions={applicationConfig.questions} />
-                </div>
-              </CardContent>
-            </Card>
-          </StepPanel>
-
-          {/* ── Step 4 · Publish ── */}
-          <StepPanel active={step === 3}>
-            <Card>
-              <CardHeader>
-                <CardTitle>Review &amp; publish</CardTitle>
-                <CardDescription>
-                  {job?.status === "open"
-                    ? "Save your changes — they go live on your careers page immediately."
-                    : "Publish to add this role to your public careers page, or keep it as a draft."}
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <dl className="grid gap-x-6 gap-y-3 rounded-xl border bg-muted/30 p-4 sm:grid-cols-2">
-                  <ReviewRow label="Title" value={title || "—"} />
-                  <ReviewRow label="Workplace" value={workplaceTypes.find((w) => w.value === workplace)?.label ?? workplace} />
-                  <ReviewRow label="Sections" value={`${sections.length + (description.trim() ? 1 : 0)} block(s)`} />
-                  <ReviewRow label="Custom questions" value={`${applicationConfig.questions.length}`} />
-                </dl>
-                <div className="flex items-start gap-3 rounded-xl border border-dashed p-4">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                    <Megaphone className="size-4" />
-                  </span>
-                  <div className="space-y-0.5">
-                    <p className="text-sm font-medium">Source beyond your careers page</p>
-                    <p className="text-sm text-muted-foreground">
-                      One-click posting to LinkedIn and job boards is coming soon. For now,
-                      publish and share the public link.
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </StepPanel>
+            <Disclosure
+              sectionId="advanced"
+              title="Advanced"
+              icon={Settings2}
+              open={openSections.advanced}
+              onToggle={() => toggleSection("advanced")}
+            >
+              <AdvancedSection
+                job={job}
+                workplace={workplace}
+                keywords={keywords}
+                setKeywords={setKeywords}
+                photos={photos}
+                setPhotos={setPhotos}
+              />
+            </Disclosure>
+          </div>
         </div>
 
-        {/* ── Consejos rail ── */}
-        <aside className="h-fit lg:sticky lg:top-20">
-          <div className="rounded-2xl border border-border/70 bg-card p-5">
-            <div className="flex items-center gap-2 text-sm font-semibold">
-              <Lightbulb className="size-4 text-primary" strokeWidth={2} />
-              Tips
-            </div>
-            <p className="mt-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        {/* Tips sidebar */}
+        <aside className="hidden h-fit lg:sticky lg:top-12 lg:block">
+          <div className="space-y-3 rounded-2xl border border-border/70 bg-card p-4">
+            <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <Lightbulb className="size-3.5 text-primary" strokeWidth={2} />
               {tip.heading}
             </p>
-            <ul className="mt-2 space-y-3">
+            <ul className="space-y-2.5">
               {tip.items.map((item, i) => (
-                <li key={i} className="flex gap-2 text-sm text-muted-foreground">
-                  <Check className="mt-0.5 size-3.5 shrink-0 text-primary" />
+                <li key={i} className="flex gap-2 text-[13px] leading-snug text-muted-foreground">
+                  <Check className="mt-0.5 size-3 shrink-0 text-primary" />
                   <span>{item}</span>
                 </li>
               ))}
@@ -809,139 +361,61 @@ export function JobForm({ action, job, submitLabel, departments }: JobFormProps)
           </div>
         </aside>
       </div>
-
-      {/* ── Sticky actions ── */}
-      <div className="sticky bottom-0 z-10 -mx-4 mt-6 flex items-center justify-between gap-3 border-t bg-background/90 px-4 py-3 backdrop-blur md:-mx-6 md:px-6">
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={() => jumpTo(step - 1)}
-          className={cn(step === 0 && "invisible")}
-        >
-          Back
-        </Button>
-        <div className="flex items-center gap-3">
-          <Button type="submit" name="intent" value="draft" variant="outline" onClick={guardSubmit}>
-            Save as draft
-          </Button>
-          {step < lastStep ? (
-            <Button type="button" size="lg" onClick={goNext}>
-              Continue
-            </Button>
-          ) : (
-            <Button type="submit" name="intent" value="continue" size="lg" onClick={guardSubmit}>
-              <Share2 className="size-4" />
-              {submitLabel}
-            </Button>
-          )}
-        </div>
-      </div>
     </form>
   );
 }
 
-function StepPanel({ active, children }: { active: boolean; children: React.ReactNode }) {
-  // Hidden (not unmounted) so every field stays in the DOM and submits with the form.
-  return <div className={cn("space-y-6", !active && "hidden")}>{children}</div>;
-}
+/* ------------------------------------------------------------------ */
+/*  Disclosure                                                        */
+/* ------------------------------------------------------------------ */
 
-function StepNav({
-  current,
-  onJump,
-  canAdvance,
+function Disclosure({
+  sectionId,
+  title,
+  icon: Icon,
+  open,
+  onToggle,
+  children,
 }: {
-  current: number;
-  onJump: (n: number) => void;
-  canAdvance: boolean;
+  sectionId: string;
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  open: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <ol className="flex items-stretch gap-2 overflow-x-auto rounded-2xl border border-border/70 bg-card p-2">
-      {STEPS.map((s, i) => {
-        const state = i === current ? "current" : i < current ? "done" : "upcoming";
-        // Can't jump forward past step 1 until the title is valid.
-        const reachable = i <= current || canAdvance;
-        return (
-          <li key={s.key} className="flex-1">
-            <button
-              type="button"
-              disabled={!reachable}
-              onClick={() => reachable && onJump(i)}
-              className={cn(
-                "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors",
-                state === "current" && "bg-accent",
-                state !== "current" && reachable && "hover:bg-muted",
-                !reachable && "cursor-not-allowed opacity-50",
-              )}
-            >
-              <span
-                className={cn(
-                  "flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-                  state === "done" && "bg-primary text-primary-foreground",
-                  state === "current" && "bg-primary text-primary-foreground",
-                  state === "upcoming" && "border bg-card text-muted-foreground",
-                )}
-              >
-                {state === "done" ? <Check className="size-4" /> : i + 1}
-              </span>
-              <span className="hidden min-w-0 sm:block">
-                <span
-                  className={cn(
-                    "block truncate text-sm font-medium",
-                    state === "current" ? "text-accent-foreground" : "text-foreground",
-                  )}
-                >
-                  {s.label}
-                </span>
-                <span className="block truncate text-xs text-muted-foreground">{s.hint}</span>
-              </span>
-            </button>
-          </li>
-        );
-      })}
-    </ol>
-  );
-}
-
-function ReviewRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 border-b border-border/50 pb-2 last:border-0 last:pb-0 sm:border-0 sm:pb-0">
-      <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="truncate text-sm font-medium">{value}</dd>
-    </div>
-  );
-}
-
-function LinkToggle({
-  name,
-  requiredName,
-  label,
-  setting,
-}: {
-  name: string;
-  requiredName: string;
-  label: string;
-  setting: { enabled: boolean; required: boolean };
-}) {
-  const [enabled, setEnabled] = useState(setting.enabled);
-
-  return (
-    <div className="rounded-lg border bg-muted/40 px-4 py-3">
-      <label className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium">{label}</span>
-        <Switch
-          name={name}
-          checked={enabled}
-          onCheckedChange={setEnabled}
-        />
-      </label>
-      {enabled ? (
-        <label className="mt-2.5 flex items-center justify-between gap-3 border-t pt-2.5">
-          <span className="text-xs text-muted-foreground">
-            Require candidates to fill this in
+    <div data-section={sectionId} className="rounded-2xl border border-border/70 bg-card">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex w-full items-center justify-between px-5 py-4 text-left"
+      >
+        <span className="flex items-center gap-2.5">
+          <span className="flex size-8 items-center justify-center rounded-lg bg-muted">
+            <Icon className="size-4 text-muted-foreground" />
           </span>
-          <Switch name={requiredName} defaultChecked={setting.required} />
-        </label>
-      ) : null}
+          <span className="font-display text-[15px] font-semibold tracking-tight">
+            {title}
+          </span>
+        </span>
+        <ChevronDown
+          className={cn(
+            "size-4 text-muted-foreground transition-transform duration-200 ease-out motion-reduce:transition-none",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+      <div
+        className={cn(
+          "grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none",
+          open ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+        )}
+      >
+        <div className="overflow-hidden">
+          <div className="border-t px-5 pb-5 pt-4">{children}</div>
+        </div>
+      </div>
     </div>
   );
 }
