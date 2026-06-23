@@ -80,8 +80,8 @@ export function BoardShell({ workspace, boardRoot, children }: BoardShellProps) 
   const root = boardRoot ?? `/board/${workspace.slug}`;
   return (
     <div
-      className="board-canvas min-h-screen"
-      style={boardThemeStyle({ primaryColor: workspace.primaryColor })}
+      className="light board-canvas min-h-screen"
+      style={{ colorScheme: "light", ...boardThemeStyle({ primaryColor: workspace.primaryColor }) }}
     >
       {children}
       <BoardFooter workspace={workspace} boardRoot={root} />

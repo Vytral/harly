@@ -1,7 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
+@custom-variant dark (&:is(.dark *):not(:is(.light *)));
 
 /*
  * Harly admin theme — "off-white + lime" (Remote.com-inspired soft UI).
@@ -425,5 +425,28 @@ html[data-tab-switch="true"] .animate-in {
 @media (prefers-reduced-motion: reduce) {
   .spotlight-item-enter {
     animation: none !important;
+  }
+}
+
+/* Career page gallery marquee */
+@keyframes career-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+.career-marquee-slow {
+  animation: career-marquee 32s linear infinite;
+}
+.career-marquee-normal {
+  animation: career-marquee 16s linear infinite;
+}
+.career-marquee-slow:hover,
+.career-marquee-normal:hover {
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .career-marquee-slow,
+  .career-marquee-normal {
+    animation: none;
   }
 }

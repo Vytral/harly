@@ -41,7 +41,7 @@ export function ThemeWrapper({
       className={cn(
         "min-h-screen transition-colors duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] motion-reduce:transition-none",
         fontClass,
-        mode === "dark" && "dark",
+        mode === "dark" ? "dark" : "light",
       )}
       style={{
         backgroundColor: effectiveBg,
