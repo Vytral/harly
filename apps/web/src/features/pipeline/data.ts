@@ -88,7 +88,7 @@ async function getDefaultPipelineJobId(workspaceId: string) {
   return latestJob?.id ?? null;
 }
 
-function normalizeStageEmailConfig(value: unknown) {
+export function normalizeStageEmailConfig(value: unknown) {
   if (
     typeof value === "object" &&
     value !== null &&

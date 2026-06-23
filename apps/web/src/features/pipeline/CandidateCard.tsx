@@ -4,13 +4,13 @@ import { useRef } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Clock, GripVertical } from "lucide-react";
+import { Clock, GripVertical } from "lucide-react";
 
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { PipelineApplication } from "@/features/pipeline/data";
-import { DaysSince, ShortDate } from "@/lib/date-hydration";
+import { DaysSince } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
 type CandidateCardProps = {
@@ -29,40 +29,10 @@ type CandidateCardOverlayProps = {
 
 const accentStyles: Record<PipelineApplication["status"], string> = {
   active: "border-l-transparent",
-  hired: "border-l-emerald-400",
-  rejected: "border-l-rose-400",
-  withdrawn: "border-l-zinc-300",
+  hired: "border-l-emerald-500",
+  rejected: "border-l-destructive",
+  withdrawn: "border-l-muted-foreground/30",
 };
-
-function CandidateCardContent({ application }: CandidateCardOverlayProps) {
-  const fullName = `${application.candidateFirstName} ${application.candidateLastName}`;
-  const stageStartedAt = application.lastStageMovedAt ?? application.createdAt;
-
-  return (
-    <div className="min-w-0 flex-1">
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3 className="truncate text-sm font-semibold">{fullName}</h3>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {application.jobTitle}
-          </p>
-        </div>
-        <ApplicationStatusBadge status={application.status} />
-      </div>
-
-      <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="inline-flex items-center gap-1">
-          <CalendarDays className="size-3.5" />
-          <ShortDate value={application.appliedAt} />
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Clock className="size-3.5" />
-          <DaysSince value={stageStartedAt} />d in stage
-        </span>
-      </div>
-    </div>
-  );
-}
 
 export function CandidateCard({
   application,
@@ -84,6 +54,7 @@ export function CandidateCard({
     data: { type: "application", stageId: application.currentStageId },
   });
   const fullName = `${application.candidateFirstName} ${application.candidateLastName}`;
+  const stageStartedAt = application.lastStageMovedAt ?? application.createdAt;
 
   return (
     <article
@@ -105,18 +76,21 @@ export function CandidateCard({
         }
       }}
       className={cn(
-        "group cursor-pointer rounded-lg border border-l-2 bg-card p-3 shadow-xs transition",
+        "group cursor-pointer rounded-xl border-l-2 bg-card p-2.5 shadow-sm transition-all duration-150",
         accentStyles[application.status],
         selected
-          ? "ring-2 ring-primary/40"
-          : "hover:border-ring/40 hover:shadow-sm",
-        isDragging && "z-10 opacity-60 shadow-lg",
+          ? "ring-2 ring-primary/30 bg-accent/20"
+          : "hover:shadow-md",
+        isDragging && "z-10 scale-[0.97] opacity-50 shadow-lg",
       )}
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-center gap-2">
         <span
           onClick={(event) => event.stopPropagation()}
-          className="mt-0.5 opacity-0 transition group-hover:opacity-100"
+          className={cn(
+            "shrink-0 transition",
+            selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+          )}
         >
           <Checkbox
             checked={selected}
@@ -127,45 +101,60 @@ export function CandidateCard({
           />
         </span>
         <UserAvatar name={fullName} size="sm" />
-        <CandidateCardContent application={application} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold leading-tight">{fullName}</p>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {application.candidateEmail}
+          </p>
+        </div>
         <button
           type="button"
           {...attributes}
           {...listeners}
           onClick={(event) => event.stopPropagation()}
-          className="touch-none cursor-grab rounded-md p-1 text-muted-foreground/50 opacity-0 transition hover:bg-accent hover:text-foreground group-hover:opacity-100 active:cursor-grabbing"
+          className="shrink-0 touch-none cursor-grab rounded-md p-0.5 text-muted-foreground/40 opacity-0 transition hover:bg-accent hover:text-foreground group-hover:opacity-100 active:cursor-grabbing"
           aria-label={`Drag ${fullName}`}
         >
-          <GripVertical className="size-4" />
+          <GripVertical className="size-3.5" />
         </button>
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t pt-2 text-xs">
-        <span className="truncate text-muted-foreground">
-          {application.source ?? "manual"}
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <Clock className="size-2.5" />
+          <DaysSince value={stageStartedAt} />d
         </span>
-        <div className="flex gap-1">
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onStatusChange([application.id], "hired");
-            }}
-            className="rounded-md px-2 py-1 font-semibold text-emerald-700 transition hover:bg-emerald-50"
-          >
-            Hire
-          </button>
-          <button
-            type="button"
-            onClick={(event) => {
-              event.stopPropagation();
-              onStatusChange([application.id], "rejected");
-            }}
-            className="rounded-md px-2 py-1 font-semibold text-rose-600 transition hover:bg-rose-50"
-          >
-            Reject
-          </button>
-        </div>
+        {application.source ? (
+          <span className="truncate rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+            {application.source}
+          </span>
+        ) : null}
+        {application.status !== "active" ? (
+          <ApplicationStatusBadge status={application.status} />
+        ) : null}
+      </div>
+
+      <div className="mt-2 flex justify-end gap-1 opacity-0 transition-opacity duration-100 group-hover:opacity-100">
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onStatusChange([application.id], "hired");
+          }}
+          className="rounded-md px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-50 active:scale-[0.97] dark:text-emerald-400 dark:hover:bg-emerald-950"
+        >
+          Hire
+        </button>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            onStatusChange([application.id], "rejected");
+          }}
+          className="rounded-md px-2 py-0.5 text-[11px] font-semibold text-destructive transition hover:bg-destructive/10 active:scale-[0.97]"
+        >
+          Reject
+        </button>
       </div>
     </article>
   );
@@ -173,17 +162,32 @@ export function CandidateCard({
 
 export function CandidateCardOverlay({ application }: CandidateCardOverlayProps) {
   const fullName = `${application.candidateFirstName} ${application.candidateLastName}`;
+  const stageStartedAt = application.lastStageMovedAt ?? application.createdAt;
 
   return (
     <article
       className={cn(
-        "w-72 cursor-grabbing rounded-lg border border-l-2 bg-card p-3 shadow-2xl",
+        "w-56 cursor-grabbing rounded-xl border-l-2 bg-card p-2.5 shadow-2xl lg:w-64",
         accentStyles[application.status],
       )}
     >
-      <div className="flex items-start gap-2.5">
+      <div className="flex items-center gap-2">
         <UserAvatar name={fullName} size="sm" />
-        <CandidateCardContent application={application} />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold leading-tight">{fullName}</p>
+          <p className="truncate text-[11px] text-muted-foreground">
+            {application.candidateEmail}
+          </p>
+        </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+          <Clock className="size-2.5" />
+          <DaysSince value={stageStartedAt} />d
+        </span>
+        {application.status !== "active" ? (
+          <ApplicationStatusBadge status={application.status} />
+        ) : null}
       </div>
     </article>
   );

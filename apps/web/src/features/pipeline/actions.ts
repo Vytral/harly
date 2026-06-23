@@ -24,6 +24,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import { normalizeStageEmailConfig } from "@/features/pipeline/data";
 
 type ApplicationStatus = "active" | "hired" | "rejected" | "withdrawn";
 
@@ -72,21 +73,6 @@ type PipelineEmail =
       jobTitle: string;
       workspaceName: string;
     };
-
-function normalizeStageEmailConfig(value: unknown) {
-  if (
-    typeof value === "object" &&
-    value !== null &&
-    "candidateUpdatesEnabled" in value &&
-    typeof value.candidateUpdatesEnabled === "boolean"
-  ) {
-    return {
-      candidateUpdatesEnabled: value.candidateUpdatesEnabled,
-    };
-  }
-
-  return { candidateUpdatesEnabled: true };
-}
 
 async function sendPipelineEmails(workspaceId: string, emails: PipelineEmail[]) {
   const branding = await getWorkspaceEmailBranding(workspaceId);
@@ -381,7 +367,38 @@ export async function bulkMoveApplications(
       return { success: false, error: "Workspace access denied." };
     }
 
-    await db.transaction(async (tx) => {
+    type StageEvent = {
+      applicationId: string;
+      fromStageId: string;
+      status: ApplicationStatus;
+      becameRejected: boolean;
+    };
+    const stageEvents: StageEvent[] = [];
+
+    const emails = await db.transaction<PipelineEmail[]>(async (tx) => {
+      const [targetStage] = await tx
+        .select({
+          id: jobStages.id,
+          name: jobStages.name,
+          emailConfig: jobStages.emailConfig,
+        })
+        .from(jobStages)
+        .where(
+          and(
+            eq(jobStages.workspaceId, input.workspaceId),
+            eq(jobStages.id, input.toStageId),
+          ),
+        )
+        .limit(1);
+
+      if (!targetStage) {
+        throw new Error("Target stage not found.");
+      }
+
+      const toStageName = targetStage.name;
+      const stageEmailConfig = normalizeStageEmailConfig(targetStage.emailConfig);
+      const isRejectionStage = toStageName.toLowerCase() === "rejected";
+
       const targetStageApplications = await tx
         .select({ id: applications.id })
         .from(applications)
@@ -400,8 +417,32 @@ export async function bulkMoveApplications(
       const now = new Date();
 
       const allApplications = await tx
-        .select({ id: applications.id, currentStageId: applications.currentStageId })
+        .select({
+          id: applications.id,
+          currentStageId: applications.currentStageId,
+          status: applications.status,
+          candidateEmail: candidates.email,
+          candidateFirstName: candidates.firstName,
+          candidateLastName: candidates.lastName,
+          jobTitle: jobs.title,
+          workspaceName: organization.name,
+        })
         .from(applications)
+        .innerJoin(
+          candidates,
+          and(
+            eq(candidates.workspaceId, input.workspaceId),
+            eq(candidates.id, applications.candidateId),
+          ),
+        )
+        .innerJoin(
+          jobs,
+          and(
+            eq(jobs.workspaceId, input.workspaceId),
+            eq(jobs.id, applications.jobId),
+          ),
+        )
+        .innerJoin(organization, eq(organization.id, applications.workspaceId))
         .where(
           and(
             eq(applications.workspaceId, input.workspaceId),
@@ -410,23 +451,27 @@ export async function bulkMoveApplications(
         );
 
       const applicationsByStage = new Map<string, string[]>();
-      const stageByApplication = new Map<string, string>();
+      const appDataById = new Map(allApplications.map((a) => [a.id, a]));
 
       for (const app of allApplications) {
         if (app.currentStageId === input.toStageId) continue;
-        stageByApplication.set(app.id, app.currentStageId);
         const stageApps = applicationsByStage.get(app.currentStageId) ?? [];
         stageApps.push(app.id);
         applicationsByStage.set(app.currentStageId, stageApps);
       }
 
+      const collectedEmails: PipelineEmail[] = [];
+
       for (const [fromStageId, appIds] of applicationsByStage) {
         if (appIds.length === 0) continue;
+
+        const nextStatus = isRejectionStage ? "rejected" : undefined;
 
         await tx
           .update(applications)
           .set({
             currentStageId: input.toStageId,
+            ...(nextStatus ? { status: nextStatus } : {}),
             updatedAt: now,
           })
           .where(
@@ -457,9 +502,50 @@ export async function bulkMoveApplications(
               fromStageId,
               toStageId: input.toStageId,
               bulk: true,
+              ...(nextStatus ? { status: nextStatus } : {}),
             },
           })),
         );
+
+        for (const applicationId of appIds) {
+          const appData = appDataById.get(applicationId);
+          if (!appData) continue;
+
+          const resolvedStatus = nextStatus ?? appData.status;
+          const becameRejected =
+            appData.status === "active" && resolvedStatus === "rejected";
+
+          stageEvents.push({
+            applicationId,
+            fromStageId,
+            status: resolvedStatus,
+            becameRejected,
+          });
+
+          const candidateName = `${appData.candidateFirstName} ${appData.candidateLastName}`;
+
+          if (becameRejected) {
+            collectedEmails.push({
+              type: "rejected",
+              candidateEmail: appData.candidateEmail,
+              candidateName,
+              jobTitle: appData.jobTitle,
+              workspaceName: appData.workspaceName,
+            });
+          } else if (
+            resolvedStatus === "active" &&
+            stageEmailConfig.candidateUpdatesEnabled
+          ) {
+            collectedEmails.push({
+              type: "stage",
+              candidateEmail: appData.candidateEmail,
+              candidateName,
+              jobTitle: appData.jobTitle,
+              stageName: toStageName,
+              workspaceName: appData.workspaceName,
+            });
+          }
+        }
       }
 
       for (const [index, applicationId] of orderedIds.entries()) {
@@ -474,9 +560,26 @@ export async function bulkMoveApplications(
             ),
           );
       }
+
+      return collectedEmails;
     });
 
     revalidatePath("/dashboard/pipeline");
+    void sendPipelineEmails(input.workspaceId, emails);
+
+    for (const evt of stageEvents) {
+      void emitWebhookEvent(input.workspaceId, "application.stage_changed", {
+        application: { id: evt.applicationId },
+        fromStageId: evt.fromStageId,
+        toStageId: input.toStageId,
+        status: evt.status,
+      });
+      if (evt.becameRejected) {
+        void emitWebhookEvent(input.workspaceId, "application.rejected", {
+          application: { id: evt.applicationId },
+        });
+      }
+    }
 
     return { success: true };
   } catch (error) {
@@ -534,6 +637,18 @@ export async function updateApplicationStatus(
     });
 
     revalidatePath("/dashboard/pipeline");
+
+    for (const application of applicationRows) {
+      if (input.status === "hired") {
+        void emitWebhookEvent(input.workspaceId, "application.hired", {
+          application: { id: application.id },
+        });
+      } else if (input.status === "rejected") {
+        void emitWebhookEvent(input.workspaceId, "application.rejected", {
+          application: { id: application.id },
+        });
+      }
+    }
 
     if (input.status === "rejected") {
       void sendPipelineEmails(

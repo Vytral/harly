@@ -21,7 +21,7 @@ export function PipelineViewToggle({
       {items.map((it) => (
         <Link
           key={it.key}
-          href={`/dashboard/pipeline?job=${jobId}&view=${it.key}` as Route}
+          href={`/dashboard/pipeline?jobId=${jobId}&view=${it.key}` as Route}
           aria-current={view === it.key ? "page" : undefined}
           className={cn(
             "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition",

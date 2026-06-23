@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowRightLeft,
@@ -17,10 +17,8 @@ import {
 } from "@/features/pipeline/actions";
 import type {
   PipelineApplication,
-  PipelineJobOption,
   PipelineStage,
 } from "@/features/pipeline/data";
-import { PipelineJobSelect } from "@/features/pipeline/PipelineJobSelect";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { PipelineSpine } from "@/components/ui/PipelineSpine";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -38,8 +36,6 @@ import { ShortDate } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
 type PipelineListProps = {
-  jobs: PipelineJobOption[];
-  selectedJob: PipelineJobOption;
   stages: PipelineStage[];
   applications: PipelineApplication[];
 };
@@ -47,8 +43,6 @@ type PipelineListProps = {
 const ALL = "__all__";
 
 export function PipelineList({
-  jobs,
-  selectedJob,
   stages,
   applications,
 }: PipelineListProps) {
@@ -120,7 +114,6 @@ export function PipelineList({
     if (result.success) {
       toast.success(`${label} ${selectedIds.length} candidate${selectedIds.length === 1 ? "" : "s"}.`);
       setSelected(new Set());
-      router.refresh();
     } else {
       toast.error(result.error ?? "Could not update candidates.");
     }
@@ -154,9 +147,6 @@ export function PipelineList({
     <div className="space-y-4">
       {/* Toolbar */}
       <div className="flex flex-wrap items-center gap-3">
-        <Suspense>
-          <PipelineJobSelect jobs={jobs} selectedJobId={selectedJob.id} />
-        </Suspense>
         <div className="relative ml-auto w-full max-w-xs">
           <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input

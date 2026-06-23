@@ -45,20 +45,20 @@ export function StageColumn({
     <section
       ref={setNodeRef}
       className={cn(
-        "flex min-h-[34rem] w-72 shrink-0 flex-col rounded-xl border bg-muted/40 transition",
+        "flex w-56 shrink-0 flex-col rounded-xl border bg-muted/40 transition lg:w-64",
         isOver && "border-primary/40 bg-accent/60",
       )}
     >
-      <div className="sticky top-0 z-10 rounded-t-xl border-b bg-muted/60 p-3 backdrop-blur">
+      <div className="sticky top-0 z-10 rounded-t-xl border-b bg-muted/60 p-2.5 backdrop-blur">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span
-              className="size-2.5 shrink-0 rounded-full"
+              className="size-2 shrink-0 rounded-full"
               style={{ backgroundColor: stage.color ?? "#a1a1aa" }}
               aria-hidden
             />
-            <h2 className="truncate text-sm font-semibold">{stage.name}</h2>
-            <Badge variant="secondary" className="tabular-nums">
+            <h2 className="truncate text-xs font-semibold">{stage.name}</h2>
+            <Badge variant="secondary" className="tabular-nums text-[10px] px-1.5 py-0">
               {applications.length}
             </Badge>
           </div>
@@ -71,17 +71,17 @@ export function StageColumn({
                 : "Candidate email updates off"
             }
             className={cn(
-              "flex size-7 items-center justify-center rounded-md transition",
+              "flex size-6 items-center justify-center rounded-md transition",
               emailOn
-                ? "bg-emerald-50 text-emerald-700"
+                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
                 : "text-muted-foreground hover:bg-accent",
             )}
             aria-label="Toggle candidate email updates"
           >
             {emailOn ? (
-              <Bell className="size-4" />
+              <Bell className="size-3.5" />
             ) : (
-              <BellOff className="size-4" />
+              <BellOff className="size-3.5" />
             )}
           </button>
         </div>
@@ -91,7 +91,7 @@ export function StageColumn({
         items={applications.map((application) => application.id)}
         strategy={verticalListSortingStrategy}
       >
-        <div className="flex flex-1 flex-col gap-2 p-2">
+        <div className="flex max-h-[calc(100vh-16rem)] flex-1 flex-col gap-2 overflow-y-auto p-2">
           {applications.map((application) => (
             <CandidateCard
               key={application.id}

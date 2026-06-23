@@ -20,7 +20,10 @@ import {
   updateApplicationStatus,
   updateStageEmailSettings,
 } from "@/features/pipeline/actions";
-import { CandidateCardOverlay } from "@/features/pipeline/CandidateCard";
+import {
+  CandidateCard,
+  CandidateCardOverlay,
+} from "@/features/pipeline/CandidateCard";
 import type {
   PipelineApplication,
   PipelineJobOption,
@@ -29,7 +32,6 @@ import type {
 import { StageColumn } from "@/features/pipeline/StageColumn";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
@@ -175,7 +177,6 @@ function matchesSearch(application: PipelineApplication, query: string) {
 }
 
 export function PipelineBoard({
-  jobs,
   selectedJob,
   stages: initialStages,
   applications,
@@ -188,10 +189,12 @@ export function PipelineBoard({
     useState<PipelineApplication | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
-  const [jobFilter, setJobFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [hideEmptyColumns, setHideEmptyColumns] = useState(false);
+  const [mobileStage, setMobileStage] = useState<string>(
+    initialStages[0]?.id ?? "",
+  );
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
@@ -226,17 +229,17 @@ export function PipelineBoard({
           stageId,
           stageApplications.filter(
             (application) =>
-              (jobFilter === "all" || application.jobId === jobFilter) &&
               (statusFilter === "all" || application.status === statusFilter) &&
               matchesSearch(application, searchQuery),
           ),
         ]),
       ),
-    [columns, jobFilter, searchQuery, statusFilter],
+    [columns, searchQuery, statusFilter],
   );
   const visibleStages = hideEmptyColumns
     ? stages.filter((stage) => (filteredColumns.get(stage.id)?.length ?? 0) > 0)
     : stages;
+  const mobileApplications = filteredColumns.get(mobileStage) ?? [];
 
   function handleSelect(applicationId: string, selected: boolean) {
     setSelectedIds((current) => {
@@ -436,10 +439,7 @@ export function PipelineBoard({
     );
 
     const result = await updateStageEmailSettings({
-      workspaceId:
-        Array.from(columns.values()).flat()[0]?.workspaceId ??
-        applications[0]?.workspaceId ??
-        "",
+      workspaceId: applications[0]?.workspaceId ?? "",
       stageId,
       candidateUpdatesEnabled: enabled,
     });
@@ -450,164 +450,187 @@ export function PipelineBoard({
     }
   }
 
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <p className="text-sm text-muted-foreground">
-              Drag candidates between stages, filter, and act in bulk.
-            </p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="search"
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search candidates…"
-                  className="w-full pl-9 sm:w-52"
-                />
-              </div>
-              <Select value={jobFilter} onValueChange={setJobFilter}>
-                <SelectTrigger className="w-full sm:w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All jobs</SelectItem>
-                  {jobs.map((job) => (
-                    <SelectItem key={job.id} value={job.id}>
-                      {job.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={statusFilter}
-                onValueChange={(value) =>
-                  setStatusFilter(value as StatusFilter)
-                }
-              >
-                <SelectTrigger className="w-full sm:w-36">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="hired">Hired</SelectItem>
-                  <SelectItem value="rejected">Rejected</SelectItem>
-                  <SelectItem value="withdrawn">Withdrawn</SelectItem>
-                </SelectContent>
-              </Select>
-              <label className="flex h-9 items-center gap-2 rounded-md border bg-muted/40 px-3 text-sm font-medium text-muted-foreground">
-                <Checkbox
-                  checked={hideEmptyColumns}
-                  onCheckedChange={(checked) =>
-                    setHideEmptyColumns(checked === true)
-                  }
-                />
-                Hide empty
-              </label>
-            </div>
-          </div>
+  const filterBar = (
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          type="search"
+          value={searchQuery}
+          onChange={(event) => setSearchQuery(event.target.value)}
+          placeholder="Search candidates…"
+          className="w-full pl-9 sm:w-48"
+        />
+      </div>
+      <Select
+        value={statusFilter}
+        onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+      >
+        <SelectTrigger className="w-full sm:w-36">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All statuses</SelectItem>
+          <SelectItem value="active">Active</SelectItem>
+          <SelectItem value="hired">Hired</SelectItem>
+          <SelectItem value="rejected">Rejected</SelectItem>
+          <SelectItem value="withdrawn">Withdrawn</SelectItem>
+        </SelectContent>
+      </Select>
+      <label className="hidden items-center gap-2 rounded-md border bg-muted/40 px-3 py-1.5 text-sm font-medium text-muted-foreground sm:flex">
+        <Checkbox
+          checked={hideEmptyColumns}
+          onCheckedChange={(checked) => setHideEmptyColumns(checked === true)}
+        />
+        Hide empty
+      </label>
+    </div>
+  );
 
-          {selectedApplications.length > 0 ? (
-            <div className="flex flex-col gap-3 rounded-lg border bg-accent/40 p-3 sm:flex-row sm:items-center sm:justify-between">
-              <Badge variant="secondary" className="w-fit">
-                {selectedApplications.length} selected
-              </Badge>
-              <div className="flex flex-wrap gap-2">
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      Move to stage
-                      <ChevronDown className="size-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    {stages.map((stage) => (
-                      <DropdownMenuItem
-                        key={stage.id}
-                        onClick={() => void handleBulkMove(stage.id)}
-                      >
-                        {stage.name}
-                      </DropdownMenuItem>
-                    ))}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-                <Button
-                  size="sm"
-                  onClick={() =>
-                    void handleStatusChange(
-                      selectedApplications.map((application) => application.id),
-                      "hired",
-                    )
-                  }
-                >
-                  <Check className="size-4" />
-                  Hire
-                </Button>
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() =>
-                    void handleStatusChange(
-                      selectedApplications.map((application) => application.id),
-                      "rejected",
-                    )
-                  }
-                >
-                  <X className="size-4" />
-                  Reject
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setSelectedIds(new Set())}
-                >
-                  Clear
-                </Button>
-              </div>
-            </div>
-          ) : null}
-        </CardContent>
-      </Card>
+  const bulkBar = selectedApplications.length > 0 ? (
+    <div className="flex flex-col gap-3 rounded-xl border bg-accent/40 p-3 sm:flex-row sm:items-center sm:justify-between">
+      <Badge variant="secondary" className="w-fit">
+        {selectedApplications.length} selected
+      </Badge>
+      <div className="flex flex-wrap gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm">
+              Move to stage
+              <ChevronDown className="size-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            {stages.map((stage) => (
+              <DropdownMenuItem
+                key={stage.id}
+                onClick={() => void handleBulkMove(stage.id)}
+              >
+                {stage.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          size="sm"
+          onClick={() =>
+            void handleStatusChange(
+              selectedApplications.map((application) => application.id),
+              "hired",
+            )
+          }
+        >
+          <Check className="size-4" />
+          Hire
+        </Button>
+        <Button
+          size="sm"
+          variant="destructive"
+          onClick={() =>
+            void handleStatusChange(
+              selectedApplications.map((application) => application.id),
+              "rejected",
+            )
+          }
+        >
+          <X className="size-4" />
+          Reject
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() => setSelectedIds(new Set())}
+        >
+          Clear
+        </Button>
+      </div>
+    </div>
+  ) : null;
+
+  return (
+    <div className="space-y-3">
+      {filterBar}
+      {bulkBar}
 
       {error ? (
-        <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive">
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive">
           {error}
         </div>
       ) : null}
 
-      <DndContext
-        id={`pipeline-${selectedJob.id}`}
-        sensors={sensors}
-        collisionDetection={pointerWithin}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-        onDragCancel={() => setActiveApplication(null)}
-      >
-        <div className="flex gap-4 overflow-x-auto pb-3">
-          {visibleStages.map((stage) => (
-            <StageColumn
-              key={stage.id}
-              stage={stage}
-              applications={filteredColumns.get(stage.id) ?? []}
-              selectedIds={selectedIds}
+      {/* Mobile: stage selector + vertical card list */}
+      <div className="sm:hidden">
+        <Select value={mobileStage} onValueChange={setMobileStage}>
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder="Select stage" />
+          </SelectTrigger>
+          <SelectContent>
+            {stages.map((stage) => (
+              <SelectItem key={stage.id} value={stage.id}>
+                <span className="flex items-center gap-2">
+                  <span
+                    className="size-2 shrink-0 rounded-full"
+                    style={{ backgroundColor: stage.color ?? "#a1a1aa" }}
+                  />
+                  {stage.name}
+                  <span className="text-muted-foreground">
+                    ({filteredColumns.get(stage.id)?.length ?? 0})
+                  </span>
+                </span>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <div className="mt-3 space-y-2">
+          {mobileApplications.map((application) => (
+            <CandidateCard
+              key={application.id}
+              application={application}
+              selected={selectedIds.has(application.id)}
               onSelect={handleSelect}
               onStatusChange={handleStatusChange}
-              onToggleStageEmail={(stageId, enabled) => {
-                void handleToggleStageEmail(stageId, enabled);
-              }}
             />
           ))}
-        </div>
-        <DragOverlay>
-          {activeApplication ? (
-            <CandidateCardOverlay application={activeApplication} />
+          {mobileApplications.length === 0 ? (
+            <div className="flex items-center justify-center rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+              No candidates in this stage
+            </div>
           ) : null}
-        </DragOverlay>
-      </DndContext>
+        </div>
+      </div>
+
+      {/* Desktop: full board with DnD */}
+      <div className="hidden sm:block">
+        <DndContext
+          id={`pipeline-${selectedJob.id}`}
+          sensors={sensors}
+          collisionDetection={pointerWithin}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={() => setActiveApplication(null)}
+        >
+          <div className="flex gap-3 overflow-x-auto overscroll-x-contain pb-2">
+            {visibleStages.map((stage) => (
+              <StageColumn
+                key={stage.id}
+                stage={stage}
+                applications={filteredColumns.get(stage.id) ?? []}
+                selectedIds={selectedIds}
+                onSelect={handleSelect}
+                onStatusChange={handleStatusChange}
+                onToggleStageEmail={(stageId, enabled) => {
+                  void handleToggleStageEmail(stageId, enabled);
+                }}
+              />
+            ))}
+          </div>
+          <DragOverlay>
+            {activeApplication ? (
+              <CandidateCardOverlay application={activeApplication} />
+            ) : null}
+          </DragOverlay>
+        </DndContext>
+      </div>
     </div>
   );
 }

@@ -1,6 +1,5 @@
 import { Suspense } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { PageHeader } from "@/components/ui/PageHeader";
 import { PipelineBoard } from "@/features/pipeline/PipelineBoard";
 import { PipelineJobSelect } from "@/features/pipeline/PipelineJobSelect";
 import { PipelineList } from "@/features/pipeline/PipelineList";
@@ -24,70 +23,57 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
 
   if (data.kind === "empty") {
     return (
-      <div className="space-y-6">
-        <PageHeader
-          eyebrow="Pipeline"
-          title="Candidate movement"
-          description="Move applicants through each hiring stage for a selected job."
-        />
+      <div className="space-y-4">
         <EmptyState
           title="No jobs yet"
-          description="Create a job to get started."
+          description="Create a job to start building your pipeline."
           action={{ href: "/dashboard/jobs/new", label: "Create job" }}
         />
       </div>
     );
   }
 
-  const header = (
-    <PageHeader
-      eyebrow="Pipeline"
-      title={data.selectedJob.title}
-      description={`Pipeline for ${data.selectedJob.status} job.`}
-      actions={
-        data.stages.length > 0 ? (
-          <PipelineViewToggle jobId={data.selectedJob.id} view={view} />
-        ) : undefined
-      }
-    />
+  const toolbar = (
+    <div className="flex items-center justify-between gap-3">
+      <Suspense>
+        <PipelineJobSelect jobs={data.jobs} selectedJobId={data.selectedJob.id} />
+      </Suspense>
+      {data.stages.length > 0 ? (
+        <PipelineViewToggle jobId={data.selectedJob.id} view={view} />
+      ) : null}
+    </div>
   );
 
   if (data.stages.length === 0) {
     return (
-      <div className="space-y-6">
-        {header}
-        <Suspense>
-          <PipelineJobSelect jobs={data.jobs} selectedJobId={data.selectedJob.id} />
-        </Suspense>
-        <p className="rounded-lg border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
-          This job has no pipeline stages yet.
-        </p>
+      <div className="space-y-4">
+        {toolbar}
+        <EmptyState
+          title="No stages configured"
+          description="Add pipeline stages to this job to start tracking candidates."
+        />
       </div>
     );
   }
 
   if (data.applications.length === 0) {
     return (
-      <div className="space-y-6">
-        {header}
-        <Suspense>
-          <PipelineJobSelect jobs={data.jobs} selectedJobId={data.selectedJob.id} />
-        </Suspense>
-        <p className="rounded-lg border border-dashed bg-card p-6 text-center text-sm text-muted-foreground">
-          No candidates have applied to this job yet.
-        </p>
+      <div className="space-y-4">
+        {toolbar}
+        <EmptyState
+          title="No candidates yet"
+          description="Candidates will appear here once they apply."
+        />
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {header}
+    <div className="space-y-4">
+      {toolbar}
       {view === "list" ? (
         <PipelineList
           key={`list-${data.selectedJob.id}`}
-          jobs={data.jobs}
-          selectedJob={data.selectedJob}
           stages={data.stages}
           applications={data.applications}
         />
