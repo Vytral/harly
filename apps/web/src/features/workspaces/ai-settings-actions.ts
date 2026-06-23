@@ -18,10 +18,10 @@ export type AiSettingsActionResult = { ok: boolean; error?: string };
 const saveSchema = z.object({
   provider: z.string().min(1),
   modelId: z.string().trim().min(1, "Choose a model.").max(200),
-  // Optional: when blank, the previously stored key is kept.
   apiKey: z.string().trim().max(500).optional(),
   baseUrl: z.string().trim().max(500).optional(),
   enabled: z.boolean(),
+  autoScore: z.boolean().optional(),
 });
 
 export async function saveAiSettingsAction(input: {
@@ -30,6 +30,7 @@ export async function saveAiSettingsAction(input: {
   apiKey?: string;
   baseUrl?: string;
   enabled: boolean;
+  autoScore?: boolean;
 }): Promise<AiSettingsActionResult> {
   const context = await requireWorkspaceRole(["owner", "admin"]);
 
@@ -48,7 +49,7 @@ export async function saveAiSettingsAction(input: {
     };
   }
 
-  const { provider, modelId, apiKey, baseUrl, enabled } = parsed.data;
+  const { provider, modelId, apiKey, baseUrl, enabled, autoScore } = parsed.data;
   if (!isAiProviderId(provider)) {
     return { ok: false, error: "Unknown provider." };
   }
@@ -75,6 +76,7 @@ export async function saveAiSettingsAction(input: {
       aiProvider: provider,
       aiModelId: modelId,
       aiBaseUrl: baseUrl || null,
+      aiAutoScore: autoScore ?? false,
       ...keyColumns,
     })
     .onConflictDoUpdate({
@@ -84,6 +86,7 @@ export async function saveAiSettingsAction(input: {
         aiProvider: provider,
         aiModelId: modelId,
         aiBaseUrl: baseUrl || null,
+        aiAutoScore: autoScore ?? false,
         ...keyColumns,
         updatedAt: new Date(),
       },
@@ -156,6 +159,23 @@ export async function testAiConnectionAction(input: {
           : "Connection failed.",
     };
   }
+}
+
+export async function saveAiAutoScoreAction(
+  autoScore: boolean,
+): Promise<AiSettingsActionResult> {
+  const context = await requireWorkspaceRole(["owner", "admin"]);
+
+  await db
+    .insert(workspaceSettings)
+    .values({ organizationId: context.organization.id, aiAutoScore: autoScore })
+    .onConflictDoUpdate({
+      target: workspaceSettings.organizationId,
+      set: { aiAutoScore: autoScore, updatedAt: new Date() },
+    });
+
+  revalidatePath("/settings/ai");
+  return { ok: true };
 }
 
 export async function searchOpenRouterModelsAction(

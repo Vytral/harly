@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import {
   disableAiAction,
   saveAiSettingsAction,
+  saveAiAutoScoreAction,
   searchOpenRouterModelsAction,
   testAiConnectionAction,
 } from "@/features/workspaces/ai-settings-actions";
@@ -39,6 +40,7 @@ import {
   CheckIcon,
   GlobeIcon,
   KeyDuotoneIcon,
+  LightningIcon,
   MagicWandDuotoneIcon,
   ReadCvDuotoneIcon,
   RobotDuotoneIcon,
@@ -114,6 +116,7 @@ export function AiSettingsCard({
     <div className="space-y-5">
       {!status.encryptionReady ? <EncryptionWarning /> : null}
 
+      {/* Provider config card */}
       <Card className="gap-0 overflow-hidden p-0">
         <div className="p-6">
           <SectionHeader
@@ -189,19 +192,32 @@ export function AiSettingsCard({
         </div>
       </Card>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <CapabilityCard
-          icon={ReadCvDuotoneIcon}
-          title="Resume parsing"
-          description="Extract name, contacts, skills and work history from uploaded CVs into structured candidate profiles."
-        />
-        <CapabilityCard
-          icon={MagicWandDuotoneIcon}
-          title="Job-description drafting"
-          description="Generate first-draft postings and screening questions from a short brief, in your tone."
-        />
+      {/* AI Features section */}
+      <div>
+        <h2 className="mb-3 text-sm font-semibold tracking-tight text-foreground/80">
+          AI Features
+        </h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <FeatureCard
+            icon={ReadCvDuotoneIcon}
+            title="Resume parsing"
+            description="Extract name, contacts, skills, and work history from uploaded CVs into structured candidate profiles automatically on apply."
+            alwaysOn
+          />
+          <FeatureCard
+            icon={MagicWandDuotoneIcon}
+            title="Job-description drafting"
+            description="Generate first-draft postings from a short brief in the job wizard — title, keywords, and workplace type are enough to get a full draft."
+            alwaysOn
+          />
+          <AutoScoreFeatureCard
+            status={status}
+            canEdit={canEdit}
+          />
+        </div>
       </div>
 
+      {/* Supported providers */}
       <Card className="gap-4">
         <div className="px-6">
           <h3 className="text-sm font-semibold tracking-tight">
@@ -268,22 +284,91 @@ function EncryptionWarning() {
   );
 }
 
-function CapabilityCard({
+function FeatureCard({
   icon: Icon,
   title,
   description,
+  alwaysOn = false,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   description: string;
+  alwaysOn?: boolean;
 }) {
   return (
     <Card className="gap-0 p-5">
-      <span className="flex size-10 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
-        <Icon className="size-5" />
-      </span>
+      <div className="flex items-start justify-between gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
+          <Icon className="size-5" />
+        </span>
+        {alwaysOn ? (
+          <span className="mt-0.5 rounded-full bg-sage/60 px-2 py-0.5 text-[11px] font-semibold text-pine">
+            Always on
+          </span>
+        ) : null}
+      </div>
       <h3 className="mt-3.5 text-sm font-semibold tracking-tight">{title}</h3>
       <p className="mt-1 text-sm text-muted-foreground">{description}</p>
+    </Card>
+  );
+}
+
+function AutoScoreFeatureCard({
+  status,
+  canEdit,
+}: {
+  status: WorkspaceAiStatus;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [pending, startToggle] = useTransition();
+  const [optimistic, setOptimistic] = useState(status.autoScore);
+
+  const disabled = !status.enabled || !status.hasApiKey || !canEdit;
+
+  function toggle(next: boolean) {
+    setOptimistic(next);
+    startToggle(async () => {
+      const result = await saveAiAutoScoreAction(next);
+      if (!result.ok) {
+        setOptimistic(!next);
+        toast.error(result.error ?? "Could not update setting.");
+        return;
+      }
+      toast.success(next ? "Auto-scoring enabled" : "Auto-scoring disabled");
+      router.refresh();
+    });
+  }
+
+  return (
+    <Card className="gap-0 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
+          <LightningIcon className="size-5" />
+        </span>
+        <Switch
+          checked={optimistic}
+          onCheckedChange={toggle}
+          disabled={disabled || pending}
+          aria-label="Auto-score applications"
+          className="mt-0.5"
+        />
+      </div>
+      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">
+        Auto-score applications
+      </h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Score each new application automatically as it arrives — no manual
+        trigger needed. Requires AI to be enabled.
+      </p>
+      {disabled && status.hasApiKey && !status.enabled ? (
+        <p className="mt-2 text-xs text-clay">Enable AI above to activate.</p>
+      ) : null}
+      {!status.hasApiKey ? (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Configure a provider to unlock.
+        </p>
+      ) : null}
     </Card>
   );
 }
@@ -334,9 +419,7 @@ function AiSettingsForm({
       const found = await searchOpenRouterModelsAction(query);
       setResults(found);
       if (found.length === 0) {
-        toast.message("No models found", {
-          description: "Try a different term.",
-        });
+        toast.message("No models found", { description: "Try a different term." });
       }
     });
   }
@@ -347,8 +430,7 @@ function AiSettingsForm({
         provider,
         modelId,
         apiKey: apiKey || undefined,
-        baseUrl:
-          showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
+        baseUrl: showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
       });
       if (result.ok) {
         toast.success("Connection OK");
@@ -364,8 +446,7 @@ function AiSettingsForm({
         provider,
         modelId,
         apiKey: apiKey || undefined,
-        baseUrl:
-          showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
+        baseUrl: showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
         enabled,
       });
       if (!result.ok) {
@@ -426,8 +507,8 @@ function AiSettingsForm({
                   </SelectItem>
                 );
               })}
-              </SelectContent>
-            </Select>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="space-y-2">

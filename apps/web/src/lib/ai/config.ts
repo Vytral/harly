@@ -17,6 +17,8 @@ export type WorkspaceAiStatus = {
   hasApiKey: boolean;
   /** False when AI_ENCRYPTION_KEY is missing/invalid — AI can't be used. */
   encryptionReady: boolean;
+  /** Automatically score new applications when AI is configured. */
+  autoScore: boolean;
 };
 
 /** Public-safe status for the settings UI. Never returns the API key. */
@@ -30,6 +32,7 @@ export async function getWorkspaceAiStatus(
       aiModelId: workspaceSettings.aiModelId,
       aiBaseUrl: workspaceSettings.aiBaseUrl,
       aiApiKeyCiphertext: workspaceSettings.aiApiKeyCiphertext,
+      aiAutoScore: workspaceSettings.aiAutoScore,
     })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, workspaceId))
@@ -42,6 +45,7 @@ export async function getWorkspaceAiStatus(
     baseUrl: row?.aiBaseUrl ?? null,
     hasApiKey: Boolean(row?.aiApiKeyCiphertext),
     encryptionReady: isEncryptionConfigured(),
+    autoScore: Boolean(row?.aiAutoScore),
   };
 }
 
