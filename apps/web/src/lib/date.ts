@@ -74,3 +74,12 @@ export function daysSince(value: Date | string): number {
 
   return Math.max(0, Math.floor(diff / 86_400_000));
 }
+
+const timeFormatter = new Intl.DateTimeFormat("en", {
+  hour: "numeric",
+  minute: "2-digit",
+});
+
+export function formatTime(value: Date | string): string {
+  return timeFormatter.format(toDate(value));
+}
