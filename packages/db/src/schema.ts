@@ -1647,6 +1647,98 @@ export const candidatePortalMagicLinks = pgTable(
   ],
 );
 
+// ---------------------------------------------------------------------------
+// GDPR / Consent records — proves consent was obtained (Art. 7 GDPR).
+// ---------------------------------------------------------------------------
+
+export const consentTypeEnum = pgEnum("consent_type", [
+  "data_processing",
+  "marketing",
+  "ai_evaluation",
+]);
+
+export const consentRecords = pgTable(
+  "consent_records",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    applicationId: uuid("application_id").references(() => applications.id, {
+      onDelete: "set null",
+    }),
+    consentType: consentTypeEnum("consent_type").notNull(),
+    consentText: text("consent_text").notNull(),
+    granted: boolean("granted").notNull(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    withdrawnAt: timestamp("withdrawn_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("consent_records_workspace_idx").on(table.workspaceId),
+    index("consent_records_candidate_idx").on(table.candidateId),
+    index("consent_records_application_idx").on(table.applicationId),
+    index("consent_records_type_idx").on(table.consentType),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// DSAR (Data Subject Access Request) — tracks export/erasure requests.
+// ---------------------------------------------------------------------------
+
+export const dsarStatusEnum = pgEnum("dsar_status", [
+  "pending",
+  "processing",
+  "completed",
+  "denied",
+]);
+
+export const dsarTypeEnum = pgEnum("dsar_type", [
+  "export",
+  "erasure",
+]);
+
+export const dsarRequests = pgTable(
+  "dsar_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    type: dsarTypeEnum("type").notNull(),
+    status: dsarStatusEnum("status").default("pending").notNull(),
+    requestedBy: text("requested_by"),
+    processedBy: text("processed_by"),
+    notes: text("notes"),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("dsar_requests_workspace_idx").on(table.workspaceId),
+    index("dsar_requests_candidate_idx").on(table.candidateId),
+    index("dsar_requests_status_idx").on(table.status),
+  ],
+);
+
+export type ConsentRecord = typeof consentRecords.$inferSelect;
+export type NewConsentRecord = typeof consentRecords.$inferInsert;
+export type DsarRequest = typeof dsarRequests.$inferSelect;
+export type NewDsarRequest = typeof dsarRequests.$inferInsert;
+
 export type CandidatePortalSession = typeof candidatePortalSessions.$inferSelect;
 export type NewCandidatePortalSession = typeof candidatePortalSessions.$inferInsert;
 export type CandidatePortalMagicLink = typeof candidatePortalMagicLinks.$inferSelect;

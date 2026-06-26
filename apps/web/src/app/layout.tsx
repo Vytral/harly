@@ -5,6 +5,7 @@ import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { CookiePanel } from "@/components/CookieConsentBanner";
 
 import "./globals.css";
 
@@ -48,6 +49,7 @@ export default function RootLayout({
         >
           <TooltipProvider delayDuration={200}>{children}</TooltipProvider>
           <Toaster position="bottom-right" richColors closeButton />
+          <CookiePanel />
         </ThemeProvider>
       </body>
     </html>

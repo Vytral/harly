@@ -28,6 +28,7 @@ import type { ApplicationFormValues } from "@/lib/validations/applications";
 import { cn, formatFileSize } from "@/lib/utils";
 import { getResumeFileValidationError } from "@/lib/storage-validation";
 import { PhoneInput } from "@/components/ui/PhoneInput";
+import { Button } from "@/components/ui/button";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 
 const initialState: ApplyJobActionState = {
@@ -614,6 +615,9 @@ export function ApplyForm({
         formData.set("resumeFileType", uploaded.fileType);
         formData.set("resumeFileSize", String(uploaded.fileSize));
       }
+      if (consentGiven) {
+        formData.set("consentGiven", "true");
+      }
 
       setIsUploading(false);
       startTransition(() => {
@@ -1142,7 +1146,7 @@ export function ApplyForm({
           ) : null}
 
           {showConsentCheckbox ? (
-            <div className="space-y-2">
+            <div className="-mt-2 space-y-2">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1154,22 +1158,19 @@ export function ApplyForm({
                   className="mt-1 size-4 rounded border-zinc-300 text-[var(--board-primary)] focus:ring-[var(--board-primary)]"
                 />
                 <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                  <span className="text-red-500">*</span>{" "}
                   {privacyPolicyUrl ? (
-                    <>
-                      {consentText.replace(/privacy policy/gi, "").trim() || "I agree to the "}
-                      <a
-                        href={privacyPolicyUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline hover:text-zinc-900 dark:hover:text-zinc-100"
-                      >
-                        privacy policy
-                      </a>
-                    </>
+                    <a
+                      href={privacyPolicyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium underline underline-offset-2 decoration-zinc-300 hover:decoration-zinc-500 dark:decoration-zinc-600 dark:hover:decoration-zinc-400"
+                    >
+                      {consentText}
+                    </a>
                   ) : (
                     consentText
                   )}
-                  {" *"}
                 </span>
               </label>
               {consentError ? (
@@ -1549,7 +1550,7 @@ export function ApplyForm({
           ) : null}
 
           {showConsentCheckbox ? (
-            <div className="space-y-2">
+            <div className="-mt-2 space-y-2">
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -1561,22 +1562,19 @@ export function ApplyForm({
                   className="mt-1 size-4 rounded border-zinc-300 text-[var(--board-primary)] focus:ring-[var(--board-primary)]"
                 />
                 <span className="text-sm text-zinc-600 dark:text-zinc-400">
+                  <span className="text-red-500">*</span>{" "}
                   {privacyPolicyUrl ? (
-                    <>
-                      {consentText.replace(/privacy policy/gi, "").trim() || "I agree to the "}
-                      <a
-                        href={privacyPolicyUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="underline hover:text-zinc-900 dark:hover:text-zinc-100"
-                      >
-                        privacy policy
-                      </a>
-                    </>
+                    <a
+                      href={privacyPolicyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium underline underline-offset-2 decoration-zinc-300 hover:decoration-zinc-500 dark:decoration-zinc-600 dark:hover:decoration-zinc-400"
+                    >
+                      {consentText}
+                    </a>
                   ) : (
                     consentText
                   )}
-                  {" *"}
                 </span>
               </label>
               {consentError ? (
@@ -1585,24 +1583,22 @@ export function ApplyForm({
             </div>
           ) : null}
 
-          <button
+          <Button
             type="submit"
-            disabled={isSubmitting}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md text-sm font-medium text-white transition-transform duration-150 hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-            style={{ backgroundColor: "var(--board-primary)" }}
+            disabled={isPending || isUploading}
+            className="w-full"
+            size="lg"
+            style={{
+              backgroundColor: "var(--board-primary)",
+              color: "var(--board-primary-contrast)",
+            }}
           >
-            {isUploading || isPending ? (
-              <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.2" />
-                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-              </svg>
-            ) : null}
             {isUploading
-              ? "Uploading..."
+              ? "Uploading…"
               : isPending
-                ? "Submitting..."
+                ? "Submitting…"
                 : "Submit application"}
-          </button>
+          </Button>
         </>
       )}
     </form>

@@ -4,16 +4,11 @@ import { useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import {
-  AtSign,
-  Bell,
-  Briefcase,
-  Calendar,
   CheckCheck,
   EllipsisVertical,
   Eye,
   EyeOff,
   Trash2,
-  UserPlus,
 } from "lucide-react";
 
 import {
@@ -23,6 +18,8 @@ import {
   deleteNotification,
 } from "@/features/notifications/actions";
 import type { NotificationItem } from "@/features/notifications/data";
+import { NotificationTypeIcon } from "@/features/notifications/notification-icons";
+import { ActorAvatar } from "@/features/notifications/actor-avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -35,28 +32,6 @@ import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
 type Filter = "all" | "unread";
-
-const TYPE_ICONS: Record<string, typeof Bell> = {
-  "note.mentioned": AtSign,
-  "application.created": UserPlus,
-  "application.stage_changed": Briefcase,
-  "application.hired": Briefcase,
-  "application.rejected": Briefcase,
-  "candidate.created": UserPlus,
-  "interview.scheduled": Calendar,
-  "interview.canceled": Calendar,
-  "interview.rescheduled": Calendar,
-  "job.published": Briefcase,
-};
-
-function NotificationIcon({ type }: { type: string }) {
-  const Icon = TYPE_ICONS[type] ?? Bell;
-  return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-      <Icon className="size-4.5" strokeWidth={1.8} />
-    </span>
-  );
-}
 
 export function InboxList({ items }: { items: NotificationItem[] }) {
   const router = useRouter();
@@ -108,7 +83,20 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
     return (
       <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-16 text-center">
         <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-          <Bell className="size-5" strokeWidth={1.6} />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          </svg>
         </span>
         <p className="text-sm font-medium">You&apos;re all caught up</p>
         <p className="max-w-sm text-sm text-muted-foreground">
@@ -170,7 +158,18 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
                 disabled={isPending}
                 className="flex min-w-0 flex-1 items-start gap-3 text-left"
               >
-                <NotificationIcon type={item.type} />
+                <span className="relative shrink-0">
+                  <NotificationTypeIcon type={item.type} />
+                  {item.actorAvatar ? (
+                    <span className="absolute -bottom-1 -right-1">
+                      <ActorAvatar
+                        name={item.actorName}
+                        avatar={item.actorAvatar}
+                        size="sm"
+                      />
+                    </span>
+                  ) : null}
+                </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex items-center gap-2">
                     <span

@@ -1,54 +1,83 @@
-# OpenHire — Gap analysis para un ATS open-source completo
+# Harly — Gap Analysis para ATS open-source completo
 
-_Última actualización: 2026-05-30_
+_Última actualización: 2026-06-23_
 
-Estado de OpenHire frente a un ATS open-source self-hostable de referencia (modelo Cal.com / Twenty: código abierto + cloud managed como monetización). Marca qué existe, qué falta, y prioridad.
+Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo Cal.com / Twenty: código abierto + cloud managed como monetización).
 
 ## ✅ Ya construido
 
-- **Identidad / multi-tenant**: Better Auth (email+password, magic link, Google OAuth, organization plugin). Fuente única de verdad tras el refactor de identidad (2026-05-30).
-- **Jobs**: CRUD, slug público, custom questions, branding por job, board público con SEO, estados draft/open/closed.
-- **Apply flow**: formulario público, upload de CV (local/S3), preguntas configurables, detección de duplicados, autofill best-effort.
-- **Pipeline**: kanban drag&drop, reorden, bulk actions, emails por cambio de stage.
-- **Candidates**: perfil, notas, timeline de actividad, archivos.
+- **Identidad / multi-tenant**: Better Auth (email+password, magic link, Google OAuth, passkeys, organization plugin). Workspace switcher + onboarding wizard.
+- **Jobs**: CRUD, slug público, custom questions, branding por job, board público con SEO, estados draft/open/closed, hiring team, AI description generation, AI question suggestions, trash.
+- **Apply flow**: formulario público, upload de CV (local/S3), preguntas configurables, detección de duplicados, autofill best-effort, persiste skills + experience years, consentimiento GDPR.
+- **Pipeline**: kanban drag&drop, reorden, vista board+lista, bulk actions, búsqueda, filtros, emails por cambio de stage, UI estilo Ashby/Workable.
+- **Candidates**: perfil completo (editar, notas, timeline, archivos, AI score, tags, bulk email, import CSV, schedule interviews, trash).
+- **Talent Pool**: pool de candidatos sourced, source filtering, job assignment.
+- **Career Pages**: builder con 4 templates (Minimal, Playful, Ashby, Greenhouse), live preview, board público con SEO.
+- **Reports**: funnel de conversión, time-to-hire, source effectiveness, gráficos.
+- **Tasks**: board con cards/rows, crear/asignar/completar, linked a candidatos/jobs.
+- **Interviews**: tabla real `interviews`, Cal.com integration (OAuth + webhook firmado), mark complete/cancel.
+- **Offers**: drawer/panel, extend/withdraw, emails.
 - **Storage**: adapter abstracto local + S3/R2 con presigned URLs.
-- **Emails**: react-email templates + Resend (fallback consola).
-- **Settings**: workspace profile, branding board, miembros, invitaciones, roles.
-- **UI/UX (2026-05-30)**: design system shadcn/ui + lucide, shell con sidebar colapsable + ⌘K, dashboard/jobs/pipeline/candidates/settings rediseñados grado Ashby/Workable.
+- **Emails**: 19 react-email templates + Resend (fallback consola) + AI email drafting.
+- **API v1**: REST `/api/v1/*`, API keys por workspace, OpenAPI spec, webhooks outbound con HMAC signing, cron dispatch, public endpoints.
+- **Integrations**: Google Calendar (OAuth + sync), Cal.com, Slack OAuth.
+- **Legal & Compliance**: EU compliance research, settings admin, public legal pages, consent checkbox, audit logs en acciones clave.
+- **Security**: 2FA, passkeys, audit logs, force 2FA, SSO placeholder.
+- **Settings**: General, Members, Invitations, Roles (RBAC custom), AI, Email, Developers, Integrations, Legal, Portal, Security.
+- **Candidate Portal**: OAuth (Google, GitHub), login/dashboard/jobs/profile.
+- **UI/UX**: shadcn/ui + lucide (37 componentes), sidebar colapsable, ⌘K quick-nav, theme toggle.
 
 ## ❌ Falta — por prioridad
 
 ### P0 — Bloqueante para lanzar OSS
+
 1. **Self-hosting serio**
-   - Wizard `create-harly` (hoy placeholder en `tooling/create-harly`).
-   - Dockerfile de la app + `docker-compose` completo (app + Postgres + Redis).
+   - `create-harly` CLI (hoy placeholder en `tooling/create-harly`).
+   - Dockerfile de la app + docker-compose completo (app + Postgres).
    - Healthcheck endpoint, validación de env (zod) al boot, seed limpio.
-   - Botones one-click deploy (Vercel + Neon/Railway) en README.
-   - Docs de deploy (`apps/docs`).
-2. **README épico**: GIF del pipeline, screenshots del nuevo UI, `docker compose up` one-liner. Es lo que da stars en HN/r/selfhosted.
-3. **Corregir drift de docs**: README dice tRPC/Neon/Uploadthing; real es Server Actions/Docker Postgres/storage propio.
+   - One-click deploy buttons (Vercel + Railway) en README.
+   - Docs de deploy (`apps/docs` — hoy stub vacío).
 
-### P1 — Diferenciadores y core faltante
-4. **API pública + webhooks** (hoy 0 — diferenciador clave vs OpenCATS):
-   - REST `/api/v1/*`, API keys por workspace, OpenAPI spec.
-   - Webhooks: on application, on stage change, on hire.
-5. **Reporting / analytics**: time-to-hire, funnel de conversión por stage, fuentes, gráficos en overview (cuando haya datos).
-6. **Búsqueda global ⌘K real**: hoy es quick-nav; falta indexar jobs/candidates/miembros.
-7. **Email producción**: UI para conectar Resend/SMTP, remitente verificado, toggle por workspace, plantillas editables.
+2. **README actualizado**: hoy dice tRPC/Neon/Uploadthing, nada de eso es real. Needs: tech stack correcto, GIF del pipeline, screenshots, `docker compose up` one-liner.
 
-### P2 — Colaboración y reclutamiento avanzado
-8. **Scorecards / evaluaciones**: hiring team por job ✅ + scorecards básicos ✅. Falta: kit de entrevista (criterios), @menciones en notas.
-9. **Scheduling** ✅ (2026-06-05): interviews reales (tabla `interviews`) desde el perfil + Cal.com (Settings → Integrations) con webhook firmado que sincroniza bookings. Falta: registro de webhook contra cuenta Cal.com real (necesita URL pública).
-10. **CV parsing / IA**: extracción multiformato ✅ (pdf/docx/rtf/txt) + parse con IA BYO-key ✅. Falta: candidate scoring (plan Pro).
-11. **Sourcing / import**: ❌ import masivo CSV, import desde otros ATS, integraciones (Greenhouse, Gmail, LinkedIn) — placeholders "coming soon" ya visibles en Settings → Integrations.
+3. **Packages vacíos**: `@harly/config`, `@harly/ui`, `@harly/validators` son stubs.
 
-### P3 — Cumplimiento y madurez
-12. **Compliance**: export + borrado GDPR/CCPA, consentimiento, audit log, Cloudflare Turnstile opcional en apply.
-13. **Calidad**: tests unitarios, e2e críticos (Playwright), hardening de permisos por rol, estados de error consistentes.
-14. **UX extra**: dark mode, i18n (ES/EN), datos de muestra (cargar/eliminar), badge OSS/BETA + versión (ya en sidebar), directorio de empleados (visión SIRH futura).
+### P1 — Core faltante
+
+4. **Búsqueda global ⌘K real**: hoy es quick-nav; falta indexar jobs/candidates/miembros con ranking.
+
+5. **Email producción**: UI para conectar Resend/SMTP, remitente verificado, toggle por workspace, plantillas editables (parcialmente hecho, falta pulir).
+
+6. **Two-way email / inbox**: hoy solo outbound; falta inbound webhook → thread → timeline.
+
+7. **Sourcing / import**: import masivo CSV (parcial), import desde otros ATS, integraciones (Greenhouse, Gmail, LinkedIn) — placeholders "coming soon".
+
+8. **Scorecards / entrevistas**: hiring team ✅ + scheduling ✅. Falta: kit de entrevista (criterios por stage), evaluaciones strutured.
+
+### P2 — Calidad y madurez
+
+9. **Tests e2e**: 0 Playwright tests hoy. 15 unit tests (0 .test.tsx).
+
+10. **Calendars page**: ComingSoon stub — datos existen (interviews + Cal.com), falta UI de calendario.
+
+11. **Templates page**: ComingSoon stub.
+
+12. **apps/docs y apps/marketing**: stubs vacíos.
+
+13. **Dark mode**: parcial (career pages), falta en dashboard.
+
+14. **i18n**: 0 hoy (solo ES/EN hardcoded).
+
+### P3 — Enterprise
+
+15. **SSO/SAML + SCIM** (Better Auth SSO plugin).
+16. **Custom fields** en candidatos/jobs (jsonb definitions).
+17. **Approval workflows** — job requisition + offer approval chains.
 
 ## Modelo de monetización (referencia)
+
 Open-source gratis forever (self-host). Cloud managed = MRR: Free (1 job activo) + Pro ($19/mes ilimitado + AI features). Enterprise = soporte self-host + integraciones premium.
 
 ## Próximo sprint sugerido
-P0 completo (self-hosting + README + docs fix) → primer lanzamiento en GitHub/HN. Luego P1.4 (API+webhooks) como gancho para devs.
+
+P0 completo (self-hosting + README fix + apps/docs) → primer lanzamiento GitHub/HN. Luego P1.4 (⌘K search) como quick win, luego P1.6 (two-way email) o P1.8 (scorecards) según prioridad.

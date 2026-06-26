@@ -22,28 +22,26 @@ Harly is built for startups, agencies, and technical teams that want:
 
 - Next.js App Router
 - TypeScript
-- tRPC
-- Drizzle ORM
-- PostgreSQL
-- Better Auth
-- Tailwind CSS
-- shadcn/ui
-- Resend
-- react.email
-- Uploadthing / S3-compatible storage
+- Server Actions (no tRPC)
+- Drizzle ORM + PostgreSQL
+- Better Auth (email/password, OAuth, passkeys, organizations)
+- Tailwind CSS + shadcn/ui
+- Resend + react.email
+- S3-compatible storage (AWS S3 / Cloudflare R2 / MinIO)
 - Turborepo
 
 ## Project Structure
 
 ```txt
-apps/web        Next.js application
-packages/db     Database schema and migrations
-packages/auth   Authentication utilities
-packages/api    tRPC routers and server logic
-packages/ui     Shared UI components
-packages/emails Email templates
-packages/config Shared config
-packages/validators Shared validation schemas
+apps/web        Next.js application (main product)
+packages/db     Database schema + 39 migrations (Drizzle)
+packages/auth   Better Auth integration
+packages/api    REST API v1 + API key auth + webhooks
+packages/storage Abstract storage adapters (local + S3)
+packages/emails 19 React Email templates
+packages/config Shared config (placeholder)
+packages/ui     Shared UI components (placeholder)
+packages/validators Shared validation schemas (placeholder)
 ```
 
 ## Local Development
@@ -71,3 +69,22 @@ pnpm db:migrate
 pnpm db:seed
 pnpm db:down
 ```
+
+## Features
+
+- **Jobs**: CRUD, custom questions, branding, public board with SEO, hiring team, AI-powered description generation
+- **Pipeline**: Kanban board + list view, drag & drop, bulk actions, search, filters
+- **Candidates**: profiles, notes, timeline, files, AI scoring, tags, talent pool
+- **Interviews**: scheduling, Cal.com integration, calendar sync
+- **Offers**: extend/withdraw with email notifications
+- **API v1**: REST with API keys, OpenAPI spec, outbound webhooks
+- **Integrations**: Google Calendar, Cal.com, Slack
+- **Career Pages**: 4 templates, builder with live preview
+- **Reports**: funnel, time-to-hire, source analytics
+- **Tasks**: board view, assign to candidates/jobs
+- **Legal**: GDPR compliance, consent, audit logs
+- **Security**: 2FA, passkeys, audit logs, RBAC roles
+
+## License
+
+MIT

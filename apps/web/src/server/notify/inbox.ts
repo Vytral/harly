@@ -106,8 +106,52 @@ function extractIds(data: EventPayload) {
   return { candidateName, jobTitle, jobId, candidateId };
 }
 
+function buildTitle(
+  event: WebhookEvent,
+  candidateName: string | null,
+  jobTitle: string | null,
+): string {
+  const label = WEBHOOK_EVENT_LABELS[event] ?? event;
+
+  if (event === "application.created" && candidateName) {
+    return `${candidateName} applied`;
+  }
+  if (event === "application.hired" && candidateName) {
+    return `${candidateName} was hired`;
+  }
+  if (event === "application.rejected" && candidateName) {
+    return `${candidateName} was rejected`;
+  }
+  if (event === "application.stage_changed" && candidateName && jobTitle) {
+    return `${candidateName} moved stage — ${jobTitle}`;
+  }
+  if (event === "application.stage_changed" && candidateName) {
+    return `${candidateName} moved stage`;
+  }
+  if (event === "candidate.created" && candidateName) {
+    return `${candidateName} added as candidate`;
+  }
+  if (event === "interview.scheduled" && candidateName) {
+    return `Interview with ${candidateName}`;
+  }
+  if (event === "interview.canceled" && candidateName) {
+    return `Interview with ${candidateName} canceled`;
+  }
+  if (event === "interview.completed" && candidateName) {
+    return `Interview with ${candidateName} completed`;
+  }
+  if (event === "interview.rescheduled" && candidateName) {
+    return `Interview with ${candidateName} rescheduled`;
+  }
+  if (event === "job.published" && jobTitle) {
+    return `${jobTitle} published`;
+  }
+
+  return label;
+}
+
 function buildDetail(candidateName: string | null, jobTitle: string | null): string | null {
-  if (candidateName && jobTitle) return `${candidateName} → ${jobTitle}`;
+  if (candidateName && jobTitle) return `${jobTitle}`;
   return candidateName ?? jobTitle ?? null;
 }
 
@@ -163,7 +207,7 @@ export async function notifyInboxEvent(
     if (recipientIds.length === 0) return;
 
     const { candidateName, jobTitle } = extractIds(data);
-    const title = WEBHOOK_EVENT_LABELS[event] ?? event;
+    const title = buildTitle(event, candidateName, jobTitle);
     const body = buildDetail(candidateName, jobTitle);
     const href = buildHref(event, data);
 

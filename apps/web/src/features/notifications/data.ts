@@ -13,6 +13,7 @@ export type NotificationItem = {
   body: string | null;
   href: string | null;
   actorName: string | null;
+  actorAvatar: string | null;
   read: boolean;
   createdAt: string;
 };
@@ -31,6 +32,7 @@ export async function listNotifications(limit = 50): Promise<NotificationItem[]>
       readAt: notifications.readAt,
       createdAt: notifications.createdAt,
       actorName: authUsers.name,
+      actorAvatar: authUsers.image,
     })
     .from(notifications)
     .leftJoin(authUsers, eq(authUsers.id, notifications.actorId))
@@ -50,6 +52,7 @@ export async function listNotifications(limit = 50): Promise<NotificationItem[]>
     body: row.body,
     href: row.href,
     actorName: row.actorName,
+    actorAvatar: row.actorAvatar,
     read: row.readAt !== null,
     createdAt: row.createdAt.toISOString(),
   }));

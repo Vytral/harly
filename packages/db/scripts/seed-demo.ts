@@ -264,7 +264,7 @@ const APPLICATIONS: { c: number; j: number; stage: StageName; source: string }[]
   { c: 13, j: 6, stage: "Applied", source: "LinkedIn" },
   { c: 1, j: 0, stage: "Screening", source: "Referral" },
 ];
-const STAGE_AGE = [4, 1, 0, 1, 8, 3, 1, 5, 0, 6, 2, 1, 0, 4, 0, 2, 2, 7, 1, 5, 0, 1, 2, 6];
+const STAGE_AGE = [3, 1, 0, 1, 2, 3, 1, 2, 0, 4, 2, 1, 0, 1, 0, 2, 2, 3, 1, 2, 0, 1, 2, 1];
 // Round-robin of who advanced each candidate (feeds team-activity ownership).
 const MOVERS = ["sarah", "diego", "emma", "james", "sofia"];
 
@@ -304,6 +304,15 @@ const MESSAGES = [
   { c: 0, subject: "Next steps — Senior Frontend Engineer", body: "Hi Ava, we loved your onsite. We'd like to move forward with an offer — call you tomorrow to discuss details." },
   { c: 3, subject: "Welcome to PloxHost!", body: "Hi Noah, thrilled to have you on board. Your start details and onboarding plan are attached." },
   { c: 16, subject: "Quick comp conversation", body: "Hi Hannah, great to connect. Could we chat briefly about compensation expectations before the next round?" },
+];
+
+const TASKS = [
+  { title: "Review Ava Thompson's offer letter", status: "pending", priority: "high", owner: "sarah", dueDaysFromNow: 2 },
+  { title: "Schedule portfolio review with Sofía Martínez", status: "pending", priority: "medium", owner: "emma", dueDaysFromNow: 3 },
+  { title: "Send onboarding docs to Noah Williams", status: "completed", priority: "high", owner: "james", dueDaysFromNow: -1 },
+  { title: "Prepare technical assessment for Backend Engineer role", status: "in_progress", priority: "medium", owner: "diego", dueDaysFromNow: 4 },
+  { title: "Follow up with Isabella Rossi on marketing role", status: "pending", priority: "low", owner: "sofia", dueDaysFromNow: 5 },
+  { title: "Update job description for DevOps contract", status: "pending", priority: "medium", owner: "diego", dueDaysFromNow: 6 },
 ];
 
 // Interviews reference an application by `${c}-${j}`; `interviewer` = teammate key.
@@ -393,6 +402,7 @@ async function main() {
 
     // ── Wipe existing domain data for this workspace (children → parents) ──
     const wipeOrder = [
+      schema.tasks,
       schema.interviews,
       schema.activityEvents,
       schema.candidateMessages,
@@ -450,9 +460,9 @@ async function main() {
           },
           boardConfig: {},
           status: job.status as "draft" | "open" | "closed",
-          publishedAt: job.status === "open" ? daysAgo(30 - j) : null,
+          publishedAt: job.status === "open" ? daysAgo(22 - (j === 4 ? 0 : j)) : null,
           createdById: user.id,
-          createdAt: daysAgo(35 - j),
+          createdAt: daysAgo(j === 4 ? 35 : 25 - j),
         })
         .returning({ id: schema.jobs.id });
 
@@ -700,8 +710,23 @@ async function main() {
       interviewCount++;
     }
 
+    // ── Tasks ──
+    for (const task of TASKS) {
+      const ownerId = teammateId(task.owner) ?? user.id;
+      await db.insert(schema.tasks).values({
+        workspaceId,
+        title: task.title,
+        status: task.status as "pending" | "in_progress" | "completed" | "canceled",
+        priority: task.priority as "low" | "medium" | "high" | "urgent",
+        ownerId,
+        createdById: user.id,
+        dueDate: daysFromNowAt(task.dueDaysFromNow, 9),
+        completedAt: task.status === "completed" ? daysAgo(1) : null,
+      });
+    }
+
     console.log(
-      `Done: ${JOBS.length} jobs, ${TEAMMATES.length} teammates, ${CANDIDATES.length} candidates, ${APPLICATIONS.length} applications, ${interviewCount} interviews, ${NOTES.length} notes, ${SCORECARDS.length} scorecards, ${TAGS.reduce((n, t) => n + t.labels.length, 0)} tags, ${MESSAGES.length} messages.`,
+      `Done: ${JOBS.length} jobs, ${TEAMMATES.length} teammates, ${CANDIDATES.length} candidates, ${APPLICATIONS.length} applications, ${interviewCount} interviews, ${NOTES.length} notes, ${SCORECARDS.length} scorecards, ${TAGS.reduce((n, t) => n + t.labels.length, 0)} tags, ${MESSAGES.length} messages, ${TASKS.length} tasks.`,
     );
   } finally {
     await sql.end();

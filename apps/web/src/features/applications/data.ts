@@ -11,6 +11,7 @@ import {
   applicationStageHistory,
   candidates,
   candidateFiles,
+  consentRecords,
   jobs,
   jobStages,
   member as authMembers,
@@ -77,6 +78,13 @@ export async function getPublicJobApplicationContext(input: {
 export async function createPublicApplication(
   input: { jobSlug: string; workspaceSlug?: string },
   values: ApplicationFormValues,
+  options?: {
+    consent?: {
+      consentText: string;
+      ipAddress: string | null;
+      userAgent: string | null;
+    } | null;
+  },
 ): Promise<PublicApplicationResult> {
   // Captured inside the transaction, emitted after commit so a failed webhook
   // can never roll back a successful application.
@@ -322,6 +330,20 @@ export async function createPublicApplication(
         questionAnswers: values.questionAnswers,
       },
     });
+
+    // Persist consent record (GDPR Art. 7 — proof of consent).
+    if (options?.consent) {
+      await tx.insert(consentRecords).values({
+        workspaceId,
+        candidateId: candidate.id,
+        applicationId: application.id,
+        consentType: "data_processing",
+        consentText: options.consent.consentText,
+        granted: true,
+        ipAddress: options.consent.ipAddress,
+        userAgent: options.consent.userAgent,
+      });
+    }
 
     const owners = await tx
       .select({ email: authUsers.email })

@@ -4,14 +4,24 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { AtSign, Bell, CheckCheck } from "lucide-react";
+import { CheckCheck, Eye, EyeOff, Trash2 } from "lucide-react";
 
 import {
   markAllNotificationsRead,
   markNotificationRead,
+  markNotificationUnread,
+  deleteNotification,
 } from "@/features/notifications/actions";
 import type { NotificationItem } from "@/features/notifications/data";
+import { NotificationTypeIconSmall } from "@/features/notifications/notification-icons";
+import { ActorAvatar } from "@/features/notifications/actor-avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Popover,
   PopoverContent,
@@ -44,6 +54,26 @@ export function NotificationsBell({
     });
   }
 
+  function toggleRead(e: React.MouseEvent, item: NotificationItem) {
+    e.stopPropagation();
+    startTransition(async () => {
+      if (item.read) {
+        await markNotificationUnread({ notificationId: item.id });
+      } else {
+        await markNotificationRead({ notificationId: item.id });
+      }
+      router.refresh();
+    });
+  }
+
+  function dismiss(e: React.MouseEvent, item: NotificationItem) {
+    e.stopPropagation();
+    startTransition(async () => {
+      await deleteNotification({ notificationId: item.id });
+      router.refresh();
+    });
+  }
+
   function markAll() {
     startTransition(async () => {
       await markAllNotificationsRead();
@@ -62,7 +92,20 @@ export function NotificationsBell({
             unread > 0 ? `Notifications (${unread} unread)` : "Notifications"
           }
         >
-          <Bell className="size-[18px]" strokeWidth={1.5} />
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+            <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+          </svg>
           {unread > 0 ? (
             <span className="absolute right-1.5 top-1.5 flex size-2 rounded-full bg-primary ring-2 ring-background" />
           ) : null}
@@ -98,13 +141,22 @@ export function NotificationsBell({
                 onClick={() => openItem(item)}
                 disabled={isPending}
                 className={cn(
-                  "flex w-full items-start gap-2.5 px-4 py-3 text-left transition-colors hover:bg-muted/50",
+                  "group flex w-full items-start gap-2.5 px-4 py-3 text-left transition-colors hover:bg-muted/50",
                   index > 0 && "border-t border-border/60",
                   !item.read && "bg-primary/[0.03]",
                 )}
               >
-                <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
-                  <AtSign className="size-3.5" strokeWidth={1.8} />
+                <span className="relative mt-0.5">
+                  <NotificationTypeIconSmall type={item.type} />
+                  {item.actorAvatar ? (
+                    <span className="absolute -bottom-1 -right-1">
+                      <ActorAvatar
+                        name={item.actorName}
+                        avatar={item.actorAvatar}
+                        size="sm"
+                      />
+                    </span>
+                  ) : null}
                 </span>
                 <span className="min-w-0 flex-1">
                   <span
@@ -115,13 +167,72 @@ export function NotificationsBell({
                   >
                     {item.title}
                   </span>
+                  {item.body ? (
+                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                      {item.body}
+                    </span>
+                  ) : null}
                   <span className="mt-0.5 block text-xs text-muted-foreground">
                     <RelativeTime value={item.createdAt} />
                   </span>
                 </span>
-                {!item.read ? (
-                  <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary" />
-                ) : null}
+                <span className="flex shrink-0 items-center gap-1">
+                  {!item.read ? (
+                    <span className="size-1.5 rounded-full bg-primary" />
+                  ) : null}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <span
+                        role="button"
+                        tabIndex={-1}
+                        onClick={(e) => e.stopPropagation()}
+                        className="flex size-6 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <circle cx="12" cy="12" r="1" />
+                          <circle cx="19" cy="12" r="1" />
+                          <circle cx="5" cy="12" r="1" />
+                        </svg>
+                      </span>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={(e) => toggleRead(e, item)}
+                        disabled={isPending}
+                      >
+                        {item.read ? (
+                          <>
+                            <EyeOff className="size-4" />
+                            Mark as unread
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="size-4" />
+                            Mark as read
+                          </>
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => dismiss(e, item)}
+                        disabled={isPending}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="size-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </span>
               </button>
             ))}
           </div>

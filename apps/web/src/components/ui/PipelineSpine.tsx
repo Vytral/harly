@@ -16,6 +16,7 @@ const CANONICAL_STAGES = [
 ] as const;
 
 const REJECTED = new Set(["rejected", "declined", "withdrawn"]);
+const HIRED = new Set(["hired"]);
 
 type PipelineSpineProps = {
   /** Current stage name (matched case-insensitively against `stages`). */
@@ -35,6 +36,7 @@ export function PipelineSpine({
 }: PipelineSpineProps) {
   const normalized = current.trim().toLowerCase();
   const isRejected = REJECTED.has(normalized);
+  const isHired = HIRED.has(normalized);
   const activeIndex = stages.findIndex((s) => s.toLowerCase() === normalized);
   const total = stages.length;
   const position = activeIndex >= 0 ? activeIndex + 1 : 0;
@@ -59,18 +61,22 @@ export function PipelineSpine({
         }
       >
         {stages.map((stage, i) => {
-          const filled = !isRejected && activeIndex >= 0 && i <= activeIndex;
-          const isCurrent = !isRejected && i === activeIndex;
+          const filled = !isRejected && !isHired && activeIndex >= 0 && i <= activeIndex;
+          const isCurrent = !isRejected && !isHired && i === activeIndex;
           return (
             <span
               key={stage}
               className={cn(
                 "h-1.5 flex-1 rounded-full transition-colors",
                 isRejected
-                  ? "bg-destructive/30"
-                  : filled
-                    ? "bg-primary"
-                    : "bg-muted",
+                  ? i <= activeIndex || activeIndex < 0
+                    ? "bg-destructive"
+                    : "bg-destructive/20"
+                  : isHired
+                    ? "bg-emerald-500"
+                    : filled
+                      ? "bg-primary"
+                      : "bg-muted",
                 isCurrent && "ring-1 ring-primary/30",
               )}
             />

@@ -17,11 +17,19 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DocxViewer } from "@/features/candidates/DocxViewer";
 
 function isPdfFile(file: { fileType: string | null; fileName: string }) {
   return (
     file.fileType === "application/pdf" ||
     file.fileName.toLowerCase().endsWith(".pdf")
+  );
+}
+
+function isDocxFile(file: { fileType: string | null; fileName: string }) {
+  return (
+    file.fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    file.fileName.toLowerCase().endsWith(".docx")
   );
 }
 
@@ -183,6 +191,41 @@ function FileRow({ file, duplicateCount }: { file: CandidateFileItem; duplicateC
     );
   }
 
+  if (isDocxFile(file)) {
+    return (
+      <Dialog>
+        <DialogTrigger asChild>
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition hover:border-ring/40 hover:bg-accent/40"
+          >
+            {icon}
+            {meta}
+          </button>
+        </DialogTrigger>
+        <DialogContent className="sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center justify-between gap-3 pr-8">
+              <span className="truncate">{file.fileName}</span>
+              <Button asChild size="sm" variant="outline">
+                <a href={file.fileUrl} target="_blank" rel="noreferrer">
+                  <Download className="size-4" />
+                  Download
+                </a>
+              </Button>
+            </DialogTitle>
+            <DialogDescription className="sr-only">
+              Preview for {file.fileName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="h-[75vh] overflow-hidden rounded-lg border">
+            <DocxViewer fileUrl={file.fileUrl} className="h-full rounded-none border-0" />
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
+
   return (
     <a
       href={file.fileUrl}
@@ -306,7 +349,7 @@ export function CandidateFileUpload({
         </Button>
       </div>
 
-      {/* Inline PDF preview for latest file */}
+      {/* Inline preview for latest file */}
       {latestFile && isPdfFile(latestFile) ? (
         <div className="overflow-hidden rounded-lg border">
           <iframe
@@ -314,6 +357,10 @@ export function CandidateFileUpload({
             title={latestFile.fileName}
             className="h-[55vh] w-full"
           />
+        </div>
+      ) : latestFile && isDocxFile(latestFile) ? (
+        <div className="overflow-hidden rounded-lg border">
+          <DocxViewer fileUrl={latestFile.fileUrl} className="h-[55vh]" />
         </div>
       ) : null}
 

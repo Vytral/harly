@@ -1,8 +1,10 @@
 "use server";
 
+import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 
+import { db, workspaceSettings } from "@harly/db";
 import { createPublicApplication } from "@/features/applications/data";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import {
@@ -197,8 +199,32 @@ export async function submitApplicationAction(
     };
   }
 
+  const consentGiven = formData.get("consentGiven") === "true";
+
+  // Fetch the consent text from workspace settings (used for the consent record).
+  let consentText =
+    "I agree to the privacy policy and consent to the processing of my personal data.";
+  if (consentGiven) {
+    const [settings] = await db
+      .select({ consentCheckboxText: workspaceSettings.consentCheckboxText })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.organizationId, jobContext.workspaceId))
+      .limit(1);
+    if (settings?.consentCheckboxText) {
+      consentText = settings.consentCheckboxText;
+    }
+  }
+
   try {
-    const result = await createPublicApplication(input, parsed.data);
+    const result = await createPublicApplication(input, parsed.data, {
+      consent: consentGiven
+        ? {
+            consentText,
+            ipAddress: remoteIp,
+            userAgent: requestHeaders.get("user-agent") ?? null,
+          }
+        : null,
+    });
 
     if (!result.ok) {
       return {
