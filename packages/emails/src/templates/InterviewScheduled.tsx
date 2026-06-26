@@ -89,7 +89,7 @@ export function InterviewScheduled({
                 </a>
               </td>
               <td>
-                <a href={calendarLinks.icsDataUri} download={`${interviewType}-${jobTitle}.ics`} style={buttonStyle("#6b7280")}>
+                <a href={calendarLinks.icsDataUri} download={`${interviewType}-${jobTitle}.ics`} style={buttonStyle("#44403c")}>
                   Download .ics
                 </a>
               </td>

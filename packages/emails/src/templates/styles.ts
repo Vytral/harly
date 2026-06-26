@@ -71,7 +71,7 @@ export const footer = {
 };
 
 /** Primary CTA button. Pass accentColor to override for workspace-branded emails. */
-export function buttonStyle(accentColor = HARLY_ACCENT) {
+export function buttonStyle(accentColor = GENERIC_ACCENT) {
   return {
     backgroundColor: accentColor,
     borderRadius: "8px",
@@ -107,7 +107,7 @@ export const detailValue = {
 };
 
 // Logo text fallback (initials badge)
-export const logoBadge = (accentColor = HARLY_ACCENT) => ({
+export const logoBadge = (accentColor = GENERIC_ACCENT) => ({
   backgroundColor: accentColor,
   borderRadius: "8px",
   color: "#ffffff",

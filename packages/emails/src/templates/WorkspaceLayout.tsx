@@ -132,14 +132,7 @@ export function WorkspaceLayout({
                 </table>
               )}
 
-              {/* Powered by Harly */}
-              <Text style={muted}>
-                Powered by{" "}
-                <a href="https://harly.dev" style={{ color: "#78716c", textDecoration: "underline" }}>
-                  Harly
-                </a>{" "}
-                · Open-source applicant tracking
-              </Text>
+              {/* Workspace branding only — no Harly footer for candidate-facing emails */}
             </Section>
           </Section>
         </Container>
