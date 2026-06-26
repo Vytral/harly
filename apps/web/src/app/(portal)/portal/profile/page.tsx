@@ -7,7 +7,7 @@ import { candidates, db } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { PortalShell } from "@/features/portal/PortalShellServer";
 import { PortalProfileForm } from "@/features/portal/PortalProfileForm";
-import { CandidateAvatarEdit } from "@/features/candidates/CandidateAvatarEdit";
+import { PortalAvatarEdit } from "@/features/portal/PortalAvatarEdit";
 
 export const dynamic = "force-dynamic";
 
@@ -45,9 +45,7 @@ export default async function PortalProfilePage() {
       <div className="mx-auto max-w-2xl space-y-6">
         {/* Avatar + name header */}
         <div className="flex items-center gap-5 rounded-2xl border border-zinc-200 bg-white p-6 shadow-[0_1px_3px_rgba(0,0,0,0.04)] dark:border-zinc-800 dark:bg-zinc-900">
-          <CandidateAvatarEdit
-            candidateId={session.candidateId}
-            workspaceId={session.workspaceId}
+          <PortalAvatarEdit
             name={fullName}
             avatarUrl={candidate.avatarUrl}
             className="size-16"

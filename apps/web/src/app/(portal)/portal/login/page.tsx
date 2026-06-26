@@ -1,7 +1,7 @@
 import { Suspense } from "react";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 
-import { db, organization, workspaceSettings } from "@harly/db";
+import { db, jobs, organization, workspaceSettings } from "@harly/db";
 import { PortalLoginForm } from "@/features/portal/PortalLoginForm";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +19,20 @@ async function getOrgBranding() {
     .leftJoin(workspaceSettings, eq(workspaceSettings.organizationId, organization.id))
     .orderBy(asc(organization.createdAt))
     .limit(1);
-  return row ?? { name: "Careers Portal", logo: null, tagline: null, primaryColor: null, heroImageUrl: null };
+
+  const deptRows = await db
+    .selectDistinct({ department: jobs.department })
+    .from(jobs)
+    .where(eq(jobs.status, "open"))
+    .orderBy(sql`${jobs.department} asc nulls last`)
+    .limit(6);
+
+  const departments = deptRows.map((r) => r.department).filter(Boolean) as string[];
+
+  return {
+    ...(row ?? { name: "Careers Portal", logo: null, tagline: null, primaryColor: null, heroImageUrl: null }),
+    departments,
+  };
 }
 
 export default async function PortalLoginPage() {
@@ -28,9 +41,10 @@ export default async function PortalLoginPage() {
   const hasGitHub = Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
 
   const accentColor = org.primaryColor ?? "#18181b";
+  const departments = org.departments.length > 0 ? org.departments : ["Engineering", "Design", "Product"];
 
   return (
-    <div className="flex min-h-screen flex-col bg-[#fafafa] dark:bg-zinc-950 lg:flex-row">
+    <div className="flex min-h-screen flex-col bg-background lg:flex-row">
       {/* Left panel — branding hero */}
       <div className="relative flex min-h-[220px] flex-col items-center justify-center overflow-hidden px-10 py-16 lg:min-h-screen lg:w-[46%] lg:items-start">
         {/* Background: hero image or gradient */}
@@ -87,7 +101,7 @@ export default async function PortalLoginPage() {
 
           {/* Decorative role pills */}
           <div className="mt-8 hidden flex-wrap gap-2 lg:flex">
-            {["Engineering", "Design", "Product", "Operations"].map((label) => (
+            {departments.map((label) => (
               <span
                 key={label}
                 className="rounded-full bg-white/15 px-3 py-1 text-xs font-medium text-white/80 backdrop-blur-sm"

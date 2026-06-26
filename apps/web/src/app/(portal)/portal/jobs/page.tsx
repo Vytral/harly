@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 import { desc, eq, and } from "drizzle-orm";
 import type { Route } from "next";
 
@@ -102,7 +103,7 @@ export default async function PortalJobsPage() {
         </div>
 
         {openJobs.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-zinc-200 bg-white p-12 text-center dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="rounded-2xl border border-dashed border-border bg-card p-12 text-center">
             <BriefcaseIcon className="mx-auto mb-3 size-8 text-muted-foreground/50" />
             <p className="font-medium text-foreground">No open roles right now</p>
             <p className="mt-1 text-sm text-muted-foreground">Check back soon for new opportunities.</p>
@@ -115,19 +116,17 @@ export default async function PortalJobsPage() {
                   <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
                     {dept}
                   </h2>
-                  <div className="h-px flex-1 bg-zinc-100 dark:bg-zinc-800" />
+                  <div className="h-px flex-1 bg-border" />
                   <span className="text-xs text-muted-foreground">{byDept[dept].length}</span>
                 </div>
                 <div className="space-y-2.5">
                   {byDept[dept].map((job) => {
                     const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency, job.salaryPeriod);
                     return (
-                      <a
+                      <Link
                         key={job.id}
-                        href={`/jobs/${job.slug}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="group flex items-start justify-between gap-4 rounded-xl border border-zinc-200 bg-white p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all hover:border-zinc-300 hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-zinc-700 sm:p-5"
+                        href={`/portal/jobs/${job.id}` as Route}
+                        className="group flex items-start justify-between gap-4 rounded-xl border border-border bg-card p-4 shadow-[0_1px_3px_rgba(0,0,0,0.04)] transition-all hover:border-border hover:shadow-md sm:p-5"
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -158,12 +157,12 @@ export default async function PortalJobsPage() {
                         </div>
                         <div className="shrink-0">
                           {job.workplaceType && (
-                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${WORKPLACE_COLORS[job.workplaceType] ?? "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"}`}>
+                            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${WORKPLACE_COLORS[job.workplaceType] ?? "bg-muted text-muted-foreground"}`}>
                               {WORKPLACE_LABELS[job.workplaceType] ?? job.workplaceType}
                             </span>
                           )}
                         </div>
-                      </a>
+                      </Link>
                     );
                   })}
                 </div>

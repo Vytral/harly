@@ -31,7 +31,7 @@ const STATUS_STYLES = {
   active: "bg-blue-50 text-blue-700 ring-blue-200/60 dark:bg-blue-950/50 dark:text-blue-400 dark:ring-blue-800/40",
   hired: "bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/50 dark:text-emerald-400 dark:ring-emerald-800/40",
   rejected: "bg-red-50 text-red-600 ring-red-200/60 dark:bg-red-950/50 dark:text-red-400 dark:ring-red-800/40",
-  withdrawn: "bg-zinc-100 text-zinc-500 ring-zinc-200/60 dark:bg-zinc-800 dark:text-zinc-400 dark:ring-zinc-700",
+  withdrawn: "bg-muted text-muted-foreground ring-border",
 } as const;
 
 const STATUS_LABELS = {
@@ -144,7 +144,7 @@ export default async function PortalDashboardPage() {
 
       {appRows.length === 0 ? (
         /* ── Empty state ── */
-        <div className="rounded-2xl border border-dashed border-zinc-200 bg-white p-10 text-center dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
           <BriefcaseIcon className="mx-auto mb-3 size-8 text-muted-foreground/50" />
           <p className="text-sm font-medium text-muted-foreground">No applications yet</p>
           <p className="mt-1 text-xs text-muted-foreground/70">
@@ -167,7 +167,13 @@ export default async function PortalDashboardPage() {
                 {session.firstName} {session.lastName}
               </h2>
               <p className="mt-0.5 text-sm text-muted-foreground">
-                For <span className="font-medium text-foreground">{primaryApp.jobTitle}</span>
+                For{" "}
+                <Link
+                  href={`/portal/applications/${primaryApp.id}` as Route}
+                  className="font-medium text-foreground underline-offset-2 hover:underline"
+                >
+                  {primaryApp.jobTitle}
+                </Link>
               </p>
             </div>
           )}
@@ -180,7 +186,7 @@ export default async function PortalDashboardPage() {
               {primaryApp && showPipeline && (stagesByJob.get(primaryApp.jobId) ?? []).length > 0 && (
                 <section>
                   <h3 className="mb-3 text-sm font-semibold text-foreground">Interview plan</h3>
-                  <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+                  <div className="overflow-hidden rounded-xl border border-border bg-card">
                     <InterviewPlanSidebar
                       app={primaryApp}
                       stages={stagesByJob.get(primaryApp.jobId) ?? []}
@@ -197,7 +203,7 @@ export default async function PortalDashboardPage() {
                     {teamMembers.map((m, i) => (
                       <div
                         key={`${m.name}-${i}`}
-                        className="flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900"
+                        className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
                       >
                         {m.image ? (
                           <img
@@ -240,9 +246,10 @@ export default async function PortalDashboardPage() {
                       const currentIdx = stages.findIndex((s) => s.id === row.currentStageId);
                       const isTerminal = row.status === "rejected" || row.status === "withdrawn";
                       return (
-                        <div
+                        <Link
                           key={row.id}
-                          className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
+                          href={`/portal/applications/${row.id}` as Route}
+                          className="block rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/50"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
@@ -264,25 +271,25 @@ export default async function PortalDashboardPage() {
                                       "flex size-4 shrink-0 items-center justify-center rounded-full",
                                       completed && "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400",
                                       isCurrent && "bg-blue-100 text-blue-600 dark:bg-blue-950 dark:text-blue-400",
-                                      !completed && !isCurrent && "bg-zinc-100 dark:bg-zinc-800",
+                                      !completed && !isCurrent && "bg-muted",
                                     )}>
                                       {completed ? (
                                         <CheckCircleIcon className="size-3" />
                                       ) : isCurrent ? (
                                         <div className="size-1.5 rounded-full bg-blue-600 dark:bg-blue-400" />
                                       ) : (
-                                        <div className="size-1.5 rounded-full bg-zinc-300 dark:bg-zinc-600" />
+                                        <div className="size-1.5 rounded-full bg-muted-foreground/30" />
                                       )}
                                     </div>
                                     {i < stages.length - 1 && (
-                                      <div className={cn("h-px w-4 shrink-0", completed ? "bg-emerald-200 dark:bg-emerald-800" : "bg-zinc-200 dark:bg-zinc-700")} />
+                                      <div className={cn("h-px w-4 shrink-0", completed ? "bg-emerald-200 dark:bg-emerald-800" : "bg-border")} />
                                     )}
                                   </div>
                                 );
                               })}
                             </div>
                           )}
-                        </div>
+                        </Link>
                       );
                     })}
                   </div>
@@ -292,7 +299,7 @@ export default async function PortalDashboardPage() {
               {/* Company info */}
               {(settings?.description || settings?.websiteUrl) && (
                 <section>
-                  <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
+                  <div className="overflow-hidden rounded-xl border border-border bg-card">
                     <div className="p-5">
                       <h3 className="mb-2 text-sm font-semibold text-foreground">
                         About the company
@@ -350,7 +357,7 @@ function InterviewPlanSidebar({
                 "flex size-5 shrink-0 items-center justify-center rounded-full",
                 completed && "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400",
                 isCurrent && "bg-blue-100 text-blue-600 ring-2 ring-blue-200 ring-offset-1 dark:bg-blue-950 dark:text-blue-400 dark:ring-blue-800 dark:ring-offset-zinc-900",
-                !completed && !isCurrent && "bg-zinc-100 text-zinc-400 dark:bg-zinc-800 dark:text-zinc-500",
+                !completed && !isCurrent && "bg-muted text-muted-foreground",
                 isTerminal && isCurrent && "bg-red-50 text-red-400 ring-2 ring-red-200 ring-offset-1 dark:bg-red-950 dark:text-red-400 dark:ring-red-800",
               )}>
                 {completed ? (
@@ -363,7 +370,7 @@ function InterviewPlanSidebar({
               </div>
               {!isLast && (
                 <div
-                  className={cn("my-0.5 w-px flex-1", completed ? "bg-emerald-200 dark:bg-emerald-800" : "bg-zinc-200 dark:bg-zinc-700")}
+                  className={cn("my-0.5 w-px flex-1", completed ? "bg-emerald-200 dark:bg-emerald-800" : "bg-border")}
                   style={{ minHeight: 16 }}
                 />
               )}

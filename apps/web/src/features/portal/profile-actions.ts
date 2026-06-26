@@ -1,61 +1,95 @@
 "use server";
 
 import { cookies } from "next/headers";
-import { eq, and } from "drizzle-orm";
-import { z } from "zod";
+import { and, eq } from "drizzle-orm";
 
 import { candidates, db } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 
-const profileSchema = z.object({
-  firstName: z.string().trim().min(1).max(100),
-  lastName: z.string().trim().max(100).optional().default(""),
-  headline: z.string().trim().max(200).optional().nullable(),
-  phone: z.string().trim().max(30).optional().nullable(),
-  location: z.string().trim().max(100).optional().nullable(),
-  linkedinUrl: z.string().trim().url().max(500).optional().nullable().or(z.literal("")),
-  githubUrl: z.string().trim().url().max(500).optional().nullable().or(z.literal("")),
-  websiteUrl: z.string().trim().url().max(500).optional().nullable().or(z.literal("")),
-});
-
-export type UpdateProfileResult = { ok: true } | { ok: false; error: string };
+type ProfileData = {
+  firstName: string;
+  lastName: string | null;
+  phone: string | null;
+  location: string | null;
+  linkedinUrl: string | null;
+  githubUrl: string | null;
+  websiteUrl: string | null;
+  headline: string | null;
+};
 
 export async function updatePortalProfileAction(
-  input: unknown,
-): Promise<UpdateProfileResult> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
-  if (!token) return { ok: false, error: "Not signed in." };
+  profile: ProfileData,
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
+    if (!token) return { ok: false, error: "Unauthorized." };
 
-  const session = await resolvePortalSession(token);
-  if (!session) return { ok: false, error: "Session expired." };
+    const session = await resolvePortalSession(token);
+    if (!session) return { ok: false, error: "Unauthorized." };
 
-  const parsed = profileSchema.safeParse(input);
-  if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    const [candidate] = await db
+      .update(candidates)
+      .set({
+        firstName: profile.firstName,
+        lastName: profile.lastName ?? "",
+        phone: profile.phone,
+        location: profile.location,
+        linkedinUrl: profile.linkedinUrl,
+        githubUrl: profile.githubUrl,
+        websiteUrl: profile.websiteUrl,
+        headline: profile.headline,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(candidates.id, session.candidateId),
+          eq(candidates.workspaceId, session.workspaceId),
+        ),
+      )
+      .returning({ id: candidates.id });
+
+    if (!candidate) {
+      return { ok: false, error: "Candidate not found." };
+    }
+
+    return { ok: true };
+  } catch {
+    return { ok: false, error: "Unable to update profile." };
   }
+}
 
-  const d = parsed.data;
+export async function updatePortalCandidateAvatarAction(input: {
+  avatarUrl: string | null;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
+    if (!token) return { success: false, error: "Unauthorized." };
 
-  await db
-    .update(candidates)
-    .set({
-      firstName: d.firstName,
-      lastName: d.lastName,
-      headline: d.headline || null,
-      phone: d.phone || null,
-      location: d.location || null,
-      linkedinUrl: d.linkedinUrl || null,
-      githubUrl: d.githubUrl || null,
-      websiteUrl: d.websiteUrl || null,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(candidates.id, session.candidateId),
-        eq(candidates.workspaceId, session.workspaceId),
-      ),
-    );
+    const session = await resolvePortalSession(token);
+    if (!session) return { success: false, error: "Unauthorized." };
 
-  return { ok: true };
+    const [candidate] = await db
+      .update(candidates)
+      .set({
+        avatarUrl: input.avatarUrl,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(candidates.id, session.candidateId),
+          eq(candidates.workspaceId, session.workspaceId),
+        ),
+      )
+      .returning({ id: candidates.id });
+
+    if (!candidate) {
+      return { success: false, error: "Candidate not found." };
+    }
+
+    return { success: true };
+  } catch {
+    return { success: false, error: "Unable to update avatar." };
+  }
 }

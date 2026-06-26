@@ -10,7 +10,8 @@ import { cn } from "@/lib/utils";
 import {
   HouseIcon,
   UserCircleIcon,
-  SignOutIcon,
+  BriefcaseIcon,
+  BellIcon,
   CaretDownIcon,
   HamburgerIcon,
   XIcon,
@@ -32,6 +33,8 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/portal/dashboard" as Route, label: "Home", icon: HouseIcon, match: "/portal/dashboard" },
+  { href: "/portal/jobs" as Route, label: "Jobs", icon: BriefcaseIcon, match: "/portal/jobs" },
+  { href: "/portal/notifications" as Route, label: "Notifications", icon: BellIcon, match: "/portal/notifications" },
   { href: "/portal/profile" as Route, label: "Profile", icon: UserCircleIcon, match: "/portal/profile" },
 ];
 
@@ -65,9 +68,9 @@ export function PortalShellClient({
   const accentColor = orgColor ?? "#18181b";
 
   return (
-    <div className="min-h-screen bg-[#fafafa] dark:bg-zinc-950">
+    <div className="min-h-screen bg-background">
       {/* ── Top Navigation ── */}
-      <header className="sticky top-0 z-30 border-b border-black/[0.06] bg-white/95 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/95">
+      <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur-sm">
         <div className="mx-auto flex h-14 max-w-5xl items-center justify-between gap-4 px-4 sm:px-6">
           {/* Left: Org logo + name */}
           <Link
@@ -127,7 +130,7 @@ export function PortalShellClient({
                     "relative flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors",
                     active
                       ? "text-foreground"
-                      : "text-muted-foreground hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.06]",
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground",
                   )}
                 >
                   <item.icon className="size-4" />
@@ -143,7 +146,7 @@ export function PortalShellClient({
           {/* Right: User menu */}
           <div className="flex items-center gap-2">
             <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.06]">
+              <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-muted">
                 {candidateAvatarUrl ? (
                   <img
                     src={candidateAvatarUrl}
@@ -182,7 +185,7 @@ export function PortalShellClient({
             <button
               type="button"
               onClick={() => setMobileOpen(!mobileOpen)}
-              className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.06] sm:hidden"
+              className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted sm:hidden"
             >
               {mobileOpen ? <XIcon className="size-5" /> : <HamburgerIcon className="size-5" />}
             </button>
@@ -190,8 +193,11 @@ export function PortalShellClient({
         </div>
 
         {/* Mobile nav drawer */}
-        {mobileOpen && (
-          <nav className="border-t border-black/[0.06] bg-white px-4 pb-3 pt-2 dark:border-zinc-800 dark:bg-zinc-900 sm:hidden">
+        <div className={cn(
+          "border-t border-border bg-background overflow-hidden transition-all duration-200 ease-in-out sm:hidden",
+          mobileOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0 border-t-0",
+        )}>
+          <nav className="px-4 pb-3 pt-2">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.match || pathname.startsWith(item.match + "/");
               return (
@@ -202,8 +208,8 @@ export function PortalShellClient({
                   className={cn(
                     "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
                     active
-                      ? "bg-foreground/[0.06] text-foreground"
-                      : "text-muted-foreground hover:bg-black/[0.04] dark:hover:bg-white/[0.06]",
+                      ? "bg-muted text-foreground"
+                      : "text-muted-foreground hover:bg-muted",
                   )}
                 >
                   <item.icon className="size-4" />
@@ -212,16 +218,14 @@ export function PortalShellClient({
               );
             })}
           </nav>
-        )}
+        </div>
       </header>
-
-      {/* ── Main Content ── */}
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
         {children}
       </main>
 
       {/* ── Footer ── */}
-      <footer className="border-t border-black/[0.06] bg-white/60 py-4 text-center dark:border-zinc-800 dark:bg-zinc-900/60">
+      <footer className="border-t border-border bg-background/60 py-4 text-center">
         <p className="text-xs text-muted-foreground">
           Powered by{" "}
           <span className="font-medium text-foreground">Harly</span>

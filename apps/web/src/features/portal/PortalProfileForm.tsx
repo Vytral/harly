@@ -33,27 +33,27 @@ function Field({
     <div className="space-y-1.5">
       <label
         htmlFor={id}
-        className="block text-xs font-medium text-zinc-500 dark:text-zinc-400"
+        className="block text-xs font-medium text-muted-foreground"
       >
         {label}
       </label>
       {children}
-      {hint && <p className="text-[11px] text-zinc-400 dark:text-zinc-600">{hint}</p>}
+      {hint && <p className="text-[11px] text-muted-foreground">{hint}</p>}
     </div>
   );
 }
 
 const inputClass = cn(
-  "h-10 w-full rounded-lg border border-zinc-200 dark:border-zinc-700",
-  "bg-white dark:bg-zinc-800/60 px-3.5 text-sm text-zinc-900 dark:text-zinc-100",
-  "placeholder:text-zinc-400 dark:placeholder:text-zinc-600",
-  "outline-none focus:ring-2 focus:ring-zinc-900/20 dark:focus:ring-zinc-400/20 focus:border-zinc-400 dark:focus:border-zinc-500",
+  "h-10 w-full rounded-lg border border-border",
+  "bg-card px-3.5 text-sm text-foreground",
+  "placeholder:text-muted-foreground",
+  "outline-none focus:ring-2 focus:ring-ring focus:border-transparent",
   "transition-colors",
 );
 
 const readonlyClass = cn(
-  "flex h-10 w-full items-center rounded-lg border border-zinc-100 dark:border-zinc-800",
-  "bg-zinc-50 dark:bg-zinc-900 px-3.5 text-sm text-zinc-400 dark:text-zinc-600",
+  "flex h-10 w-full items-center rounded-lg border border-border",
+  "bg-muted px-3.5 text-sm text-muted-foreground",
   "cursor-not-allowed select-none",
 );
 
@@ -133,7 +133,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
     <form onSubmit={save} className="space-y-6">
       {/* Basic info */}
       <fieldset className="space-y-4">
-        <legend className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+        <legend className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Basic info
         </legend>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -163,7 +163,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
         <Field label="Headline" id="headline">
           <div className="relative">
             <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-              <IdentificationIcon className="size-4 text-zinc-400" />
+              <IdentificationIcon className="size-4 text-muted-foreground" />
             </div>
             <input
               id="headline"
@@ -179,7 +179,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
           <Field label="Phone" id="phone">
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                <PhoneIcon className="size-4 text-zinc-400" />
+                <PhoneIcon className="size-4 text-muted-foreground" />
               </div>
               <input
                 id="phone"
@@ -194,7 +194,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
           <Field label="Location" id="location">
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                <MapPinIcon className="size-4 text-zinc-400" />
+                <MapPinIcon className="size-4 text-muted-foreground" />
               </div>
               <input
                 id="location"
@@ -208,11 +208,11 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
         </div>
       </fieldset>
 
-      <div className="h-px bg-zinc-100 dark:bg-zinc-800" />
+      <div className="h-px bg-border" />
 
       {/* Online profiles */}
       <fieldset className="space-y-4">
-        <legend className="text-xs font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">
+        <legend className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
           Online profiles
         </legend>
 
@@ -236,7 +236,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
           <Field label="GitHub" id="github">
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                <GitHubIcon className="size-4 text-zinc-800 dark:text-zinc-200" />
+                <GitHubIcon className="size-4 text-foreground" />
               </div>
               <input
                 id="github"
@@ -251,7 +251,7 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
           <Field label="Website" id="website">
             <div className="relative">
               <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
-                <GlobeIcon className="size-4 text-zinc-400" />
+                <GlobeIcon className="size-4 text-muted-foreground" />
               </div>
               <input
                 id="website"
@@ -271,8 +271,8 @@ export function PortalProfileForm({ profile }: { profile: ProfileData }) {
           type="submit"
           disabled={isPending}
           className={cn(
-            "rounded-lg bg-zinc-900 dark:bg-zinc-100 px-5 py-2.5 text-sm font-semibold text-white dark:text-zinc-900",
-            "transition-all duration-150 hover:bg-zinc-700 dark:hover:bg-zinc-300",
+            "rounded-lg bg-foreground px-5 py-2.5 text-sm font-semibold text-background",
+            "transition-all duration-150 hover:bg-foreground/90",
             "active:scale-[0.97]",
             "disabled:opacity-40 disabled:cursor-not-allowed disabled:active:scale-100",
           )}
