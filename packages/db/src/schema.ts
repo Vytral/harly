@@ -226,6 +226,7 @@ export const organization = pgTable(
     name: text("name").notNull(),
     slug: text("slug").notNull().unique(),
     logo: text("logo"),
+    logoEmail: text("logo_email"), // PNG/JPG/WebP version for email compatibility
     createdAt: timestamp("created_at").notNull(),
     metadata: text("metadata"),
   },

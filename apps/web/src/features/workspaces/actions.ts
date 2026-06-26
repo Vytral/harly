@@ -255,6 +255,24 @@ export async function updateWorkspaceProfileAction(
         logo: parsed.data.logoUrl || null,
       })
       .where(eq(authOrganizations.id, context.organization.id));
+
+    // Convert logo for email compatibility if a new logo was uploaded
+    if (parsed.data.logoUrl) {
+      try {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+        await fetch(`${appUrl}/api/logo/convert`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            logoUrl: parsed.data.logoUrl,
+            organizationId: context.organization.id,
+          }),
+        });
+      } catch (error) {
+        // Log but don't fail the profile update
+        console.error("[Workspace] Failed to convert logo for email:", error);
+      }
+    }
     
     await db
       .insert(workspaceSettings)
