@@ -24,6 +24,7 @@ export type WorkspaceMemberOption = {
   userId: string;
   name: string;
   email: string;
+  image: string | null;
 };
 
 export async function listJobHiringTeam(
@@ -58,6 +59,7 @@ export async function listWorkspaceMembers(): Promise<WorkspaceMemberOption[]> {
       userId: authMembers.userId,
       name: authUsers.name,
       email: authUsers.email,
+      image: authUsers.image,
     })
     .from(authMembers)
     .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))

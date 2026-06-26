@@ -588,3 +588,203 @@ export async function rescheduleInterview(input: {
     };
   }
 }
+
+const updateSchema = z.object({
+  interviewId: z.string().min(1),
+  candidateId: z.string().min(1),
+  type: z.enum(interviewTypes).optional(),
+  mode: z.enum(interviewModes).optional(),
+  scheduledAt: z
+    .string()
+    .refine((value) => value === "" || !Number.isNaN(Date.parse(value)), "Invalid date/time.")
+    .optional(),
+  durationMins: z.coerce.number().int().min(5).max(480).optional(),
+  interviewerId: z
+    .string()
+    .trim()
+    .transform((value) => (value.length > 0 ? value : null))
+    .nullable()
+    .optional(),
+  title: z
+    .string()
+    .trim()
+    .max(120)
+    .transform((value) => (value.length > 0 ? value : null))
+    .nullable()
+    .optional(),
+  location: z
+    .string()
+    .trim()
+    .max(500)
+    .transform((value) => (value.length > 0 ? value : null))
+    .nullable()
+    .optional(),
+  notes: z
+    .string()
+    .trim()
+    .max(5000)
+    .transform((value) => (value.length > 0 ? value : null))
+    .nullable()
+    .optional(),
+});
+
+/**
+ * Full edit: update any combination of interview fields. Syncs to GCal and
+ * sends a rescheduled email when the date/time changes.
+ */
+export async function updateInterview(input: {
+  interviewId: string;
+  candidateId: string;
+  type?: "screening" | "culture_fit" | "technical" | "onsite" | "final";
+  mode?: "video" | "phone" | "onsite";
+  scheduledAt?: string;
+  durationMins?: number;
+  interviewerId?: string | null;
+  title?: string | null;
+  location?: string | null;
+  notes?: string | null;
+}): Promise<{ success: boolean; error?: string }> {
+  try {
+    const parsed = updateSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      };
+    }
+
+    const { organization: workspace } = await getWorkspaceContext();
+    const data = parsed.data;
+
+    // Build the update payload — only set fields that were explicitly provided.
+    const set: Record<string, unknown> = { updatedAt: new Date() };
+    if (data.type !== undefined) set.type = data.type;
+    if (data.mode !== undefined) set.mode = data.mode;
+    if (data.title !== undefined) set.title = data.title;
+    if (data.interviewerId !== undefined) set.interviewerId = data.interviewerId;
+    if (data.location !== undefined) set.location = data.location;
+    if (data.notes !== undefined) set.notes = data.notes;
+    if (data.durationMins !== undefined) set.durationMins = data.durationMins;
+    if (data.scheduledAt !== undefined && data.scheduledAt !== "") {
+      set.scheduledAt = new Date(data.scheduledAt);
+    }
+
+    const updated = await db
+      .update(interviews)
+      .set(set)
+      .where(
+        and(
+          eq(interviews.id, data.interviewId),
+          eq(interviews.workspaceId, workspace.id),
+        ),
+      )
+      .returning({
+        id: interviews.id,
+        gcalEventId: interviews.gcalEventId,
+        scheduledAt: interviews.scheduledAt,
+        type: interviews.type,
+        mode: interviews.mode,
+      });
+
+    if (updated.length === 0) {
+      return { success: false, error: "Interview not found." };
+    }
+
+    const row = updated[0];
+
+    // Fetch full context for GCal sync and email.
+    const [info] = await db
+      .select({
+        email: candidates.email,
+        firstName: candidates.firstName,
+        companyName: organization.name,
+        jobTitle: jobs.title,
+        interviewerId: interviews.interviewerId,
+        scheduledAt: interviews.scheduledAt,
+      })
+      .from(interviews)
+      .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
+      .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+      .innerJoin(organization, eq(organization.id, interviews.workspaceId))
+      .where(
+        and(
+          eq(interviews.id, data.interviewId),
+          eq(interviews.workspaceId, workspace.id),
+        ),
+      )
+      .limit(1);
+
+    // Resolve attendee emails for GCal invitations.
+    let interviewerEmail: string | undefined;
+    if (info?.interviewerId) {
+      const [interviewer] = await db
+        .select({ email: authUsers.email })
+        .from(authUsers)
+        .where(eq(authUsers.id, info.interviewerId))
+        .limit(1);
+      interviewerEmail = interviewer?.email ?? undefined;
+    }
+    const attendees = [info?.email, interviewerEmail].filter(
+      (e): e is string => Boolean(e),
+    );
+
+    // Sync to Google Calendar if the event was previously synced.
+    if (row?.gcalEventId) {
+      void updateInterviewGCalEvent({
+        workspaceId: workspace.id,
+        gcalEventId: row.gcalEventId,
+        start: info?.scheduledAt ?? new Date(),
+        durationMins: data.durationMins ?? 45,
+        attendees: attendees.length > 0 ? attendees : undefined,
+        location: data.location ?? undefined,
+      });
+    }
+
+    // Send rescheduled email if date/time changed.
+    if (data.scheduledAt && data.scheduledAt !== "" && info?.email) {
+      const when = new Date(data.scheduledAt);
+      const branding = await getWorkspaceEmailBranding(workspace.id);
+      void sendWorkspaceEmail(workspace.id, {
+        to: info.email,
+        subject: interviewRescheduledSubject({
+          companyName: info.companyName,
+          jobTitle: info.jobTitle,
+        }),
+        react: createElement(InterviewRescheduled, {
+          candidateName: info.firstName,
+          companyName: info.companyName,
+          companyLogoUrl: branding.logoUrl ?? undefined,
+          accentColor: branding.primaryColor ?? undefined,
+          socialLinks: branding.socialLinks,
+          jobTitle: info.jobTitle,
+          interviewType: INTERVIEW_TYPE_LABEL[data.type ?? row?.type ?? "screening"] ?? "Interview",
+          when: interviewWhenFormatter.format(when),
+          mode: INTERVIEW_MODE_LABEL[data.mode ?? row?.mode ?? "video"] ?? "Video call",
+          location: data.location ?? undefined,
+          duration: data.durationMins ? `${data.durationMins} min` : undefined,
+          startIso: when.toISOString(),
+          durationMins: data.durationMins ?? 45,
+        }),
+      });
+    }
+
+    revalidatePath(`/dashboard/candidates/${data.candidateId}`);
+    revalidatePath("/dashboard");
+    revalidatePath("/dashboard/calendars");
+
+    void emitWebhookEvent(workspace.id, "interview.rescheduled", {
+      interviewId: data.interviewId,
+      candidateId: data.candidateId,
+      scheduledAt: info?.scheduledAt?.toISOString(),
+      durationMins: data.durationMins,
+      location: data.location,
+    });
+
+    return { success: true };
+  } catch {
+    return {
+      success: false,
+      error: "Unable to update interview.",
+    };
+  }
+}

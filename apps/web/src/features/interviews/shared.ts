@@ -23,7 +23,9 @@ export type CandidateInterviewItem = {
   title: string | null;
   location: string | null;
   notes: string | null;
+  interviewerId: string | null;
   interviewerName: string | null;
+  interviewerImage: string | null;
   jobTitle: string;
   gcalEventId: string | null;
 };

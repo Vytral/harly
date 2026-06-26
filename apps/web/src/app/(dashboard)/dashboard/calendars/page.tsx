@@ -7,6 +7,7 @@ import {
 } from "@/features/interviews/shared";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 
 const MODE_ICON = {
   video: Video,
@@ -101,7 +102,13 @@ export default async function CalendarsPage() {
                               {iv.jobTitle}
                             </span>
                             {iv.interviewerName ? (
-                              <span className="rounded-full bg-muted px-2 py-0.5">
+                              <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2 py-0.5">
+                                <UserAvatar
+                                  name={iv.interviewerName}
+                                  src={iv.interviewerImage}
+                                  size="sm"
+                                  className="size-4 text-[9px]"
+                                />
                                 {iv.interviewerName}
                               </span>
                             ) : null}

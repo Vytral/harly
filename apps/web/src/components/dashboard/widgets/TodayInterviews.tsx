@@ -44,6 +44,7 @@ export function TodayInterviews({
                     <span className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                       <UserAvatar
                         name={iv.interviewer}
+                        src={iv.interviewerImage}
                         size="sm"
                         className="size-5 text-[10px]"
                       />

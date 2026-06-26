@@ -332,6 +332,7 @@ export default async function CandidateDetailPage({
               enabled: calStatus.enabled,
               bookingUrl: calStatus.bookingUrl,
             }}
+            currentUserId={workspaceContext.user.id}
             aiConfigured={
               aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
             }

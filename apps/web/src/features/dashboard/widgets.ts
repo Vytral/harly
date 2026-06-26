@@ -145,6 +145,7 @@ export const getTodayInterviews = cache(async () => {
       last: candidates.lastName,
       jobTitle: jobs.title,
       interviewer: user.name,
+      interviewerImage: user.image,
       gcalEventId: interviews.gcalEventId,
     })
     .from(interviews)
@@ -177,6 +178,7 @@ export const getTodayInterviews = cache(async () => {
     candidate: `${r.first} ${r.last}`,
     job: r.jobTitle,
     interviewer: r.interviewer ?? null,
+    interviewerImage: r.interviewerImage ?? null,
     gcalEventId: r.gcalEventId,
   }));
 });

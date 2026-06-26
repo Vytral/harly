@@ -11,10 +11,12 @@ import {
   Check,
   ClipboardCheck,
   ExternalLink,
+  FileText,
   Mail,
   MapPin,
   MessageSquare,
   Minus,
+  Pencil,
   Phone,
   Plus,
   ThumbsDown,
@@ -26,17 +28,17 @@ import { toast } from "sonner";
 
 import { AiScoreCard } from "@/features/candidates/AiScoreCard";
 import { CandidateFileUpload } from "@/features/candidates/CandidateFileUpload";
+import { EditInterviewDialog } from "@/features/candidates/EditInterviewDialog";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
 import {
-  ScheduleDrawer,
+  ScheduleDialog,
   type ScheduleApplicationOption,
   type ScheduleCalConfig,
   type ScheduleMemberOption,
-} from "@/features/candidates/ScheduleDrawer";
+} from "@/features/candidates/ScheduleDialog";
 import { OffersPanel } from "@/features/offers/OffersPanel";
 import type { CandidateOfferItem } from "@/features/offers/shared";
 import { NoteForm } from "@/features/candidates/NoteForm";
-import { RescheduleDrawer } from "@/features/candidates/RescheduleDrawer";
 import { EmailDrawer, type EmailTemplateOption } from "@/features/candidates/EmailDrawer";
 import type { TemplateValues } from "@/features/email-templates/interpolate";
 import { setInterviewStatus } from "@/features/interviews/actions";
@@ -56,7 +58,18 @@ import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ShortDate, RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
@@ -125,6 +138,7 @@ type CandidateProfileTabsProps = {
   scheduleApplications: ScheduleApplicationOption[];
   scheduleMembers: ScheduleMemberOption[];
   scheduleCal: ScheduleCalConfig;
+  currentUserId?: string;
 };
 
 const INTERVIEW_MODE_ICON = {
@@ -214,6 +228,7 @@ export function CandidateProfileTabs({
   scheduleApplications,
   scheduleMembers,
   scheduleCal,
+  currentUserId,
 }: CandidateProfileTabsProps) {
   return (
     <Tabs defaultValue="profile">
@@ -320,7 +335,7 @@ export function CandidateProfileTabs({
       {/* ── Interviews ── */}
       <TabsContent value="interviews" className="mt-4 space-y-3">
         <div className="flex justify-end">
-          <ScheduleDrawer
+          <ScheduleDialog
             candidateId={candidateId}
             workspaceId={workspaceId}
             candidateName={candidateName}
@@ -328,6 +343,7 @@ export function CandidateProfileTabs({
             applications={scheduleApplications}
             members={scheduleMembers}
             cal={scheduleCal}
+            currentUserId={currentUserId}
             trigger={
               <Button size="sm">
                 <Plus className="size-4" />
@@ -348,6 +364,8 @@ export function CandidateProfileTabs({
               interview={interview}
               candidateId={candidateId}
               workspaceId={workspaceId}
+              members={scheduleMembers}
+              currentUserId={currentUserId}
             />
           ))
         )}
@@ -530,10 +548,14 @@ function InterviewCard({
   interview,
   candidateId,
   workspaceId,
+  members,
+  currentUserId,
 }: {
   interview: CandidateInterviewItem;
   candidateId: string;
   workspaceId: string;
+  members: ScheduleMemberOption[];
+  currentUserId?: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -559,7 +581,8 @@ function InterviewCard({
 
   return (
     <Card className={cn(isPast && "opacity-80")}>
-      <CardContent className="space-y-2.5">
+      <CardContent className="space-y-3">
+        {/* Title row: title left, status + edit right */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <p className="font-medium">
@@ -570,101 +593,157 @@ function InterviewCard({
               {interview.durationMins} min
             </p>
           </div>
-          <Badge variant={statusMeta.variant} className="shrink-0">
-            {statusMeta.label}
-          </Badge>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1">
-            <ModeIcon className="size-3.5" strokeWidth={1.8} />
-            {interviewModeLabel(interview.mode)}
-          </span>
-          <span className="rounded-full bg-muted px-2.5 py-1">
-            {interviewTypeLabel(interview.type)}
-          </span>
-          <span className="rounded-full bg-muted px-2.5 py-1">{interview.jobTitle}</span>
-          {interview.interviewerName ? (
-            <span className="rounded-full bg-muted px-2.5 py-1">
-              {interview.interviewerName}
-            </span>
-          ) : null}
-        </div>
-
-        {interview.location ? (
-          <p className="truncate text-sm text-foreground/90">{interview.location}</p>
-        ) : null}
-        {interview.notes ? (
-          <p className="whitespace-pre-line text-sm text-muted-foreground">
-            {interview.notes}
-          </p>
-        ) : null}
-
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          {interview.status === "scheduled" ? (
-            <>
-              <RescheduleDrawer
-                interviewId={interview.id}
+          <div className="flex items-center gap-2 shrink-0">
+            {interview.status === "scheduled" ? (
+              <EditInterviewDialog
+                interview={interview}
                 candidateId={candidateId}
-                currentScheduledAt={interview.scheduledAt}
-                currentDurationMins={interview.durationMins}
-                currentLocation={interview.location}
+                members={members}
+                currentUserId={currentUserId}
                 trigger={
-                  <Button size="sm" variant="outline" disabled={isPending}>
-                    <CalendarClock className="size-4" />
-                    Reschedule
+                  <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground">
+                    <Pencil className="size-4" />
                   </Button>
                 }
               />
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isPending}
-                onClick={() => update("completed")}
-              >
-                <Check className="size-4" />
-                Mark complete
+            ) : null}
+            <Badge variant={statusMeta.variant}>
+              {statusMeta.label}
+            </Badge>
+          </div>
+        </div>
+
+        {/* Mode pill */}
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-muted px-2.5 py-1 text-xs text-muted-foreground w-fit">
+          <ModeIcon className="size-3.5" strokeWidth={1.8} />
+          {interviewModeLabel(interview.mode)}
+        </span>
+
+        {/* Location */}
+        {interview.location ? (
+          <div className="flex items-center gap-2 text-sm text-foreground/90">
+            <MapPin className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
+            <span className="truncate">{interview.location}</span>
+          </div>
+        ) : null}
+
+        {/* Notes */}
+        {interview.notes ? (
+          <div className="flex items-start gap-2 text-sm text-muted-foreground">
+            <FileText className="size-4 shrink-0 mt-0.5" strokeWidth={1.8} />
+            <span className="whitespace-pre-line">{interview.notes}</span>
+          </div>
+        ) : null}
+
+        {/* Interviewer */}
+        {interview.interviewerName ? (
+          <div className="flex items-center gap-2.5">
+            <UserAvatar
+              name={interview.interviewerName}
+              src={interview.interviewerImage}
+              size="sm"
+              className="size-7 text-[11px]"
+            />
+            <span className="text-sm font-medium">{interview.interviewerName}</span>
+          </div>
+        ) : null}
+
+        {/* Separator + actions */}
+        <div className="border-t pt-3">
+          <div className="flex flex-wrap items-center gap-2">
+            {interview.status === "scheduled" ? (
+              <>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button size="sm" variant="outline" disabled={isPending}>
+                      <Check className="size-4" />
+                      Mark complete
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Mark interview as complete?</DialogTitle>
+                      <DialogDescription>
+                        This will mark the interview with {interview.interviewerName ?? "the interviewer"} as completed.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="outline" disabled={isPending}>Cancel</Button>
+                      </DialogClose>
+                      <DialogClose asChild>
+                        <Button disabled={isPending} onClick={() => update("completed")}>
+                          {isPending ? "Saving…" : "Confirm"}
+                        </Button>
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-muted-foreground"
+                      disabled={isPending}
+                    >
+                      <X className="size-4" />
+                      Cancel
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Cancel this interview?</DialogTitle>
+                      <DialogDescription>
+                        The candidate will be notified. This action cannot be undone.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose asChild>
+                        <Button variant="outline" disabled={isPending}>Go back</Button>
+                      </DialogClose>
+                      <DialogClose asChild>
+                        <Button variant="destructive" disabled={isPending} onClick={() => update("canceled")}>
+                          {isPending ? "Canceling…" : "Yes, cancel interview"}
+                        </Button>
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </>
+            ) : null}
+            {interview.gcalEventId ? (
+              <Button asChild size="sm" variant="ghost" className="text-muted-foreground">
+                <a
+                  href={`https://calendar.google.com/calendar/r/search?q=${encodeURIComponent(interview.gcalEventId)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <ExternalLink className="size-4" />
+                  Google Calendar
+                </a>
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="text-muted-foreground"
-                disabled={isPending}
-                onClick={() => update("canceled")}
-              >
-                <X className="size-4" />
-                Cancel
-              </Button>
-            </>
-          ) : null}
-          {interview.gcalEventId ? (
-            <Button asChild size="sm" variant="ghost" className="text-muted-foreground">
-              <a
-                href={`https://calendar.google.com/calendar/r/search?q=${encodeURIComponent(interview.gcalEventId)}`}
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <ExternalLink className="size-4" />
-                View in Google Calendar
-              </a>
-            </Button>
-          ) : interview.status === "scheduled" ? (
-            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-              <span className="size-1.5 rounded-full bg-amber-400" />
-              Not synced to GCal
-            </span>
-          ) : null}
-          <EvaluationDrawer
-            candidateId={candidateId}
-            workspaceId={workspaceId}
-            stageName={interview.title ?? interviewTypeLabel(interview.type)}
-            trigger={
-              <Button size="sm" variant="outline">
-                <ClipboardCheck className="size-4" />
-                Evaluate
-              </Button>
-            }
-          />
+            ) : interview.status === "scheduled" ? (
+              <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
+                <span className="size-1.5 rounded-full bg-amber-400" />
+                Not synced to GCal
+              </span>
+            ) : null}
+            <div className="ml-auto">
+              <EvaluationDrawer
+                candidateId={candidateId}
+                workspaceId={workspaceId}
+                stageName={interview.title ?? interviewTypeLabel(interview.type)}
+                trigger={
+                  <Button size="sm" variant="outline">
+                    <ClipboardCheck className="size-4" />
+                    Evaluate
+                  </Button>
+                }
+              />
+            </div>
+          </div>
         </div>
       </CardContent>
     </Card>
