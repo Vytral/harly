@@ -229,6 +229,7 @@ export type GenerateQuestionsResult =
 export async function generateScreeningQuestionsAction(input: {
   title: string;
   description?: string | null;
+  requirements?: string | null;
   keywords?: string[];
 }): Promise<GenerateQuestionsResult> {
   const context = await requirePermission("jobs:create");
@@ -249,6 +250,7 @@ export async function generateScreeningQuestionsAction(input: {
     const questions = await generateScreeningQuestionsWithAI(config, {
       title: input.title.trim(),
       description: input.description,
+      requirements: input.requirements,
       keywords: input.keywords,
     });
     return { ok: true, questions };

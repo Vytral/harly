@@ -34,6 +34,8 @@ export type ScoreCandidateInput = {
     resumeText: string | null;
     /** Custom application question answers, when available. */
     answers: Array<{ question: string; answer: string }>;
+    skills?: string[];
+    experienceYears?: number | null;
   };
 };
 
@@ -78,6 +80,8 @@ export async function scoreCandidateWithAI(
     `Name: ${candidate.fullName}`,
     candidate.headline ? `Headline: ${candidate.headline}` : null,
     candidate.location ? `Location: ${candidate.location}` : null,
+    candidate.experienceYears != null ? `Experience: ${candidate.experienceYears} years` : null,
+    candidate.skills && candidate.skills.length > 0 ? `Skills: ${candidate.skills.slice(0, 20).join(", ")}` : null,
     answersBlock ? `Application answers:\n${answersBlock}` : null,
     candidate.resumeText
       ? `Resume:\n"""\n${candidate.resumeText.slice(0, 12000)}\n"""`

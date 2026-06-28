@@ -15,6 +15,7 @@ export type SuggestedQuestion = {
 export type QuestionsInput = {
   title: string;
   description?: string | null;
+  requirements?: string | null;
   keywords?: string[];
 };
 
@@ -47,6 +48,9 @@ export async function generateScreeningQuestionsWithAI(
       : null,
     input.description
       ? `Description excerpt: ${input.description.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 800)}`
+      : null,
+    input.requirements
+      ? `Requirements excerpt: ${input.requirements.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 600)}`
       : null,
   ]
     .filter(Boolean)

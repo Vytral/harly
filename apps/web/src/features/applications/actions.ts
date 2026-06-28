@@ -25,6 +25,24 @@ import {
 } from "@/features/applications/resume-autofill";
 import { scheduleAutoScore } from "@/features/applications/auto-score";
 
+// Simple in-memory rate limiter for public AI calls.
+// Max 10 parse calls per IP per 60-second window.
+const _parseRateLimit = new Map<string, { count: number; resetAt: number }>();
+const PARSE_LIMIT = 10;
+const PARSE_WINDOW_MS = 60_000;
+
+function checkParseRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const entry = _parseRateLimit.get(ip);
+  if (!entry || now > entry.resetAt) {
+    _parseRateLimit.set(ip, { count: 1, resetAt: now + PARSE_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= PARSE_LIMIT) return false;
+  entry.count++;
+  return true;
+}
+
 export type ParseResumeResult =
   | { ok: true; fields: ResumeAutofillFields }
   | { ok: false };
@@ -43,6 +61,16 @@ export async function parseResumeAction(input: {
   const key = typeof input?.key === "string" ? input.key : "";
 
   if (!key.startsWith("resumes/") || key.includes("..")) {
+    return { ok: false };
+  }
+
+  // Rate-limit by IP to prevent API key drain.
+  const requestHeaders = await headers();
+  const ip =
+    requestHeaders.get("cf-connecting-ip") ??
+    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    "unknown";
+  if (!checkParseRateLimit(ip)) {
     return { ok: false };
   }
 

@@ -79,7 +79,12 @@ export async function draftEmailWithAI(
     .replace(/\n?```$/, "")
     .trim();
 
-  const parsed = JSON.parse(cleaned) as { subject: string; body: string };
+  let parsed: { subject: string; body: string };
+  try {
+    parsed = JSON.parse(cleaned) as { subject: string; body: string };
+  } catch {
+    throw new Error("AI returned malformed JSON. Try again or switch to a different model.");
+  }
 
   if (!parsed.subject || !parsed.body) {
     throw new Error("AI returned incomplete draft.");

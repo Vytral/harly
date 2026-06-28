@@ -18,8 +18,10 @@ import {
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
+import { createLogger } from "@/lib/logger";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
 import { extractResumeText } from "@/lib/resume/extract-text";
+import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { storage } from "@/lib/storage";
 import { maxResumeFileSize } from "@/lib/storage-validation";
 
@@ -27,26 +29,6 @@ const generateSchema = z.object({
   applicationId: z.uuid(),
 });
 
-/**
- * Recover a storage key from a stored file URL. Local files are saved as
- * `/uploads/<key>`; S3 URLs keep the key in the path. Returns null when no
- * `resumes/` key can be recovered.
- */
-function resumeKeyFromUrl(fileUrl: string): string | null {
-  const path = fileUrl.startsWith("/")
-    ? fileUrl
-    : (() => {
-        try {
-          return new URL(fileUrl).pathname;
-        } catch {
-          return fileUrl;
-        }
-      })();
-  const marker = path.indexOf("resumes/");
-  if (marker === -1) return null;
-  const key = path.slice(marker);
-  return key.includes("..") ? null : key;
-}
 
 async function loadResumeText(input: {
   workspaceId: string;
@@ -121,6 +103,8 @@ export async function generateAiEvaluationAction(input: {
       lastName: candidates.lastName,
       headline: candidates.headline,
       location: candidates.location,
+      skills: candidates.skills,
+      experienceYears: candidates.experienceYears,
       jobTitle: jobs.title,
       jobDescription: jobs.description,
       jobRequirements: jobs.requirements,
@@ -205,6 +189,8 @@ export async function generateAiEvaluationAction(input: {
         location: row.location,
         resumeText: resume.text,
         answers: answerRows,
+        skills: Array.isArray(row.skills) ? (row.skills as string[]) : [],
+        experienceYears: row.experienceYears,
       },
     });
 
@@ -319,15 +305,24 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
   const remaining = Math.max(0, unscoredApps.length - BULK_BATCH_SIZE);
   const batch = unscoredApps.slice(0, BULK_BATCH_SIZE);
 
+  // Run up to 5 concurrent scoring calls.
+  const CONCURRENCY = 5;
   let succeeded = 0;
   let failed = 0;
 
-  for (const { applicationId } of batch) {
-    const result = await generateAiEvaluationAction({ applicationId });
-    if (result.success) {
-      succeeded++;
-    } else {
-      failed++;
+  for (let i = 0; i < batch.length; i += CONCURRENCY) {
+    const chunk = batch.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      chunk.map(({ applicationId }) =>
+        generateAiEvaluationAction({ applicationId }),
+      ),
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value.success) {
+        succeeded++;
+      } else {
+        failed++;
+      }
     }
   }
 

@@ -17,20 +17,10 @@ import {
 
 import { storage } from "@/lib/storage";
 import { extractResumeText } from "@/lib/resume/extract-text";
+import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { maxResumeFileSize } from "@/lib/storage-validation";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
-
-function resumeKeyFromUrl(url: string): string | null {
-  try {
-    const parsed = new URL(url);
-    const key = parsed.pathname.replace(/^\//, "");
-    return key.startsWith("resumes/") && !key.includes("..") ? key : null;
-  } catch {
-    const match = url.match(/(resumes\/[^?#]+)/);
-    return match?.[1] ?? null;
-  }
-}
 
 /**
  * Fire-and-forget: score a new application if auto-score is enabled for the
@@ -62,6 +52,8 @@ export async function scheduleAutoScore(
         lastName: candidates.lastName,
         headline: candidates.headline,
         location: candidates.location,
+        skills: candidates.skills,
+        experienceYears: candidates.experienceYears,
         jobTitle: jobs.title,
         jobDescription: jobs.description,
         jobRequirements: jobs.requirements,
@@ -159,6 +151,8 @@ export async function scheduleAutoScore(
         location: row.location,
         resumeText,
         answers: answerRows,
+        skills: Array.isArray(row.skills) ? (row.skills as string[]) : [],
+        experienceYears: row.experienceYears,
       },
     });
 

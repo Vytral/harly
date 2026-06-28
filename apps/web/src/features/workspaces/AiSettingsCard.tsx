@@ -37,14 +37,17 @@ import {
   XaiLogo,
 } from "@/components/ui/icons/brands";
 import {
+  AuditDuotoneIcon,
   CheckIcon,
   GlobeIcon,
   KeyDuotoneIcon,
   LightningIcon,
   MagicWandDuotoneIcon,
+  PaperPlaneDuotoneIcon,
   ReadCvDuotoneIcon,
   RobotDuotoneIcon,
   SearchIcon,
+  SealCheckDuotoneIcon,
   SpinnerIcon,
 } from "@/components/ui/icons/phosphor";
 import { Input } from "@/components/ui/input";
@@ -213,6 +216,24 @@ export function AiSettingsCard({
           <AutoScoreFeatureCard
             status={status}
             canEdit={canEdit}
+          />
+          <FeatureCard
+            icon={AuditDuotoneIcon}
+            title="Screening questions"
+            description="Generate role-specific screening questions for a job from its title, keywords, and description in the job question builder."
+            alwaysOn
+          />
+          <FeatureCard
+            icon={SealCheckDuotoneIcon}
+            title="Candidate scoring"
+            description="Score any candidate against a specific job on-demand, or regenerate scores when the job or candidate profile changes."
+            alwaysOn
+          />
+          <FeatureCard
+            icon={PaperPlaneDuotoneIcon}
+            title="AI email drafting"
+            description="Draft screening outreach, interview invites, rejections, and offers from the candidate email drawer — pre-filled with role and candidate context."
+            alwaysOn
           />
         </div>
       </div>

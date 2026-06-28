@@ -15,6 +15,7 @@ import {
   candidateMessages,
   candidateNotes,
   candidateTags,
+  jobStages,
   jobs,
   member as authMembers,
   notifications,
@@ -872,7 +873,7 @@ export async function generateEmailDraftAction(input: {
       firstName: candidates.firstName,
       lastName: candidates.lastName,
       jobTitle: jobs.title,
-      stageName: jobs.title, // overridden below via application join
+      stageName: jobStages.name,
     })
     .from(candidates)
     .leftJoin(
@@ -886,6 +887,7 @@ export async function generateEmailDraftAction(input: {
       jobs,
       and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
     )
+    .leftJoin(jobStages, eq(jobStages.id, applications.currentStageId))
     .where(
       and(
         eq(candidates.workspaceId, workspace.id),
