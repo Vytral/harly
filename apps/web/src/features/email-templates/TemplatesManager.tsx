@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Plus, Trash2 } from "lucide-react";
+import { FileText, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -25,6 +25,8 @@ import { Sheet, SheetClose } from "@/components/ui/sheet";
 import { Textarea } from "@/components/ui/textarea";
 import { RelativeTime } from "@/lib/date-hydration";
 
+const BODY_MAX_LENGTH = 10_000;
+
 const PREVIEW_VALUES = {
   candidate_first_name: "Ava",
   candidate_last_name: "Thompson",
@@ -36,17 +38,28 @@ const PREVIEW_VALUES = {
 
 export function TemplatesManager({
   templates,
+  workspaceName,
 }: {
   templates: EmailTemplateItem[];
+  workspaceName: string;
 }) {
+  const previewValues = {
+    ...PREVIEW_VALUES,
+    company_name: workspaceName,
+  };
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<EmailTemplateItem | null>(null);
+  const [search, setSearch] = useState("");
 
   const [name, setName] = useState("");
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+
+  const isDirty = name.trim() !== (editing?.name ?? "") ||
+    subject.trim() !== (editing?.subject ?? "") ||
+    body.trim() !== (editing?.body ?? "");
 
   // Sync the form to the open template at render time (React's "adjust state on
   // prop change" pattern) instead of in an effect — avoids a cascading render.
@@ -60,6 +73,10 @@ export function TemplatesManager({
       setBody(editing?.body ?? "");
     }
   }
+
+  const filteredTemplates = templates.filter((t) =>
+    t.name.toLowerCase().includes(search.toLowerCase()),
+  );
 
   const unknownVariables = findUnknownVariables(`${subject}\n${body}`);
 
@@ -118,6 +135,18 @@ export function TemplatesManager({
         </Button>
       </div>
 
+      {templates.length > 0 && (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search templates…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+      )}
+
       {templates.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-14 text-center">
           <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
@@ -132,9 +161,15 @@ export function TemplatesManager({
             and fill themselves in when you email a candidate.
           </p>
         </div>
+      ) : filteredTemplates.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-14 text-center">
+          <p className="text-sm text-muted-foreground">
+            No templates match "{search}"
+          </p>
+        </div>
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {templates.map((template) => (
+          {filteredTemplates.map((template) => (
             <Card key={template.id}>
               <CardContent className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
@@ -181,6 +216,9 @@ export function TemplatesManager({
       <Sheet
         open={open}
         onOpenChange={(next) => {
+          if (!next && isDirty) {
+            if (!window.confirm("Discard unsaved changes?")) return;
+          }
           setOpen(next);
           if (!next) setEditing(null);
         }}
@@ -197,7 +235,13 @@ export function TemplatesManager({
               </SheetClose>
               <Button
                 onClick={save}
-                disabled={isPending || !name.trim() || !subject.trim() || !body.trim()}
+                disabled={
+                  isPending ||
+                  !name.trim() ||
+                  !subject.trim() ||
+                  !body.trim() ||
+                  body.length > BODY_MAX_LENGTH
+                }
               >
                 {isPending ? "Saving…" : "Save template"}
               </Button>
@@ -234,7 +278,20 @@ export function TemplatesManager({
                 placeholder={"Hi {{candidate_first_name}},\n\n…"}
                 className="min-h-40"
               />
-              <div className="flex flex-wrap gap-1.5 pt-1">
+              <div className="flex items-center justify-between pt-1">
+                <p
+                  className={`text-xs ${
+                    body.length > BODY_MAX_LENGTH
+                      ? "text-destructive font-medium"
+                      : body.length > BODY_MAX_LENGTH * 0.9
+                        ? "text-clay"
+                        : "text-muted-foreground"
+                  }`}
+                >
+                  {body.length.toLocaleString()} / {BODY_MAX_LENGTH.toLocaleString()} characters
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-1.5">
                 {TEMPLATE_VARIABLES.map((variable) => (
                   <button
                     key={variable.key}
@@ -262,10 +319,10 @@ export function TemplatesManager({
                   Preview
                 </p>
                 <p className="text-sm font-medium">
-                  {interpolateTemplate(subject, PREVIEW_VALUES)}
+                  {interpolateTemplate(subject, previewValues)}
                 </p>
                 <p className="whitespace-pre-line text-sm text-muted-foreground">
-                  {interpolateTemplate(body, PREVIEW_VALUES)}
+                  {interpolateTemplate(body, previewValues)}
                 </p>
               </div>
             ) : null}

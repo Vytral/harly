@@ -9,7 +9,6 @@ import {
   isNavActive,
   primaryNav,
   workspaceNav,
-  moreNav,
 } from "@/components/dashboard/nav-items";
 import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
 import { usePageTitle } from "@/components/dashboard/PageTitleContext";
@@ -44,7 +43,7 @@ export function TopBar({
   const { title, breadcrumb } = usePageTitle();
   const pathname = usePathname();
 
-  const allNav = [...primaryNav, ...workspaceNav, ...moreNav];
+  const allNav = [...primaryNav, ...workspaceNav];
   const activeNav = allNav.find((item) => isNavActive(pathname, item));
   const SectionIcon = activeNav?.icon;
   const sectionLabel = activeNav?.label;

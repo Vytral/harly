@@ -16,8 +16,9 @@ export type ApplicationReceivedCandidateProps = {
 
 export function applicationReceivedCandidateSubject({
   jobTitle,
-}: Pick<ApplicationReceivedCandidateProps, "jobTitle">) {
-  return `We received your application — ${jobTitle}`;
+  companyName,
+}: Pick<ApplicationReceivedCandidateProps, "jobTitle" | "companyName">) {
+  return `Got your application — ${jobTitle} at ${companyName}`;
 }
 
 export function ApplicationReceivedCandidate({
@@ -31,7 +32,7 @@ export function ApplicationReceivedCandidate({
 }: ApplicationReceivedCandidateProps) {
   return (
     <WorkspaceLayout
-      preview={`Your application for ${jobTitle} at ${companyName} is confirmed.`}
+      preview={`Your application for ${jobTitle} is in. We'll be in touch.`}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -40,19 +41,24 @@ export function ApplicationReceivedCandidate({
       <Text style={heading}>Application received</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        Thanks for applying to <strong>{jobTitle}</strong> at {companyName}. We
-        have received your application and the hiring team will review it.
+        We got your application for <strong>{jobTitle}</strong>. The team will
+        review it and reach out if there&apos;s a fit.
       </Text>
-      <Text style={text}>
-        If there is a fit, {companyName} will follow up with next steps.
-      </Text>
+      <Text style={text}>Thanks for taking the time — we appreciate it.</Text>
       {jobBoardUrl ? (
         <Section style={{ marginTop: "24px" }}>
           <Button href={jobBoardUrl} style={buttonStyle(accentColor)}>
-            View open roles
+            See other open roles
           </Button>
         </Section>
       ) : null}
     </WorkspaceLayout>
   );
 }
+
+ApplicationReceivedCandidate.PreviewProps = {
+  candidateName: "Ava Thompson",
+  jobTitle: "Senior Frontend Engineer",
+  companyName: "Acme Inc.",
+  jobBoardUrl: "https://acme.com/careers",
+} satisfies ApplicationReceivedCandidateProps;

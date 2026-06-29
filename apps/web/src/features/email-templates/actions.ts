@@ -50,7 +50,17 @@ export async function createEmailTemplate(input: {
     });
   } catch (error) {
     log.error(error, "template write failed");
-    return { success: false, error: "A template with that name already exists." };
+    // PostgreSQL unique violation code: 23505
+    const isUniqueViolation =
+      error instanceof Error &&
+      "code" in error &&
+      (error as { code: string }).code === "23505";
+    return {
+      success: false,
+      error: isUniqueViolation
+        ? "A template with that name already exists."
+        : "Could not save the template. Please try again.",
+    };
   }
 
   revalidatePath("/dashboard/templates");
@@ -97,7 +107,17 @@ export async function updateEmailTemplate(input: {
       );
   } catch (error) {
     log.error(error, "template write failed");
-    return { success: false, error: "A template with that name already exists." };
+    // PostgreSQL unique violation code: 23505
+    const isUniqueViolation =
+      error instanceof Error &&
+      "code" in error &&
+      (error as { code: string }).code === "23505";
+    return {
+      success: false,
+      error: isUniqueViolation
+        ? "A template with that name already exists."
+        : "Could not update the template. Please try again.",
+    };
   }
 
   revalidatePath("/dashboard/templates");

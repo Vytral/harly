@@ -4,6 +4,7 @@ import { buttonStyle, heading, text } from "./styles";
 import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
 
 export type WorkspaceInvitationProps = {
+  inviteeName: string;
   inviterName: string;
   workspaceName: string;
   role: string;
@@ -12,11 +13,10 @@ export type WorkspaceInvitationProps = {
 };
 
 export function workspaceInvitationSubject({
+  inviterName,
   workspaceName,
-}: {
-  workspaceName: string;
-}) {
-  return `You've been invited to join ${workspaceName} on Harly`;
+}: Pick<WorkspaceInvitationProps, "inviterName" | "workspaceName">) {
+  return `${inviterName} invited you to ${workspaceName}`;
 }
 
 const ROLE_LABELS: Record<string, string> = {
@@ -27,35 +27,44 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export function WorkspaceInvitation({
+  inviteeName,
   inviterName,
   workspaceName,
   role,
   acceptUrl,
   branding,
 }: WorkspaceInvitationProps) {
-  const roleLabel = ROLE_LABELS[role] ?? "Recruiter";
+  const roleLabel = ROLE_LABELS[role] ?? "team member";
 
   return (
     <HarlyLayout
-      preview={`${inviterName} invited you to join ${workspaceName} on Harly as ${roleLabel}.`}
+      preview={`${inviterName} added you to ${workspaceName} on Harly.`}
       branding={branding}
     >
-      <Text style={heading}>You&apos;re invited</Text>
-      <Text style={text}>Hi there,</Text>
+      <Text style={heading}>You&apos;re invited to {workspaceName}</Text>
+      <Text style={text}>Hi {inviteeName},</Text>
       <Text style={text}>
-        <strong>{inviterName}</strong> has invited you to join{" "}
-        <strong>{workspaceName}</strong> as a <strong>{roleLabel}</strong> on
-        Harly — an open-source applicant tracking system.
+        <strong>{inviterName}</strong> has added you to{" "}
+        <strong>{workspaceName}</strong> as a <strong>{roleLabel}</strong>.
+        Click below to accept and set up your account.
       </Text>
       <Section style={{ marginTop: "24px" }}>
-        <Button href={acceptUrl} style={buttonStyle(branding?.primaryColor || undefined)}>
+        <Button href={acceptUrl} style={buttonStyle(branding?.primaryColor ?? undefined)}>
           Accept invitation
         </Button>
       </Section>
-      <Text style={{ ...text, marginTop: "24px", fontSize: "13px", color: "#78716c" }}>
-        This invitation expires in 7 days. If you were not expecting this, you
-        can safely ignore it.
+      <Text style={{ ...text, fontSize: "13px", color: "#78716c", marginTop: "24px" }}>
+        This invitation expires in 7 days. Not expecting this? You can safely
+        ignore it.
       </Text>
     </HarlyLayout>
   );
 }
+
+WorkspaceInvitation.PreviewProps = {
+  inviteeName: "Ava",
+  inviterName: "Max",
+  workspaceName: "Acme Inc.",
+  role: "recruiter",
+  acceptUrl: "https://app.harly.dev/join?token=abc123",
+} satisfies WorkspaceInvitationProps;

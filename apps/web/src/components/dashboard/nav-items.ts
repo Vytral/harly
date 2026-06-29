@@ -43,6 +43,8 @@ export const workspaceNav: NavItem[] = [
   { label: "Pipeline", href: "/dashboard/pipeline", icon: KanbanSquare },
   { label: "Reports", href: "/dashboard/reports", icon: BarChart3 },
   { label: "Tasks", href: "/dashboard/tasks", icon: ListTodo },
+  { label: "Calendars", href: "/dashboard/calendars", icon: CalendarDays },
+  { label: "Templates", href: "/dashboard/templates", icon: FileText },
   { label: "Talent Pool", href: "/dashboard/talent-pool", icon: Bookmark },
   { label: "Career Page", href: "/dashboard/career-page", icon: Globe },
   {
@@ -51,12 +53,6 @@ export const workspaceNav: NavItem[] = [
     icon: Settings,
     requiredPermission: "settings:edit",
   },
-];
-
-/** Stub sections — coming-soon pages collapsed under "More" in the sidebar. */
-export const moreNav: NavItem[] = [
-  { label: "Calendars", href: "/dashboard/calendars", icon: CalendarDays },
-  { label: "Templates", href: "/dashboard/templates", icon: FileText },
 ];
 
 /** Legacy flat nav kept for the command palette / any residual consumers. */

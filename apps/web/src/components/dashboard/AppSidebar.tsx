@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { PanelLeftClose, PanelLeftOpen, UserPlus } from "lucide-react";
@@ -12,6 +13,10 @@ import {
   workspaceNav,
   type NavItem,
 } from "@/components/dashboard/nav-items";
+import {
+  InviteTeammatesSheet,
+  type AssignableRole,
+} from "@/features/workspaces/InviteTeammatesSheet";
 import {
   Sidebar,
   SidebarContent,
@@ -39,6 +44,7 @@ type AppSidebarProps = {
   inboxCount: number;
   role: WorkspaceRole;
   sidebarLogo: SidebarBranding;
+  assignableRoles: AssignableRole[];
 };
 
 export function AppSidebar({
@@ -46,9 +52,11 @@ export function AppSidebar({
   inboxCount,
   role,
   sidebarLogo,
+  assignableRoles,
 }: AppSidebarProps) {
   const pathname = usePathname();
   const { open } = useSidebar();
+  const [inviteOpen, setInviteOpen] = useState(false);
 
   const userPermissions: Permission[] =
     BUILTIN_ROLE_PERMISSIONS[role as keyof typeof BUILTIN_ROLE_PERMISSIONS] ?? [];
@@ -109,11 +117,17 @@ export function AppSidebar({
           <SidebarFooter>
             <SidebarMenu>
               <SidebarMenuItem>
-                <SidebarMenuButton asChild tooltip="Invite team">
-                  <Link href="/settings/members">
-                    <UserPlus className="size-4" strokeWidth={1.8} />
-                    <span>Invite team</span>
-                  </Link>
+                <InviteTeammatesSheet
+                  assignableRoles={assignableRoles}
+                  open={inviteOpen}
+                  onOpenChange={setInviteOpen}
+                />
+                <SidebarMenuButton
+                  tooltip="Invite team"
+                  onClick={() => setInviteOpen(true)}
+                >
+                  <UserPlus className="size-4" strokeWidth={1.8} />
+                  <span>Invite team</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>

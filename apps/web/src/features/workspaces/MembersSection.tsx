@@ -14,7 +14,6 @@ import { toast } from "sonner";
 
 import {
   cancelWorkspaceInvitationAction,
-  inviteWorkspaceMemberAction,
   removeWorkspaceMemberAction,
   updateMemberRolesAction,
 } from "@/features/workspaces/actions";
@@ -22,6 +21,11 @@ import type {
   WorkspaceInvitationItem,
   WorkspaceMemberItem,
 } from "@/features/workspaces/data";
+import {
+  InviteTeammatesSheet,
+  type InviteLinkState,
+} from "@/features/workspaces/InviteTeammatesSheet";
+import { InviteLinkButton } from "@/features/workspaces/InviteLinkButton";
 import { roleLabel } from "@/features/workspaces/permissions";
 import {
   RoleEditor,
@@ -41,7 +45,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -49,14 +52,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-  SheetTrigger,
-} from "@/components/ui/sheet";
+import { Sheet, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
@@ -76,23 +72,11 @@ function formatInvitationDate(date: Date) {
   }).format(date);
 }
 
-function useActionToast(
-  state: { success: boolean; error?: string },
-  successMessage: string,
-) {
-  const previous = useRef(state);
-  useEffect(() => {
-    if (state === previous.current) return;
-    previous.current = state;
-    if (state.success) toast.success(successMessage);
-    else if (state.error) toast.error(state.error);
-  }, [state, successMessage]);
-}
-
 export function MembersAndRoles({
   members,
   invitations,
   assignableRoles,
+  inviteLink,
   roles,
   canManageMembers,
   canManageRoles,
@@ -100,6 +84,7 @@ export function MembersAndRoles({
   members: WorkspaceMemberItem[];
   invitations: WorkspaceInvitationItem[];
   assignableRoles: AssignableRole[];
+  inviteLink: InviteLinkState;
   roles: RoleSummary[];
   canManageMembers: boolean;
   canManageRoles: boolean;
@@ -147,6 +132,7 @@ export function MembersAndRoles({
           members={members}
           invitations={invitations}
           assignableRoles={assignableRoles}
+          inviteLink={inviteLink}
           canManageMembers={canManageMembers}
         />
       </TabsContent>
@@ -186,20 +172,16 @@ function MembersPanel({
   members,
   invitations,
   assignableRoles,
+  inviteLink,
   canManageMembers,
 }: {
   members: WorkspaceMemberItem[];
   invitations: WorkspaceInvitationItem[];
   assignableRoles: AssignableRole[];
+  inviteLink: InviteLinkState;
   canManageMembers: boolean;
 }) {
   const router = useRouter();
-  const [inviteState, inviteAction, isInviting] = useActionState(
-    inviteWorkspaceMemberAction,
-    initialActionState,
-  );
-  useActionToast(inviteState, "Invitation sent.");
-
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -284,11 +266,22 @@ function MembersPanel({
             </SelectContent>
           </Select>
           {canManageMembers ? (
-            <InviteSheet
-              action={inviteAction}
-              isInviting={isInviting}
-              assignableRoles={assignableRoles}
-            />
+            <>
+              <InviteLinkButton
+                inviteLink={inviteLink}
+                assignableRoles={assignableRoles}
+              />
+              <InviteTeammatesSheet
+                assignableRoles={assignableRoles}
+                pendingInvitations={invitations}
+                trigger={
+                  <Button>
+                    <UserPlusIcon className="size-4" />
+                    Invite
+                  </Button>
+                }
+              />
+            </>
           ) : null}
         </div>
       </div>
@@ -444,68 +437,6 @@ function MembersPanel({
         </div>
       ) : null}
     </div>
-  );
-}
-
-function InviteSheet({
-  action,
-  isInviting,
-  assignableRoles,
-}: {
-  action: (formData: FormData) => void;
-  isInviting: boolean;
-  assignableRoles: AssignableRole[];
-}) {
-  return (
-    <Sheet>
-      <SheetTrigger asChild>
-        <Button>
-          <UserPlusIcon className="size-4" />
-          Invite
-        </Button>
-      </SheetTrigger>
-      <SheetContent className="w-full sm:max-w-md">
-        <SheetHeader className="border-b px-5 py-4 text-left">
-          <SheetTitle className="font-display text-lg font-semibold tracking-tight">
-            Invite a teammate
-          </SheetTitle>
-          <SheetDescription className="mt-1 text-sm text-muted-foreground">
-            They&apos;ll get an email to join this workspace.
-          </SheetDescription>
-        </SheetHeader>
-        <form action={action} className="flex-1 space-y-5 px-5 py-5">
-          <div className="space-y-2">
-            <Label htmlFor="invite-email">Email</Label>
-            <Input
-              id="invite-email"
-              name="email"
-              type="email"
-              placeholder="teammate@company.com"
-              disabled={isInviting}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="invite-role">Role</Label>
-            <Select name="role" defaultValue="recruiter">
-              <SelectTrigger id="invite-role" className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {assignableRoles.map((r) => (
-                  <SelectItem key={r.key} value={r.key}>
-                    {r.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <Button type="submit" disabled={isInviting} className="w-full">
-            <UserPlusIcon className="size-4" />
-            {isInviting ? "Inviting…" : "Send invite"}
-          </Button>
-        </form>
-      </SheetContent>
-    </Sheet>
   );
 }
 

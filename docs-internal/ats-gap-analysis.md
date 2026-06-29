@@ -1,6 +1,6 @@
 # Harly — Gap Analysis para ATS open-source completo
 
-_Última actualización: 2026-06-23_
+_Última actualización: 2026-06-29_
 
 Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo Cal.com / Twenty: código abierto + cloud managed como monetización).
 
@@ -17,12 +17,16 @@ Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo 
 - **Tasks**: board con cards/rows, crear/asignar/completar, linked a candidatos/jobs.
 - **Interviews**: tabla real `interviews`, Cal.com integration (OAuth + webhook firmado), mark complete/cancel.
 - **Offers**: drawer/panel, extend/withdraw, emails.
+- **Templates**: email templates + interpolación de variables + TemplatesManager UI.
+- **Calendars**: agenda de entrevistas próximas agrupada por fecha con badges de modo/duración/GCal link.
 - **Storage**: adapter abstracto local + S3/R2 con presigned URLs.
-- **Emails**: 19 react-email templates + Resend (fallback consola) + AI email drafting.
+- **Emails**: 19 react-email templates + Resend (fallback consola) + AI email drafting + UI para conectar Resend/SMTP.
+- **Search ⌘K**: spotlight palette con búsqueda real sobre jobs y candidates (ilike, workspace-scoped).
 - **API v1**: REST `/api/v1/*`, API keys por workspace, OpenAPI spec, webhooks outbound con HMAC signing, cron dispatch, public endpoints.
 - **Integrations**: Google Calendar (OAuth + sync), Cal.com, Slack OAuth.
 - **Legal & Compliance**: EU compliance research, settings admin, public legal pages, consent checkbox, audit logs en acciones clave.
-- **Security**: 2FA, passkeys, audit logs, force 2FA, SSO placeholder.
+- **Security**: 2FA, passkeys, audit logs, force 2FA, SSO/OIDC+SAML (Better Auth SSO plugin — SsoCard + SsoConfigDrawer + SsoProviderDrawer + sso-actions).
+- **Dark mode**: completo en dashboard.
 - **Settings**: General, Members, Invitations, Roles (RBAC custom), AI, Email, Developers, Integrations, Legal, Portal, Security.
 - **Candidate Portal**: OAuth (Google, GitHub), login/dashboard/jobs/profile.
 - **UI/UX**: shadcn/ui + lucide (37 componentes), sidebar colapsable, ⌘K quick-nav, theme toggle.
@@ -32,47 +36,41 @@ Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo 
 ### P0 — Bloqueante para lanzar OSS
 
 1. **Self-hosting serio**
-   - `create-harly` CLI (hoy placeholder en `tooling/create-harly`).
+   - `create-harly` CLI — hoy solo README placeholder en `tooling/create-harly/src`.
    - Dockerfile de la app + docker-compose completo (app + Postgres).
    - Healthcheck endpoint, validación de env (zod) al boot, seed limpio.
    - One-click deploy buttons (Vercel + Railway) en README.
    - Docs de deploy (`apps/docs` — hoy stub vacío).
 
-2. **README actualizado**: hoy dice tRPC/Neon/Uploadthing, nada de eso es real. Needs: tech stack correcto, GIF del pipeline, screenshots, `docker compose up` one-liner.
+2. **README desactualizado**: dice tRPC/Neon/Uploadthing, nada de eso es real. Necesita: tech stack correcto, GIF del pipeline, screenshots, `docker compose up` one-liner.
 
-3. **Packages vacíos**: `@harly/config`, `@harly/ui`, `@harly/validators` son stubs.
+3. **Packages vacíos**: `@harly/config`, `@harly/ui`, `@harly/validators` son stubs sin implementar.
+
+4. **Bug de seguridad**: `proxy.ts` exime al owner de 2FA enforcement — **DEBE removerse antes de launch**.
 
 ### P1 — Core faltante
 
-4. **Búsqueda global ⌘K real**: hoy es quick-nav; falta indexar jobs/candidates/miembros con ranking.
+5. **Two-way email / inbox**: hoy solo outbound; falta inbound webhook → thread → timeline.
 
-5. **Email producción**: UI para conectar Resend/SMTP, remitente verificado, toggle por workspace, plantillas editables (parcialmente hecho, falta pulir).
+6. **Scorecards estructurados**: hiring team + scheduling ✅. Falta: kit de entrevista (criterios por stage), evaluaciones estructuradas con rúbrica.
 
-6. **Two-way email / inbox**: hoy solo outbound; falta inbound webhook → thread → timeline.
-
-7. **Sourcing / import**: import masivo CSV (parcial), import desde otros ATS, integraciones (Greenhouse, Gmail, LinkedIn) — placeholders "coming soon".
-
-8. **Scorecards / entrevistas**: hiring team ✅ + scheduling ✅. Falta: kit de entrevista (criterios por stage), evaluaciones strutured.
+7. **Import masivo desde otros ATS**: import CSV parcial ✅. Falta: import desde Greenhouse/Lever/otros, integraciones Gmail/LinkedIn.
 
 ### P2 — Calidad y madurez
 
-9. **Tests e2e**: 0 Playwright tests hoy. 15 unit tests (0 .test.tsx).
+8. **Tests e2e**: 0 Playwright tests. 15 unit tests solamente.
 
-10. **Calendars page**: ComingSoon stub — datos existen (interviews + Cal.com), falta UI de calendario.
+9. **Cal.com webhook real sin probar**: requiere `NEXT_PUBLIC_APP_URL` público (túnel/deploy) y API key con scope webhook. `cal-api-version` sin confirmar contra changelog.
 
-11. **Templates page**: ComingSoon stub.
+10. **apps/docs y apps/marketing**: stubs vacíos — pendiente hasta lanzamiento.
 
-12. **apps/docs y apps/marketing**: stubs vacíos.
+### P3 — Enterprise / futuro
 
-13. **Dark mode**: parcial (career pages), falta en dashboard.
+11. **Custom fields**: campos extra definidos por el workspace en candidates/jobs (jsonb definitions + UI builder). No hay schema ni UI hoy.
 
-14. **i18n**: 0 hoy (solo ES/EN hardcoded).
+12. **Approval workflows**: job requisition approval chain + offer approval antes de enviar. No hay nada hoy.
 
-### P3 — Enterprise
-
-15. **SSO/SAML + SCIM** (Better Auth SSO plugin).
-16. **Custom fields** en candidatos/jobs (jsonb definitions).
-17. **Approval workflows** — job requisition + offer approval chains.
+13. **i18n**: 0 hoy (solo ES/EN hardcoded).
 
 ## Modelo de monetización (referencia)
 
@@ -80,4 +78,4 @@ Open-source gratis forever (self-host). Cloud managed = MRR: Free (1 job activo)
 
 ## Próximo sprint sugerido
 
-P0 completo (self-hosting + README fix + apps/docs) → primer lanzamiento GitHub/HN. Luego P1.4 (⌘K search) como quick win, luego P1.6 (two-way email) o P1.8 (scorecards) según prioridad.
+P0 completo (self-hosting + README fix + 2FA bug) → primer lanzamiento GitHub/HN. Luego P1.5 (two-way email) o P1.6 (scorecards) según prioridad.

@@ -1,6 +1,6 @@
 import { Text } from "@react-email/components";
 
-import { heading, text, buttonStyle } from "./styles";
+import { heading, text, buttonStyle, secondaryButtonStyle } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
 import { buildCalendarLinks } from "./calendarLinks";
@@ -66,7 +66,7 @@ export function InterviewRescheduled({
 
   return (
     <WorkspaceLayout
-      preview={`Your ${interviewType.toLowerCase()} for ${jobTitle} at ${companyName} has been rescheduled to ${when}.`}
+      preview={`Your ${interviewType.toLowerCase()} has moved to ${when}.`}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -76,7 +76,8 @@ export function InterviewRescheduled({
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
         Your <strong>{interviewType.toLowerCase()}</strong> for{" "}
-        <strong>{jobTitle}</strong> at {companyName} has been rescheduled.
+        <strong>{jobTitle}</strong> at {companyName} has been moved. New
+        details below:
       </Text>
       <DetailTable rows={rows} />
       {calendarLinks ? (
@@ -84,12 +85,21 @@ export function InterviewRescheduled({
           <tbody>
             <tr>
               <td style={{ paddingRight: 8 }}>
-                <a href={calendarLinks.googleCalendarUrl} target="_blank" rel="noopener noreferrer" style={buttonStyle(accentColor)}>
+                <a
+                  href={calendarLinks.googleCalendarUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={buttonStyle(accentColor)}
+                >
                   Add to Google Calendar
                 </a>
               </td>
               <td>
-                <a href={calendarLinks.icsDataUri} download={`${interviewType}-${jobTitle}.ics`} style={buttonStyle("#6b7280")}>
+                <a
+                  href={calendarLinks.icsDataUri}
+                  download={`${interviewType}-${jobTitle}.ics`}
+                  style={secondaryButtonStyle()}
+                >
                   Download .ics
                 </a>
               </td>
@@ -98,9 +108,20 @@ export function InterviewRescheduled({
         </table>
       ) : null}
       <Text style={text}>
-        If you have any questions or need to adjust further, just reply to this
-        email.
+        Questions or need to adjust again? Reply here and we&apos;ll sort it out.
       </Text>
     </WorkspaceLayout>
   );
 }
+
+InterviewRescheduled.PreviewProps = {
+  candidateName: "Ava Thompson",
+  companyName: "Acme Inc.",
+  jobTitle: "Senior Frontend Engineer",
+  interviewType: "Technical interview",
+  when: "Friday, July 4 at 10:00 AM",
+  mode: "Video call",
+  duration: "60 minutes",
+  startIso: "2026-07-04T10:00:00Z",
+  durationMins: 60,
+} satisfies InterviewRescheduledProps;

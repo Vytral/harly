@@ -153,7 +153,7 @@ export async function getSidebarBranding(
 
 export async function getWorkspaceSettingsData() {
   const context = await getWorkspaceContext();
-  const [branding, workspaceOptions, memberRows, invitationRows] =
+  const [branding, workspaceOptions, memberRows, invitationRows, settingsRow] =
     await Promise.all([
       getWorkspaceBranding(context.organization.id, context.organization),
       listUserWorkspaceOptions(),
@@ -186,12 +186,26 @@ export async function getWorkspaceSettingsData() {
         .from(invitation)
         .where(eq(invitation.organizationId, context.organization.id))
         .orderBy(desc(invitation.createdAt)),
+      db
+        .select({
+          token: workspaceSettings.inviteLinkToken,
+          role: workspaceSettings.inviteLinkRole,
+          enabled: workspaceSettings.inviteLinkEnabled,
+        })
+        .from(workspaceSettings)
+        .where(eq(workspaceSettings.organizationId, context.organization.id))
+        .limit(1),
     ]);
 
   return {
     context,
     branding,
     workspaceOptions,
+    inviteLink: {
+      token: settingsRow[0]?.token ?? null,
+      role: normalizeWorkspaceRole(settingsRow[0]?.role ?? "recruiter"),
+      enabled: settingsRow[0]?.enabled ?? false,
+    },
     members: memberRows.map((member) => ({
       ...member,
       // Keep the raw role key so custom roles survive (the select resolves names).
@@ -291,4 +305,39 @@ export async function getPendingInvitationForEmail(email: string) {
         role: normalizeWorkspaceRole(row.role),
       }
     : null;
+}
+
+/**
+ * Resolve a workspace from a shareable invite-link token. Returns null when the
+ * token is unknown or the link is disabled. Used by the public /join/[token]
+ * landing page.
+ */
+export async function getWorkspaceByInviteToken(token: string) {
+  const cleaned = token.trim();
+  if (!cleaned) return null;
+
+  const [row] = await db
+    .select({
+      organizationId: workspaceSettings.organizationId,
+      role: workspaceSettings.inviteLinkRole,
+      enabled: workspaceSettings.inviteLinkEnabled,
+      name: authOrganizations.name,
+      logo: authOrganizations.logo,
+    })
+    .from(workspaceSettings)
+    .innerJoin(
+      authOrganizations,
+      eq(authOrganizations.id, workspaceSettings.organizationId),
+    )
+    .where(eq(workspaceSettings.inviteLinkToken, cleaned))
+    .limit(1);
+
+  if (!row || !row.enabled) return null;
+
+  return {
+    organizationId: row.organizationId,
+    organizationName: row.name,
+    organizationLogo: row.logo,
+    role: normalizeWorkspaceRole(row.role),
+  };
 }

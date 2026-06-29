@@ -75,7 +75,24 @@ export function buttonStyle(accentColor = GENERIC_ACCENT) {
   return {
     backgroundColor: accentColor,
     borderRadius: "8px",
+    boxSizing: "border-box" as const,
     color: "#ffffff",
+    display: "inline-block",
+    fontSize: "14px",
+    fontWeight: "600",
+    padding: "11px 20px",
+    textDecoration: "none",
+  };
+}
+
+/** Secondary/neutral button (e.g. .ics download). */
+export function secondaryButtonStyle() {
+  return {
+    backgroundColor: "#f5f5f4",
+    border: "1px solid #e7e5e4",
+    borderRadius: "8px",
+    boxSizing: "border-box" as const,
+    color: "#44403c",
     display: "inline-block",
     fontSize: "14px",
     fontWeight: "600",

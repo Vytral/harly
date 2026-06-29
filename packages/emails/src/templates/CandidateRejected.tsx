@@ -15,9 +15,10 @@ export type CandidateRejectedProps = {
 };
 
 export function candidateRejectedSubject({
+  companyName,
   jobTitle,
-}: Pick<CandidateRejectedProps, "jobTitle">) {
-  return `Your application for ${jobTitle}`;
+}: Pick<CandidateRejectedProps, "companyName" | "jobTitle">) {
+  return `Your application for ${jobTitle} at ${companyName}`;
 }
 
 export function CandidateRejected({
@@ -37,20 +38,26 @@ export function CandidateRejected({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text style={heading}>Application update</Text>
+      <Text style={heading}>Update on your application</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        Thank you for your interest in <strong>{jobTitle}</strong> at{" "}
-        {companyName}.
-      </Text>
-      <Text style={text}>
         {customMessage ??
-          "After careful consideration, we will not be moving forward with your application at this time."}
+          `Thank you for applying to ${jobTitle} at ${companyName}. We've reviewed your application and decided to move forward with other candidates.`}
       </Text>
       <Text style={text}>
-        We appreciate the time you invested and wish you the best in your
-        search.
+        We know job searching takes real effort, and we genuinely appreciate
+        the time you put into this. We&apos;ll keep your profile on file and may
+        reach out if something changes.
+      </Text>
+      <Text style={{ ...text, color: "#78716c" }}>
+        Wishing you the best — {companyName}
       </Text>
     </WorkspaceLayout>
   );
 }
+
+CandidateRejected.PreviewProps = {
+  candidateName: "Ava Thompson",
+  jobTitle: "Senior Frontend Engineer",
+  companyName: "Acme Inc.",
+} satisfies CandidateRejectedProps;

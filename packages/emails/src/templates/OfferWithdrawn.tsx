@@ -11,12 +11,14 @@ export type OfferWithdrawnProps = {
   accentColor?: string;
   socialLinks?: SocialLink[];
   jobTitle: string;
+  reason?: string;
 };
 
 export function offerWithdrawnSubject({
   companyName,
-}: Pick<OfferWithdrawnProps, "companyName">) {
-  return `Update on your offer from ${companyName}`;
+  jobTitle,
+}: Pick<OfferWithdrawnProps, "companyName" | "jobTitle">) {
+  return `Update on your offer — ${jobTitle} at ${companyName}`;
 }
 
 export function OfferWithdrawn({
@@ -26,6 +28,7 @@ export function OfferWithdrawn({
   accentColor,
   socialLinks,
   jobTitle,
+  reason,
 }: OfferWithdrawnProps) {
   return (
     <WorkspaceLayout
@@ -35,16 +38,22 @@ export function OfferWithdrawn({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text style={heading}>Update on your offer</Text>
+      <Text style={heading}>Offer update</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        We are writing to let you know that the offer for{" "}
-        <strong>{jobTitle}</strong> at {companyName} has been withdrawn.
+        {reason ??
+          `We need to let you know that the offer for ${jobTitle} at ${companyName} has been withdrawn.`}
       </Text>
       <Text style={text}>
-        We know this is disappointing. If you have questions, reply to this
-        email and the hiring team will get back to you.
+        We know this is disappointing and we&apos;re sorry for the disruption.
+        If you have questions, reply here and we&apos;ll do our best to explain.
       </Text>
     </WorkspaceLayout>
   );
 }
+
+OfferWithdrawn.PreviewProps = {
+  candidateName: "Ava Thompson",
+  companyName: "Acme Inc.",
+  jobTitle: "Senior Frontend Engineer",
+} satisfies OfferWithdrawnProps;

@@ -15,7 +15,7 @@ export function applicationReceivedRecruiterSubject({
   candidateName,
   jobTitle,
 }: Pick<ApplicationReceivedRecruiterProps, "candidateName" | "jobTitle">) {
-  return `New application — ${candidateName} for ${jobTitle}`;
+  return `${candidateName} applied for ${jobTitle}`;
 }
 
 export function ApplicationReceivedRecruiter({
@@ -27,28 +27,30 @@ export function ApplicationReceivedRecruiter({
 }: ApplicationReceivedRecruiterProps) {
   return (
     <HarlyLayout
-      preview={`${candidateName} applied for ${jobTitle}. Review their application in Harly.`}
+      preview={`${candidateName} just applied for ${jobTitle}.`}
       branding={branding}
     >
       <Text style={heading}>New application</Text>
       <Text style={text}>
-        <strong>{candidateName}</strong> applied for{" "}
-        <strong>{jobTitle}</strong>.
+        <strong>{candidateName}</strong> applied for <strong>{jobTitle}</strong>.
       </Text>
-      <Text style={text}>
-        Email:{" "}
-        <a
-          href={`mailto:${candidateEmail}`}
-          style={{ color: "#44403c", textDecoration: "underline" }}
-        >
+      <Text style={{ ...text, color: "#78716c" }}>
+        <a href={`mailto:${candidateEmail}`} style={{ color: "#78716c" }}>
           {candidateEmail}
         </a>
       </Text>
       <Section style={{ marginTop: "24px" }}>
-        <Button href={dashboardUrl} style={buttonStyle(branding?.primaryColor || undefined)}>
-          Review candidate
+        <Button href={dashboardUrl} style={buttonStyle(branding?.primaryColor ?? undefined)}>
+          Review application
         </Button>
       </Section>
     </HarlyLayout>
   );
 }
+
+ApplicationReceivedRecruiter.PreviewProps = {
+  candidateName: "Ava Thompson",
+  candidateEmail: "ava@example.com",
+  jobTitle: "Senior Frontend Engineer",
+  dashboardUrl: "https://app.harly.dev/dashboard/candidates/123",
+} satisfies ApplicationReceivedRecruiterProps;

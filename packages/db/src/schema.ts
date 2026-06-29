@@ -464,6 +464,10 @@ export const workspaceSettings = pgTable("workspace_settings", {
   portalGithubClientSecretTag: text("portal_github_client_secret_tag"),
   // Portal UI options.
   portalShowApplicationStatus: boolean("portal_show_application_status").default(true).notNull(),
+  // Shareable invite link — anyone with the token can join with inviteLinkRole.
+  inviteLinkToken: text("invite_link_token"),
+  inviteLinkRole: text("invite_link_role").default("recruiter").notNull(),
+  inviteLinkEnabled: boolean("invite_link_enabled").default(false).notNull(),
   ...timestamps(),
 });
 

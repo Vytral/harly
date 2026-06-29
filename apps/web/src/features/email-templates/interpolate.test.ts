@@ -58,6 +58,30 @@ describe("interpolateTemplate", () => {
       }),
     ).toBe("X {{job_title}}");
   });
+
+  it("matches variables case-insensitively", () => {
+    expect(
+      interpolateTemplate("Hi {{Candidate_First_Name}}!", {
+        candidate_first_name: "Ava",
+      }),
+    ).toBe("Hi Ava!");
+  });
+
+  it("supports hyphens in variable names", () => {
+    expect(
+      interpolateTemplate("Hi {{candidate-first-name}}!", {
+        candidate_first_name: "Ava",
+      }),
+    ).toBe("Hi Ava!");
+  });
+
+  it("supports dots in variable names", () => {
+    expect(
+      interpolateTemplate("Hi {{candidate.first.name}}!", {
+        candidate_first_name: "Ava",
+      }),
+    ).toBe("Hi Ava!");
+  });
 });
 
 describe("findUnknownVariables", () => {
@@ -69,5 +93,19 @@ describe("findUnknownVariables", () => {
 
   it("returns empty for clean templates", () => {
     expect(findUnknownVariables("Hi {{candidate_full_name}}")).toEqual([]);
+  });
+
+  it("detects uppercase variable names as unknown", () => {
+    expect(findUnknownVariables("{{Candidate_First_Name}}")).toEqual([
+      "Candidate_First_Name",
+    ]);
+  });
+
+  it("detects hyphenated variable names as unknown", () => {
+    expect(findUnknownVariables("{{job-title}}")).toEqual(["job-title"]);
+  });
+
+  it("detects dotted variable names as unknown", () => {
+    expect(findUnknownVariables("{{job.title}}")).toEqual(["job.title"]);
   });
 });

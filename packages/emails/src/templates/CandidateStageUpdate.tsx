@@ -12,12 +12,14 @@ export type CandidateStageUpdateProps = {
   companyLogoUrl?: string;
   accentColor?: string;
   socialLinks?: SocialLink[];
+  nextStepMessage?: string;
 };
 
 export function candidateStageUpdateSubject({
   jobTitle,
-}: Pick<CandidateStageUpdateProps, "jobTitle">) {
-  return `Update on your application — ${jobTitle}`;
+  stageName,
+}: Pick<CandidateStageUpdateProps, "jobTitle" | "stageName">) {
+  return `You're moving to ${stageName} — ${jobTitle}`;
 }
 
 export function CandidateStageUpdate({
@@ -28,24 +30,36 @@ export function CandidateStageUpdate({
   companyLogoUrl,
   accentColor,
   socialLinks,
+  nextStepMessage,
 }: CandidateStageUpdateProps) {
   return (
     <WorkspaceLayout
-      preview={`Your application for ${jobTitle} at ${companyName} has moved to: ${stageName}.`}
+      preview={`Good news — your ${jobTitle} application has moved to ${stageName}.`}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text style={heading}>Application update</Text>
+      <Text style={heading}>You&apos;re moving forward</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
         Your application for <strong>{jobTitle}</strong> at {companyName} has
-        moved to a new stage: <strong>{stageName}</strong>.
+        moved to the <strong>{stageName}</strong> stage.
       </Text>
-      <Text style={text}>
-        The hiring team will reach out if they need anything else from you.
-      </Text>
+      {nextStepMessage ? (
+        <Text style={text}>{nextStepMessage}</Text>
+      ) : (
+        <Text style={text}>
+          Someone from the team will reach out shortly with next steps.
+        </Text>
+      )}
     </WorkspaceLayout>
   );
 }
+
+CandidateStageUpdate.PreviewProps = {
+  candidateName: "Ava Thompson",
+  jobTitle: "Senior Frontend Engineer",
+  stageName: "Interview",
+  companyName: "Acme Inc.",
+} satisfies CandidateStageUpdateProps;

@@ -13,6 +13,7 @@ export type InterviewCanceledProps = {
   jobTitle: string;
   interviewType: string;
   when?: string;
+  reason?: string;
 };
 
 export function interviewCanceledSubject({
@@ -31,10 +32,11 @@ export function InterviewCanceled({
   jobTitle,
   interviewType,
   when,
+  reason,
 }: InterviewCanceledProps) {
   return (
     <WorkspaceLayout
-      preview={`Your ${interviewType.toLowerCase()} for ${jobTitle} at ${companyName} has been canceled.`}
+      preview={`Your ${interviewType.toLowerCase()} for ${jobTitle} has been canceled.`}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -44,19 +46,29 @@ export function InterviewCanceled({
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
         Your <strong>{interviewType.toLowerCase()}</strong> for{" "}
-        <strong>{jobTitle}</strong> at {companyName}
+        <strong>{jobTitle}</strong>
         {when ? (
           <>
-            {" "}
-            scheduled for <strong>{when}</strong>
+            {" "}scheduled for <strong>{when}</strong>
           </>
         ) : null}{" "}
         has been canceled.
       </Text>
+      {reason ? (
+        <Text style={text}>{reason}</Text>
+      ) : null}
       <Text style={text}>
-        If this was unexpected or you would like to find another time, reply to
-        this email and the hiring team will follow up.
+        Reply to this email and we&apos;ll work on finding a new time that
+        works for you.
       </Text>
     </WorkspaceLayout>
   );
 }
+
+InterviewCanceled.PreviewProps = {
+  candidateName: "Ava Thompson",
+  companyName: "Acme Inc.",
+  jobTitle: "Senior Frontend Engineer",
+  interviewType: "Technical interview",
+  when: "Thursday, July 3 at 2:00 PM",
+} satisfies InterviewCanceledProps;

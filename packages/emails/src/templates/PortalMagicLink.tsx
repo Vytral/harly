@@ -1,31 +1,41 @@
 import { Button, Section, Text } from "@react-email/components";
-import { HarlyLayout } from "./HarlyLayout";
-import { buttonStyle, heading, text } from "./styles";
 
-export function PortalMagicLinkEmail({
-  loginUrl,
-}: {
+import { buttonStyle, heading, text } from "./styles";
+import { HarlyLayout } from "./HarlyLayout";
+import { HARLY_ACCENT } from "./styles";
+
+export type PortalMagicLinkEmailProps = {
+  candidateName?: string;
   loginUrl: string;
-}) {
+};
+
+export function portalMagicLinkSubject() {
+  return "Your sign-in link";
+}
+
+export function PortalMagicLinkEmail({ candidateName, loginUrl }: PortalMagicLinkEmailProps) {
   return (
-    <HarlyLayout preview="Your sign-in link for the candidate portal">
+    <HarlyLayout preview="Your sign-in link is ready — expires in 15 minutes.">
       <Text style={heading}>Sign in to your portal</Text>
+      {candidateName ? (
+        <Text style={text}>Hi {candidateName},</Text>
+      ) : null}
       <Text style={text}>
-        Click the button below to sign in to your candidate portal. The link
-        expires in 15 minutes.
+        Click below to sign in. This link works once and expires in 15 minutes.
       </Text>
       <Section style={{ marginTop: "24px" }}>
-        <Button href={loginUrl} style={buttonStyle()}>
+        <Button href={loginUrl} style={buttonStyle(HARLY_ACCENT)}>
           Sign in
         </Button>
       </Section>
-      <Text style={{ ...text, marginTop: "16px", fontSize: "13px" }}>
-        If you did not request this, you can safely ignore this email.
+      <Text style={{ ...text, fontSize: "13px", color: "#78716c", marginTop: "24px" }}>
+        Didn&apos;t request this? You can safely ignore it.
       </Text>
     </HarlyLayout>
   );
 }
 
-export function portalMagicLinkSubject() {
-  return "Sign in to your candidate portal";
-}
+PortalMagicLinkEmail.PreviewProps = {
+  candidateName: "Ava",
+  loginUrl: "https://app.harly.dev/portal/login?token=abc123",
+} satisfies PortalMagicLinkEmailProps;

@@ -7,7 +7,6 @@ export type WelcomeEmailProps = {
   userName: string;
   workspaceName?: string;
   dashboardUrl: string;
-  /** Optional workspace branding to customize the email appearance */
   branding?: WorkspaceEmailBranding;
 };
 
@@ -20,27 +19,28 @@ export function WelcomeEmail({
   branding,
 }: WelcomeEmailProps) {
   const displayName = workspaceName || branding?.name || "Harly";
-  const workspaceLabel = workspaceName ? ` for ${workspaceName}` : "";
 
   return (
-    <HarlyLayout 
-      preview={`Welcome to ${displayName}, ${userName}`}
+    <HarlyLayout
+      preview={`Welcome to ${displayName}, ${userName}. Let's get started.`}
       branding={branding}
     >
-      <Text style={heading}>Welcome to {displayName}</Text>
-      <Text style={text}>Hi {userName},</Text>
+      <Text style={heading}>Welcome, {userName}</Text>
       <Text style={text}>
-        Welcome to {displayName}. Create your first job posting, publish
-        it to your job board, and start tracking candidates — all in one place.
+        Your {displayName} workspace is ready. Post your first job, publish it
+        to your career page, and start tracking candidates — all in one place.
       </Text>
       <Section style={{ marginTop: "24px" }}>
-        <Button href={dashboardUrl} style={buttonStyle(branding?.primaryColor || undefined)}>
-          Go to dashboard
+        <Button href={dashboardUrl} style={buttonStyle(branding?.primaryColor ?? undefined)}>
+          Open dashboard
         </Button>
       </Section>
-      <Text style={{ ...text, marginTop: "24px", fontSize: "13px", color: "#78716c" }}>
-        Harly is open source and self-hostable.
-      </Text>
     </HarlyLayout>
   );
 }
+
+WelcomeEmail.PreviewProps = {
+  userName: "Ava",
+  workspaceName: "Acme Inc.",
+  dashboardUrl: "https://app.harly.dev/dashboard",
+} satisfies WelcomeEmailProps;

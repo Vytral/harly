@@ -22,7 +22,7 @@ export function offerExtendedSubject({
   companyName,
   jobTitle,
 }: Pick<OfferExtendedProps, "companyName" | "jobTitle">) {
-  return `Your offer from ${companyName} — ${jobTitle}`;
+  return `Offer from ${companyName} — ${jobTitle}`;
 }
 
 export function OfferExtended({
@@ -47,7 +47,7 @@ export function OfferExtended({
 
   return (
     <WorkspaceLayout
-      preview={`${companyName} has extended you an offer for ${jobTitle}.`}
+      preview={`${companyName} wants you on the team. Here's your offer.`}
       companyName={companyName}
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
@@ -56,14 +56,24 @@ export function OfferExtended({
       <Text style={heading}>You have an offer</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        We are delighted to offer you the role of{" "}
-        <strong>{jobTitle}</strong> at {companyName}. Here are the details:
+        We&apos;d love to have you join {companyName} as{" "}
+        <strong>{jobTitle}</strong>. Here&apos;s what we&apos;re offering:
       </Text>
       <DetailTable rows={rows} />
       <Text style={text}>
-        Reply to this email to accept, or let us know if you have any
-        questions.
+        Reply to this email to accept or to ask any questions. We&apos;re
+        excited about the possibility of working with you.
       </Text>
     </WorkspaceLayout>
   );
 }
+
+OfferExtended.PreviewProps = {
+  candidateName: "Ava Thompson",
+  companyName: "Acme Inc.",
+  jobTitle: "Senior Frontend Engineer",
+  salary: "$140,000 / year",
+  startDate: "August 1, 2026",
+  expiresAt: "July 10, 2026",
+  equity: "0.15% over 4 years",
+} satisfies OfferExtendedProps;
