@@ -1746,3 +1746,33 @@ export type NewDsarRequest = typeof dsarRequests.$inferInsert;
 export type CandidatePortalSession = typeof candidatePortalSessions.$inferSelect;
 export type NewCandidatePortalSession = typeof candidatePortalSessions.$inferInsert;
 export type CandidatePortalMagicLink = typeof candidatePortalMagicLinks.$inferSelect;
+
+// OAuth provider credentials stored per workspace.
+// Mirrors the migration in 0041_oauth_providers.sql.
+// Secrets encrypted AES-256-GCM, never returned in plaintext.
+export const oauthProviders = pgTable(
+  "oauth_providers",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    clientId: text("client_id").notNull(),
+    clientSecretCiphertext: text("client_secret_ciphertext"),
+    clientSecretIv: text("client_secret_iv"),
+    clientSecretTag: text("client_secret_tag"),
+    enabled: boolean("enabled").default(true).notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    index("oauth_providers_workspace_idx").on(table.workspaceId),
+    uniqueIndex("oauth_providers_workspace_provider_unique").on(
+      table.workspaceId,
+      table.provider,
+    ),
+  ],
+);
+
+export type OAuthProvider = typeof oauthProviders.$inferSelect;
+export type NewOAuthProvider = typeof oauthProviders.$inferInsert;
