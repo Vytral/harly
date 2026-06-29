@@ -863,3 +863,47 @@ export async function permanentlyDeleteCandidate(candidateId: string) {
     ? ({ ok: true } as const)
     : ({ ok: false, error: "Candidate not found in trash." } as const);
 }
+
+// ── Duplicate detection helpers ──────────────────────────────────────────────
+
+export type SuspectCandidate = {
+  candidateId: string;
+  fullName: string;
+  email: string;
+};
+
+/** Fuzzy name match — heuristic only, no AI. Used for the profile banner. */
+export async function findSuspectDuplicates(
+  candidateId: string,
+  firstName: string,
+  lastName: string,
+  workspaceId: string,
+): Promise<SuspectCandidate[]> {
+  const { ilike, ne, sql: drizzleSql } = await import("drizzle-orm");
+
+  const rows = await db
+    .select({
+      candidateId: candidates.id,
+      fullName: drizzleSql<string>`concat(${candidates.firstName}, ' ', ${candidates.lastName})`,
+      email: candidates.email,
+    })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.workspaceId, workspaceId),
+        ne(candidates.id, candidateId),
+        isNull(candidates.deletedAt),
+        or(
+          ilike(candidates.firstName, `%${firstName}%`),
+          ilike(candidates.lastName, `%${lastName}%`),
+        ),
+      ),
+    )
+    .limit(5);
+
+  return rows.map((r) => ({
+    candidateId: r.candidateId,
+    fullName: r.fullName,
+    email: r.email,
+  }));
+}

@@ -28,7 +28,7 @@ import { CandidateListRail } from "@/features/candidates/CandidateListRail";
 import { CandidateProfileTabs } from "@/features/candidates/CandidateProfileTabs";
 import { CandidateTags } from "@/features/candidates/CandidateTags";
 import { DuplicateDetectionCard } from "@/features/candidates/DuplicateDetectionCard";
-import { getCandidateProfile, listCandidates } from "@/features/candidates/data";
+import { getCandidateProfile, listCandidates, findSuspectDuplicates } from "@/features/candidates/data";
 import { listCandidateInterviews } from "@/features/interviews/data";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listOffersForCandidate } from "@/features/offers/data";
@@ -37,8 +37,6 @@ import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
 import { gravatarUrl } from "@/lib/gravatar";
-import { and, eq, ilike, isNull, ne, or, sql } from "drizzle-orm";
-import { db, candidates as candidatesTable } from "@harly/db";
 
 export const dynamic = "force-dynamic";
 
@@ -107,30 +105,12 @@ export default async function CandidateDetailPage({
   const avatarSrc = candidate.email ? gravatarUrl(candidate.email) : null;
 
   // Fuzzy duplicate check (heuristic only, no AI at load time)
-  const suspectRows = await db
-    .select({
-      candidateId: candidatesTable.id,
-      fullName: sql<string>`concat(${candidatesTable.firstName}, ' ', ${candidatesTable.lastName})`,
-      email: candidatesTable.email,
-    })
-    .from(candidatesTable)
-    .where(
-      and(
-        eq(candidatesTable.workspaceId, workspaceId),
-        ne(candidatesTable.id, candidate.id),
-        isNull(candidatesTable.deletedAt),
-        or(
-          ilike(candidatesTable.firstName, `%${candidate.firstName}%`),
-          ilike(candidatesTable.lastName, `%${candidate.lastName}%`),
-        ),
-      ),
-    )
-    .limit(5);
-  const suspectCandidates = suspectRows.map((r) => ({
-    candidateId: r.candidateId,
-    fullName: r.fullName,
-    email: r.email,
-  }));
+  const suspectCandidates = await findSuspectDuplicates(
+    candidate.id,
+    candidate.firstName,
+    candidate.lastName,
+    workspaceId,
+  );
 
   const railCandidates = allCandidates
     .slice()

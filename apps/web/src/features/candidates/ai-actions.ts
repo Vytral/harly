@@ -301,15 +301,22 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
   const remaining = Math.max(0, unscoredApps.length - BULK_BATCH_SIZE);
   const batch = unscoredApps.slice(0, BULK_BATCH_SIZE);
 
+  // Run up to 5 concurrent scoring calls.
+  const CONCURRENCY = 5;
   let succeeded = 0;
   let failed = 0;
 
-  for (const { applicationId } of batch) {
-    const result = await generateAiEvaluationAction({ applicationId });
-    if (result.success) {
-      succeeded++;
-    } else {
-      failed++;
+  for (let i = 0; i < batch.length; i += CONCURRENCY) {
+    const chunk = batch.slice(i, i + CONCURRENCY);
+    const results = await Promise.allSettled(
+      chunk.map(({ applicationId }) => generateAiEvaluationAction({ applicationId })),
+    );
+    for (const r of results) {
+      if (r.status === "fulfilled" && r.value.success) {
+        succeeded++;
+      } else {
+        failed++;
+      }
     }
   }
 
@@ -346,7 +353,7 @@ export async function detectCandidateDuplicatesAction(input: {
 
   let context;
   try {
-    context = await requirePermission("collab:write");
+    context = await requirePermission("collab:read");
   } catch {
     return { ok: false, error: "You do not have permission to run AI duplicate detection." };
   }

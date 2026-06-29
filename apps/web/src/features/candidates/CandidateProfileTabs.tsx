@@ -378,6 +378,7 @@ export function CandidateProfileTabs({
               workspaceId={workspaceId}
               members={scheduleMembers}
               currentUserId={currentUserId}
+              aiConfigured={aiConfigured}
             />
           ))
         )}
@@ -562,12 +563,14 @@ function InterviewCard({
   workspaceId,
   members,
   currentUserId,
+  aiConfigured,
 }: {
   interview: CandidateInterviewItem;
   candidateId: string;
   workspaceId: string;
   members: ScheduleMemberOption[];
   currentUserId?: string;
+  aiConfigured: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -743,26 +746,30 @@ function InterviewCard({
               </span>
             ) : null}
             <div className="ml-auto flex items-center gap-2">
-              <InterviewBriefSheet
-                interview={interview}
-                trigger={
-                  <AiButton size="sm" variant="outline">
-                    <BrainCircuit className="size-4" />
-                    Interview Brief
-                  </AiButton>
-                }
-              />
-              {interview.status === "completed" ? (
-                <SummarizeNotesSheet
-                  interview={interview}
-                  candidateId={candidateId}
-                  workspaceId={workspaceId}
-                  trigger={
-                    <AiButton size="sm" variant="outline">
-                      Summarize notes
-                    </AiButton>
-                  }
-                />
+              {aiConfigured ? (
+                <>
+                  <InterviewBriefSheet
+                    interview={interview}
+                    trigger={
+                      <AiButton size="sm" variant="outline">
+                        <BrainCircuit className="size-4" />
+                        Interview Brief
+                      </AiButton>
+                    }
+                  />
+                  {interview.status === "completed" ? (
+                    <SummarizeNotesSheet
+                      interview={interview}
+                      candidateId={candidateId}
+                      workspaceId={workspaceId}
+                      trigger={
+                        <AiButton size="sm" variant="outline">
+                          Summarize notes
+                        </AiButton>
+                      }
+                    />
+                  ) : null}
+                </>
               ) : null}
               <EvaluationDrawer
                 candidateId={candidateId}

@@ -9,16 +9,19 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export async function PipelineSummaryCard({ jobId }: { jobId: string }) {
   const { organization: workspace } = await getWorkspaceContext();
-  const summary = await getPipelineSummary(jobId);
+
+  // Run DB query and AI config fetch in parallel.
+  const [summary, aiConfig] = await Promise.all([
+    getPipelineSummary(jobId),
+    getWorkspaceAiConfig(workspace.id),
+  ]);
 
   if (!summary || summary.totalActive === 0) return null;
 
-  // Generate AI headline if AI is configured (don't block render on failure)
   let aiHeadline: string | null = null;
   try {
-    const config = await getWorkspaceAiConfig(workspace.id);
-    if (config) {
-      aiHeadline = await generatePipelineHeadlineWithAI(config, summary);
+    if (aiConfig) {
+      aiHeadline = await generatePipelineHeadlineWithAI(aiConfig, summary);
     }
   } catch {
     // AI unavailable — show stats only

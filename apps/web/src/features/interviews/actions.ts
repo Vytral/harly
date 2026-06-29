@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createElement } from "react";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { Output, generateText } from "ai";
 import { z } from "zod";
 
@@ -10,6 +10,7 @@ import { db } from "@harly/db";
 import {
   activityEvents,
   applications,
+  candidateFiles,
   candidates,
   interviews,
   jobs,
@@ -39,6 +40,10 @@ import {
   type InterviewNotesSummary,
 } from "@/lib/ai/schemas";
 import { createLogger } from "@/lib/logger";
+import { extractResumeText } from "@/lib/resume/extract-text";
+import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
+import { storage } from "@/lib/storage";
+import { maxResumeFileSize } from "@/lib/storage-validation";
 
 const log = createLogger("interviews");
 
@@ -870,6 +875,35 @@ export async function generateInterviewBriefAction(input: {
     return { success: false, error: "Interview not found." };
   }
 
+  // Load resume text for richer brief context.
+  let resumeText: string | null = null;
+  const [resumeFile] = await db
+    .select({ fileName: candidateFiles.fileName, fileUrl: candidateFiles.fileUrl })
+    .from(candidateFiles)
+    .where(
+      and(
+        eq(candidateFiles.workspaceId, workspaceId),
+        eq(candidateFiles.candidateId, briefRow.candidateId),
+      ),
+    )
+    .orderBy(desc(candidateFiles.createdAt))
+    .limit(1);
+
+  if (resumeFile) {
+    const key = resumeKeyFromUrl(resumeFile.fileUrl);
+    if (key) {
+      try {
+        const buffer = await storage.read(key);
+        if (buffer.byteLength > 0 && buffer.byteLength <= maxResumeFileSize) {
+          const { text } = await extractResumeText({ buffer, fileName: resumeFile.fileName });
+          resumeText = text.trim() || null;
+        }
+      } catch {
+        // Resume unavailable — proceed without it.
+      }
+    }
+  }
+
   function stripHtml(html: string | null): string {
     if (!html) return "";
     return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -885,6 +919,9 @@ export async function generateInterviewBriefAction(input: {
     Array.isArray(briefRow.candidateSkills) && (briefRow.candidateSkills as string[]).length > 0
       ? `Skills: ${(briefRow.candidateSkills as string[]).slice(0, 20).join(", ")}`
       : null,
+    resumeText
+      ? `Resume:\n"""\n${resumeText.slice(0, 8000)}\n"""`
+      : "Resume: not available",
   ]
     .filter(Boolean)
     .join("\n");
