@@ -3,6 +3,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { PipelineBoard } from "@/features/pipeline/PipelineBoard";
 import { PipelineJobSelect } from "@/features/pipeline/PipelineJobSelect";
 import { PipelineList } from "@/features/pipeline/PipelineList";
+import { PipelineSummaryCard } from "@/features/pipeline/PipelineSummaryCard";
 import { PipelineViewToggle } from "@/features/pipeline/PipelineViewToggle";
 import { getPipelineData } from "@/features/pipeline/data";
 
@@ -71,6 +72,9 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
   return (
     <div className="space-y-4">
       {toolbar}
+      <Suspense fallback={null}>
+        <PipelineSummaryCard jobId={data.selectedJob.id} />
+      </Suspense>
       {view === "list" ? (
         <PipelineList
           key={`list-${data.selectedJob.id}`}

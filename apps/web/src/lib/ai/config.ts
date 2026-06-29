@@ -19,6 +19,8 @@ export type WorkspaceAiStatus = {
   encryptionReady: boolean;
   /** Automatically score new applications when AI is configured. */
   autoScore: boolean;
+  /** Automatically flag potential duplicate candidates when a new application arrives. */
+  duplicateCheck: boolean;
 };
 
 /** Public-safe status for the settings UI. Never returns the API key. */
@@ -33,6 +35,7 @@ export async function getWorkspaceAiStatus(
       aiBaseUrl: workspaceSettings.aiBaseUrl,
       aiApiKeyCiphertext: workspaceSettings.aiApiKeyCiphertext,
       aiAutoScore: workspaceSettings.aiAutoScore,
+      aiDuplicateCheck: workspaceSettings.aiDuplicateCheck,
     })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, workspaceId))
@@ -46,6 +49,7 @@ export async function getWorkspaceAiStatus(
     hasApiKey: Boolean(row?.aiApiKeyCiphertext),
     encryptionReady: isEncryptionConfigured(),
     autoScore: Boolean(row?.aiAutoScore),
+    duplicateCheck: Boolean(row?.aiDuplicateCheck),
   };
 }
 

@@ -178,6 +178,23 @@ export async function saveAiAutoScoreAction(
   return { ok: true };
 }
 
+export async function saveAiDuplicateCheckAction(
+  duplicateCheck: boolean,
+): Promise<AiSettingsActionResult> {
+  const context = await requireWorkspaceRole(["owner", "admin"]);
+
+  await db
+    .insert(workspaceSettings)
+    .values({ organizationId: context.organization.id, aiDuplicateCheck: duplicateCheck })
+    .onConflictDoUpdate({
+      target: workspaceSettings.organizationId,
+      set: { aiDuplicateCheck: duplicateCheck, updatedAt: new Date() },
+    });
+
+  revalidatePath("/settings/ai");
+  return { ok: true };
+}
+
 export async function searchOpenRouterModelsAction(
   query: string,
 ): Promise<OpenRouterModel[]> {

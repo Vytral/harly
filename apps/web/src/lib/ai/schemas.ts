@@ -54,3 +54,33 @@ export const candidateScoreSchema = z.object({
 });
 
 export type CandidateScore = z.infer<typeof candidateScoreSchema>;
+
+export const interviewBriefSchema = z.object({
+  candidateSummary: z.string(),
+  keyAreasToProbe: z.array(z.string()),
+  suggestedQuestions: z.array(z.string()),
+  redFlags: z.array(z.string()),
+});
+
+export type InterviewBrief = z.infer<typeof interviewBriefSchema>;
+
+export const interviewNotesSummarySchema = z.object({
+  executiveSummary: z.string(),
+  positiveSignals: z.array(z.string()),
+  concerns: z.array(z.string()),
+  suggestedDecision: z.enum(["strong_yes", "yes", "maybe", "no"]),
+});
+
+export type InterviewNotesSummary = z.infer<typeof interviewNotesSummarySchema>;
+
+export const duplicateCandidateSchema = z.object({
+  matches: z.array(
+    z.object({
+      candidateId: z.string(),
+      confidence: z.enum(["high", "medium"]),
+      reason: z.string(),
+    }),
+  ),
+});
+
+export type DuplicateCandidateResult = z.infer<typeof duplicateCandidateSchema>;

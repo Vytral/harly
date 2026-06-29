@@ -1,11 +1,13 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import {
+  AlertTriangle,
   ArrowRight,
+  BrainCircuit,
   Calendar,
   CalendarClock,
   Check,
@@ -28,6 +30,7 @@ import { toast } from "sonner";
 
 import { AiScoreCard } from "@/features/candidates/AiScoreCard";
 import { CandidateFileUpload } from "@/features/candidates/CandidateFileUpload";
+import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { EditInterviewDialog } from "@/features/candidates/EditInterviewDialog";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
 import {
@@ -41,12 +44,18 @@ import type { CandidateOfferItem } from "@/features/offers/shared";
 import { NoteForm } from "@/features/candidates/NoteForm";
 import { EmailDrawer, type EmailTemplateOption } from "@/features/candidates/EmailDrawer";
 import type { TemplateValues } from "@/features/email-templates/interpolate";
-import { setInterviewStatus } from "@/features/interviews/actions";
+import { createCandidateNote } from "@/features/candidates/actions";
+import {
+  generateInterviewBriefAction,
+  setInterviewStatus,
+  summarizeInterviewNotesAction,
+} from "@/features/interviews/actions";
 import {
   interviewModeLabel,
   interviewTypeLabel,
   type CandidateInterviewItem,
 } from "@/features/interviews/shared";
+import type { InterviewBrief, InterviewNotesSummary } from "@/lib/ai/schemas";
 import type {
   CandidateActivityItem,
   CandidateAiEvaluationItem,
@@ -55,6 +64,7 @@ import type {
   NoteMention,
 } from "@/features/candidates/data";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
+import { AiButton } from "@/components/ui/AiButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -68,7 +78,9 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Sheet, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ShortDate, RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
@@ -730,7 +742,28 @@ function InterviewCard({
                 Not synced to GCal
               </span>
             ) : null}
-            <div className="ml-auto">
+            <div className="ml-auto flex items-center gap-2">
+              <InterviewBriefSheet
+                interview={interview}
+                trigger={
+                  <AiButton size="sm" variant="outline">
+                    <BrainCircuit className="size-4" />
+                    Interview Brief
+                  </AiButton>
+                }
+              />
+              {interview.status === "completed" ? (
+                <SummarizeNotesSheet
+                  interview={interview}
+                  candidateId={candidateId}
+                  workspaceId={workspaceId}
+                  trigger={
+                    <AiButton size="sm" variant="outline">
+                      Summarize notes
+                    </AiButton>
+                  }
+                />
+              ) : null}
               <EvaluationDrawer
                 candidateId={candidateId}
                 workspaceId={workspaceId}
@@ -747,6 +780,304 @@ function InterviewCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+// ── Recommendation meta (mirrors AiScoreCard) ────────────────────────────────
+const DECISION_META: Record<
+  "strong_yes" | "yes" | "maybe" | "no",
+  { label: string; className: string }
+> = {
+  strong_yes: { label: "Strong yes", className: "bg-primary/10 text-primary" },
+  yes: { label: "Yes", className: "bg-primary/10 text-primary" },
+  maybe: { label: "Maybe", className: "bg-clay/15 text-clay" },
+  no: { label: "No", className: "bg-destructive/10 text-destructive" },
+};
+
+// ── InterviewBriefSheet ───────────────────────────────────────────────────────
+function InterviewBriefSheet({
+  interview,
+  trigger,
+}: {
+  interview: CandidateInterviewItem;
+  trigger: React.ReactNode;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [brief, setBrief] = useState<InterviewBrief | null>(
+    interview.briefContent ?? null,
+  );
+
+  function generate() {
+    startTransition(async () => {
+      const result = await generateInterviewBriefAction({
+        interviewId: interview.id,
+      });
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      setBrief(result.brief);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>{trigger}</SheetTrigger>
+      <DrawerLayout
+        title="Interview Brief"
+        description={`${interview.title ?? interviewTypeLabel(interview.type)} · ${interview.jobTitle}`}
+        footer={
+          <AiButton
+            size="sm"
+            variant={brief ? "outline" : "default"}
+            onClick={generate}
+            loading={isPending}
+            loadingText="Generating"
+          >
+            {brief ? "Regenerate" : "Generate Brief"}
+          </AiButton>
+        }
+      >
+        {brief ? (
+          <div className="space-y-5 text-sm">
+            <div>
+              <p className="mb-1.5 font-medium text-foreground">Candidate summary</p>
+              <p className="text-muted-foreground leading-relaxed">{brief.candidateSummary}</p>
+            </div>
+
+            {brief.keyAreasToProbe.length > 0 ? (
+              <div>
+                <p className="mb-1.5 font-medium text-foreground">Key areas to probe</p>
+                <ul className="space-y-1 text-muted-foreground">
+                  {brief.keyAreasToProbe.map((area, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-muted-foreground/60" />
+                      {area}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+
+            {brief.suggestedQuestions.length > 0 ? (
+              <div>
+                <p className="mb-1.5 font-medium text-foreground">Suggested questions</p>
+                <ol className="space-y-2 text-muted-foreground">
+                  {brief.suggestedQuestions.map((q, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="shrink-0 tabular-nums text-muted-foreground/50 w-4">
+                        {i + 1}.
+                      </span>
+                      {q}
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            ) : null}
+
+            {brief.redFlags.length > 0 ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
+                <div className="mb-1.5 flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
+                  <AlertTriangle className="size-3.5 shrink-0" strokeWidth={2} />
+                  Watch for
+                </div>
+                <ul className="space-y-1 text-amber-700/90 dark:text-amber-400/80">
+                  {brief.redFlags.map((flag, i) => (
+                    <li key={i} className="flex items-start gap-2">
+                      <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-amber-400" />
+                      {flag}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3 py-12 text-center">
+            <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <BrainCircuit className="size-5" strokeWidth={1.8} />
+            </span>
+            <p className="text-sm text-muted-foreground max-w-[220px]">
+              Generate a brief to get candidate context, suggested questions, and areas to probe.
+            </p>
+          </div>
+        )}
+      </DrawerLayout>
+    </Sheet>
+  );
+}
+
+// ── SummarizeNotesSheet ───────────────────────────────────────────────────────
+function SummarizeNotesSheet({
+  interview,
+  candidateId,
+  workspaceId,
+  trigger,
+}: {
+  interview: CandidateInterviewItem;
+  candidateId: string;
+  workspaceId: string;
+  trigger: React.ReactNode;
+}) {
+  const router = useRouter();
+  const [open, setOpen] = useState(false);
+  const [isPending, startTransition] = useTransition();
+  const [rawNotes, setRawNotes] = useState("");
+  const [summary, setSummary] = useState<InterviewNotesSummary | null>(null);
+  const [isSaving, startSaveTransition] = useTransition();
+
+  function summarize() {
+    if (!rawNotes.trim()) {
+      toast.error("Enter some notes first.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await summarizeInterviewNotesAction({
+        interviewId: interview.id,
+        rawNotes,
+      });
+      if (!result.success) {
+        toast.error(result.error);
+        return;
+      }
+      setSummary(result.summary);
+    });
+  }
+
+  function saveAsNote() {
+    if (!summary) return;
+    const decision = DECISION_META[summary.suggestedDecision];
+    const body = [
+      `Interview summary — ${interview.title ?? interviewTypeLabel(interview.type)}`,
+      "",
+      summary.executiveSummary,
+      "",
+      "Positive signals",
+      ...summary.positiveSignals.map((s) => `• ${s}`),
+      ...(summary.concerns.length > 0
+        ? ["", "Concerns", ...summary.concerns.map((c) => `• ${c}`)]
+        : []),
+      "",
+      `Suggested decision: ${decision?.label ?? summary.suggestedDecision}`,
+    ].join("\n");
+
+    startSaveTransition(async () => {
+      const result = await createCandidateNote({
+        candidateId,
+        workspaceId,
+        body,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Could not save note.");
+        return;
+      }
+      toast.success("Summary saved as note");
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>{trigger}</SheetTrigger>
+      <DrawerLayout
+        title="Summarize interview notes"
+        description={`${interview.title ?? interviewTypeLabel(interview.type)} · ${interview.jobTitle}`}
+        footer={
+          summary ? (
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isSaving}
+              onClick={saveAsNote}
+            >
+              {isSaving ? "Saving…" : "Save as note"}
+            </Button>
+          ) : undefined
+        }
+      >
+        <div className="space-y-4">
+          {!summary ? (
+            <>
+              <Textarea
+                placeholder="Paste or type your raw interview notes here…"
+                className="min-h-[180px] resize-y text-sm"
+                value={rawNotes}
+                onChange={(e) => setRawNotes(e.target.value)}
+                disabled={isPending}
+              />
+              <AiButton
+                size="sm"
+                onClick={summarize}
+                loading={isPending}
+                loadingText="Summarizing"
+                disabled={!rawNotes.trim()}
+              >
+                Summarize with AI
+              </AiButton>
+            </>
+          ) : (
+            <div className="space-y-5 text-sm">
+              <div>
+                <p className="mb-1.5 font-medium text-foreground">Summary</p>
+                <p className="text-muted-foreground leading-relaxed">{summary.executiveSummary}</p>
+              </div>
+
+              {summary.positiveSignals.length > 0 ? (
+                <div>
+                  <p className="mb-1.5 font-medium text-foreground">Positive signals</p>
+                  <ul className="space-y-1 text-muted-foreground">
+                    {summary.positiveSignals.map((s, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-primary/60" />
+                        {s}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {summary.concerns.length > 0 ? (
+                <div>
+                  <p className="mb-1.5 font-medium text-foreground">Concerns</p>
+                  <ul className="space-y-1 text-muted-foreground">
+                    {summary.concerns.map((c, i) => (
+                      <li key={i} className="flex items-start gap-2">
+                        <span className="mt-1.5 size-1.5 shrink-0 rounded-full bg-destructive/60" />
+                        {c}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              <div className="flex items-center gap-2">
+                <p className="font-medium text-foreground">Suggested decision</p>
+                <span
+                  className={cn(
+                    "rounded-full px-2.5 py-0.5 text-xs font-medium",
+                    DECISION_META[summary.suggestedDecision]?.className,
+                  )}
+                >
+                  {DECISION_META[summary.suggestedDecision]?.label ?? summary.suggestedDecision}
+                </span>
+              </div>
+
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline-offset-2 hover:underline"
+                onClick={() => setSummary(null)}
+              >
+                Edit notes and re-summarize
+              </button>
+            </div>
+          )}
+        </div>
+      </DrawerLayout>
+    </Sheet>
   );
 }
 

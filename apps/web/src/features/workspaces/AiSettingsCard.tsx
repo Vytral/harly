@@ -8,6 +8,7 @@ import {
   disableAiAction,
   saveAiSettingsAction,
   saveAiAutoScoreAction,
+  saveAiDuplicateCheckAction,
   searchOpenRouterModelsAction,
   testAiConnectionAction,
 } from "@/features/workspaces/ai-settings-actions";
@@ -37,18 +38,16 @@ import {
   XaiLogo,
 } from "@/components/ui/icons/brands";
 import {
-  AuditDuotoneIcon,
   CheckIcon,
   GlobeIcon,
   KeyDuotoneIcon,
   LightningIcon,
   MagicWandDuotoneIcon,
-  PaperPlaneDuotoneIcon,
   ReadCvDuotoneIcon,
   RobotDuotoneIcon,
   SearchIcon,
-  SealCheckDuotoneIcon,
   SpinnerIcon,
+  UsersThreeDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -217,23 +216,9 @@ export function AiSettingsCard({
             status={status}
             canEdit={canEdit}
           />
-          <FeatureCard
-            icon={AuditDuotoneIcon}
-            title="Screening questions"
-            description="Generate role-specific screening questions for a job from its title, keywords, and description in the job question builder."
-            alwaysOn
-          />
-          <FeatureCard
-            icon={SealCheckDuotoneIcon}
-            title="Candidate scoring"
-            description="Score any candidate against a specific job on-demand, or regenerate scores when the job or candidate profile changes."
-            alwaysOn
-          />
-          <FeatureCard
-            icon={PaperPlaneDuotoneIcon}
-            title="AI email drafting"
-            description="Draft screening outreach, interview invites, rejections, and offers from the candidate email drawer — pre-filled with role and candidate context."
-            alwaysOn
+          <DuplicateCheckFeatureCard
+            status={status}
+            canEdit={canEdit}
           />
         </div>
       </div>
@@ -389,6 +374,62 @@ function AutoScoreFeatureCard({
         <p className="mt-2 text-xs text-muted-foreground">
           Configure a provider to unlock.
         </p>
+      ) : null}
+    </Card>
+  );
+}
+
+function DuplicateCheckFeatureCard({
+  status,
+  canEdit,
+}: {
+  status: WorkspaceAiStatus;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [pending, startToggle] = useTransition();
+  const [optimistic, setOptimistic] = useState(status.duplicateCheck);
+
+  const disabled = !status.enabled || !status.hasApiKey || !canEdit;
+
+  function toggle(next: boolean) {
+    setOptimistic(next);
+    startToggle(async () => {
+      const result = await saveAiDuplicateCheckAction(next);
+      if (!result.ok) {
+        setOptimistic(!next);
+        toast.error(result.error ?? "Could not update setting.");
+        return;
+      }
+      toast.success(next ? "Duplicate detection enabled" : "Duplicate detection disabled");
+      router.refresh();
+    });
+  }
+
+  return (
+    <Card className="gap-0 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
+          <UsersThreeDuotoneIcon className="size-5" />
+        </span>
+        <Switch
+          checked={optimistic}
+          onCheckedChange={toggle}
+          disabled={disabled || pending}
+          aria-label="Duplicate detection"
+          className="mt-0.5"
+        />
+      </div>
+      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">Duplicate detection</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Automatically flag potential duplicate candidates when a new application arrives — and let
+        you verify with AI from any candidate profile.
+      </p>
+      {disabled && status.hasApiKey && !status.enabled ? (
+        <p className="mt-2 text-xs text-clay">Enable AI above to activate.</p>
+      ) : null}
+      {!status.hasApiKey ? (
+        <p className="mt-2 text-xs text-muted-foreground">Configure a provider to unlock.</p>
       ) : null}
     </Card>
   );

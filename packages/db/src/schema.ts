@@ -352,6 +352,8 @@ export const workspaceSettings = pgTable("workspace_settings", {
   aiApiKeyTag: text("ai_api_key_tag"),
   // Automatically score new applications when AI is configured.
   aiAutoScore: boolean("ai_auto_score").default(false).notNull(),
+  // Automatically detect potential duplicate candidates when AI is configured.
+  aiDuplicateCheck: boolean("ai_duplicate_check").default(false).notNull(),
   // Cal.com scheduling (bring-your-own-key). Same AES-256-GCM encryption as the
   // AI key — the API key is never stored or returned in plaintext.
   calEnabled: boolean("cal_enabled").default(false).notNull(),
@@ -1227,6 +1229,7 @@ export const interviews = pgTable(
     // with a Cal.com booking. Lets the webhook upsert instead of duplicating.
     calBookingUid: text("cal_booking_uid"),
     gcalEventId: text("gcal_event_id"),
+    briefContent: jsonb("brief_content"),
     ...timestamps(),
   },
   (table) => [

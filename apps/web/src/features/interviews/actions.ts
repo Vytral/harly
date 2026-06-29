@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createElement } from "react";
 import { and, eq } from "drizzle-orm";
+import { Output, generateText } from "ai";
 import { z } from "zod";
 
 import { db } from "@harly/db";
@@ -28,6 +29,18 @@ import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { syncInterviewToGCal, cancelInterviewGCalEvent, updateInterviewGCalEvent } from "@/lib/gcal/sync";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import { getWorkspaceAiConfig } from "@/lib/ai/config";
+import { getModel } from "@/lib/ai/registry";
+import {
+  interviewBriefSchema,
+  interviewNotesSummarySchema,
+  type InterviewBrief,
+  type InterviewNotesSummary,
+} from "@/lib/ai/schemas";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("interviews");
 
 const INTERVIEW_TYPE_LABEL: Record<string, string> = {
   screening: "Screening interview",
@@ -785,6 +798,247 @@ export async function updateInterview(input: {
     return {
       success: false,
       error: "Unable to update interview.",
+    };
+  }
+}
+
+// ── Interview Brief ─────────────────────────────────────────────────────────
+
+const briefSchema = z.object({ interviewId: z.uuid() });
+
+export type GenerateInterviewBriefResult =
+  | { success: true; brief: InterviewBrief }
+  | { success: false; error: string; reason?: "not_configured" };
+
+/** Generate (or regenerate) an AI pre-interview brief and persist it on the row. */
+export async function generateInterviewBriefAction(input: {
+  interviewId: string;
+}): Promise<GenerateInterviewBriefResult> {
+  const parsed = briefSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: "Invalid interview." };
+  }
+
+  let context;
+  try {
+    context = await requirePermission("collab:write");
+  } catch {
+    return { success: false, error: "You do not have permission to generate briefs." };
+  }
+  const workspaceId = context.organization.id;
+
+  const aiConfig = await getWorkspaceAiConfig(workspaceId);
+  if (!aiConfig) {
+    return {
+      success: false,
+      error: "AI is not configured for this workspace.",
+      reason: "not_configured",
+    };
+  }
+
+  const [briefRow] = await db
+    .select({
+      id: interviews.id,
+      type: interviews.type,
+      title: interviews.title,
+      notes: interviews.notes,
+      scheduledAt: interviews.scheduledAt,
+      durationMins: interviews.durationMins,
+      candidateId: interviews.candidateId,
+      candidateFirst: candidates.firstName,
+      candidateLast: candidates.lastName,
+      candidateHeadline: candidates.headline,
+      candidateLocation: candidates.location,
+      candidateSkills: candidates.skills,
+      candidateExperienceYears: candidates.experienceYears,
+      jobTitle: jobs.title,
+      jobDescription: jobs.description,
+      jobRequirements: jobs.requirements,
+    })
+    .from(interviews)
+    .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
+    .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+    .where(
+      and(
+        eq(interviews.id, parsed.data.interviewId),
+        eq(interviews.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+
+  if (!briefRow) {
+    return { success: false, error: "Interview not found." };
+  }
+
+  function stripHtml(html: string | null): string {
+    if (!html) return "";
+    return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  }
+
+  const candidateBlock = [
+    `Name: ${briefRow.candidateFirst} ${briefRow.candidateLast}`,
+    briefRow.candidateHeadline ? `Headline: ${briefRow.candidateHeadline}` : null,
+    briefRow.candidateLocation ? `Location: ${briefRow.candidateLocation}` : null,
+    briefRow.candidateExperienceYears != null
+      ? `Experience: ${briefRow.candidateExperienceYears} years`
+      : null,
+    Array.isArray(briefRow.candidateSkills) && (briefRow.candidateSkills as string[]).length > 0
+      ? `Skills: ${(briefRow.candidateSkills as string[]).slice(0, 20).join(", ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const jobBlock = [
+    `Title: ${briefRow.jobTitle}`,
+    `Description: ${stripHtml(briefRow.jobDescription).slice(0, 3000)}`,
+    briefRow.jobRequirements
+      ? `Requirements: ${stripHtml(briefRow.jobRequirements).slice(0, 1500)}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const interviewBlock = [
+    `Interview type: ${INTERVIEW_TYPE_LABEL[briefRow.type] ?? briefRow.type}`,
+    `Duration: ${briefRow.durationMins} min`,
+    briefRow.notes ? `Interviewer notes: ${briefRow.notes}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  try {
+    const { output: briefOutput } = await generateText({
+      model: getModel(aiConfig),
+      system:
+        "You are an expert recruiter coach. Generate a focused pre-interview brief for " +
+        "the interviewer. Be specific and practical. `candidateSummary` is 2-4 sentences. " +
+        "`keyAreasToProbe` is 3-6 concise themes. `suggestedQuestions` is 4-8 concrete, " +
+        "open-ended questions. `redFlags` lists concerns worth watching — leave empty when " +
+        "there are none. Use plain text only, no markdown.",
+      prompt:
+        `Prepare an interview brief.\n\n## Candidate\n${candidateBlock}\n\n` +
+        `## Job\n${jobBlock}\n\n## Interview\n${interviewBlock}`,
+      output: Output.object({ schema: interviewBriefSchema }),
+    });
+
+    if (!briefOutput) {
+      return { success: false, error: "AI returned no structured output." };
+    }
+
+    await db
+      .update(interviews)
+      .set({ briefContent: briefOutput, updatedAt: new Date() })
+      .where(
+        and(
+          eq(interviews.id, parsed.data.interviewId),
+          eq(interviews.workspaceId, workspaceId),
+        ),
+      );
+
+    revalidatePath(`/dashboard/candidates/${briefRow.candidateId}`);
+    return { success: true, brief: briefOutput };
+  } catch (briefError) {
+    log.error(briefError, "generateInterviewBriefAction failed");
+    return {
+      success: false,
+      error: "Failed to generate brief. Check AI provider settings and try again.",
+    };
+  }
+}
+
+// ── Interview Notes Summarizer ───────────────────────────────────────────────
+
+const summarizeSchema = z.object({
+  interviewId: z.uuid(),
+  rawNotes: z.string().trim().min(1, "Notes are required.").max(8000),
+});
+
+export type SummarizeInterviewNotesResult =
+  | { success: true; summary: InterviewNotesSummary }
+  | { success: false; error: string; reason?: "not_configured" };
+
+/** Summarize raw post-interview notes into structured AI output (not persisted). */
+export async function summarizeInterviewNotesAction(input: {
+  interviewId: string;
+  rawNotes: string;
+}): Promise<SummarizeInterviewNotesResult> {
+  const parsed = summarizeSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      success: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
+  }
+
+  let context;
+  try {
+    context = await requirePermission("collab:write");
+  } catch {
+    return { success: false, error: "You do not have permission to summarize notes." };
+  }
+  const workspaceId = context.organization.id;
+
+  const aiConfig = await getWorkspaceAiConfig(workspaceId);
+  if (!aiConfig) {
+    return {
+      success: false,
+      error: "AI is not configured for this workspace.",
+      reason: "not_configured",
+    };
+  }
+
+  const [sumRow] = await db
+    .select({
+      type: interviews.type,
+      title: interviews.title,
+      candidateFirst: candidates.firstName,
+      candidateLast: candidates.lastName,
+      jobTitle: jobs.title,
+    })
+    .from(interviews)
+    .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
+    .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+    .where(
+      and(
+        eq(interviews.id, parsed.data.interviewId),
+        eq(interviews.workspaceId, workspaceId),
+      ),
+    )
+    .limit(1);
+
+  if (!sumRow) {
+    return { success: false, error: "Interview not found." };
+  }
+
+  try {
+    const { output: sumOutput } = await generateText({
+      model: getModel(aiConfig),
+      system:
+        "You are a recruiting analyst. Summarize post-interview notes into a structured " +
+        "debrief. `executiveSummary` is 2-3 plain sentences. `positiveSignals` and " +
+        "`concerns` are concise bullet phrases derived strictly from the notes — do not " +
+        "invent information. `suggestedDecision` reflects the overall sentiment: " +
+        "strong_yes / yes / maybe / no. Use plain text only, no markdown.",
+      prompt:
+        `Summarize these interview notes.\n\n` +
+        `Candidate: ${sumRow.candidateFirst} ${sumRow.candidateLast}\n` +
+        `Role: ${sumRow.jobTitle}\n` +
+        `Interview: ${sumRow.title ?? INTERVIEW_TYPE_LABEL[sumRow.type] ?? sumRow.type}\n\n` +
+        `Notes:\n"""\n${parsed.data.rawNotes.slice(0, 8000)}\n"""`,
+      output: Output.object({ schema: interviewNotesSummarySchema }),
+    });
+
+    if (!sumOutput) {
+      return { success: false, error: "AI returned no structured output." };
+    }
+
+    return { success: true, summary: sumOutput };
+  } catch (sumError) {
+    log.error(sumError, "summarizeInterviewNotesAction failed");
+    return {
+      success: false,
+      error: "Failed to summarize notes. Check AI provider settings and try again.",
     };
   }
 }

@@ -37,6 +37,7 @@ export async function listCandidateInterviews(
       interviewerImage: authUsers.image,
       jobTitle: jobs.title,
       gcalEventId: interviews.gcalEventId,
+      briefContent: interviews.briefContent,
     })
     .from(interviews)
     .innerJoin(
@@ -67,6 +68,7 @@ export async function listCandidateInterviews(
     interviewerImage: row.interviewerImage,
     jobTitle: row.jobTitle,
     gcalEventId: row.gcalEventId,
+    briefContent: (row.briefContent ?? null) as import("@/lib/ai/schemas").InterviewBrief | null,
   }));
 }
 

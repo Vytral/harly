@@ -4,6 +4,8 @@
  * Server queries live in `./data`.
  */
 
+import type { InterviewBrief } from "@/lib/ai/schemas";
+
 export type InterviewType =
   | "screening"
   | "culture_fit"
@@ -28,6 +30,7 @@ export type CandidateInterviewItem = {
   interviewerImage: string | null;
   jobTitle: string;
   gcalEventId: string | null;
+  briefContent?: InterviewBrief | null;
 };
 
 export type UpcomingInterviewItem = CandidateInterviewItem & {

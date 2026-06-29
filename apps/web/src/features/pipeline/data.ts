@@ -1,9 +1,10 @@
 import "server-only";
 
-import { and, asc, desc, eq, max } from "drizzle-orm";
+import { and, asc, count, desc, eq, lt, max, notInArray, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
+  aiEvaluations,
   applications,
   applicationStageHistory,
   candidates,
@@ -214,5 +215,133 @@ export async function getPipelineData(
       ...stage,
       emailConfig: normalizeStageEmailConfig(stage.emailConfig),
     })),
+  };
+}
+
+// ── Pipeline summary ────────────────────────────────────────────────────────
+
+export type PipelineSummary = {
+  totalActive: number;
+  stalledCandidates: number;
+  /** Days threshold used for stalled calculation. */
+  stalledDays: number;
+  unscored: number;
+  byRecommendation: {
+    strong_yes: number;
+    yes: number;
+    maybe: number;
+    no: number;
+  };
+};
+
+/**
+ * Return aggregate stats for a job pipeline. Returns null when the job has no
+ * active applications, so the card can be hidden without an extra query.
+ */
+export async function getPipelineSummary(jobId: string): Promise<PipelineSummary | null> {
+  const { organization: workspace } = await getWorkspaceContext();
+
+  const STALLED_DAYS = 14;
+
+  const stalledThreshold = new Date(Date.now() - STALLED_DAYS * 24 * 60 * 60 * 1000);
+
+  // Total active applications for this job.
+  const [totalsRow] = await db
+    .select({ total: count() })
+    .from(applications)
+    .where(
+      and(
+        eq(applications.workspaceId, workspace.id),
+        eq(applications.jobId, jobId),
+        eq(applications.status, "active"),
+      ),
+    );
+
+  const totalActive = Number(totalsRow?.total ?? 0);
+  if (totalActive === 0) return null;
+
+  // Applications that haven't moved stages in STALLED_DAYS days.
+  const latestStageMove = db
+    .select({
+      applicationId: applicationStageHistory.applicationId,
+      lastMoved: max(applicationStageHistory.createdAt).as("last_moved"),
+    })
+    .from(applicationStageHistory)
+    .where(eq(applicationStageHistory.workspaceId, workspace.id))
+    .groupBy(applicationStageHistory.applicationId)
+    .as("latest_stage_move");
+
+  const [stalledRow] = await db
+    .select({ stalled: count() })
+    .from(applications)
+    .leftJoin(latestStageMove, eq(latestStageMove.applicationId, applications.id))
+    .where(
+      and(
+        eq(applications.workspaceId, workspace.id),
+        eq(applications.jobId, jobId),
+        eq(applications.status, "active"),
+        lt(
+          sql`coalesce(${latestStageMove.lastMoved}, ${applications.createdAt})`,
+          stalledThreshold,
+        ),
+      ),
+    );
+
+  // Applications without an AI evaluation.
+  const scoredSubquery = db
+    .select({ applicationId: aiEvaluations.applicationId })
+    .from(aiEvaluations)
+    .where(eq(aiEvaluations.workspaceId, workspace.id));
+
+  const [unscoredRow] = await db
+    .select({ unscored: count() })
+    .from(applications)
+    .where(
+      and(
+        eq(applications.workspaceId, workspace.id),
+        eq(applications.jobId, jobId),
+        eq(applications.status, "active"),
+        notInArray(applications.id, scoredSubquery),
+      ),
+    );
+
+  // Recommendation breakdown from AI evaluations for this job.
+  const recRows = await db
+    .select({
+      recommendation: aiEvaluations.recommendation,
+      cnt: count(),
+    })
+    .from(aiEvaluations)
+    .innerJoin(
+      applications,
+      and(
+        eq(applications.workspaceId, workspace.id),
+        eq(applications.id, aiEvaluations.applicationId),
+        eq(applications.jobId, jobId),
+        eq(applications.status, "active"),
+      ),
+    )
+    .where(eq(aiEvaluations.workspaceId, workspace.id))
+    .groupBy(aiEvaluations.recommendation);
+
+  const byRec: PipelineSummary["byRecommendation"] = {
+    strong_yes: 0,
+    yes: 0,
+    maybe: 0,
+    no: 0,
+  };
+  for (const row of recRows) {
+    const key = row.recommendation as keyof typeof byRec;
+    if (key in byRec) {
+      byRec[key] = Number(row.cnt);
+    }
+  }
+
+  return {
+    totalActive,
+    stalledCandidates: Number(stalledRow?.stalled ?? 0),
+    stalledDays: STALLED_DAYS,
+    unscored: Number(unscoredRow?.unscored ?? 0),
+    byRecommendation: byRec,
   };
 }
