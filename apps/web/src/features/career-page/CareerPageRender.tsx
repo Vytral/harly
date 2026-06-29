@@ -3,21 +3,12 @@
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
 import type { CareerPageConfig } from "./config";
+import type { Job } from "./types";
 import { ThemeWrapper } from "./ThemeWrapper";
 import { PlayfulTemplate } from "./templates/PlayfulTemplate";
 import { MinimalTemplate } from "./templates/MinimalTemplate";
 import { AshbyTemplate } from "./templates/AshbyTemplate";
 import { GreenhouseTemplate } from "./templates/GreenhouseTemplate";
-
-type Job = {
-  id: string;
-  slug: string;
-  title: string;
-  department: string | null;
-  location: string | null;
-  employmentType: string;
-  workplaceType: string;
-};
 
 /**
  * Renders the public career page from live config. Switch picks the template

@@ -2,8 +2,10 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { magicLink, organization, twoFactor } from "better-auth/plugins";
+import { sso } from "@better-auth/sso";
 
-import { db, schema } from "@harly/db";
+import { db, schema, oauthProviders } from "@harly/db";
+import { eq, and } from "drizzle-orm";
 import {
   createEmailSender,
   ResetPasswordEmail,
@@ -12,10 +14,9 @@ import {
   verifyEmailSubject,
   type SendEmailOptions,
 } from "@harly/emails";
+import { decryptSecret, isEncryptionConfigured } from "./crypto-adapter";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-const googleClientId = process.env.GOOGLE_CLIENT_ID;
-const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const emailFrom = process.env.EMAIL_FROM ?? "Harly <noreply@harly.dev>";
 
 /**
@@ -73,6 +74,130 @@ async function sendMagicLinkEmail(email: string, url: string) {
   }
 }
 
+/**
+ * Load OAuth credentials from the database for a given provider.
+ * Returns null if not found or if encryption is not configured.
+ */
+async function getOAuthCredentialsFromDb(
+  provider: string,
+): Promise<{ clientId: string; clientSecret: string } | null> {
+  if (!isEncryptionConfigured()) {
+    return null;
+  }
+
+  try {
+    const [row] = await db
+      .select()
+      .from(oauthProviders)
+      .where(
+        and(
+          eq(oauthProviders.provider, provider),
+          eq(oauthProviders.enabled, true),
+        ),
+      )
+      .limit(1);
+
+    if (!row || !row.clientSecretCiphertext || !row.clientSecretIv || !row.clientSecretTag) {
+      return null;
+    }
+
+    const clientSecret = decryptSecret({
+      ciphertext: row.clientSecretCiphertext,
+      iv: row.clientSecretIv,
+      tag: row.clientSecretTag,
+    });
+
+    return {
+      clientId: row.clientId,
+      clientSecret,
+    };
+  } catch (error) {
+    console.error(`[Harly] Failed to load ${provider} credentials from DB:`, error);
+    return null;
+  }
+}
+
+/**
+ * Build social providers dynamically from DB and env vars.
+ * DB config takes precedence over env vars.
+ */
+async function buildSocialProviders() {
+  const providers: Record<string, {
+    clientId: string;
+    clientSecret: string;
+    tenantId?: string;
+    mapProfileToUser?: (profile: Record<string, unknown>) => Record<string, unknown>;
+  }> = {};
+  const providerNames = ["google", "microsoft", "github", "linkedin"];
+
+  for (const providerName of providerNames) {
+    // Try DB first
+    const dbCreds = await getOAuthCredentialsFromDb(providerName);
+    if (dbCreds) {
+      providers[providerName] = {
+        clientId: dbCreds.clientId,
+        clientSecret: dbCreds.clientSecret,
+        ...(providerName === "microsoft" ? { tenantId: "common" } : {}),
+        mapProfileToUser: getProfileMapper(providerName),
+      };
+      continue;
+    }
+
+    // Fallback to env vars
+    const envClientId = process.env[`${providerName.toUpperCase()}_CLIENT_ID`];
+    const envClientSecret = process.env[`${providerName.toUpperCase()}_CLIENT_SECRET`];
+    
+    if (envClientId && envClientSecret) {
+      providers[providerName] = {
+        clientId: envClientId,
+        clientSecret: envClientSecret,
+        ...(providerName === "microsoft" ? { tenantId: "common" } : {}),
+        mapProfileToUser: getProfileMapper(providerName),
+      };
+    }
+  }
+
+  return providers;
+}
+
+/**
+ * Returns a mapProfileToUser function for the given provider that extracts
+ * image, linkedinUrl, and githubUrl from the OAuth profile.
+ */
+function getProfileMapper(provider: string) {
+  return (profile: Record<string, unknown>): Record<string, unknown> => {
+    const updates: Record<string, unknown> = {};
+
+    // Extract image from all providers
+    if (provider === "google") {
+      updates.image = profile.picture ?? null;
+    } else if (provider === "github") {
+      updates.image = profile.avatar_url ?? null;
+      updates.githubUrl = profile.html_url ?? null;
+    } else if (provider === "linkedin") {
+      // LinkedIn OpenID Connect returns picture
+      updates.image = profile.picture ?? null;
+      // LinkedIn profile URL from sub (we can't get the vanity URL from OIDC)
+    } else if (provider === "microsoft") {
+      updates.image = profile.picture ?? null;
+    }
+
+    return updates;
+  };
+}
+
+// Build social providers on module load (cached for the lifetime of the process)
+// In production, this will be refreshed when the server restarts.
+// For dynamic updates, we use the cache invalidation in auth-logic.ts.
+let socialProvidersPromise: ReturnType<typeof buildSocialProviders> | null = null;
+
+function getSocialProviders() {
+  if (!socialProvidersPromise) {
+    socialProvidersPromise = buildSocialProviders();
+  }
+  return socialProvidersPromise;
+}
+
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? appUrl,
   secret: process.env.BETTER_AUTH_SECRET,
@@ -88,17 +213,10 @@ export const auth = betterAuth({
         await sendMagicLinkEmail(email, url);
       },
     }),
+    sso(),
     nextCookies(),
   ],
-  socialProviders:
-    googleClientId && googleClientSecret
-      ? {
-          google: {
-            clientId: googleClientId,
-            clientSecret: googleClientSecret,
-          },
-        }
-      : {},
+  socialProviders: await getSocialProviders(),
   emailAndPassword: {
     enabled: true,
     // Verification is encouraged via the dashboard banner, not enforced —

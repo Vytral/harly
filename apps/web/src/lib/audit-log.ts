@@ -2,6 +2,10 @@ import "server-only";
 
 import { db, auditLogs } from "@harly/db";
 
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("audit");
+
 type AuditSeverity = "info" | "warning" | "critical";
 
 interface LogAuditEventParams {
@@ -33,7 +37,7 @@ export async function logAuditEvent(params: LogAuditEventParams) {
     });
   } catch (err) {
     // Audit log failures are non-fatal — log but don't surface to caller.
-    console.error("[audit] Failed to write audit log:", err);
+    log.error(err, "[audit] Failed to write audit log");
   }
 }
 

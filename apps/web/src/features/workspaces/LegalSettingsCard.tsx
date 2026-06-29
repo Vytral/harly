@@ -506,8 +506,9 @@ export function LegalSettings({
           <div>
             <h2 className="text-sm font-semibold text-foreground">Legal Pages</h2>
             <p className="text-xs text-muted-foreground">
-              Write your legal content in Markdown. Pages are rendered at /legal/* and linked
-              from your application form.
+              Write your legal content in Markdown. Pages are published at{" "}
+              <code className="text-xs">/legal/privacy-policy</code>,{" "}
+              <code className="text-xs">/legal/terms-of-service</code>, etc.
             </p>
           </div>
           <div className="flex items-center gap-2">

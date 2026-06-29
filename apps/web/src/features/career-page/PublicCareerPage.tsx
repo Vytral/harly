@@ -7,17 +7,8 @@ import {
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
 import { isCareerPageConfigured, type CareerPageConfig } from "./config";
+import type { Job } from "./types";
 import { CareerPageRender } from "./CareerPageRender";
-
-type Job = {
-  id: string;
-  slug: string;
-  title: string;
-  department: string | null;
-  location: string | null;
-  employmentType: string;
-  workplaceType: string;
-};
 
 /**
  * The public careers surface. Used by both the workspace homepage (`/`) and the

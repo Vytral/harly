@@ -6,7 +6,10 @@ import {
 import { eq } from "drizzle-orm";
 import { db, passkeys } from "@harly/db";
 import { auth } from "@/lib/auth";
+import { createLogger } from "@/lib/logger";
 import { RP_ID, RP_NAME, ORIGIN, storeChallenge, consumeChallenge } from "@/lib/passkey";
+
+const log = createLogger("api-passkey-register");
 
 // GET — generate registration options for the authenticated user.
 export async function GET(req: NextRequest) {
@@ -65,7 +68,8 @@ export async function POST(req: NextRequest) {
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,
     });
-  } catch {
+  } catch (error) {
+    log.error(error, "passkey register verification failed");
     return NextResponse.json(
       { error: "Verification failed" },
       { status: 400 },

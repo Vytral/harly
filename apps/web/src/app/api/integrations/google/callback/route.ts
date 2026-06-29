@@ -7,6 +7,9 @@ import { db, workspaceSettings } from "@harly/db";
 import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { createOAuth2Client } from "@/lib/gcal/config";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api-google-callback");
 
 export const runtime = "nodejs";
 
@@ -71,8 +74,8 @@ export async function GET(req: NextRequest) {
       const info = (await res.json()) as { email?: string };
       accountEmail = info.email ?? null;
     }
-  } catch {
-    // Non-critical — proceed without email
+  } catch (error) {
+    log.error(error, "google callback userinfo fetch failed");
   }
 
   const encrypted = encryptSecret(tokens.refresh_token);
@@ -116,7 +119,8 @@ function verifyState(state: string): string | null {
     if (data.t && Date.now() - data.t > STATE_MAX_AGE_MS) return null;
 
     return data.ws;
-  } catch {
+  } catch (error) {
+    log.error(error, "google callback verifyState failed");
     return null;
   }
 }

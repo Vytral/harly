@@ -13,22 +13,13 @@ import { cn } from "@/lib/utils";
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 import type { CareerPageConfig } from "@/features/career-page/config";
+import type { Job } from "@/features/career-page/types";
 import { CareerTestimonials } from "@/features/career-page/CareerTestimonials";
 import { CareerFaq } from "@/features/career-page/CareerFaq";
 import { CareerFooter } from "@/features/career-page/CareerFooter";
 
 const reveal =
   "duration-500 animate-in fade-in slide-in-from-bottom-3 fill-mode-backwards motion-reduce:animate-none";
-
-type Job = {
-  id: string;
-  slug: string;
-  title: string;
-  department: string | null;
-  location: string | null;
-  employmentType: string;
-  workplaceType: string;
-};
 
 
 /** Distinct, sorted facet values for a key. */

@@ -6,7 +6,10 @@ import {
 import { eq, and } from "drizzle-orm";
 import { db, passkeys } from "@harly/db";
 import { auth } from "@/lib/auth";
+import { createLogger } from "@/lib/logger";
 import { RP_ID, ORIGIN, storeChallenge, consumeChallenge } from "@/lib/passkey";
+
+const log = createLogger("api-passkey-authenticate");
 
 // GET — generate authentication options for the authenticated user (for re-auth flows).
 export async function GET(req: NextRequest) {
@@ -88,7 +91,8 @@ export async function POST(req: NextRequest) {
           : undefined,
       },
     });
-  } catch {
+  } catch (error) {
+    log.error(error, "passkey authenticate verification failed");
     return NextResponse.json(
       { error: "Verification failed" },
       { status: 400 },

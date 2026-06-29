@@ -7,6 +7,9 @@ import { z } from "zod";
 import { db, emailTemplates } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("email-templates");
 
 const templateFieldsSchema = z.object({
   name: z.string().trim().min(1, "Name is required.").max(120),
@@ -32,7 +35,8 @@ export async function createEmailTemplate(input: {
   let context;
   try {
     context = await requirePermission("templates:manage");
-  } catch {
+  } catch (error) {
+    log.error(error, "template permission check failed");
     return { success: false, error: "You do not have permission to manage templates." };
   }
 
@@ -44,7 +48,8 @@ export async function createEmailTemplate(input: {
       body: parsed.data.body,
       createdById: context.user.id,
     });
-  } catch {
+  } catch (error) {
+    log.error(error, "template write failed");
     return { success: false, error: "A template with that name already exists." };
   }
 
@@ -71,7 +76,8 @@ export async function updateEmailTemplate(input: {
   let context;
   try {
     context = await requirePermission("templates:manage");
-  } catch {
+  } catch (error) {
+    log.error(error, "template permission check failed");
     return { success: false, error: "You do not have permission to manage templates." };
   }
 
@@ -89,7 +95,8 @@ export async function updateEmailTemplate(input: {
           eq(emailTemplates.id, parsed.data.templateId),
         ),
       );
-  } catch {
+  } catch (error) {
+    log.error(error, "template write failed");
     return { success: false, error: "A template with that name already exists." };
   }
 
@@ -106,7 +113,8 @@ export async function deleteEmailTemplate(input: {
   let context;
   try {
     context = await requirePermission("templates:manage");
-  } catch {
+  } catch (error) {
+    log.error(error, "template permission check failed");
     return { success: false, error: "You do not have permission to manage templates." };
   }
 

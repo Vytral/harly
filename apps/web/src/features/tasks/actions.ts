@@ -7,6 +7,9 @@ import { z } from "zod";
 import { db } from "@harly/db";
 import { activityEvents, notifications, tasks } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("tasks");
 
 const createSchema = z.object({
   title: z.string().trim().min(1, "Title is required.").max(200),
@@ -83,7 +86,8 @@ export async function createTask(
     revalidatePath("/dashboard/tasks");
     revalidatePath("/dashboard");
     return { success: true, taskId: task.id };
-  } catch {
+  } catch (error) {
+    log.error(error, "createTask failed");
     return { success: false, error: "Unable to create task." };
   }
 }
@@ -166,7 +170,8 @@ export async function updateTask(
     revalidatePath("/dashboard/tasks");
     revalidatePath("/dashboard");
     return { success: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "updateTask failed");
     return { success: false, error: "Unable to update task." };
   }
 }
@@ -189,7 +194,8 @@ export async function deleteTask(
     revalidatePath("/dashboard/tasks");
     revalidatePath("/dashboard");
     return { success: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "deleteTask failed");
     return { success: false, error: "Unable to delete task." };
   }
 }

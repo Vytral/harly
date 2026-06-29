@@ -8,6 +8,9 @@ import { db, workspaceSettings } from "@harly/db";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceGCalConfig } from "@/lib/gcal/config";
 import { listCalendars } from "@/lib/gcal/client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("workspace-gcal-settings");
 
 export type GCalActionResult = { ok: boolean; error?: string };
 
@@ -36,6 +39,7 @@ export async function listGCalCalendarsAction(): Promise<
       })),
     };
   } catch (err) {
+    log.error(err, "listGCalCalendarsAction failed");
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to list calendars.",
@@ -72,8 +76,8 @@ export async function disconnectGCalAction(): Promise<GCalActionResult> {
   if (config) {
     try {
       await config.oauth2Client.revokeCredentials();
-    } catch {
-      // Non-critical
+    } catch (error) {
+      log.error(error, "disconnectGCalAction revoke failed");
     }
   }
 
@@ -106,6 +110,7 @@ export async function testGCalConnectionAction(): Promise<GCalActionResult> {
     await listCalendars(config.oauth2Client);
     return { ok: true };
   } catch (err) {
+    log.error(err, "testGCalConnectionAction failed");
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Connection test failed.",

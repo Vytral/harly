@@ -21,8 +21,31 @@ export interface EmailSender {
 
 export type SocialProviders = Record<
   string,
-  { clientId: string; clientSecret: string; tenantId?: string }
+  { clientId: string; clientSecret: string; tenantId?: string; mapProfileToUser?: (profile: Record<string, unknown>) => Record<string, unknown> }
 >;
+
+/**
+ * Returns a mapProfileToUser function for the given provider that extracts
+ * image, linkedinUrl, and githubUrl from the OAuth profile.
+ */
+function getProfileMapper(provider: string) {
+  return (profile: Record<string, unknown>): Record<string, unknown> => {
+    const updates: Record<string, unknown> = {};
+
+    if (provider === "google") {
+      updates.image = profile.picture ?? null;
+    } else if (provider === "github") {
+      updates.image = profile.avatar_url ?? null;
+      updates.githubUrl = profile.html_url ?? null;
+    } else if (provider === "linkedin") {
+      updates.image = profile.picture ?? null;
+    } else if (provider === "microsoft") {
+      updates.image = profile.picture ?? null;
+    }
+
+    return updates;
+  };
+}
 
 /**
  * Builds the socialProviders config object from environment variables.
@@ -38,6 +61,7 @@ export function buildSocialProviders(
     providers.google = {
       clientId: env.GOOGLE_CLIENT_ID,
       clientSecret: env.GOOGLE_CLIENT_SECRET,
+      mapProfileToUser: getProfileMapper("google"),
     };
   }
 
@@ -46,6 +70,7 @@ export function buildSocialProviders(
       clientId: env.MICROSOFT_CLIENT_ID,
       clientSecret: env.MICROSOFT_CLIENT_SECRET,
       tenantId: "common",
+      mapProfileToUser: getProfileMapper("microsoft"),
     };
   }
 
@@ -53,10 +78,81 @@ export function buildSocialProviders(
     providers.github = {
       clientId: env.GITHUB_CLIENT_ID,
       clientSecret: env.GITHUB_CLIENT_SECRET,
+      mapProfileToUser: getProfileMapper("github"),
+    };
+  }
+
+  if (env.LINKEDIN_CLIENT_ID && env.LINKEDIN_CLIENT_SECRET) {
+    providers.linkedin = {
+      clientId: env.LINKEDIN_CLIENT_ID,
+      clientSecret: env.LINKEDIN_CLIENT_SECRET,
+      mapProfileToUser: getProfileMapper("linkedin"),
     };
   }
 
   return providers;
+}
+
+/**
+ * Builds social providers from database-stored OAuth credentials.
+ * Falls back to environment variables when no DB config exists.
+ * Caches results for 5 minutes to avoid hitting the DB on every request.
+ */
+let cachedProviders: SocialProviders | null = null;
+let cacheTimestamp = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+export async function buildDynamicSocialProviders(
+  getDbCredentials: (provider: string) => Promise<{ clientId: string; clientSecret: string } | null>,
+): Promise<SocialProviders> {
+  const now = Date.now();
+  
+  // Return cached if fresh
+  if (cachedProviders && now - cacheTimestamp < CACHE_TTL_MS) {
+    return cachedProviders;
+  }
+
+  const providers: SocialProviders = {};
+  const providerNames = ["google", "microsoft", "github", "linkedin"];
+
+  for (const providerName of providerNames) {
+    // Try DB first
+    const dbCreds = await getDbCredentials(providerName);
+    if (dbCreds) {
+      providers[providerName] = {
+        clientId: dbCreds.clientId,
+        clientSecret: dbCreds.clientSecret,
+        ...(providerName === "microsoft" ? { tenantId: "common" } : {}),
+        mapProfileToUser: getProfileMapper(providerName),
+      };
+      continue;
+    }
+
+    // Fallback to env vars
+    const envClientId = process.env[`${providerName.toUpperCase()}_CLIENT_ID`];
+    const envClientSecret = process.env[`${providerName.toUpperCase()}_CLIENT_SECRET`];
+    
+    if (envClientId && envClientSecret) {
+      providers[providerName] = {
+        clientId: envClientId,
+        clientSecret: envClientSecret,
+        ...(providerName === "microsoft" ? { tenantId: "common" } : {}),
+        mapProfileToUser: getProfileMapper(providerName),
+      };
+    }
+  }
+
+  // Update cache
+  cachedProviders = providers;
+  cacheTimestamp = now;
+
+  return providers;
+}
+
+/** Invalidate the cached providers (e.g., after config changes). */
+export function invalidateProviderCache(): void {
+  cachedProviders = null;
+  cacheTimestamp = 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

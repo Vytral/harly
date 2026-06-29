@@ -15,6 +15,9 @@ import {
   cancelInterviewGCalEvent,
   updateInterviewGCalEvent,
 } from "@/lib/gcal/sync";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("api-cal-webhook");
 
 export const runtime = "nodejs";
 
@@ -74,7 +77,8 @@ export async function POST(request: NextRequest) {
   let body: CalWebhookBody;
   try {
     body = JSON.parse(rawBody) as CalWebhookBody;
-  } catch {
+  } catch (error) {
+    log.error(error, "cal webhook JSON parse failed");
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 

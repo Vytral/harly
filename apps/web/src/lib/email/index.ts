@@ -5,6 +5,9 @@ import type React from "react";
 import { createEmailSender, type EmailSender } from "@harly/emails";
 
 import { getWorkspaceEmailConfig } from "./config";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("email");
 
 export const emailSender = createEmailSender();
 
@@ -23,7 +26,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
   try {
     await emailSender.send(options);
   } catch (error) {
-    console.error("[Harly] Failed to send email:", error);
+    log.error(error, "[email] Failed to send email");
   }
 }
 
@@ -57,7 +60,7 @@ export async function sendWorkspaceEmail(
     await sender.send(options);
     return true;
   } catch (error) {
-    console.error("[Harly] Failed to send email:", error);
+    log.error(error, "[email] Failed to send workspace email");
     return false;
   }
 }

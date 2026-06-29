@@ -9,275 +9,331 @@ const EU_TEMPLATE: LegalTemplate = {
 
 **Last updated:** {{DATE}}
 
-## 1. Data Controller
+At {{ENTITY_NAME}}, we take your privacy seriously. This policy explains what personal data we collect when you apply for a role, why we collect it, and how we protect it.
 
-The data controller responsible for your personal data is:
+---
 
-- **Entity:** {{ENTITY_NAME}}
-- **Address:** {{ENTITY_ADDRESS}}
-- **Email:** {{ENTITY_EMAIL}}
-- **Website:** {{ENTITY_WEBSITE}}
-{{#DPO}}- **Data Protection Officer:** {{DPO_EMAIL}}{{/DPO}}
+## Who we are
 
-## 2. Data We Collect
+**{{ENTITY_NAME}}**
+{{ENTITY_ADDRESS}}
+[{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
+{{#ENTITY_WEBSITE}}[{{ENTITY_WEBSITE}}]({{ENTITY_WEBSITE}}){{/ENTITY_WEBSITE}}
+{{#DPO}}**Data Protection Officer:** [{{DPO_EMAIL}}](mailto:{{DPO_EMAIL}}){{/DPO}}
 
-When you apply for a position through our careers page, we collect:
+We are the data controller for the personal data you submit through our careers page.
 
-- **Identity data:** First name, last name
-- **Contact data:** Email address, phone number, location
-- **Professional data:** Resume/CV, LinkedIn profile, GitHub profile, portfolio website
-- **Application data:** Answers to application questions, cover letter
-- **Technical data:** IP address, browser type, device information
+---
 
-## 3. Purpose and Legal Basis
+## What we collect
 
-We process your data for the following purposes and legal bases:
+When you apply for a position, we collect:
 
-| Purpose | Legal Basis |
-|---------|------------|
-| Processing your job application | Art. 6(1)(b) GDPR — performance of a contract |
-| Evaluating your candidacy | Art. 6(1)(f) GDPR — legitimate interest |
-| Sending application status updates | Art. 6(1)(b) GDPR — performance of a contract |
-| Retaining your data for future opportunities | Art. 6(1)(a) GDPR — consent |
+- **Contact details** — name, email address, phone number, location
+- **Professional background** — resume/CV, LinkedIn, GitHub, portfolio
+- **Application responses** — answers to screening questions, cover letter
+- **Technical metadata** — IP address, browser type, device info (collected automatically)
 
-## 4. Data Retention
+We only collect what we need to evaluate your application. We don't ask for sensitive data unless legally required or directly relevant to the role.
 
-- **Applicant data:** {{RETENTION_APPLICANTS}} months after the hiring decision
-- **Talent pool data:** {{RETENTION_TALENT_POOL}} months (with your consent)
+---
 
-## 5. Data Sharing
+## Why we process your data
 
-Your data may be shared with:
+| Purpose | Legal basis (GDPR) |
+|---|---|
+| Reviewing and evaluating your application | Art. 6(1)(b) — pre-contractual steps |
+| Communicating with you about your candidacy | Art. 6(1)(b) — pre-contractual steps |
+| Keeping your profile for future opportunities | Art. 6(1)(a) — your consent |
+| Improving our recruitment process | Art. 6(1)(f) — legitimate interest |
 
-- Our hiring team members involved in the recruitment process
-- Cloud infrastructure providers (data processed within the EU)
-- Email service providers (for application communications)
+---
 
-We do not sell your personal data to third parties.
+## How long we keep it
 
-## 6. Your Rights
+- **Active applicants:** {{RETENTION_APPLICANTS}} months from the final hiring decision
+- **Talent pool (opted-in only):** {{RETENTION_TALENT_POOL}} months from the date of consent
+
+After these periods, your data is securely deleted unless we're legally required to keep it longer.
+
+---
+
+## Who we share it with
+
+Your data is only shared with:
+
+- Members of our hiring team directly involved in evaluating your application
+- Infrastructure and tooling providers (under data processing agreements)
+
+We do not sell, rent, or trade your personal data. Ever.
+
+---
+
+## Your rights
 
 Under GDPR, you have the right to:
 
-- **Access** your personal data (Art. 15)
-- **Rectify** inaccurate data (Art. 16)
-- **Erase** your data (Art. 17)
-- **Restrict** processing (Art. 18)
-- **Data portability** (Art. 20)
-- **Object** to processing (Art. 21)
-- **Not be subject** to automated decisions (Art. 22)
+- **Access** the data we hold about you
+- **Correct** anything that's inaccurate
+- **Delete** your data (the "right to be forgotten")
+- **Restrict** how we process it
+- **Port** your data to another service
+- **Object** to processing based on legitimate interest
+- **Not be subject** to purely automated decisions
 
-To exercise your rights, contact us at {{ENTITY_EMAIL}}.
+To exercise any of these rights, email us at [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}). We'll respond within 30 days.
 
-## 7. International Transfers
+---
 
-Your data is processed within the European Economic Area (EEA). If data is transferred outside the EU, we ensure adequate safeguards through Standard Contractual Clauses (SCCs).
+## International transfers
 
-## 8. Changes to This Policy
+Your data is processed within the European Economic Area. If we ever transfer data outside the EEA, we ensure appropriate safeguards are in place (e.g. Standard Contractual Clauses).
 
-We may update this policy from time to time. Material changes will be communicated via email or a notice on our careers page.
+---
 
-## 9. Contact
+## Complaints
 
-For privacy-related inquiries, contact us at {{ENTITY_EMAIL}}.
-{{#DPO}}You may also contact our Data Protection Officer at {{DPO_EMAIL}}.{{/DPO}}
+If you believe we've mishandled your data, you have the right to lodge a complaint with your local data protection authority. We'd always prefer to resolve concerns directly first — reach out at [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 
-You have the right to lodge a complaint with your local supervisory authority.
+---
+
+## Changes to this policy
+
+If we make material changes, we'll notify you by email or with a notice on our careers page. The "last updated" date at the top of this page reflects the most recent revision.
 `,
 
   termsOfService: `# Terms of Service
 
 **Last updated:** {{DATE}}
 
-## 1. Acceptance of Terms
+These Terms govern your use of the careers page and application system operated by **{{ENTITY_NAME}}**. By submitting an application or browsing open roles, you agree to these terms.
 
-By accessing or using the careers page and application system provided by {{ENTITY_NAME}} ("we", "us", "our"), you agree to be bound by these Terms of Service.
+---
 
-## 2. Description of Service
+## What this service is
 
-We provide an online platform for job applications and recruitment management. Our service allows you to:
+Our careers page lets you:
 
-- Browse open positions
-- Submit job applications
-- Upload your resume and supporting documents
-- Track your application status
+- Explore open positions at {{ENTITY_NAME}}
+- Submit job applications and supporting documents
+- Track the status of your application
 
-## 3. Eligibility
+That's it. It's a recruitment tool, not a general-purpose platform.
 
-You must be at least 16 years old to use our service. By submitting an application, you represent that you meet this age requirement and that the information provided is accurate and complete.
+---
 
-## 4. Your Responsibilities
+## What we ask of you
 
-You agree to:
+When using this service, you agree to:
 
-- Provide accurate and truthful information
-- Not submit misleading or fraudulent applications
-- Not attempt to gain unauthorized access to the system
-- Not use the service for any unlawful purpose
+- Provide accurate and truthful information in your application
+- Not submit the same application multiple times to game our process
+- Not attempt to access parts of the system you're not authorised to use
+- Not use the service for anything other than legitimate job applications
 
-## 5. Intellectual Property
+Misrepresentation in an application is grounds for disqualification — or termination if discovered after hiring.
 
-All content on this careers page, including text, graphics, logos, and software, is the property of {{ENTITY_NAME}} and is protected by intellectual property laws.
+---
 
-## 6. Limitation of Liability
+## Intellectual property
 
-To the maximum extent permitted by law, {{ENTITY_NAME}} shall not be liable for any indirect, incidental, special, or consequential damages arising from your use of the service.
+The content, design, and software powering this careers page belong to {{ENTITY_NAME}} or its licensors. You may not reproduce or repurpose any of it without our written permission.
 
-## 7. Privacy
+---
 
-Your use of our service is also governed by our Privacy Policy, which is incorporated into these Terms by reference.
+## Limitation of liability
 
-## 8. Changes to These Terms
+We make this service available as-is. To the extent permitted by law, {{ENTITY_NAME}} is not liable for indirect, incidental, or consequential damages arising from your use of this service.
 
-We reserve the right to modify these Terms at any time. Continued use of the service after changes constitutes acceptance of the modified Terms.
+---
 
-## 9. Governing Law
+## Privacy
 
-These Terms are governed by the laws of the European Union and the applicable member state laws.
+How we handle your personal data is covered in our [Privacy Policy](/legal/privacy-policy). It's short — worth reading.
 
-## 10. Contact
+---
 
-For questions about these Terms, contact us at {{ENTITY_EMAIL}}.
+## Governing law
+
+These Terms are governed by the laws of the European Union and the laws of the jurisdiction in which {{ENTITY_NAME}} is incorporated.
+
+---
+
+## Questions
+
+If anything here is unclear, email us at [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 `,
 
   cookiePolicy: `# Cookie Policy
 
 **Last updated:** {{DATE}}
 
-## 1. What Are Cookies
+We use a small number of cookies on our careers page. This policy explains what they are and how you can control them.
 
-Cookies are small text files stored on your device when you visit our website. They help us provide you with a better experience.
+---
 
-## 2. How We Use Cookies
+## What cookies we use
 
-### Strictly Necessary Cookies
+### Strictly necessary
 
-These cookies are essential for the website to function. They cannot be disabled.
+These cookies are required for the site to work. They cannot be turned off.
 
-| Cookie | Purpose | Duration |
-|--------|---------|----------|
-| Session | Maintains your session state | Session |
-| CSRF | Protects against cross-site request forgery | Session |
-| Sidebar | Remembers your sidebar preferences | 1 year |
+| Cookie | What it does | Duration |
+|---|---|---|
+| Session | Keeps you logged in during your visit | Session |
+| CSRF token | Protects form submissions from cross-site attacks | Session |
+| UI preferences | Remembers sidebar state and display settings | 1 year |
 
-### Analytics Cookies (Optional)
+### Analytics (optional)
 
-These cookies help us understand how visitors interact with our website.
+If you accept analytics cookies, we collect anonymised data about how visitors use the site — page views, time on page, referral source. No personal data is attached to these events.
 
-| Cookie | Purpose | Duration |
-|--------|---------|----------|
-| Analytics | Tracks anonymous usage statistics | 1 year |
+| Cookie | What it does | Duration |
+|---|---|---|
+| Analytics | Tracks anonymous usage patterns | 1 year |
 
-Analytics cookies are only set after you provide consent.
+Analytics cookies are only set after you give consent via the cookie banner.
 
-## 3. Managing Cookies
+---
 
-You can control and manage cookies through your browser settings. Note that disabling certain cookies may affect the functionality of the website.
+## How to manage cookies
 
-## 4. Third-Party Cookies
+You can change your preferences at any time using the cookie banner, or by clearing cookies in your browser settings. Disabling strictly necessary cookies will break core site functionality.
 
-We may use third-party services that set cookies on your device. These services include:
+---
 
-- Cloudflare (security and performance)
-- Analytics providers (only with your consent)
+## Third-party services
 
-## 5. Changes to This Policy
+We use Cloudflare for security and performance. Cloudflare may set its own cookies — see [Cloudflare's cookie policy](https://www.cloudflare.com/cookie-policy/) for details.
 
-We may update this Cookie Policy from time to time. Changes will be posted on this page with an updated date.
+---
 
-## 6. Contact
+## Questions
 
-For questions about our use of cookies, contact us at {{ENTITY_EMAIL}}.
+Email us at [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 `,
 
   candidateNotice: `# Candidate Privacy Notice
 
 **Last updated:** {{DATE}}
 
-This notice explains how {{ENTITY_NAME}} collects, uses, and protects your personal data when you apply for a position through our careers page.
+This notice is for people applying to roles at **{{ENTITY_NAME}}**. It explains exactly how we handle your personal data during the recruitment process.
 
-## Data Controller
+---
 
-{{ENTITY_NAME}}
+## Data controller
+
+**{{ENTITY_NAME}}**
 {{ENTITY_ADDRESS}}
-Email: {{ENTITY_EMAIL}}
-{{#DPO}}DPO: {{DPO_EMAIL}}{{/DPO}}
+[{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
+{{#DPO}}Data Protection Officer: [{{DPO_EMAIL}}](mailto:{{DPO_EMAIL}}){{/DPO}}
 
-## Data We Collect
+---
 
-- **Provided by you:** Name, email, phone, location, resume, cover letter, application answers, social profiles
-- **Automatically collected:** IP address, browser type, device info, pages visited
+## What we collect and why
 
-## How We Use Your Data
+**You provide directly:**
+- Name, email, phone number, location
+- Resume/CV and cover letter
+- Answers to application questions
+- Links to professional profiles (LinkedIn, GitHub, portfolio)
 
-- To process and evaluate your application
-- To communicate with you about the hiring process
-- To comply with legal obligations
-- To improve our recruitment process (analytics, aggregated data only)
+**Collected automatically:**
+- IP address, browser type, device info
+- Pages visited and time spent on the careers site
 
-## Retention
+We use all of this to evaluate your application, communicate with you, and — where you've opted in — consider you for future roles.
 
-Your application data is retained for {{RETENTION_APPLICANTS}} months after the hiring decision. If you opt into our talent pool, your data is retained for {{RETENTION_TALENT_POOL}} months with your consent.
+---
 
-## Your Rights
+## How long we keep your data
 
-You have the right to access, correct, delete, or restrict processing of your personal data. You also have the right to data portability and to object to processing.
+- **Active applications:** {{RETENTION_APPLICANTS}} months from the final decision on your candidacy
+- **Talent pool:** {{RETENTION_TALENT_POOL}} months, if you've given explicit consent to be considered for future roles
 
-To exercise your rights, contact us at {{ENTITY_EMAIL}}.
+When retention periods expire, your data is permanently deleted from our systems.
 
-## AI Usage
+---
 
-We may use AI-assisted tools to help process and evaluate applications. AI is used as a supplementary tool only — all hiring decisions involve human review. You have the right to request human review of any automated decision affecting you.
+## Your rights
+
+You can, at any time:
+
+- Request a copy of the data we hold on you
+- Ask us to correct or update it
+- Ask us to delete it
+- Withdraw consent for talent pool inclusion
+- Request that we restrict or stop processing your data
+
+Email [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}) and we'll respond within 30 days.
+
+---
+
+## AI in our process
+
+We use AI tools to help parse resumes and organise application data. AI is a tool — it helps our team work faster, but it does not make hiring decisions. Every decision involving your candidacy is made by a human.
+
+If you have questions about how AI was used in evaluating your application, just ask.
+
+---
 
 ## Complaints
 
-You have the right to lodge a complaint with your local data protection authority.
+You have the right to complain to your local data protection authority. We'd much rather resolve any concern directly, so please reach out first.
 `,
 
   aiTransparencyNotice: `# AI Transparency Notice
 
 **Last updated:** {{DATE}}
 
-## AI in Our Recruitment Process
+{{ENTITY_NAME}} uses AI tools as part of our recruitment workflow. This notice explains what AI does, what it doesn't do, and what rights you have.
 
-{{ENTITY_NAME}} uses artificial intelligence tools to assist with certain aspects of our recruitment process. This notice explains how AI is used and your rights regarding AI-assisted decisions.
+---
 
-## How We Use AI
+## Where AI is involved
 
-### Resume Parsing
-AI is used to extract structured information from your resume/CV (such as work experience, education, and skills). This helps us process applications more efficiently.
+### Resume parsing
 
-### Content Generation
-AI may assist in drafting job descriptions and communications. All AI-generated content is reviewed and approved by our hiring team before use.
+When you upload a resume, AI extracts structured information — work history, education, skills, contact details — to pre-fill application fields and help our team quickly understand your background. No data beyond what you submitted is used.
 
-## What AI Does NOT Do
+### Job description drafting
 
-- AI does **not** make final hiring decisions
-- AI does **not** score or rank candidates in a way that replaces human judgment
-- AI does **not** assess protected characteristics (race, gender, age, disability, etc.)
+AI may assist our team in drafting job descriptions and candidate communications. All AI-generated content is reviewed and edited by a human before it's published or sent.
 
-## Human Oversight
+---
 
-All AI-assisted decisions are subject to meaningful human review. Our hiring team reviews AI outputs and makes final decisions based on a holistic evaluation of each candidate.
+## Where AI is not involved
 
-## Your Rights
+We want to be explicit about this:
+
+- **AI does not score or rank candidates.** There is no automated scoring system that determines whether you advance.
+- **AI does not make hiring decisions.** Every decision — screen, interview, offer, rejection — is made by a human.
+- **AI does not assess protected characteristics.** We do not use AI to infer or evaluate race, gender, age, religion, disability, or any other protected attribute.
+
+---
+
+## Human oversight
+
+Our hiring team reviews all application data directly. AI outputs are treated as a starting point, never a final answer. If AI parsing produces incorrect information, candidates can correct it before submission.
+
+---
+
+## Your rights
 
 Under the EU AI Act and GDPR, you have the right to:
 
-- **Know** that AI is being used in the evaluation process
-- **Request an explanation** of how AI contributed to any decision
-- **Request human review** of any AI-assisted decision
-- **Object** to solely automated decisions with legal effects
+- **Know** that AI tools are involved in processing your application (this notice)
+- **Request an explanation** of any AI-assisted step in your evaluation
+- **Request human review** of any decision that affects you
+- **Object** to processing by automated means
 
-To exercise these rights, contact us at {{ENTITY_EMAIL}}.
+To exercise any of these rights, contact us at [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 
-## Data Used by AI
+---
 
-AI tools process only the data you provide in your application (resume, application answers). We do not use external data sources or profiling about you.
+## Questions
 
-## Changes to This Notice
-
-We may update this notice as our use of AI evolves. Material changes will be communicated on this page.
+We're happy to explain how AI is used in any specific part of the process. Just email [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 `,
 };
 
@@ -286,208 +342,259 @@ const US_TEMPLATE: LegalTemplate = {
 
 **Last updated:** {{DATE}}
 
-## 1. Information We Collect
+{{ENTITY_NAME}} built this careers page to make applying for jobs straightforward. This policy explains what personal information we collect, how we use it, and your choices.
 
-When you apply for a position through our careers page, we collect:
+---
 
-- **Personal Information:** Name, email address, phone number, location
-- **Professional Information:** Resume/CV, work history, education, skills
-- **Application Data:** Cover letter, answers to application questions
-- **Technical Information:** IP address, browser type, device information
+## Who we are
 
-## 2. How We Use Your Information
+**{{ENTITY_NAME}}**
+{{ENTITY_ADDRESS}}
+[{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
+{{#ENTITY_WEBSITE}}[{{ENTITY_WEBSITE}}]({{ENTITY_WEBSITE}}){{/ENTITY_WEBSITE}}
+
+---
+
+## What we collect
+
+When you apply for a role, we collect:
+
+- **Contact information** — name, email address, phone number, location
+- **Professional information** — resume/CV, work history, education, skills
+- **Application data** — cover letter, answers to screening questions
+- **Profile links** — LinkedIn, GitHub, portfolio website (if you provide them)
+- **Technical information** — IP address, browser type, device info (collected automatically)
+
+---
+
+## How we use it
 
 We use your information to:
 
-- Process and evaluate your job application
-- Communicate with you about the hiring process
-- Comply with legal obligations
+- Review and evaluate your job application
+- Contact you about the status of your application
+- Consider you for future roles (only if you opt in)
 - Improve our recruitment process
 
-## 3. Information Sharing
+We do not sell your personal information.
 
-We may share your information with:
+---
 
-- Internal hiring team members involved in the recruitment process
-- Service providers who assist with our recruitment platform (under contractual obligations)
-- Legal authorities when required by law
+## Who we share it with
 
-We do **not** sell your personal information to third parties.
+- Members of our internal hiring team
+- Service providers that help us operate our recruitment platform (under contractual data protection obligations)
+- Law enforcement or government authorities when legally required
 
-## 4. Data Security
+---
 
-We implement reasonable security measures to protect your personal information, including encryption in transit and at rest, access controls, and regular security audits.
+## How long we keep it
 
-## 5. Data Retention
+- **Applicant data:** {{RETENTION_APPLICANTS}} months after the final hiring decision
+- **Talent pool:** {{RETENTION_TALENT_POOL}} months, with your explicit consent
 
-- **Applicant data:** {{RETENTION_APPLICANTS}} months after the hiring decision
-- **Talent pool data:** {{RETENTION_TALENT_POOL}} months (with your consent)
+After these periods, your data is securely deleted.
 
-## 6. Your Rights
+---
 
-Depending on your location, you may have the right to:
+## Your rights
 
-- Access your personal information
+Depending on where you live, you may have the right to:
+
+- Access the personal information we hold about you
 - Correct inaccurate information
-- Delete your personal information
-- Opt out of the sale of personal information (we do not sell data)
-- Not be discriminated against for exercising your rights
+- Delete your information
+- Opt out of certain types of data processing
 
-## 7. California Residents (CCPA/CPRA)
+**California residents (CCPA/CPRA):** You have the right to know what personal information we've collected, delete it, and not be discriminated against for exercising these rights. We do not sell personal information.
 
-If you are a California resident, you have additional rights under the California Consumer Privacy Act:
+To make a request, email [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 
-- Right to know what personal information is collected
-- Right to delete personal information
-- Right to opt out of the sale of personal information
-- Right to non-discrimination
+---
 
-## 8. Contact
+## Security
 
-For privacy-related inquiries, contact us at {{ENTITY_EMAIL}}.
+We use encryption in transit and at rest, access controls, and routine security reviews to protect your data. No system is completely secure, but we take reasonable steps to keep your information safe.
+
+---
+
+## Changes
+
+We may update this policy. If we make significant changes, we'll let you know via email or a notice on our careers page.
 `,
 
   termsOfService: `# Terms of Service
 
 **Last updated:** {{DATE}}
 
-## 1. Acceptance of Terms
+By using the careers page operated by **{{ENTITY_NAME}}**, you agree to these Terms. If you don't agree, please don't use the service.
 
-By accessing or using the careers page and application system provided by {{ENTITY_NAME}} ("we", "us", "our"), you agree to be bound by these Terms of Service.
+---
 
-## 2. Description of Service
+## What this service does
 
-We provide an online platform for job applications and recruitment management.
+Our careers page lets you browse open positions, submit applications, and track your candidacy. That's its purpose.
 
-## 3. Eligibility
+---
 
-You must be at least 16 years old to use our service. By submitting an application, you represent that the information provided is accurate and complete.
-
-## 4. Your Responsibilities
+## Your responsibilities
 
 You agree to:
 
-- Provide accurate and truthful information
-- Not submit misleading or fraudulent applications
-- Not attempt to gain unauthorized access to the system
-- Not use the service for any unlawful purpose
+- Provide accurate, truthful information in your application
+- Not submit false or misleading materials
+- Not attempt to access any part of the system you're not authorised to use
+- Use the service only for legitimate job applications
 
-## 5. Intellectual Property
+---
 
-All content on this careers page is the property of {{ENTITY_NAME}} and is protected by applicable intellectual property laws.
+## Intellectual property
 
-## 6. Limitation of Liability
+All content on this careers page belongs to {{ENTITY_NAME}} or its licensors. You may not copy, reproduce, or redistribute it without our permission.
 
-To the maximum extent permitted by law, {{ENTITY_NAME}} shall not be liable for any damages arising from your use of the service.
+---
 
-## 7. Privacy
+## Disclaimer and liability
 
-Your use of our service is also governed by our Privacy Policy.
+This service is provided "as is." To the extent permitted by applicable law, {{ENTITY_NAME}} is not liable for any damages arising from your use of the service.
 
-## 8. Changes to These Terms
+---
 
-We reserve the right to modify these Terms at any time.
+## Privacy
 
-## 9. Governing Law
+See our [Privacy Policy](/legal/privacy-policy) for details on how we handle your data.
 
-These Terms are governed by the laws of the State of {{STATE}}, United States.
+---
 
-## 10. Contact
+## Governing law
 
-For questions about these Terms, contact us at {{ENTITY_EMAIL}}.
+These Terms are governed by the laws of the State of {{STATE}}, United States, without regard to conflict of law principles.
+
+---
+
+## Contact
+
+Questions? Email [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 `,
 
   cookiePolicy: `# Cookie Policy
 
 **Last updated:** {{DATE}}
 
-## 1. What Are Cookies
+We use cookies on our careers page to make it work and to understand how people use it. Here's the full picture.
 
-Cookies are small text files stored on your device when you visit our website.
+---
 
-## 2. Types of Cookies We Use
+## Cookies we use
 
-### Essential Cookies
+### Essential cookies
 
-These cookies are necessary for the website to function properly.
+Required for the site to function. These can't be disabled.
 
-### Analytics Cookies (Optional)
+| Cookie | Purpose | Duration |
+|---|---|---|
+| Session | Maintains your session | Session |
+| CSRF | Protects form submissions | Session |
+| UI preferences | Remembers display settings | 1 year |
 
-These cookies help us understand how visitors interact with our website. They are only set with your consent.
+### Analytics cookies (optional)
 
-## 3. Managing Cookies
+Collect anonymous data about how visitors use the site. Only set with your consent.
 
-You can control cookies through your browser settings.
+| Cookie | Purpose | Duration |
+|---|---|---|
+| Analytics | Tracks anonymous usage | 1 year |
 
-## 4. Do Not Track
+---
+
+## Managing cookies
+
+You can update your cookie preferences via the banner at any time, or clear cookies through your browser settings.
+
+---
+
+## Do Not Track
 
 We honor Do Not Track signals sent by your browser.
 
-## 5. Changes to This Policy
+---
 
-We may update this policy from time to time.
+## Questions
 
-## 6. Contact
-
-For questions about cookies, contact us at {{ENTITY_EMAIL}}.
+Email [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 `,
 
   candidateNotice: `# Candidate Privacy Notice
 
 **Last updated:** {{DATE}}
 
-This notice explains how {{ENTITY_NAME}} handles your personal data during the recruitment process.
+This notice explains how **{{ENTITY_NAME}}** handles personal information collected during the hiring process.
 
-## What We Collect
+---
 
-- Name, email, phone, location
-- Resume/CV and cover letter
-- Application question answers
-- Technical information (IP, browser, device)
+## What we collect
 
-## How We Use It
+- Name, email, phone number, current location
+- Resume/CV, cover letter, application answers
+- Professional profile links (LinkedIn, GitHub, portfolio)
+- Technical info (IP address, browser, device) — collected automatically
 
-- To process and evaluate your application
-- To communicate about the hiring process
-- To comply with legal obligations
+---
 
-## Retention
+## How we use it
 
-Your data is kept for {{RETENTION_APPLICANTS}} months after the hiring decision.
+- To evaluate your application for current and future roles
+- To communicate with you about the hiring process
+- To comply with applicable employment laws
 
-## Your Rights
+---
 
-You may request access to, correction of, or deletion of your personal data by contacting us at {{ENTITY_EMAIL}}.
+## How long we keep it
 
-## AI Usage
+- **Active applications:** {{RETENTION_APPLICANTS}} months after the final hiring decision
+- **Talent pool:** {{RETENTION_TALENT_POOL}} months, if you've given consent
 
-We may use AI tools to assist with resume parsing and application processing. All hiring decisions involve human review.
+---
+
+## Your rights
+
+You can request access to, correction of, or deletion of your personal information at any time. Email [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
+
+---
+
+## AI usage
+
+We use AI tools to help parse resumes. AI does not make hiring decisions — those are made by our team.
 `,
 
   aiTransparencyNotice: `# AI Transparency Notice
 
 **Last updated:** {{DATE}}
 
-## AI in Our Recruitment Process
+Here's how **{{ENTITY_NAME}}** uses AI in recruitment — and where we don't.
 
-{{ENTITY_NAME}} uses AI tools to assist with recruitment.
+---
 
-## How We Use AI
+## What AI does
 
-- **Resume Parsing:** Extracts structured data from your resume
-- **Content Generation:** Assists in drafting job descriptions (reviewed by humans)
+- **Resume parsing** — extracts structured data (experience, education, skills) from uploaded resumes to pre-fill application fields and help our team review applications faster
+- **Drafting assistance** — AI may help draft job descriptions or messages, reviewed and edited by humans before use
 
-## What AI Does Not Do
+---
 
+## What AI does not do
+
+- AI does not score, rank, or filter candidates
 - AI does not make hiring decisions
-- AI does not score or rank candidates without human oversight
-- AI does not assess protected characteristics
+- AI does not evaluate or infer protected characteristics
 
-## Your Rights
+All hiring decisions are made by humans.
 
-You may request an explanation of how AI was used in evaluating your application and request human review of any automated decision.
+---
 
-Contact us at {{ENTITY_EMAIL}}.
+## Your rights
+
+You may request an explanation of how AI was used in your application process, and request human review of any decision. Contact us at [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 `,
 };
 
@@ -496,173 +603,163 @@ const OTHER_TEMPLATE: LegalTemplate = {
 
 **Last updated:** {{DATE}}
 
-## 1. Data Controller
+This policy explains how **{{ENTITY_NAME}}** handles personal data collected through our careers page.
 
-**Entity:** {{ENTITY_NAME}}
-**Address:** {{ENTITY_ADDRESS}}
-**Email:** {{ENTITY_EMAIL}}
-**Website:** {{ENTITY_WEBSITE}}
+---
 
-## 2. Data We Collect
+## Data controller
 
-When you apply for a position, we collect: name, email, phone, location, resume/CV, application answers, and technical data (IP, browser, device).
+**{{ENTITY_NAME}}**
+{{ENTITY_ADDRESS}}
+[{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
+{{#ENTITY_WEBSITE}}[{{ENTITY_WEBSITE}}]({{ENTITY_WEBSITE}}){{/ENTITY_WEBSITE}}
 
-## 3. How We Use Your Data
+---
 
-- To process your job application
-- To communicate about the hiring process
-- To comply with legal obligations
+## What we collect
 
-## 4. Data Retention
+When you apply for a role, we collect: name, email, phone number, location, resume/CV, application answers, professional profile links, and technical metadata (IP, browser, device).
 
-- Applicants: {{RETENTION_APPLICANTS}} months after hiring decision
-- Talent pool: {{RETENTION_TALENT_POOL}} months (with consent)
+---
 
-## 5. Data Sharing
+## Why we collect it
 
-We share data with our hiring team and service providers under contractual obligations. We do not sell your data.
+To process your job application, communicate with you about your candidacy, and — with your consent — consider you for future roles.
 
-## 6. Your Rights
+---
 
-You may access, correct, delete, or restrict processing of your data. Contact us at {{ENTITY_EMAIL}}.
+## How long we keep it
 
-## 7. Security
+- **Applicants:** {{RETENTION_APPLICANTS}} months after the final hiring decision
+- **Talent pool (with consent):** {{RETENTION_TALENT_POOL}} months
 
-We implement reasonable security measures to protect your data.
+---
 
-## 8. Changes
+## Who we share it with
 
-We may update this policy. Material changes will be communicated on this page.
+Our hiring team and service providers operating under data processing agreements. We don't sell your data.
 
-## 9. Contact
+---
 
-{{ENTITY_EMAIL}}
+## Your rights
+
+You can access, correct, or delete your data at any time. Email [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}) and we'll respond within 30 days.
+
+---
+
+## Security
+
+We use encryption, access controls, and routine security audits to protect your data.
+
+---
+
+## Updates
+
+We'll post changes here and update the date above.
 `,
 
   termsOfService: `# Terms of Service
 
 **Last updated:** {{DATE}}
 
-## 1. Acceptance
+By using the careers page operated by **{{ENTITY_NAME}}**, you agree to these Terms.
 
-By using the careers page of {{ENTITY_NAME}}, you agree to these terms.
+---
 
-## 2. Service
+## The service
 
-We provide an online platform for job applications and recruitment.
+Our careers page lets you browse open positions and submit job applications.
 
-## 3. Your Responsibilities
+---
 
-Provide accurate information. Do not misuse the service.
+## Your responsibilities
 
-## 4. Intellectual Property
+Provide accurate information. Don't misuse the service or attempt to access areas you're not authorised to use.
 
-Content is the property of {{ENTITY_NAME}}.
+---
 
-## 5. Liability
+## Intellectual property
 
-To the maximum extent permitted by law, we are not liable for damages from your use of the service.
+Content on this page belongs to {{ENTITY_NAME}}.
 
-## 6. Changes
+---
 
-We may modify these terms at any time.
+## Liability
 
-## 7. Contact
+To the extent permitted by law, {{ENTITY_NAME}} is not liable for damages arising from use of this service.
 
-{{ENTITY_EMAIL}}
+---
+
+## Privacy
+
+See our [Privacy Policy](/legal/privacy-policy).
+
+---
+
+## Contact
+
+[{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
 `,
 
   cookiePolicy: `# Cookie Policy
 
 **Last updated:** {{DATE}}
 
-We use cookies to provide and improve our service. Essential cookies are necessary for the site to function. Analytics cookies are optional and require your consent.
+We use a small number of cookies to run our careers page. Essential cookies keep the site working. Analytics cookies (optional) help us understand how it's used.
 
-You can manage cookies through your browser settings.
+You can manage your preferences via the cookie banner or your browser settings.
 
-Contact us at {{ENTITY_EMAIL}} for questions.
+Questions? [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
 `,
 
   candidateNotice: `# Candidate Privacy Notice
 
 **Last updated:** {{DATE}}
 
-{{ENTITY_NAME}} collects your application data (name, email, resume, application answers) to process your candidacy.
+**{{ENTITY_NAME}}** collects your application data — name, email, resume, application answers — to evaluate your candidacy and communicate with you during the hiring process.
 
-Data is retained for {{RETENTION_APPLICANTS}} months after the hiring decision.
+Data is retained for **{{RETENTION_APPLICANTS}} months** after the final hiring decision. If you opt into our talent pool, we keep it for **{{RETENTION_TALENT_POOL}} months**.
 
-You may request access, correction, or deletion of your data at {{ENTITY_EMAIL}}.
+You can request access, correction, or deletion of your data at any time: [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
 
-We may use AI tools for resume parsing. All hiring decisions involve human review.
+We may use AI tools for resume parsing. All hiring decisions are made by humans.
 `,
 
   aiTransparencyNotice: `# AI Transparency Notice
 
 **Last updated:** {{DATE}}
 
-{{ENTITY_NAME}} uses AI to assist with resume parsing and job description drafting.
+**{{ENTITY_NAME}}** uses AI to help parse resumes and draft job-related content. AI-generated content is always reviewed by a human before use.
 
-AI does not make hiring decisions. All decisions involve human review.
+AI does not make hiring decisions. Every decision in our recruitment process involves human review.
 
-You may request an explanation of AI usage at {{ENTITY_EMAIL}}.
+To ask about how AI was used in your application, contact [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 `,
 };
 
-const TEMPLATES: Record<Jurisdiction, LegalTemplate> = {
-  eu: EU_TEMPLATE,
-  us: US_TEMPLATE,
-  other: OTHER_TEMPLATE,
-};
-
-/**
- * Fills template placeholders with entity data.
- */
-export function renderTemplate(
-  template: LegalTemplate,
-  vars: {
-    entityName?: string | null;
-    entityAddress?: string | null;
-    entityEmail?: string | null;
-    entityWebsite?: string | null;
-    dpoEmail?: string | null;
-    retentionApplicants?: number;
-    retentionTalentPool?: number;
-  },
-): LegalPageKey[] {
-  const replacements: Record<string, string> = {
-    "{{DATE}}": new Date().toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    }),
-    "{{ENTITY_NAME}}": vars.entityName ?? "[Company Name]",
-    "{{ENTITY_ADDRESS}}": vars.entityAddress ?? "[Company Address]",
-    "{{ENTITY_EMAIL}}": vars.entityEmail ?? "[privacy@company.com]",
-    "{{ENTITY_WEBSITE}}": vars.entityWebsite ?? "[https://company.com]",
-    "{{DPO_EMAIL}}": vars.dpoEmail ?? "",
-    "{{RETENTION_APPLICANTS}}": String(vars.retentionApplicants ?? 6),
-    "{{RETENTION_TALENT_POOL}}": String(vars.retentionTalentPool ?? 24),
-  };
-
-  // Conditional blocks: {{#DPO}}...{{/DPO}}
-  const hasDpo = Boolean(vars.dpoEmail);
-  const dpoConditional = /\{\{#DPO\}\}([\s\S]*?)\{\{\/DPO\}\}/g;
-
-  const pages = {} as Record<LegalPageKey, string>;
-
-  for (const [key, raw] of Object.entries(template) as [LegalPageKey, string][]) {
-    let filled = raw;
-    for (const [placeholder, value] of Object.entries(replacements)) {
-      filled = filled.replaceAll(placeholder, value);
-    }
-    // Handle conditional blocks
-    filled = filled.replace(dpoConditional, hasDpo ? "$1" : "");
-    pages[key] = filled.trim();
-  }
-
-  return Object.keys(pages) as LegalPageKey[];
+export function getTemplate(jurisdiction: Jurisdiction): LegalTemplate {
+  if (jurisdiction === "eu") return EU_TEMPLATE;
+  if (jurisdiction === "us") return US_TEMPLATE;
+  return OTHER_TEMPLATE;
 }
 
-export function getTemplate(jurisdiction: Jurisdiction): LegalTemplate {
-  return TEMPLATES[jurisdiction] ?? TEMPLATES.other;
+export function renderTemplate(
+  template: string,
+  vars: Record<string, string>,
+): string {
+  let result = template;
+
+  // Conditional blocks: {{#KEY}}...{{/KEY}} — render only if KEY has a value.
+  result = result.replace(
+    /\{\{#(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g,
+    (_, key: string, content: string) =>
+      vars[key] ? content.replace(`{{${key}}}`, vars[key]) : "",
+  );
+
+  // Simple substitutions.
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replaceAll(`{{${key}}}`, value);
+  }
+
+  return result;
 }

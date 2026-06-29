@@ -6,16 +6,7 @@ import { CareerGallery } from "@/features/career-page/CareerGallery";
 import { CareerFooter } from "@/features/career-page/CareerFooter";
 import { careerIcon } from "@/features/career-page/icons";
 import type { CareerPageConfig } from "@/features/career-page/config";
-
-type Job = {
-  id: string;
-  slug: string;
-  title: string;
-  department: string | null;
-  location: string | null;
-  employmentType: string;
-  workplaceType: string;
-};
+import type { Job } from "@/features/career-page/types";
 
 export function MinimalTemplate({
   workspace,

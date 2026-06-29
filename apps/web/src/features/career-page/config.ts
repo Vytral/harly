@@ -61,7 +61,11 @@ export type CareerPageConfig = {
   positions: { title: string; filters: Array<"department" | "location" | "type"> };
   /** `color` overrides the accent for the CTA banner. */
   cta: { enabled: boolean; title: string; body: string; color: string | null };
-  footer: { socials: CareerSocialLink[] };
+  footer: {
+    socials: CareerSocialLink[];
+    /** Legal page slugs to show as links in the footer (e.g. ["privacy-policy", "terms-of-service"]). */
+    legalLinks: string[];
+  };
   theme: {
     mode: ColorMode;
     background: string;
@@ -91,7 +95,7 @@ const EMPTY: CareerPageConfig = {
   faq: { enabled: false, title: "Frequently asked questions", items: [] },
   positions: { title: "Our open positions", filters: ["department", "location"] },
   cta: { enabled: false, title: "", body: "", color: null },
-  footer: { socials: [] },
+  footer: { socials: [], legalLinks: [] },
   theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
 };
 
@@ -109,7 +113,7 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
     faq: { enabled: false, title: "Frequently asked questions", items: [] },
     positions: { title: "Open positions", filters: ["department", "location"] },
     cta: { ...EMPTY.cta },
-    footer: { socials: [] },
+    footer: { socials: [], legalLinks: [] },
     theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "sharp" },
   }),
   playful: () => ({
@@ -159,7 +163,7 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
       title: "Don't see a role that fits?",
       body: "We are always opening new opportunities for great people. Reach out.",
     },
-    footer: { socials: [] },
+    footer: { socials: [], legalLinks: [] },
     theme: { mode: "light", background: "#FFF9E6", font: "sans", accent: "#f4c100", rounded: "soft" },
   }),
   ashby: () => ({
@@ -174,7 +178,7 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
     faq: { enabled: false, title: "Frequently asked questions", items: [] },
     positions: { title: "Open positions", filters: ["department", "location", "type"] },
     cta: { ...EMPTY.cta },
-    footer: { socials: [] },
+    footer: { socials: [], legalLinks: [] },
     theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
   }),
   greenhouse: () => ({
@@ -189,13 +193,23 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
     faq: { enabled: false, title: "Frequently asked questions", items: [] },
     positions: { title: "Open positions", filters: ["department", "location"] },
     cta: { ...EMPTY.cta },
-    footer: { socials: [] },
+    footer: { socials: [], legalLinks: [] },
     theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
   }),
 };
 
 function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
+}
+
+function isValidHexColor(s: string): boolean {
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
+}
+
+function validRounded(v: unknown, fallback: "soft" | "sharp"): "soft" | "sharp" {
+  return (["soft", "sharp"] as const).includes(v as "soft" | "sharp")
+    ? (v as "soft" | "sharp")
+    : fallback;
 }
 
 /** Coerce raw jsonb into a complete, safe config (deep-merged over EMPTY). */
@@ -263,13 +277,16 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
     },
     footer: {
       socials: asArray<CareerSocialLink>(r.footer?.socials),
+      legalLinks: asArray<string>(r.footer?.legalLinks),
     },
     theme: {
       mode: colorModes.includes(r.theme?.mode as ColorMode) ? (r.theme!.mode as ColorMode) : base.theme.mode,
       background: typeof r.theme?.background === "string" ? r.theme.background : base.theme.background,
       font: fontFamilies.includes(r.theme?.font as FontFamily) ? (r.theme!.font as FontFamily) : base.theme.font,
-      accent: r.theme?.accent ?? base.theme.accent,
-      rounded: r.theme?.rounded ?? base.theme.rounded,
+      accent: typeof r.theme?.accent === "string" && isValidHexColor(r.theme.accent)
+        ? r.theme.accent
+        : base.theme.accent,
+      rounded: validRounded(r.theme?.rounded, base.theme.rounded),
     },
   };
 }
@@ -364,6 +381,7 @@ export const careerPageConfigSchema = z.object({
   }),
   footer: z.object({
     socials: z.array(z.object({ platform: z.enum(socialPlatforms), url: s(600) })).max(8),
+    legalLinks: z.array(s(80)).max(10),
   }),
   theme: z.object({
     mode: z.enum(["light", "dark"]),

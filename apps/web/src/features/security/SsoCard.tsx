@@ -6,6 +6,10 @@ import { authClient } from "@harly/auth/client";
 import { SectionHeader, StatusPill, BrandTile } from "@/features/workspaces/settings-ui";
 import { SsoDuotoneIcon, CheckIcon } from "@/components/ui/icons/phosphor";
 import { Card } from "@/components/ui/card";
+import { SsoConfigDrawer } from "@/features/security/SsoConfigDrawer";
+import { SsoProviderDrawer } from "@/features/security/SsoProviderDrawer";
+import type { OAuthProviderConfig, OAuthProvider } from "@/features/security/actions";
+import type { SSOProviderConfig } from "@/features/security/sso-actions";
 
 function MicrosoftLogo({ className }: { className?: string }) {
   return (
@@ -38,25 +42,24 @@ function GoogleLogo() {
   );
 }
 
-type Provider = {
-  id: "google" | "microsoft" | "github";
+type ProviderInfo = {
+  id: OAuthProvider;
   name: string;
-  configured: boolean;
   logo: React.ReactNode;
 };
 
 export function SsoCard({
-  googleConfigured,
-  microsoftConfigured,
-  githubConfigured,
+  providerConfigs,
+  existingConfigs,
+  ssoProviders,
 }: {
-  googleConfigured: boolean;
-  microsoftConfigured: boolean;
-  githubConfigured: boolean;
+  providerConfigs: Record<OAuthProvider, { configured: boolean; source: "db" | "env" | null }>;
+  existingConfigs: OAuthProviderConfig[];
+  ssoProviders?: SSOProviderConfig[];
 }) {
   const [isPending, startTransition] = useTransition();
 
-  function connect(provider: "google" | "microsoft" | "github") {
+  function connect(provider: OAuthProvider) {
     startTransition(async () => {
       await authClient.signIn.social({
         provider,
@@ -65,25 +68,23 @@ export function SsoCard({
     });
   }
 
-  const anyConfigured = googleConfigured || microsoftConfigured || githubConfigured;
+  const anyConfigured = Object.values(providerConfigs).some((p) => p.configured);
+  const hasEnterpriseSso = (ssoProviders?.length ?? 0) > 0;
 
-  const providers: Provider[] = [
+  const providers: ProviderInfo[] = [
     {
       id: "google",
       name: "Google Workspace",
-      configured: googleConfigured,
       logo: <GoogleLogo />,
     },
     {
       id: "microsoft",
       name: "Microsoft / Entra ID",
-      configured: microsoftConfigured,
       logo: <MicrosoftLogo className="size-5" />,
     },
     {
       id: "github",
       name: "GitHub",
-      configured: githubConfigured,
       logo: <GithubLogo className="size-4 text-foreground" />,
     },
   ];
@@ -93,9 +94,9 @@ export function SsoCard({
       <SectionHeader
         icon={SsoDuotoneIcon}
         title="Single Sign-On"
-        description="Allow team members to authenticate via OAuth providers. Configure credentials in your environment variables."
+        description="Allow team members to authenticate via OAuth providers or enterprise SSO."
         badge={
-          anyConfigured ? (
+          anyConfigured || hasEnterpriseSso ? (
             <StatusPill tone="on">SSO configured</StatusPill>
           ) : (
             <StatusPill tone="off">No SSO configured</StatusPill>
@@ -104,45 +105,118 @@ export function SsoCard({
       />
 
       <div className="space-y-2">
-        {providers.map((provider) => (
-          <div
-            key={provider.id}
-            className="flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3"
-          >
-            <div className="flex items-center gap-3">
-              <BrandTile>{provider.logo}</BrandTile>
-              <div>
-                <p className="text-sm font-medium">{provider.name}</p>
-                <p className="text-xs text-muted-foreground">
-                  {provider.configured ? "Credentials configured" : "Not configured"}
-                </p>
+        {providers.map((provider) => {
+          const config = providerConfigs[provider.id];
+          const existingConfig = existingConfigs.find((c) => c.provider === provider.id);
+          const isConfigured = config?.configured ?? false;
+          const source = config?.source;
+
+          return (
+            <div
+              key={provider.id}
+              className="flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3"
+            >
+              <div className="flex items-center gap-3">
+                <BrandTile>{provider.logo}</BrandTile>
+                <div>
+                  <p className="text-sm font-medium">{provider.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {isConfigured ? (
+                      <>
+                        Configured
+                        {source === "env" && (
+                          <span className="ml-1 text-muted-foreground/60">(via env vars)</span>
+                        )}
+                      </>
+                    ) : (
+                      "Not configured"
+                    )}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {isConfigured ? (
+                  <button
+                    type="button"
+                    onClick={() => connect(provider.id)}
+                    disabled={isPending}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-pine/20 bg-sage/30 px-2.5 py-1 text-xs font-medium text-pine transition-colors hover:bg-sage/50 disabled:opacity-50"
+                  >
+                    <CheckIcon className="size-3" />
+                    Connect account
+                  </button>
+                ) : null}
+                <SsoConfigDrawer
+                  provider={provider.id}
+                  existingConfig={existingConfig}
+                />
               </div>
             </div>
-            {provider.configured ? (
-              <button
-                type="button"
-                onClick={() => connect(provider.id)}
-                disabled={isPending}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-pine/20 bg-sage/30 px-2.5 py-1 text-xs font-medium text-pine transition-colors hover:bg-sage/50 disabled:opacity-50"
-              >
-                <CheckIcon className="size-3" />
-                Connect account
-              </button>
-            ) : (
-              <span className="rounded-md bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                Set env vars
-              </span>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Set <code className="font-mono">GOOGLE_CLIENT_ID</code>,{" "}
-        <code className="font-mono">MICROSOFT_CLIENT_ID</code>, or{" "}
-        <code className="font-mono">GITHUB_CLIENT_ID</code> + their respective secrets to enable each provider.
-        SAML 2.0 is on the roadmap.
+        You can configure OAuth credentials here or via environment variables. 
+        Database configuration takes precedence over env vars.
       </p>
+
+      {/* Enterprise SSO Section */}
+      <div className="border-t pt-5">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-sm font-medium">Enterprise SSO</h3>
+            <p className="text-xs text-muted-foreground">
+              Configure SAML 2.0 or OpenID Connect for enterprise single sign-on.
+            </p>
+          </div>
+          <SsoProviderDrawer />
+        </div>
+
+        {ssoProviders && ssoProviders.length > 0 ? (
+          <div className="space-y-2">
+            {ssoProviders.map((provider) => (
+              <div
+                key={provider.id}
+                className="flex items-center justify-between gap-4 rounded-xl border bg-card px-4 py-3"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="flex size-8 items-center justify-center rounded-lg bg-muted">
+                    <span className="text-xs font-medium">
+                      {provider.issuer.includes("okta") ? "Okta" :
+                       provider.issuer.includes("azure") ? "Azure" :
+                       provider.issuer.includes("google") ? "Google" :
+                       provider.issuer.includes("onelogin") ? "OneLogin" :
+                       "SSO"}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium">{provider.providerId}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {provider.domain} • {provider.issuer}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusPill tone={provider.enabled ? "on" : "off"}>
+                    {provider.enabled ? "Active" : "Disabled"}
+                  </StatusPill>
+                  <SsoProviderDrawer existingProvider={provider} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed p-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              No enterprise SSO providers configured.
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Add a provider to enable SAML or OIDC authentication for your organization.
+            </p>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }

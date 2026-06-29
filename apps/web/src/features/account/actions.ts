@@ -1,8 +1,11 @@
 "use server";
 
 import { auth } from "@/lib/auth";
+import { createLogger } from "@/lib/logger";
 import { db, schema } from "@harly/db";
 import { eq } from "drizzle-orm";
+
+const log = createLogger("account");
 
 export async function updateUserProfileAction(data: {
   name: string;
@@ -40,7 +43,7 @@ export async function updateUserProfileAction(data: {
 
     return { success: true } as const;
   } catch (error) {
-    console.error("[updateUserProfileAction]", error);
+    log.error(error, "updateUserProfileAction failed");
     return {
       success: false,
       error: "Could not update profile. Some fields may not be available yet.",

@@ -11,7 +11,10 @@ import { createEmailSender, type EmailProviderConfig } from "@harly/emails";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { createLogger } from "@/lib/logger";
 import { getWorkspaceEmailConfig, getWorkspaceEmailStatus } from "@/lib/email/config";
+
+const log = createLogger("workspace-email-settings");
 
 export type EmailSettingsActionResult = { ok: boolean; error?: string };
 
@@ -234,6 +237,7 @@ export async function sendTestEmailAction(input: {
     });
     return { ok: true };
   } catch (error) {
+    log.error(error, "sendTestEmailAction failed");
     return {
       ok: false,
       error:

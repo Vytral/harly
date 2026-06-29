@@ -6,6 +6,9 @@ import { db, interviews } from "@harly/db";
 
 import { getWorkspaceGCalConfig } from "@/lib/gcal/config";
 import { createEvent, updateEvent, deleteEvent } from "@/lib/gcal/client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("gcal-sync");
 
 /**
  * Fire-and-forget: create a Google Calendar event for a new interview and
@@ -43,7 +46,7 @@ export async function syncInterviewToGCal(opts: {
       .set({ gcalEventId: event.id })
       .where(eq(interviews.id, opts.interviewId));
   } catch (err) {
-    console.error("[gcal-sync] Failed to create event:", err);
+    log.error(err, "[gcal-sync] Failed to create event");
   }
 }
 
@@ -66,7 +69,7 @@ export async function cancelInterviewGCalEvent(opts: {
       .set({ gcalEventId: null })
       .where(eq(interviews.id, opts.interviewId));
   } catch (err) {
-    console.error("[gcal-sync] Failed to cancel event:", err);
+    log.error(err, "[gcal-sync] Failed to cancel event");
   }
 }
 
@@ -101,6 +104,6 @@ export async function updateInterviewGCalEvent(opts: {
       },
     );
   } catch (err) {
-    console.error("[gcal-sync] Failed to update event:", err);
+    log.error(err, "[gcal-sync] Failed to update event");
   }
 }

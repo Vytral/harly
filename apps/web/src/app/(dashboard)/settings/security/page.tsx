@@ -1,6 +1,8 @@
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAuditLogs, getWorkspaceSecuritySettings } from "@/features/security/data";
+import { getOAuthProviderStatus, listOAuthProvidersAction } from "@/features/security/actions";
+import { listSSOProvidersAction } from "@/features/security/sso-actions";
 import { SsoCard } from "@/features/security/SsoCard";
 import { AuditLogsCard } from "@/features/security/AuditLogsCard";
 import { Force2FACard } from "@/features/security/Force2FACard";
@@ -11,14 +13,14 @@ export default async function SecuritySettingsPage() {
   await requirePermission("members:manage");
   const { organization, roleKey } = await getWorkspaceContext();
 
-  const [securitySettings, auditLogRows] = await Promise.all([
-    getWorkspaceSecuritySettings(organization.id),
-    getWorkspaceAuditLogs(organization.id),
-  ]);
-
-  const microsoftConfigured = !!process.env.MICROSOFT_CLIENT_ID;
-  const githubConfigured = !!process.env.GITHUB_CLIENT_ID;
-  const googleConfigured = !!process.env.GOOGLE_CLIENT_ID;
+  const [securitySettings, auditLogRows, providerStatus, existingConfigs, ssoProviders] =
+    await Promise.all([
+      getWorkspaceSecuritySettings(organization.id),
+      getWorkspaceAuditLogs(organization.id),
+      getOAuthProviderStatus(),
+      listOAuthProvidersAction(),
+      listSSOProvidersAction(),
+    ]);
 
   const isOwner = roleKey === "owner";
 
@@ -26,9 +28,9 @@ export default async function SecuritySettingsPage() {
     <div className="space-y-6">
       <Force2FACard enabled={securitySettings.require2fa} isOwner={isOwner} />
       <SsoCard
-        googleConfigured={googleConfigured}
-        microsoftConfigured={microsoftConfigured}
-        githubConfigured={githubConfigured}
+        providerConfigs={providerStatus}
+        existingConfigs={existingConfigs}
+        ssoProviders={ssoProviders}
       />
       <AuditLogsCard logs={auditLogRows} />
     </div>

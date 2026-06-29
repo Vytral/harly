@@ -30,8 +30,8 @@ const CookiePanel = (props: CookiePanelProps) => {
     customizeText = "Customize",
     icon = "cookie",
     className,
-    privacyHref = "/privacy",
-    termsHref = "/terms",
+    privacyHref = "/legal/privacy-policy",
+    termsHref = "/legal/terms-of-service",
   } = props;
 
   const [visible, setVisible] = useState(false);

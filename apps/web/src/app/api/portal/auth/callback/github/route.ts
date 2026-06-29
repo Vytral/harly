@@ -51,6 +51,7 @@ export async function GET(request: NextRequest) {
       userInfo.email,
       { firstName: userInfo.firstName, lastName: userInfo.lastName },
       userInfo.avatarUrl,
+      { githubUrl: userInfo.githubUrl },
     );
 
     const ua = request.headers.get("user-agent") ?? undefined;

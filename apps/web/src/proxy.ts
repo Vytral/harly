@@ -28,11 +28,11 @@ const PUBLIC_PATHS = [
   // Portal public routes — pages enforce isPortalEnabled themselves
   "/portal",
   "/api/portal",
+  "/setup-2fa",
 ];
 
 const PROTECTED_PATH_PREFIXES = ["/dashboard", "/settings"];
-const ACCOUNT_PATH = "/account";
-const SECURITY_EXEMPT_PREFIXES = ["/settings/security", "/api"];
+const SECURITY_EXEMPT_PREFIXES = ["/settings/security", "/account", "/api"];
 
 // Portal protected paths — require portal session cookie (no DB needed)
 const PORTAL_PROTECTED = ["/portal/dashboard", "/portal/jobs", "/portal/profile"];
@@ -88,26 +88,53 @@ export async function proxy(request: NextRequest) {
       return NextResponse.redirect(loginUrl);
     }
 
-    if (pathname !== ACCOUNT_PATH) {
-      try {
-        const { db, workspaceSettings } = await import("@harly/db");
-        const { eq } = await import("drizzle-orm");
+    try {
+      const { db, workspaceSettings } = await import("@harly/db");
+      const { eq } = await import("drizzle-orm");
 
-        const orgId = (session.user as Record<string, unknown>).organizationId as string | undefined;
-        if (orgId) {
-          const [wsRow] = await db
+      const { member: authMembers, user: userTable } = await import("@harly/db");
+
+      // Resolve org: activeOrganizationId → first membership (same as workspace/context.ts)
+      const activeOrgId = (session.session as Record<string, unknown>).activeOrganizationId as string | undefined;
+      let orgId = activeOrgId;
+      if (!orgId) {
+        const [firstMember] = await db
+          .select({ orgId: authMembers.organizationId })
+          .from(authMembers)
+          .where(eq(authMembers.userId, session.user.id))
+          .limit(1);
+        orgId = firstMember?.orgId;
+      }
+
+      if (orgId) {
+        const [[wsRow], [memberRow], [userRow]] = await Promise.all([
+          db
             .select({ require2fa: workspaceSettings.require2fa })
             .from(workspaceSettings)
             .where(eq(workspaceSettings.organizationId, orgId))
-            .limit(1);
+            .limit(1),
+          db
+            .select({ role: authMembers.role })
+            .from(authMembers)
+            .where(eq(authMembers.userId, session.user.id))
+            .limit(1),
+          db
+            .select({ twoFactorEnabled: userTable.twoFactorEnabled })
+            .from(userTable)
+            .where(eq(userTable.id, session.user.id))
+            .limit(1),
+        ]);
 
-          if (wsRow?.require2fa && !session.user.twoFactorEnabled) {
-            return NextResponse.redirect(new URL(ACCOUNT_PATH, request.url));
-          }
+        // Owner is exempt from 2FA enforcement (temporary — for testing).
+        const isOwner = memberRow?.role === "owner";
+        const has2fa = userRow?.twoFactorEnabled ?? false;
+
+        if (wsRow?.require2fa && !has2fa && !isOwner) {
+          return NextResponse.redirect(new URL("/setup-2fa", request.url));
         }
-      } catch {
-        // DB query failure — allow through, server-side enforces as fallback.
       }
+    } catch {
+      // DB query failure — allow through, server-side enforces as fallback.
     }
   }
 

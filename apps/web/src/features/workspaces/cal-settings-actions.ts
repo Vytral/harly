@@ -9,13 +9,16 @@ import { z } from "zod";
 import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
-import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import {
   DEFAULT_CAL_BASE_URL,
   getWorkspaceCalConfig,
   getWorkspaceCalStatus,
 } from "@/lib/cal/config";
 import { registerCalWebhook } from "@/lib/cal/client";
+import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("workspace-cal-settings");
 
 export type CalSettingsActionResult = { ok: boolean; error?: string };
 
@@ -149,6 +152,7 @@ export async function registerCalWebhookAction(): Promise<CalSettingsActionResul
     });
     return { ok: true };
   } catch (error) {
+    log.error(error, "registerCalWebhookAction failed");
     return {
       ok: false,
       error:

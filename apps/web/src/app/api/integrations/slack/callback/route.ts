@@ -1,13 +1,15 @@
 import { createHmac } from "node:crypto";
 
 import { NextResponse, type NextRequest } from "next/server";
-import { eq } from "drizzle-orm";
 
 import { db, workspaceSettings } from "@harly/db";
 
 import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
+import { createLogger } from "@/lib/logger";
 import { getWorkspaceSlackCredentials } from "@/lib/slack/config";
+
+const log = createLogger("api-slack-callback");
 
 export const runtime = "nodejs";
 
@@ -129,7 +131,8 @@ function verifyState(state: string): string | null {
     if (data.t && Date.now() - data.t > STATE_MAX_AGE_MS) return null;
 
     return data.ws;
-  } catch {
+  } catch (error) {
+    log.error(error, "slack callback verifyState failed");
     return null;
   }
 }

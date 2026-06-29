@@ -27,6 +27,7 @@ import {
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
+import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
@@ -58,6 +59,8 @@ function formatOfferSalary(
   }
   return period === "monthly" ? `${money} / month` : `${money} / year`;
 }
+
+const log = createLogger("offers");
 
 const offerFieldsSchema = z.object({
   title: z.string().trim().min(1, "Offer title is required.").max(200),
@@ -167,7 +170,8 @@ export async function createOffer(input: {
   let context;
   try {
     context = await requirePermission("offers:manage");
-  } catch {
+  } catch (error) {
+    log.error(error, "createOffer failed");
     return { success: false, error: "You do not have permission to manage offers." };
   }
   const workspaceId = context.organization.id;
@@ -243,7 +247,8 @@ export async function updateOffer(input: {
   let context;
   try {
     context = await requirePermission("offers:manage");
-  } catch {
+  } catch (error) {
+    log.error(error, "updateOffer failed");
     return { success: false, error: "You do not have permission to manage offers." };
   }
   const workspaceId = context.organization.id;
@@ -282,7 +287,8 @@ export async function sendOffer(input: { offerId: string }): Promise<ActionResul
   let context;
   try {
     context = await requirePermission("offers:manage");
-  } catch {
+  } catch (error) {
+    log.error(error, "updateOffer failed");
     return { success: false, error: "You do not have permission to manage offers." };
   }
   const workspaceId = context.organization.id;
@@ -353,7 +359,8 @@ export async function decideOffer(input: {
   let context;
   try {
     context = await requirePermission("offers:manage");
-  } catch {
+  } catch (error) {
+    log.error(error, "updateOffer failed");
     return { success: false, error: "You do not have permission to manage offers." };
   }
   const workspaceId = context.organization.id;
@@ -478,7 +485,8 @@ export async function withdrawOffer(input: {
   let context;
   try {
     context = await requirePermission("offers:manage");
-  } catch {
+  } catch (error) {
+    log.error(error, "updateOffer failed");
     return { success: false, error: "You do not have permission to manage offers." };
   }
   const workspaceId = context.organization.id;

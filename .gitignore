@@ -72,3 +72,6 @@ graphify-out
 .kiro
 .agents
 .qwen
+# figma debug dumps
+logs/
+public/images/figma-preview/

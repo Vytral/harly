@@ -15,7 +15,10 @@ import {
   isBuiltinRole,
   roleLabel,
 } from "@/features/workspaces/permissions";
+import { createLogger } from "@/lib/logger";
 import { slugify } from "@/lib/utils";
+
+const log = createLogger("workspace-roles");
 
 export type RoleActionResult = { ok: boolean; error?: string };
 
@@ -52,7 +55,8 @@ export async function createCustomRole(input: {
       name: parsed.data.name,
       permissions: parsed.data.permissions,
     });
-  } catch {
+  } catch (error) {
+    log.error(error, "createCustomRole failed");
     return { ok: false, error: "A role with that name already exists." };
   }
 

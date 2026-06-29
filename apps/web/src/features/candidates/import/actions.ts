@@ -15,7 +15,10 @@ import {
 } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+
+const log = createLogger("candidate-import");
 
 const optionalText = z
   .string()
@@ -79,7 +82,8 @@ export async function importCandidatesAction(input: {
   let context;
   try {
     context = await requirePermission("candidates:edit");
-  } catch {
+  } catch (error) {
+    log.error(error, "importCandidatesAction permission failed");
     return { success: false, error: "You do not have permission to add candidates." };
   }
   const workspaceId = context.organization.id;
@@ -234,7 +238,8 @@ export async function importCandidatesAction(input: {
         imported += 1;
         importedApplicationIds.push(application.id);
       });
-    } catch {
+    } catch (error) {
+      log.error(error, "importCandidatesAction row import failed");
       errors.push({ row: index + 1, email: values.email, reason: "Could not import this row." });
     }
   }

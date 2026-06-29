@@ -39,6 +39,7 @@ export default async function PortalLoginPage() {
   const org = await getOrgBranding();
   const hasGoogle = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
   const hasGitHub = Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
+  const hasLinkedIn = Boolean(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET);
 
   const accentColor = org.primaryColor ?? "#18181b";
   const departments = org.departments.length > 0 ? org.departments : ["Engineering", "Design", "Product"];
@@ -126,7 +127,7 @@ export default async function PortalLoginPage() {
           </div>
 
           <Suspense>
-            <PortalLoginForm hasGoogle={hasGoogle} hasGitHub={hasGitHub} />
+            <PortalLoginForm hasGoogle={hasGoogle} hasGitHub={hasGitHub} hasLinkedIn={hasLinkedIn} />
           </Suspense>
 
           <p className="text-center text-xs text-muted-foreground">

@@ -8,8 +8,11 @@ import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { createLogger } from "@/lib/logger";
 import { getWorkspaceSlackConfig } from "@/lib/slack/config";
 import { isWebhookEvent } from "@/server/webhooks/events";
+
+const log = createLogger("workspace-slack-settings");
 
 export type SlackActionResult = { ok: boolean; error?: string };
 
@@ -75,7 +78,8 @@ export async function listSlackChannelsAction(): Promise<
       .map((c) => ({ id: c.id!, name: c.name! }));
 
     return { ok: true, channels };
-  } catch {
+  } catch (error) {
+    log.error(error, "listSlackChannelsAction failed");
     return { ok: false, error: "Failed to fetch channels from Slack." };
   }
 }
@@ -116,8 +120,8 @@ export async function disconnectSlackAction(): Promise<SlackActionResult> {
     try {
       const client = new WebClient(config.botToken);
       await client.auth.revoke();
-    } catch {
-      // Token may already be invalid — continue cleanup
+    } catch (error) {
+      log.error(error, "disconnectSlackAction revoke failed");
     }
   }
 
@@ -170,6 +174,7 @@ export async function testSlackAction(): Promise<SlackActionResult> {
     });
     return { ok: true };
   } catch (err) {
+    log.error(err, "testSlackAction failed");
     const msg = err instanceof Error ? err.message : "Send failed";
     return { ok: false, error: msg };
   }

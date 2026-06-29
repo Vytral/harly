@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@harly/db";
-import { customRoles, member as authMembers } from "@harly/db";
+import { customRoles, member as authMembers, user as authUsers } from "@harly/db";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
@@ -109,6 +109,12 @@ export async function requirePagePermission(permission: Permission) {
   return context;
 }
 
+export type WorkspaceRoleMember = {
+  id: string;
+  name: string;
+  image?: string | null;
+};
+
 export type WorkspaceRoleSummary = {
   key: string;
   name: string;
@@ -118,13 +124,14 @@ export type WorkspaceRoleSummary = {
   isOwner: boolean;
   editable: boolean;
   memberCount: number;
+  members: WorkspaceRoleMember[];
 };
 
 /** All assignable roles (built-in + custom) with member counts, for settings. */
 export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
   const { organization } = await getWorkspaceContext();
 
-  const [rows, members] = await Promise.all([
+  const [rows, memberRows] = await Promise.all([
     db
       .select({
         key: customRoles.key,
@@ -135,14 +142,24 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
       .where(eq(customRoles.workspaceId, organization.id))
       .orderBy(customRoles.name),
     db
-      .select({ role: authMembers.role })
+      .select({
+        id: authMembers.id,
+        role: authMembers.role,
+        name: authUsers.name,
+        image: authUsers.image,
+      })
       .from(authMembers)
+      .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
       .where(eq(authMembers.organizationId, organization.id)),
   ]);
 
+  const membersByRole = new Map<string, WorkspaceRoleMember[]>();
   const counts = new Map<string, number>();
-  for (const m of members) {
+  for (const m of memberRows) {
     counts.set(m.role, (counts.get(m.role) ?? 0) + 1);
+    const list = membersByRole.get(m.role) ?? [];
+    list.push({ id: m.id, name: m.name, image: m.image });
+    membersByRole.set(m.role, list);
   }
 
   const overrides = new Map(rows.map((r) => [r.key, r]));
@@ -167,6 +184,7 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
       isOwner: key === "owner",
       editable: key !== "owner",
       memberCount: counts.get(key) ?? 0,
+      members: membersByRole.get(key) ?? [],
     };
   });
 
@@ -181,6 +199,7 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
       isOwner: false,
       editable: true,
       memberCount: counts.get(row.key) ?? 0,
+      members: membersByRole.get(row.key) ?? [],
     }));
 
   return [...builtin, ...customSummaries];

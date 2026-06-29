@@ -2,7 +2,13 @@ import Link from "next/link";
 
 import { LoginForm } from "./_components/login-form";
 
-export default function LoginPage() {
+type LoginPageProps = {
+  searchParams: Promise<{ redirect?: string }>;
+};
+
+export default async function LoginPage({ searchParams }: LoginPageProps) {
+  const { redirect } = await searchParams;
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="flex items-center justify-between px-8 py-6">
@@ -27,7 +33,7 @@ export default function LoginPage() {
           </p>
 
           <div className="mt-10">
-            <LoginForm />
+            <LoginForm redirect={redirect} />
           </div>
         </div>
       </main>

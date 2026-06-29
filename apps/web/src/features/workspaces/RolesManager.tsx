@@ -21,6 +21,7 @@ import {
   SpinnerIcon,
   TrashIcon,
 } from "@/components/ui/icons/phosphor";
+import { AvatarGroup, AvatarGroupCount } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -28,6 +29,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
 
 export type RoleSummary = {
@@ -38,6 +40,11 @@ export type RoleSummary = {
   isOwner: boolean;
   editable: boolean;
   memberCount: number;
+  members: {
+    id: string;
+    name: string;
+    image?: string | null;
+  }[];
 };
 
 const TOTAL_PERMISSIONS = PERMISSION_GROUPS.reduce(
@@ -126,6 +133,30 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
                 />
               </div>
             </div>
+
+            {role.members.length > 0 && (
+              <div className="mt-4 border-t pt-4">
+                <p className="mb-2 text-xs font-medium text-muted-foreground">
+                  Members with this role
+                </p>
+                <AvatarGroup>
+                  {role.members.slice(0, 5).map((member) => (
+                    <UserAvatar
+                      key={member.id}
+                      name={member.name}
+                      src={member.image}
+                      size="sm"
+                      className="ring-2 ring-background"
+                    />
+                  ))}
+                  {role.members.length > 5 && (
+                    <AvatarGroupCount>
+                      +{role.members.length - 5}
+                    </AvatarGroupCount>
+                  )}
+                </AvatarGroup>
+              </div>
+            )}
           </Card>
         );
       })}

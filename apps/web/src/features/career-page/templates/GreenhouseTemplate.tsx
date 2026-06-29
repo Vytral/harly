@@ -5,19 +5,10 @@ import { MapPin } from "lucide-react";
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 import type { CareerPageConfig } from "@/features/career-page/config";
+import type { Job } from "@/features/career-page/types";
 import { CareerTestimonials } from "@/features/career-page/CareerTestimonials";
 import { CareerFaq } from "@/features/career-page/CareerFaq";
 import { CareerFooter } from "@/features/career-page/CareerFooter";
-
-type Job = {
-  id: string;
-  slug: string;
-  title: string;
-  department: string | null;
-  location: string | null;
-  employmentType: string;
-  workplaceType: string;
-};
 
 
 /**
@@ -91,7 +82,7 @@ export function GreenhouseTemplate({
       </header>
 
       {/* About */}
-      {config.intro.body && (
+      {config.overview.enabled && (
         <section className="border-b border-zinc-200 dark:border-zinc-800">
           <div className="mx-auto max-w-3xl px-6 py-14 text-center">
             {config.overview.title && (
@@ -99,9 +90,11 @@ export function GreenhouseTemplate({
                 {config.overview.title}
               </h2>
             )}
-            <p className="mt-4 whitespace-pre-line text-lg leading-relaxed text-zinc-700 dark:text-zinc-300">
-              {config.intro.body}
-            </p>
+            {config.intro.body && (
+              <p className="mt-4 whitespace-pre-line text-lg leading-relaxed text-zinc-700 dark:text-zinc-300">
+                {config.intro.body}
+              </p>
+            )}
           </div>
         </section>
       )}

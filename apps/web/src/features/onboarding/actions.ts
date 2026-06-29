@@ -10,6 +10,9 @@ import { db, user as userTable, workspaceSettings } from "@harly/db";
 import { auth } from "@/lib/auth";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("onboarding");
 
 export type OnboardingResult = { ok: boolean; error?: string };
 
@@ -60,6 +63,7 @@ export async function saveOnboardingBrandingAction(input: {
     });
     return { ok: true };
   } catch (error) {
+    log.error(error, "onboarding action failed");
     return { ok: false, error: error instanceof Error ? error.message : "Failed." };
   }
 }
@@ -75,6 +79,7 @@ export async function saveAcquisitionAction(
     });
     return { ok: true };
   } catch (error) {
+    log.error(error, "onboarding action failed");
     return { ok: false, error: error instanceof Error ? error.message : "Failed." };
   }
 }
@@ -91,6 +96,7 @@ export async function saveUserRoleAction(
       .where(eq(userTable.id, session.user.id));
     return { ok: true };
   } catch (error) {
+    log.error(error, "onboarding action failed");
     return { ok: false, error: error instanceof Error ? error.message : "Failed." };
   }
 }
@@ -105,6 +111,7 @@ export async function setRequire2faAction(
     await patchWorkspaceSettings(organization.id, { require2fa });
     return { ok: true };
   } catch (error) {
+    log.error(error, "onboarding action failed");
     return { ok: false, error: error instanceof Error ? error.message : "Failed." };
   }
 }
@@ -145,6 +152,7 @@ export async function completeRecruiterOnboardingAction(): Promise<OnboardingRes
     revalidatePath("/dashboard");
     return { ok: true };
   } catch (error) {
+    log.error(error, "onboarding action failed");
     return { ok: false, error: error instanceof Error ? error.message : "Failed." };
   }
 }
@@ -160,6 +168,7 @@ export async function completeOnboardingAction(): Promise<OnboardingResult> {
     revalidatePath("/dashboard");
     return { ok: true };
   } catch (error) {
+    log.error(error, "onboarding action failed");
     return { ok: false, error: error instanceof Error ? error.message : "Failed." };
   }
 }

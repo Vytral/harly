@@ -6,7 +6,6 @@ import { toast } from "sonner";
 
 import { acceptWorkspaceInvitationAction } from "@/features/workspaces/actions";
 import { authClient } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
 
 type AcceptInvitationButtonProps = {
   invitationId: string;
@@ -19,10 +18,10 @@ export function AcceptInvitationButton({
   const [isPending, startTransition] = useTransition();
 
   return (
-    <Button
-      size="lg"
-      className="w-full"
+    <button
+      type="button"
       disabled={isPending}
+      className="w-full rounded-lg bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-pine-strong disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
       onClick={() => {
         startTransition(async () => {
           const result = await acceptWorkspaceInvitationAction(invitationId);
@@ -42,6 +41,6 @@ export function AcceptInvitationButton({
       }}
     >
       {isPending ? "Accepting…" : "Accept invitation"}
-    </Button>
+    </button>
   );
 }

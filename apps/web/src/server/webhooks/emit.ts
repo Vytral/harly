@@ -9,6 +9,9 @@ import type { WebhookEvent } from "./events";
 import { notifySlackEvent } from "@/server/notify/slack";
 import { notifyChatEvent } from "@/server/notify/dispatch";
 import { notifyInboxEvent } from "@/server/notify/inbox";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("webhooks");
 
 /**
  * Emit a domain event to all subscribed webhook endpoints.
@@ -56,14 +59,14 @@ export async function emitWebhookEvent(
 
       if (!row) continue;
       // Best-effort immediate delivery; the dispatcher is the safety net.
-      void deliverWebhook(row, endpoint).catch(() => undefined);
+      void deliverWebhook(row, endpoint).catch((err) => log.error(err, "deliverWebhook failed"));
     }
   } catch (error) {
-    console.error("[webhooks] emit failed", { workspaceId, event, error });
+    log.error({ workspaceId, event, error }, "[webhooks] emit failed");
   }
 
   // Fire-and-forget: chat webhook (Slack/Discord incoming-webhook) + Slack OAuth API
-  void notifyChatEvent(workspaceId, event, data).catch(() => undefined);
-  void notifySlackEvent(workspaceId, event, data).catch(() => undefined);
-  void notifyInboxEvent(workspaceId, event, data).catch(() => undefined);
+  void notifyChatEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyChatEvent failed"));
+  void notifySlackEvent(workspaceId, event, data).catch((err) => log.error(err, "notifySlackEvent failed"));
+  void notifyInboxEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyInboxEvent failed"));
 }

@@ -106,6 +106,14 @@ export async function getPortalGitHubCredentials(): Promise<PortalOAuthCredentia
   return null;
 }
 
+export async function getPortalLinkedInCredentials(): Promise<PortalOAuthCredentials | null> {
+  // LinkedIn uses env vars (no DB storage yet — add portalLinkedin* columns in a future migration)
+  const clientId = process.env.LINKEDIN_CLIENT_ID;
+  const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
+  if (clientId && clientSecret) return { clientId, clientSecret };
+  return null;
+}
+
 export async function createPortalSession(candidateId: string, workspaceId: string, userAgent?: string): Promise<string> {
   const raw = generateToken();
   const tokenHash = hashToken(raw);
@@ -140,17 +148,43 @@ export async function deletePortalSession(rawToken: string): Promise<void> {
   await db.delete(candidatePortalSessions).where(eq(candidatePortalSessions.tokenHash, hashToken(rawToken)));
 }
 
-export async function findOrCreateCandidateByEmail(workspaceId: string, email: string, name?: { firstName: string; lastName: string }, avatarUrl?: string): Promise<string> {
+export async function findOrCreateCandidateByEmail(
+  workspaceId: string,
+  email: string,
+  name?: { firstName: string; lastName: string },
+  avatarUrl?: string,
+  extra?: { linkedinUrl?: string; githubUrl?: string },
+): Promise<string> {
   const normalizedEmail = email.toLowerCase().trim();
   const [existing] = await db
-    .select({ id: candidates.id })
+    .select({ id: candidates.id, avatarUrl: candidates.avatarUrl, linkedinUrl: candidates.linkedinUrl, githubUrl: candidates.githubUrl })
     .from(candidates)
     .where(and(eq(candidates.workspaceId, workspaceId), eq(candidates.email, normalizedEmail)))
     .limit(1);
-  if (existing) return existing.id;
+
+  if (existing) {
+    // Sync profile data from OAuth provider on each login
+    const updates: Record<string, unknown> = {};
+    if (avatarUrl && avatarUrl !== existing.avatarUrl) updates.avatarUrl = avatarUrl;
+    if (extra?.linkedinUrl && extra.linkedinUrl !== existing.linkedinUrl) updates.linkedinUrl = extra.linkedinUrl;
+    if (extra?.githubUrl && extra.githubUrl !== existing.githubUrl) updates.githubUrl = extra.githubUrl;
+    if (Object.keys(updates).length > 0) {
+      await db.update(candidates).set(updates).where(eq(candidates.id, existing.id));
+    }
+    return existing.id;
+  }
+
   const [created] = await db
     .insert(candidates)
-    .values({ workspaceId, email: normalizedEmail, firstName: name?.firstName ?? email.split("@")[0] ?? "Candidate", lastName: name?.lastName ?? "", avatarUrl: avatarUrl ?? null })
+    .values({
+      workspaceId,
+      email: normalizedEmail,
+      firstName: name?.firstName ?? email.split("@")[0] ?? "Candidate",
+      lastName: name?.lastName ?? "",
+      avatarUrl: avatarUrl ?? null,
+      linkedinUrl: extra?.linkedinUrl ?? null,
+      githubUrl: extra?.githubUrl ?? null,
+    })
     .returning({ id: candidates.id });
   if (!created) throw new Error("Failed to create candidate.");
   return created.id;
@@ -196,7 +230,7 @@ export async function exchangeGoogleCode(code: string, redirectUri: string): Pro
   return { email: user.email, firstName: user.given_name ?? user.email.split("@")[0] ?? "Candidate", lastName: user.family_name ?? "", avatarUrl: user.picture };
 }
 
-export async function exchangeGitHubCode(code: string): Promise<{ email: string; firstName: string; lastName: string; avatarUrl?: string }> {
+export async function exchangeGitHubCode(code: string): Promise<{ email: string; firstName: string; lastName: string; avatarUrl?: string; githubUrl?: string }> {
   const creds = await getPortalGitHubCredentials();
   if (!creds) throw new Error("GitHub OAuth not configured.");
   const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
@@ -211,12 +245,18 @@ export async function exchangeGitHubCode(code: string): Promise<{ email: string;
     fetch("https://api.github.com/user/emails", { headers: { Authorization: `Bearer ${access_token}`, Accept: "application/vnd.github+json" } }),
   ]);
   if (!userRes.ok) throw new Error("GitHub user fetch failed.");
-  const ghUser = await userRes.json() as { name?: string; avatar_url?: string; login: string };
+  const ghUser = await userRes.json() as { name?: string; avatar_url?: string; login: string; html_url: string };
   const emails = emailsRes.ok ? (await emailsRes.json() as Array<{ email: string; primary: boolean; verified: boolean }>) : [];
   const primaryEmail = emails.find((e) => e.primary && e.verified)?.email ?? emails.find((e) => e.verified)?.email;
   if (!primaryEmail) throw new Error("No verified email on GitHub account.");
   const nameParts = (ghUser.name ?? ghUser.login).split(" ");
-  return { email: primaryEmail, firstName: nameParts[0] ?? ghUser.login, lastName: nameParts.slice(1).join(" ") ?? "", avatarUrl: ghUser.avatar_url };
+  return {
+    email: primaryEmail,
+    firstName: nameParts[0] ?? ghUser.login,
+    lastName: nameParts.slice(1).join(" ") ?? "",
+    avatarUrl: ghUser.avatar_url,
+    githubUrl: ghUser.html_url,
+  };
 }
 
 export async function buildGoogleAuthUrl(redirectUri: string, state: string): Promise<string> {
@@ -231,4 +271,130 @@ export async function buildGitHubAuthUrl(state: string): Promise<string> {
   if (!creds) throw new Error("GitHub OAuth not configured.");
   const params = new URLSearchParams({ client_id: creds.clientId, scope: "user:email", state });
   return `https://github.com/login/oauth/authorize?${params.toString()}`;
+}
+
+export async function exchangeLinkedInCode(code: string, redirectUri: string): Promise<{
+  email: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string;
+  headline?: string;
+  linkedinUrl?: string;
+}> {
+  const creds = await getPortalLinkedInCredentials();
+  if (!creds) throw new Error("LinkedIn OAuth not configured.");
+
+  // Exchange code for access token
+  const tokenRes = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: creds.clientId,
+      client_secret: creds.clientSecret,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code",
+    }),
+  });
+  if (!tokenRes.ok) throw new Error("LinkedIn token exchange failed.");
+  const { access_token } = await tokenRes.json() as { access_token: string };
+
+  // Fetch user info from LinkedIn OpenID Connect (always works with openid scope)
+  const userRes = await fetch("https://api.linkedin.com/v2/userinfo", {
+    headers: { Authorization: `Bearer ${access_token}` },
+  });
+  if (!userRes.ok) throw new Error("LinkedIn userinfo fetch failed.");
+  const user = await userRes.json() as {
+    sub: string;
+    email: string;
+    name: string;
+    given_name?: string;
+    family_name?: string;
+    picture?: string;
+  };
+
+  const result: {
+    email: string;
+    firstName: string;
+    lastName: string;
+    avatarUrl?: string;
+    headline?: string;
+    linkedinUrl?: string;
+  } = {
+    email: user.email,
+    firstName: user.given_name ?? user.name?.split(" ")[0] ?? user.email.split("@")[0] ?? "Candidate",
+    lastName: user.family_name ?? user.name?.split(" ").slice(1).join(" ") ?? "",
+    avatarUrl: user.picture,
+  };
+
+  // Try to fetch additional profile data from the Profile API
+  // This requires r_basicprofile or r_liteprofile scope (may not be available for all apps)
+  try {
+    const profileRes = await fetch(
+      "https://api.linkedin.com/v2/me?projection=(id,firstName,lastName,headline,vanityName,profilePicture~(displayImage~:playableStreams))",
+      { headers: { Authorization: `Bearer ${access_token}` } },
+    );
+
+    if (profileRes.ok) {
+      const profile = await profileRes.json() as {
+        id?: string;
+        firstName?: { localized?: Record<string, string>; preferredLocale?: { country: string; language: string } };
+        lastName?: { localized?: Record<string, string>; preferredLocale?: { country: string; language: string } };
+        headline?: { localized?: Record<string, string>; preferredLocale?: { country: string; language: string } };
+        vanityName?: string;
+        profilePicture?: {
+          displayImage?: string;
+         "displayImage~"?: {
+            elements?: Array<{
+              identification: string;
+              medialets: string;
+            }>;
+          };
+        };
+      };
+
+      // Extract headline
+      if (profile.headline?.localized) {
+        const locale = profile.headline.preferredLocale;
+        const localeKey = locale ? `${locale.language}_${locale.country}` : undefined;
+        result.headline = localeKey ? profile.headline.localized[localeKey] : Object.values(profile.headline.localized)[0];
+      }
+
+      // Extract LinkedIn URL from vanityName
+      if (profile.vanityName) {
+        result.linkedinUrl = `https://www.linkedin.com/in/${profile.vanityName}`;
+      }
+
+      // Extract higher resolution profile picture if available
+      if (profile.profilePicture?.["displayImage~"]?.elements?.length) {
+        const largestImage = profile.profilePicture["displayImage~"].elements
+          .sort((a, b) => {
+            const sizeA = parseInt(a.medialets || "0", 10);
+            const sizeB = parseInt(b.medialets || "0", 10);
+            return sizeB - sizeA;
+          })[0];
+        if (largestImage?.identification) {
+          result.avatarUrl = largestImage.identification;
+        }
+      }
+    }
+  } catch {
+    // Profile API call failed — this is expected if the app doesn't have r_basicprofile permission
+    // We still have the basic OIDC data, so we continue
+  }
+
+  return result;
+}
+
+export async function buildLinkedInAuthUrl(redirectUri: string, state: string): Promise<string> {
+  const creds = await getPortalLinkedInCredentials();
+  if (!creds) throw new Error("LinkedIn OAuth not configured.");
+  const params = new URLSearchParams({
+    client_id: creds.clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid profile email",
+    state,
+  });
+  return `https://www.linkedin.com/oauth/v2/authorization?${params.toString()}`;
 }

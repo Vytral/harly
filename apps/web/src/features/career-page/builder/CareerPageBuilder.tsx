@@ -62,17 +62,16 @@ import {
   careerIcon,
 } from "@/features/career-page/icons";
 import { SocialIcon, SOCIAL_ICONS } from "@/features/career-page/social-icons";
+import type { Job } from "@/features/career-page/types";
 
-type Job = {
-  id: string;
-  slug: string;
-  title: string;
-  department: string | null;
-  location: string | null;
-  employmentType: string;
-  workplaceType: string;
+
+const LEGAL_SLUG_LABELS: Record<string, string> = {
+  "privacy-policy": "Privacy Policy",
+  "terms-of-service": "Terms of Service",
+  "cookie-policy": "Cookie Policy",
+  "candidate-notice": "Candidate Notice",
+  "ai-transparency-notice": "AI Transparency",
 };
-
 
 const TEMPLATE_META: Record<
   CareerTemplate,
@@ -88,12 +87,13 @@ export function CareerPageBuilder({
   initialConfig,
   workspace,
   jobs,
-  slug,
+  availableLegalPages = [],
 }: {
   initialConfig: CareerPageConfig;
   workspace: WorkspaceBoardBranding & { id: string };
   jobs: Job[];
-  slug: string;
+  /** Legal page slugs configured in workspace settings (e.g. ["privacy-policy"]). */
+  availableLegalPages?: string[];
 }) {
   const [config, setConfig] = useState<CareerPageConfig>(initialConfig);
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
@@ -674,6 +674,36 @@ export function CareerPageBuilder({
                 <p className="text-[11px] text-muted-foreground">
                   Shown bottom-right with real brand icons.
                 </p>
+                {availableLegalPages.length > 0 && (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="text-[11px] font-medium text-foreground">Legal links</p>
+                    <p className="text-[11px] text-muted-foreground">Select which legal pages appear in the footer.</p>
+                    {availableLegalPages.map((slug) => {
+                      const label = LEGAL_SLUG_LABELS[slug] ?? slug;
+                      const checked = (config.footer.legalLinks ?? []).includes(slug);
+                      return (
+                        <label key={slug} className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() =>
+                              update((d) => {
+                                const links = d.footer.legalLinks ?? [];
+                                if (links.includes(slug)) {
+                                  d.footer.legalLinks = links.filter((l) => l !== slug);
+                                } else {
+                                  d.footer.legalLinks = [...links, slug];
+                                }
+                              })
+                            }
+                            className="size-3.5 rounded border-zinc-300 accent-pine"
+                          />
+                          <span className="text-[12px] text-foreground">{label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
                 <ListEditor
                   label="Social links"
                   items={config.footer.socials}
@@ -831,7 +861,7 @@ export function CareerPageBuilder({
                     config={config}
                     workspace={workspace}
                     jobs={jobs}
-                    boardRoot={`/board/${slug}`}
+                    boardRoot=""
                   />
                 </PreviewFrame>
               )}

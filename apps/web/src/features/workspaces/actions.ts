@@ -11,6 +11,7 @@ import { auth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit-log";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
+import { createLogger } from "@/lib/logger";
 import { db } from "@harly/db";
 import {
   customRoles,
@@ -151,6 +152,8 @@ function canManageMembers(role: WorkspaceRole) {
   return role === "owner" || role === "admin";
 }
 
+const log = createLogger("workspaces");
+
 export async function updateWorkspaceBoardBrandingAction(
   _previousState: ActionResult,
   formData: FormData,
@@ -212,6 +215,7 @@ export async function updateWorkspaceBoardBrandingAction(
     revalidatePath(`/board/${context.organization.slug}`);
     return { success: true };
   } catch (error) {
+    log.error(error, "updateWorkspaceBoardBrandingAction failed");
     return {
       success: false,
       error:
@@ -315,7 +319,8 @@ export async function updateWorkspaceProfileAction(
     });
 
     return { success: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "updateWorkspaceProfileAction failed");
     return {
       success: false,
       error:
@@ -459,7 +464,8 @@ export async function inviteWorkspaceMemberAction(
     });
     revalidatePath("/settings");
     return { success: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "inviteWorkspaceMemberAction failed");
     return {
       success: false,
       error: "Unable to invite member.",
@@ -532,7 +538,8 @@ export async function updateWorkspaceMemberRoleAction(
     });
     revalidatePath("/settings");
     return { success: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "updateWorkspaceMemberRoleAction failed");
     return {
       success: false,
       error: "Unable to update member.",
@@ -616,7 +623,8 @@ export async function updateMemberRolesAction(input: {
 
     revalidatePath("/settings/members");
     return { success: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "updateMemberRolesAction failed");
     return {
       success: false,
       error: "Unable to update roles.",
@@ -682,7 +690,8 @@ export async function removeWorkspaceMemberAction(
     });
     revalidatePath("/settings");
     return { success: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "removeWorkspaceMemberAction failed");
     return {
       success: false,
       error: "Unable to remove member.",
@@ -717,7 +726,8 @@ export async function cancelWorkspaceInvitationAction(
     });
     revalidatePath("/settings");
     return { success: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "cancelWorkspaceInvitationAction failed");
     return {
       success: false,
       error:
@@ -817,7 +827,8 @@ export async function acceptWorkspaceInvitationAction(
     revalidatePath("/dashboard");
     revalidatePath("/settings");
     return result;
-  } catch {
+  } catch (error) {
+    log.error(error, "acceptWorkspaceInvitationAction failed");
     return {
       success: false,
       error:
@@ -858,7 +869,8 @@ export async function leaveWorkspaceAction(): Promise<ActionResult> {
 
     revalidatePath("/dashboard");
     return { success: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "leaveWorkspaceAction failed");
     return {
       success: false,
       error: "Unable to leave workspace.",

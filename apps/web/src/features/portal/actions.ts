@@ -27,6 +27,9 @@ import {
   isPortalEnabled,
   resolvePortalSession,
 } from "@/lib/portal-auth";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("portal-actions");
 
 const emailSchema = z.string().email().max(254).toLowerCase().trim();
 
@@ -69,7 +72,7 @@ export async function sendPortalMagicLinkAction(
 
     return { ok: true };
   } catch (err) {
-    console.error("sendPortalMagicLinkAction error:", err);
+    log.error(err, "sendPortalMagicLinkAction failed");
     return { ok: false, error: "Could not send the sign-in link. Try again." };
   }
 }
@@ -193,7 +196,8 @@ export async function applyToJobAction(
     }
 
     return { ok: true, applicationId: application.id };
-  } catch {
+  } catch (error) {
+    log.error(error, "applyToJobAction failed");
     return { ok: false, error: "Unable to submit application." };
   }
 }

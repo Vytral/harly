@@ -74,6 +74,10 @@ type PipelineEmail =
       workspaceName: string;
     };
 
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("pipeline");
+
 async function sendPipelineEmails(workspaceId: string, emails: PipelineEmail[]) {
   const branding = await getWorkspaceEmailBranding(workspaceId);
   await Promise.allSettled(
@@ -339,12 +343,8 @@ export async function moveApplicationInPipeline(
 
     return { success: true };
   } catch (error) {
-    const message =
-      "Unable to move application.";
-
-    console.error("Failed to move application in pipeline", error);
-
-    return { success: false, error: message };
+    log.error(error, "moveApplicationInPipeline failed");
+    return { success: false, error: "Unable to move application." };
   }
 }
 
@@ -583,12 +583,8 @@ export async function bulkMoveApplications(
 
     return { success: true };
   } catch (error) {
-    const message =
-      "Unable to move applications.";
-
-    console.error("Failed to bulk move applications", error);
-
-    return { success: false, error: message };
+    log.error(error, "bulkMoveApplications failed");
+    return { success: false, error: "Unable to move applications." };
   }
 }
 
@@ -665,12 +661,8 @@ export async function updateApplicationStatus(
 
     return { success: true };
   } catch (error) {
-    const message =
-      "Unable to update status.";
-
-    console.error("Failed to update application status", error);
-
-    return { success: false, error: message };
+    log.error(error, "updateApplicationStatus failed");
+    return { success: false, error: "Unable to update status." };
   }
 }
 
@@ -703,11 +695,7 @@ export async function updateStageEmailSettings(
 
     return { success: true };
   } catch (error) {
-    const message =
-      "Unable to update stage email.";
-
-    console.error("Failed to update stage email settings", error);
-
-    return { success: false, error: message };
+    log.error(error, "updateStageEmailSettings failed");
+    return { success: false, error: "Unable to update stage email." };
   }
 }

@@ -31,7 +31,7 @@ export default async function OnboardingPage() {
   if (onboardingCompletedAt) redirect("/dashboard");
 
   const context = await getWorkspaceContextOrNull({
-    fallbackToFirstOrganization: false,
+    fallbackToFirstOrganization: true,
   });
 
   const firstName = session.user.name?.split(" ")[0] ?? "there";

@@ -5,7 +5,10 @@ import { revalidatePath } from "next/cache";
 import { db, webhookDeliveries } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { createLogger } from "@/lib/logger";
 import { deliverWebhook } from "@/server/webhooks/dispatch";
+
+const log = createLogger("developers");
 import {
   createApiKey,
   createWebhookEndpoint,
@@ -49,6 +52,7 @@ export async function createApiKeyAction(input: {
     revalidatePath(SETTINGS_PATH);
     return { ok: true, raw };
   } catch (error) {
+    log.error(error, "developer action failed");
     return { ok: false, error: errorMessage(error, "Could not create key.") };
   }
 }

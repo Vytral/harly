@@ -314,7 +314,7 @@ function MembersPanel({
                   key={member.id}
                   className="flex flex-wrap items-center gap-3 px-5 py-3.5 transition-colors hover:bg-muted/20"
                 >
-                  <UserAvatar name={member.name} size="sm" />
+                  <UserAvatar name={member.name} src={member.image} size="sm" />
                   <div className="min-w-0 flex-1">
                     <p className="flex items-center gap-2 text-sm font-medium">
                       <span className="truncate">{member.name}</span>

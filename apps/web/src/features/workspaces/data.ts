@@ -60,6 +60,7 @@ export type WorkspaceMemberItem = {
   // Raw role key — built-in ("owner"…) or a custom-role slug.
   role: string;
   email: string;
+  image?: string | null;
   isCurrentUser: boolean;
   createdAt: Date;
 };
@@ -162,6 +163,7 @@ export async function getWorkspaceSettingsData() {
           userId: authUsers.id,
           name: authUsers.name,
           email: authUsers.email,
+          image: authUsers.image,
           role: authMembers.role,
           createdAt: authMembers.createdAt,
         })
@@ -218,7 +220,11 @@ export async function getInvitationById(invitationId: string) {
       organizationId: invitation.organizationId,
       organizationName: authOrganizations.name,
       organizationSlug: authOrganizations.slug,
+      organizationLogo: authOrganizations.logo,
       existingAuthUserId: authUsers.id,
+      inviterId: invitation.inviterId,
+      inviterName: authUsers.name,
+      inviterImage: authUsers.image,
     })
     .from(invitation)
     .innerJoin(
@@ -236,9 +242,21 @@ export async function getInvitationById(invitationId: string) {
     return null;
   }
 
+  // Fetch inviter details separately
+  const [inviter] = await db
+    .select({
+      id: authUsers.id,
+      name: authUsers.name,
+      image: authUsers.image,
+    })
+    .from(authUsers)
+    .where(eq(authUsers.id, row.inviterId))
+    .limit(1);
+
   return {
     ...row,
     role: normalizeWorkspaceRole(row.role),
+    inviter: inviter ?? null,
   };
 }
 

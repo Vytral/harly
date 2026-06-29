@@ -10,6 +10,9 @@ import {
   careerPageConfigSchema,
   normalizeCareerPageConfig,
 } from "@/features/career-page/config";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("career-page");
 
 export type SaveCareerPageResult = { success: boolean; error?: string };
 
@@ -49,7 +52,7 @@ export async function saveCareerPageConfigAction(
         .values({ organizationId: workspaceId, careerPageConfig: config });
     }
   } catch (error) {
-    console.error("Failed to save career page config", error);
+    log.error(error, "saveCareerPageConfigAction failed");
     return { success: false, error: "Could not save. Try again." };
   }
 

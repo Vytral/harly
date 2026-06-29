@@ -5,6 +5,9 @@ import { and, eq } from "drizzle-orm";
 
 import { candidates, db } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("portal-profile");
 
 type ProfileData = {
   firstName: string;
@@ -54,7 +57,8 @@ export async function updatePortalProfileAction(
     }
 
     return { ok: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "updatePortalProfileAction failed");
     return { ok: false, error: "Unable to update profile." };
   }
 }
@@ -89,7 +93,8 @@ export async function updatePortalCandidateAvatarAction(input: {
     }
 
     return { success: true };
-  } catch {
+  } catch (error) {
+    log.error(error, "updatePortalCandidateAvatarAction failed");
     return { success: false, error: "Unable to update avatar." };
   }
 }

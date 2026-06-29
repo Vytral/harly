@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useReducer, useRef, useState, useTransition } from "react";
 import {
   Check,
   Globe,
@@ -288,6 +288,144 @@ function YesNoToggle({
 const cardClass =
   "rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-900/60";
 
+function ConsentCheckbox({
+  checked,
+  onCheckedChange,
+  onErrorClear,
+  consentText,
+  privacyPolicyUrl,
+  error,
+}: {
+  checked: boolean;
+  onCheckedChange: (v: boolean) => void;
+  onErrorClear: () => void;
+  consentText: string;
+  privacyPolicyUrl: string | null;
+  error: string | null;
+}) {
+  return (
+    <div className="-mt-2 space-y-2">
+      <label className="flex cursor-pointer items-start gap-3">
+        <input
+          type="checkbox"
+          checked={checked}
+          onChange={(e) => {
+            onCheckedChange(e.target.checked);
+            onErrorClear();
+          }}
+          className="mt-1 size-4 rounded border-zinc-300 text-[var(--board-primary)] focus:ring-[var(--board-primary)]"
+        />
+        <span className="text-sm text-zinc-600 dark:text-zinc-400">
+          <span className="text-red-500">*</span>{" "}
+          {privacyPolicyUrl ? (
+            <a
+              href={privacyPolicyUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium underline underline-offset-2 decoration-zinc-300 hover:decoration-zinc-500 dark:decoration-zinc-600 dark:hover:decoration-zinc-400"
+            >
+              {consentText}
+            </a>
+          ) : (
+            consentText
+          )}
+        </span>
+      </label>
+      {error ? <p className="text-sm text-red-500">{error}</p> : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Form state reducer — unifies fields + answers + client-side validation
+// errors so a single dispatch replaces three separate setState calls and
+// prevents cascading re-renders on every keystroke.
+// ---------------------------------------------------------------------------
+type FormState = {
+  fields: Record<TextField, string>;
+  answers: Record<string, string>;
+  fieldErrors: Partial<Record<keyof ApplicationFormValues, string[]>>;
+  questionErrors: Record<string, string[]>;
+};
+
+type FormAction =
+  | { type: "SET_FIELD"; field: TextField; value: string }
+  | { type: "SET_ANSWER"; id: string; value: string }
+  | { type: "CLEAR_PERSONAL" }
+  | { type: "SET_FIELD_ERRORS"; errors: Partial<Record<keyof ApplicationFormValues, string[]>> }
+  | { type: "SET_QUESTION_ERRORS"; errors: Record<string, string[]> }
+  | { type: "CLEAR_FIELD_ERROR"; field: keyof ApplicationFormValues }
+  | { type: "CLEAR_QUESTION_ERROR"; id: string }
+  | { type: "APPLY_AUTOFILL"; extracted: Partial<Record<TextField, string>> };
+
+const initialFormState: FormState = {
+  fields: initialFields,
+  answers: {},
+  fieldErrors: {},
+  questionErrors: {},
+};
+
+function formReducer(state: FormState, action: FormAction): FormState {
+  switch (action.type) {
+    case "SET_FIELD":
+      return {
+        ...state,
+        fields: { ...state.fields, [action.field]: action.value },
+        fieldErrors: (() => {
+          if (!(action.field in state.fieldErrors)) return state.fieldErrors;
+          const next = { ...state.fieldErrors };
+          delete next[action.field];
+          return next;
+        })(),
+      };
+    case "SET_ANSWER":
+      return {
+        ...state,
+        answers: { ...state.answers, [action.id]: action.value },
+        questionErrors: (() => {
+          if (!(action.id in state.questionErrors)) return state.questionErrors;
+          const next = { ...state.questionErrors };
+          delete next[action.id];
+          return next;
+        })(),
+      };
+    case "CLEAR_PERSONAL":
+      return {
+        ...state,
+        fields: {
+          ...state.fields,
+          firstName: "",
+          lastName: "",
+          email: "",
+          phone: "",
+          location: "",
+        },
+      };
+    case "SET_FIELD_ERRORS":
+      return { ...state, fieldErrors: action.errors };
+    case "SET_QUESTION_ERRORS":
+      return { ...state, questionErrors: action.errors };
+    case "CLEAR_FIELD_ERROR": {
+      const next = { ...state.fieldErrors };
+      delete next[action.field];
+      return { ...state, fieldErrors: next };
+    }
+    case "CLEAR_QUESTION_ERROR": {
+      const next = { ...state.questionErrors };
+      delete next[action.id];
+      return { ...state, questionErrors: next };
+    }
+    case "APPLY_AUTOFILL": {
+      const next = { ...state.fields };
+      for (const [k, v] of Object.entries(action.extracted)) {
+        const key = k as TextField;
+        if (!next[key] && v) next[key] = v as string;
+      }
+      return { ...state, fields: next };
+    }
+  }
+}
+
 export function ApplyForm({
   jobSlug,
   workspaceSlug,
@@ -305,67 +443,38 @@ export function ApplyForm({
   const action = submitApplicationAction.bind(null, { jobSlug, workspaceSlug });
   const [state, formAction, isPending] = useActionState(action, initialState);
   const formRef = useRef<HTMLFormElement>(null);
-  const [fields, setFields] = useState(initialFields);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [form, dispatch] = useReducer(formReducer, initialFormState);
+  const { fields, answers, fieldErrors: clientFieldErrors, questionErrors: clientQuestionErrors } = form;
   const [showLinks, setShowLinks] = useState(false);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(
-    null,
-  );
+  const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
   const [detected, setDetected] = useState<DetectedSummary | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [autofillMessage, setAutofillMessage] = useState<string | null>(null);
-  const [clientFieldErrors, setClientFieldErrors] = useState<
-    Partial<Record<keyof ApplicationFormValues, string[]>>
-  >({});
-  const [clientQuestionErrors, setClientQuestionErrors] = useState<
-    Record<string, string[]>
-  >({});
-  const [isUploading, setIsUploading] = useState(false);
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const [, startTransition] = useTransition();
-  const isSubmitting = isPending || isUploading;
+  const isSubmitting = isPending || isSubmittingForm;
 
   const showConsentCheckbox = legalConfigured;
   const privacyPolicyUrl = legalPages?.privacyPolicy
-    ? `/board/${workspaceSlug}/legal/privacy-policy`
+    ? `/legal/privacy-policy`
     : null;
   const consentText = consentCheckboxText || "I agree to the privacy policy and consent to the processing of my personal data.";
 
   function updateField(field: TextField, value: string) {
-    setFields((current) => ({ ...current, [field]: value }));
-    setClientFieldErrors((current) => {
-      if (!current[field]) {
-        return current;
-      }
-      const next = { ...current };
-      delete next[field];
-      return next;
-    });
+    dispatch({ type: "SET_FIELD", field, value });
   }
 
   function updateAnswer(id: string, value: string) {
-    setAnswers((current) => ({ ...current, [id]: value }));
-    setClientQuestionErrors((current) => {
-      if (!current[id]) {
-        return current;
-      }
-      const next = { ...current };
-      delete next[id];
-      return next;
-    });
+    dispatch({ type: "SET_ANSWER", id, value });
   }
 
   function clearPersonalInfo() {
-    setFields((current) => ({
-      ...current,
-      firstName: "",
-      lastName: "",
-      email: "",
-      phone: "",
-      location: "",
-    }));
+    dispatch({ type: "CLEAR_PERSONAL" });
   }
 
   function focusField(field: string) {
@@ -413,8 +522,8 @@ export function ApplyForm({
       }
     }
 
-    setClientFieldErrors(nextErrors);
-    setClientQuestionErrors(nextQuestionErrors);
+    dispatch({ type: "SET_FIELD_ERRORS", errors: nextErrors });
+    dispatch({ type: "SET_QUESTION_ERRORS", errors: nextQuestionErrors });
 
     const firstError = Object.keys(nextErrors)[0];
     const firstQuestionError = Object.keys(nextQuestionErrors)[0];
@@ -439,20 +548,11 @@ export function ApplyForm({
       "websiteUrl",
     ];
 
-    // Count only the empty fields we actually fill, for the status message.
     const filledCount = contactKeys.filter(
       (key) => !fields[key] && extracted[key],
     ).length;
 
-    setFields((current) => {
-      const next = { ...current };
-      for (const key of contactKeys) {
-        if (!current[key] && extracted[key]) {
-          next[key] = extracted[key] as string;
-        }
-      }
-      return next;
-    });
+    dispatch({ type: "APPLY_AUTOFILL", extracted });
 
     if (extracted.linkedinUrl || extracted.githubUrl || extracted.websiteUrl) {
       setShowLinks(true);
@@ -491,7 +591,7 @@ export function ApplyForm({
     }
 
     setResumeFile(file);
-    setIsUploading(true);
+    setIsUploadingResume(true);
 
     try {
       // Upload via the presigned URL first (this bypasses the server-action body
@@ -504,6 +604,8 @@ export function ApplyForm({
       const parseResult = await parseResumeAction({
         key: uploaded.key,
         fileName: file.name,
+        jobSlug,
+        workspaceSlug,
       });
 
       if (!parseResult.ok) {
@@ -523,7 +625,29 @@ export function ApplyForm({
           : "Unable to read this resume. Please try again.",
       );
     } finally {
-      setIsUploading(false);
+      setIsUploadingResume(false);
+    }
+  }
+
+  function handleDragOver(event: React.DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(true);
+  }
+
+  function handleDragLeave(event: React.DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+  }
+
+  function handleDrop(event: React.DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    const file = event.dataTransfer.files[0];
+    if (file) {
+      void handleResumeChange(file);
     }
   }
 
@@ -589,7 +713,7 @@ export function ApplyForm({
       return;
     }
 
-    setIsUploading(true);
+    setIsSubmittingForm(true);
 
     try {
       // Reuse the file already uploaded during autofill; only re-upload if the
@@ -619,12 +743,12 @@ export function ApplyForm({
         formData.set("consentGiven", "true");
       }
 
-      setIsUploading(false);
+      setIsSubmittingForm(false);
       startTransition(() => {
         formAction(formData);
       });
     } catch (error) {
-      setIsUploading(false);
+      setIsSubmittingForm(false);
       setResumeError(
         error instanceof Error
           ? error.message
@@ -681,7 +805,7 @@ export function ApplyForm({
   // variants, so it's built once and dropped into either resume block.
   const resumeStatus = (
     <>
-      {isUploading ? (
+      {isUploadingResume ? (
         <p className="mt-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
           Reading your resume…
         </p>
@@ -800,7 +924,15 @@ export function ApplyForm({
             ) : (
               <label
                 htmlFor="resumeFile"
-                className="group mt-4 flex cursor-pointer flex-col items-center gap-3 rounded-lg border border-dashed border-zinc-300 bg-zinc-50/50 px-6 py-7 text-center transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/30 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/50 sm:flex-row sm:justify-center sm:gap-4 sm:text-left"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={cn(
+                  "group mt-4 flex cursor-pointer flex-col items-center gap-3 rounded-lg border border-dashed bg-zinc-50/50 px-6 py-7 text-center transition hover:bg-zinc-50 dark:bg-zinc-800/30 dark:hover:bg-zinc-800/50 sm:flex-row sm:justify-center sm:gap-4 sm:text-left",
+                  isDragging
+                    ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/5"
+                    : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500",
+                )}
               >
                 <span
                   className="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-4 text-sm font-semibold transition-transform duration-150 group-active:scale-[0.98] dark:bg-zinc-900"
@@ -810,10 +942,10 @@ export function ApplyForm({
                   }}
                 >
                   <Paperclip className="size-4" strokeWidth={2} />
-                  Upload File
+                  {isDragging ? "Drop here" : "Upload File"}
                 </span>
                 <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                  or drag and drop here
+                  {isDragging ? "Release to upload" : "or drag and drop here"}
                 </span>
               </label>
             )}
@@ -854,6 +986,7 @@ export function ApplyForm({
                 <input
                   name="firstName"
                   type="text"
+                  autoComplete="given-name"
                   value={fields.firstName}
                   onChange={(event) => updateField("firstName", event.target.value)}
                   placeholder="Type here..."
@@ -867,6 +1000,7 @@ export function ApplyForm({
                 <input
                   name="lastName"
                   type="text"
+                  autoComplete="family-name"
                   value={fields.lastName}
                   onChange={(event) => updateField("lastName", event.target.value)}
                   placeholder="Type here..."
@@ -881,6 +1015,7 @@ export function ApplyForm({
               <input
                 name="email"
                 type="email"
+                autoComplete="email"
                 value={fields.email}
                 onChange={(event) => updateField("email", event.target.value)}
                 placeholder="hello@example.com..."
@@ -912,6 +1047,7 @@ export function ApplyForm({
                 <input
                   name="location"
                   type="text"
+                  autoComplete="address-level2"
                   value={fields.location}
                   onChange={(event) => updateField("location", event.target.value)}
                   placeholder="City, country"
@@ -960,6 +1096,7 @@ export function ApplyForm({
                         <input
                           name="linkedinUrl"
                           type="text"
+                          autoComplete="url"
                           value={fields.linkedinUrl}
                           onChange={(event) =>
                             updateField("linkedinUrl", event.target.value)
@@ -987,6 +1124,7 @@ export function ApplyForm({
                         <input
                           name="githubUrl"
                           type="text"
+                          autoComplete="url"
                           value={fields.githubUrl}
                           onChange={(event) =>
                             updateField("githubUrl", event.target.value)
@@ -1014,6 +1152,7 @@ export function ApplyForm({
                         <input
                           name="websiteUrl"
                           type="text"
+                          autoComplete="url"
                           value={fields.websiteUrl}
                           onChange={(event) =>
                             updateField("websiteUrl", event.target.value)
@@ -1146,37 +1285,14 @@ export function ApplyForm({
           ) : null}
 
           {showConsentCheckbox ? (
-            <div className="-mt-2 space-y-2">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={consentGiven}
-                  onChange={(e) => {
-                    setConsentGiven(e.target.checked);
-                    setConsentError(null);
-                  }}
-                  className="mt-1 size-4 rounded border-zinc-300 text-[var(--board-primary)] focus:ring-[var(--board-primary)]"
-                />
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                  <span className="text-red-500">*</span>{" "}
-                  {privacyPolicyUrl ? (
-                    <a
-                      href={privacyPolicyUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium underline underline-offset-2 decoration-zinc-300 hover:decoration-zinc-500 dark:decoration-zinc-600 dark:hover:decoration-zinc-400"
-                    >
-                      {consentText}
-                    </a>
-                  ) : (
-                    consentText
-                  )}
-                </span>
-              </label>
-              {consentError ? (
-                <p className="text-sm text-red-500">{consentError}</p>
-              ) : null}
-            </div>
+            <ConsentCheckbox
+              checked={consentGiven}
+              onCheckedChange={setConsentGiven}
+              onErrorClear={() => setConsentError(null)}
+              consentText={consentText}
+              privacyPolicyUrl={privacyPolicyUrl}
+              error={consentError}
+            />
           ) : null}
 
           <button
@@ -1185,18 +1301,18 @@ export function ApplyForm({
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold text-white transition-transform duration-150 hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             style={{ backgroundColor: "var(--board-primary)" }}
           >
-            {isUploading || isPending ? (
+            {isSubmittingForm || isPending ? (
               <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.2" />
                 <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
               </svg>
             ) : null}
-            {isUploading
+            {isSubmittingForm
               ? "Uploading..."
               : isPending
                 ? "Submitting..."
                 : "Submit Application"}
-            {!isUploading && !isPending ? (
+            {!isSubmittingForm && !isPending ? (
               <Send className="size-4" strokeWidth={2} />
             ) : null}
           </button>
@@ -1246,7 +1362,15 @@ export function ApplyForm({
             ) : (
               <label
                 htmlFor="resumeFile"
-                className="group mt-4 flex cursor-pointer flex-col items-center rounded-md border border-dashed border-zinc-300 bg-zinc-50/50 px-6 py-8 text-center transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-800/30 dark:hover:border-zinc-500 dark:hover:bg-zinc-800/50"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={cn(
+                  "group mt-4 flex cursor-pointer flex-col items-center rounded-md border border-dashed bg-zinc-50/50 px-6 py-8 text-center transition hover:bg-zinc-50 dark:bg-zinc-800/30 dark:hover:bg-zinc-800/50",
+                  isDragging
+                    ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/5"
+                    : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500",
+                )}
               >
                 <span
                   className="mb-3 flex size-11 items-center justify-center rounded-full transition-transform duration-150 group-hover:-translate-y-0.5 motion-reduce:transform-none"
@@ -1263,9 +1387,9 @@ export function ApplyForm({
                     className="font-medium"
                     style={{ color: "var(--board-primary)" }}
                   >
-                    Choose a file
+                    {isDragging ? "Drop here" : "Choose a file"}
                   </span>{" "}
-                  or drag and drop here
+                  {isDragging ? "Release to upload" : "or drag and drop here"}
                 </p>
                 <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
                   .pdf, .doc, .docx · up to 10MB
@@ -1300,6 +1424,7 @@ export function ApplyForm({
                 <input
                   name="firstName"
                   type="text"
+                  autoComplete="given-name"
                   value={fields.firstName}
                   onChange={(event) => updateField("firstName", event.target.value)}
                   className={`${input} mt-1.5`}
@@ -1312,6 +1437,7 @@ export function ApplyForm({
                 <input
                   name="lastName"
                   type="text"
+                  autoComplete="family-name"
                   value={fields.lastName}
                   onChange={(event) => updateField("lastName", event.target.value)}
                   className={`${input} mt-1.5`}
@@ -1325,6 +1451,7 @@ export function ApplyForm({
               <input
                 name="email"
                 type="email"
+                autoComplete="email"
                 value={fields.email}
                 onChange={(event) => updateField("email", event.target.value)}
                 className={`${input} mt-1.5`}
@@ -1347,10 +1474,11 @@ export function ApplyForm({
             </label>
 
             <label className="mt-4 block">
-              <FieldLabel>Address</FieldLabel>
+              <FieldLabel>Current location</FieldLabel>
               <input
                 name="location"
                 type="text"
+                autoComplete="address-level2"
                 value={fields.location}
                 onChange={(event) => updateField("location", event.target.value)}
                 placeholder="City, country"
@@ -1386,6 +1514,7 @@ export function ApplyForm({
                           <input
                             name="linkedinUrl"
                             type="text"
+                            autoComplete="url"
                             value={fields.linkedinUrl}
                             onChange={(event) =>
                               updateField("linkedinUrl", event.target.value)
@@ -1412,6 +1541,7 @@ export function ApplyForm({
                           <input
                             name="githubUrl"
                             type="text"
+                            autoComplete="url"
                             value={fields.githubUrl}
                             onChange={(event) =>
                               updateField("githubUrl", event.target.value)
@@ -1438,6 +1568,7 @@ export function ApplyForm({
                           <input
                             name="websiteUrl"
                             type="text"
+                            autoComplete="url"
                             value={fields.websiteUrl}
                             onChange={(event) =>
                               updateField("websiteUrl", event.target.value)
@@ -1550,42 +1681,19 @@ export function ApplyForm({
           ) : null}
 
           {showConsentCheckbox ? (
-            <div className="-mt-2 space-y-2">
-              <label className="flex items-start gap-3 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={consentGiven}
-                  onChange={(e) => {
-                    setConsentGiven(e.target.checked);
-                    setConsentError(null);
-                  }}
-                  className="mt-1 size-4 rounded border-zinc-300 text-[var(--board-primary)] focus:ring-[var(--board-primary)]"
-                />
-                <span className="text-sm text-zinc-600 dark:text-zinc-400">
-                  <span className="text-red-500">*</span>{" "}
-                  {privacyPolicyUrl ? (
-                    <a
-                      href={privacyPolicyUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="font-medium underline underline-offset-2 decoration-zinc-300 hover:decoration-zinc-500 dark:decoration-zinc-600 dark:hover:decoration-zinc-400"
-                    >
-                      {consentText}
-                    </a>
-                  ) : (
-                    consentText
-                  )}
-                </span>
-              </label>
-              {consentError ? (
-                <p className="text-sm text-red-500">{consentError}</p>
-              ) : null}
-            </div>
+            <ConsentCheckbox
+              checked={consentGiven}
+              onCheckedChange={setConsentGiven}
+              onErrorClear={() => setConsentError(null)}
+              consentText={consentText}
+              privacyPolicyUrl={privacyPolicyUrl}
+              error={consentError}
+            />
           ) : null}
 
           <Button
             type="submit"
-            disabled={isPending || isUploading}
+            disabled={isPending || isSubmittingForm}
             className="w-full"
             size="lg"
             style={{
@@ -1593,7 +1701,7 @@ export function ApplyForm({
               color: "var(--board-primary-contrast)",
             }}
           >
-            {isUploading
+            {isSubmittingForm
               ? "Uploading…"
               : isPending
                 ? "Submitting…"

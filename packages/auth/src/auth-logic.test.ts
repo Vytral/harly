@@ -84,6 +84,31 @@ describe("buildSocialProviders", () => {
     expect(Object.keys(providers).sort()).toEqual(["github", "google", "microsoft"]);
   });
 
+  it("includes linkedin when both LINKEDIN_* vars are set", () => {
+    const providers = buildSocialProviders({
+      LINKEDIN_CLIENT_ID: "li-id",
+      LINKEDIN_CLIENT_SECRET: "li-secret",
+    });
+    expect(providers.linkedin).toEqual({
+      clientId: "li-id",
+      clientSecret: "li-secret",
+    });
+  });
+
+  it("includes all four providers when all vars are set", () => {
+    const providers = buildSocialProviders({
+      GOOGLE_CLIENT_ID: "g-id",
+      GOOGLE_CLIENT_SECRET: "g-secret",
+      MICROSOFT_CLIENT_ID: "ms-id",
+      MICROSOFT_CLIENT_SECRET: "ms-secret",
+      GITHUB_CLIENT_ID: "gh-id",
+      GITHUB_CLIENT_SECRET: "gh-secret",
+      LINKEDIN_CLIENT_ID: "li-id",
+      LINKEDIN_CLIENT_SECRET: "li-secret",
+    });
+    expect(Object.keys(providers).sort()).toEqual(["github", "google", "linkedin", "microsoft"]);
+  });
+
   it("omits a provider when only the clientId is present (no secret)", () => {
     const providers = buildSocialProviders({ GOOGLE_CLIENT_ID: "g-id" });
     expect(providers.google).toBeUndefined();
