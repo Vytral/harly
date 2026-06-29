@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, lt, max, notInArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, max, notInArray, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -280,10 +280,7 @@ export async function getPipelineSummary(jobId: string): Promise<PipelineSummary
         eq(applications.workspaceId, workspace.id),
         eq(applications.jobId, jobId),
         eq(applications.status, "active"),
-        lt(
-          sql`coalesce(${latestStageMove.lastMoved}, ${applications.createdAt})`,
-          stalledThreshold,
-        ),
+        sql`coalesce(${latestStageMove.lastMoved}, ${applications.createdAt}) < ${stalledThreshold.toISOString()}`,
       ),
     );
 

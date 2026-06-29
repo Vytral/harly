@@ -1,286 +1,314 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1780159002173,
-      "tag": "0000_parched_otto_octavius",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1780207178236,
-      "tag": "0001_magical_silhouette",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1780533741823,
-      "tag": "0002_brown_power_pack",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1780545879657,
-      "tag": "0003_messy_firestar",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1780610835321,
-      "tag": "0004_fixed_metal_master",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1780706359796,
-      "tag": "0005_marvelous_gorilla_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1780706412073,
-      "tag": "0006_bouncy_valkyrie",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1780756961388,
-      "tag": "0007_shiny_arclight",
-      "breakpoints": true
-    },
-    {
-      "idx": 8,
-      "version": "7",
-      "when": 1780762454439,
-      "tag": "0008_woozy_aqueduct",
-      "breakpoints": true
-    },
-    {
-      "idx": 9,
-      "version": "7",
-      "when": 1780762831536,
-      "tag": "0009_nice_squadron_supreme",
-      "breakpoints": true
-    },
-    {
-      "idx": 10,
-      "version": "7",
-      "when": 1780877231284,
-      "tag": "0010_brown_tomorrow_man",
-      "breakpoints": true
-    },
-    {
-      "idx": 11,
-      "version": "7",
-      "when": 1780893227947,
-      "tag": "0011_unusual_jack_murdock",
-      "breakpoints": true
-    },
-    {
-      "idx": 12,
-      "version": "7",
-      "when": 1781054222004,
-      "tag": "0012_fixed_the_liberteens",
-      "breakpoints": true
-    },
-    {
-      "idx": 13,
-      "version": "7",
-      "when": 1781056878248,
-      "tag": "0013_brief_the_stranger",
-      "breakpoints": true
-    },
-    {
-      "idx": 14,
-      "version": "7",
-      "when": 1781144121514,
-      "tag": "0014_youthful_shape",
-      "breakpoints": true
-    },
-    {
-      "idx": 15,
-      "version": "7",
-      "when": 1781144609540,
-      "tag": "0015_thick_lockjaw",
-      "breakpoints": true
-    },
-    {
-      "idx": 16,
-      "version": "7",
-      "when": 1781192967914,
-      "tag": "0016_groovy_nehzno",
-      "breakpoints": true
-    },
-    {
-      "idx": 17,
-      "version": "7",
-      "when": 1781196903194,
-      "tag": "0017_tranquil_master_mold",
-      "breakpoints": true
-    },
-    {
-      "idx": 18,
-      "version": "7",
-      "when": 1781208554949,
-      "tag": "0018_burly_leopardon",
-      "breakpoints": true
-    },
-    {
-      "idx": 19,
-      "version": "7",
-      "when": 1781283668214,
-      "tag": "0019_complex_synch",
-      "breakpoints": true
-    },
-    {
-      "idx": 20,
-      "version": "7",
-      "when": 1781391320501,
-      "tag": "0020_misty_ben_urich",
-      "breakpoints": true
-    },
-    {
-      "idx": 21,
-      "version": "7",
-      "when": 1781391321501,
-      "tag": "0021_amusing_celestials",
-      "breakpoints": true
-    },
-    {
-      "idx": 22,
-      "version": "7",
-      "when": 1781391322501,
-      "tag": "0022_small_misty_knight",
-      "breakpoints": true
-    },
-    {
-      "idx": 23,
-      "version": "7",
-      "when": 1781391323501,
-      "tag": "0023_security_features",
-      "breakpoints": true
-    },
-    {
-      "idx": 24,
-      "version": "7",
-      "when": 1781391324501,
-      "tag": "0024_security_require2fa",
-      "breakpoints": true
-    },
-    {
-      "idx": 25,
-      "version": "7",
-      "when": 1781391325501,
-      "tag": "0025_chat_notifications",
-      "breakpoints": true
-    },
-    {
-      "idx": 26,
-      "version": "7",
-      "when": 1781391326501,
-      "tag": "0026_onboarding_flow",
-      "breakpoints": true
-    },
-    {
-      "idx": 27,
-      "version": "7",
-      "when": 1781391327501,
-      "tag": "0027_turnstile",
-      "breakpoints": true
-    },
-    {
-      "idx": 28,
-      "version": "7",
-      "when": 1781391328501,
-      "tag": "0028_ai_custom_provider",
-      "breakpoints": true
-    },
-    {
-      "idx": 29,
-      "version": "7",
-      "when": 1781391329501,
-      "tag": "0029_drop_ai_custom_config",
-      "breakpoints": true
-    },
-    {
-      "idx": 30,
-      "version": "7",
-      "when": 1781391330501,
-      "tag": "0030_closed_red_shift",
-      "breakpoints": true
-    },
-    {
-      "idx": 31,
-      "version": "7",
-      "when": 1781391331501,
-      "tag": "0031_mature_bishop",
-      "breakpoints": true
-    },
-    {
-      "idx": 32,
-      "version": "7",
-      "when": 1781391332501,
-      "tag": "0032_slack_oauth",
-      "breakpoints": true
-    },
-    {
-      "idx": 33,
-      "version": "7",
-      "when": 1782097212144,
-      "tag": "0033_dark_shocker",
-      "breakpoints": true
-    },
-    {
-      "idx": 34,
-      "version": "7",
-      "when": 1782105148992,
-      "tag": "0034_gcal-integration",
-      "breakpoints": true
-    },
-    {
-      "idx": 35,
-      "version": "7",
-      "when": 1782241861132,
-      "tag": "0035_volatile_loa",
-      "breakpoints": true
-    },
-    {
-      "idx": 36,
-      "version": "7",
-      "when": 1782242435244,
-      "tag": "0036_fixed_rocket_raccoon",
-      "breakpoints": true
-    },
-    {
-      "idx": 37,
-      "version": "7",
-      "when": 1782247752844,
-      "tag": "0037_first_hex",
-      "breakpoints": true
-    },
-    {
-      "idx": 38,
-      "version": "7",
-      "when": 1782252117757,
-      "tag": "0038_stale_prowler",
-      "breakpoints": true
-    },
-    {
-      "idx": 39,
-      "version": "7",
-      "when": 1782277814857,
-      "tag": "0039_slow_roland_deschain",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1780159002173,
+			"tag": "0000_parched_otto_octavius",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1780207178236,
+			"tag": "0001_magical_silhouette",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1780533741823,
+			"tag": "0002_brown_power_pack",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1780545879657,
+			"tag": "0003_messy_firestar",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1780610835321,
+			"tag": "0004_fixed_metal_master",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1780706359796,
+			"tag": "0005_marvelous_gorilla_man",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1780706412073,
+			"tag": "0006_bouncy_valkyrie",
+			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1780756961388,
+			"tag": "0007_shiny_arclight",
+			"breakpoints": true
+		},
+		{
+			"idx": 8,
+			"version": "7",
+			"when": 1780762454439,
+			"tag": "0008_woozy_aqueduct",
+			"breakpoints": true
+		},
+		{
+			"idx": 9,
+			"version": "7",
+			"when": 1780762831536,
+			"tag": "0009_nice_squadron_supreme",
+			"breakpoints": true
+		},
+		{
+			"idx": 10,
+			"version": "7",
+			"when": 1780877231284,
+			"tag": "0010_brown_tomorrow_man",
+			"breakpoints": true
+		},
+		{
+			"idx": 11,
+			"version": "7",
+			"when": 1780893227947,
+			"tag": "0011_unusual_jack_murdock",
+			"breakpoints": true
+		},
+		{
+			"idx": 12,
+			"version": "7",
+			"when": 1781054222004,
+			"tag": "0012_fixed_the_liberteens",
+			"breakpoints": true
+		},
+		{
+			"idx": 13,
+			"version": "7",
+			"when": 1781056878248,
+			"tag": "0013_brief_the_stranger",
+			"breakpoints": true
+		},
+		{
+			"idx": 14,
+			"version": "7",
+			"when": 1781144121514,
+			"tag": "0014_youthful_shape",
+			"breakpoints": true
+		},
+		{
+			"idx": 15,
+			"version": "7",
+			"when": 1781144609540,
+			"tag": "0015_thick_lockjaw",
+			"breakpoints": true
+		},
+		{
+			"idx": 16,
+			"version": "7",
+			"when": 1781192967914,
+			"tag": "0016_groovy_nehzno",
+			"breakpoints": true
+		},
+		{
+			"idx": 17,
+			"version": "7",
+			"when": 1781196903194,
+			"tag": "0017_tranquil_master_mold",
+			"breakpoints": true
+		},
+		{
+			"idx": 18,
+			"version": "7",
+			"when": 1781208554949,
+			"tag": "0018_burly_leopardon",
+			"breakpoints": true
+		},
+		{
+			"idx": 19,
+			"version": "7",
+			"when": 1781283668214,
+			"tag": "0019_complex_synch",
+			"breakpoints": true
+		},
+		{
+			"idx": 20,
+			"version": "7",
+			"when": 1781391320501,
+			"tag": "0020_misty_ben_urich",
+			"breakpoints": true
+		},
+		{
+			"idx": 21,
+			"version": "7",
+			"when": 1781391321501,
+			"tag": "0021_amusing_celestials",
+			"breakpoints": true
+		},
+		{
+			"idx": 22,
+			"version": "7",
+			"when": 1781391322501,
+			"tag": "0022_small_misty_knight",
+			"breakpoints": true
+		},
+		{
+			"idx": 23,
+			"version": "7",
+			"when": 1781391323501,
+			"tag": "0023_security_features",
+			"breakpoints": true
+		},
+		{
+			"idx": 24,
+			"version": "7",
+			"when": 1781391324501,
+			"tag": "0024_security_require2fa",
+			"breakpoints": true
+		},
+		{
+			"idx": 25,
+			"version": "7",
+			"when": 1781391325501,
+			"tag": "0025_chat_notifications",
+			"breakpoints": true
+		},
+		{
+			"idx": 26,
+			"version": "7",
+			"when": 1781391326501,
+			"tag": "0026_onboarding_flow",
+			"breakpoints": true
+		},
+		{
+			"idx": 27,
+			"version": "7",
+			"when": 1781391327501,
+			"tag": "0027_turnstile",
+			"breakpoints": true
+		},
+		{
+			"idx": 28,
+			"version": "7",
+			"when": 1781391328501,
+			"tag": "0028_ai_custom_provider",
+			"breakpoints": true
+		},
+		{
+			"idx": 29,
+			"version": "7",
+			"when": 1781391329501,
+			"tag": "0029_drop_ai_custom_config",
+			"breakpoints": true
+		},
+		{
+			"idx": 30,
+			"version": "7",
+			"when": 1781391330501,
+			"tag": "0030_closed_red_shift",
+			"breakpoints": true
+		},
+		{
+			"idx": 31,
+			"version": "7",
+			"when": 1781391331501,
+			"tag": "0031_mature_bishop",
+			"breakpoints": true
+		},
+		{
+			"idx": 32,
+			"version": "7",
+			"when": 1781391332501,
+			"tag": "0032_slack_oauth",
+			"breakpoints": true
+		},
+		{
+			"idx": 33,
+			"version": "7",
+			"when": 1782097212144,
+			"tag": "0033_dark_shocker",
+			"breakpoints": true
+		},
+		{
+			"idx": 34,
+			"version": "7",
+			"when": 1782105148992,
+			"tag": "0034_gcal-integration",
+			"breakpoints": true
+		},
+		{
+			"idx": 35,
+			"version": "7",
+			"when": 1782241861132,
+			"tag": "0035_volatile_loa",
+			"breakpoints": true
+		},
+		{
+			"idx": 36,
+			"version": "7",
+			"when": 1782242435244,
+			"tag": "0036_fixed_rocket_raccoon",
+			"breakpoints": true
+		},
+		{
+			"idx": 37,
+			"version": "7",
+			"when": 1782247752844,
+			"tag": "0037_first_hex",
+			"breakpoints": true
+		},
+		{
+			"idx": 38,
+			"version": "7",
+			"when": 1782252117757,
+			"tag": "0038_stale_prowler",
+			"breakpoints": true
+		},
+		{
+			"idx": 39,
+			"version": "7",
+			"when": 1782277814857,
+			"tag": "0039_slow_roland_deschain",
+			"breakpoints": true
+		},
+		{
+			"idx": 40,
+			"version": "7",
+			"when": 1782277815857,
+			"tag": "0040_add_organization_logo_email",
+			"breakpoints": true
+		},
+		{
+			"idx": 41,
+			"version": "7",
+			"when": 1782277816857,
+			"tag": "0041_oauth_providers",
+			"breakpoints": true
+		},
+		{
+			"idx": 42,
+			"version": "7",
+			"when": 1782277817857,
+			"tag": "0042_sso_providers",
+			"breakpoints": true
+		},
+		{
+			"idx": 43,
+			"version": "7",
+			"when": 1782277818857,
+			"tag": "0043_ai_brief_duplicate_check",
+			"breakpoints": true
+		}
+	]
 }
