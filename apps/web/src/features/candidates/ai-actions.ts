@@ -353,7 +353,7 @@ export async function detectCandidateDuplicatesAction(input: {
 
   let context;
   try {
-    context = await requirePermission("collab:read");
+    context = await requirePermission("collab:write");
   } catch {
     return { ok: false, error: "You do not have permission to run AI duplicate detection." };
   }
