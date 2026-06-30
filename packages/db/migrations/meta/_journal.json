@@ -316,6 +316,13 @@
       "when": 1782712014882,
       "tag": "0044_mushy_dreadnoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 45,
+      "version": "7",
+      "when": 1782793503281,
+      "tag": "0045_omniscient_sersi",
+      "breakpoints": true
     }
   ]
 }

@@ -1780,3 +1780,66 @@ export const oauthProviders = pgTable(
 
 export type OAuthProvider = typeof oauthProviders.$inferSelect;
 export type NewOAuthProvider = typeof oauthProviders.$inferInsert;
+
+// ── Harly AI chat history ────────────────────────────────────────────────────
+// Persistent conversations for the in-product AI copilot. Scoped to a single
+// user within a workspace. Messages store the AI SDK UIMessage `parts` array
+// verbatim (jsonb) so reloading a conversation re-renders text, tool calls, and
+// rich result cards exactly as first streamed.
+export const aiConversations = pgTable(
+  "ai_conversations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Derived from the first user message; null until the first turn lands.
+    title: text("title"),
+    // Drives the history sort order; bumped on every new message.
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    index("ai_conversations_workspace_user_idx").on(
+      table.workspaceId,
+      table.userId,
+      table.lastMessageAt,
+    ),
+  ],
+);
+
+export const aiMessages = pgTable(
+  "ai_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => aiConversations.id, { onDelete: "cascade" }),
+    // "user" | "assistant" | "system"
+    role: text("role").notNull(),
+    // AI SDK UIMessage.parts[] stored verbatim (text, tool calls, tool outputs).
+    parts: jsonb("parts").default(sql`'[]'::jsonb`).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("ai_messages_conversation_idx").on(
+      table.conversationId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type AiConversation = typeof aiConversations.$inferSelect;
+export type NewAiConversation = typeof aiConversations.$inferInsert;
+export type AiMessage = typeof aiMessages.$inferSelect;
+export type NewAiMessage = typeof aiMessages.$inferInsert;

@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { GeistMono } from "geist/font/mono";
+import { GeistSans } from "geist/font/sans";
 import { Inter } from "next/font/google";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -31,7 +32,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${GeistMono.variable} h-full antialiased`}
+      className={`${inter.variable} ${GeistMono.variable} ${GeistSans.variable} h-full antialiased`}
       data-scroll-behavior="smooth"
     >
       <head>

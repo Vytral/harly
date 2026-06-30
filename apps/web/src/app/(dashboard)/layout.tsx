@@ -8,6 +8,8 @@ import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { listNotifications } from "@/features/notifications/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { getWorkspaceAiStatus } from "@/lib/ai/config";
+import { getCurrentPermissions } from "@/features/workspaces/permissions-server";
 import {
   getSidebarBranding,
   listUserWorkspaceOptions,
@@ -24,12 +26,14 @@ export default async function DashboardLayout({
   const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
   const { organization, user, role } = await getWorkspaceContext();
-  const [workspaceOptions, notifications, sidebarLogo, roles] =
+  const [workspaceOptions, notifications, sidebarLogo, roles, userPermissions, aiStatus] =
     await Promise.all([
       listUserWorkspaceOptions(),
       listNotifications(8),
       getSidebarBranding(organization.id),
       listWorkspaceRoles(),
+      getCurrentPermissions(),
+      getWorkspaceAiStatus(organization.id),
     ]);
   const inboxCount = notifications.filter((n) => !n.read).length;
   const assignableRoles = roles.map((r) => ({ key: r.key, name: r.name }));
@@ -45,7 +49,7 @@ export default async function DashboardLayout({
       <AppSidebar
         workspace={workspace}
         inboxCount={inboxCount}
-        role={role}
+        userPermissions={userPermissions}
         sidebarLogo={sidebarLogo}
         assignableRoles={assignableRoles}
       />
@@ -64,7 +68,7 @@ export default async function DashboardLayout({
           </main>
         </PageTitleProvider>
       </SidebarInset>
-      <HarlyAIWidget userName={user.name} />
+      <HarlyAIWidget userName={user.name} aiEnabled={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady} />
     </SidebarProvider>
   );
 }
