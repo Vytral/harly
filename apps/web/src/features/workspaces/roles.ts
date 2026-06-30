@@ -5,11 +5,13 @@ export const workspaceRoles = [
   "hiring_manager",
 ] as const;
 
-export type WorkspaceRole = (typeof workspaceRoles)[number];
+export type BuiltinWorkspaceRole = (typeof workspaceRoles)[number];
+export type WorkspaceRole = BuiltinWorkspaceRole;
+export type WorkspaceRoleKey = string;
 
 export function normalizeWorkspaceRole(
   role: string | null | undefined,
-): WorkspaceRole {
+): BuiltinWorkspaceRole {
   if (role && workspaceRoles.includes(role as WorkspaceRole)) {
     return role as WorkspaceRole;
   }

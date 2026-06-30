@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 import { logAuditEvent } from "@/lib/audit-log";
 
@@ -56,10 +57,7 @@ export async function registerSSOProviderAction(
   input: SSORegisterInput,
 ): Promise<SSOActionResult> {
   try {
-    const { organization, roleKey, user } = await getWorkspaceContext();
-    if (roleKey !== "owner" && roleKey !== "admin") {
-      return { ok: false, error: "Only owners or admins can configure SSO providers." };
-    }
+    const { organization, user } = await requirePermission("security:manage");
 
     const headerList = await headers();
 
@@ -173,10 +171,7 @@ export async function deleteSSOProviderAction(
   providerId: string,
 ): Promise<SSOActionResult> {
   try {
-    const { organization, roleKey, user } = await getWorkspaceContext();
-    if (roleKey !== "owner" && roleKey !== "admin") {
-      return { ok: false, error: "Only owners or admins can delete SSO providers." };
-    }
+    const { organization, user } = await requirePermission("security:manage");
 
     const headerList = await headers();
 

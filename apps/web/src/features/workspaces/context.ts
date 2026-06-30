@@ -14,6 +14,7 @@ import {
 import {
   normalizeWorkspaceRole,
   type WorkspaceRole,
+  type WorkspaceRoleKey,
 } from "@/features/workspaces/roles";
 
 type Session = NonNullable<Awaited<ReturnType<typeof auth.api.getSession>>>;
@@ -36,7 +37,7 @@ export type WorkspaceContext = {
   /** Normalized built-in role (custom keys collapse to "recruiter"). Legacy. */
   role: WorkspaceRole;
   /** Raw membership role key — may be a custom-role slug. Drives permissions. */
-  roleKey: string;
+  roleKey: WorkspaceRoleKey;
 };
 
 type ResolveWorkspaceContextOptions = {

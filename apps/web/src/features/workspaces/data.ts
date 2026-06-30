@@ -14,6 +14,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
   normalizeWorkspaceRole,
   type WorkspaceRole,
+  type WorkspaceRoleKey,
 } from "@/features/workspaces/roles";
 import {
   normalizeBoardStyle,
@@ -68,7 +69,7 @@ export type WorkspaceMemberItem = {
 export type WorkspaceInvitationItem = {
   id: string;
   email: string;
-  role: WorkspaceRole;
+  role: WorkspaceRoleKey;
   status: string;
   expiresAt: Date;
   createdAt: Date;
@@ -143,7 +144,7 @@ export async function getSidebarBranding(
     .where(eq(workspaceSettings.organizationId, organizationId))
     .limit(1);
 
-    return {
+  return {
     style: normalizeLogoStyle(settings?.sidebarLogoStyle),
     lightUrl: settings?.sidebarLogoUrl ?? null,
     darkUrl: settings?.sidebarLogoDarkUrl ?? null,
@@ -203,7 +204,7 @@ export async function getWorkspaceSettingsData() {
     workspaceOptions,
     inviteLink: {
       token: settingsRow[0]?.token ?? null,
-      role: normalizeWorkspaceRole(settingsRow[0]?.role ?? "recruiter"),
+      role: settingsRow[0]?.role ?? "recruiter",
       enabled: settingsRow[0]?.enabled ?? false,
     },
     members: memberRows.map((member) => ({
@@ -215,7 +216,7 @@ export async function getWorkspaceSettingsData() {
     invitations: invitationRows.map((item) => ({
       id: item.id,
       email: item.email,
-      role: normalizeWorkspaceRole(item.role),
+      role: item.role ?? "recruiter",
       status: item.status,
       expiresAt: item.expiresAt,
       createdAt: item.createdAt,
@@ -269,7 +270,7 @@ export async function getInvitationById(invitationId: string) {
 
   return {
     ...row,
-    role: normalizeWorkspaceRole(row.role),
+    role: row.role ?? "recruiter",
     inviter: inviter ?? null,
   };
 }
@@ -302,7 +303,7 @@ export async function getPendingInvitationForEmail(email: string) {
   return row
     ? {
         ...row,
-        role: normalizeWorkspaceRole(row.role),
+        role: row.role ?? "recruiter",
       }
     : null;
 }
@@ -338,6 +339,6 @@ export async function getWorkspaceByInviteToken(token: string) {
     organizationId: row.organizationId,
     organizationName: row.name,
     organizationLogo: row.logo,
-    role: normalizeWorkspaceRole(row.role),
+    role: row.role ?? "recruiter",
   };
 }

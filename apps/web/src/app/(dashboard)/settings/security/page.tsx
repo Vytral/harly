@@ -10,7 +10,7 @@ import { Force2FACard } from "@/features/security/Force2FACard";
 export const dynamic = "force-dynamic";
 
 export default async function SecuritySettingsPage() {
-  await requirePermission("members:manage");
+  await requirePermission("security:manage");
   const { organization, roleKey } = await getWorkspaceContext();
 
   const [securitySettings, auditLogRows, providerStatus, existingConfigs, ssoProviders] =

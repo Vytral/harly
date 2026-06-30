@@ -78,7 +78,10 @@ export function MembersAndRoles({
   assignableRoles,
   inviteLink,
   roles,
-  canManageMembers,
+  canInviteMembers,
+  canEditMembers,
+  canRemoveMembers,
+  canManageInviteLinks,
   canManageRoles,
 }: {
   members: WorkspaceMemberItem[];
@@ -86,7 +89,10 @@ export function MembersAndRoles({
   assignableRoles: AssignableRole[];
   inviteLink: InviteLinkState;
   roles: RoleSummary[];
-  canManageMembers: boolean;
+  canInviteMembers: boolean;
+  canEditMembers: boolean;
+  canRemoveMembers: boolean;
+  canManageInviteLinks: boolean;
   canManageRoles: boolean;
 }) {
   const [creatingRole, setCreatingRole] = useState(false);
@@ -104,14 +110,16 @@ export function MembersAndRoles({
             Members
             <CountChip active={tab === "members"}>{members.length}</CountChip>
           </TabsTrigger>
-          <TabsTrigger
-            value="roles"
-            className="gap-2 rounded-lg px-4 data-[state=active]:shadow-sm"
-          >
-            <ShieldCheckDuotoneIcon className="size-4" />
-            Roles
-            <CountChip active={tab === "roles"}>{roles.length}</CountChip>
-          </TabsTrigger>
+          {canManageRoles ? (
+            <TabsTrigger
+              value="roles"
+              className="gap-2 rounded-lg px-4 data-[state=active]:shadow-sm"
+            >
+              <ShieldCheckDuotoneIcon className="size-4" />
+              Roles
+              <CountChip active={tab === "roles"}>{roles.length}</CountChip>
+            </TabsTrigger>
+          ) : null}
         </TabsList>
 
         {canManageRoles && tab === "roles" ? (
@@ -133,7 +141,10 @@ export function MembersAndRoles({
           invitations={invitations}
           assignableRoles={assignableRoles}
           inviteLink={inviteLink}
-          canManageMembers={canManageMembers}
+          canInviteMembers={canInviteMembers}
+          canEditMembers={canEditMembers}
+          canRemoveMembers={canRemoveMembers}
+          canManageInviteLinks={canManageInviteLinks}
         />
       </TabsContent>
 
@@ -173,13 +184,19 @@ function MembersPanel({
   invitations,
   assignableRoles,
   inviteLink,
-  canManageMembers,
+  canInviteMembers,
+  canEditMembers,
+  canRemoveMembers,
+  canManageInviteLinks,
 }: {
   members: WorkspaceMemberItem[];
   invitations: WorkspaceInvitationItem[];
   assignableRoles: AssignableRole[];
   inviteLink: InviteLinkState;
-  canManageMembers: boolean;
+  canInviteMembers: boolean;
+  canEditMembers: boolean;
+  canRemoveMembers: boolean;
+  canManageInviteLinks: boolean;
 }) {
   const router = useRouter();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
@@ -265,22 +282,26 @@ function MembersPanel({
               ))}
             </SelectContent>
           </Select>
-          {canManageMembers ? (
+          {canInviteMembers || canManageInviteLinks ? (
             <>
-              <InviteLinkButton
-                inviteLink={inviteLink}
-                assignableRoles={assignableRoles}
-              />
-              <InviteTeammatesSheet
-                assignableRoles={assignableRoles}
-                pendingInvitations={invitations}
-                trigger={
-                  <Button>
-                    <UserPlusIcon className="size-4" />
-                    Invite
-                  </Button>
-                }
-              />
+              {canManageInviteLinks ? (
+                <InviteLinkButton
+                  inviteLink={inviteLink}
+                  assignableRoles={assignableRoles}
+                />
+              ) : null}
+              {canInviteMembers ? (
+                <InviteTeammatesSheet
+                  assignableRoles={assignableRoles}
+                  pendingInvitations={invitations}
+                  trigger={
+                    <Button>
+                      <UserPlusIcon className="size-4" />
+                      Invite
+                    </Button>
+                  }
+                />
+              ) : null}
             </>
           ) : null}
         </div>
@@ -325,7 +346,7 @@ function MembersPanel({
                     </p>
                   </div>
 
-                  {!canManageMembers || isLockedOwner ? (
+                  {!canEditMembers || isLockedOwner ? (
                     <Badge variant="outline">{roleName(member.role)}</Badge>
                   ) : (
                     <div className="flex items-center gap-2">
@@ -355,7 +376,7 @@ function MembersPanel({
                           ))}
                         </SelectContent>
                       </Select>
-                      {!member.isCurrentUser ? (
+                      {!member.isCurrentUser && canRemoveMembers ? (
                         <RemoveMemberButton
                           memberId={member.id}
                           name={member.name}
@@ -405,7 +426,7 @@ function MembersPanel({
                       </p>
                     </div>
                   </div>
-                  {canManageMembers ? (
+                  {canInviteMembers ? (
                     <CancelInvitationButton invitationId={item.id} />
                   ) : null}
                 </li>
@@ -415,7 +436,7 @@ function MembersPanel({
         </div>
       ) : null}
 
-      {canManageMembers && dirty.length > 0 ? (
+      {canEditMembers && dirty.length > 0 ? (
         <div className="sticky bottom-4 z-10 flex items-center justify-between gap-3 rounded-2xl border border-pine/30 bg-card px-4 py-3 shadow-[0_8px_24px_-12px_rgba(31,41,38,0.25)]">
           <p className="text-sm">
             <span className="font-medium">{dirty.length}</span> unsaved role{" "}

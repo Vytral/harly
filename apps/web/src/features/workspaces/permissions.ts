@@ -17,10 +17,15 @@ export const PERMISSIONS = [
   "collab:write", // notes, scorecards, schedule interviews, message
   "offers:manage",
   "templates:manage",
-  "members:manage",
+  "members:read",
+  "members:invite",
+  "members:edit",
+  "members:remove",
+  "invite_links:manage",
   "settings:edit",
   "integrations:manage",
   "roles:manage",
+  "security:manage",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -70,10 +75,15 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   {
     label: "Administration",
     permissions: [
-      { key: "members:manage", label: "Manage members & invites" },
+      { key: "members:read", label: "View members & invitations" },
+      { key: "members:invite", label: "Invite members", hint: "Send invites, cancel invites, and add existing users" },
+      { key: "members:edit", label: "Change member roles" },
+      { key: "members:remove", label: "Remove members" },
+      { key: "invite_links:manage", label: "Manage invite links" },
       { key: "settings:edit", label: "Edit workspace settings" },
       { key: "integrations:manage", label: "Manage integrations" },
       { key: "roles:manage", label: "Manage roles & permissions" },
+      { key: "security:manage", label: "Manage workspace security", hint: "2FA enforcement, SSO, and security settings" },
     ],
   },
 ];
@@ -103,8 +113,9 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "collab:write",
     "offers:manage",
     "templates:manage",
+    "members:read",
   ],
-  hiring_manager: ["candidates:move", "collab:write"],
+  hiring_manager: ["candidates:move", "collab:write", "members:read"],
 };
 
 export function isBuiltinRole(role: string): role is BuiltinRole {
@@ -138,13 +149,13 @@ export function roleLabel(role: string): string {
  */
 export const SETTINGS_SECTION_PERMISSION: Record<string, Permission> = {
   "/settings": "settings:edit",
-  "/settings/members": "members:manage",
+  "/settings/members": "members:read",
   "/settings/roles": "roles:manage",
   "/settings/ai": "settings:edit",
   "/settings/email": "settings:edit",
   "/settings/integrations": "integrations:manage",
   "/settings/developers": "integrations:manage",
-  "/settings/security": "members:manage",
+  "/settings/security": "security:manage",
   "/settings/legal": "settings:edit",
   "/settings/portal": "settings:edit",
 };

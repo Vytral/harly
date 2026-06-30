@@ -6,6 +6,7 @@ import { db, auditLogs, passkeys, workspaceSettings, oauthProviders } from "@har
 import { auth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 import { encryptSecret, decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 
@@ -81,7 +82,7 @@ export async function toggleForce2FAAction(
   require2fa: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { organization, roleKey, user } = await getWorkspaceContext();
+    const { organization, roleKey, user } = await requirePermission("security:manage");
     if (roleKey !== "owner") throw new Error("Only owners can change this setting.");
 
     await db
@@ -153,7 +154,7 @@ export async function saveOAuthProviderAction(input: {
   clientSecret: string;
 }): Promise<OAuthActionResult> {
   try {
-    const { organization, roleKey, user } = await getWorkspaceContext();
+    const { organization, roleKey, user } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
       return { ok: false, error: "Only owners can configure OAuth providers." };
     }
@@ -215,7 +216,7 @@ export async function toggleOAuthProviderAction(
   enabled: boolean,
 ): Promise<OAuthActionResult> {
   try {
-    const { organization, roleKey, user } = await getWorkspaceContext();
+    const { organization, roleKey, user } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
       return { ok: false, error: "Only owners can change this setting." };
     }
@@ -251,7 +252,7 @@ export async function deleteOAuthProviderAction(
   providerId: string,
 ): Promise<OAuthActionResult> {
   try {
-    const { organization, roleKey, user } = await getWorkspaceContext();
+    const { organization, roleKey, user } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
       return { ok: false, error: "Only owners can delete OAuth configurations." };
     }

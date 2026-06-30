@@ -33,16 +33,12 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import type { SidebarBranding } from "@/features/workspaces/data";
-import type { WorkspaceRole } from "@/features/workspaces/roles";
-import {
-  BUILTIN_ROLE_PERMISSIONS,
-  type Permission,
-} from "@/features/workspaces/permissions";
+import type { Permission } from "@/features/workspaces/permissions";
 
 type AppSidebarProps = {
   workspace: { id: string; name: string; logoUrl: string | null };
   inboxCount: number;
-  role: WorkspaceRole;
+  userPermissions: Permission[];
   sidebarLogo: SidebarBranding;
   assignableRoles: AssignableRole[];
 };
@@ -50,7 +46,7 @@ type AppSidebarProps = {
 export function AppSidebar({
   workspace,
   inboxCount,
-  role,
+  userPermissions,
   sidebarLogo,
   assignableRoles,
 }: AppSidebarProps) {
@@ -58,16 +54,13 @@ export function AppSidebar({
   const { open } = useSidebar();
   const [inviteOpen, setInviteOpen] = useState(false);
 
-  const userPermissions: Permission[] =
-    BUILTIN_ROLE_PERMISSIONS[role as keyof typeof BUILTIN_ROLE_PERMISSIONS] ?? [];
-
   const visibleWorkspaceNav = workspaceNav.filter(
     (item) =>
       !item.requiredPermission ||
       userPermissions.includes(item.requiredPermission),
   );
 
-  const canInvite = userPermissions.includes("members:manage");
+  const canInvite = userPermissions.includes("members:invite");
 
   return (
     <Sidebar collapsible="icon">

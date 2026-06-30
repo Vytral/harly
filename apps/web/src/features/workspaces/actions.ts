@@ -34,7 +34,6 @@ import {
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import {
   normalizeWorkspaceRole,
-  type WorkspaceRole,
 } from "@/features/workspaces/roles";
 import {
   boardBrandingSchema,
@@ -148,8 +147,8 @@ async function countOwners(organizationId: string) {
   return row?.count ?? 0;
 }
 
-function canManageMembers(role: WorkspaceRole) {
-  return role === "owner" || role === "admin";
+function isOwnerRole(role: string) {
+  return role === "owner";
 }
 
 const log = createLogger("workspaces");
@@ -460,7 +459,7 @@ export async function inviteWorkspaceMemberAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin"]);
+    const context = await requirePermission("members:invite");
     const parsed = inviteMemberSchema.safeParse({
       email: formData.get("email"),
       role: formData.get("role"),
@@ -471,10 +470,6 @@ export async function inviteWorkspaceMemberAction(
         success: false,
         error: parsed.error.issues[0]?.message ?? "Invalid invitation.",
       };
-    }
-
-    if (!canManageMembers(context.role)) {
-      return { success: false, error: "Workspace access denied." };
     }
 
     if (!(await isAssignableRole(context.organization.id, parsed.data.role))) {
@@ -528,10 +523,7 @@ export async function inviteWorkspaceMembersAction(
   formData: FormData,
 ): Promise<BulkInviteResult> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin"]);
-    if (!canManageMembers(context.role)) {
-      return { success: false, error: "Workspace access denied." };
-    }
+    const context = await requirePermission("members:invite");
 
     const raw = formData.get("invites");
     let payload: unknown;
@@ -588,7 +580,7 @@ export async function updateWorkspaceMemberRoleAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin"]);
+    const context = await requirePermission("members:edit");
     const parsed = updateMemberRoleSchema.safeParse({
       memberId: formData.get("memberId"),
       role: formData.get("role"),
@@ -624,7 +616,7 @@ export async function updateWorkspaceMemberRoleAction(
     }
 
     if (
-      normalizeWorkspaceRole(targetMember.role) === "owner" &&
+      isOwnerRole(targetMember.role) &&
       parsed.data.role !== "owner" &&
       (await countOwners(context.organization.id)) <= 1
     ) {
@@ -678,7 +670,7 @@ export async function updateMemberRolesAction(input: {
   changes: { memberId: string; role: string }[];
 }): Promise<ActionResult> {
   try {
-    const context = await requirePermission("members:manage");
+    const context = await requirePermission("members:edit");
     const parsed = bulkRolesSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false, error: "Invalid changes." };
@@ -747,7 +739,7 @@ export async function removeWorkspaceMemberAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin"]);
+    const context = await requirePermission("members:remove");
     const parsed = removeMemberSchema.safeParse({
       memberId: formData.get("memberId"),
     });
@@ -780,7 +772,7 @@ export async function removeWorkspaceMemberAction(
     }
 
     if (
-      normalizeWorkspaceRole(targetMember.role) === "owner" &&
+      isOwnerRole(targetMember.role) &&
       (await countOwners(context.organization.id)) <= 1
     ) {
       return { success: false, error: "Workspace must keep at least one owner." };
@@ -813,7 +805,7 @@ export async function cancelWorkspaceInvitationAction(
   invitationId: string,
 ): Promise<ActionResult> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin"]);
+    const context = await requirePermission("members:invite");
 
     await db
       .update(invitation)
@@ -892,7 +884,11 @@ export async function acceptWorkspaceInvitationAction(
         };
       }
 
-      const role = normalizeWorkspaceRole(targetInvitation.role);
+      const role = targetInvitation.role ?? "recruiter";
+
+      if (!(await isAssignableRole(targetInvitation.organizationId, role))) {
+        return { success: false, error: "This invitation points to a role that no longer exists." };
+      }
 
       await tx
         .insert(authMembers)
@@ -1022,10 +1018,7 @@ export async function enableInviteLinkAction(
   formData: FormData,
 ): Promise<InviteLinkResult> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin"]);
-    if (!canManageMembers(context.role)) {
-      return { success: false, error: "Workspace access denied." };
-    }
+    const context = await requirePermission("invite_links:manage");
 
     const parsed = inviteLinkRoleSchema.safeParse({ role: formData.get("role") });
     if (!parsed.success) {
@@ -1039,13 +1032,22 @@ export async function enableInviteLinkAction(
     const token = existing?.token ?? crypto.randomBytes(18).toString("base64url");
 
     await db
-      .update(workspaceSettings)
-      .set({
+      .insert(workspaceSettings)
+      .values({
+        organizationId: context.organization.id,
         inviteLinkToken: token,
         inviteLinkRole: parsed.data.role,
         inviteLinkEnabled: true,
       })
-      .where(eq(workspaceSettings.organizationId, context.organization.id));
+      .onConflictDoUpdate({
+        target: workspaceSettings.organizationId,
+        set: {
+          inviteLinkToken: token,
+          inviteLinkRole: parsed.data.role,
+          inviteLinkEnabled: true,
+          updatedAt: new Date(),
+        },
+      });
 
     await logAuditEvent({
       workspaceId: context.organization.id,
@@ -1066,14 +1068,17 @@ export async function enableInviteLinkAction(
 /** Disable the shareable link (keeps the token so re-enabling reuses it). */
 export async function disableInviteLinkAction(): Promise<InviteLinkResult> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin"]);
-    if (!canManageMembers(context.role)) {
-      return { success: false, error: "Workspace access denied." };
-    }
+    const context = await requirePermission("invite_links:manage");
     await db
-      .update(workspaceSettings)
-      .set({ inviteLinkEnabled: false })
-      .where(eq(workspaceSettings.organizationId, context.organization.id));
+      .insert(workspaceSettings)
+      .values({
+        organizationId: context.organization.id,
+        inviteLinkEnabled: false,
+      })
+      .onConflictDoUpdate({
+        target: workspaceSettings.organizationId,
+        set: { inviteLinkEnabled: false, updatedAt: new Date() },
+      });
     revalidatePath("/settings");
     return { success: true, enabled: false };
   } catch (error) {
@@ -1085,15 +1090,23 @@ export async function disableInviteLinkAction(): Promise<InviteLinkResult> {
 /** Mint a fresh token, invalidating all previously shared URLs. */
 export async function rotateInviteLinkAction(): Promise<InviteLinkResult> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin"]);
-    if (!canManageMembers(context.role)) {
-      return { success: false, error: "Workspace access denied." };
-    }
+    const context = await requirePermission("invite_links:manage");
     const token = crypto.randomBytes(18).toString("base64url");
     await db
-      .update(workspaceSettings)
-      .set({ inviteLinkToken: token, inviteLinkEnabled: true })
-      .where(eq(workspaceSettings.organizationId, context.organization.id));
+      .insert(workspaceSettings)
+      .values({
+        organizationId: context.organization.id,
+        inviteLinkToken: token,
+        inviteLinkEnabled: true,
+      })
+      .onConflictDoUpdate({
+        target: workspaceSettings.organizationId,
+        set: {
+          inviteLinkToken: token,
+          inviteLinkEnabled: true,
+          updatedAt: new Date(),
+        },
+      });
     revalidatePath("/settings");
     return { success: true, token, enabled: true };
   } catch (error) {
@@ -1132,7 +1145,10 @@ export async function joinViaInviteLinkAction(
       return { success: false, error: "This invite link is no longer active." };
     }
 
-    const role = normalizeWorkspaceRole(ws.role);
+    const role = ws.role ?? "recruiter";
+    if (!(await isAssignableRole(ws.organizationId, role))) {
+      return { success: false, error: "This invite link points to a role that no longer exists." };
+    }
 
     await db
       .insert(authMembers)
