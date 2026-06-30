@@ -5,8 +5,10 @@ import {
   Check,
   Globe,
   MapPin,
+  Paperclip,
   Plus,
   Send,
+  UploadCloud,
   WandSparkles,
 } from "lucide-react";
 
@@ -25,7 +27,6 @@ import {
 import type { ApplicationFormValues } from "@/lib/validations/applications";
 import { cn, formatFileSize } from "@/lib/utils";
 import { getResumeFileValidationError } from "@/lib/storage-validation";
-import { FileUpload, type FileUploadItem } from "@/components/ui/file-upload";
 import { PhoneInput } from "@/components/ui/PhoneInput";
 import { Button } from "@/components/ui/button";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
@@ -445,13 +446,15 @@ export function ApplyForm({
   const [form, dispatch] = useReducer(formReducer, initialFormState);
   const { fields, answers, fieldErrors: clientFieldErrors, questionErrors: clientQuestionErrors } = form;
   const [showLinks, setShowLinks] = useState(false);
+  const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
   const [detected, setDetected] = useState<DetectedSummary | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [autofillMessage, setAutofillMessage] = useState<string | null>(null);
+  const [isUploadingResume, setIsUploadingResume] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
-  const [resumeFiles, setResumeFiles] = useState<FileUploadItem[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
   const [isSubmittingForm, setIsSubmittingForm] = useState(false);
   const [, startTransition] = useTransition();
   const isSubmitting = isPending || isSubmittingForm;
@@ -568,32 +571,35 @@ export function ApplyForm({
     );
   }
 
-  async function handleResumeFilesAdded(added: FileUploadItem[], files: File[]) {
-    if (files.length === 0) return;
-    const file = files[0];
-
+  async function handleResumeChange(file: File | null) {
     setResumeError(null);
     setAutofillMessage(null);
     setDetected(null);
+    setUploadedResume(null);
+
+    if (!file) {
+      setResumeFile(null);
+      return;
+    }
 
     const validationError = getResumeFileValidationError(file);
+
     if (validationError) {
-      setResumeFiles([]);
+      setResumeFile(null);
       setResumeError(validationError);
       return;
     }
 
+    setResumeFile(file);
+    setIsUploadingResume(true);
+
     try {
+      // Upload via the presigned URL first (this bypasses the server-action body
+      // limit), then parse the stored file on the server. The browser's
+      // file.text() returns binary garbage for PDF/DOCX, so parsing must be
+      // server-side where the real extractors live.
       const uploaded = await uploadResume(file);
       setUploadedResume(uploaded);
-
-      setResumeFiles([
-        {
-          ...added[0],
-          status: "success",
-          progress: 100,
-        },
-      ]);
 
       const parseResult = await parseResumeAction({
         key: uploaded.key,
@@ -611,38 +617,38 @@ export function ApplyForm({
 
       applyAutofill(parseResult.fields);
     } catch (error) {
-      setResumeFiles([
-        {
-          ...added[0],
-          status: "error",
-          error:
-            error instanceof Error
-              ? error.message
-              : "Unable to upload resume.",
-        },
-      ]);
+      setResumeFile(null);
       setUploadedResume(null);
+      setResumeError(
+        error instanceof Error
+          ? error.message
+          : "Unable to read this resume. Please try again.",
+      );
+    } finally {
+      setIsUploadingResume(false);
     }
   }
 
-  async function handleResumeRetry(item: FileUploadItem) {
-    if (!item.file) return;
-    const newItem: FileUploadItem = {
-      ...item,
-      status: "uploading",
-      progress: 0,
-      error: undefined,
-    };
-    setResumeFiles([newItem]);
-    await handleResumeFilesAdded([newItem], [item.file]);
+  function handleDragOver(event: React.DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(true);
   }
 
-  function handleResumeRemove() {
-    setResumeFiles([]);
-    setUploadedResume(null);
-    setDetected(null);
-    setAutofillMessage(null);
-    setResumeError(null);
+  function handleDragLeave(event: React.DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+  }
+
+  function handleDrop(event: React.DragEvent) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsDragging(false);
+    const file = event.dataTransfer.files[0];
+    if (file) {
+      void handleResumeChange(file);
+    }
   }
 
   async function uploadResume(file: File) {
@@ -688,8 +694,17 @@ export function ApplyForm({
       return;
     }
 
-    if (applicationConfig.resumeRequired && resumeFiles.length === 0) {
+    if (applicationConfig.resumeRequired && !resumeFile) {
       setResumeError("Resume is required.");
+      return;
+    }
+
+    const validationError = resumeFile
+      ? getResumeFileValidationError(resumeFile)
+      : null;
+
+    if (validationError) {
+      setResumeError(validationError);
       return;
     }
 
@@ -701,6 +716,15 @@ export function ApplyForm({
     setIsSubmittingForm(true);
 
     try {
+      // Reuse the file already uploaded during autofill; only re-upload if the
+      // selected file changed since then.
+      const uploaded = resumeFile
+        ? uploadedResume &&
+          uploadedResume.fileName === resumeFile.name &&
+          uploadedResume.fileSize === resumeFile.size
+          ? uploadedResume
+          : await uploadResume(resumeFile)
+        : null;
       const form = formRef.current;
 
       if (!form) {
@@ -708,12 +732,12 @@ export function ApplyForm({
       }
 
       const formData = new FormData(form);
-      if (uploadedResume) {
-        formData.set("resumeUrl", uploadedResume.fileUrl);
-        formData.set("resumeKey", uploadedResume.key);
-        formData.set("resumeFileName", uploadedResume.fileName);
-        formData.set("resumeFileType", uploadedResume.fileType);
-        formData.set("resumeFileSize", String(uploadedResume.fileSize));
+      if (uploaded) {
+        formData.set("resumeUrl", uploaded.fileUrl);
+        formData.set("resumeKey", uploaded.key);
+        formData.set("resumeFileName", uploaded.fileName);
+        formData.set("resumeFileType", uploaded.fileType);
+        formData.set("resumeFileSize", String(uploaded.fileSize));
       }
       if (consentGiven) {
         formData.set("consentGiven", "true");
@@ -728,7 +752,7 @@ export function ApplyForm({
       setResumeError(
         error instanceof Error
           ? error.message
-          : "Unable to submit application. Please try again.",
+          : "Unable to upload resume. Please try again.",
       );
     }
   }

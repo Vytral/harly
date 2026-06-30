@@ -25,10 +25,10 @@ import {
 } from "@/features/applications/resume-autofill";
 import { scheduleAutoScore } from "@/features/applications/auto-score";
 
-// Simple in-memory rate limiter for public AI calls.
-// Max 10 parse calls per IP per 60-second window.
+// Rate limiter: IP → {count, resetAt}. Per IP, max 5 parse calls per 60s window.
+// Stricter than before to prevent API key drain on public AI parsing.
 const _parseRateLimit = new Map<string, { count: number; resetAt: number }>();
-const PARSE_LIMIT = 10;
+const PARSE_LIMIT = 5;
 const PARSE_WINDOW_MS = 60_000;
 
 function checkParseRateLimit(ip: string): boolean {
