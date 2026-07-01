@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 
 import { db, jobHiringTeam } from "@harly/db";
-import { requireWorkspaceRole } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 import { logAuditEvent } from "@/lib/audit-log";
 import type { HiringTeamRole } from "@/features/jobs/hiring-team-data";
 
@@ -16,7 +16,7 @@ export async function addHiringTeamMember(input: {
   role: HiringTeamRole;
 }): Promise<Result> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin", "recruiter"]);
+    const context = await requirePermission("jobs:edit");
     await db
       .insert(jobHiringTeam)
       .values({
@@ -52,7 +52,7 @@ export async function updateHiringTeamRole(input: {
   role: HiringTeamRole;
 }): Promise<Result> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin", "recruiter"]);
+    const context = await requirePermission("jobs:edit");
     await db
       .update(jobHiringTeam)
       .set({ role: input.role })
@@ -77,7 +77,7 @@ export async function removeHiringTeamMember(input: {
   jobId: string;
 }): Promise<Result> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin", "recruiter"]);
+    const context = await requirePermission("jobs:edit");
     await db
       .delete(jobHiringTeam)
       .where(

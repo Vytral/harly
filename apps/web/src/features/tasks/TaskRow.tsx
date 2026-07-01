@@ -1,6 +1,7 @@
 "use client";
 
 import { Briefcase, Calendar, Flag, User } from "lucide-react";
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import type { TaskItem } from "./shared";
@@ -47,13 +48,26 @@ export function TaskRow({ task, handlers }: { task: TaskItem; handlers: TaskHand
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             {task.candidateName && (
               <span className="inline-flex items-center gap-1">
-                <User className="size-3" /> {task.candidateName}
+                <User className="size-3" />
+                {task.candidateId ? (
+                  <Link href={`/dashboard/candidates/${task.candidateId}`} className="hover:underline">
+                    {task.candidateName}
+                  </Link>
+                ) : (
+                  task.candidateName
+                )}
               </span>
             )}
             {task.jobTitle && (
               <span className="inline-flex min-w-0 items-center gap-1">
                 <Briefcase className="size-3 shrink-0" />
-                <span className="truncate">{task.jobTitle}</span>
+                {task.jobId ? (
+                  <Link href={`/dashboard/jobs/${task.jobId}`} className="truncate hover:underline">
+                    {task.jobTitle}
+                  </Link>
+                ) : (
+                  <span className="truncate">{task.jobTitle}</span>
+                )}
               </span>
             )}
           </div>

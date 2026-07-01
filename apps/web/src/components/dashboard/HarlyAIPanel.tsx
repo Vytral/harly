@@ -1224,7 +1224,12 @@ function HarlyChat({
                   }>;
                   const statusEls: React.ReactNode[] = [];
                   const textEls: React.ReactNode[] = [];
-                  const cardEls: React.ReactNode[] = [];
+                  const writeEls: React.ReactNode[] = [];
+                  // Read tools chain (search → list → profile), each emitting a
+                  // card. Rendering one per call floods the message, so we keep
+                  // only the LAST completed read card — the one that actually
+                  // answers the turn. Status lines still show every step.
+                  let lastReadCard: React.ReactNode = null;
 
                   parts.forEach((part, i) => {
                     if (part.type === "text") {
@@ -1248,7 +1253,7 @@ function HarlyChat({
                       if (!part.input || !part.toolCallId) return;
                       const callId = part.toolCallId;
                       const inputData = part.input;
-                      textEls.push(
+                      writeEls.push(
                         <WriteConfirmCard
                           key={callId}
                           toolName={toolName}
@@ -1262,7 +1267,7 @@ function HarlyChat({
                       return;
                     }
 
-                    // Read tool → status line + (when done) a rich card at the end.
+                    // Read tool → status line + (when done) a rich card.
                     const label = TOOL_LABELS[part.type] ?? "Working";
                     if (part.state === "output-available" && part.output) {
                       const errored =
@@ -1276,14 +1281,15 @@ function HarlyChat({
                           state={errored ? "error" : "done"}
                         />,
                       );
-                      const card = (
-                        <ToolResultCard
-                          key={`c-${part.toolCallId}`}
-                          toolName={toolName}
-                          output={part.output}
-                        />
-                      );
-                      cardEls.push(card);
+                      if (!errored) {
+                        lastReadCard = (
+                          <ToolResultCard
+                            key={`c-${part.toolCallId}`}
+                            toolName={toolName}
+                            output={part.output}
+                          />
+                        );
+                      }
                       return;
                     }
                     if (part.state === "input-streaming" || part.state === "input-available") {
@@ -1307,10 +1313,9 @@ function HarlyChat({
                         {statusEls.length > 0 && (
                           <div className="flex flex-col gap-1">{statusEls}</div>
                         )}
+                        {lastReadCard}
                         {textEls}
-                        {cardEls.length > 0 && (
-                          <div className="flex flex-col gap-2">{cardEls}</div>
-                        )}
+                        {writeEls}
                       </div>
                     </div>
                   );

@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { db, workspaceSettings } from "@harly/db";
 
-import { requireWorkspaceRole } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 
 export type LegalSettingsActionResult = { ok: boolean; error?: string };
 
@@ -39,7 +39,7 @@ export type LegalSettingsInput = z.infer<typeof saveSchema>;
 export async function saveLegalSettingsAction(
   input: LegalSettingsInput,
 ): Promise<LegalSettingsActionResult> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   const parsed = saveSchema.safeParse(input);
   if (!parsed.success) {
@@ -129,7 +129,7 @@ export type LegalSettingsData = {
 };
 
 export async function getLegalSettingsData(): Promise<LegalSettingsData> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   const [settings] = await db
     .select()

@@ -42,15 +42,12 @@ export function CandidateRejected({
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
         {customMessage ??
-          `Thank you for applying to ${jobTitle} at ${companyName}. We've reviewed your application and decided to move forward with other candidates.`}
-      </Text>
-      <Text style={text}>
-        We know job searching takes real effort, and we genuinely appreciate
-        the time you put into this. We&apos;ll keep your profile on file and may
-        reach out if something changes.
+          `Thank you for applying to ${jobTitle} at ${companyName}. We've decided to move forward with other candidates.`}
       </Text>
       <Text style={{ ...text, color: "#78716c" }}>
-        Wishing you the best — {companyName}
+        Thanks,
+        <br />
+        {companyName}
       </Text>
     </WorkspaceLayout>
   );

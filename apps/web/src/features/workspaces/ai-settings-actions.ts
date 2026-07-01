@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { db, workspaceSettings } from "@harly/db";
 
-import { requireWorkspaceRole } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { getWorkspaceAiConfig, getWorkspaceAiStatus } from "@/lib/ai/config";
 import { fetchOpenRouterModels, getModel } from "@/lib/ai/registry";
@@ -32,7 +32,7 @@ export async function saveAiSettingsAction(input: {
   enabled: boolean;
   autoScore?: boolean;
 }): Promise<AiSettingsActionResult> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   if (!isEncryptionConfigured()) {
     return {
@@ -97,7 +97,7 @@ export async function saveAiSettingsAction(input: {
 }
 
 export async function disableAiAction(): Promise<AiSettingsActionResult> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   await db
     .update(workspaceSettings)
@@ -114,7 +114,7 @@ export async function testAiConnectionAction(input: {
   apiKey?: string;
   baseUrl?: string;
 }): Promise<AiSettingsActionResult> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   if (!isEncryptionConfigured()) {
     return { ok: false, error: "Server is missing AI_ENCRYPTION_KEY." };
@@ -164,7 +164,7 @@ export async function testAiConnectionAction(input: {
 export async function saveAiAutoScoreAction(
   autoScore: boolean,
 ): Promise<AiSettingsActionResult> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   await db
     .insert(workspaceSettings)
@@ -181,7 +181,7 @@ export async function saveAiAutoScoreAction(
 export async function saveAiDuplicateCheckAction(
   duplicateCheck: boolean,
 ): Promise<AiSettingsActionResult> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   await db
     .insert(workspaceSettings)
@@ -198,7 +198,7 @@ export async function saveAiDuplicateCheckAction(
 export async function searchOpenRouterModelsAction(
   query: string,
 ): Promise<OpenRouterModel[]> {
-  await requireWorkspaceRole(["owner", "admin"]);
+  await requirePermission("settings:edit");
 
   const all = await fetchOpenRouterModels();
   const q = query.trim().toLowerCase();

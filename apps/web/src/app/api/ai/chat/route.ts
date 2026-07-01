@@ -63,7 +63,7 @@ export async function POST(req: Request) {
     }),
     messages: await convertToModelMessages(messages),
     tools: buildHarlyTools({ workspaceId, userId }),
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(12),
   });
 
   return result.toUIMessageStreamResponse({

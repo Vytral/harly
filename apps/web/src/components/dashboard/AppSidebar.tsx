@@ -38,6 +38,7 @@ import type { Permission } from "@/features/workspaces/permissions";
 type AppSidebarProps = {
   workspace: { id: string; name: string; logoUrl: string | null };
   inboxCount: number;
+  taskDueCount: number;
   userPermissions: Permission[];
   sidebarLogo: SidebarBranding;
   assignableRoles: AssignableRole[];
@@ -46,6 +47,7 @@ type AppSidebarProps = {
 export function AppSidebar({
   workspace,
   inboxCount,
+  taskDueCount,
   userPermissions,
   sidebarLogo,
   assignableRoles,
@@ -97,7 +99,16 @@ export function AppSidebar({
           <SidebarGroupContent>
             <SidebarMenu>
               {visibleWorkspaceNav.map((item) => (
-                <NavMenuItem key={item.href} item={item} pathname={pathname} />
+                <NavMenuItem
+                  key={item.href}
+                  item={item}
+                  pathname={pathname}
+                  badge={
+                    item.badge === "tasks" && taskDueCount > 0
+                      ? taskDueCount
+                      : undefined
+                  }
+                />
               ))}
             </SidebarMenu>
           </SidebarGroupContent>

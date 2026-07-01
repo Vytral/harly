@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, count, desc, eq, gte, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 
 import {
   applications,
@@ -12,6 +12,7 @@ import {
   jobs,
   jobStages,
   scorecards,
+  tasks,
   user,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
@@ -635,3 +636,74 @@ export type RiskJob = Awaited<ReturnType<typeof getJobsAtRisk>>[number] & {
 };
 export type HiringPerformance = Awaited<ReturnType<typeof getHiringPerformance>>;
 export type InboxItem = Awaited<ReturnType<typeof getInbox>>[number];
+
+// ── My tasks (dashboard widget) ─────────────────────────────────────────────
+
+export const getMyDashboardTasks = cache(async () => {
+  const { organization: workspace, user: currentUser } = await getWorkspaceContext();
+  const now = new Date();
+
+  const rows = await db
+    .select({
+      id: tasks.id,
+      title: tasks.title,
+      priority: tasks.priority,
+      dueDate: tasks.dueDate,
+      status: tasks.status,
+      candidateFirst: candidates.firstName,
+      candidateLast: candidates.lastName,
+      candidateId: tasks.candidateId,
+      jobTitle: jobs.title,
+    })
+    .from(tasks)
+    .leftJoin(candidates, eq(candidates.id, tasks.candidateId))
+    .leftJoin(jobs, eq(jobs.id, tasks.jobId))
+    .where(
+      and(
+        eq(tasks.workspaceId, workspace.id),
+        eq(tasks.ownerId, currentUser.id),
+        or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
+      ),
+    )
+    .orderBy(
+      asc(
+        sql`CASE ${tasks.priority}
+          WHEN 'urgent' THEN 0
+          WHEN 'high' THEN 1
+          WHEN 'medium' THEN 2
+          WHEN 'low' THEN 3
+        END`,
+      ),
+      asc(tasks.dueDate),
+    )
+    .limit(6);
+
+  const todayUtc = now.toISOString().slice(0, 10);
+
+  return rows.map((r) => {
+    const dueDate = r.dueDate ? new Date(r.dueDate) : null;
+    let dueState: "overdue" | "today" | "soon" | null = null;
+    if (dueDate) {
+      const dueDateUtc = dueDate.toISOString().slice(0, 10);
+      if (dueDateUtc < todayUtc) dueState = "overdue";
+      else if (dueDateUtc === todayUtc) dueState = "today";
+      else dueState = "soon";
+    }
+
+    return {
+      id: r.id,
+      title: r.title,
+      priority: r.priority as "urgent" | "high" | "medium" | "low",
+      status: r.status as "pending" | "in_progress",
+      dueDate: r.dueDate?.toISOString() ?? null,
+      dueState,
+      context:
+        r.candidateFirst && r.candidateLast
+          ? `${r.candidateFirst} ${r.candidateLast}`
+          : r.jobTitle ?? null,
+      candidateId: r.candidateId,
+    };
+  });
+});
+
+export type MyDashboardTask = Awaited<ReturnType<typeof getMyDashboardTasks>>[number];

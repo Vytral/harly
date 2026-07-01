@@ -5,7 +5,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db, workspaceSettings } from "@harly/db";
-import { requireWorkspaceRole } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 
 export type PortalSettingsResult = { ok: boolean; error?: string };
@@ -13,7 +13,7 @@ export type PortalSettingsResult = { ok: boolean; error?: string };
 export async function savePortalSettingsAction(
   enabled: boolean,
 ): Promise<PortalSettingsResult> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   await db
     .insert(workspaceSettings)
@@ -38,7 +38,7 @@ export async function savePortalOAuthAction(input: {
   clientId: string;
   clientSecret?: string;
 }): Promise<PortalSettingsResult> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   if (!isEncryptionConfigured()) {
     return { ok: false, error: "Server encryption key not configured." };
@@ -97,7 +97,7 @@ export async function savePortalOAuthAction(input: {
 export async function disconnectPortalOAuthAction(
   provider: "google" | "github",
 ): Promise<PortalSettingsResult> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   const set =
     provider === "google"
@@ -128,7 +128,7 @@ export async function disconnectPortalOAuthAction(
 export async function savePortalUiOptionsAction(input: {
   showApplicationStatus: boolean;
 }): Promise<PortalSettingsResult> {
-  const context = await requireWorkspaceRole(["owner", "admin"]);
+  const context = await requirePermission("settings:edit");
 
   await db
     .insert(workspaceSettings)

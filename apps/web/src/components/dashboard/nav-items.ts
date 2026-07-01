@@ -18,7 +18,7 @@ import {
 
 import type { Permission } from "@/features/workspaces/permissions";
 
-export type NavBadge = "inbox";
+export type NavBadge = "inbox" | "tasks";
 
 export type NavItem = {
   label: string;
@@ -42,7 +42,7 @@ export const workspaceNav: NavItem[] = [
   { label: "Candidates", href: "/dashboard/candidates", icon: Users },
   { label: "Pipeline", href: "/dashboard/pipeline", icon: KanbanSquare },
   { label: "Reports", href: "/dashboard/reports", icon: BarChart3 },
-  { label: "Tasks", href: "/dashboard/tasks", icon: ListTodo },
+  { label: "Tasks", href: "/dashboard/tasks", icon: ListTodo, badge: "tasks" },
   { label: "Calendars", href: "/dashboard/calendars", icon: CalendarDays },
   { label: "Templates", href: "/dashboard/templates", icon: FileText },
   { label: "Talent Pool", href: "/dashboard/talent-pool", icon: Bookmark },

@@ -1,14 +1,14 @@
 import { CandidatesNeedingReview } from "@/components/dashboard/widgets/CandidatesNeedingReview";
 import { HiringPerformance } from "@/components/dashboard/widgets/HiringPerformance";
 import { InboxCard } from "@/components/dashboard/widgets/InboxCard";
-import { JobsAtRisk } from "@/components/dashboard/widgets/JobsAtRisk";
+import { MyTasksCard } from "@/components/dashboard/widgets/MyTasksCard";
 import { PipelineOverviewCard } from "@/components/dashboard/widgets/PipelineOverviewCard";
 import { TodayInterviews } from "@/components/dashboard/widgets/TodayInterviews";
 import {
   getCandidatesNeedingReview,
   getHiringPerformance,
   getInbox,
-  getJobsAtRisk,
+  getMyDashboardTasks,
   getPipelineOverview,
   getTodayInterviews,
 } from "@/features/dashboard/widgets";
@@ -38,13 +38,13 @@ export default async function DashboardPage({
   const firstName = (user.name ?? "").trim().split(/\s+/)[0] || "there";
   const now = new Date();
 
-  const [inbox, interviews, pipeline, review, atRisk, performance] =
+  const [inbox, interviews, pipeline, review, myTasks, performance] =
     await Promise.all([
       getInbox(),
       getTodayInterviews(),
       getPipelineOverview(job),
       getCandidatesNeedingReview(),
-      getJobsAtRisk(),
+      getMyDashboardTasks(),
       getHiringPerformance(),
     ]);
 
@@ -90,7 +90,7 @@ export default async function DashboardPage({
 
       <section className="grid gap-4 duration-500 animate-in fade-in slide-in-from-bottom-3 lg:grid-cols-5">
         <CandidatesNeedingReview candidates={review} className="lg:col-span-3" />
-        <JobsAtRisk jobs={atRisk} className="lg:col-span-2" />
+        <MyTasksCard tasks={myTasks} className="lg:col-span-2" />
       </section>
 
       <div className="duration-500 animate-in fade-in slide-in-from-bottom-3">

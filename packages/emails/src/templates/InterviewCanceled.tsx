@@ -57,10 +57,7 @@ export function InterviewCanceled({
       {reason ? (
         <Text style={text}>{reason}</Text>
       ) : null}
-      <Text style={text}>
-        Reply to this email and we&apos;ll work on finding a new time that
-        works for you.
-      </Text>
+      <Text style={text}>Reply to this email and we&apos;ll find a new time.</Text>
     </WorkspaceLayout>
   );
 }

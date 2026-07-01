@@ -75,9 +75,8 @@ export function InterviewScheduled({
       <Text style={heading}>Interview confirmed</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        Your <strong>{interviewType.toLowerCase()}</strong> for{" "}
-        <strong>{jobTitle}</strong> at {companyName} is set. Here are the
-        details:
+        Your <strong>{interviewType.toLowerCase()}</strong> for <strong>{jobTitle}</strong> at{" "}
+        {companyName} is set:
       </Text>
       <DetailTable rows={rows} />
       {calendarLinks ? (

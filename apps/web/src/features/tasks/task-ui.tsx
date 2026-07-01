@@ -9,7 +9,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { cn } from "@/lib/utils";
+import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { TaskItem, TaskPriority, TaskStatus } from "./shared";
 
 // ── status + priority visual language ────────────────────────────────────────
@@ -62,6 +62,7 @@ export type TaskHandlers = {
   setStatus: (id: string, status: TaskStatus) => void;
   remove: (id: string) => void;
   add: (status: TaskStatus) => void;
+  edit: (task: TaskItem) => void;
 };
 
 // ── due-date urgency ─────────────────────────────────────────────────────────
@@ -111,11 +112,13 @@ export function RelativeDate({ iso }: { iso: string | null }) {
   const view = useMemo(() => {
     if (!iso) return { label: "No date", cls: "text-muted-foreground/60" };
     const d = new Date(iso);
-    const days = Math.ceil((d.getTime() - new Date().getTime()) / DAY);
     const label = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(d);
-    if (days < 0) return { label, cls: "font-medium text-rust" };
-    if (days === 0) return { label, cls: "font-medium text-clay" };
-    if (days <= 2) return { label, cls: "text-clay" };
+    const dueDateUtc = d.toISOString().slice(0, 10);
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    if (dueDateUtc < todayUtc) return { label, cls: "font-medium text-rust" };
+    if (dueDateUtc === todayUtc) return { label, cls: "font-medium text-clay" };
+    const daysAway = Math.round((d.getTime() - new Date(todayUtc).getTime()) / DAY);
+    if (daysAway <= 2) return { label, cls: "text-clay" };
     return { label, cls: "text-muted-foreground" };
   }, [iso]);
 
@@ -123,25 +126,7 @@ export function RelativeDate({ iso }: { iso: string | null }) {
 }
 
 export function OwnerAvatar({ name, image }: { name: string; image: string | null }) {
-  if (image) {
-    return (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img
-        src={image}
-        alt={name}
-        title={name}
-        className="size-6 rounded-full object-cover ring-2 ring-card"
-      />
-    );
-  }
   return (
-    <span
-      title={name}
-      className={cn(
-        "flex size-6 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground ring-2 ring-card",
-      )}
-    >
-      {name.charAt(0).toUpperCase()}
-    </span>
+    <UserAvatar name={name} src={image} size="sm" className="size-6 text-[10px] ring-2 ring-card" />
   );
 }

@@ -42,12 +42,9 @@ export function OfferWithdrawn({
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
         {reason ??
-          `We need to let you know that the offer for ${jobTitle} at ${companyName} has been withdrawn.`}
+          `The offer for ${jobTitle} at ${companyName} has been withdrawn.`}
       </Text>
-      <Text style={text}>
-        We know this is disappointing and we&apos;re sorry for the disruption.
-        If you have questions, reply here and we&apos;ll do our best to explain.
-      </Text>
+      <Text style={text}>Questions? Reply to this email and we&apos;ll explain.</Text>
     </WorkspaceLayout>
   );
 }

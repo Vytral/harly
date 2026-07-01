@@ -10,9 +10,12 @@ import {
   Clock,
   GripVertical,
   MoreHorizontal,
+  Pencil,
   Trash2,
   User,
 } from "lucide-react";
+
+import Link from "next/link";
 
 import { cn } from "@/lib/utils";
 import {
@@ -47,6 +50,10 @@ export function TaskMenu({ task, handlers }: { task: TaskItem; handlers: TaskHan
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="w-44">
+        <DropdownMenuItem onClick={() => handlers.edit(task)}>
+          <Pencil className="mr-2 size-4" /> Edit
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onClick={() => handlers.setStatus(task.id, "pending")}>
           <Circle className="mr-2 size-4 text-muted-foreground" /> To do
         </DropdownMenuItem>
@@ -71,13 +78,26 @@ function Meta({ task }: { task: TaskItem }) {
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
       {task.candidateName && (
         <span className="inline-flex items-center gap-1">
-          <User className="size-3" /> {task.candidateName}
+          <User className="size-3" />
+          {task.candidateId ? (
+            <Link href={`/dashboard/candidates/${task.candidateId}`} className="hover:underline">
+              {task.candidateName}
+            </Link>
+          ) : (
+            task.candidateName
+          )}
         </span>
       )}
       {task.jobTitle && (
         <span className="inline-flex min-w-0 items-center gap-1">
           <Briefcase className="size-3 shrink-0" />
-          <span className="truncate">{task.jobTitle}</span>
+          {task.jobId ? (
+            <Link href={`/dashboard/jobs/${task.jobId}`} className="truncate hover:underline">
+              {task.jobTitle}
+            </Link>
+          ) : (
+            <span className="truncate">{task.jobTitle}</span>
+          )}
         </span>
       )}
     </div>

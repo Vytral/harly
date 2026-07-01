@@ -18,6 +18,7 @@ import {
 import { PageTitle } from "@/components/dashboard/PageTitleContext";
 import { deleteTask, updateTask } from "./actions";
 import { CreateTaskDialog } from "./CreateTaskDialog";
+import { EditTaskDialog } from "./EditTaskDialog";
 import { TaskBoard } from "./TaskBoard";
 import { TaskList } from "./TaskList";
 import { startOfToday, type TaskHandlers } from "./task-ui";
@@ -62,6 +63,7 @@ export function TasksView({
   const [view, setView] = useState<View>("list");
   const [createOpen, setCreateOpen] = useState(false);
   const [createStatus, setCreateStatus] = useState<TaskStatus>("pending");
+  const [editingTask, setEditingTask] = useState<TaskItem | null>(null);
   const [query, setQuery] = useState("");
   const [assignee, setAssignee] = useState("all");
   const [priority, setPriority] = useState("all");
@@ -134,6 +136,7 @@ export function TasksView({
         setCreateStatus(status);
         setCreateOpen(true);
       },
+      edit: (task) => setEditingTask(task),
     }),
     [pending, runStatus, runRemove],
   );
@@ -267,6 +270,14 @@ export function TasksView({
         onOpenChange={setCreateOpen}
         members={members}
         defaultStatus={createStatus}
+      />
+
+      <EditTaskDialog
+        open={editingTask !== null}
+        onOpenChange={(v) => { if (!v) setEditingTask(null); }}
+        task={editingTask}
+        members={members}
+        onSave={() => setEditingTask(null)}
       />
     </div>
   );

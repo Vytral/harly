@@ -29,12 +29,8 @@ import {
 } from "@harly/emails";
 import {
   getWorkspaceContext,
-  requireWorkspaceRole,
 } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
-import {
-  normalizeWorkspaceRole,
-} from "@/features/workspaces/roles";
 import {
   boardBrandingSchema,
   boardStyles,
@@ -158,7 +154,7 @@ export async function updateWorkspaceBoardBrandingAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin"]);
+    const context = await requirePermission("settings:edit");
     const rawBoardStyle = formData.get("boardStyle");
     const rawLogoStyle = formData.get("logoStyle");
     const parsed = boardBrandingSchema.safeParse({
@@ -230,7 +226,7 @@ export async function updateWorkspaceProfileAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
-    const context = await requireWorkspaceRole(["owner", "admin"]);
+    const context = await requirePermission("settings:edit");
     const rawSidebarLogoStyle = formData.get("sidebarLogoStyle");
     const parsed = workspaceProfileSchema.safeParse({
       name: formData.get("name"),

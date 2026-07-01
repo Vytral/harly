@@ -10,38 +10,28 @@ export const HARLY_ACCENT = "#ef3e36";
 export const GENERIC_ACCENT = "#000000";
 
 export const main = {
-  backgroundColor: "#f5f5f4",
+  backgroundColor: "#ffffff",
   color: "#1c1917",
   fontFamily:
     '-apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif',
 };
 
 export const container = {
-  backgroundColor: "#ffffff",
-  borderRadius: "12px",
   margin: "40px auto",
-  maxWidth: "560px",
-  padding: "0",
-  overflow: "hidden" as const,
-};
-
-// Header bar (logo zone)
-export const header = {
-  backgroundColor: "#ffffff",
-  borderBottom: "1px solid #e7e5e4",
-  padding: "24px 32px",
+  maxWidth: "600px",
+  padding: "0 32px",
 };
 
 // Main content area
 export const body = {
-  padding: "32px 32px 24px",
+  padding: "0 0 24px",
 };
 
 export const heading = {
   color: "#1c1917",
-  fontSize: "22px",
-  fontWeight: "700",
-  lineHeight: "30px",
+  fontSize: "20px",
+  fontWeight: "400",
+  lineHeight: "28px",
   margin: "0 0 16px",
 };
 
@@ -59,15 +49,9 @@ export const muted = {
   margin: "0",
 };
 
-export const hr = {
-  border: "none",
-  borderTop: "1px solid #e7e5e4",
-  margin: "24px 0",
-};
-
-// Footer below hr
+// Footer below body
 export const footer = {
-  padding: "0 32px 28px",
+  padding: "0 0 28px",
 };
 
 /** Primary CTA button. Pass accentColor to override for workspace-branded emails. */
@@ -122,18 +106,3 @@ export const detailValue = {
   fontWeight: 600,
   padding: "7px 0",
 };
-
-// Logo text fallback (initials badge)
-export const logoBadge = (accentColor = GENERIC_ACCENT) => ({
-  backgroundColor: accentColor,
-  borderRadius: "8px",
-  color: "#ffffff",
-  display: "inline-block",
-  fontSize: "14px",
-  fontWeight: "700",
-  height: "36px",
-  lineHeight: "36px",
-  minWidth: "36px",
-  textAlign: "center" as const,
-  padding: "0 10px",
-});

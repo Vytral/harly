@@ -11,8 +11,11 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("email-templates");
 
+const TEMPLATE_TYPES = ["general", "interview_invite", "rejection", "offer", "screening"] as const;
+
 const templateFieldsSchema = z.object({
   name: z.string().trim().min(1, "Name is required.").max(120),
+  type: z.enum(TEMPLATE_TYPES).default("general"),
   subject: z.string().trim().min(1, "Subject is required.").max(300),
   body: z.string().trim().min(1, "Body is required.").max(10_000),
 });
@@ -21,6 +24,7 @@ type ActionResult = { success: boolean; error?: string };
 
 export async function createEmailTemplate(input: {
   name: string;
+  type?: string;
   subject: string;
   body: string;
 }): Promise<ActionResult> {
@@ -44,13 +48,13 @@ export async function createEmailTemplate(input: {
     await db.insert(emailTemplates).values({
       workspaceId: context.organization.id,
       name: parsed.data.name,
+      type: parsed.data.type,
       subject: parsed.data.subject,
       body: parsed.data.body,
       createdById: context.user.id,
     });
   } catch (error) {
     log.error(error, "template write failed");
-    // PostgreSQL unique violation code: 23505
     const isUniqueViolation =
       error instanceof Error &&
       "code" in error &&
@@ -70,6 +74,7 @@ export async function createEmailTemplate(input: {
 export async function updateEmailTemplate(input: {
   templateId: string;
   name: string;
+  type?: string;
   subject: string;
   body: string;
 }): Promise<ActionResult> {
@@ -96,6 +101,7 @@ export async function updateEmailTemplate(input: {
       .update(emailTemplates)
       .set({
         name: parsed.data.name,
+        type: parsed.data.type,
         subject: parsed.data.subject,
         body: parsed.data.body,
       })
@@ -107,7 +113,6 @@ export async function updateEmailTemplate(input: {
       );
   } catch (error) {
     log.error(error, "template write failed");
-    // PostgreSQL unique violation code: 23505
     const isUniqueViolation =
       error instanceof Error &&
       "code" in error &&

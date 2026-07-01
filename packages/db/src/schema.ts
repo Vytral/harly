@@ -960,6 +960,11 @@ export const emailTemplates = pgTable(
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
+    type: text("type", {
+      enum: ["general", "interview_invite", "rejection", "offer", "screening"],
+    })
+      .notNull()
+      .default("general"),
     subject: text("subject").notNull(),
     body: text("body").notNull(),
     createdById: text("created_by_id").references(() => user.id, {

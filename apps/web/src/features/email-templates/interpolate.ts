@@ -11,12 +11,24 @@
  */
 
 export const TEMPLATE_VARIABLES = [
-  { key: "candidate_first_name", label: "Candidate first name" },
-  { key: "candidate_last_name", label: "Candidate last name" },
-  { key: "candidate_full_name", label: "Candidate full name" },
-  { key: "job_title", label: "Job title" },
-  { key: "company_name", label: "Company name" },
-  { key: "sender_name", label: "Your name" },
+  // Candidate
+  { key: "candidate_first_name", label: "Candidate first name", group: "Candidate" },
+  { key: "candidate_last_name", label: "Candidate last name", group: "Candidate" },
+  { key: "candidate_full_name", label: "Candidate full name", group: "Candidate" },
+  // Job & stage
+  { key: "job_title", label: "Job title", group: "Job" },
+  { key: "stage_name", label: "Current stage", group: "Job" },
+  // Interview
+  { key: "interview_date", label: "Interview date", group: "Interview" },
+  { key: "interview_time", label: "Interview time", group: "Interview" },
+  { key: "interview_location", label: "Interview location / link", group: "Interview" },
+  // Offer
+  { key: "offer_salary", label: "Offer salary", group: "Offer" },
+  { key: "offer_expiry", label: "Offer expiry date", group: "Offer" },
+  // Workspace
+  { key: "company_name", label: "Company name", group: "Workspace" },
+  { key: "portal_link", label: "Candidate portal link", group: "Workspace" },
+  { key: "sender_name", label: "Your name", group: "Workspace" },
 ] as const;
 
 export type TemplateVariableKey = (typeof TEMPLATE_VARIABLES)[number]["key"];

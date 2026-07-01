@@ -15,6 +15,7 @@ import {
   listUserWorkspaceOptions,
 } from "@/features/workspaces/data";
 import { listWorkspaceRoles } from "@/features/workspaces/permissions-server";
+import { getMyTasksDueCount } from "@/features/tasks/data";
 
 export default async function DashboardLayout({
   children,
@@ -26,7 +27,7 @@ export default async function DashboardLayout({
   const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false";
 
   const { organization, user, role } = await getWorkspaceContext();
-  const [workspaceOptions, notifications, sidebarLogo, roles, userPermissions, aiStatus] =
+  const [workspaceOptions, notifications, sidebarLogo, roles, userPermissions, aiStatus, taskDueCount] =
     await Promise.all([
       listUserWorkspaceOptions(),
       listNotifications(8),
@@ -34,6 +35,7 @@ export default async function DashboardLayout({
       listWorkspaceRoles(),
       getCurrentPermissions(),
       getWorkspaceAiStatus(organization.id),
+      getMyTasksDueCount(),
     ]);
   const inboxCount = notifications.filter((n) => !n.read).length;
   const assignableRoles = roles.map((r) => ({ key: r.key, name: r.name }));
@@ -49,6 +51,7 @@ export default async function DashboardLayout({
       <AppSidebar
         workspace={workspace}
         inboxCount={inboxCount}
+        taskDueCount={taskDueCount}
         userPermissions={userPermissions}
         sidebarLogo={sidebarLogo}
         assignableRoles={assignableRoles}

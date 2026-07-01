@@ -6,9 +6,12 @@ import { db, emailTemplates } from "@harly/db";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
+export type TemplateType = "general" | "interview_invite" | "rejection" | "offer" | "screening";
+
 export type EmailTemplateItem = {
   id: string;
   name: string;
+  type: TemplateType;
   subject: string;
   body: string;
   updatedAt: string;
@@ -21,6 +24,7 @@ export async function listEmailTemplates(): Promise<EmailTemplateItem[]> {
     .select({
       id: emailTemplates.id,
       name: emailTemplates.name,
+      type: emailTemplates.type,
       subject: emailTemplates.subject,
       body: emailTemplates.body,
       updatedAt: emailTemplates.updatedAt,
@@ -31,6 +35,7 @@ export async function listEmailTemplates(): Promise<EmailTemplateItem[]> {
 
   return rows.map((row) => ({
     ...row,
+    type: (row.type ?? "general") as TemplateType,
     updatedAt: row.updatedAt.toISOString(),
   }));
 }
@@ -44,6 +49,7 @@ export async function getEmailTemplate(
     .select({
       id: emailTemplates.id,
       name: emailTemplates.name,
+      type: emailTemplates.type,
       subject: emailTemplates.subject,
       body: emailTemplates.body,
       updatedAt: emailTemplates.updatedAt,
@@ -57,5 +63,7 @@ export async function getEmailTemplate(
     )
     .limit(1);
 
-  return row ? { ...row, updatedAt: row.updatedAt.toISOString() } : null;
+  return row
+    ? { ...row, type: (row.type ?? "general") as TemplateType, updatedAt: row.updatedAt.toISOString() }
+    : null;
 }

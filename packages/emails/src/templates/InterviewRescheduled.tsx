@@ -75,9 +75,8 @@ export function InterviewRescheduled({
       <Text style={heading}>Interview rescheduled</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        Your <strong>{interviewType.toLowerCase()}</strong> for{" "}
-        <strong>{jobTitle}</strong> at {companyName} has been moved. New
-        details below:
+        Your <strong>{interviewType.toLowerCase()}</strong> for <strong>{jobTitle}</strong> at{" "}
+        {companyName} has moved:
       </Text>
       <DetailTable rows={rows} />
       {calendarLinks ? (
@@ -107,9 +106,7 @@ export function InterviewRescheduled({
           </tbody>
         </table>
       ) : null}
-      <Text style={text}>
-        Questions or need to adjust again? Reply here and we&apos;ll sort it out.
-      </Text>
+      <Text style={text}>Need to adjust again? Just reply to this email.</Text>
     </WorkspaceLayout>
   );
 }

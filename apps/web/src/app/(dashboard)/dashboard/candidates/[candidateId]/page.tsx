@@ -191,6 +191,7 @@ export default async function CandidateDetailPage({
                       candidate_last_name: candidate.lastName,
                       candidate_full_name: fullName,
                       job_title: latestApplication?.jobTitle ?? "",
+                      stage_name: latestApplication?.currentStageName ?? "",
                       company_name: workspaceName,
                       sender_name: currentUserName,
                     }}
