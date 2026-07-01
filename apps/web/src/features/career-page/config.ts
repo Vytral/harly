@@ -59,6 +59,13 @@ export type CareerPageConfig = {
     overlayOpacity: number;
     /** Which logo asset to show — square mark or full wordmark. */
     logoType: "logo" | "fullLogo";
+    /** Banner-only: full logo variants uploaded for the hero banner. The banner
+     *  background has an adjustable dark overlay, so the dark variant (white
+     *  letters) is the sensible default. Null → fall back to the workspace logo. */
+    bannerLogoLight: string | null;
+    bannerLogoDark: string | null;
+    /** Which banner logo variant to display. Defaults to "dark" (white letters). */
+    bannerLogoVariant: "light" | "dark";
     /** Text label for the "View jobs" CTA button. */
     ctaButtonText: string;
   };
@@ -100,6 +107,9 @@ const EMPTY: CareerPageConfig = {
     bannerEnabled: false,
     overlayOpacity: 40,
     logoType: "logo",
+    bannerLogoLight: null,
+    bannerLogoDark: null,
+    bannerLogoVariant: "dark",
     ctaButtonText: "View jobs",
   },
   intro: { body: "", chips: [] },
@@ -227,6 +237,9 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
       bannerEnabled: typeof r.hero?.bannerEnabled === "boolean" ? r.hero.bannerEnabled : base.hero.bannerEnabled,
       overlayOpacity: typeof r.hero?.overlayOpacity === "number" ? Math.min(100, Math.max(0, r.hero.overlayOpacity)) : base.hero.overlayOpacity,
       logoType: (["logo", "fullLogo"] as const).includes(r.hero?.logoType as "logo" | "fullLogo") ? (r.hero!.logoType as "logo" | "fullLogo") : base.hero.logoType,
+      bannerLogoLight: r.hero?.bannerLogoLight ?? base.hero.bannerLogoLight,
+      bannerLogoDark: r.hero?.bannerLogoDark ?? base.hero.bannerLogoDark,
+      bannerLogoVariant: (["light", "dark"] as const).includes(r.hero?.bannerLogoVariant as "light" | "dark") ? (r.hero!.bannerLogoVariant as "light" | "dark") : base.hero.bannerLogoVariant,
       ctaButtonText: typeof r.hero?.ctaButtonText === "string" && r.hero.ctaButtonText.trim() ? r.hero.ctaButtonText.trim() : base.hero.ctaButtonText,
     },
     intro: {
@@ -340,6 +353,9 @@ export const careerPageConfigSchema = z.object({
     bannerEnabled: z.boolean(),
     overlayOpacity: z.number().min(0).max(100),
     logoType: z.enum(["logo", "fullLogo"]),
+    bannerLogoLight: s(600).nullable(),
+    bannerLogoDark: s(600).nullable(),
+    bannerLogoVariant: z.enum(["light", "dark"]),
     ctaButtonText: s(60),
   }),
   intro: z.object({ body: s(20000), chips: z.array(chip).max(12) }),

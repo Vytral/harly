@@ -1,15 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
-import {
-  ArrowDown,
-  ArrowUp,
-  Ban,
-  ChevronDown,
-  Image as ImageIcon,
-  Plus,
-  Search,
-  Trash2,
-  type LucideIcon,
-} from "lucide-react";
+import { useState, useEffect, useRef, useMemo, type ComponentType, type SVGProps } from "react";
 
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -21,6 +10,18 @@ import {
   CareerIcon,
   careerIcon,
 } from "@/features/career-page/icons";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  BanIcon,
+  ChevronDownIcon,
+  ImageIcon,
+  PlusIcon,
+  SearchIcon,
+  TrashIcon,
+} from "./builder-icons";
+
+type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
 /* ------------------------------------------------------------------ */
 /*  Section                                                           */
@@ -33,7 +34,7 @@ export function Section({
   children,
 }: {
   title: string;
-  icon: LucideIcon;
+  icon: IconComponent;
   defaultOpen?: boolean;
   children: React.ReactNode;
 }) {
@@ -49,7 +50,7 @@ export function Section({
           <Icon className="size-4 text-muted-foreground" strokeWidth={1.8} />
           {title}
         </span>
-        <ChevronDown
+        <ChevronDownIcon
           className={cn(
             "size-4 text-muted-foreground transition-transform duration-200 ease-out motion-reduce:transition-none",
             open && "rotate-180",
@@ -175,7 +176,7 @@ export function ListEditor<T>({
           onClick={onAdd}
           className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-pine transition-colors hover:bg-sage/40"
         >
-          <Plus className="size-3.5" /> Add
+          <PlusIcon className="size-3.5" /> Add
         </button>
       </div>
       {items.map((item, i) => (
@@ -187,17 +188,17 @@ export function ListEditor<T>({
             <div className="flex-1">{render(item, i)}</div>
             <div className="flex shrink-0 flex-col gap-0.5">
               <IconBtn onClick={() => onMove(i, -1)} disabled={i === 0} label="Move up">
-                <ArrowUp className="size-3.5" />
+                <ArrowUpIcon className="size-3.5" />
               </IconBtn>
               <IconBtn
                 onClick={() => onMove(i, 1)}
                 disabled={i === items.length - 1}
                 label="Move down"
               >
-                <ArrowDown className="size-3.5" />
+                <ArrowDownIcon className="size-3.5" />
               </IconBtn>
               <IconBtn onClick={() => onRemove(i)} label="Remove">
-                <Trash2 className="size-3.5 text-destructive" />
+                <TrashIcon className="size-3.5 text-destructive" />
               </IconBtn>
             </div>
           </div>
@@ -297,7 +298,7 @@ export function IconSelect({
           className="absolute right-0 z-30 mt-1.5 w-64 origin-top-right rounded-xl border bg-popover p-2 shadow-lg duration-150 animate-in fade-in slide-in-from-top-1 motion-reduce:animate-none"
         >
           <div className="flex items-center gap-2 rounded-md border px-2 py-1.5">
-            <Search className="size-3.5 text-muted-foreground" />
+            <SearchIcon className="size-3.5 text-muted-foreground" />
             <input
               autoFocus
               value={query}
@@ -319,7 +320,7 @@ export function IconSelect({
                 !value ? "border-pine bg-sage/30" : "border-transparent",
               )}
             >
-              <Ban className="size-4" strokeWidth={1.8} />
+              <BanIcon className="size-4" strokeWidth={1.8} />
             </button>
             {filtered.map((name) => {
               const Icon = CAREER_ICONS[name];

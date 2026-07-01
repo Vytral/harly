@@ -214,6 +214,13 @@
     font-weight: 700;
     letter-spacing: -0.02em;
   }
+  /* Cal Sans — distinctive display face for focus-mode builder chrome only.
+     Falls back to sans until the local font (app/(fullscreen)/layout.tsx)
+     loads. Deliberately NOT applied to public/live pages. */
+  .font-cal {
+    font-family: var(--font-cal), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.01em;
+  }
 }
 
 /* Public board pages opt into a neutral white canvas regardless of admin chrome. */
