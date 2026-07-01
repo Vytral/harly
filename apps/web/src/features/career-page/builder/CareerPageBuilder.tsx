@@ -38,6 +38,7 @@ import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
@@ -80,7 +81,6 @@ const TEMPLATE_META: Record<
   minimal: { label: "Minimal", blurb: "Clean type, just the essentials", ready: true },
   playful: { label: "Playful", blurb: "Colorful, friendly, high-energy", ready: true },
   ashby: { label: "Ashby", blurb: "Structured, sidebar filters", ready: true },
-  greenhouse: { label: "Greenhouse", blurb: "Classic grouped board", ready: true },
 };
 
 export function CareerPageBuilder({
@@ -148,7 +148,7 @@ export function CareerPageBuilder({
         </div>
         <div className="flex items-center gap-2">
           <a
-            href="/"
+            href={`/board/${workspace.slug}`}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-lg border px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
@@ -252,36 +252,108 @@ export function CareerPageBuilder({
                     placeholder="A short tagline or mission statement"
                   />
                 </Field>
-                <Field label="Banner image">
-                  <FileDropzone
-                    aspect="banner"
-                    value={config.hero.imageUrl}
-                    onChange={(url) => update((d) => (d.hero.imageUrl = url))}
-                  />
-                </Field>
-                <ToggleRow
-                  label="Gradient overlay (left → right)"
-                  checked={config.hero.overlay === "gradient"}
-                  onCheckedChange={(v) =>
-                    update((d) => (d.hero.overlay = v ? "gradient" : "none"))
-                  }
-                />
-                {config.hero.overlay === "gradient" && (
-                  <div className="grid grid-cols-2 gap-2">
-                    <ColorField
-                      label="From"
-                      value={config.hero.overlayFrom}
-                      fallback={config.theme.accent ?? workspace.primaryColor}
-                      onChange={(c) => update((d) => (d.hero.overlayFrom = c))}
+
+                {/* Minimal-specific hero options */}
+                {config.template === "minimal" && (
+                  <>
+                    <ToggleRow
+                      label="Use banner image instead of topbar"
+                      checked={config.hero.bannerEnabled}
+                      onCheckedChange={(v) => update((d) => (d.hero.bannerEnabled = v))}
                     />
-                    <ColorField
-                      label="To"
-                      value={config.hero.overlayTo}
-                      fallback="#ffffff"
-                      onChange={(c) => update((d) => (d.hero.overlayTo = c))}
-                    />
-                  </div>
+                    {config.hero.bannerEnabled && (
+                      <>
+                        <Field label="Banner image">
+                          <FileDropzone
+                            aspect="banner"
+                            value={config.hero.imageUrl ?? workspace.heroImageUrl}
+                            onChange={(url) => update((d) => (d.hero.imageUrl = url))}
+                          />
+                        </Field>
+                        <Field label={`Overlay opacity — ${config.hero.overlayOpacity}%`}>
+                          <input
+                            type="range"
+                            min={0}
+                            max={100}
+                            step={5}
+                            value={config.hero.overlayOpacity}
+                            onChange={(e) =>
+                              update((d) => (d.hero.overlayOpacity = Number(e.target.value)))
+                            }
+                            className="w-full accent-pine"
+                          />
+                        </Field>
+                        <ToggleRow
+                          label="Show headline text"
+                          checked={config.hero.showHeadline}
+                          onCheckedChange={(v) => update((d) => (d.hero.showHeadline = v))}
+                        />
+                      </>
+                    )}
+                    <Field label="Logo to display">
+                      <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
+                        {(["logo", "fullLogo"] as const).map((t) => (
+                          <button
+                            key={t}
+                            type="button"
+                            onClick={() => update((d) => (d.hero.logoType = t))}
+                            className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                              config.hero.logoType === t
+                                ? "bg-card text-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground"
+                            }`}
+                          >
+                            {t === "logo" ? "Square mark" : "Full wordmark"}
+                          </button>
+                        ))}
+                      </div>
+                    </Field>
+                    <Field label="Button text">
+                      <Input
+                        value={config.hero.ctaButtonText}
+                        onChange={(e) => update((d) => (d.hero.ctaButtonText = e.target.value))}
+                        placeholder="View jobs"
+                      />
+                    </Field>
+                  </>
                 )}
+
+                {/* Banner image + overlay — Playful & Ashby */}
+                {config.template !== "minimal" && (
+                  <>
+                    <Field label="Banner image">
+                      <FileDropzone
+                        aspect="banner"
+                        value={config.hero.imageUrl}
+                        onChange={(url) => update((d) => (d.hero.imageUrl = url))}
+                      />
+                    </Field>
+                    <ToggleRow
+                      label="Gradient overlay (left → right)"
+                      checked={config.hero.overlay === "gradient"}
+                      onCheckedChange={(v) =>
+                        update((d) => (d.hero.overlay = v ? "gradient" : "none"))
+                      }
+                    />
+                    {config.hero.overlay === "gradient" && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <ColorField
+                          label="From"
+                          value={config.hero.overlayFrom}
+                          fallback={config.theme.accent ?? workspace.primaryColor}
+                          onChange={(c) => update((d) => (d.hero.overlayFrom = c))}
+                        />
+                        <ColorField
+                          label="To"
+                          value={config.hero.overlayTo}
+                          fallback="#ffffff"
+                          onChange={(c) => update((d) => (d.hero.overlayTo = c))}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+
                 <Field label="Logo position">
                   <div className="inline-flex rounded-lg border bg-muted/40 p-0.5">
                     {(["left", "center", "right"] as const).map((pos) => {
@@ -312,42 +384,47 @@ export function CareerPageBuilder({
               </Section>
 
               {/* Intro */}
-              <Section title="Intro & chips" icon={Type}>
-                <Field label="Intro paragraph">
-                  <Textarea
-                    rows={4}
-                    value={config.intro.body}
-                    onChange={(e) => update((d) => (d.intro.body = e.target.value))}
+              <Section title="Intro & content" icon={Type}>
+                <Field label="Intro / about us">
+                  <RichTextEditor
+                    key={config.template}
+                    defaultValue={config.intro.body}
+                    placeholder="Tell candidates about your company, culture, mission…"
+                    minHeight="10rem"
+                    onChange={(html) => update((d) => (d.intro.body = html))}
                   />
                 </Field>
-                <ListEditor
-                  label="Chips"
-                  items={config.intro.chips}
-                  onAdd={() =>
-                    update((d) => d.intro.chips.push({ label: "New", icon: "" }))
-                  }
-                  onRemove={(i) => update((d) => d.intro.chips.splice(i, 1))}
-                  onMove={(i, dir) => update((d) => move(d.intro.chips, i, dir))}
-                  render={(chip, i) => (
-                    <div className="flex gap-2">
-                      <Input
-                        value={chip.label}
-                        onChange={(e) =>
-                          update((d) => (d.intro.chips[i].label = e.target.value))
-                        }
-                        placeholder="Label"
-                        className="min-w-0"
-                      />
-                      <IconSelect
-                        value={chip.icon ?? ""}
-                        onChange={(v) => update((d) => (d.intro.chips[i].icon = v))}
-                      />
-                    </div>
-                  )}
-                />
+                {config.template === "playful" && (
+                  <ListEditor
+                    label="Chips"
+                    items={config.intro.chips}
+                    onAdd={() =>
+                      update((d) => d.intro.chips.push({ label: "New", icon: "" }))
+                    }
+                    onRemove={(i) => update((d) => d.intro.chips.splice(i, 1))}
+                    onMove={(i, dir) => update((d) => move(d.intro.chips, i, dir))}
+                    render={(chip, i) => (
+                      <div className="flex gap-2">
+                        <Input
+                          value={chip.label}
+                          onChange={(e) =>
+                            update((d) => (d.intro.chips[i].label = e.target.value))
+                          }
+                          placeholder="Label"
+                          className="min-w-0"
+                        />
+                        <IconSelect
+                          value={chip.icon ?? ""}
+                          onChange={(v) => update((d) => (d.intro.chips[i].icon = v))}
+                        />
+                      </div>
+                    )}
+                  />
+                )}
               </Section>
 
-              {/* Overview */}
+              {/* Overview — Playful only */}
+              {config.template === "playful" && (
               <Section title="Overview card" icon={BarChart3}>
                 <ToggleRow
                   label="Show overview card"
@@ -398,8 +475,10 @@ export function CareerPageBuilder({
                   )}
                 />
               </Section>
+              )}
 
-              {/* Gallery */}
+              {/* Gallery — Playful only */}
+              {config.template === "playful" && (
               <Section title="Photo gallery" icon={Images}>
                 <ToggleRow
                   label="Show gallery"
@@ -447,8 +526,10 @@ export function CareerPageBuilder({
                   )}
                 />
               </Section>
+              )}
 
-              {/* Values */}
+              {/* Values — Playful only */}
+              {config.template === "playful" && (
               <Section title="Values" icon={Sparkles}>
                 <ToggleRow
                   label="Show values"
@@ -490,6 +571,7 @@ export function CareerPageBuilder({
                   )}
                 />
               </Section>
+              )}
 
               {/* Positions */}
               <Section title="Open positions" icon={Briefcase}>
@@ -551,12 +633,22 @@ export function CareerPageBuilder({
                     onChange={(e) => update((d) => (d.cta.body = e.target.value))}
                   />
                 </Field>
-                <ColorField
-                  label="Banner color"
-                  value={config.cta.color}
-                  fallback={config.theme.accent ?? workspace.primaryColor}
-                  onChange={(c) => update((d) => (d.cta.color = c))}
-                />
+                <Field label="Button text">
+                  <Input
+                    value={config.cta.buttonText}
+                    onChange={(e) => update((d) => (d.cta.buttonText = e.target.value))}
+                    placeholder="Get in touch"
+                  />
+                </Field>
+                {/* Banner color — Playful only (Minimal CTA is text-only, Ashby has no CTA) */}
+                {config.template === "playful" && (
+                  <ColorField
+                    label="Banner color"
+                    value={config.cta.color}
+                    fallback={config.theme.accent ?? workspace.primaryColor}
+                    onChange={(c) => update((d) => (d.cta.color = c))}
+                  />
+                )}
               </Section>
 
               {/* Testimonials */}

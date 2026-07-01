@@ -12,6 +12,8 @@ export type WorkspaceBoardBranding = {
   name: string;
   slug: string;
   logoUrl: string | null;
+  /** Full wordmark / horizontal logo. Falls back to logoUrl when null. */
+  fullLogoUrl: string | null;
   tagline: string | null;
   description: string | null;
   websiteUrl: string | null;

@@ -30,6 +30,7 @@ const workspaceBrandingSelect = {
   name: organization.name,
   slug: organization.slug,
   logoUrl: organization.logo,
+  fullLogoUrl: workspaceSettings.sidebarLogoUrl,
   tagline: workspaceSettings.tagline,
   description: workspaceSettings.description,
   websiteUrl: workspaceSettings.websiteUrl,
@@ -47,6 +48,7 @@ type WorkspaceBrandingRow = {
   name: string;
   slug: string;
   logoUrl: string | null;
+  fullLogoUrl: string | null;
   tagline: string | null;
   description: string | null;
   websiteUrl: string | null;
@@ -67,6 +69,7 @@ export function toBoardBranding(
     name: row.name,
     slug: row.slug,
     logoUrl: row.logoUrl,
+    fullLogoUrl: row.fullLogoUrl ?? null,
     tagline: row.tagline,
     description: row.description,
     websiteUrl: row.websiteUrl,

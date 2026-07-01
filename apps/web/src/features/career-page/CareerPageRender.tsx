@@ -8,12 +8,12 @@ import { ThemeWrapper } from "./ThemeWrapper";
 import { PlayfulTemplate } from "./templates/PlayfulTemplate";
 import { MinimalTemplate } from "./templates/MinimalTemplate";
 import { AshbyTemplate } from "./templates/AshbyTemplate";
-import { GreenhouseTemplate } from "./templates/GreenhouseTemplate";
 
 /**
  * Renders the public career page from live config. Switch picks the template
  * component based on config.template, wraps it in ThemeWrapper to apply
  * mode/background/font. All templates receive the same props (config-driven).
+ * Greenhouse configs fall back to Minimal.
  */
 export function CareerPageRender({
   config,
@@ -30,10 +30,9 @@ export function CareerPageRender({
     minimal: MinimalTemplate,
     playful: PlayfulTemplate,
     ashby: AshbyTemplate,
-    greenhouse: GreenhouseTemplate,
   } as const;
 
-  const TemplateComponent = 
+  const TemplateComponent =
     config.template !== "" && config.template in templateMap
       ? templateMap[config.template as keyof typeof templateMap]
       : MinimalTemplate;
