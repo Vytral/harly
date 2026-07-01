@@ -35,6 +35,15 @@ export function MinimalTemplate({
       ? (workspace.fullLogoUrl ?? workspace.logoUrl)
       : workspace.logoUrl;
 
+  // Banner mode can carry its own light/dark full-logo (white vs dark letters),
+  // since the banner background has an adjustable overlay. Falls back to the
+  // regular display logo when the chosen variant isn't uploaded.
+  const bannerVariantLogo =
+    config.hero.bannerLogoVariant === "light"
+      ? config.hero.bannerLogoLight
+      : config.hero.bannerLogoDark;
+  const bannerLogo = bannerVariantLogo ?? displayLogo;
+
   const logoAlign =
     config.hero.logoPosition === "center"
       ? "justify-center"
@@ -81,10 +90,10 @@ export function MinimalTemplate({
 
           {/* Content */}
           <div className="relative z-10 flex flex-col items-center gap-5">
-            {displayLogo ? (
+            {bannerLogo ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
-                src={displayLogo}
+                src={bannerLogo}
                 alt={workspace.name}
                 className="h-10 w-auto max-w-[240px] object-contain drop-shadow"
               />
@@ -274,7 +283,6 @@ export function MinimalTemplate({
         <div className="py-8">
           <CareerFooter
             config={config}
-            logo={displayLogo}
             workspaceName={workspace.name}
             maxWidth="max-w-3xl"
             iconRounded="rounded-md"

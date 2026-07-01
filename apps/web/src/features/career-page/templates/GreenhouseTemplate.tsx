@@ -204,7 +204,7 @@ export function GreenhouseTemplate({
 
       <footer className="border-t border-zinc-200 dark:border-zinc-800">
         <div className="py-8">
-          <CareerFooter config={config} logo={workspace.logoUrl} workspaceName={workspace.name} maxWidth="max-w-3xl" iconRounded="rounded-md" />
+          <CareerFooter config={config} workspaceName={workspace.name} maxWidth="max-w-3xl" iconRounded="rounded-md" />
         </div>
       </footer>
     </div>

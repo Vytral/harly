@@ -6,6 +6,7 @@ import { CareerTestimonials } from "@/features/career-page/CareerTestimonials";
 import { CareerFaq } from "@/features/career-page/CareerFaq";
 import { CareerGallery } from "@/features/career-page/CareerGallery";
 import { CareerFooter } from "@/features/career-page/CareerFooter";
+import { RichBody } from "@/features/career-page/RichBody";
 import { careerIcon } from "@/features/career-page/icons";
 import type { CareerPageConfig } from "@/features/career-page/config";
 import type { Job } from "@/features/career-page/types";
@@ -94,9 +95,9 @@ export function PlayfulTemplate({
               {headline}
             </h1>
             {config.intro.body && (
-              <p className="mt-5 max-w-xl text-lg leading-relaxed text-zinc-600 dark:text-zinc-400">
-                {config.intro.body}
-              </p>
+              <div className="mt-5 max-w-xl text-lg leading-relaxed text-zinc-600 dark:text-zinc-400">
+                <RichBody html={config.intro.body} />
+              </div>
             )}
             {config.intro.chips.length > 0 && (
               <div className="mt-6 flex flex-wrap gap-2.5">
@@ -280,7 +281,7 @@ export function PlayfulTemplate({
 
       <footer className="mx-auto mt-20 max-w-5xl px-6 pb-12">
         <div className="border-t border-zinc-100 pt-6 dark:border-zinc-800">
-          <CareerFooter config={config} logo={workspace.logoUrl} workspaceName={workspace.name} maxWidth="max-w-5xl" />
+          <CareerFooter config={config} workspaceName={workspace.name} maxWidth="max-w-5xl" />
         </div>
       </footer>
     </div>

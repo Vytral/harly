@@ -285,7 +285,6 @@ export function JobShell({
         <div className="py-6">
           <CareerFooter
             config={config}
-            logo={workspace.logoUrl}
             workspaceName={workspace.name}
             maxWidth="max-w-5xl"
           />

@@ -17,6 +17,7 @@ import type { Job } from "@/features/career-page/types";
 import { CareerTestimonials } from "@/features/career-page/CareerTestimonials";
 import { CareerFaq } from "@/features/career-page/CareerFaq";
 import { CareerFooter } from "@/features/career-page/CareerFooter";
+import { RichBody } from "@/features/career-page/RichBody";
 
 const reveal =
   "duration-500 animate-in fade-in slide-in-from-bottom-3 fill-mode-backwards motion-reduce:animate-none";
@@ -152,9 +153,9 @@ export function AshbyTemplate({
           {headline}
         </h1>
         {config.intro.body && (
-          <p className="mt-3 max-w-2xl text-zinc-600 dark:text-zinc-400">
-            {config.intro.body}
-          </p>
+          <div className="mt-3 max-w-2xl text-zinc-600 dark:text-zinc-400">
+            <RichBody html={config.intro.body} />
+          </div>
         )}
 
         <div className="mt-10 grid gap-10 lg:grid-cols-[240px_1fr]">
@@ -304,7 +305,7 @@ export function AshbyTemplate({
 
       <footer className="border-t border-zinc-200 dark:border-zinc-800">
         <div className="py-8">
-          <CareerFooter config={config} logo={workspace.logoUrl} workspaceName={workspace.name} maxWidth="max-w-6xl" iconRounded="rounded-md" />
+          <CareerFooter config={config} workspaceName={workspace.name} maxWidth="max-w-6xl" iconRounded="rounded-md" />
         </div>
       </footer>
     </div>
