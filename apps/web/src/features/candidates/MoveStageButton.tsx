@@ -2,11 +2,11 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { moveApplicationStage } from "@/features/pipeline/actions";
 import { Button } from "@/components/ui/button";
+import { ArrowLineRightIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
 
 export type MoveStageTarget = {
@@ -70,7 +70,7 @@ export function MoveStageButton({
           <span className="truncate">
             {isPending ? "Moving…" : `Move to ${nextStage.name}`}
           </span>
-          <ArrowRight className="size-4 shrink-0" />
+          <ArrowLineRightIcon className="size-4 shrink-0" />
         </>
       ) : (
         "Final stage"

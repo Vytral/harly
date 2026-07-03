@@ -33,6 +33,7 @@ import { CandidateFileUpload } from "@/features/candidates/CandidateFileUpload";
 import { EducationList } from "@/features/candidates/EducationList";
 import { ExperienceTimeline } from "@/features/candidates/ExperienceTimeline";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
+import { EnvelopeSimpleDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { EditInterviewDialog } from "@/features/candidates/EditInterviewDialog";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
 import {
@@ -490,8 +491,8 @@ export function CandidateProfileTabs({
         </div>
         {messages.length === 0 ? (
           <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">
-            <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-              <Mail className="size-5" strokeWidth={1.6} />
+            <span className="flex size-12 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+              <EnvelopeSimpleDuotoneIcon className="size-6" />
             </span>
             <p className="text-sm font-medium">No messages yet</p>
             <p className="max-w-sm text-sm text-muted-foreground">
@@ -624,7 +625,7 @@ function InterviewCard({
         return;
       }
       toast.success(status === "completed" ? "Marked complete" : "Interview canceled");
-      router.refresh();
+      (router as { refresh?: () => void }).refresh?.();
     });
   }
 
@@ -860,7 +861,7 @@ function InterviewBriefSheet({
         return;
       }
       setBrief(result.brief);
-      router.refresh();
+      (router as { refresh?: () => void }).refresh?.();
     });
   }
 
@@ -1017,7 +1018,7 @@ function SummarizeNotesSheet({
       }
       toast.success("Summary saved as note");
       setOpen(false);
-      router.refresh();
+      (router as { refresh?: () => void }).refresh?.();
     });
   }
 

@@ -2,11 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Star, StarOff } from "lucide-react";
 import { toast } from "sonner";
 
 import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
 import { Button } from "@/components/ui/button";
+import { BookmarkSimpleIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
 
 type CandidatePoolButtonProps = {
@@ -41,7 +41,7 @@ export function CandidatePoolButton({
 
       setInPool(!inPool);
       toast.success(inPool ? "Removed from pool." : "Added to pool.");
-      router.refresh();
+      (router as { refresh?: () => void }).refresh?.();
     });
   }
 
@@ -59,12 +59,12 @@ export function CandidatePoolButton({
     >
       {inPool ? (
         <>
-          <StarOff className="size-4" />
+          <BookmarkSimpleIcon className="size-4 fill-current" />
           {size !== "icon" && <span className="ml-1.5">In Pool</span>}
         </>
       ) : (
         <>
-          <Star className="size-4" />
+          <BookmarkSimpleIcon className="size-4" />
           {size !== "icon" && <span className="ml-1.5">Add to Pool</span>}
         </>
       )}

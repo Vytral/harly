@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Activity, ChevronDown } from "lucide-react";
+import { ChevronDown } from "lucide-react";
 
+import { PulseIcon } from "@/components/ui/icons/phosphor";
 import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
@@ -43,7 +44,7 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
           className="flex w-full items-center justify-between gap-2 px-4 py-3 text-left"
         >
           <span className="flex items-center gap-2">
-            <Activity className="size-4 text-primary" strokeWidth={1.8} />
+            <PulseIcon className="size-4 text-primary" />
             <span className="text-sm font-semibold">Activity</span>
             {activity.length > 0 ? (
               <span className="rounded-full bg-muted px-1.5 text-xs font-medium tabular-nums text-muted-foreground">
@@ -69,7 +70,7 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
             {activity.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center">
                 <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-                  <Activity className="size-5" strokeWidth={1.6} />
+                  <PulseIcon className="size-5" />
                 </span>
                 <p className="text-sm font-medium">No activity yet</p>
                 <p className="max-w-[16rem] text-xs text-muted-foreground">

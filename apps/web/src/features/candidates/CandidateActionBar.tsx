@@ -5,7 +5,6 @@ import { useState, useTransition } from "react";
 
 import { useRouter } from "next/navigation";
 import {
-  Ban,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -35,6 +34,7 @@ import {
   type MoveStageTarget,
 } from "@/features/candidates/MoveStageButton";
 import { PdfViewer } from "@/features/candidates/PdfViewer";
+import { ProhibitIcon } from "@/components/ui/icons/phosphor";
 import {
   ScheduleDrawer,
   type ScheduleApplicationOption,
@@ -141,7 +141,7 @@ function RejectButton({
         className="rounded-r-none border-destructive/30 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
         title="Reject candidate"
       >
-        <Ban className="size-4" />
+        <ProhibitIcon className="size-4" />
         {compact ? <span className="sr-only">Reject</span> : "Reject"}
       </Button>
       <DropdownMenu>
@@ -162,7 +162,7 @@ function RejectButton({
             variant="destructive"
             onSelect={() => run("rejected", "rejected")}
           >
-            <Ban className="size-4" />
+            <ProhibitIcon className="size-4" />
             Reject candidate
           </DropdownMenuItem>
           <DropdownMenuItem onSelect={() => run("withdrawn", "withdrawn")}>
