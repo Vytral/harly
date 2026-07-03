@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { Download, ExternalLink, FileText, Upload } from "lucide-react";
+import { Download, ExternalLink, FileText, GraduationCap, Sparkles, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { attachCandidateFile } from "@/features/candidates/actions";
@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { DocxViewer } from "@/features/candidates/DocxViewer";
+import { PdfViewer } from "@/features/candidates/PdfViewer";
 
 function isPdfFile(file: { fileType: string | null; fileName: string }) {
   return (
@@ -40,6 +41,11 @@ type CandidateFileItem = {
   fileType: string | null;
   fileSize: number | null;
   contentHash: string | null;
+  parsedSummary: string | null;
+  parsedSkills: string[];
+  parsedEducation: string | null;
+  parsedExperienceYears: number | null;
+  parsedAt: string | null;
   createdAt: string;
   uploadedByName: string | null;
   uploadedByEmail: string | null;
@@ -128,6 +134,86 @@ function groupFiles(files: CandidateFileItem[]): GroupedFile[] {
   });
 }
 
+function hasParsedDetails(file: CandidateFileItem) {
+  return Boolean(
+    file.parsedSummary ||
+      file.parsedEducation ||
+      file.parsedExperienceYears !== null ||
+      file.parsedSkills.length > 0,
+  );
+}
+
+function ResumeDetailsCard({ file }: { file: CandidateFileItem }) {
+  if (!hasParsedDetails(file)) return null;
+
+  return (
+    <div className="rounded-lg border bg-muted/20">
+      <div className="border-b px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-4 text-primary" strokeWidth={1.8} />
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Details extracted from résumé
+          </h4>
+        </div>
+      </div>
+      <div className="divide-y divide-border/60">
+        {file.parsedSummary ? (
+          <section className="px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Summary
+            </p>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/85">
+              {file.parsedSummary}
+            </p>
+          </section>
+        ) : null}
+
+        {file.parsedEducation || file.parsedExperienceYears !== null ? (
+          <section className="grid gap-3 px-4 py-3 sm:grid-cols-2">
+            {file.parsedEducation ? (
+              <div>
+                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <GraduationCap className="size-3.5" />
+                  Education
+                </p>
+                <p className="mt-1.5 text-sm font-medium">{file.parsedEducation}</p>
+              </div>
+            ) : null}
+            {file.parsedExperienceYears !== null ? (
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Experience
+                </p>
+                <p className="mt-1.5 text-sm font-medium">
+                  {file.parsedExperienceYears}+ years
+                </p>
+              </div>
+            ) : null}
+          </section>
+        ) : null}
+
+        {file.parsedSkills.length > 0 ? (
+          <section className="px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Skills
+            </p>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {file.parsedSkills.slice(0, 18).map((skill) => (
+                <Badge key={skill} variant="secondary" className="font-medium">
+                  {skill}
+                </Badge>
+              ))}
+              {file.parsedSkills.length > 18 ? (
+                <Badge variant="outline">+{file.parsedSkills.length - 18}</Badge>
+              ) : null}
+            </div>
+          </section>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function FileRow({ file, duplicateCount }: { file: CandidateFileItem; duplicateCount: number }) {
   const meta = (
     <div className="min-w-0 flex-1">
@@ -183,9 +269,11 @@ function FileRow({ file, duplicateCount }: { file: CandidateFileItem; duplicateC
               Preview for {file.fileName}
             </DialogDescription>
           </DialogHeader>
-          <div className="h-[75vh] overflow-hidden rounded-lg border">
-            <iframe src={file.fileUrl} title={file.fileName} className="size-full" />
-          </div>
+          <PdfViewer
+            fileUrl={file.fileUrl}
+            fileName={file.fileName}
+            className="h-[75vh]"
+          />
         </DialogContent>
       </Dialog>
     );
@@ -298,6 +386,11 @@ export function CandidateFileUpload({
               fileType: result.file!.fileType,
               fileSize: result.file!.fileSize,
               contentHash: result.file!.contentHash,
+              parsedSummary: result.file!.parsedSummary,
+              parsedSkills: result.file!.parsedSkills,
+              parsedEducation: result.file!.parsedEducation,
+              parsedExperienceYears: result.file!.parsedExperienceYears,
+              parsedAt: result.file!.parsedAt,
               createdAt: result.file!.createdAt,
               uploadedByName: result.file!.uploadedByName,
               uploadedByEmail: null,
@@ -349,15 +442,15 @@ export function CandidateFileUpload({
         </Button>
       </div>
 
+      {latestFile ? <ResumeDetailsCard file={latestFile} /> : null}
+
       {/* Inline preview for latest file */}
       {latestFile && isPdfFile(latestFile) ? (
-        <div className="overflow-hidden rounded-lg border">
-          <iframe
-            src={latestFile.fileUrl}
-            title={latestFile.fileName}
-            className="h-[55vh] w-full"
-          />
-        </div>
+        <PdfViewer
+          fileUrl={latestFile.fileUrl}
+          fileName={latestFile.fileName}
+          className="h-[60vh]"
+        />
       ) : latestFile && isDocxFile(latestFile) ? (
         <div className="overflow-hidden rounded-lg border">
           <DocxViewer fileUrl={latestFile.fileUrl} className="h-[55vh]" />

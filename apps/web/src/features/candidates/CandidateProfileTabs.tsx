@@ -30,6 +30,8 @@ import { toast } from "sonner";
 
 import { AiScoreCard } from "@/features/candidates/AiScoreCard";
 import { CandidateFileUpload } from "@/features/candidates/CandidateFileUpload";
+import { EducationList } from "@/features/candidates/EducationList";
+import { ExperienceTimeline } from "@/features/candidates/ExperienceTimeline";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { EditInterviewDialog } from "@/features/candidates/EditInterviewDialog";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
@@ -55,6 +57,7 @@ import {
   interviewTypeLabel,
   type CandidateInterviewItem,
 } from "@/features/interviews/shared";
+import type { ResumeEducationItem, ResumeExperienceItem } from "@harly/db";
 import type { InterviewBrief, InterviewNotesSummary } from "@/lib/ai/schemas";
 import type {
   CandidateActivityItem,
@@ -103,6 +106,13 @@ type CandidateFile = {
   fileType: string | null;
   fileSize: number | null;
   contentHash: string | null;
+  parsedSummary: string | null;
+  parsedSkills: string[];
+  parsedEducation: string | null;
+  parsedExperienceYears: number | null;
+  parsedExperience: ResumeExperienceItem[];
+  parsedEducationItems: ResumeEducationItem[];
+  parsedAt: string | null;
   createdAt: string;
   uploadedByName: string | null;
   uploadedByEmail: string | null;
@@ -242,9 +252,14 @@ export function CandidateProfileTabs({
   scheduleCal,
   currentUserId,
 }: CandidateProfileTabsProps) {
+  const latestFile = files[0] ?? null;
+
   return (
     <Tabs defaultValue="profile">
-      <TabsList className="w-full justify-start overflow-x-auto">
+      <TabsList
+        variant="line"
+        className="w-full justify-start gap-5 overflow-x-auto border-b border-border/60 [&>button]:flex-none [&>button]:px-0.5"
+      >
         <TabsTrigger value="profile">Profile</TabsTrigger>
         <TabsTrigger value="interviews">
           Interviews
@@ -268,8 +283,33 @@ export function CandidateProfileTabs({
         </TabsTrigger>
       </TabsList>
 
-      {/* ── Profile ── */}
-      <TabsContent value="profile" className="mt-4 space-y-4">
+      {/* ── Profile — AI match leads, résumé + application context follows ── */}
+      <TabsContent value="profile" className="mt-5 space-y-4">
+        <AiScoreCard
+          applications={applications.map((application) => ({
+            id: application.id,
+            jobTitle: application.jobTitle,
+          }))}
+          evaluations={aiEvaluations}
+          aiConfigured={aiConfigured}
+        />
+
+        <CandidateFileUpload
+          candidateId={candidateId}
+          workspaceId={workspaceId}
+          initialFiles={files}
+        />
+
+        {latestFile ? (
+          <div className="space-y-4">
+            <ExperienceTimeline experience={latestFile.parsedExperience} />
+            <EducationList
+              education={latestFile.parsedEducationItems}
+              fallback={latestFile.parsedEducation}
+            />
+          </div>
+        ) : null}
+
         {applications.length === 0 ? (
           <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
             No applications yet.
@@ -336,12 +376,6 @@ export function CandidateProfileTabs({
             </CardContent>
           </Card>
         )}
-
-        <CandidateFileUpload
-          candidateId={candidateId}
-          workspaceId={workspaceId}
-          initialFiles={files}
-        />
       </TabsContent>
 
       {/* ── Interviews ── */}

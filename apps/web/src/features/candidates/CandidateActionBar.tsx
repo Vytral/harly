@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 
 import { useRouter } from "next/navigation";
 import {
+  Ban,
   CalendarClock,
   CheckCircle2,
   ChevronDown,
@@ -16,7 +17,6 @@ import {
   RotateCcw,
   Trash2,
   UserMinus,
-  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -30,6 +30,11 @@ import {
 } from "@/features/candidates/EmailDrawer";
 import type { TemplateValues } from "@/features/email-templates/interpolate";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
+import {
+  MoveStageButton,
+  type MoveStageTarget,
+} from "@/features/candidates/MoveStageButton";
+import { PdfViewer } from "@/features/candidates/PdfViewer";
 import {
   ScheduleDrawer,
   type ScheduleApplicationOption,
@@ -68,6 +73,8 @@ function isPdfResume(url: string, fileType: string | null, fileName: string | nu
 
 type CandidateStatus = "active" | "hired" | "rejected" | "withdrawn";
 
+// Reject / withdraw live in their own prominent RejectButton; this menu covers
+// the remaining lifecycle transitions.
 const STATUS_ACTIONS: Array<{
   status: CandidateStatus;
   label: string;
@@ -82,26 +89,91 @@ const STATUS_ACTIONS: Array<{
     confirm: "Mark {name} as hired? This updates every active application.",
   },
   {
-    status: "rejected",
-    label: "Reject candidate",
-    icon: XCircle,
-    confirm: "Reject {name}? They'll be moved out of active pipelines.",
-    destructive: true,
-  },
-  {
-    status: "withdrawn",
-    label: "Withdraw application",
-    icon: UserMinus,
-    confirm: "Mark {name}'s application as withdrawn? They'll stay in your candidate list but be filtered out of active pipelines.",
-    destructive: true,
-  },
-  {
     status: "active",
     label: "Reactivate",
     icon: RotateCcw,
     confirm: "Reactivate {name}? Their applications return to the active pipeline.",
   },
 ];
+
+/**
+ * Prominent, isolated reject control (rust) with a split dropdown for
+ * "withdrawn". Mirrors the Workable red reject button + reason menu.
+ */
+function RejectButton({
+  name,
+  applicationIds,
+  compact = false,
+}: {
+  name: string;
+  applicationIds: string[];
+  compact?: boolean;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function run(status: "rejected" | "withdrawn", pastTense: string) {
+    if (applicationIds.length === 0) {
+      toast.error("This candidate has no application to update.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await bulkUpdateCandidateStatusAction({
+        applicationIds,
+        status,
+      });
+      if (result.success) {
+        toast.success(`${name} ${pastTense}.`);
+        (router as { refresh?: () => void }).refresh?.();
+      } else {
+        toast.error(result.error ?? "Could not update candidate.");
+      }
+    });
+  }
+
+  return (
+    <div className="flex items-center">
+      <Button
+        size="sm"
+        variant="outline"
+        disabled={isPending}
+        onClick={() => run("rejected", "rejected")}
+        className="rounded-r-none border-destructive/30 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+        title="Reject candidate"
+      >
+        <Ban className="size-4" />
+        {compact ? <span className="sr-only">Reject</span> : "Reject"}
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={isPending}
+            className="rounded-l-none border-l-0 border-destructive/30 px-1.5 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+            title="More reject options"
+          >
+            <ChevronDown className="size-4" />
+            <span className="sr-only">Reject options</span>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => run("rejected", "rejected")}
+          >
+            <Ban className="size-4" />
+            Reject candidate
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => run("withdrawn", "withdrawn")}>
+            <UserMinus className="size-4" />
+            Mark withdrawn
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
 
 function CandidateStatusMenu({
   name,
@@ -127,7 +199,7 @@ function CandidateStatusMenu({
       });
       if (result.success) {
         toast.success(`${name} ${label.toLowerCase()}.`);
-        router.refresh();
+        (router as { refresh?: () => void }).refresh?.();
       } else {
         toast.error(result.error ?? "Could not update candidate status.");
       }
@@ -185,7 +257,7 @@ function DeleteCandidateButton({
           onClick: () => {
             startTransition(async () => {
               await restoreCandidateAction(candidateId);
-              router.refresh();
+              (router as { refresh?: () => void }).refresh?.();
             });
           },
         },
@@ -235,9 +307,11 @@ export function CandidateActionBar({
   applications,
   members,
   cal,
+  move,
   emailTemplates = [],
   emailTemplateValues = {},
   inPool = false,
+  variant = "full",
 }: {
   candidate: EditableCandidate;
   name: string;
@@ -248,119 +322,200 @@ export function CandidateActionBar({
   applications: ScheduleApplicationOption[];
   members: ScheduleMemberOption[];
   cal: ScheduleCalConfig;
+  move: MoveStageTarget | null;
   emailTemplates?: EmailTemplateOption[];
   emailTemplateValues?: TemplateValues;
   inPool?: boolean;
+  variant?: "full" | "compact";
 }) {
   const applicationIds = applications.map((application) => application.applicationId);
 
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {/* Primary actions — always visible */}
-      <CandidatePoolButton
-        candidateId={candidate.id}
-        inPool={inPool}
-      />
-      <EvaluationDrawer
-        candidateId={candidate.id}
-        workspaceId={candidate.workspaceId}
-        stageName={stageName}
-        trigger={
-          <Button size="sm">
-            <ClipboardCheck className="size-4" />
-            Evaluate
+  const email = (
+    <EmailDrawer
+      candidateId={candidate.id}
+      workspaceId={candidate.workspaceId}
+      email={candidate.email}
+      name={name}
+      templates={emailTemplates}
+      templateValues={emailTemplateValues}
+      trigger={
+        variant === "compact" ? (
+          <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="Email">
+            <Mail className="size-4" />
+            <span className="sr-only">Email</span>
           </Button>
-        }
-      />
-      <EmailDrawer
-        candidateId={candidate.id}
-        workspaceId={candidate.workspaceId}
-        email={candidate.email}
-        name={name}
-        templates={emailTemplates}
-        templateValues={emailTemplateValues}
-        trigger={
+        ) : (
           <Button size="sm" variant="outline">
             <Mail className="size-4" />
             Email
           </Button>
-        }
-      />
-      <ScheduleDrawer
-        candidateId={candidate.id}
-        workspaceId={candidate.workspaceId}
-        candidateName={name}
-        candidateEmail={candidate.email}
-        applications={applications}
-        members={members}
-        cal={cal}
-        trigger={
+        )
+      }
+    />
+  );
+
+  const schedule = (
+    <ScheduleDrawer
+      candidateId={candidate.id}
+      workspaceId={candidate.workspaceId}
+      candidateName={name}
+      candidateEmail={candidate.email}
+      applications={applications}
+      members={members}
+      cal={cal}
+      trigger={
+        variant === "compact" ? (
+          <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="Schedule">
+            <CalendarClock className="size-4" />
+            <span className="sr-only">Schedule</span>
+          </Button>
+        ) : (
           <Button size="sm" variant="outline">
             <CalendarClock className="size-4" />
             Schedule
           </Button>
-        }
-      />
-      <CandidateStatusMenu name={name} applicationIds={applicationIds} />
+        )
+      }
+    />
+  );
 
-      {/* Secondary actions — compact */}
-      <EditCandidateDrawer
-        candidate={candidate}
-        trigger={
-          <Button size="sm" variant="ghost" className="size-8 p-0" title="Edit candidate">
-            <Pencil className="size-4" />
-            <span className="sr-only">Edit</span>
+  const evaluate = (
+    <EvaluationDrawer
+      candidateId={candidate.id}
+      workspaceId={candidate.workspaceId}
+      stageName={stageName}
+      trigger={
+        variant === "compact" ? (
+          <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="Evaluate">
+            <ClipboardCheck className="size-4" />
+            <span className="sr-only">Evaluate</span>
           </Button>
-        }
-      />
-      {resumeUrl ? (
-        isPdfResume(resumeUrl, resumeFileType, resumeFileName) ? (
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button size="sm" variant="ghost" className="size-8 p-0" title="View resume">
-                <FileText className="size-4" />
-                <span className="sr-only">Resume</span>
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-3xl">
-              <DialogHeader>
-                <DialogTitle className="flex items-center justify-between gap-3 pr-8">
-                  <span className="truncate">{resumeFileName ?? `${name}'s resume`}</span>
-                  <Button asChild size="sm" variant="outline">
-                    <a href={resumeUrl} target="_blank" rel="noreferrer">
-                      <Download className="size-4" />
-                      Download
-                    </a>
-                  </Button>
-                </DialogTitle>
-                <DialogDescription className="sr-only">
-                  Resume preview for {name}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="h-[75vh] overflow-hidden rounded-lg border">
-                <iframe src={resumeUrl} title={resumeFileName ?? "Resume"} className="size-full" />
-              </div>
-            </DialogContent>
-          </Dialog>
         ) : (
-          <Button asChild size="sm" variant="ghost" className="size-8 p-0" title="View resume">
-            <a href={resumeUrl} target="_blank" rel="noreferrer">
-              <FileText className="size-4" />
-              <span className="sr-only">Resume</span>
-            </a>
+          <Button size="sm" variant="outline">
+            <ClipboardCheck className="size-4" />
+            Evaluate
           </Button>
         )
-      ) : null}
-      <DeleteCandidateButton
-        candidateId={candidate.id}
-        name={name}
-        trigger={
-          <Button size="sm" variant="ghost" className="size-8 p-0 text-destructive hover:text-destructive" title="Delete candidate">
-            <Trash2 className="size-4" />
-            <span className="sr-only">Delete</span>
-          </Button>
-        }
-      />
+      }
+    />
+  );
+
+  const reject = (
+    <RejectButton
+      name={name}
+      applicationIds={applicationIds}
+      compact={variant === "compact"}
+    />
+  );
+
+  // ── Compact (sticky bar): fast-path actions only ──
+  if (variant === "compact") {
+    return (
+      <div className="flex items-center gap-1.5">
+        {email}
+        {schedule}
+        {evaluate}
+        {reject}
+        <MoveStageButton target={move} />
+      </div>
+    );
+  }
+
+  // ── Full (header card) ──
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
+      {/* Primary — advance the pipeline */}
+      <MoveStageButton target={move} />
+
+      {/* Communication */}
+      <div className="flex items-center gap-2">
+        {email}
+        {schedule}
+        {evaluate}
+      </div>
+
+      {/* Status + pool */}
+      <div className="flex items-center gap-2 sm:border-l sm:border-border/70 sm:pl-2">
+        <CandidateStatusMenu name={name} applicationIds={applicationIds} />
+        <CandidatePoolButton candidateId={candidate.id} inPool={inPool} />
+      </div>
+
+      {/* Utilities — compact icons */}
+      <div className="flex items-center gap-1 sm:border-l sm:border-border/70 sm:pl-2">
+        <EditCandidateDrawer
+          candidate={candidate}
+          trigger={
+            <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="Edit candidate">
+              <Pencil className="size-4" />
+              <span className="sr-only">Edit</span>
+            </Button>
+          }
+        />
+        {resumeUrl ? (
+          isPdfResume(resumeUrl, resumeFileType, resumeFileName) ? (
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="View resume">
+                  <FileText className="size-4" />
+                  <span className="sr-only">Resume</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-3xl">
+                <DialogHeader>
+                  <DialogTitle className="flex items-center justify-between gap-3 pr-8">
+                    <span className="truncate">{resumeFileName ?? `${name}'s resume`}</span>
+                    <Button asChild size="sm" variant="outline">
+                      <a href={resumeUrl} target="_blank" rel="noreferrer">
+                        <Download className="size-4" />
+                        Download
+                      </a>
+                    </Button>
+                  </DialogTitle>
+                  <DialogDescription className="sr-only">
+                    Resume preview for {name}
+                  </DialogDescription>
+                </DialogHeader>
+                <PdfViewer
+                  fileUrl={resumeUrl}
+                  fileName={resumeFileName}
+                  className="h-[75vh]"
+                />
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <Button asChild size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="View resume">
+              <a href={resumeUrl} target="_blank" rel="noreferrer">
+                <FileText className="size-4" />
+                <span className="sr-only">Resume</span>
+              </a>
+            </Button>
+          )
+        ) : null}
+      </div>
+
+      {/* Reject — prominent, isolated */}
+      <div className="flex items-center sm:border-l sm:border-border/70 sm:pl-2">
+        {reject}
+      </div>
+
+      {/* Destructive — far right so it can't be hit by accident */}
+      <div className="ml-auto flex items-center sm:ml-1 sm:border-l sm:border-border/70 sm:pl-2">
+        <DeleteCandidateButton
+          candidateId={candidate.id}
+          name={name}
+          trigger={
+            <Button
+              size="sm"
+              variant="ghost"
+              className="size-8 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+              title="Delete candidate"
+            >
+              <Trash2 className="size-4" />
+              <span className="sr-only">Delete</span>
+            </Button>
+          }
+        />
+      </div>
     </div>
   );
 }
