@@ -104,6 +104,43 @@ export function normalizeStageEmailConfig(value: unknown) {
   return { candidateUpdatesEnabled: true };
 }
 
+export type NextStage = { id: string; name: string; order: number };
+
+/**
+ * The stage immediately after `currentStageId` in a job's ordered pipeline.
+ * Returns null when the application is already in the final stage (or the job
+ * has no stages). Powers the contextual "Move → [next stage]" CTA.
+ */
+export async function getNextStage(
+  jobId: string,
+  currentStageId: string | null,
+): Promise<NextStage | null> {
+  const { organization: workspace } = await getWorkspaceContext();
+
+  const stages = await db
+    .select({
+      id: jobStages.id,
+      name: jobStages.name,
+      order: jobStages.order,
+    })
+    .from(jobStages)
+    .where(
+      and(
+        eq(jobStages.workspaceId, workspace.id),
+        eq(jobStages.jobId, jobId),
+      ),
+    )
+    .orderBy(asc(jobStages.order));
+
+  if (stages.length === 0) return null;
+
+  const currentIndex = currentStageId
+    ? stages.findIndex((stage) => stage.id === currentStageId)
+    : -1;
+
+  return stages[currentIndex + 1] ?? null;
+}
+
 export async function getPipelineData(
   requestedJobId: string | undefined,
 ): Promise<PipelineData> {

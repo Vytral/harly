@@ -22,6 +22,40 @@ export const resumeExtractionSchema = z.object({
 
 export type ResumeExtraction = z.infer<typeof resumeExtractionSchema>;
 
+/**
+ * Rich, structured résumé extraction for the candidate profile — summary, skills,
+ * total years, plus a work-experience timeline and education list. One AI call
+ * fills every parsed field on `candidateFiles`.
+ */
+export const resumeStructuredSchema = z.object({
+  // 2-4 sentence professional summary in the candidate's own framing. Null if absent.
+  summary: z.string().nullable(),
+  // Concise, deduplicated skill/technology names.
+  skills: z.array(z.string()),
+  // Total years of professional experience, rounded. Null if not derivable.
+  experienceYears: z.number().nullable(),
+  experience: z.array(
+    z.object({
+      company: z.string(),
+      title: z.string(),
+      // Human-readable range as written on the résumé, e.g. "2023 - 2025" or "2020 - Present".
+      dateRange: z.string().nullable(),
+      // Achievement/responsibility bullets, verbatim-ish, no leading markers.
+      bullets: z.array(z.string()),
+    }),
+  ),
+  education: z.array(
+    z.object({
+      school: z.string(),
+      degree: z.string().nullable(),
+      field: z.string().nullable(),
+      dateRange: z.string().nullable(),
+    }),
+  ),
+});
+
+export type ResumeStructured = z.infer<typeof resumeStructuredSchema>;
+
 export const jobDraftSchema = z.object({
   // Short plain-text intro (no HTML) — formatted to safe HTML downstream.
   summary: z.string(),

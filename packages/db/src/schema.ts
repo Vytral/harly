@@ -804,6 +804,22 @@ export const candidateNotes = pgTable(
   ],
 );
 
+/** One work-experience entry parsed from a résumé (structured timeline). */
+export type ResumeExperienceItem = {
+  company: string;
+  title: string;
+  dateRange: string | null;
+  bullets: string[];
+};
+
+/** One education entry parsed from a résumé. */
+export type ResumeEducationItem = {
+  school: string;
+  degree: string | null;
+  field: string | null;
+  dateRange: string | null;
+};
+
 export const candidateFiles = pgTable(
   "candidate_files",
   {
@@ -819,6 +835,19 @@ export const candidateFiles = pgTable(
     fileType: text("file_type"),
     fileSize: integer("file_size"),
     contentHash: text("content_hash"),
+    parsedSummary: text("parsed_summary"),
+    parsedSkills: jsonb("parsed_skills").$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
+    parsedEducation: text("parsed_education"),
+    parsedExperienceYears: integer("parsed_experience_years"),
+    parsedExperience: jsonb("parsed_experience")
+      .$type<ResumeExperienceItem[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    parsedEducationItems: jsonb("parsed_education_items")
+      .$type<ResumeEducationItem[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    parsedAt: timestamp("parsed_at", { withTimezone: true }),
     uploadedById: text("uploaded_by_id").references(() => user.id, {
       onDelete: "set null",
     }),

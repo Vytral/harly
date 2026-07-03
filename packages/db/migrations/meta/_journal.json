@@ -330,6 +330,20 @@
       "when": 1782846844940,
       "tag": "0046_green_forgotten_one",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1783022582447,
+      "tag": "0047_oval_silver_fox",
+      "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1783036641795,
+      "tag": "0048_watery_paper_doll",
+      "breakpoints": true
     }
   ]
 }

@@ -21,6 +21,9 @@ import {
   notifications,
   scorecards,
 } from "@harly/db";
+import type { ResumeEducationItem, ResumeExperienceItem } from "@harly/db";
+import { getWorkspaceAiConfig } from "@/lib/ai/config";
+import { parseResumeStructured } from "@/lib/ai/surfaces/parse-resume";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceEmailSender } from "@/lib/email";
@@ -36,6 +39,10 @@ import {
   allowedResumeContentTypes,
   maxResumeFileSize,
 } from "@/lib/storage-validation";
+import { extractResumeAutofillFields } from "@/features/applications/resume-autofill";
+import { extractResumeText } from "@/lib/resume/extract-text";
+import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
+import { storage } from "@/lib/storage";
 
 export type CandidateActionState = {
   success: boolean;
@@ -130,6 +137,112 @@ const candidateFileSchema = z.object({
     .regex(/^[a-f0-9]{64}$/i, "Invalid file hash.")
     .optional(),
 });
+
+type ParsedResumeDetails = {
+  summary: string | null;
+  skills: string[];
+  education: string | null;
+  experienceYears: number | null;
+  experience: ResumeExperienceItem[];
+  educationItems: ResumeEducationItem[];
+};
+
+/** Compact one-line education label from a structured entry (for back-compat). */
+function educationLabel(item: ResumeEducationItem): string | null {
+  const parts = [item.degree, item.field, item.school].filter(
+    (value): value is string => Boolean(value),
+  );
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+function summarizeResumeText(text: string) {
+  const paragraphs = text
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.replace(/\s+/g, " ").trim())
+    .filter((paragraph) => paragraph.length >= 80);
+
+  const summary = paragraphs.find(
+    (paragraph) =>
+      !/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i.test(paragraph) &&
+      !/^\+?\d[\d\s().-]{7,}\d$/.test(paragraph),
+  );
+
+  if (!summary) return null;
+  return summary.length > 420 ? `${summary.slice(0, 417).trim()}…` : summary;
+}
+
+async function parseCandidateFileDetails(input: {
+  workspaceId: string;
+  fileUrl: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+}): Promise<ParsedResumeDetails> {
+  const empty = {
+    summary: null,
+    skills: [],
+    education: null,
+    experienceYears: null,
+    experience: [],
+    educationItems: [],
+  } satisfies ParsedResumeDetails;
+
+  const key = resumeKeyFromUrl(input.fileUrl);
+  if (!key || input.fileSize > maxResumeFileSize) return empty;
+
+  try {
+    const buffer = await storage.read(key);
+    if (buffer.byteLength === 0 || buffer.byteLength > maxResumeFileSize) {
+      return empty;
+    }
+
+    const { text } = await extractResumeText({
+      buffer,
+      fileName: input.fileName,
+      mimeType: input.fileType,
+    });
+    if (!text.trim()) return empty;
+
+    // Prefer the AI structured parse (summary + skills + experience timeline +
+    // education) when the workspace has AI configured; fall back to the heuristic
+    // so uploads never break if AI is off or errors.
+    const aiConfig = await getWorkspaceAiConfig(input.workspaceId);
+    if (aiConfig) {
+      try {
+        const structured = await parseResumeStructured(aiConfig, text);
+        return {
+          summary: structured.summary ?? summarizeResumeText(text),
+          skills: structured.skills,
+          education: structured.education[0]
+            ? educationLabel(structured.education[0])
+            : null,
+          experienceYears: structured.experienceYears,
+          experience: structured.experience,
+          educationItems: structured.education,
+        };
+      } catch (error) {
+        console.error("AI resume parse failed; using heuristic", error);
+      }
+    }
+
+    const fields = extractResumeAutofillFields({
+      fileName: input.fileName,
+      text,
+    });
+
+    return {
+      summary: summarizeResumeText(text),
+      skills: fields.skills ?? [],
+      education: fields.education ?? null,
+      experienceYears: fields.experienceYears ?? null,
+      experience: [],
+      educationItems: [],
+    };
+  } catch (error) {
+    console.error("Failed to parse candidate resume details", error);
+    return empty;
+  }
+}
 
 export async function createCandidateNote(input: {
   candidateId: string;
@@ -433,6 +546,11 @@ export async function attachCandidateFile(input: {
     fileType: string | null;
     fileSize: number | null;
     contentHash: string | null;
+    parsedSummary: string | null;
+    parsedSkills: string[];
+    parsedEducation: string | null;
+    parsedExperienceYears: number | null;
+    parsedAt: string | null;
     createdAt: string;
     uploadedByName: string;
   };
@@ -452,6 +570,23 @@ export async function attachCandidateFile(input: {
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
+
+    const parsedDetails = await parseCandidateFileDetails({
+      workspaceId: input.workspaceId,
+      fileUrl: parsed.data.fileUrl,
+      fileName: parsed.data.fileName,
+      fileType: parsed.data.fileType,
+      fileSize: parsed.data.fileSize,
+    });
+    const parsedAt =
+      parsedDetails.summary ||
+      parsedDetails.skills.length > 0 ||
+      parsedDetails.education ||
+      parsedDetails.experienceYears !== null ||
+      parsedDetails.experience.length > 0 ||
+      parsedDetails.educationItems.length > 0
+        ? new Date()
+        : null;
 
     const result = await db.transaction(async (tx) => {
       const [candidate] = await tx
@@ -478,6 +613,11 @@ export async function attachCandidateFile(input: {
             fileType: candidateFiles.fileType,
             fileSize: candidateFiles.fileSize,
             contentHash: candidateFiles.contentHash,
+            parsedSummary: candidateFiles.parsedSummary,
+            parsedSkills: candidateFiles.parsedSkills,
+            parsedEducation: candidateFiles.parsedEducation,
+            parsedExperienceYears: candidateFiles.parsedExperienceYears,
+            parsedAt: candidateFiles.parsedAt,
             createdAt: candidateFiles.createdAt,
           })
           .from(candidateFiles)
@@ -496,6 +636,10 @@ export async function attachCandidateFile(input: {
             success: true,
             file: {
               ...existing,
+              parsedSkills: Array.isArray(existing.parsedSkills)
+                ? existing.parsedSkills
+                : [],
+              parsedAt: existing.parsedAt?.toISOString() ?? null,
               createdAt: existing.createdAt.toISOString(),
               uploadedByName: user.name,
             },
@@ -513,6 +657,13 @@ export async function attachCandidateFile(input: {
           fileType: parsed.data.fileType,
           fileSize: parsed.data.fileSize,
           contentHash: parsed.data.contentHash?.toLowerCase() ?? null,
+          parsedSummary: parsedDetails.summary,
+          parsedSkills: parsedDetails.skills,
+          parsedEducation: parsedDetails.education,
+          parsedExperienceYears: parsedDetails.experienceYears,
+          parsedExperience: parsedDetails.experience,
+          parsedEducationItems: parsedDetails.educationItems,
+          parsedAt,
           uploadedById: user.id,
         })
         .returning({
@@ -522,6 +673,11 @@ export async function attachCandidateFile(input: {
           fileType: candidateFiles.fileType,
           fileSize: candidateFiles.fileSize,
           contentHash: candidateFiles.contentHash,
+          parsedSummary: candidateFiles.parsedSummary,
+          parsedSkills: candidateFiles.parsedSkills,
+          parsedEducation: candidateFiles.parsedEducation,
+          parsedExperienceYears: candidateFiles.parsedExperienceYears,
+          parsedAt: candidateFiles.parsedAt,
           createdAt: candidateFiles.createdAt,
         });
 
@@ -545,6 +701,8 @@ export async function attachCandidateFile(input: {
         success: true,
         file: {
           ...file,
+          parsedSkills: Array.isArray(file.parsedSkills) ? file.parsedSkills : [],
+          parsedAt: file.parsedAt?.toISOString() ?? null,
           createdAt: file.createdAt.toISOString(),
           uploadedByName: user.name,
         },

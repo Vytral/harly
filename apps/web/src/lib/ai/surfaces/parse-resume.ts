@@ -3,9 +3,13 @@ import "server-only";
 import { Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
-import { resumeExtractionSchema } from "@/lib/ai/schemas";
+import { resumeExtractionSchema, resumeStructuredSchema } from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
 import type { ResumeAutofillFields } from "@/features/applications/resume-autofill";
+import type {
+  ResumeEducationItem,
+  ResumeExperienceItem,
+} from "@harly/db";
 
 const SYSTEM_PROMPT =
   "You extract structured candidate information from raw resume text. " +
@@ -48,5 +52,60 @@ export async function parseResumeWithAI(
     skills: output.skills.length > 0 ? output.skills.slice(0, 30) : undefined,
     experienceYears: output.experienceYears ?? undefined,
     education: output.education ?? undefined,
+  };
+}
+
+export type ResumeStructuredResult = {
+  summary: string | null;
+  skills: string[];
+  experienceYears: number | null;
+  experience: ResumeExperienceItem[];
+  education: ResumeEducationItem[];
+};
+
+const STRUCTURED_SYSTEM_PROMPT =
+  "You extract a structured profile from raw résumé text for a recruiter's " +
+  "candidate view. Return a concise summary, deduplicated skills, total years of " +
+  "experience, a chronological work-experience timeline (most recent first), and " +
+  "education. Preserve the candidate's own wording in bullets; strip leading " +
+  "bullet markers. Use null for any single value that is not clearly present and " +
+  "empty arrays when a whole section is missing — never invent content.";
+
+/**
+ * Rich structured résumé parse for the candidate profile. Powers the experience
+ * timeline / education list / summary rendered on the detail page. Caps input to
+ * keep cost and context bounded.
+ */
+export async function parseResumeStructured(
+  config: AiModelConfig,
+  text: string,
+): Promise<ResumeStructuredResult> {
+  const { output } = await generateText({
+    model: getModel(config),
+    system: STRUCTURED_SYSTEM_PROMPT,
+    prompt: `Extract the candidate's structured profile from this résumé.\n\nRésumé:\n"""\n${text.slice(0, 16000)}\n"""`,
+    output: Output.object({ schema: resumeStructuredSchema }),
+  });
+
+  if (!output) {
+    throw new Error("AI returned no structured output for the resume.");
+  }
+
+  return {
+    summary: output.summary,
+    skills: output.skills.slice(0, 40),
+    experienceYears: output.experienceYears,
+    experience: output.experience.slice(0, 15).map((item) => ({
+      company: item.company,
+      title: item.title,
+      dateRange: item.dateRange,
+      bullets: item.bullets.slice(0, 12),
+    })),
+    education: output.education.slice(0, 10).map((item) => ({
+      school: item.school,
+      degree: item.degree,
+      field: item.field,
+      dateRange: item.dateRange,
+    })),
   };
 }
