@@ -444,16 +444,17 @@ export function CandidateFileUpload({
 
       {latestFile ? <ResumeDetailsCard file={latestFile} /> : null}
 
-      {/* Inline preview for latest file */}
+      {/* Inline preview for latest file — capped height, internal scroll;
+       * the viewer's own fullscreen button is the way to see it large. */}
       {latestFile && isPdfFile(latestFile) ? (
         <PdfViewer
           fileUrl={latestFile.fileUrl}
           fileName={latestFile.fileName}
-          className="h-[60vh]"
+          className="h-[560px]"
         />
       ) : latestFile && isDocxFile(latestFile) ? (
         <div className="overflow-hidden rounded-lg border">
-          <DocxViewer fileUrl={latestFile.fileUrl} className="h-[55vh]" />
+          <DocxViewer fileUrl={latestFile.fileUrl} className="h-[560px]" />
         </div>
       ) : null}
 

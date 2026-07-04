@@ -29,23 +29,24 @@ function scoreTone(score: number) {
   return "text-destructive";
 }
 
-function ScoreRing({ score }: { score: number }) {
-  const radius = 26;
+function ScoreRing({ score, compact = false }: { score: number; compact?: boolean }) {
+  const radius = compact ? 19 : 26;
   const circumference = 2 * Math.PI * radius;
+  const box = compact ? 48 : 64;
   return (
-    <div className="relative size-16 shrink-0">
-      <svg viewBox="0 0 64 64" className="size-16 -rotate-90">
+    <div className={cn("relative shrink-0", compact ? "size-12" : "size-16")}>
+      <svg viewBox={`0 0 ${box} ${box}`} className={cn("-rotate-90", compact ? "size-12" : "size-16")}>
         <circle
-          cx="32"
-          cy="32"
+          cx={box / 2}
+          cy={box / 2}
           r={radius}
           fill="none"
           strokeWidth="5"
           className="stroke-muted"
         />
         <circle
-          cx="32"
-          cy="32"
+          cx={box / 2}
+          cy={box / 2}
           r={radius}
           fill="none"
           strokeWidth="5"
@@ -57,7 +58,8 @@ function ScoreRing({ score }: { score: number }) {
       </svg>
       <span
         className={cn(
-          "absolute inset-0 flex items-center justify-center text-base font-semibold tabular-nums",
+          "absolute inset-0 flex items-center justify-center font-semibold tabular-nums",
+          compact ? "text-sm" : "text-base",
           scoreTone(score),
         )}
       >
@@ -102,14 +104,29 @@ function GenerateButton({
   );
 }
 
+/** Top 2 highlights for the condensed card: strengths first, then gaps, then a
+ * one-line summary fallback so the condensed card never renders empty. */
+function topHighlights(evaluation: CandidateAiEvaluationItem): string[] {
+  const picks = [...evaluation.strengths, ...evaluation.gaps].slice(0, 2);
+  if (picks.length > 0) return picks;
+  return evaluation.summary ? [evaluation.summary] : [];
+}
+
 export function AiScoreCard({
   applications,
   evaluations,
   aiConfigured,
+  variant = "full",
+  onViewDetailsAction,
 }: {
   applications: Array<{ id: string; jobTitle: string }>;
   evaluations: CandidateAiEvaluationItem[];
   aiConfigured: boolean;
+  /** "condensed" = score + verdict + top bullets, no scroll (Profile tab).
+   * "full" = criteria bars + evidence + strengths/gaps (Evaluation tab). */
+  variant?: "full" | "condensed";
+  /** Condensed only — jumps the caller to the full breakdown (Evaluation tab). */
+  onViewDetailsAction?: () => void;
 }) {
   if (applications.length === 0) return null;
 
@@ -137,6 +154,73 @@ export function AiScoreCard({
   }
 
   const byApplication = new Map(evaluations.map((e) => [e.applicationId, e]));
+
+  if (variant === "condensed") {
+    return (
+      <div className="space-y-2">
+        {applications.map((application) => {
+          const evaluation = byApplication.get(application.id);
+
+          if (!evaluation) {
+            return (
+              <Card key={application.id} className="gap-0 py-0">
+                <CardContent className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <SparkleFillIcon className="size-4" />
+                    </span>
+                    <p className="truncate text-sm text-muted-foreground">
+                      No AI evaluation yet for {application.jobTitle}.
+                    </p>
+                  </div>
+                  <GenerateButton applicationId={application.id} hasEvaluation={false} />
+                </CardContent>
+              </Card>
+            );
+          }
+
+          const meta = RECOMMENDATION_META[evaluation.recommendation];
+          const highlights = topHighlights(evaluation);
+
+          return (
+            <Card key={application.id} className="gap-0 py-0">
+              <CardContent className="flex items-center gap-3 px-4 py-3">
+                <ScoreRing score={evaluation.score} compact />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="truncate text-sm font-semibold">{application.jobTitle}</p>
+                    <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", meta.className)}>
+                      {meta.label}
+                    </span>
+                  </div>
+                  {highlights.length > 0 ? (
+                    <ul className="mt-1 space-y-0.5">
+                      {highlights.map((item) => (
+                        <li key={item} className="flex gap-1.5 text-xs text-muted-foreground">
+                          <span className="mt-1.5 size-1 shrink-0 rounded-full bg-current opacity-60" />
+                          <span className="line-clamp-1">{item}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+                {onViewDetailsAction ? (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="shrink-0 text-muted-foreground"
+                    onClick={onViewDetailsAction}
+                  >
+                    View details
+                  </Button>
+                ) : null}
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3">

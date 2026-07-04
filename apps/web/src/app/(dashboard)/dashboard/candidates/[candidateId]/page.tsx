@@ -25,6 +25,7 @@ import { CandidateAvatarEdit } from "@/features/candidates/CandidateAvatarEdit";
 import { Button } from "@/components/ui/button";
 import { CandidateActionBar } from "@/features/candidates/CandidateActionBar";
 import { CandidateActivityRail } from "@/features/candidates/CandidateActivityRail";
+import { CandidatePager } from "@/features/candidates/CandidatePager";
 import { CandidateStickyHeader } from "@/features/candidates/CandidateStickyHeader";
 import { CandidateProfileTabs } from "@/features/candidates/CandidateProfileTabs";
 import { CandidateTags } from "@/features/candidates/CandidateTags";
@@ -184,24 +185,31 @@ export default async function CandidateDetailPage({
 
   return (
     <div className="space-y-4">
-      <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
-        <Link href="/dashboard/candidates">
-          <ArrowLeft className="size-4" />
-          Back to candidates
-        </Link>
-      </Button>
+      <div className="flex items-center justify-between gap-3">
+        <Button asChild variant="ghost" size="sm" className="-ml-2 w-fit">
+          <Link href="/dashboard/candidates">
+            <ArrowLeft className="size-4" />
+            Back to candidates
+          </Link>
+        </Button>
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <CandidatePager
+          prevId={prevId}
+          nextId={nextId}
+          position={activeIndex >= 0 ? activeIndex + 1 : null}
+          total={railCandidates.length}
+        />
+      </div>
 
-        <main className="min-w-0 space-y-5">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_20rem]">
+
+        <div className="min-w-0 space-y-5">
           <CandidateStickyHeader
             name={fullName}
             avatarUrl={candidate.avatarUrl ?? null}
             fallbackSrc={avatarSrc}
             stageName={latestApplication?.currentStageName ?? null}
             phone={candidate.phone}
-            prevId={prevId}
-            nextId={nextId}
             actions={
               <CandidateActionBar
                 candidate={actionCandidate}
@@ -410,7 +418,7 @@ export default async function CandidateDetailPage({
             }
             offers={offers}
           />
-        </main>
+        </div>
 
         <CandidateActivityRail activity={serializedActivity} />
       </div>

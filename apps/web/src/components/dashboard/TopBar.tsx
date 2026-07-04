@@ -13,8 +13,10 @@ import {
 import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
 import { usePageTitle } from "@/components/dashboard/PageTitleContext";
 import { QuickCreateMenu } from "@/components/dashboard/QuickCreateMenu";
+import { useStickyBar } from "@/components/dashboard/StickyBarContext";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Popover,
   PopoverContent,
@@ -42,6 +44,7 @@ export function TopBar({
   const [commandOpen, setCommandOpen] = useState(false);
   const { title, breadcrumb } = usePageTitle();
   const pathname = usePathname();
+  const { stickyBarVisible } = useStickyBar();
 
   const allNav = [...primaryNav, ...workspaceNav];
   const activeNav = allNav.find((item) => isNavActive(pathname, item));
@@ -52,7 +55,18 @@ export function TopBar({
   const displayTitle = title || sectionLabel;
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-border/80 bg-background/80 px-4 backdrop-blur-md md:px-6">
+    <div
+      className={cn(
+        "sticky top-0 z-30 grid transition-[grid-template-rows] duration-300",
+        stickyBarVisible ? "grid-rows-[0fr]" : "grid-rows-[1fr]",
+      )}
+    >
+    <header
+      className={cn(
+        "overflow-hidden flex h-14 items-center gap-2 border-b border-border/80 bg-background/80 px-4 backdrop-blur-md md:px-6",
+        stickyBarVisible && "pointer-events-none",
+      )}
+    >
       {displayTitle ? (
         <div className="ml-1 flex min-w-0 items-center gap-1.5">
           {SectionIcon ? (
@@ -114,6 +128,7 @@ export function TopBar({
 
       <CommandMenu open={commandOpen} onOpenChange={setCommandOpen} />
     </header>
+    </div>
   );
 }
 

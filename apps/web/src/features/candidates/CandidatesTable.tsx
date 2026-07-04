@@ -382,7 +382,8 @@ export function CandidatesTable({
         </div>
         <Button variant="outline" className="h-11 rounded-full" onClick={exportCsv}>
           <Download className="size-4" />
-          {selectedCount > 0 ? `Export selected (${selectedCount})` : "Export CSV"}
+          <span className="hidden sm:inline">{selectedCount > 0 ? `Export selected (${selectedCount})` : "Export CSV"}</span>
+          <span className="sm:hidden">{selectedCount > 0 ? `(${selectedCount})` : "CSV"}</span>
         </Button>
         <ImportCandidatesDrawer jobs={importJobs} />
       </div>

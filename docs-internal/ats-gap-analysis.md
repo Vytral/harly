@@ -1,6 +1,6 @@
 # Harly — Gap Analysis para ATS open-source completo
 
-_Última actualización: 2026-06-29_
+_Última actualización: 2026-07-02_
 
 Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo Cal.com / Twenty: código abierto + cloud managed como monetización).
 
@@ -10,7 +10,7 @@ Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo 
 - **Jobs**: CRUD, slug público, custom questions, branding por job, board público con SEO, estados draft/open/closed, hiring team, AI description generation, AI question suggestions, trash.
 - **Apply flow**: formulario público, upload de CV (local/S3), preguntas configurables, detección de duplicados, autofill best-effort, persiste skills + experience years, consentimiento GDPR.
 - **Pipeline**: kanban drag&drop, reorden, vista board+lista, bulk actions, búsqueda, filtros, emails por cambio de stage, UI estilo Ashby/Workable.
-- **Candidates**: perfil completo (editar, notas, timeline, archivos, AI score, tags, bulk email, import CSV, schedule interviews, trash).
+- **Candidates**: perfil completo (editar, notas, timeline, archivos, AI score, AI interview brief, AI notes summarizer, AI duplicate detection, tags, bulk email, import CSV, schedule interviews, trash).
 - **Talent Pool**: pool de candidatos sourced, source filtering, job assignment.
 - **Career Pages**: builder con 4 templates (Minimal, Playful, Ashby, Greenhouse), live preview, board público con SEO.
 - **Reports**: funnel de conversión, time-to-hire, source effectiveness, gráficos.
@@ -26,9 +26,9 @@ Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo 
 - **Integrations**: Google Calendar (OAuth + sync), Cal.com, Slack OAuth.
 - **Legal & Compliance**: EU compliance research, settings admin, public legal pages, consent checkbox, audit logs en acciones clave.
 - **Security**: 2FA, passkeys, audit logs, force 2FA, SSO/OIDC+SAML (Better Auth SSO plugin — SsoCard + SsoConfigDrawer + SsoProviderDrawer + sso-actions).
-- **Dark mode**: completo en dashboard.
+- **Dark mode**: completo en dashboard + career pages.
 - **Settings**: General, Members, Invitations, Roles (RBAC custom), AI, Email, Developers, Integrations, Legal, Portal, Security.
-- **Candidate Portal**: OAuth (Google, GitHub), login/dashboard/jobs/profile.
+- **Candidate Portal**: OAuth (Google, GitHub, LinkedIn), login/dashboard/jobs/profile.
 - **UI/UX**: shadcn/ui + lucide (37 componentes), sidebar colapsable, ⌘K quick-nav, theme toggle.
 
 ## ❌ Falta — por prioridad
@@ -42,11 +42,11 @@ Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo 
    - One-click deploy buttons (Vercel + Railway) en README.
    - Docs de deploy (`apps/docs` — hoy stub vacío).
 
-2. **README desactualizado**: dice tRPC/Neon/Uploadthing, nada de eso es real. Necesita: tech stack correcto, GIF del pipeline, screenshots, `docker compose up` one-liner.
+2. **README**: tech stack correcto, features list, `docker compose up` one-liner. Falta: GIF del pipeline, screenshots, deploy buttons.
 
 3. **Packages vacíos**: `@harly/config`, `@harly/ui`, `@harly/validators` son stubs sin implementar.
 
-4. **Bug de seguridad**: `proxy.ts` exime al owner de 2FA enforcement — **DEBE removerse antes de launch**.
+4. **Bug de seguridad**: `proxy.ts` exime al owner de 2FA enforcement (linea 128-132) — **DEBE removerse antes de launch**.
 
 ### P1 — Core faltante
 
@@ -78,4 +78,4 @@ Open-source gratis forever (self-host). Cloud managed = MRR: Free (1 job activo)
 
 ## Próximo sprint sugerido
 
-P0 completo (self-hosting + README fix + 2FA bug) → primer lanzamiento GitHub/HN. Luego P1.5 (two-way email) o P1.6 (scorecards) según prioridad.
+Próximo sprint: self-hosting (Dockerfile + docker-compose + healthcheck + env validation) + fix 2FA bug → primer lanzamiento GitHub/HN. Luego P1 (two-way email, scorecards).

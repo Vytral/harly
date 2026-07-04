@@ -254,9 +254,10 @@ export function CandidateProfileTabs({
   currentUserId,
 }: CandidateProfileTabsProps) {
   const latestFile = files[0] ?? null;
+  const [tab, setTab] = useState("profile");
 
   return (
-    <Tabs defaultValue="profile">
+    <Tabs value={tab} onValueChange={setTab}>
       <TabsList
         variant="line"
         className="w-full justify-start gap-5 overflow-x-auto border-b border-border/60 [&>button]:flex-none [&>button]:px-0.5"
@@ -293,6 +294,8 @@ export function CandidateProfileTabs({
           }))}
           evaluations={aiEvaluations}
           aiConfigured={aiConfigured}
+          variant="condensed"
+          onViewDetailsAction={() => setTab("evaluation")}
         />
 
         <CandidateFileUpload
@@ -311,71 +314,12 @@ export function CandidateProfileTabs({
           </div>
         ) : null}
 
-        {applications.length === 0 ? (
-          <p className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-            No applications yet.
-          </p>
-        ) : (
-          <Card className="gap-0 py-0">
-            <CardContent className="p-0">
-              <div className="border-b px-4 py-2">
-                <p className="text-xs font-medium text-muted-foreground">
-                  Applications
-                </p>
-              </div>
-              {applications.map((application, idx) => (
-                <div
-                  key={application.id}
-                  className={cn(
-                    "space-y-3 px-4 py-2.5",
-                    idx < applications.length - 1 && "border-b border-border/50",
-                  )}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <h2 className="truncate text-sm font-semibold text-foreground">{application.jobTitle}</h2>
-                        <ApplicationStatusBadge status={application.status} />
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-foreground/70">
-                        <span className="font-medium">{application.currentStageName ?? "No stage"}</span>
-                        <span className="inline-flex items-center gap-1">
-                          <Calendar className="size-3" />
-                          <ShortDate value={application.appliedAt} />
-                        </span>
-                        {application.source ? (
-                          <span>{APPLICATION_SOURCE_LABEL[application.source] ?? application.source}</span>
-                        ) : null}
-                      </div>
-                    </div>
-                    <Button asChild variant="link" size="sm" className="h-auto shrink-0 p-0 text-xs text-primary">
-                      <Link href={`/dashboard/pipeline?job=${application.jobId}` as Route}>
-                        View in pipeline
-                        <ArrowRight className="size-3.5" />
-                      </Link>
-                    </Button>
-                  </div>
-                  {application.answers.length > 0 ? (
-                    <div className="rounded-lg border bg-muted/40 p-4">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        Application answers
-                      </p>
-                      <dl className="mt-3 space-y-3">
-                        {application.answers.map((answer) => (
-                          <div key={answer.id}>
-                            <dt className="text-xs font-semibold text-muted-foreground">
-                              {answer.label}
-                            </dt>
-                            <dd className="mt-1 whitespace-pre-line text-sm">{answer.answer}</dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </div>
-                  ) : null}
-                </div>
-              ))}
-            </CardContent>
-          </Card>
+        {applications.length === 0 ? null : (
+          <div className="divide-y divide-border/60 rounded-xl border">
+            {applications.map((application) => (
+              <ApplicationRow key={application.id} application={application} />
+            ))}
+          </div>
         )}
       </TabsContent>
 
@@ -1120,6 +1064,75 @@ function SummarizeNotesSheet({
         </div>
       </DrawerLayout>
     </Sheet>
+  );
+}
+
+/** One compact row per application: job · stage · date · source · pipeline
+ * link, with answers tucked behind a disclosure toggle so the row stays a
+ * single line by default (Workable-style, redundant stage progress already
+ * lives in the header spine). */
+function ApplicationRow({ application }: { application: CandidateProfileApplication }) {
+  const [open, setOpen] = useState(false);
+  const hasAnswers = application.answers.length > 0;
+
+  return (
+    <div className="px-4 py-2.5">
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => hasAnswers && setOpen((v) => !v)}
+          disabled={!hasAnswers}
+          className={cn(
+            "flex min-w-0 flex-1 items-center gap-x-3 gap-y-0.5 text-left",
+            hasAnswers && "cursor-pointer",
+          )}
+        >
+          <h2 className="truncate text-sm font-medium text-foreground">{application.jobTitle}</h2>
+          <ApplicationStatusBadge status={application.status} />
+          <span className="hidden shrink-0 text-xs text-foreground/70 sm:inline">
+            {application.currentStageName ?? "No stage"}
+          </span>
+          <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
+            <Calendar className="size-3" />
+            <ShortDate value={application.appliedAt} />
+          </span>
+          {application.source ? (
+            <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
+              {APPLICATION_SOURCE_LABEL[application.source] ?? application.source}
+            </span>
+          ) : null}
+          {hasAnswers ? (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {application.answers.length} answer{application.answers.length === 1 ? "" : "s"}
+            </span>
+          ) : null}
+        </button>
+        <Button asChild variant="link" size="sm" className="h-auto shrink-0 p-0 text-xs text-primary">
+          <Link href={`/dashboard/pipeline?job=${application.jobId}` as Route}>
+            View in pipeline
+            <ArrowRight className="size-3.5" />
+          </Link>
+        </Button>
+      </div>
+
+      {open && hasAnswers ? (
+        <div className="mt-3 rounded-lg border bg-muted/40 p-4">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Application answers
+          </p>
+          <dl className="mt-3 space-y-3">
+            {application.answers.map((answer) => (
+              <div key={answer.id}>
+                <dt className="text-xs font-semibold text-muted-foreground">
+                  {answer.label}
+                </dt>
+                <dd className="mt-1 whitespace-pre-line text-sm">{answer.answer}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

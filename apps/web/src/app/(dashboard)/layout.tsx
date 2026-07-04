@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { AppSidebar } from "@/components/dashboard/AppSidebar";
 import { HarlyAIWidget } from "@/components/dashboard/HarlyAIWidget";
 import { PageTitleProvider } from "@/components/dashboard/PageTitleContext";
+import { StickyBarProvider } from "@/components/dashboard/StickyBarContext";
 import { TopBar } from "@/components/dashboard/TopBar";
 import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
@@ -47,31 +48,33 @@ export default async function DashboardLayout({
   };
 
   return (
-    <SidebarProvider defaultOpen={sidebarOpen}>
-      <AppSidebar
-        workspace={workspace}
-        inboxCount={inboxCount}
-        taskDueCount={taskDueCount}
-        userPermissions={userPermissions}
-        sidebarLogo={sidebarLogo}
-        assignableRoles={assignableRoles}
-      />
-      <SidebarInset>
-        <TopBar
-          user={{ name: user.name, email: user.email, image: user.image ?? null }}
-          role={role}
+    <StickyBarProvider>
+      <SidebarProvider defaultOpen={sidebarOpen}>
+        <AppSidebar
           workspace={workspace}
-          workspaceOptions={workspaceOptions}
-          notifications={notifications}
+          inboxCount={inboxCount}
+          taskDueCount={taskDueCount}
+          userPermissions={userPermissions}
+          sidebarLogo={sidebarLogo}
+          assignableRoles={assignableRoles}
         />
-        {!user.emailVerified ? <VerifyEmailBanner email={user.email} /> : null}
-        <PageTitleProvider>
-          <main className="w-full flex-1 px-4 pb-6 pt-2 md:px-6 lg:px-8 lg:pb-8 lg:pt-3">
-            {children}
-          </main>
-        </PageTitleProvider>
-      </SidebarInset>
-      <HarlyAIWidget userName={user.name} aiEnabled={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady} />
-    </SidebarProvider>
+        <SidebarInset>
+          <TopBar
+            user={{ name: user.name, email: user.email, image: user.image ?? null }}
+            role={role}
+            workspace={workspace}
+            workspaceOptions={workspaceOptions}
+            notifications={notifications}
+          />
+          {!user.emailVerified ? <VerifyEmailBanner email={user.email} /> : null}
+          <PageTitleProvider>
+            <main className="w-full flex-1 px-4 pb-6 pt-2 md:px-6 lg:px-8 lg:pb-8 lg:pt-3">
+              {children}
+            </main>
+          </PageTitleProvider>
+        </SidebarInset>
+        <HarlyAIWidget userName={user.name} aiEnabled={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady} />
+      </SidebarProvider>
+    </StickyBarProvider>
   );
 }
