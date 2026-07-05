@@ -816,6 +816,78 @@ export function FunnelIcon(props: IconProps) {
   );
 }
 
+/** Reports: hiring trend tile header. */
+export function ChartBarIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path fill="currentColor" d="M224 200h-8V40a8 8 0 0 0-8-8h-56a8 8 0 0 0-8 8v40H96a8 8 0 0 0-8 8v40H48a8 8 0 0 0-8 8v64h-8a8 8 0 0 0 0 16h192a8 8 0 0 0 0-16M160 48h40v152h-40Zm-56 48h40v104h-40Zm-48 48h32v56H56Z" />
+    </Svg>
+  );
+}
+
+/** Reports: pipeline funnel tile header. */
+export function GitBranchIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path fill="currentColor" d="M232 64a32 32 0 1 0-40 31v17a8 8 0 0 1-8 8H96a23.8 23.8 0 0 0-8 1.38V95a32 32 0 1 0-16 0v66a32 32 0 1 0 16 0v-17a8 8 0 0 1 8-8h88a24 24 0 0 0 24-24V95a32.06 32.06 0 0 0 24-31M64 64a16 16 0 1 1 16 16a16 16 0 0 1-16-16m32 128a16 16 0 1 1-16-16a16 16 0 0 1 16 16M200 80a16 16 0 1 1 16-16a16 16 0 0 1-16 16" />
+    </Svg>
+  );
+}
+
+/** Reports: source effectiveness tile header. */
+export function TrayIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path fill="currentColor" d="M208 32H48a16 16 0 0 0-16 16v160a16 16 0 0 0 16 16h160a16 16 0 0 0 16-16V48a16 16 0 0 0-16-16m0 16v104h-28.7a15.86 15.86 0 0 0-11.3 4.69L148.69 176h-41.38L88 156.69A15.86 15.86 0 0 0 76.69 152H48V48Zm0 160H48v-40h28.69L96 187.31a15.86 15.86 0 0 0 11.31 4.69h41.38a15.86 15.86 0 0 0 11.31-4.69L179.31 168H208z" />
+    </Svg>
+  );
+}
+
+/** Delta badge — positive comparison. */
+export function TrendUpIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path fill="currentColor" d="M240 56v64a8 8 0 0 1-16 0V75.31l-82.34 82.35a8 8 0 0 1-11.32 0L96 123.31l-66.34 66.35a8 8 0 0 1-11.32-11.32l72-72a8 8 0 0 1 11.32 0L136 140.69L212.69 64H168a8 8 0 0 1 0-16h64a8 8 0 0 1 8 8" />
+    </Svg>
+  );
+}
+
+/** Delta badge — negative comparison. */
+export function TrendDownIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path fill="currentColor" d="M240 128v64a8 8 0 0 1-8 8h-64a8 8 0 0 1 0-16h44.69L136 107.31l-34.34 34.35a8 8 0 0 1-11.32 0l-72-72a8 8 0 0 1 11.32-11.32L96 124.69l34.34-34.35a8 8 0 0 1 11.32 0L224 172.69V128a8 8 0 0 1 16 0" />
+    </Svg>
+  );
+}
+
+/** Delta badge arrow — compact positive variant. */
+export function ArrowDownRightIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path fill="currentColor" d="M200 88v104a8 8 0 0 1-8 8H88a8 8 0 0 1 0-16h84.69L58.34 69.66a8 8 0 0 1 11.32-11.32L184 172.69V88a8 8 0 0 1 16 0" />
+    </Svg>
+  );
+}
+
+/** Reports: candidates stat card. */
+export function UsersIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path fill="currentColor" d="M117.25 157.92a60 60 0 1 0-66.5 0a95.83 95.83 0 0 0-47.22 37.71a8 8 0 1 0 13.4 8.74a80 80 0 0 1 134.14 0a8 8 0 0 0 13.4-8.74a95.83 95.83 0 0 0-47.22-37.71M40 108a44 44 0 1 1 44 44a44.05 44.05 0 0 1-44-44m210.14 98.7a8 8 0 0 1-11.07-2.33A79.83 79.83 0 0 0 172 168a8 8 0 0 1 0-16a44 44 0 1 0-16.34-84.87a8 8 0 1 1-5.94-14.85a60 60 0 0 1 55.53 105.64a95.83 95.83 0 0 1 47.22 37.71a8 8 0 0 1-2.33 11.07" />
+    </Svg>
+  );
+}
+
+/** Reports: date-range selector, calendars grid empty-state (no dots). */
+export function CalendarBlankIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path fill="currentColor" d="M208 32h-24v-8a8 8 0 0 0-16 0v8H88v-8a8 8 0 0 0-16 0v8H48a16 16 0 0 0-16 16v160a16 16 0 0 0 16 16h160a16 16 0 0 0 16-16V48a16 16 0 0 0-16-16M72 48v8a8 8 0 0 0 16 0v-8h80v8a8 8 0 0 0 16 0v-8h24v32H48V48Zm136 160H48V96h160z" />
+    </Svg>
+  );
+}
+
 /** Empty-state illustration — Communication tab. */
 export function EnvelopeSimpleDuotoneIcon(props: IconProps) {
   return (

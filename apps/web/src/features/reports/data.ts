@@ -44,6 +44,19 @@ export type SourceRow = {
 
 export type TimeToHireBucket = { bucket: string; count: number };
 
+export type PeriodComparison = {
+  current: number;
+  previous: number;
+  deltaPct: number | null;
+};
+
+export type ReportsComparison = {
+  rangeDays: number;
+  applications: PeriodComparison;
+  hires: PeriodComparison;
+  avgTimeToHireDays: PeriodComparison;
+};
+
 export type ReportsData = {
   summary: ReportsSummary;
   applicationsByMonth: MonthlyPoint[];
@@ -51,7 +64,13 @@ export type ReportsData = {
   funnel: FunnelStage[];
   sources: SourceRow[];
   timeToHire: TimeToHireBucket[];
+  comparison: ReportsComparison;
 };
+
+function deltaPct(current: number, previous: number): number | null {
+  if (previous <= 0) return null;
+  return Math.round(((current - previous) / previous) * 100);
+}
 
 function monthKey(date: Date): string {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -62,11 +81,15 @@ const MONTH_LABELS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-export async function getReportsData(): Promise<ReportsData> {
+/** Period-over-period comparison range, in days. Defaults to 30 (current 30d vs prior 30d). */
+export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
   const { organization } = await getWorkspaceContext();
   const ws = organization.id;
   const now = new Date();
   const since90 = new Date(now.getTime() - 90 * DAY_SECONDS * 1000);
+
+  const curStart = new Date(now.getTime() - rangeDays * DAY_SECONDS * 1000).toISOString();
+  const prevStart = new Date(now.getTime() - 2 * rangeDays * DAY_SECONDS * 1000).toISOString();
 
   const [
     openRolesRow,
@@ -80,6 +103,7 @@ export async function getReportsData(): Promise<ReportsData> {
     sourceRows,
     hireMonthRows,
     timeToHireDaysRows,
+    comparisonRow,
   ] = await Promise.all([
     db
       .select({ n: sql<number>`count(*)::int` })
@@ -175,6 +199,18 @@ export async function getReportsData(): Promise<ReportsData> {
           sql`${applications.appliedAt} is not null`,
         ),
       ),
+    // Current vs previous period-over-period comparison (equal-length windows).
+    db
+      .select({
+        curApps: sql<number>`count(*) filter (where ${applications.appliedAt} >= ${curStart}::timestamptz)::int`,
+        prevApps: sql<number>`count(*) filter (where ${applications.appliedAt} >= ${prevStart}::timestamptz and ${applications.appliedAt} < ${curStart}::timestamptz)::int`,
+        curHires: sql<number>`count(*) filter (where ${applications.status} = 'hired' and ${applications.updatedAt} >= ${curStart}::timestamptz)::int`,
+        prevHires: sql<number>`count(*) filter (where ${applications.status} = 'hired' and ${applications.updatedAt} >= ${prevStart}::timestamptz and ${applications.updatedAt} < ${curStart}::timestamptz)::int`,
+        curAvgTthSeconds: sql<number | null>`avg(extract(epoch from (${applications.updatedAt} - ${applications.appliedAt}))) filter (where ${applications.status} = 'hired' and ${applications.appliedAt} is not null and ${applications.updatedAt} >= ${curStart}::timestamptz)`,
+        prevAvgTthSeconds: sql<number | null>`avg(extract(epoch from (${applications.updatedAt} - ${applications.appliedAt}))) filter (where ${applications.status} = 'hired' and ${applications.appliedAt} is not null and ${applications.updatedAt} >= ${prevStart}::timestamptz and ${applications.updatedAt} < ${curStart}::timestamptz)`,
+      })
+      .from(applications)
+      .where(eq(applications.workspaceId, ws)),
   ]);
 
   // Summary
@@ -253,5 +289,38 @@ export async function getReportsData(): Promise<ReportsData> {
     if (idx >= 0) timeToHire[idx].count++;
   }
 
-  return { summary, applicationsByMonth, hiresByMonth, funnel, sources, timeToHire };
+  // Period-over-period comparison for the current stat cards.
+  const cmp = comparisonRow[0];
+  const curAvgTth = cmp?.curAvgTthSeconds != null ? Number(cmp.curAvgTthSeconds) / DAY_SECONDS : 0;
+  const prevAvgTth = cmp?.prevAvgTthSeconds != null ? Number(cmp.prevAvgTthSeconds) / DAY_SECONDS : 0;
+  const comparison: ReportsComparison = {
+    rangeDays,
+    applications: {
+      current: cmp?.curApps ?? 0,
+      previous: cmp?.prevApps ?? 0,
+      deltaPct: deltaPct(cmp?.curApps ?? 0, cmp?.prevApps ?? 0),
+    },
+    hires: {
+      current: cmp?.curHires ?? 0,
+      previous: cmp?.prevHires ?? 0,
+      deltaPct: deltaPct(cmp?.curHires ?? 0, cmp?.prevHires ?? 0),
+    },
+    avgTimeToHireDays: {
+      current: Math.round(curAvgTth),
+      previous: Math.round(prevAvgTth),
+      // Standard current-vs-previous delta; a negative value means hiring got
+      // *faster* here (fewer days), so the UI inverts polarity for this stat only.
+      deltaPct: cmp?.prevAvgTthSeconds != null ? deltaPct(curAvgTth, prevAvgTth) : null,
+    },
+  };
+
+  return {
+    summary,
+    applicationsByMonth,
+    hiresByMonth,
+    funnel,
+    sources,
+    timeToHire,
+    comparison,
+  };
 }

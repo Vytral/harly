@@ -10,8 +10,11 @@
  */
 
 import { useId, useMemo, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { cn } from "@/lib/utils";
+
+const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 // ── shared helpers ──────────────────────────────────────────────────────────
 
@@ -36,6 +39,7 @@ export type TrendSeries = {
 
 export function TrendChart({ series }: { series: TrendSeries[] }) {
   const gradientId = useId();
+  const shouldReduceMotion = useReducedMotion();
   const [hidden, setHidden] = useState<Set<string>>(() => new Set());
   const labels = series[0]?.points.map((p) => p.label) ?? [];
   const subs = series[0]?.points.map((p) => p.sub ?? p.label) ?? [];
@@ -148,8 +152,24 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
               : "";
             return (
               <g key={s.key}>
-                <path d={area} fill={`url(#${gradientId}-${s.key})`} />
-                <path d={line} fill="none" stroke={s.color} strokeWidth={2.25} strokeLinecap="round" strokeLinejoin="round" />
+                <motion.path
+                  d={area}
+                  fill={`url(#${gradientId}-${s.key})`}
+                  initial={shouldReduceMotion ? false : { opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.5, ease: EASE_OUT }}
+                />
+                <motion.path
+                  d={line}
+                  fill="none"
+                  stroke={s.color}
+                  strokeWidth={2.25}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  initial={shouldReduceMotion ? false : { pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: 0.7, ease: EASE_OUT }}
+                />
                 <circle cx={x(active)} cy={y(s.points[active]?.value ?? 0)} r={4.5} fill="var(--card)" stroke={s.color} strokeWidth={2.5} />
               </g>
             );
@@ -213,6 +233,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
 export type FunnelDatum = { name: string; count: number; pct: number };
 
 export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
+  const shouldReduceMotion = useReducedMotion();
   const [selected, setSelected] = useState(0);
   const top = stages[0]?.count ?? 0;
   const W = 360;
@@ -245,7 +266,7 @@ export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
             : `M ${x0} ${top0} L ${x1} ${top0} L ${xb1} ${top0 + bandH} L ${xb0} ${top0 + bandH} Z`;
           const isSel = i === selected;
           return (
-            <g
+            <motion.g
               key={stage.name}
               tabIndex={0}
               role="button"
@@ -254,6 +275,9 @@ export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
               onMouseEnter={() => setSelected(i)}
               onFocus={() => setSelected(i)}
               onClick={() => setSelected(i)}
+              initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: EASE_OUT, delay: i * 0.06 }}
             >
               <path
                 d={path}
@@ -269,7 +293,7 @@ export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
               <text x={W / 2} y={top0 + bandH / 2 + 13} textAnchor="middle" className="fill-[var(--primary-foreground)] text-[11px] tabular-nums opacity-90">
                 {fmt.format(stage.count)} · {stage.pct}%
               </text>
-            </g>
+            </motion.g>
           );
         })}
       </svg>
@@ -303,6 +327,7 @@ export type SourceDatum = {
 };
 
 export function SourceBars({ sources }: { sources: SourceDatum[] }) {
+  const shouldReduceMotion = useReducedMotion();
   const [sort, setSort] = useState<"candidates" | "hires" | "conversion">("candidates");
   const sorted = useMemo(
     () => [...sources].sort((a, b) => b[sort] - a[sort]),
@@ -332,8 +357,15 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
       </div>
 
       <ul className="space-y-3">
-        {sorted.map((row) => (
-          <li key={row.source} className="grid grid-cols-[minmax(96px,150px)_1fr_auto] items-center gap-4">
+        {sorted.map((row, i) => (
+          <motion.li
+            key={row.source}
+            layout={!shouldReduceMotion}
+            initial={shouldReduceMotion ? false : { opacity: 0, x: -6 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.25, ease: EASE_OUT, delay: i * 0.04 }}
+            className="grid grid-cols-[minmax(96px,150px)_1fr_auto] items-center gap-4"
+          >
             <span className="truncate text-sm font-medium">{row.label}</span>
             <span className="relative h-7 overflow-hidden rounded-lg bg-muted">
               <span
@@ -349,7 +381,7 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
               </span>
             </span>
             <span className="w-12 text-right text-sm font-semibold tabular-nums">{row.conversion}%</span>
-          </li>
+          </motion.li>
         ))}
       </ul>
     </div>

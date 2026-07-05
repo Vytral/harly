@@ -1,21 +1,29 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useMemo } from "react";
-import {
-  ArrowDownRight,
-  ArrowUpRight,
-  BarChart3,
-  Briefcase,
-  Clock,
-  GitBranch,
-  Inbox,
-  TrendingUp,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
+import { motion, useReducedMotion } from "motion/react";
 
-import { EmptyHint, Tile } from "@/components/dashboard/widgets/primitives";
+import { Tile } from "@/components/dashboard/widgets/primitives";
 import { PageHeader } from "@/components/ui/PageHeader";
+import {
+  ArrowDownRightIcon,
+  ArrowUpRightIcon,
+  BriefcaseIcon,
+  ChartBarIcon,
+  ClockIcon,
+  GitBranchIcon,
+  TrayIcon,
+  TrendUpIcon,
+  UsersIcon,
+} from "@/components/ui/icons/phosphor";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import {
   FunnelChart,
@@ -27,32 +35,44 @@ import {
 } from "./charts";
 import type { ReportsData } from "./data";
 
+const EASE_OUT = [0.16, 1, 0.3, 1] as const;
+
+const RANGE_OPTIONS = [
+  { value: "30", label: "Last 30 days" },
+  { value: "90", label: "Last 90 days" },
+  { value: "365", label: "Last 12 months" },
+];
+
 function formatSource(source: string) {
   if (source === "unknown") return "Unknown";
   return source.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Month-over-month delta from a trailing series, or null when undefined. */
-function momDelta(points: { count: number }[]): number | null {
-  const last = points[points.length - 1]?.count ?? 0;
-  const prev = points[points.length - 2]?.count ?? 0;
-  if (prev <= 0) return null;
-  return Math.round(((last - prev) / prev) * 100);
+type IconComponent = React.ComponentType<{ className?: string }>;
+
+function EmptyPanel({ icon: Icon, text }: { icon: IconComponent; text: string }) {
+  return (
+    <div className="m-3 flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-6 py-10 text-center">
+      <Icon className="size-5 text-muted-foreground" />
+      <p className="text-sm text-muted-foreground">{text}</p>
+    </div>
+  );
 }
 
-function DeltaBadge({ value }: { value: number }) {
-  const positive = value >= 0;
-  const Icon = positive ? ArrowUpRight : ArrowDownRight;
+function DeltaBadge({ value, invert = false }: { value: number; invert?: boolean }) {
+  const positive = invert ? value <= 0 : value >= 0;
+  const Icon = positive ? ArrowUpRightIcon : ArrowDownRightIcon;
+  const shown = invert ? -value : value;
   return (
     <span
       className={cn(
         "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums",
-        positive ? "bg-primary/10 text-primary" : "bg-destructive/10 text-destructive",
+        positive ? "bg-pine/10 text-pine" : "bg-destructive/10 text-destructive",
       )}
     >
-      <Icon className="size-3" strokeWidth={2} />
-      {positive ? "+" : ""}
-      {value}%
+      <Icon className="size-3" />
+      {shown >= 0 ? "+" : ""}
+      {shown}%
     </span>
   );
 }
@@ -63,25 +83,37 @@ function StatCard({
   value,
   hint,
   delta,
+  invertDelta,
+  index,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   label: string;
   value: string;
   hint: string;
   delta?: number | null;
+  invertDelta?: boolean;
+  index: number;
 }) {
+  const shouldReduceMotion = useReducedMotion();
   return (
-    <div className="rounded-2xl border border-border/60 bg-card p-4 shadow-[0_1px_2px_rgba(23,23,23,0.04)]">
+    <motion.div
+      initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.3, ease: EASE_OUT, delay: index * 0.05 }}
+      className="rounded-2xl border border-border/60 bg-card p-4 shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
+    >
       <div className="flex items-center justify-between gap-3">
         <span className="flex size-8 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-          <Icon className="size-4" strokeWidth={1.8} />
+          <Icon className="size-4" />
         </span>
-        {typeof delta === "number" ? <DeltaBadge value={delta} /> : null}
+        {typeof delta === "number" ? (
+          <DeltaBadge value={delta} invert={invertDelta} />
+        ) : null}
       </div>
       <p className="mt-4 text-xs font-medium text-muted-foreground">{label}</p>
       <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
       <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>
-    </div>
+    </motion.div>
   );
 }
 
@@ -90,14 +122,14 @@ function CardHead({
   title,
   subtitle,
 }: {
-  icon: LucideIcon;
+  icon: IconComponent;
   title: string;
   subtitle: string;
 }) {
   return (
     <div>
       <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <Icon className="size-4 text-muted-foreground" strokeWidth={1.8} />
+        <Icon className="size-4 text-muted-foreground" />
         {title}
       </h2>
       <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
@@ -106,9 +138,12 @@ function CardHead({
 }
 
 export function ReportsDashboard({ data }: { data: ReportsData }) {
+  const router = useRouter();
+  const shouldReduceMotion = useReducedMotion();
   const totalApplications = data.applicationsByMonth.reduce((s, p) => s + p.count, 0);
   const last12Hires = data.hiresByMonth.reduce((s, p) => s + p.count, 0);
   const topSource = data.sources[0];
+  const { comparison } = data;
 
   const trendSeries: TrendSeries[] = useMemo(
     () => [
@@ -133,30 +168,38 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
     [data.sources],
   );
 
+  const rangeLabel =
+    RANGE_OPTIONS.find((o) => Number(o.value) === comparison.rangeDays)?.label ??
+    `Last ${comparison.rangeDays} days`;
+
   const stats = [
     {
-      icon: Users,
+      icon: UsersIcon,
       label: "Applications",
-      value: totalApplications.toLocaleString(),
+      value: comparison.applications.current.toLocaleString(),
       hint: `${data.summary.applications90d.toLocaleString()} in the last 90 days`,
-      delta: momDelta(data.applicationsByMonth),
+      delta: comparison.applications.deltaPct,
     },
     {
-      icon: Briefcase,
-      label: "Open roles",
-      value: data.summary.openRoles.toLocaleString(),
-      hint: "Currently published jobs",
-      delta: null,
-    },
-    {
-      icon: Clock,
-      label: "Avg time to hire",
-      value: data.summary.avgTimeToHireDays != null ? `${data.summary.avgTimeToHireDays}d` : "—",
+      icon: BriefcaseIcon,
+      label: "Hires",
+      value: comparison.hires.current.toLocaleString(),
       hint: `${data.summary.hires.toLocaleString()} hires all-time`,
-      delta: null,
+      delta: comparison.hires.deltaPct,
     },
     {
-      icon: TrendingUp,
+      icon: ClockIcon,
+      label: "Avg time to hire",
+      value: comparison.avgTimeToHireDays.current > 0 ? `${comparison.avgTimeToHireDays.current}d` : "—",
+      hint:
+        comparison.avgTimeToHireDays.previous > 0
+          ? `${comparison.avgTimeToHireDays.previous}d prior period`
+          : "No prior data",
+      delta: comparison.avgTimeToHireDays.deltaPct,
+      invertDelta: true,
+    },
+    {
+      icon: TrendUpIcon,
       label: "Offer acceptance",
       value: data.summary.offerAcceptRate != null ? `${data.summary.offerAcceptRate}%` : "—",
       hint: topSource ? `${formatSource(topSource.source)} leads source volume` : "No source data yet",
@@ -171,51 +214,79 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
         title="Reports"
         description="Hiring momentum, funnel health, and source quality — read straight from real workspace activity."
         actions={
-          <span className="inline-flex items-center gap-1.5 rounded-full border bg-card px-3 py-1.5 text-xs font-medium text-muted-foreground">
-            <Clock className="size-3.5" strokeWidth={1.8} />
-            Last 12 months
-          </span>
+          <Select
+            value={String(comparison.rangeDays)}
+            onValueChange={(v) => router.push(`/dashboard/reports?range=${v}`)}
+          >
+            <SelectTrigger className="h-8 w-auto min-w-40 text-xs">
+              <SelectValue>{rangeLabel}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {RANGE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         }
       />
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        {stats.map((s) => (
-          <StatCard key={s.label} {...s} />
+        {stats.map((s, i) => (
+          <StatCard key={s.label} {...s} index={i} />
         ))}
       </section>
 
-      <Tile className="gap-5 p-5">
-        <CardHead icon={BarChart3} title="Hiring trend" subtitle="Applications received vs. hires made, by month." />
-        <TrendChart series={trendSeries} />
-      </Tile>
-
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+      <motion.div
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.15 }}
+      >
         <Tile className="gap-5 p-5">
-          <CardHead icon={GitBranch} title="Pipeline funnel" subtitle="Stage reach and step-to-step conversion. Hover a stage." />
+          <CardHead icon={ChartBarIcon} title="Hiring trend" subtitle="Applications received vs. hires made, by month." />
+          <TrendChart series={trendSeries} />
+        </Tile>
+      </motion.div>
+
+      <motion.section
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.2 }}
+        className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
+      >
+        <Tile className="gap-5 p-5">
+          <CardHead icon={GitBranchIcon} title="Pipeline funnel" subtitle="Stage reach and step-to-step conversion. Hover a stage." />
           {data.funnel[0]?.count ? (
             <FunnelChart stages={data.funnel} />
           ) : (
-            <EmptyHint icon={GitBranch} text="Funnel data appears once candidates move through stages." />
+            <EmptyPanel icon={GitBranchIcon} text="Funnel data appears once candidates move through stages." />
           )}
         </Tile>
 
         <Tile className="gap-5 p-5">
-          <CardHead icon={Clock} title="Time to hire" subtitle="How long filled roles took, from apply to hire." />
+          <CardHead icon={ClockIcon} title="Time to hire" subtitle="How long filled roles took, from apply to hire." />
           <Histogram data={data.timeToHire} />
         </Tile>
-      </section>
+      </motion.section>
 
-      <Tile className="gap-5 p-5">
-        <CardHead icon={Inbox} title="Source effectiveness" subtitle="Volume and hire conversion by application source." />
-        {sourceData.length ? (
-          <SourceBars sources={sourceData} />
-        ) : (
-          <EmptyHint icon={Users} text="No applications yet. Sources appear once candidates apply." />
-        )}
-      </Tile>
+      <motion.div
+        initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.25 }}
+      >
+        <Tile className="gap-5 p-5">
+          <CardHead icon={TrayIcon} title="Source effectiveness" subtitle="Volume and hire conversion by application source." />
+          {sourceData.length ? (
+            <SourceBars sources={sourceData} />
+          ) : (
+            <EmptyPanel icon={UsersIcon} text="No applications yet. Sources appear once candidates apply." />
+          )}
+        </Tile>
+      </motion.div>
 
       <p className="px-1 text-xs text-muted-foreground/70">
-        {`${totalApplications.toLocaleString()} applications · ${last12Hires.toLocaleString()} hires in the last 12 months · ${data.summary.totalCandidates.toLocaleString()} candidates tracked.`}
+        {`${totalApplications.toLocaleString()} applications · ${last12Hires.toLocaleString()} hires in the last 12 months · ${data.summary.totalCandidates.toLocaleString()} candidates tracked · comparing to ${rangeLabel.toLowerCase()}.`}
       </p>
     </div>
   );
