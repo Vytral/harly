@@ -36,6 +36,7 @@ export type CandidateInterviewItem = {
 export type UpcomingInterviewItem = CandidateInterviewItem & {
   candidateId: string;
   candidateName: string;
+  jobId: string;
 };
 
 const TYPE_LABELS: Record<InterviewType, string> = {
