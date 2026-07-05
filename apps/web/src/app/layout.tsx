@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
-import { Inter } from "next/font/google";
+import { Inter, Fraunces } from "next/font/google";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
@@ -18,6 +18,18 @@ const inter = Inter({
   display: "swap",
 });
 
+// Fraunces is the editorial display face for the Folio career template only —
+// a variable serif with optical sizing and a "soft" axis. Loaded here so the
+// CSS variable is always available; templates opt in via `.font-fraunces`.
+// `opsz` keeps body-sized text crisp while headings get the display cut.
+// Variable font → no fixed weight/style, the full range is available.
+const fraunces = Fraunces({
+  subsets: ["latin"],
+  variable: "--font-fraunces",
+  display: "swap",
+  axes: ["opsz", "SOFT"],
+});
+
 export const metadata: Metadata = {
   title: "Harly",
   description: "Open-source applicant tracking system for modern teams.",
@@ -32,7 +44,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${GeistMono.variable} ${GeistSans.variable} h-full antialiased`}
+      className={`${inter.variable} ${fraunces.variable} ${GeistMono.variable} ${GeistSans.variable} h-full antialiased`}
       data-scroll-behavior="smooth"
     >
       <head>

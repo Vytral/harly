@@ -90,6 +90,10 @@
   --board-primary-soft: #f4f4f5;
   --board-surface: #ffffff;
   --board-surface-muted: #fafafa;
+
+  /* Folio template defaults — overridden inline by FolioTemplate / JobShell. */
+  --folio-ink: #1a1715;
+  --folio-paper: #F7F4EE;
 }
 
 @theme inline {
@@ -153,6 +157,13 @@
   --color-board-surface: var(--board-surface);
   --color-board-surface-muted: var(--board-surface-muted);
 
+  /* Folio template — ink + paper. Set via inline style on the template root
+     (--folio-ink: #1a1715; --folio-paper: <theme background>), so every
+     text-folio-ink / border-folio-ink/15 / bg-folio-paper utility resolves to
+     the live value and respects the user's background override. */
+  --color-folio-ink: var(--folio-ink);
+  --color-folio-paper: var(--folio-paper);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -167,6 +178,12 @@
   /* Display = Inter bold w/ tight tracking (see .font-display rule below). */
   --font-display:
     var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  /* Serif = Fraunces (variable, editorial). Falls back to a UI serif stack
+     until the local font (root layout) loads. Used by the Folio template and
+     by `font-serif` utility consumers. */
+  --font-serif:
+    var(--font-fraunces), ui-serif, Georgia, Cambria, "Times New Roman",
+    serif;
 }
 
 @layer base {
@@ -511,5 +528,165 @@ html[data-tab-switch="true"] .animate-in {
   .animate-tab-in {
     animation: none;
     opacity: 1;
+  }
+}
+
+/* ── Folio template — editorial chrome ────────────────────────────── */
+/*
+ * Fraunces utility. Optical sizing driven by `font-variation-settings` so a
+ * 4xl headline gets the display cut (high contrast, tighter joints) while body
+ * text keeps the text cut (sturdier, more open). The "SOFT" axis softens
+ * terminals at larger sizes — set to 0 for the newsprint feel, 50 for warmer.
+ */
+.font-fraunces {
+  font-family: var(--font-fraunces), ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  font-variation-settings: "opsz" 14, "SOFT" 0;
+  font-feature-settings: "ss01", "ss02";
+}
+.font-fraunces-display {
+  font-family: var(--font-fraunces), ui-serif, Georgia, Cambria, "Times New Roman", serif;
+  font-variation-settings: "opsz" 144, "SOFT" 20;
+  font-feature-settings: "ss01", "ss02", "lnum";
+}
+
+/* Drop cap — first letter blown up, ink-fill wipe on enter. The wipe is a
+   linear-gradient mask translated across the glyph; transform/opacity only. */
+.folio-dropcap::first-letter {
+  float: left;
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-variation-settings: "opsz" 144, "SOFT" 30;
+  font-weight: 600;
+  font-size: 4.5em;
+  line-height: 0.78;
+  padding-right: 0.08em;
+  padding-top: 0.06em;
+  margin-right: 0.04em;
+  background: linear-gradient(120deg, currentColor 0%, currentColor 35%, transparent 35%, transparent 100%);
+  background-size: 250% 100%;
+  background-position: 100% 0;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: var(--folio-ink, #1a1715);
+  -webkit-text-fill-color: transparent;
+  animation: folio-ink-fill 1100ms cubic-bezier(0.16, 1, 0.3, 1) 250ms both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .folio-dropcap::first-letter {
+    animation: none;
+    background: none;
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+@keyframes folio-ink-fill {
+  from { background-position: 100% 0; }
+  to   { background-position: 0% 0; }
+}
+
+/* Mask reveal — headlines wipe in from the bottom via clip-path. The inner
+   span also lifts 6px (transform-only) so the reveal has direction. */
+.folio-mask {
+  clip-path: inset(100% 0 0 0);
+  animation: folio-mask-in 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.folio-mask > span {
+  display: inline-block;
+  transform: translateY(0.18em);
+  animation: folio-mask-lift 720ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes folio-mask-in {
+  to { clip-path: inset(0 0 0 0); }
+}
+@keyframes folio-mask-lift {
+  to { transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .folio-mask,
+  .folio-mask > span {
+    animation: none;
+    clip-path: none;
+    transform: none;
+  }
+}
+
+/* Section reveal — eyebrow + heading fade up on scroll. Always transform /
+   opacity, ≤200ms ease-out, motion-reduce disabled. */
+.folio-reveal {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+.folio-reveal.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .folio-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
+/* Pull-quote oversized mark — scale-in + fade on reveal. */
+.folio-quote-mark {
+  display: inline-block;
+  transform: scale(0.6);
+  opacity: 0;
+  transition: transform 600ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 600ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.folio-quote-mark.is-visible {
+  transform: scale(1);
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .folio-quote-mark {
+    transform: none;
+    opacity: 1;
+    transition: none;
+  }
+}
+
+/* Hero entrance — scale + blur focus for the background image. */
+.folio-hero {
+  transform: scale(1.04);
+  filter: blur(8px);
+  opacity: 0;
+  animation: folio-hero-in 1200ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes folio-hero-in {
+  to {
+    transform: scale(1);
+    filter: blur(0);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .folio-hero {
+    animation: none;
+    transform: none;
+    filter: none;
+    opacity: 1;
+  }
+}
+
+/* Job row underline — grows from the left on hover. */
+.folio-row-underline {
+  background-image: linear-gradient(currentColor, currentColor);
+  background-position: 0 100%;
+  background-repeat: no-repeat;
+  background-size: 0% 1px;
+  transition: background-size 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.folio-row-underline:hover,
+.folio-row-underline:focus-visible {
+  background-size: 100% 1px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .folio-row-underline {
+    transition: none;
   }
 }
