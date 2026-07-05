@@ -21,6 +21,7 @@ const TEMPLATE_META: Record<
   minimal: { label: "Minimal", blurb: "Clean type, just the essentials", ready: true },
   playful: { label: "Playful", blurb: "Colorful, friendly, high-energy", ready: true },
   ashby: { label: "Ashby", blurb: "Structured, sidebar filters", ready: true },
+  folio: { label: "Folio", blurb: "Editorial, magazine-grade serif", ready: true },
 };
 
 export function BuilderTopBar({

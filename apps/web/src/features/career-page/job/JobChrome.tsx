@@ -2,16 +2,24 @@ import type { CSSProperties } from "react";
 
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
-import type { CareerPageConfig } from "../config";
+import type { CareerPageConfig, CareerTemplate } from "../config";
 import { ThemeWrapper } from "../ThemeWrapper";
-import { JobShell } from "./JobShell";
+import { JobShell, type JobShellVariant } from "./JobShell";
 import type { JobLike } from "./jobMeta";
+
+/** Map a career template to its job-page chrome variant. */
+function templateToVariant(t: CareerTemplate | ""): JobShellVariant {
+  if (t === "playful") return "playful";
+  if (t === "folio") return "folio";
+  return "structured";
+}
 
 /**
  * Per-template public job chrome. Wraps the active tab's content in the
  * workspace's career template look: ThemeWrapper (mode/bg/font) + a shell picked
- * by `config.template` (playful → PlayfulJobShell, else StructuredJobShell).
- * Exposes the accent as `--board-primary` so shared form/buttons pick it up.
+ * by `config.template` (playful → hero band, folio → masthead bar, else
+ * structured header). Exposes the accent as `--board-primary` so shared
+ * form/buttons pick it up.
  */
 export function JobChrome({
   config,
@@ -44,7 +52,7 @@ export function JobChrome({
           job={job}
           boardRoot={boardRoot}
           activeTab={activeTab}
-          playful={config.template === "playful"}
+          variant={templateToVariant(config.template)}
         >
           {children}
         </JobShell>
