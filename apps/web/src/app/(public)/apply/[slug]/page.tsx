@@ -43,7 +43,11 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
           jobSlug={job.slug}
           workspaceSlug={workspace.slug}
           applicationConfig={applicationConfig}
-          variant={config.template === "ashby" ? "ashby" : "default"}
+          variant={
+            config.template === "ashby" ? "ashby"
+            : config.template === "folio" ? "folio"
+            : "default"
+          }
           turnstileSiteKey={turnstileSiteKey}
           legalConfigured={workspace.legalConfigured}
           consentCheckboxText={workspace.consentCheckboxText}

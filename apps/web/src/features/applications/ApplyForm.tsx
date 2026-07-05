@@ -36,9 +36,10 @@ const initialState: ApplyJobActionState = {
 };
 
 /** Apply-form presentation variant. Driven by the active career template so the
- * "ashby" template gets its distinctive flat, sectioned layout while every other
- * template keeps its existing card-based form unchanged. */
-type ApplyFormVariant = "ashby" | "default";
+ * "ashby" template gets its distinctive flat, sectioned layout, "folio" gets
+ * an editorial serif/sharp chrome, while every other template keeps its
+ * existing card-based form unchanged. */
+type ApplyFormVariant = "ashby" | "default" | "folio";
 
 type ApplyFormProps = {
   jobSlug: string;
@@ -172,6 +173,15 @@ const inputClassAshby =
 const textareaClassAshby =
   "w-full rounded-lg border border-zinc-200 bg-white px-3.5 py-2.5 text-sm text-zinc-900 outline-none transition placeholder:text-zinc-400 focus:border-[color:var(--board-primary)] focus:ring-2 focus:ring-[color:var(--board-primary)]/15 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:placeholder:text-zinc-500";
 
+// Folio variant fields: sharp corners, Fraunces text, ink hairlines, accent
+// focus ring. Reads --folio-ink (set by FolioTemplate / JobShell root) so
+// borders tint with the user's paper.
+const inputClassFolio =
+  "h-11 w-full rounded-none border border-folio-ink/25 bg-transparent px-3.5 font-fraunces text-base text-folio-ink outline-none transition placeholder:text-folio-ink/40 focus:border-[color:var(--board-primary)] focus:ring-2 focus:ring-[color:var(--board-primary)]/15 dark:border-folio-ink/30 dark:text-folio-ink dark:placeholder:text-folio-ink/40";
+
+const textareaClassFolio =
+  "w-full rounded-none border border-folio-ink/25 bg-transparent px-3.5 py-2.5 font-fraunces text-base text-folio-ink outline-none transition placeholder:text-folio-ink/40 focus:border-[color:var(--board-primary)] focus:ring-2 focus:ring-[color:var(--board-primary)]/15 dark:border-folio-ink/30 dark:text-folio-ink dark:placeholder:text-folio-ink/40";
+
 const labelClass = "text-sm font-medium text-zinc-800 dark:text-zinc-200";
 const requiredMarkClass = "text-red-500";
 const hintClass = "mt-1.5 text-xs text-zinc-500 leading-relaxed dark:text-zinc-400";
@@ -216,16 +226,29 @@ function InputIcon({ children, className }: { children: React.ReactNode; classNa
 }
 
 /** Label with required marker. The Ashby variant pins the asterisk as a suffix
- * (`Name*`); every other template keeps the existing prefix (`* Name`). */
+ * (`Name*`); Folio does the same but in Fraunces serif with the asterisk
+ * coloured by the accent; every other template keeps the prefix (`* Name`). */
 function FieldLabel({
   children,
   required,
   ashby,
+  folio,
 }: {
   children: React.ReactNode;
   required?: boolean;
   ashby?: boolean;
+  folio?: boolean;
 }) {
+  if (folio) {
+    return (
+      <span className="font-fraunces text-sm font-medium text-folio-ink">
+        {children}
+        {required ? (
+          <span className="ml-0.5" style={{ color: "var(--board-primary)" }}>*</span>
+        ) : null}
+      </span>
+    );
+  }
   const cls = ashby
     ? "text-sm font-semibold text-zinc-800 dark:text-zinc-200"
     : labelClass;
@@ -251,13 +274,15 @@ function YesNoToggle({
   name,
   value,
   onChange,
+  sharp = false,
 }: {
   name: string;
   value: string;
   onChange: (next: string) => void;
+  sharp?: boolean;
 }) {
   return (
-    <div className="mt-2 inline-flex rounded-lg border border-zinc-200 p-1 dark:border-zinc-700">
+    <div className={cn("mt-2 inline-flex p-1", sharp ? "rounded-none border border-folio-ink/30" : "rounded-lg border border-zinc-200 dark:border-zinc-700")}>
       <input type="hidden" name={name} value={value} />
       {["Yes", "No"].map((option) => {
         const active = value === option;
@@ -268,10 +293,13 @@ function YesNoToggle({
             aria-pressed={active}
             onClick={() => onChange(active ? "" : option)}
             className={cn(
-              "min-w-[76px] rounded-md px-4 py-1.5 text-sm font-medium transition-transform duration-150 active:scale-[0.97]",
+              "min-w-[76px] px-4 py-1.5 text-sm font-medium transition-transform duration-150 active:scale-[0.97]",
+              sharp ? "rounded-none" : "rounded-md",
               active
                 ? "text-white shadow-sm"
-                : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
+                : sharp
+                  ? "text-folio-ink/70 hover:text-folio-ink"
+                  : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
             )}
             style={active ? { backgroundColor: "var(--board-primary)" } : undefined}
           >
@@ -437,8 +465,9 @@ export function ApplyForm({
   legalPages = null,
 }: ApplyFormProps) {
   const isAshby = variant === "ashby";
-  const input = isAshby ? inputClassAshby : inputClass;
-  const textarea = isAshby ? textareaClassAshby : textareaClass;
+  const isFolio = variant === "folio";
+  const input = isFolio ? inputClassFolio : isAshby ? inputClassAshby : inputClass;
+  const textarea = isFolio ? textareaClassFolio : isAshby ? textareaClassAshby : textareaClass;
 
   const action = submitApplicationAction.bind(null, { jobSlug, workspaceSlug });
   const [state, formAction, isPending] = useActionState(action, initialState);
@@ -851,7 +880,7 @@ export function ApplyForm({
       ref={formRef}
       action={formAction}
       onSubmit={handleSubmit}
-      className={isAshby ? "space-y-8" : "space-y-6"}
+      className={isFolio ? "space-y-10" : isAshby ? "space-y-8" : "space-y-6"}
     >
       <input
         id="resumeFile"
@@ -872,7 +901,433 @@ export function ApplyForm({
         </div>
       ) : null}
 
-      {isAshby ? (
+      {isFolio ? (
+        /* ─────────────────────────── Folio variant ─────────────────────────── */
+        <>
+          {/* ── Resume — hairline, no card ── */}
+          <section className={cn("space-y-4", reveal)} style={{ animationDelay: "0ms" }}>
+            <div className="flex flex-col gap-4 border-b border-folio-ink/15 pb-3 sm:flex-row sm:items-start sm:justify-between">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--board-primary)" }}>
+                  § I
+                </p>
+                <h2 className="mt-1 font-fraunces text-xl tracking-tight text-folio-ink">Resume</h2>
+                <p className="mt-1 max-w-sm font-fraunces text-sm leading-relaxed text-folio-ink/70">
+                  Upload once — we&apos;ll attach it to your application and use it to pre-fill the form below.
+                </p>
+              </div>
+              {resumeFile ? (
+                <label
+                  htmlFor="resumeFile"
+                  className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-none border px-4 font-mono text-xs uppercase tracking-[0.16em] transition-transform duration-150 active:scale-[0.98]"
+                  style={{
+                    borderColor: "color-mix(in srgb, var(--board-primary) 45%, transparent)",
+                    color: "var(--board-primary)",
+                  }}
+                >
+                  Replace file
+                </label>
+              ) : null}
+            </div>
+
+            {resumeFile ? (
+              <p className="flex items-center gap-2 font-fraunces text-sm text-folio-ink/85">
+                <span
+                  className="inline-flex size-5 items-center justify-center rounded-full text-white"
+                  style={{ backgroundColor: "var(--board-primary)" }}
+                  aria-hidden
+                >
+                  <Check className="size-3" strokeWidth={3} />
+                </span>
+                {resumeFile.name} ({formatFileSize(resumeFile.size)})
+              </p>
+            ) : (
+              <label
+                htmlFor="resumeFile"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                className={cn(
+                  "group flex cursor-pointer flex-col items-center gap-3 rounded-none border border-dashed px-6 py-8 text-center transition",
+                  isDragging
+                    ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/[0.04]"
+                    : "border-folio-ink/30 hover:border-folio-ink/55 hover:bg-folio-ink/[0.02]",
+                )}
+              >
+                <svg viewBox="0 0 24 24" className="size-5" style={{ color: "var(--board-primary)" }} fill="none" aria-hidden>
+                  <path d="M5 12h13M13 7l5 5-5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+                <p className="font-fraunces text-sm text-folio-ink">
+                  <span className="font-medium" style={{ color: "var(--board-primary)" }}>
+                    {isDragging ? "Drop here" : "Choose a file"}
+                  </span>{" "}
+                  {isDragging ? "Release to upload" : "or drag and drop"}
+                </p>
+                <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/50">
+                  .pdf · .doc · .docx · up to 10MB
+                </p>
+              </label>
+            )}
+            {resumeStatus}
+          </section>
+
+          <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
+            <span style={{ color: "var(--board-primary)" }}>*</span> Required fields
+          </p>
+
+          {/* ── II. Personal information ── */}
+          <section className={cn("space-y-5", reveal)} style={{ animationDelay: "80ms" }}>
+            <div className="flex items-center justify-between border-b border-folio-ink/15 pb-3">
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--board-primary)" }}>
+                  § II
+                </p>
+                <h2 className="mt-1 font-fraunces text-xl tracking-tight text-folio-ink">
+                  Personal information
+                </h2>
+              </div>
+              <button
+                type="button"
+                onClick={clearPersonalInfo}
+                className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55 transition hover:text-folio-ink"
+              >
+                <TrashIcon className="size-3.5" />
+                Clear
+              </button>
+            </div>
+
+            <div className="grid gap-5 sm:grid-cols-2">
+              <label className="block">
+                <FieldLabel folio required>First name</FieldLabel>
+                <input
+                  name="firstName"
+                  type="text"
+                  autoComplete="given-name"
+                  value={fields.firstName}
+                  onChange={(event) => updateField("firstName", event.target.value)}
+                  placeholder="Type here…"
+                  className={`${input} mt-1.5`}
+                />
+                <FieldError errors={fieldErrorsFor(state, "firstName")} />
+              </label>
+
+              <label className="block">
+                <FieldLabel folio required>Last name</FieldLabel>
+                <input
+                  name="lastName"
+                  type="text"
+                  autoComplete="family-name"
+                  value={fields.lastName}
+                  onChange={(event) => updateField("lastName", event.target.value)}
+                  placeholder="Type here…"
+                  className={`${input} mt-1.5`}
+                />
+                <FieldError errors={fieldErrorsFor(state, "lastName")} />
+              </label>
+            </div>
+
+            <label className="block">
+              <FieldLabel folio required>Email</FieldLabel>
+              <input
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={fields.email}
+                onChange={(event) => updateField("email", event.target.value)}
+                placeholder="hello@example.com"
+                className={`${input} mt-1.5`}
+              />
+              <FieldError errors={fieldErrorsFor(state, "email")} />
+            </label>
+
+            <label className="block">
+              <FieldLabel folio>Phone</FieldLabel>
+              <PhoneInput
+                name="phone"
+                value={fields.phone}
+                onChange={(v) => updateField("phone", v)}
+                className="mt-1.5"
+              />
+              <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
+                Hiring team may use this to contact you about the role.
+              </p>
+              <FieldError errors={fieldErrorsFor(state, "phone")} />
+            </label>
+
+            <label className="block">
+              <FieldLabel folio>Current location</FieldLabel>
+              <div className="relative mt-1.5">
+                <InputIcon>
+                  <MapPin className="size-4" strokeWidth={1.8} />
+                </InputIcon>
+                <input
+                  name="location"
+                  type="text"
+                  autoComplete="address-level2"
+                  value={fields.location}
+                  onChange={(event) => updateField("location", event.target.value)}
+                  placeholder="City, country"
+                  className={`${input} ${inputIconClass}`}
+                />
+              </div>
+              <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
+                City, region, country — helps the team evaluate your application.
+              </p>
+              <FieldError errors={fieldErrorsFor(state, "location")} />
+            </label>
+          </section>
+
+          {/* ── III. Links ── */}
+          {hasAnyProfileLink(applicationConfig.profileLinks) ? (
+            <section className={cn("space-y-5", reveal)} style={{ animationDelay: "160ms" }}>
+              <div className="border-b border-folio-ink/15 pb-3">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--board-primary)" }}>
+                  § III
+                </p>
+                <h2 className="mt-1 font-fraunces text-xl tracking-tight text-folio-ink">Links</h2>
+              </div>
+
+              {!showLinks && !hasRequiredProfileLink(applicationConfig.profileLinks) ? (
+                <button
+                  type="button"
+                  onClick={() => setShowLinks(true)}
+                  className="inline-flex items-center gap-1.5 rounded-none border border-folio-ink/30 px-3.5 py-2 font-mono text-xs uppercase tracking-[0.16em] text-folio-ink/70 transition hover:border-folio-ink/60 hover:text-folio-ink"
+                >
+                  <Plus className="size-4" strokeWidth={2} />
+                  Add links
+                </button>
+              ) : (
+                <div className="space-y-5">
+                  {applicationConfig.profileLinks.linkedin.enabled ? (
+                    <label className="block">
+                      <FieldLabel folio required={applicationConfig.profileLinks.linkedin.required}>
+                        LinkedIn
+                      </FieldLabel>
+                      <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
+                        e.g.: linkedin.com/in/yourname
+                      </p>
+                      <div className="relative mt-1.5">
+                        <InputIcon><LinkedInIcon className="size-4" /></InputIcon>
+                        <input
+                          name="linkedinUrl"
+                          type="text"
+                          autoComplete="url"
+                          value={fields.linkedinUrl}
+                          onChange={(event) => updateField("linkedinUrl", event.target.value)}
+                          placeholder="Type here…"
+                          className={`${input} ${inputIconClass}`}
+                        />
+                      </div>
+                      <FieldError
+                        errors={mergeErrors(
+                          fieldErrorsFor(state, "linkedinUrl"),
+                          clientFieldErrors.linkedinUrl,
+                        )}
+                      />
+                    </label>
+                  ) : null}
+                  {applicationConfig.profileLinks.github.enabled ? (
+                    <label className="block">
+                      <FieldLabel folio required={applicationConfig.profileLinks.github.required}>
+                        GitHub
+                      </FieldLabel>
+                      <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
+                        e.g.: github.com/yourname
+                      </p>
+                      <div className="relative mt-1.5">
+                        <InputIcon><GitHubIcon className="size-4" /></InputIcon>
+                        <input
+                          name="githubUrl"
+                          type="text"
+                          autoComplete="url"
+                          value={fields.githubUrl}
+                          onChange={(event) => updateField("githubUrl", event.target.value)}
+                          placeholder="Type here…"
+                          className={`${input} ${inputIconClass}`}
+                        />
+                      </div>
+                      <FieldError
+                        errors={mergeErrors(
+                          fieldErrorsFor(state, "githubUrl"),
+                          clientFieldErrors.githubUrl,
+                        )}
+                      />
+                    </label>
+                  ) : null}
+                  {applicationConfig.profileLinks.website.enabled ? (
+                    <label className="block">
+                      <FieldLabel folio required={applicationConfig.profileLinks.website.required}>
+                        Portfolio or personal website
+                      </FieldLabel>
+                      <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
+                        e.g.: yoursite.com
+                      </p>
+                      <div className="relative mt-1.5">
+                        <InputIcon><Globe className="size-4" strokeWidth={1.8} /></InputIcon>
+                        <input
+                          name="websiteUrl"
+                          type="text"
+                          autoComplete="url"
+                          value={fields.websiteUrl}
+                          onChange={(event) => updateField("websiteUrl", event.target.value)}
+                          placeholder="Type here…"
+                          className={`${input} ${inputIconClass}`}
+                        />
+                      </div>
+                      <FieldError
+                        errors={mergeErrors(
+                          fieldErrorsFor(state, "websiteUrl"),
+                          clientFieldErrors.websiteUrl,
+                        )}
+                      />
+                    </label>
+                  ) : null}
+                </div>
+              )}
+            </section>
+          ) : null}
+
+          {/* ── IV. Additional information ── */}
+          {applicationConfig.questions.length > 0 ? (
+            <section className={cn("space-y-5", reveal)} style={{ animationDelay: "240ms" }}>
+              <div className="border-b border-folio-ink/15 pb-3">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--board-primary)" }}>
+                  § IV
+                </p>
+                <h2 className="mt-1 font-fraunces text-xl tracking-tight text-folio-ink">
+                  Additional information
+                </h2>
+              </div>
+              <div className="space-y-5">
+                {applicationConfig.questions.map((question) => {
+                  const yesNo = isYesNoQuestion(question);
+                  return (
+                    <div key={question.id} className="block">
+                      <label className="block">
+                        <FieldLabel folio required={question.required}>
+                          {question.label}
+                        </FieldLabel>
+                      </label>
+                      {!yesNo && question.placeholder ? (
+                        <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
+                          e.g.: {question.placeholder}
+                        </p>
+                      ) : null}
+                      {question.type === "textarea" ? (
+                        <textarea
+                          name={question.id}
+                          rows={5}
+                          value={answers[question.id] ?? ""}
+                          onChange={(event) => updateAnswer(question.id, event.target.value)}
+                          placeholder="Type here…"
+                          className={`${textarea} mt-1.5`}
+                        />
+                      ) : null}
+                      {question.type === "text" ? (
+                        <input
+                          name={question.id}
+                          type="text"
+                          value={answers[question.id] ?? ""}
+                          onChange={(event) => updateAnswer(question.id, event.target.value)}
+                          placeholder="Type here…"
+                          className={`${input} mt-1.5`}
+                        />
+                      ) : null}
+                      {question.type === "url" ? (
+                        <input
+                          name={question.id}
+                          type="url"
+                          value={answers[question.id] ?? ""}
+                          onChange={(event) => updateAnswer(question.id, event.target.value)}
+                          placeholder="Type here…"
+                          className={`${input} mt-1.5`}
+                        />
+                      ) : null}
+                      {question.type === "select" && yesNo ? (
+                        <YesNoToggle
+                          name={question.id}
+                          value={answers[question.id] ?? ""}
+                          onChange={(next) => updateAnswer(question.id, next)}
+                          sharp
+                        />
+                      ) : null}
+                      {question.type === "select" && !yesNo ? (
+                        <select
+                          name={question.id}
+                          value={answers[question.id] ?? ""}
+                          onChange={(event) => updateAnswer(question.id, event.target.value)}
+                          className={`${input} mt-1.5`}
+                        >
+                          <option value="">
+                            {question.placeholder ?? "Select"}
+                          </option>
+                          {question.options?.map((option) => (
+                            <option key={option} value={option}>
+                              {option}
+                            </option>
+                          ))}
+                        </select>
+                      ) : null}
+                      {question.minLength ? (
+                        <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
+                          Min {question.minLength} chars if answered.
+                        </p>
+                      ) : null}
+                      <FieldError
+                        errors={mergeErrors(
+                          questionErrorsFor(state, question.id),
+                          clientQuestionErrors[question.id],
+                        )}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          ) : null}
+
+          {turnstileSiteKey ? (
+            <div className="flex justify-center">
+              <TurnstileWidget siteKey={turnstileSiteKey} />
+            </div>
+          ) : null}
+
+          {showConsentCheckbox ? (
+            <ConsentCheckbox
+              checked={consentGiven}
+              onCheckedChange={setConsentGiven}
+              onErrorClear={() => setConsentError(null)}
+              consentText={consentText}
+              privacyPolicyUrl={privacyPolicyUrl}
+              error={consentError}
+            />
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={isSubmitting}
+            className="group inline-flex h-12 w-full items-center justify-center gap-2 rounded-none font-mono text-xs uppercase tracking-[0.18em] text-white transition-transform duration-150 hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            style={{ backgroundColor: "var(--board-primary)" }}
+          >
+            {isSubmittingForm || isPending ? (
+              <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.2" />
+                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+            ) : null}
+            {isSubmittingForm
+              ? "Uploading…"
+              : isPending
+                ? "Submitting…"
+                : "Submit application"}
+            {!isSubmittingForm && !isPending ? (
+              <svg viewBox="0 0 24 24" className="size-3.5 transition-transform duration-200 group-hover:translate-x-1" fill="none" aria-hidden>
+                <path d="M5 12h13M13 7l5 5-5 5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            ) : null}
+          </button>
+        </>
+      ) : isAshby ? (
         /* ─────────────────────────── Ashby variant ─────────────────────────── */
         <>
           {/* Autofill from resume */}
