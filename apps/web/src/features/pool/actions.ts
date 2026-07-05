@@ -12,7 +12,6 @@ import {
   jobStages,
   poolEntries,
 } from "@harly/db";
-import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 
 export type PoolActionState = { success: boolean; error?: string };

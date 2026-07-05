@@ -14,7 +14,6 @@ import {
 } from "@/features/developers/actions";
 import {
   SectionHeader,
-  StatusPill,
 } from "@/features/workspaces/settings-ui";
 import {
   CodeDuotoneIcon,

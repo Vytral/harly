@@ -40,7 +40,7 @@ export function DocxViewer({ fileUrl, className }: DocxViewerProps) {
   }, [fileUrl]);
 
   useEffect(() => {
-    convert();
+    queueMicrotask(() => void convert());
   }, [convert]);
 
   if (state.status === "loading" || state.status === "idle") {

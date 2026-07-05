@@ -110,8 +110,10 @@ export function InviteTeammatesSheet({
           ? { description: `${skipped} skipped (${state.skipped?.[0]?.reason ?? ""})` }
           : undefined,
       );
-      setRows([newRow(defaultRole)]);
-      router.refresh();
+      queueMicrotask(() => {
+        setRows([newRow(defaultRole)]);
+        router.refresh();
+      });
     } else if (state.error) {
       toast.error(state.error);
     }

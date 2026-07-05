@@ -118,6 +118,7 @@ export default async function PortalDashboardPage() {
       {/* ── Hero Banner ── */}
       <div className="relative mb-6 overflow-hidden rounded-2xl">
         {settings?.heroImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- external URL from workspace
           <img
             src={settings.heroImageUrl}
             alt="Company banner"
@@ -206,6 +207,7 @@ export default async function PortalDashboardPage() {
                         className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
                       >
                         {m.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- external URL
                           <img
                             src={m.image}
                             alt={m.name ?? ""}

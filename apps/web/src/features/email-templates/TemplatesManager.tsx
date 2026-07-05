@@ -478,7 +478,6 @@ export function TemplatesManager({
                   {body ? (
                     <div
                       className="prose prose-sm max-w-none text-[13px] leading-relaxed text-foreground/90 prose-p:my-2 prose-ul:my-2 prose-ol:my-2"
-                      // eslint-disable-next-line react/no-danger
                       dangerouslySetInnerHTML={{
                         __html: DOMPurify.sanitize(
                           interpolateTemplate(body, previewValues),

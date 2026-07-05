@@ -95,6 +95,7 @@ export function PortalLoginForm({
                 "transition-all duration-150 hover:bg-muted hover:border-border active:scale-[0.98] shadow-sm",
               )}
             >
+              {/* eslint-disable-next-line @next/next/no-img-element -- static CDN icon */}
               <img
                 src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/google/default.svg"
                 alt="Google"
@@ -112,6 +113,7 @@ export function PortalLoginForm({
                 "transition-all duration-150 hover:bg-foreground/90 active:scale-[0.98] shadow-sm",
               )}
             >
+              {/* eslint-disable-next-line @next/next/no-img-element -- static CDN icon */}
               <img
                 src="https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons/github/light.svg"
                 alt="GitHub"

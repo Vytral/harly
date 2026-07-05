@@ -65,9 +65,11 @@ export function CommandMenu({
     // Reset to a clean slate every time the palette opens.
   useEffect(() => {
     if (!open) {
-      setQuery("");
-      setResults(emptyResults);
-      setLoading(false);
+      queueMicrotask(() => {
+        setQuery("");
+        setResults(emptyResults);
+        setLoading(false);
+      });
     }
   }, [open]);
 

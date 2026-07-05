@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import { BrainCircuit } from "lucide-react";
 
 import { Card, CardContent } from "@/components/ui/card";

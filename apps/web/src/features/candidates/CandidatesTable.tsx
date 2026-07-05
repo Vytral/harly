@@ -23,7 +23,7 @@ import {
   restoreCandidateAction,
   trashCandidateAction,
 } from "@/features/candidates/actions";
-import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
+import { addToPoolAction } from "@/features/pool/actions";
 import { toCsv } from "@/lib/csv";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";

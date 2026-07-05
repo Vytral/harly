@@ -34,7 +34,7 @@ export function sendApplicationReceivedEmails(email: ApplicationEmail): void {
     await Promise.allSettled([
       sendWorkspaceEmail(email.workspaceId, {
         to: email.candidateEmail,
-        subject: applicationReceivedCandidateSubject({ jobTitle: email.jobTitle }),
+        subject: applicationReceivedCandidateSubject({ jobTitle: email.jobTitle, companyName: email.workspaceName }),
         react: createElement(ApplicationReceivedCandidate, {
           candidateName: email.candidateFirstName,
           jobTitle: email.jobTitle,

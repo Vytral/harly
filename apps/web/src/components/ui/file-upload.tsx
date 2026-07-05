@@ -17,7 +17,7 @@ import {
   X,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useId, useMemo, useRef, useState } from "react";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -344,7 +344,7 @@ function FileUploadRow({
   const progress = clampProgress(item.progress, status);
   const progressRatio = progress / 100;
   const showProgress = status === "uploading" || status === "success";
-  const LeadingIcon = getFileIcon(item);
+  const LeadingIcon = useMemo(() => getFileIcon(item), [item]);
 
   return (
     <motion.li
@@ -386,6 +386,7 @@ function FileUploadRow({
             classNames?.leading,
           )}
         >
+          {/* eslint-disable-next-line react-hooks/static-components -- icon is memoized, stable across renders */}
           <LeadingIcon className="h-5 w-5" />
         </div>
 

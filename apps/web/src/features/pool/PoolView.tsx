@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 
-import { removeFromPoolAction, bulkRemoveFromPoolAction, bulkAssignFromPoolToJobAction } from "@/features/pool/actions";
+import { removeFromPoolAction, bulkRemoveFromPoolAction } from "@/features/pool/actions";
 import type { PoolCandidate } from "@/features/pool/data";
 import { AssignToJobModal } from "@/features/pool/AssignToJobModal";
 import { Badge } from "@/components/ui/badge";
@@ -71,15 +71,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
   }>({ open: false, candidateId: "", candidateName: "", candidateEmail: "" });
   const [bulkAssignModal, setBulkAssignModal] = useState(false);
 
-  // Extract unique skills and sources from candidates
-  const allSkills = useMemo(() => {
-    const skillSet = new Set<string>();
-    for (const c of candidates) {
-      for (const s of c.skills) skillSet.add(s);
-    }
-    return Array.from(skillSet).sort();
-  }, [candidates]);
-
+  // Extract unique sources from candidates
   const allSources = useMemo(() => {
     const sourceSet = new Set<string>();
     for (const c of candidates) sourceSet.add(c.source);

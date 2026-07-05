@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { desc, eq, and, asc } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import type { Route } from "next";
 
 import {
@@ -19,7 +19,6 @@ import { cn } from "@/lib/utils";
 import {
   CheckCircleIcon,
   LockSimpleIcon,
-  ArrowUpRightIcon,
   MapPinIcon,
 } from "@/components/ui/icons/phosphor";
 
@@ -274,6 +273,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
                       {iv.interviewerName && (
                         <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
                           {iv.interviewerImage ? (
+                            // eslint-disable-next-line @next/next/no-img-element -- external URL
                             <img
                               src={iv.interviewerImage}
                               alt={iv.interviewerName}

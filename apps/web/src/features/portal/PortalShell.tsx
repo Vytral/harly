@@ -79,12 +79,14 @@ export function PortalShellClient({
           >
             {orgFullLogoUrl ? (
               <>
+                {/* eslint-disable-next-line @next/next/no-img-element -- external URL from workspace */}
                 <img
                   src={orgFullLogoUrl}
                   alt={orgName}
                   className={cn("h-8 w-auto object-contain", orgFullLogoDarkUrl && "dark:hidden")}
                 />
                 {orgFullLogoDarkUrl && (
+                  // eslint-disable-next-line @next/next/no-img-element -- external URL from workspace
                   <img
                     src={orgFullLogoDarkUrl}
                     alt={orgName}
@@ -94,6 +96,7 @@ export function PortalShellClient({
               </>
             ) : orgLogo ? (
               <>
+                {/* eslint-disable-next-line @next/next/no-img-element -- external URL from workspace */}
                 <img
                   src={orgLogo}
                   alt={orgName}
@@ -148,6 +151,7 @@ export function PortalShellClient({
             <DropdownMenu>
               <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-lg px-1.5 py-1 transition-colors hover:bg-muted">
                 {candidateAvatarUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- external URL
                   <img
                     src={candidateAvatarUrl}
                     alt={candidateName}

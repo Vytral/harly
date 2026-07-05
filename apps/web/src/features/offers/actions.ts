@@ -517,7 +517,7 @@ export async function withdrawOffer(input: {
       const branding = await getWorkspaceEmailBranding(workspaceId);
       void sendWorkspaceEmail(workspaceId, {
         to: recipient.email,
-        subject: offerWithdrawnSubject({ companyName: recipient.companyName }),
+        subject: offerWithdrawnSubject({ companyName: recipient.companyName, jobTitle: offer.title }),
         react: createElement(OfferWithdrawn, {
           candidateName: recipient.firstName,
           companyName: recipient.companyName,

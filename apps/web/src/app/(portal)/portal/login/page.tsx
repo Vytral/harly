@@ -51,6 +51,7 @@ export default async function PortalLoginPage() {
         {/* Background: hero image or gradient */}
         {org.heroImageUrl ? (
           <>
+            {/* eslint-disable-next-line @next/next/no-img-element -- external URL from workspace */}
             <img
               src={org.heroImageUrl}
               alt={org.name}
@@ -81,6 +82,7 @@ export default async function PortalLoginPage() {
 
         <div className="relative z-10 flex flex-col items-center text-center lg:items-start lg:text-left">
           {org.logo ? (
+            // eslint-disable-next-line @next/next/no-img-element -- external URL from workspace
             <img
               src={org.logo}
               alt={org.name}

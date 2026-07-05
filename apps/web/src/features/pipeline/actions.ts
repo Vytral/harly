@@ -85,7 +85,7 @@ async function sendPipelineEmails(workspaceId: string, emails: PipelineEmail[]) 
       if (email.type === "stage") {
         return sendWorkspaceEmail(workspaceId, {
           to: email.candidateEmail,
-          subject: candidateStageUpdateSubject({ jobTitle: email.jobTitle }),
+          subject: candidateStageUpdateSubject({ jobTitle: email.jobTitle, stageName: email.stageName }),
           react: createElement(CandidateStageUpdate, {
             candidateName: email.candidateName,
             jobTitle: email.jobTitle,
@@ -100,7 +100,7 @@ async function sendPipelineEmails(workspaceId: string, emails: PipelineEmail[]) 
 
       return sendWorkspaceEmail(workspaceId, {
         to: email.candidateEmail,
-        subject: candidateRejectedSubject({ jobTitle: email.jobTitle }),
+        subject: candidateRejectedSubject({ jobTitle: email.jobTitle, companyName: email.workspaceName }),
         react: createElement(CandidateRejected, {
           candidateName: email.candidateName,
           jobTitle: email.jobTitle,

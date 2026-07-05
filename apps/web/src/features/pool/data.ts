@@ -1,7 +1,7 @@
 import "server-only";
 
-import { and, count, desc, eq, inArray, isNull, SQL, sql } from "drizzle-orm";
-import { db } from "@harly/db";
+import { and, count, desc, eq, inArray, isNull, SQL } from "drizzle-orm";
+import { db, type PoolEntry } from "@harly/db";
 import {
   candidates,
   poolEntries,
@@ -46,7 +46,7 @@ export async function listPoolCandidates(filters?: {
   ];
 
   if (filters?.source) {
-    conditions.push(eq(poolEntries.source, filters.source as any));
+    conditions.push(eq(poolEntries.source, filters.source as PoolEntry["source"]));
   }
 
   const rows = await db

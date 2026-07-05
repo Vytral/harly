@@ -22,6 +22,58 @@ interface CookiePanelProps {
   termsHref?: string;
 }
 
+function PrefRow({
+  label,
+  desc,
+  field,
+  locked,
+  checked,
+  onToggle,
+}: {
+  label: string;
+  desc: string;
+  field: keyof Prefs;
+  locked?: boolean;
+  checked: boolean;
+  onToggle: (field: keyof Prefs) => void;
+}) {
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <button
+        type="button"
+        disabled={locked}
+        onClick={() => !locked && onToggle(field)}
+        className={cn(
+          "mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
+          locked
+            ? "border-[var(--board-primary,#6366f1)]/30 bg-[var(--board-primary,#6366f1)]/10 text-[var(--board-primary,#6366f1)]"
+            : checked
+              ? "border-[var(--board-primary,#6366f1)] bg-[var(--board-primary,#6366f1)] text-white"
+              : "border-zinc-300 bg-white hover:border-zinc-400 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:border-zinc-500"
+        )}
+        aria-pressed={checked}
+        aria-label={`${label} cookie preference`}
+      >
+        {checked && <Check className="size-3" strokeWidth={3} />}
+      </button>
+
+      <div className="flex-1 min-w-0">
+        <div className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 leading-tight">
+          {label}
+          {locked && (
+            <span className="ml-1.5 text-[11px] font-normal text-zinc-400 dark:text-zinc-500">
+              (required)
+            </span>
+          )}
+        </div>
+        <p className="mt-0.5 text-[12px] leading-snug text-zinc-500 dark:text-zinc-400">
+          {desc}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 const CookiePanel = (props: CookiePanelProps) => {
   const {
     title = "This site uses cookies",
@@ -54,14 +106,17 @@ const CookiePanel = (props: CookiePanelProps) => {
         : null;
 
     if (!stored) {
-      setRender(true);
-      requestAnimationFrame(() => setVisible(true));
+      requestAnimationFrame(() => {
+        setRender(true);
+        requestAnimationFrame(() => setVisible(true));
+      });
     }
 
     const storedPrefs = localStorage.getItem("cookie-preferences");
     if (storedPrefs) {
       try {
         const parsed = JSON.parse(storedPrefs) as Prefs;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- initializing from localStorage on mount
         setPrefs({ ...parsed, necessary: true });
       } catch {}
     }
@@ -95,52 +150,6 @@ const CookiePanel = (props: CookiePanelProps) => {
 
   const IconEl =
     icon === "shield" ? Shield : icon === "info" ? Info : Cookie;
-
-  const PrefRow = ({
-    label,
-    desc,
-    field,
-    locked,
-  }: {
-    label: string;
-    desc: string;
-    field: keyof Prefs;
-    locked?: boolean;
-  }) => (
-    <div className="flex items-start gap-3 py-2.5">
-      <button
-        type="button"
-        disabled={locked}
-        onClick={() => !locked && setPrefs((p) => ({ ...p, [field]: !p[field] }))}
-        className={cn(
-          "mt-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border transition-colors",
-          locked
-            ? "border-[var(--board-primary,#6366f1)]/30 bg-[var(--board-primary,#6366f1)]/10 text-[var(--board-primary,#6366f1)]"
-            : prefs[field]
-              ? "border-[var(--board-primary,#6366f1)] bg-[var(--board-primary,#6366f1)] text-white"
-              : "border-zinc-300 bg-white hover:border-zinc-400 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:border-zinc-500"
-        )}
-        aria-pressed={prefs[field]}
-        aria-label={`${label} cookie preference`}
-      >
-        {prefs[field] && <Check className="size-3" strokeWidth={3} />}
-      </button>
-
-      <div className="flex-1 min-w-0">
-        <div className="text-[13px] font-medium text-zinc-900 dark:text-zinc-100 leading-tight">
-          {label}
-          {locked && (
-            <span className="ml-1.5 text-[11px] font-normal text-zinc-400 dark:text-zinc-500">
-              (required)
-            </span>
-          )}
-        </div>
-        <p className="mt-0.5 text-[12px] leading-snug text-zinc-500 dark:text-zinc-400">
-          {desc}
-        </p>
-      </div>
-    </div>
-  );
 
   return (
     <div
@@ -254,21 +263,29 @@ const CookiePanel = (props: CookiePanelProps) => {
                 desc="Required for core site functionality."
                 field="necessary"
                 locked
+                checked={prefs.necessary}
+                onToggle={(f) => setPrefs((p) => ({ ...p, [f]: !p[f] }))}
               />
               <PrefRow
                 label="Functional"
                 desc="Remembers your preferences and settings."
                 field="functional"
+                checked={prefs.functional}
+                onToggle={(f) => setPrefs((p) => ({ ...p, [f]: !p[f] }))}
               />
               <PrefRow
                 label="Analytics"
                 desc="Helps us understand how you use the site."
                 field="analytics"
+                checked={prefs.analytics}
+                onToggle={(f) => setPrefs((p) => ({ ...p, [f]: !p[f] }))}
               />
               <PrefRow
                 label="Marketing"
                 desc="Used to deliver personalized advertisements."
                 field="marketing"
+                checked={prefs.marketing}
+                onToggle={(f) => setPrefs((p) => ({ ...p, [f]: !p[f] }))}
               />
 
               <div className="flex items-center justify-end gap-2 pt-3">

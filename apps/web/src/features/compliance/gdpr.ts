@@ -10,7 +10,6 @@ import {
   candidates,
   candidateFiles,
   candidateMessages,
-  candidateNotes,
   candidateTags,
   consentRecords,
   jobs,

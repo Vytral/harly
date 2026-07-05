@@ -312,7 +312,7 @@ export function CandidatePortalCard({
             <div>
               <p className="text-sm font-medium">Show application status</p>
               <p className="text-xs text-muted-foreground">
-                Candidates can see which pipeline stage they are in (e.g. "Screening", "Interview").
+                Candidates can see which pipeline stage they are in (e.g. &quot;Screening&quot;, &quot;Interview&quot;).
               </p>
             </div>
             <Switch

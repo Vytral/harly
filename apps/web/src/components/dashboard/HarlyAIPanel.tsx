@@ -274,8 +274,8 @@ function initials(name: string): string {
 
 function CardAvatar({ name, src, className }: { name: string; src?: string | null; className?: string }) {
   if (src) {
-    // eslint-disable-next-line @next/next/no-img-element
     return (
+      // eslint-disable-next-line @next/next/no-img-element -- avatar from external URL
       <img
         src={src}
         alt={name}
@@ -1443,8 +1443,10 @@ function HistoryDrawer({
   onDelete: (id: string) => void;
   onClose: () => void;
 }) {
+  // eslint-disable-next-line react-hooks/purity -- relative time display, intentionally uses current time
+  const now = Date.now();
   const relative = (iso: string) => {
-    const diff = Date.now() - new Date(iso).getTime();
+    const diff = now - new Date(iso).getTime();
     const m = Math.floor(diff / 60000);
     if (m < 1) return "just now";
     if (m < 60) return `${m}m ago`;
@@ -1554,7 +1556,7 @@ export function HarlyAIPanel({ userName, aiEnabled, open, onClose }: HarlyAIPane
 
   // Load the conversation list when the panel first opens with AI enabled.
   useEffect(() => {
-    if (open && aiEnabled) void refreshList();
+    if (open && aiEnabled) queueMicrotask(() => void refreshList());
   }, [open, aiEnabled, refreshList]);
 
   function startNewChat() {
