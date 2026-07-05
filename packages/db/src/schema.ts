@@ -384,6 +384,30 @@ export const workspaceSettings = pgTable("workspace_settings", {
   emailSmtpPort: integer("email_smtp_port"),
   emailSmtpSecure: boolean("email_smtp_secure"),
   emailSmtpUser: text("email_smtp_user"),
+  // Inbound email (receiving candidate replies). Independent toggle from
+  // outbound — a workspace can send via SMTP and receive via Resend, etc.
+  emailInboundEnabled: boolean("email_inbound_enabled").default(false).notNull(),
+  emailInboundProvider: text("email_inbound_provider"), // 'resend' | 'postmark'
+  // Domain used to build the Reply-To address (reply+{token}@{domain}) on
+  // outbound sends, and shown in the UI as the domain the self-hoster must
+  // point at their provider (MX record for Postmark; verified receiving
+  // domain for Resend). Distinct from the outbound sending domain — a
+  // self-hoster may send from mail.acme.com but receive on reply.acme.com.
+  emailInboundReplyDomain: text("email_inbound_reply_domain"),
+  // Shared verification secret (Postmark: Basic Auth password embedded in
+  // the webhook URL, since Postmark has no HMAC scheme; Resend: passed
+  // straight into resend.webhooks.verify as the svix secret). Plaintext —
+  // same class as calWebhookSecret, not a bearer credential.
+  emailInboundWebhookSecret: text("email_inbound_webhook_secret"),
+  // Resend-only: API key for the follow-up emails.receiving.get() call.
+  // Separate from the outbound emailApiKey* triple on purpose — inbound and
+  // outbound providers are independent, so a workspace on SMTP-outbound +
+  // Resend-inbound has no outbound Resend key to borrow.
+  emailInboundResendApiKeyCiphertext: text(
+    "email_inbound_resend_api_key_ciphertext",
+  ),
+  emailInboundResendApiKeyIv: text("email_inbound_resend_api_key_iv"),
+  emailInboundResendApiKeyTag: text("email_inbound_resend_api_key_tag"),
   // Require all workspace members to enable two-factor authentication.
   require2fa: boolean("require_2fa").default(false).notNull(),
   // Shape lives in apps/web/src/features/career-page/config.ts.
@@ -678,6 +702,10 @@ export const applications = pgTable(
     appliedAt: timestamp("applied_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
+    // Opaque routing token for inbound email replies (reply+{token}@...).
+    // Lazily generated on first candidate-facing send — see
+    // ensureApplicationInboundToken in apps/web/src/lib/email.
+    inboundToken: text("inbound_token").unique(),
     ...timestamps(),
   },
   (table) => [
@@ -1209,6 +1237,9 @@ export const candidateMessages = pgTable(
     candidateId: uuid("candidate_id")
       .notNull()
       .references(() => candidates.id, { onDelete: "cascade" }),
+    applicationId: uuid("application_id").references(() => applications.id, {
+      onDelete: "set null",
+    }),
     authorId: text("author_id").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -1219,6 +1250,14 @@ export const candidateMessages = pgTable(
     body: text("body").notNull(),
     status: messageStatusEnum("status").default("sent").notNull(),
     providerMessageId: text("provider_message_id"),
+    // Threading (inbound only). Raw Message-ID header this reply is
+    // responding to, plus the full References chain (space-joined, RFC
+    // 2822 style) for clients that preserve it.
+    inReplyTo: text("in_reply_to"),
+    references: text("references"),
+    // Inbound attachment metadata only — bytes live in the configured
+    // StorageAdapter, this just points at the key.
+    attachments: jsonb("attachments"),
     ...timestamps(),
   },
   (table) => [

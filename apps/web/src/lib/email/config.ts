@@ -3,7 +3,7 @@ import "server-only";
 import { eq } from "drizzle-orm";
 
 import { db, workspaceSettings } from "@harly/db";
-import type { EmailProviderConfig } from "@harly/emails";
+import type { EmailProviderConfig, InboundProviderId } from "@harly/emails";
 
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 
@@ -11,6 +11,10 @@ export type EmailProviderId = "resend" | "smtp";
 
 export function isEmailProviderId(value: string): value is EmailProviderId {
   return value === "resend" || value === "smtp";
+}
+
+function isInboundProviderId(value: string): value is InboundProviderId {
+  return value === "resend" || value === "postmark";
 }
 
 export type WorkspaceEmailStatus = {
@@ -150,4 +154,116 @@ export async function getWorkspaceEmailConfig(
     user: row.emailSmtpUser ?? undefined,
     pass,
   };
+}
+
+export type WorkspaceInboundEmailStatus = {
+  enabled: boolean;
+  provider: InboundProviderId | null;
+  replyDomain: string | null;
+  /** True only when a webhook secret is stored (never the secret itself). */
+  hasWebhookSecret: boolean;
+  /** Resend only — true when an inbound-specific API key is stored. */
+  hasResendApiKey: boolean;
+  encryptionReady: boolean;
+};
+
+/** Public-safe inbound email status for the settings UI. Never returns secrets. */
+export async function getWorkspaceInboundEmailStatus(
+  workspaceId: string,
+): Promise<WorkspaceInboundEmailStatus> {
+  const [row] = await db
+    .select({
+      emailInboundEnabled: workspaceSettings.emailInboundEnabled,
+      emailInboundProvider: workspaceSettings.emailInboundProvider,
+      emailInboundReplyDomain: workspaceSettings.emailInboundReplyDomain,
+      emailInboundWebhookSecret: workspaceSettings.emailInboundWebhookSecret,
+      emailInboundResendApiKeyCiphertext:
+        workspaceSettings.emailInboundResendApiKeyCiphertext,
+    })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, workspaceId))
+    .limit(1);
+
+  const provider =
+    row?.emailInboundProvider && isInboundProviderId(row.emailInboundProvider)
+      ? row.emailInboundProvider
+      : null;
+
+  return {
+    enabled: Boolean(row?.emailInboundEnabled),
+    provider,
+    replyDomain: row?.emailInboundReplyDomain ?? null,
+    hasWebhookSecret: Boolean(row?.emailInboundWebhookSecret),
+    hasResendApiKey: Boolean(row?.emailInboundResendApiKeyCiphertext),
+    encryptionReady: isEncryptionConfigured(),
+  };
+}
+
+export type WorkspaceInboundEmailConfig = {
+  provider: InboundProviderId;
+  webhookSecret: string;
+  /** Only present for the "resend" provider. */
+  resendApiKey?: string;
+};
+
+/**
+ * Resolve a usable inbound email config (with decrypted secrets) for a
+ * workspace, or null when inbound is disabled / unconfigured / the master
+ * key is missing.
+ */
+export async function getWorkspaceInboundEmailConfig(
+  workspaceId: string,
+): Promise<WorkspaceInboundEmailConfig | null> {
+  const [row] = await db
+    .select({
+      emailInboundEnabled: workspaceSettings.emailInboundEnabled,
+      emailInboundProvider: workspaceSettings.emailInboundProvider,
+      emailInboundWebhookSecret: workspaceSettings.emailInboundWebhookSecret,
+      emailInboundResendApiKeyCiphertext:
+        workspaceSettings.emailInboundResendApiKeyCiphertext,
+      emailInboundResendApiKeyIv: workspaceSettings.emailInboundResendApiKeyIv,
+      emailInboundResendApiKeyTag: workspaceSettings.emailInboundResendApiKeyTag,
+    })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, workspaceId))
+    .limit(1);
+
+  if (
+    !row ||
+    !row.emailInboundEnabled ||
+    !row.emailInboundProvider ||
+    !isInboundProviderId(row.emailInboundProvider) ||
+    !row.emailInboundWebhookSecret
+  ) {
+    return null;
+  }
+
+  if (row.emailInboundProvider === "resend") {
+    if (
+      !isEncryptionConfigured() ||
+      !row.emailInboundResendApiKeyCiphertext ||
+      !row.emailInboundResendApiKeyIv ||
+      !row.emailInboundResendApiKeyTag
+    ) {
+      return null;
+    }
+
+    try {
+      const resendApiKey = decryptSecret({
+        ciphertext: row.emailInboundResendApiKeyCiphertext,
+        iv: row.emailInboundResendApiKeyIv,
+        tag: row.emailInboundResendApiKeyTag,
+      });
+
+      return {
+        provider: "resend",
+        webhookSecret: row.emailInboundWebhookSecret,
+        resendApiKey,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  return { provider: "postmark", webhookSecret: row.emailInboundWebhookSecret };
 }

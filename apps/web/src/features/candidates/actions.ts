@@ -27,6 +27,7 @@ import { parseResumeStructured } from "@/lib/ai/surfaces/parse-resume";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceEmailSender } from "@/lib/email";
+import { getInboundReplyTo } from "@/lib/email/inbound-token";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
 import {
@@ -905,9 +906,11 @@ export async function sendBulkCandidateEmail(input: {
     return { success: false, error: "No matching candidates.", sent: 0, failed: 0 };
   }
 
-  // Latest application job title per candidate (for {{job_title}}).
+  // Latest application per candidate — job title for {{job_title}}, and the
+  // application id for inbound reply routing.
   const jobTitleRows = await db
     .select({
+      applicationId: applications.id,
       candidateId: applications.candidateId,
       jobTitle: jobs.title,
       appliedAt: applications.appliedAt,
@@ -925,9 +928,11 @@ export async function sendBulkCandidateEmail(input: {
     )
     .orderBy(desc(applications.appliedAt));
   const jobTitleByCandidate = new Map<string, string>();
+  const latestApplicationByCandidate = new Map<string, string>();
   for (const row of jobTitleRows) {
     if (!jobTitleByCandidate.has(row.candidateId)) {
       jobTitleByCandidate.set(row.candidateId, row.jobTitle);
+      latestApplicationByCandidate.set(row.candidateId, row.applicationId);
     }
   }
 
@@ -954,6 +959,10 @@ export async function sendBulkCandidateEmail(input: {
     };
     const subject = interpolateTemplate(parsed.data.subject, values);
     const body = interpolateTemplate(parsed.data.body, values);
+    const applicationId = latestApplicationByCandidate.get(candidate.id);
+    const replyTo = applicationId
+      ? await getInboundReplyTo(workspace.id, applicationId)
+      : undefined;
 
     let status: "sent" | "queued" | "failed" = sender ? "sent" : "queued";
     if (sender) {
@@ -961,6 +970,7 @@ export async function sendBulkCandidateEmail(input: {
         await sender.send({
           to: candidate.email,
           subject,
+          replyTo,
           react: createElement(
             "div",
             { style: { whiteSpace: "pre-wrap", fontFamily: "sans-serif" } },
@@ -1111,6 +1121,23 @@ export async function sendCandidateMessage(input: {
       return { success: false, error: "Candidate not found." };
     }
 
+    // Latest application for this candidate — used to route inbound replies
+    // back to the right thread via a Reply-To token, when inbound is on.
+    const [latestApplication] = await db
+      .select({ id: applications.id })
+      .from(applications)
+      .where(
+        and(
+          eq(applications.workspaceId, input.workspaceId),
+          eq(applications.candidateId, input.candidateId),
+        ),
+      )
+      .orderBy(desc(applications.appliedAt))
+      .limit(1);
+    const replyTo = latestApplication
+      ? await getInboundReplyTo(workspace.id, latestApplication.id)
+      : undefined;
+
     // Send via the workspace's configured provider (or platform default);
     // otherwise persist as queued.
     const sender = await getWorkspaceEmailSender(workspace.id);
@@ -1120,6 +1147,7 @@ export async function sendCandidateMessage(input: {
         await sender.send({
           to: parsed.data.toEmail,
           subject: parsed.data.subject,
+          replyTo,
           react: createElement(
             "div",
             { style: { whiteSpace: "pre-wrap", fontFamily: "sans-serif" } },

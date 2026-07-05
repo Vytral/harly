@@ -4,6 +4,7 @@ export type SendEmailOptions = {
   to: string;
   subject: string;
   react: React.ReactElement;
+  replyTo?: string;
 };
 
 export type EmailSender = {
@@ -36,7 +37,7 @@ export type EmailProviderConfig = ResendProviderConfig | SmtpProviderConfig;
 
 function createResendSender(config: ResendProviderConfig): EmailSender {
   return {
-    async send({ to, subject, react }) {
+    async send({ to, subject, react, replyTo }) {
       const [{ render }, { Resend }] = await Promise.all([
         import("@react-email/render"),
         import("resend"),
@@ -44,7 +45,13 @@ function createResendSender(config: ResendProviderConfig): EmailSender {
       const resend = new Resend(config.apiKey);
       const html = await render(react);
 
-      await resend.emails.send({ from: config.from, to, subject, html });
+      await resend.emails.send({
+        from: config.from,
+        to,
+        subject,
+        html,
+        replyTo,
+      });
     },
   };
 }
@@ -62,14 +69,20 @@ function createSmtpSender(config: SmtpProviderConfig): EmailSender {
   }
 
   return {
-    async send({ to, subject, react }) {
+    async send({ to, subject, react, replyTo }) {
       const [{ render }, transport] = await Promise.all([
         import("@react-email/render"),
         transporter(),
       ]);
       const html = await render(react);
 
-      await transport.sendMail({ from: config.from, to, subject, html });
+      await transport.sendMail({
+        from: config.from,
+        to,
+        subject,
+        html,
+        replyTo,
+      });
     },
     async verify() {
       const transport = await transporter();

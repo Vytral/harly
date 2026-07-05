@@ -28,6 +28,7 @@ import {
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
+import { getInboundReplyTo } from "@/lib/email/inbound-token";
 import { syncInterviewToGCal, cancelInterviewGCalEvent, updateInterviewGCalEvent } from "@/lib/gcal/sync";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { requirePermission } from "@/features/workspaces/permissions-server";
@@ -270,12 +271,14 @@ export async function scheduleInterview(
 
       if (recipient?.email) {
         const branding = await getWorkspaceEmailBranding(workspace.id);
+        const replyTo = await getInboundReplyTo(workspace.id, data.applicationId);
         void sendWorkspaceEmail(workspace.id, {
           to: recipient.email,
           subject: interviewScheduledSubject({
             companyName: recipient.companyName,
             jobTitle: recipient.jobTitle,
           }),
+          replyTo,
           react: createElement(InterviewScheduled, {
             candidateName: recipient.firstName,
             companyName: recipient.companyName,
@@ -374,6 +377,7 @@ export async function setInterviewStatus(input: {
           jobTitle: jobs.title,
           type: interviews.type,
           scheduledAt: interviews.scheduledAt,
+          applicationId: interviews.applicationId,
         })
         .from(interviews)
         .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
@@ -389,12 +393,14 @@ export async function setInterviewStatus(input: {
 
       if (info?.email) {
         const branding = await getWorkspaceEmailBranding(workspace.id);
+        const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
         void sendWorkspaceEmail(workspace.id, {
           to: info.email,
           subject: interviewCanceledSubject({
             companyName: info.companyName,
             jobTitle: info.jobTitle,
           }),
+          replyTo,
           react: createElement(InterviewCanceled, {
             candidateName: info.firstName,
             companyName: info.companyName,
@@ -510,6 +516,7 @@ export async function rescheduleInterview(input: {
         type: interviews.type,
         mode: interviews.mode,
         interviewerId: interviews.interviewerId,
+        applicationId: interviews.applicationId,
       })
       .from(interviews)
       .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
@@ -561,12 +568,14 @@ export async function rescheduleInterview(input: {
 
     if (info?.email) {
       const branding = await getWorkspaceEmailBranding(workspace.id);
+      const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
       void sendWorkspaceEmail(workspace.id, {
         to: info.email,
         subject: interviewRescheduledSubject({
           companyName: info.companyName,
           jobTitle: info.jobTitle,
         }),
+        replyTo,
         react: createElement(InterviewRescheduled, {
           candidateName: info.firstName,
           companyName: info.companyName,
@@ -719,6 +728,7 @@ export async function updateInterview(input: {
         jobTitle: jobs.title,
         interviewerId: interviews.interviewerId,
         scheduledAt: interviews.scheduledAt,
+        applicationId: interviews.applicationId,
       })
       .from(interviews)
       .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
@@ -762,12 +772,14 @@ export async function updateInterview(input: {
     if (data.scheduledAt && data.scheduledAt !== "" && info?.email) {
       const when = new Date(data.scheduledAt);
       const branding = await getWorkspaceEmailBranding(workspace.id);
+      const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
       void sendWorkspaceEmail(workspace.id, {
         to: info.email,
         subject: interviewRescheduledSubject({
           companyName: info.companyName,
           jobTitle: info.jobTitle,
         }),
+        replyTo,
         react: createElement(InterviewRescheduled, {
           candidateName: info.firstName,
           companyName: info.companyName,

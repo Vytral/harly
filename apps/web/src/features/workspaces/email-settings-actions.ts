@@ -12,7 +12,11 @@ import { createEmailSender, type EmailProviderConfig } from "@harly/emails";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
-import { getWorkspaceEmailConfig, getWorkspaceEmailStatus } from "@/lib/email/config";
+import {
+  getWorkspaceEmailConfig,
+  getWorkspaceEmailStatus,
+  getWorkspaceInboundEmailStatus,
+} from "@/lib/email/config";
 
 const log = createLogger("workspace-email-settings");
 
@@ -146,6 +150,103 @@ export async function disableEmailAction(): Promise<EmailSettingsActionResult> {
     .where(eq(workspaceSettings.organizationId, context.organization.id));
 
   revalidatePath("/settings");
+  return { ok: true };
+}
+
+const inboundSchema = z.object({
+  provider: z.enum(["resend", "postmark"]),
+  replyDomain: z.string().trim().min(1, "Enter a reply domain.").max(200),
+  // Optional: when blank, the previously stored secret is kept.
+  webhookSecret: z.string().trim().max(500).optional(),
+  // Resend only. Optional: when blank, the previously stored key is kept.
+  resendApiKey: z.string().trim().max(500).optional(),
+});
+
+export async function saveInboundEmailSettingsAction(input: {
+  enabled: boolean;
+  provider: "resend" | "postmark";
+  replyDomain: string;
+  webhookSecret?: string;
+  resendApiKey?: string;
+}): Promise<EmailSettingsActionResult> {
+  const context = await requirePermission("integrations:manage");
+
+  if (input.enabled && !isEncryptionConfigured()) {
+    return { ok: false, error: "Server is missing AI_ENCRYPTION_KEY." };
+  }
+
+  const parsed = inboundSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid settings.",
+    };
+  }
+
+  const { enabled, provider, replyDomain, webhookSecret, resendApiKey } = input;
+  const status = await getWorkspaceInboundEmailStatus(context.organization.id);
+
+  if (enabled && !webhookSecret && !status.hasWebhookSecret) {
+    return { ok: false, error: "Add a webhook secret before enabling." };
+  }
+  if (
+    enabled &&
+    provider === "resend" &&
+    !resendApiKey &&
+    !status.hasResendApiKey
+  ) {
+    return { ok: false, error: "Add a Resend API key before enabling." };
+  }
+
+  const resendKeyColumns =
+    provider === "resend" && resendApiKey
+      ? (() => {
+          const encrypted = encryptSecret(resendApiKey);
+          return {
+            emailInboundResendApiKeyCiphertext: encrypted.ciphertext,
+            emailInboundResendApiKeyIv: encrypted.iv,
+            emailInboundResendApiKeyTag: encrypted.tag,
+          };
+        })()
+      : provider === "postmark"
+        ? {
+            emailInboundResendApiKeyCiphertext: null,
+            emailInboundResendApiKeyIv: null,
+            emailInboundResendApiKeyTag: null,
+          }
+        : {};
+
+  const columns = {
+    emailInboundEnabled: enabled,
+    emailInboundProvider: provider,
+    emailInboundReplyDomain: replyDomain,
+    ...(webhookSecret ? { emailInboundWebhookSecret: webhookSecret } : {}),
+    ...resendKeyColumns,
+  };
+
+  await db
+    .insert(workspaceSettings)
+    .values({ organizationId: context.organization.id, ...columns })
+    .onConflictDoUpdate({
+      target: workspaceSettings.organizationId,
+      set: { ...columns, updatedAt: new Date() },
+    });
+
+  revalidatePath("/settings");
+  revalidatePath("/settings/email");
+  return { ok: true };
+}
+
+export async function disableInboundEmailAction(): Promise<EmailSettingsActionResult> {
+  const context = await requirePermission("integrations:manage");
+
+  await db
+    .update(workspaceSettings)
+    .set({ emailInboundEnabled: false, updatedAt: new Date() })
+    .where(eq(workspaceSettings.organizationId, context.organization.id));
+
+  revalidatePath("/settings");
+  revalidatePath("/settings/email");
   return { ok: true };
 }
 

@@ -15,6 +15,7 @@ export type SendEmailOptions = {
   to: string;
   subject: string;
   react: React.ReactElement;
+  replyTo?: string;
 };
 
 /** Send a platform-level email (welcome, invitations...) using the env-configured sender. */

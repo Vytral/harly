@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import {
   AlertTriangle,
+  ArrowDownLeft,
   ArrowRight,
   BrainCircuit,
   Calendar,
@@ -134,6 +135,7 @@ type CandidateMessage = {
   subject: string;
   body: string;
   toEmail: string;
+  fromEmail: string | null;
   status: "queued" | "sent" | "failed";
   authorName: string | null;
   createdAt: string;
@@ -445,10 +447,23 @@ export function CandidateProfileTabs({
           </div>
         ) : (
           messages.map((message) => (
-            <Card key={message.id}>
+            <Card
+              key={message.id}
+              className={cn(
+                message.direction === "inbound" && "border-l-4 border-l-slate-info",
+              )}
+            >
               <CardContent className="space-y-1.5">
                 <div className="flex items-center justify-between gap-3">
-                  <p className="font-medium">{message.subject}</p>
+                  <div className="flex items-center gap-2">
+                    {message.direction === "inbound" ? (
+                      <Badge variant="secondary" className="gap-1">
+                        <ArrowDownLeft className="size-3" />
+                        Reply
+                      </Badge>
+                    ) : null}
+                    <p className="font-medium">{message.subject}</p>
+                  </div>
                   <Badge variant={message.status === "failed" ? "danger" : "neutral"}>
                     {MESSAGE_STATUS_LABEL[message.status]}
                   </Badge>
@@ -457,7 +472,9 @@ export function CandidateProfileTabs({
                   {message.body}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  To {message.toEmail}
+                  {message.direction === "inbound"
+                    ? `From ${message.fromEmail ?? "candidate"}`
+                    : `To ${message.toEmail}`}
                   {message.authorName ? ` · ${message.authorName}` : ""} ·{" "}
                   <RelativeTime value={message.createdAt} />
                 </p>
