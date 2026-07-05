@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, ilike, isNull, ne, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, ilike, isNull, ne, notInArray, or, sql } from "drizzle-orm";
 import { generateText } from "ai";
 import { z } from "zod";
 
@@ -11,7 +11,6 @@ import {
   applicationAnswers,
   applicationQuestions,
   applications,
-  candidateFiles,
   candidates,
   db,
   jobs,
@@ -21,54 +20,11 @@ import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { getModel } from "@/lib/ai/registry";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
-import { extractResumeText } from "@/lib/resume/extract-text";
-import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
-import { storage } from "@/lib/storage";
-import { maxResumeFileSize } from "@/lib/storage-validation";
+import { loadResumeText } from "@/lib/resume/load-resume-text";
 
 const generateSchema = z.object({
   applicationId: z.uuid(),
 });
-
-async function loadResumeText(input: {
-  workspaceId: string;
-  candidateId: string;
-}): Promise<{ text: string | null; fileName: string | null }> {
-  const [file] = await db
-    .select({
-      fileName: candidateFiles.fileName,
-      fileUrl: candidateFiles.fileUrl,
-    })
-    .from(candidateFiles)
-    .where(
-      and(
-        eq(candidateFiles.workspaceId, input.workspaceId),
-        eq(candidateFiles.candidateId, input.candidateId),
-      ),
-    )
-    .orderBy(desc(candidateFiles.createdAt))
-    .limit(1);
-
-  if (!file) return { text: null, fileName: null };
-
-  const key = resumeKeyFromUrl(file.fileUrl);
-  if (!key) return { text: null, fileName: file.fileName };
-
-  try {
-    const buffer = await storage.read(key);
-    if (buffer.byteLength === 0 || buffer.byteLength > maxResumeFileSize) {
-      return { text: null, fileName: file.fileName };
-    }
-    const { text } = await extractResumeText({
-      buffer,
-      fileName: file.fileName,
-    });
-    return { text: text.trim() ? text : null, fileName: file.fileName };
-  } catch (error) {
-    console.error("Could not read resume for AI evaluation", error);
-    return { text: null, fileName: file.fileName };
-  }
-}
 
 export type GenerateAiEvaluationResult =
   | { success: true }

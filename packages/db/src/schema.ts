@@ -1140,6 +1140,59 @@ export const aiEvaluations = pgTable(
   ],
 );
 
+// Embedding vector for a candidate's combined profile text (resume + skills +
+// headline). Powers semantic candidate-to-job matching across the whole
+// workspace, not just active applicants. Plain jsonb float array — no pgvector
+// extension required, since self-hosted deployments can't assume it's installed.
+export const candidateEmbeddings = pgTable(
+  "candidate_embeddings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    // number[]
+    embedding: jsonb("embedding").notNull(),
+    // sha256 of the source text — skip re-embedding when nothing changed.
+    sourceHash: text("source_hash").notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("candidate_embeddings_workspace_candidate_idx").on(
+      table.workspaceId,
+      table.candidateId,
+    ),
+    index("candidate_embeddings_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+// Embedding vector for a job's combined text (title + description + requirements + keywords).
+export const jobEmbeddings = pgTable(
+  "job_embeddings",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    model: text("model").notNull(),
+    // number[]
+    embedding: jsonb("embedding").notNull(),
+    sourceHash: text("source_hash").notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("job_embeddings_workspace_job_idx").on(table.workspaceId, table.jobId),
+    index("job_embeddings_workspace_idx").on(table.workspaceId),
+  ],
+);
+
 // Candidate tags
 export const candidateTags = pgTable(
   "candidate_tags",
@@ -1362,6 +1415,10 @@ export type Scorecard = typeof scorecards.$inferSelect;
 export type NewScorecard = typeof scorecards.$inferInsert;
 export type AiEvaluation = typeof aiEvaluations.$inferSelect;
 export type NewAiEvaluation = typeof aiEvaluations.$inferInsert;
+export type CandidateEmbedding = typeof candidateEmbeddings.$inferSelect;
+export type NewCandidateEmbedding = typeof candidateEmbeddings.$inferInsert;
+export type JobEmbedding = typeof jobEmbeddings.$inferSelect;
+export type NewJobEmbedding = typeof jobEmbeddings.$inferInsert;
 export type CandidateTag = typeof candidateTags.$inferSelect;
 export type NewCandidateTag = typeof candidateTags.$inferInsert;
 export type PoolEntry = typeof poolEntries.$inferSelect;

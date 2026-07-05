@@ -19,6 +19,9 @@ import { JobHiringTeam } from "@/features/jobs/JobHiringTeam";
 import { PublicJobPreview } from "@/features/jobs/PublicJobPreview";
 import { JobShareButton } from "@/features/jobs/JobShareButton";
 import { JobStatusActions } from "@/features/jobs/JobStatusActions";
+import { SemanticMatchPanel } from "@/features/matching/SemanticMatchPanel";
+import { getWorkspaceAiStatus } from "@/lib/ai/config";
+import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export const dynamic = "force-dynamic";
 
@@ -32,11 +35,13 @@ export default async function DashboardJobPage({
   params,
 }: DashboardJobPageProps) {
   const { jobId } = await params;
-  const [result, departments, hiringTeam, workspaceMembers] = await Promise.all([
+  const { organization: workspace } = await getWorkspaceContext();
+  const [result, departments, hiringTeam, workspaceMembers, aiStatus] = await Promise.all([
     getDashboardJob(jobId),
     listWorkspaceDepartments(),
     listJobHiringTeam(jobId),
     listWorkspaceMembers(),
+    getWorkspaceAiStatus(workspace.id),
   ]);
 
   if (!result) {
@@ -79,6 +84,7 @@ export default async function DashboardJobPage({
         team={hiringTeam}
         members={workspaceMembers}
       />
+      <SemanticMatchPanel jobId={job.id} aiConfigured={aiStatus.enabled && aiStatus.hasApiKey} />
       <PublicJobPreview slug={job.slug} />
     </div>
   );
