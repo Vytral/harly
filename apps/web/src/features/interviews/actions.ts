@@ -18,6 +18,7 @@ import {
   user as authUsers,
 } from "@harly/db";
 import {
+  CustomTemplateEmail,
   InterviewCanceled,
   interviewCanceledSubject,
   InterviewRescheduled,
@@ -25,6 +26,7 @@ import {
   InterviewScheduled,
   interviewScheduledSubject,
 } from "@harly/emails";
+import { renderActiveEmailTemplate } from "@/features/email-templates/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
@@ -227,6 +229,7 @@ export async function scheduleInterview(
         .select({
           email: candidates.email,
           firstName: candidates.firstName,
+          lastName: candidates.lastName,
           companyName: organization.name,
           jobTitle: jobs.title,
         })
@@ -243,13 +246,15 @@ export async function scheduleInterview(
         .limit(1);
 
       let interviewerEmail: string | undefined;
+      let interviewerName: string | undefined;
       if (data.interviewerId) {
         const [interviewer] = await db
-          .select({ email: authUsers.email })
+          .select({ email: authUsers.email, name: authUsers.name })
           .from(authUsers)
           .where(eq(authUsers.id, data.interviewerId))
           .limit(1);
         interviewerEmail = interviewer?.email ?? undefined;
+        interviewerName = interviewer?.name ?? undefined;
       }
 
       const attendees = [recipient?.email, interviewerEmail].filter(
@@ -272,30 +277,59 @@ export async function scheduleInterview(
       if (recipient?.email) {
         const branding = await getWorkspaceEmailBranding(workspace.id);
         const replyTo = await getInboundReplyTo(workspace.id, data.applicationId);
-        void sendWorkspaceEmail(workspace.id, {
-          to: recipient.email,
-          subject: interviewScheduledSubject({
-            companyName: recipient.companyName,
-            jobTitle: recipient.jobTitle,
-          }),
-          replyTo,
-          react: createElement(InterviewScheduled, {
-            candidateName: recipient.firstName,
-            companyName: recipient.companyName,
-            companyLogoUrl: branding.logoUrl ?? undefined,
-            accentColor: branding.primaryColor ?? undefined,
-            socialLinks: branding.socialLinks,
-            jobTitle: recipient.jobTitle,
-            interviewType: INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
-            when: interviewWhenFormatter.format(when),
-            mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
-            location: data.location ?? undefined,
-            duration: data.durationMins ? `${data.durationMins} min` : undefined,
-            startIso: when.toISOString(),
-            durationMins: data.durationMins,
-            notes: data.notes ?? undefined,
-          }),
+        const duration = data.durationMins ? `${data.durationMins} min` : undefined;
+
+        const custom = await renderActiveEmailTemplate(workspace.id, "interview_invite", {
+          candidate_first_name: recipient.firstName,
+          candidate_last_name: recipient.lastName,
+          candidate_full_name: `${recipient.firstName} ${recipient.lastName}`,
+          job_title: recipient.jobTitle,
+          company_name: recipient.companyName,
+          interview_date: interviewWhenFormatter.format(when),
+          interview_time: interviewWhenFormatter.format(when),
+          interview_location: data.location ?? undefined,
+          interview_duration: duration,
+          interviewer_name: interviewerName,
         });
+
+        void sendWorkspaceEmail(workspace.id, custom
+          ? {
+              to: recipient.email,
+              subject: custom.subject,
+              replyTo,
+              react: createElement(CustomTemplateEmail, {
+                bodyHtml: custom.bodyHtml,
+                companyName: recipient.companyName,
+                companyLogoUrl: branding.logoUrl ?? undefined,
+                accentColor: branding.primaryColor ?? undefined,
+                socialLinks: branding.socialLinks,
+              }),
+            }
+          : {
+              to: recipient.email,
+              subject: interviewScheduledSubject({
+                companyName: recipient.companyName,
+                jobTitle: recipient.jobTitle,
+              }),
+              replyTo,
+              react: createElement(InterviewScheduled, {
+                candidateName: recipient.firstName,
+                companyName: recipient.companyName,
+                companyLogoUrl: branding.logoUrl ?? undefined,
+                accentColor: branding.primaryColor ?? undefined,
+                socialLinks: branding.socialLinks,
+                jobTitle: recipient.jobTitle,
+                interviewType: INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
+                when: interviewWhenFormatter.format(when),
+                mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
+                location: data.location ?? undefined,
+                duration,
+                startIso: when.toISOString(),
+                durationMins: data.durationMins,
+                notes: data.notes ?? undefined,
+              }),
+            },
+        );
       }
 
       revalidatePath(`/dashboard/candidates/${data.candidateId}`);

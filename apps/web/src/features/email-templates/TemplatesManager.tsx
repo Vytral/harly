@@ -2,21 +2,33 @@
 
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import DOMPurify from "dompurify";
 
 import {
   createEmailTemplate,
   deleteEmailTemplate,
+  setActiveEmailTemplate,
   updateEmailTemplate,
 } from "@/features/email-templates/actions";
-import type { EmailTemplateItem, TemplateType } from "@/features/email-templates/data";
+import {
+  SYSTEM_TEMPLATE_TYPES,
+  type EmailTemplateItem,
+  type TemplateType,
+} from "@/features/email-templates/data";
 import {
   findUnknownVariables,
   interpolateTemplate,
   TEMPLATE_VARIABLES,
 } from "@/features/email-templates/interpolate";
+import {
+  FileTextIcon,
+  PlusIcon,
+  SearchIcon,
+  StarFillIcon,
+  StarIcon,
+  TrashIcon,
+} from "@/components/ui/icons/phosphor";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { Button } from "@/components/ui/button";
@@ -42,6 +54,7 @@ const TEMPLATE_TYPE_LABELS: Record<TemplateType, string> = {
   rejection: "Rejection",
   offer: "Offer",
   screening: "Screening",
+  stage_change: "Stage change",
 };
 
 const TEMPLATE_TYPE_COLORS: Record<TemplateType, string> = {
@@ -50,7 +63,11 @@ const TEMPLATE_TYPE_COLORS: Record<TemplateType, string> = {
   rejection: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
   offer: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
   screening: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  stage_change: "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
 };
+
+/** Types with a matching system auto-email — these can be "activated" to override the default. */
+const ACTIVATABLE_TYPES = new Set<TemplateType>(SYSTEM_TEMPLATE_TYPES);
 
 // Groups for the variable pill picker
 const VARIABLE_GROUPS = Array.from(
@@ -91,6 +108,12 @@ const STARTER_TEMPLATES: Array<{
     type: "screening",
     subject: "Quick intro call — {{job_title}}",
     body: "<p>Hi {{candidate_first_name}},</p><p>We reviewed your application for <strong>{{job_title}}</strong> at {{company_name}} and we're impressed with your background.</p><p>We'd love to schedule a quick 30-minute call to learn more about you and share details about the role.</p><p>Looking forward to connecting,<br>{{sender_name}}</p>",
+  },
+  {
+    name: "Stage update",
+    type: "stage_change",
+    subject: "You're moving to {{stage_name}} — {{job_title}}",
+    body: "<p>Hi {{candidate_first_name}},</p><p>Good news — your application for <strong>{{job_title}}</strong> at {{company_name}} has moved to the <strong>{{stage_name}}</strong> stage.</p><p>Someone from the team will reach out shortly with next steps.</p><p>Best,<br>{{sender_name}}</p>",
   },
 ];
 
@@ -208,6 +231,25 @@ export function TemplatesManager({
     });
   }
 
+  function toggleActive(template: EmailTemplateItem) {
+    startTransition(async () => {
+      const result = await setActiveEmailTemplate({
+        templateId: template.id,
+        active: !template.isActive,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Could not update the template.");
+        return;
+      }
+      toast.success(
+        template.isActive
+          ? "Reverted to the default email"
+          : `Now used for every ${TEMPLATE_TYPE_LABELS[template.type].toLowerCase()} email`,
+      );
+      router.refresh();
+    });
+  }
+
   // Strip HTML tags for plain-text preview of body in cards
   function stripHtml(html: string) {
     return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
@@ -223,7 +265,7 @@ export function TemplatesManager({
             : `${templates.length} template${templates.length === 1 ? "" : "s"}.`}
         </p>
         <Button size="sm" onClick={() => openNew()}>
-          <Plus className="size-4" />
+          <PlusIcon className="size-4" />
           New template
         </Button>
       </div>
@@ -232,7 +274,7 @@ export function TemplatesManager({
       {templates.length > 0 && (
         <div className="flex gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <SearchIcon className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               placeholder="Search templates…"
               value={search}
@@ -259,7 +301,7 @@ export function TemplatesManager({
         <div className="space-y-4">
           <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-10 text-center">
             <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-              <FileText className="size-5" strokeWidth={1.6} />
+              <FileTextIcon className="size-5" />
             </span>
             <p className="text-sm font-medium">Write once, send often</p>
             <p className="max-w-sm text-sm text-muted-foreground">
@@ -294,16 +336,49 @@ export function TemplatesManager({
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {filteredTemplates.map((template) => (
-            <Card key={template.id}>
+            <Card key={template.id} className={cn(template.isActive && "border-primary/40")}>
               <CardContent className="space-y-2">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex min-w-0 flex-col gap-1">
                     <p className="truncate font-semibold">{template.name}</p>
-                    <span className={cn("w-fit rounded-md px-2 py-0.5 text-[11px] font-semibold", TEMPLATE_TYPE_COLORS[template.type])}>
-                      {TEMPLATE_TYPE_LABELS[template.type]}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className={cn("w-fit rounded-md px-2 py-0.5 text-[11px] font-semibold", TEMPLATE_TYPE_COLORS[template.type])}>
+                        {TEMPLATE_TYPE_LABELS[template.type]}
+                      </span>
+                      {template.isActive ? (
+                        <span className="inline-flex w-fit items-center gap-1 rounded-md bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
+                          <StarFillIcon className="size-2.5" />
+                          Active
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex shrink-0 gap-1">
+                    {ACTIVATABLE_TYPES.has(template.type) ? (
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className={cn("size-8", template.isActive ? "text-success" : "text-muted-foreground")}
+                        aria-label={
+                          template.isActive
+                            ? `Stop using "${template.name}" for auto-emails`
+                            : `Use "${template.name}" for every ${TEMPLATE_TYPE_LABELS[template.type].toLowerCase()} email`
+                        }
+                        title={
+                          template.isActive
+                            ? "Active — used for this workspace's auto-emails"
+                            : "Use for this workspace's auto-emails"
+                        }
+                        disabled={isPending}
+                        onClick={() => toggleActive(template)}
+                      >
+                        {template.isActive ? (
+                          <StarFillIcon className="size-4" />
+                        ) : (
+                          <StarIcon className="size-4" />
+                        )}
+                      </Button>
+                    ) : null}
                     <Button
                       size="sm"
                       variant="ghost"
@@ -320,7 +395,7 @@ export function TemplatesManager({
                       disabled={isPending}
                       onClick={() => remove(template)}
                     >
-                      <Trash2 className="size-4" />
+                      <TrashIcon className="size-4" />
                     </Button>
                   </div>
                 </div>

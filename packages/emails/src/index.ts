@@ -7,6 +7,7 @@ export * from "./templates/ApplicationReceivedRecruiter";
 export * from "./templates/PortalMagicLink";
 export * from "./templates/CandidateRejected";
 export * from "./templates/CandidateStageUpdate";
+export * from "./templates/CustomTemplateEmail";
 export * from "./templates/DetailTable";
 export * from "./templates/HarlyLayout";
 export * from "./templates/InterviewCanceled";

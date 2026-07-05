@@ -11,7 +11,14 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("email-templates");
 
-const TEMPLATE_TYPES = ["general", "interview_invite", "rejection", "offer", "screening"] as const;
+const TEMPLATE_TYPES = [
+  "general",
+  "interview_invite",
+  "rejection",
+  "offer",
+  "screening",
+  "stage_change",
+] as const;
 
 const templateFieldsSchema = z.object({
   name: z.string().trim().min(1, "Name is required.").max(120),
@@ -124,6 +131,73 @@ export async function updateEmailTemplate(input: {
         : "Could not update the template. Please try again.",
     };
   }
+
+  revalidatePath("/dashboard/templates");
+  return { success: true };
+}
+
+/**
+ * Mark a template as the one used automatically for its `type`'s system
+ * auto-email (reject / stage-change / offer / interview-scheduled), or unset
+ * it back to the hardcoded default. Only one template per (workspace, type)
+ * can be active — activating one deactivates any sibling of the same type.
+ */
+export async function setActiveEmailTemplate(input: {
+  templateId: string;
+  active: boolean;
+}): Promise<ActionResult> {
+  const parsed = z
+    .object({ templateId: z.uuid(), active: z.boolean() })
+    .safeParse(input);
+  if (!parsed.success) return { success: false, error: "Invalid template." };
+
+  let context;
+  try {
+    context = await requirePermission("templates:manage");
+  } catch (error) {
+    log.error(error, "template permission check failed");
+    return { success: false, error: "You do not have permission to manage templates." };
+  }
+
+  const workspaceId = context.organization.id;
+
+  const [template] = await db
+    .select({ id: emailTemplates.id, type: emailTemplates.type })
+    .from(emailTemplates)
+    .where(
+      and(
+        eq(emailTemplates.workspaceId, workspaceId),
+        eq(emailTemplates.id, parsed.data.templateId),
+      ),
+    )
+    .limit(1);
+
+  if (!template) return { success: false, error: "Template not found." };
+
+  await db.transaction(async (tx) => {
+    if (parsed.data.active) {
+      // Only one active template per type — clear any current sibling first.
+      await tx
+        .update(emailTemplates)
+        .set({ isActive: false })
+        .where(
+          and(
+            eq(emailTemplates.workspaceId, workspaceId),
+            eq(emailTemplates.type, template.type),
+          ),
+        );
+    }
+
+    await tx
+      .update(emailTemplates)
+      .set({ isActive: parsed.data.active })
+      .where(
+        and(
+          eq(emailTemplates.workspaceId, workspaceId),
+          eq(emailTemplates.id, template.id),
+        ),
+      );
+  });
 
   revalidatePath("/dashboard/templates");
   return { success: true };

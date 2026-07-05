@@ -1,0 +1,2 @@
+ALTER TABLE "email_templates" ADD COLUMN "is_active" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+CREATE INDEX "email_templates_workspace_type_active_idx" ON "email_templates" USING btree ("workspace_id","type","is_active");

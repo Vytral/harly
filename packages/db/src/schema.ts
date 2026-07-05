@@ -1018,12 +1018,17 @@ export const emailTemplates = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     type: text("type", {
-      enum: ["general", "interview_invite", "rejection", "offer", "screening"],
+      enum: ["general", "interview_invite", "rejection", "offer", "screening", "stage_change"],
     })
       .notNull()
       .default("general"),
     subject: text("subject").notNull(),
     body: text("body").notNull(),
+    // When true, this template replaces the hardcoded system email for its
+    // `type` (reject/stage-change/offer/interview). At most one active
+    // template per (workspaceId, type) — enforced in the action layer, not
+    // a DB constraint, since Drizzle partial unique indexes are awkward here.
+    isActive: boolean("is_active").default(false).notNull(),
     createdById: text("created_by_id").references(() => user.id, {
       onDelete: "set null",
     }),
@@ -1037,6 +1042,11 @@ export const emailTemplates = pgTable(
     index("email_templates_workspace_updated_idx").on(
       table.workspaceId,
       table.updatedAt,
+    ),
+    index("email_templates_workspace_type_active_idx").on(
+      table.workspaceId,
+      table.type,
+      table.isActive,
     ),
   ],
 );

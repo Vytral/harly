@@ -18,12 +18,14 @@ import {
   organization,
 } from "@harly/db";
 import {
+  CustomTemplateEmail,
   OfferExtended,
   offerExtendedSubject,
   OfferWithdrawn,
   offerWithdrawnSubject,
 } from "@harly/emails";
 
+import { renderActiveEmailTemplate } from "@/features/email-templates/data";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
@@ -318,25 +320,53 @@ export async function sendOffer(input: { offerId: string }): Promise<ActionResul
 
   if (recipient?.email) {
     const branding = await getWorkspaceEmailBranding(workspaceId);
-    void sendWorkspaceEmail(workspaceId, {
-      to: recipient.email,
-      subject: offerExtendedSubject({
-        companyName: recipient.companyName,
-        jobTitle: offer.title,
-      }),
-      react: createElement(OfferExtended, {
-        candidateName: recipient.firstName,
-        companyName: recipient.companyName,
-        companyLogoUrl: branding.logoUrl ?? undefined,
-        accentColor: branding.primaryColor ?? undefined,
-        socialLinks: branding.socialLinks,
-        jobTitle: offer.title,
-        salary: formatOfferSalary(offer.salaryAmount, offer.currency, offer.salaryPeriod),
-        startDate: formatOfferDate(offer.startDate),
-        expiresAt: formatOfferDate(offer.expiresAt),
-        equity: offer.equity ?? undefined,
-      }),
-    });
+    const startDate = formatOfferDate(offer.startDate);
+    const expiresAt = formatOfferDate(offer.expiresAt);
+    const salary = formatOfferSalary(offer.salaryAmount, offer.currency, offer.salaryPeriod);
+
+    void renderActiveEmailTemplate(workspaceId, "offer", {
+      candidate_first_name: recipient.firstName,
+      candidate_last_name: recipient.lastName,
+      candidate_full_name: `${recipient.firstName} ${recipient.lastName}`,
+      job_title: offer.title,
+      company_name: recipient.companyName,
+      offer_salary: salary ?? undefined,
+      offer_expiry: expiresAt ?? undefined,
+      offer_start_date: startDate ?? undefined,
+    }).then((custom) =>
+      sendWorkspaceEmail(workspaceId, custom
+        ? {
+            to: recipient.email,
+            subject: custom.subject,
+            react: createElement(CustomTemplateEmail, {
+              bodyHtml: custom.bodyHtml,
+              companyName: recipient.companyName,
+              companyLogoUrl: branding.logoUrl ?? undefined,
+              accentColor: branding.primaryColor ?? undefined,
+              socialLinks: branding.socialLinks,
+            }),
+          }
+        : {
+            to: recipient.email,
+            subject: offerExtendedSubject({
+              companyName: recipient.companyName,
+              jobTitle: offer.title,
+            }),
+            react: createElement(OfferExtended, {
+              candidateName: recipient.firstName,
+              companyName: recipient.companyName,
+              companyLogoUrl: branding.logoUrl ?? undefined,
+              accentColor: branding.primaryColor ?? undefined,
+              socialLinks: branding.socialLinks,
+              jobTitle: offer.title,
+              salary,
+              startDate,
+              expiresAt,
+              equity: offer.equity ?? undefined,
+            }),
+          },
+      ),
+    );
   }
 
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
@@ -540,6 +570,7 @@ async function getOfferRecipient(workspaceId: string, candidateId: string) {
     .select({
       email: candidates.email,
       firstName: candidates.firstName,
+      lastName: candidates.lastName,
       companyName: organization.name,
     })
     .from(candidates)

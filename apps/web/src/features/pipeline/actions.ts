@@ -6,6 +6,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import {
   CandidateRejected,
   CandidateStageUpdate,
+  CustomTemplateEmail,
   candidateRejectedSubject,
   candidateStageUpdateSubject,
 } from "@harly/emails";
@@ -25,6 +26,13 @@ import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { normalizeStageEmailConfig } from "@/features/pipeline/data";
+import { renderActiveEmailTemplate } from "@/features/email-templates/data";
+
+/** `candidateName` in PipelineEmail is always "first last" — split for template variables. */
+function splitName(fullName: string): { first: string; last: string } {
+  const [first, ...rest] = fullName.trim().split(/\s+/);
+  return { first: first ?? fullName, last: rest.join(" ") };
+}
 
 type ApplicationStatus = "active" | "hired" | "rejected" | "withdrawn";
 
@@ -80,8 +88,34 @@ const log = createLogger("pipeline");
 
 async function sendPipelineEmails(workspaceId: string, emails: PipelineEmail[]) {
   const branding = await getWorkspaceEmailBranding(workspaceId);
+
   await Promise.allSettled(
-    emails.map((email) => {
+    emails.map(async (email) => {
+      const { first, last } = splitName(email.candidateName);
+      const templateType = email.type === "stage" ? "stage_change" : "rejection";
+      const custom = await renderActiveEmailTemplate(workspaceId, templateType, {
+        candidate_first_name: first,
+        candidate_last_name: last,
+        candidate_full_name: email.candidateName,
+        job_title: email.jobTitle,
+        stage_name: email.type === "stage" ? email.stageName : undefined,
+        company_name: email.workspaceName,
+      });
+
+      if (custom) {
+        return sendWorkspaceEmail(workspaceId, {
+          to: email.candidateEmail,
+          subject: custom.subject,
+          react: createElement(CustomTemplateEmail, {
+            bodyHtml: custom.bodyHtml,
+            companyName: email.workspaceName,
+            companyLogoUrl: branding.logoUrl ?? undefined,
+            accentColor: branding.primaryColor ?? undefined,
+            socialLinks: branding.socialLinks,
+          }),
+        });
+      }
+
       if (email.type === "stage") {
         return sendWorkspaceEmail(workspaceId, {
           to: email.candidateEmail,
