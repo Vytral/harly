@@ -4,13 +4,24 @@ import { useRef } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
-import { Clock, GripVertical } from "lucide-react";
 
+import {
+  CheckIcon,
+  ClockIcon,
+  DotsSixVerticalIcon,
+  TargetIcon,
+  XIcon,
+} from "@/components/ui/icons/phosphor";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { PipelineApplication } from "@/features/pipeline/data";
-import { DaysSince } from "@/lib/date-hydration";
+import { useDaysSince } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
 type CandidateCardProps = {
@@ -29,10 +40,71 @@ type CandidateCardOverlayProps = {
 
 const accentStyles: Record<PipelineApplication["status"], string> = {
   active: "border-l-transparent",
-  hired: "border-l-emerald-500",
+  hired: "border-l-success",
   rejected: "border-l-destructive",
   withdrawn: "border-l-muted-foreground/30",
 };
+
+/** Days a candidate can sit in a stage before the meta pill flags it as stale. */
+const STALE_AFTER_DAYS = 14;
+
+const recommendationTone: Record<
+  NonNullable<PipelineApplication["aiRecommendation"]>,
+  { pill: string; label: string }
+> = {
+  strong_yes: { pill: "bg-success/10 text-success", label: "Strong yes" },
+  yes: { pill: "bg-success/10 text-success", label: "Yes" },
+  maybe: { pill: "bg-warning/10 text-warning", label: "Maybe" },
+  no: { pill: "bg-destructive/10 text-destructive", label: "No" },
+};
+
+function ScorePill({
+  score,
+  recommendation,
+}: {
+  score: number;
+  recommendation: PipelineApplication["aiRecommendation"];
+}) {
+  const tone = recommendation
+    ? recommendationTone[recommendation]
+    : { pill: "bg-muted text-muted-foreground", label: "Scored" };
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
+            tone.pill,
+          )}
+        >
+          <TargetIcon className="size-2.5" />
+          {score}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>
+        AI fit {score}/100 — {tone.label}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+function StageAgePill({ value }: { value: string }) {
+  const days = useDaysSince(value);
+  const stale = days >= STALE_AFTER_DAYS;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
+        stale ? "bg-warning/10 text-warning" : "bg-muted text-muted-foreground",
+      )}
+    >
+      <ClockIcon className="size-2.5" />
+      {days}d
+    </span>
+  );
+}
 
 export function CandidateCard({
   application,
@@ -76,7 +148,7 @@ export function CandidateCard({
         }
       }}
       className={cn(
-        "group cursor-pointer rounded-xl border-l-2 bg-card p-2.5 shadow-sm transition-all duration-150",
+        "group cursor-pointer rounded-xl border-l-[3px] bg-card p-3 shadow-sm transition-all duration-150",
         accentStyles[application.status],
         selected
           ? "ring-2 ring-primary/30 bg-accent/20"
@@ -88,8 +160,10 @@ export function CandidateCard({
         <span
           onClick={(event) => event.stopPropagation()}
           className={cn(
-            "shrink-0 transition",
-            selected ? "opacity-100" : "opacity-0 group-hover:opacity-100",
+            "shrink-0 transition-opacity",
+            selected
+              ? "opacity-100"
+              : "opacity-30 group-hover:opacity-100 group-focus-within:opacity-100",
           )}
         >
           <Checkbox
@@ -112,18 +186,18 @@ export function CandidateCard({
           {...attributes}
           {...listeners}
           onClick={(event) => event.stopPropagation()}
-          className="shrink-0 touch-none cursor-grab rounded-md p-0.5 text-muted-foreground/40 opacity-0 transition hover:bg-accent hover:text-foreground group-hover:opacity-100 active:cursor-grabbing"
+          className="shrink-0 touch-none cursor-grab rounded-md p-0.5 text-muted-foreground/50 opacity-40 transition hover:bg-accent hover:text-foreground hover:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
           aria-label={`Drag ${fullName}`}
         >
-          <GripVertical className="size-3.5" />
+          <DotsSixVerticalIcon className="size-3.5" />
         </button>
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-          <Clock className="size-2.5" />
-          <DaysSince value={stageStartedAt} />d
-        </span>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        {application.aiScore != null ? (
+          <ScorePill score={application.aiScore} recommendation={application.aiRecommendation} />
+        ) : null}
+        <StageAgePill value={stageStartedAt} />
         {application.source ? (
           <span className="truncate rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
             {application.source}
@@ -134,15 +208,16 @@ export function CandidateCard({
         ) : null}
       </div>
 
-      <div className="mt-2 flex justify-end gap-1 opacity-0 transition-opacity duration-100 group-hover:opacity-100">
+      <div className="mt-2.5 flex justify-end gap-1 border-t pt-2 opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-focus-within:opacity-100">
         <button
           type="button"
           onClick={(event) => {
             event.stopPropagation();
             onStatusChange([application.id], "hired");
           }}
-          className="rounded-md px-2 py-0.5 text-[11px] font-semibold text-emerald-700 transition hover:bg-emerald-50 active:scale-[0.97] dark:text-emerald-400 dark:hover:bg-emerald-950"
+          className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold text-success transition hover:bg-success/10 active:scale-[0.97]"
         >
+          <CheckIcon className="size-3" />
           Hire
         </button>
         <button
@@ -151,8 +226,9 @@ export function CandidateCard({
             event.stopPropagation();
             onStatusChange([application.id], "rejected");
           }}
-          className="rounded-md px-2 py-0.5 text-[11px] font-semibold text-destructive transition hover:bg-destructive/10 active:scale-[0.97]"
+          className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold text-destructive transition hover:bg-destructive/10 active:scale-[0.97]"
         >
+          <XIcon className="size-3" />
           Reject
         </button>
       </div>
@@ -167,7 +243,7 @@ export function CandidateCardOverlay({ application }: CandidateCardOverlayProps)
   return (
     <article
       className={cn(
-        "w-56 cursor-grabbing rounded-xl border-l-2 bg-card p-2.5 shadow-2xl lg:w-64",
+        "w-56 cursor-grabbing rounded-xl border-l-[3px] bg-card p-3 shadow-2xl lg:w-64",
         accentStyles[application.status],
       )}
     >
@@ -180,11 +256,11 @@ export function CandidateCardOverlay({ application }: CandidateCardOverlayProps)
           </p>
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
-        <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-          <Clock className="size-2.5" />
-          <DaysSince value={stageStartedAt} />d
-        </span>
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+        {application.aiScore != null ? (
+          <ScorePill score={application.aiScore} recommendation={application.aiRecommendation} />
+        ) : null}
+        <StageAgePill value={stageStartedAt} />
         {application.status !== "active" ? (
           <ApplicationStatusBadge status={application.status} />
         ) : null}

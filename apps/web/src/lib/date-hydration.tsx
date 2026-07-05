@@ -30,3 +30,8 @@ export function RelativeTime({ value }: { value: Date | string }): ReactNode {
 export function DaysSince({ value }: { value: Date | string }): ReactNode {
   return useClientValue(() => daysSince(value));
 }
+
+/** Hydration-safe days-since as a number, for banding/coloring logic (not just display). */
+export function useDaysSince(value: Date | string): number {
+  return useClientValue(() => daysSince(value));
+}

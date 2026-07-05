@@ -45,6 +45,8 @@ export type PipelineApplication = {
   appliedAt: string;
   createdAt: string;
   lastStageMovedAt: string | null;
+  aiScore: number | null;
+  aiRecommendation: "strong_yes" | "yes" | "maybe" | "no" | null;
 };
 
 export type PipelineData =
@@ -213,6 +215,8 @@ export async function getPipelineData(
         appliedAt: applications.appliedAt,
         createdAt: applications.createdAt,
         lastStageMovedAt: latestStageMove.createdAt,
+        aiScore: aiEvaluations.score,
+        aiRecommendation: aiEvaluations.recommendation,
       })
       .from(applications)
       .innerJoin(
@@ -227,6 +231,13 @@ export async function getPipelineData(
         and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
       )
       .leftJoin(latestStageMove, eq(latestStageMove.applicationId, applications.id))
+      .leftJoin(
+        aiEvaluations,
+        and(
+          eq(aiEvaluations.workspaceId, workspace.id),
+          eq(aiEvaluations.applicationId, applications.id),
+        ),
+      )
       .where(
         and(
           eq(applications.workspaceId, workspace.id),

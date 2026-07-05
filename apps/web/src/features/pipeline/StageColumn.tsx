@@ -5,8 +5,7 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { Bell, BellOff } from "lucide-react";
-
+import { BellIcon, BellSlashIcon } from "@/components/ui/icons/phosphor";
 import { CandidateCard } from "@/features/pipeline/CandidateCard";
 import type {
   PipelineApplication,
@@ -73,15 +72,15 @@ export function StageColumn({
             className={cn(
               "flex size-6 items-center justify-center rounded-md transition",
               emailOn
-                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                ? "bg-success/10 text-success"
                 : "text-muted-foreground hover:bg-accent",
             )}
             aria-label="Toggle candidate email updates"
           >
             {emailOn ? (
-              <Bell className="size-3.5" />
+              <BellIcon className="size-3.5" />
             ) : (
-              <BellOff className="size-3.5" />
+              <BellSlashIcon className="size-3.5" />
             )}
           </button>
         </div>
