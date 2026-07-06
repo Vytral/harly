@@ -64,6 +64,7 @@ planesafuturo-ignorar.md
 # agent + dev tool scratch dirs
 .claude
 .codegraph
+.firecrawl
 graphify-out
 .playwright-mcp
 .superpowers
