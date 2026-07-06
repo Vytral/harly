@@ -30,6 +30,9 @@ export type CandidateInterviewItem = {
   interviewerImage: string | null;
   jobTitle: string;
   gcalEventId: string | null;
+  meetLink: string | null;
+  teamsMeetingId: string | null;
+  zoomMeetingId: string | null;
   briefContent?: InterviewBrief | null;
 };
 

@@ -15,6 +15,8 @@ export function OAuthFeedback() {
     const feedbacks: Array<{ key: string; errorKey: string; label: string }> = [
       { key: "gcal", errorKey: "gcal_error", label: "Google Calendar" },
       { key: "slack", errorKey: "slack_error", label: "Slack" },
+      { key: "outlook", errorKey: "outlook_error", label: "Microsoft Outlook" },
+      { key: "zoom", errorKey: "zoom_error", label: "Zoom" },
     ];
 
     let dirty = false;

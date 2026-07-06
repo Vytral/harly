@@ -9,6 +9,8 @@ import type { WebhookEvent } from "./events";
 import { notifySlackEvent } from "@/server/notify/slack";
 import { notifyChatEvent } from "@/server/notify/dispatch";
 import { notifyInboxEvent } from "@/server/notify/inbox";
+import { notifyOutlookEvent } from "@/server/notify/outlook";
+import { notifyZoomEvent } from "@/server/notify/zoom";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("webhooks");
@@ -69,4 +71,6 @@ export async function emitWebhookEvent(
   void notifyChatEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyChatEvent failed"));
   void notifySlackEvent(workspaceId, event, data).catch((err) => log.error(err, "notifySlackEvent failed"));
   void notifyInboxEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyInboxEvent failed"));
+  void notifyOutlookEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyOutlookEvent failed"));
+  void notifyZoomEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyZoomEvent failed"));
 }

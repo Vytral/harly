@@ -3,11 +3,15 @@ import Link from "next/link";
 import { CalSettingsCard } from "@/features/workspaces/CalSettingsCard";
 import { GCalSettingsCard } from "@/features/workspaces/GCalSettingsCard";
 import { SlackSettingsCard } from "@/features/workspaces/SlackSettingsCard";
+import { OutlookSettingsCard } from "@/features/workspaces/OutlookSettingsCard";
+import { ZoomSettingsCard } from "@/features/workspaces/ZoomSettingsCard";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
 import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
 import { getWorkspaceSlackStatus } from "@/lib/slack/config";
+import { getWorkspaceOutlookStatus } from "@/lib/outlook/config";
+import { getZoomConfig } from "@/lib/zoom/config";
 import {
   WEBHOOK_EVENTS,
   WEBHOOK_EVENT_LABELS,
@@ -52,10 +56,12 @@ const UPCOMING: Array<{
 export default async function IntegrationsSettingsPage() {
   await requirePagePermission("integrations:manage");
   const { organization, role } = await getWorkspaceContext();
-  const [calStatus, gcalStatus, slackStatus] = await Promise.all([
+  const [calStatus, gcalStatus, slackStatus, outlookStatus, zoomConfig] = await Promise.all([
     getWorkspaceCalStatus(organization.id),
     getWorkspaceGCalStatus(organization.id),
     getWorkspaceSlackStatus(organization.id),
+    getWorkspaceOutlookStatus(organization.id),
+    getZoomConfig(organization.id),
   ]);
   const canEdit = role === "owner" || role === "admin";
 
@@ -91,6 +97,15 @@ export default async function IntegrationsSettingsPage() {
           canEdit={canEdit}
           workspaceId={organization.id}
         />
+
+        <OutlookSettingsCard
+          status={outlookStatus}
+          events={eventOptions}
+          canEdit={canEdit}
+          workspaceId={organization.id}
+        />
+
+        <ZoomSettingsCard config={zoomConfig} />
 
         <Card className="gap-0 p-5">
           <div className="flex items-start gap-3">

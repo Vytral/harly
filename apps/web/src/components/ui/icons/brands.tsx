@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 /**
  * Brand logos (via better-icons / Iconify: logos + simple-icons).
  *
@@ -14,6 +16,52 @@ import { cn } from "@/lib/utils";
 type IconProps = { className?: string };
 
 /* ── Integration brands ───────────────────────────────────────────────────── */
+
+const THESVG_BASE = "https://cdn.jsdelivr.net/gh/glincker/thesvg@main/public/icons";
+
+export function GoogleMeetLogo({ className }: IconProps) {
+  return (
+    <img
+      src={`${THESVG_BASE}/google-meet/default.svg`}
+      alt="Google Meet"
+      className={cn("size-5", className)}
+      aria-hidden="true"
+    />
+  );
+}
+
+export function MicrosoftOutlookLogo({ className }: IconProps) {
+  return (
+    <img
+      src={`${THESVG_BASE}/microsoft-outlook/default.svg`}
+      alt="Microsoft Outlook"
+      className={cn("size-5", className)}
+      aria-hidden="true"
+    />
+  );
+}
+
+export function MicrosoftTeamsLogo({ className }: IconProps) {
+  return (
+    <img
+      src={`${THESVG_BASE}/microsoft-teams/default.svg`}
+      alt="Microsoft Teams"
+      className={cn("size-5", className)}
+      aria-hidden="true"
+    />
+  );
+}
+
+export function ZoomLogo({ className }: IconProps) {
+  return (
+    <img
+      src={`${THESVG_BASE}/zoom/default.svg`}
+      alt="Zoom"
+      className={cn("size-5", className)}
+      aria-hidden="true"
+    />
+  );
+}
 
 export function CloudflareLogo({ className }: IconProps) {
   return (

@@ -32,6 +32,8 @@ import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
 import { syncInterviewToGCal, cancelInterviewGCalEvent, updateInterviewGCalEvent } from "@/lib/gcal/sync";
+import { syncInterviewToTeams, cancelInterviewTeamsMeeting } from "@/lib/outlook/teams-sync";
+import { syncInterviewToZoom, cancelInterviewZoomMeeting } from "@/lib/zoom/sync";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
@@ -272,7 +274,30 @@ export async function scheduleInterview(
         durationMins: data.durationMins,
         attendees: attendees.length > 0 ? attendees : undefined,
         location: data.location ?? undefined,
+        mode: data.mode,
       });
+
+      // Create Teams meeting for video interviews (fire-and-forget).
+      if (data.mode === "video") {
+        void syncInterviewToTeams({
+          workspaceId: workspace.id,
+          interviewId: result.interviewId,
+          summary: data.title ?? INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
+          start: when,
+          durationMins: data.durationMins,
+        });
+      }
+
+      // Create Zoom meeting for video interviews (fire-and-forget).
+      if (data.mode === "video") {
+        void syncInterviewToZoom({
+          workspaceId: workspace.id,
+          interviewId: result.interviewId,
+          summary: data.title ?? INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
+          start: when,
+          durationMins: data.durationMins,
+        });
+      }
 
       if (recipient?.email) {
         const branding = await getWorkspaceEmailBranding(workspace.id);
@@ -387,7 +412,12 @@ export async function setInterviewStatus(input: {
           eq(interviews.workspaceId, workspace.id),
         ),
       )
-      .returning({ id: interviews.id, gcalEventId: interviews.gcalEventId });
+      .returning({
+        id: interviews.id,
+        gcalEventId: interviews.gcalEventId,
+        teamsMeetingId: interviews.teamsMeetingId,
+        zoomMeetingId: interviews.zoomMeetingId,
+      });
 
     if (updated.length === 0) {
       return { success: false, error: "Interview not found." };
@@ -398,6 +428,22 @@ export async function setInterviewStatus(input: {
         workspaceId: workspace.id,
         interviewId: parsed.data.interviewId,
         gcalEventId: updated[0].gcalEventId,
+      });
+    }
+
+    if (parsed.data.status === "canceled" && updated[0]?.teamsMeetingId) {
+      void cancelInterviewTeamsMeeting({
+        workspaceId: workspace.id,
+        interviewId: parsed.data.interviewId,
+        teamsMeetingId: updated[0].teamsMeetingId,
+      });
+    }
+
+    if (parsed.data.status === "canceled" && updated[0]?.zoomMeetingId) {
+      void cancelInterviewZoomMeeting({
+        workspaceId: workspace.id,
+        interviewId: parsed.data.interviewId,
+        zoomMeetingId: updated[0].zoomMeetingId,
       });
     }
 
@@ -597,6 +643,7 @@ export async function rescheduleInterview(input: {
         durationMins: data.durationMins,
         attendees: attendees.length > 0 ? attendees : undefined,
         location: data.location ?? undefined,
+        mode: info?.mode,
       });
     }
 

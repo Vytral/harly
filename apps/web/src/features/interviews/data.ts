@@ -37,6 +37,9 @@ export async function listCandidateInterviews(
       interviewerImage: authUsers.image,
       jobTitle: jobs.title,
       gcalEventId: interviews.gcalEventId,
+      meetLink: interviews.meetLink,
+      teamsMeetingId: interviews.teamsMeetingId,
+      zoomMeetingId: interviews.zoomMeetingId,
       briefContent: interviews.briefContent,
     })
     .from(interviews)
@@ -68,6 +71,9 @@ export async function listCandidateInterviews(
     interviewerImage: row.interviewerImage,
     jobTitle: row.jobTitle,
     gcalEventId: row.gcalEventId,
+    meetLink: row.meetLink,
+    teamsMeetingId: row.teamsMeetingId,
+    zoomMeetingId: row.zoomMeetingId,
     briefContent: (row.briefContent ?? null) as import("@/lib/ai/schemas").InterviewBrief | null,
   }));
 }
@@ -97,6 +103,9 @@ export async function listUpcomingInterviews(): Promise<UpcomingInterviewItem[]>
       first: candidates.firstName,
       last: candidates.lastName,
       gcalEventId: interviews.gcalEventId,
+      meetLink: interviews.meetLink,
+      teamsMeetingId: interviews.teamsMeetingId,
+      zoomMeetingId: interviews.zoomMeetingId,
     })
     .from(interviews)
     .innerJoin(
@@ -138,6 +147,9 @@ export async function listUpcomingInterviews(): Promise<UpcomingInterviewItem[]>
     candidateId: row.candidateId,
     candidateName: `${row.first} ${row.last}`,
     gcalEventId: row.gcalEventId,
+    meetLink: row.meetLink,
+    teamsMeetingId: row.teamsMeetingId,
+    zoomMeetingId: row.zoomMeetingId,
   }));
 }
 
@@ -168,6 +180,9 @@ export async function listInterviewsForRange(
       first: candidates.firstName,
       last: candidates.lastName,
       gcalEventId: interviews.gcalEventId,
+      meetLink: interviews.meetLink,
+      teamsMeetingId: interviews.teamsMeetingId,
+      zoomMeetingId: interviews.zoomMeetingId,
     })
     .from(interviews)
     .innerJoin(
@@ -208,5 +223,8 @@ export async function listInterviewsForRange(
     candidateId: row.candidateId,
     candidateName: `${row.first} ${row.last}`,
     gcalEventId: row.gcalEventId,
+    meetLink: row.meetLink,
+    teamsMeetingId: row.teamsMeetingId,
+    zoomMeetingId: row.zoomMeetingId,
   }));
 }
