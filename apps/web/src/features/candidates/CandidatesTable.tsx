@@ -9,7 +9,7 @@ import {
   MoreHorizontal,
   RotateCcw,
   Search,
-  Sparkles,
+  Zap,
   Star,
   Trash2,
   User,
@@ -635,7 +635,7 @@ export function CandidatesTable({
         <aside className="h-fit lg:sticky lg:top-20">
           <div className="rounded-2xl border border-border/70 bg-card p-5">
             <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-wide text-accent-foreground">
-              <Sparkles className="size-3.5" />
+              <Zap className="size-3.5" />
               AI sourcing
             </span>
             <p className="mt-3 text-sm font-semibold">Expand your candidate pool</p>

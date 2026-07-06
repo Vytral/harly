@@ -12,7 +12,7 @@ import { AiButton } from "@/components/ui/AiButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { SparkleFillIcon } from "@/components/ui/icons/phosphor";
+import { Brain } from "lucide-react";
 import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
@@ -136,7 +136,7 @@ export function AiScoreCard({
         <CardContent className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2.5">
             <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <SparkleFillIcon className="size-4.5" />
+              <Brain className="size-4.5" />
             </span>
             <div>
               <p className="text-sm font-medium">AI candidate scoring</p>
@@ -167,7 +167,7 @@ export function AiScoreCard({
                 <CardContent className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="flex min-w-0 items-center gap-2.5">
                     <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <SparkleFillIcon className="size-4" />
+                      <Brain className="size-4" />
                     </span>
                     <p className="truncate text-sm text-muted-foreground">
                       No AI evaluation yet for {application.jobTitle}.
@@ -233,7 +233,7 @@ export function AiScoreCard({
               <CardContent className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
                   <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                    <SparkleFillIcon className="size-4.5" />
+              <Brain className="size-4.5" />
                   </span>
                   <div>
                     <p className="text-sm font-medium">{application.jobTitle}</p>

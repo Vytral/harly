@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { Download, ExternalLink, FileText, GraduationCap, Sparkles, Upload } from "lucide-react";
+import { Download, ExternalLink, FileText, GraduationCap, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { attachCandidateFile } from "@/features/candidates/actions";
@@ -150,7 +150,7 @@ function ResumeDetailsCard({ file }: { file: CandidateFileItem }) {
     <div className="rounded-lg border bg-muted/20">
       <div className="border-b px-4 py-3">
         <div className="flex items-center gap-2">
-          <Sparkles className="size-4 text-primary" strokeWidth={1.8} />
+          <FileText className="size-4 text-primary" strokeWidth={1.8} />
           <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Details extracted from résumé
           </h4>

@@ -3,7 +3,7 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { FileText, Sparkles, Users } from "lucide-react";
+import { FileText, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { bulkGenerateAiEvaluationsForJobAction } from "@/features/candidates/ai-actions";
@@ -142,7 +142,7 @@ export function TalentPoolView({
               onClick={rankUnscored}
               disabled={ranking || unscored === 0}
             >
-              <Sparkles className={cn("size-4", ranking && "animate-pulse")} />
+              <Users className={cn("size-4", ranking && "animate-pulse")} />
               {ranking
                 ? "Ranking…"
                 : unscored === 0

@@ -1,5 +1,5 @@
 import type { Job } from "@harly/db";
-import { Plus, Trash2, Wand2 } from "lucide-react";
+import { Plus, Trash2, FileText } from "lucide-react";
 import { toast } from "sonner";
 
 import type { JobContentSection } from "../config";
@@ -167,7 +167,7 @@ export function DescriptionSection({
               Generate with AI
             </AiButton>
             <Button type="button" variant="outline" size="sm" onClick={scaffoldDraft}>
-              <Wand2 className="size-4" />
+              <FileText className="size-4" />
               Draft for me
             </Button>
             <DropdownMenu>

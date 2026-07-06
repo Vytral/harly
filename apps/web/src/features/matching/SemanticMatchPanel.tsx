@@ -14,7 +14,6 @@ import { assignFromPoolToJobAction } from "@/features/pool/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  SparkleFillIcon,
   TargetIcon,
   UserPlusIcon,
 } from "@/components/ui/icons/phosphor";
@@ -93,7 +92,7 @@ export function SemanticMatchPanel({
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="flex items-center gap-2 font-semibold tracking-tight">
-            <SparkleFillIcon className="size-4 text-pine" />
+            <TargetIcon className="size-4 text-pine" />
             Semantic match
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
@@ -103,7 +102,7 @@ export function SemanticMatchPanel({
         </div>
         {aiConfigured ? (
           <Button size="sm" onClick={findMatches} disabled={loading}>
-            <SparkleFillIcon className={cn("size-4", loading && "animate-pulse")} />
+            <TargetIcon className={cn("size-4", loading && "animate-pulse")} />
             {loading ? "Matching…" : matches ? "Refresh matches" : "Find matches"}
           </Button>
         ) : (
@@ -159,7 +158,7 @@ export function SemanticMatchPanel({
         </ul>
       ) : matches && matches.length === 0 ? (
         <CardContent className="mt-3 flex flex-col items-center gap-2 rounded-xl border border-dashed py-8 text-center">
-          <SparkleFillIcon className="size-6 text-muted-foreground" />
+          <TargetIcon className="size-6 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
             No indexed candidates yet — add candidates to your pool first.
           </p>
