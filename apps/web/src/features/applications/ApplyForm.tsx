@@ -9,7 +9,7 @@ import {
   Plus,
   Send,
   UploadCloud,
-  WandSparkles,
+  Upload,
 } from "lucide-react";
 
 import {
@@ -1342,7 +1342,7 @@ export function ApplyForm({
                   }}
                   aria-hidden
                 >
-                  <WandSparkles className="size-[18px]" strokeWidth={1.8} />
+                  <Upload className="size-[18px]" strokeWidth={1.8} />
                 </span>
                 <div>
                   <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
