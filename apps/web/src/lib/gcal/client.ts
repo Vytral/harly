@@ -18,6 +18,14 @@ type CalendarEvent = {
   summary?: string;
   start?: { dateTime?: string };
   end?: { dateTime?: string };
+  hangoutLink?: string;
+  conferenceData?: {
+    entryPoints?: Array<{
+      uri?: string;
+      label?: string;
+      entryPointType?: string;
+    }>;
+  };
 };
 
 async function gcalFetch<T>(
@@ -64,6 +72,7 @@ export async function createEvent(
     durationMins: number;
     attendees?: string[];
     location?: string;
+    conferenceData?: boolean;
   },
 ): Promise<CalendarEvent> {
   const startIso = event.start.toISOString();
@@ -73,20 +82,35 @@ export async function createEvent(
 
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
+  const body: Record<string, unknown> = {
+    summary: event.summary,
+    description: event.description,
+    location: event.location,
+    start: { dateTime: startIso, timeZone },
+    end: { dateTime: endIso, timeZone },
+    attendees: event.attendees?.map((email) => ({ email })),
+    reminders: { useDefault: true },
+  };
+
+  if (event.conferenceData) {
+    body.conferenceData = {
+      createRequest: {
+        requestId: crypto.randomUUID(),
+        conferenceSolutionKey: { type: "hangoutsMeet" },
+      },
+    };
+  }
+
+  const qs = event.conferenceData
+    ? "sendUpdates=all&conferenceDataVersion=1"
+    : "sendUpdates=all";
+
   return gcalFetch<CalendarEvent>(
     client,
-    `/calendars/${encodeURIComponent(calendarId)}/events?sendUpdates=all`,
+    `/calendars/${encodeURIComponent(calendarId)}/events?${qs}`,
     {
       method: "POST",
-      body: JSON.stringify({
-        summary: event.summary,
-        description: event.description,
-        location: event.location,
-        start: { dateTime: startIso, timeZone },
-        end: { dateTime: endIso, timeZone },
-        attendees: event.attendees?.map((email) => ({ email })),
-        reminders: { useDefault: true },
-      }),
+      body: JSON.stringify(body),
     },
   );
 }

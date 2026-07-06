@@ -23,6 +23,7 @@ export async function syncInterviewToGCal(opts: {
   durationMins: number;
   attendees?: string[];
   location?: string;
+  mode?: string;
 }): Promise<void> {
   try {
     const config = await getWorkspaceGCalConfig(opts.workspaceId);
@@ -38,12 +39,18 @@ export async function syncInterviewToGCal(opts: {
         durationMins: opts.durationMins,
         attendees: opts.attendees,
         location: opts.location,
+        conferenceData: opts.mode === "video",
       },
     );
 
+    const update: Record<string, unknown> = { gcalEventId: event.id };
+    if (event.hangoutLink) {
+      update.meetLink = event.hangoutLink;
+    }
+
     await db
       .update(interviews)
-      .set({ gcalEventId: event.id })
+      .set(update)
       .where(eq(interviews.id, opts.interviewId));
   } catch (err) {
     log.error(err, "[gcal-sync] Failed to create event");
