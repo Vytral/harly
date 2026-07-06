@@ -1,5 +1,7 @@
 # Harly Platform - Feature Audit
 
+_Última actualización: 2026-07-05_
+
 ## Summary
 The platform has a solid foundation with auth, jobs, candidates, pipeline, portal, and settings. Key gaps are in polish, mobile UX, and some missing features.
 
@@ -96,10 +98,10 @@ The platform has a solid foundation with auth, jobs, candidates, pipeline, porta
 | Feature | Priority | Notes |
 |---------|----------|-------|
 | **Candidate notes** | Medium | `NoteForm.tsx` exists but no inline display |
-| **Activity timeline** | Medium | No visual timeline of candidate actions |
+| **Activity timeline** | ✅ Done | Enriched timeline (applied, stage changes, notes, profile updated, file uploaded, hired/rejected) |
 | **Bulk tag management** | Low | Can add tags but no bulk edit |
 | **Candidate comparison** | Low | Side-by-side view of 2+ candidates |
-| **Resume parsing** | Medium | `DocxViewer.tsx` exists but no PDF viewer |
+| **Resume parsing** | ✅ Done | Structured AI résumé parsing + next-stage helper |
 | **Avatar upload** | Low | `CandidateAvatarEdit.tsx` exists |
 | **Source tracking** | Medium | Field exists but no UI to set it |
 
@@ -118,7 +120,7 @@ The platform has a solid foundation with auth, jobs, candidates, pipeline, porta
 |---------|----------|
 | **Job templates** | Medium |
 | **Duplicate job** | Low |
-| **Job publish/unpublish toggle** | High |
+| **Job publish/unpublish toggle** | ✅ Done |
 | **Job expiry dates** | Medium |
 | **Internal notes on jobs** | Low |
 | **Job sharing (LinkedIn, etc.)** | Medium |
@@ -138,9 +140,9 @@ The platform has a solid foundation with auth, jobs, candidates, pipeline, porta
 ### Missing Features
 | Feature | Priority |
 |---------|----------|
-| **Application status tracking** | High |
+| **Application status tracking** | ✅ Done — portal shows application status |
 | **Interview schedule view** | Medium |
-| **Document upload (resume, cover letter)** | High |
+| **Document upload (resume, cover letter)** | ✅ Done — CV upload in apply form + portal profile |
 | **Application withdrawal** | Medium |
 | **Saved jobs** | Low |
 | **Refer a friend** | Low |
@@ -170,8 +172,8 @@ The platform has a solid foundation with auth, jobs, candidates, pipeline, porta
 | Setting | Priority |
 |---------|----------|
 | **Notification preferences** | Medium |
-| **API key management** | Medium |
-| **Webhook configuration** | Medium |
+| **API key management** | ✅ Done — Developers settings page |
+| **Webhook configuration** | ✅ Done — Developers settings page |
 | **Custom fields** | High |
 | **Email domain verification** | Low |
 | **Audit log export** | Low |
@@ -214,8 +216,8 @@ The platform has a solid foundation with auth, jobs, candidates, pipeline, porta
 - [ ] Team activity feed
 - [ ] Upcoming deadlines
 - [ ] Offer pipeline
-- [ ] Source effectiveness
-- [ ] Time-to-hire metrics
+- [x] Source effectiveness — implemented in Reports
+- [x] Time-to-hire metrics — implemented in Reports
 
 ---
 
@@ -303,9 +305,9 @@ The platform has a solid foundation with auth, jobs, candidates, pipeline, porta
 3. Card empty states
 
 ### P1 - High (Next Sprint)
-1. Candidate document upload (resume, cover letter)
-2. Application status tracking in portal
-3. Job publish/unpublish toggle
+1. ~~Candidate document upload (resume, cover letter)~~ ✅ Done
+2. ~~Application status tracking in portal~~ ✅ Done
+3. ~~Job publish/unpublish toggle~~ ✅ Done
 4. Custom fields setting
 
 ### P2 - Medium (Backlog)

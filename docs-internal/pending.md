@@ -1,12 +1,12 @@
 # Harly — Pendientes
 
-_Última actualización: 2026-06-23_
+_Última actualización: 2026-07-05_
 
 Trabajo diferido a propósito. Se construirá después.
 
 ## Stubs del sidebar (ComingSoon pages)
 
-- [ ] `calendars` — vista calendario de entrevistas. Datos existen (table `interviews` + Cal.com sync). Falta UI month/week grid.
+- [x] `calendars` — vista calendario de entrevistas. Implementado: real month grid + filters + clickthrough.
 - [ ] `templates` — plantillas de emails + interview kits / scorecard templates por job.
 
 ## Pendientes menores

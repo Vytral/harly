@@ -1,6 +1,6 @@
 # Harly — Polish Roadmap
 
-_Última actualización: 2026-06-23_
+_Última actualización: 2026-07-05_
 
 Trabajo para llevar Harly a nivel Workable/Ashby. Self-hosting / OSS P0 excluido intencionalmente — primero se pulen features.
 
@@ -13,15 +13,16 @@ Trabajo para llevar Harly a nivel Workable/Ashby. Self-hosting / OSS P0 excluido
 - **Full email set**: apply, stage, reject, offer extended/withdrawn, interview scheduled/canceled + platform auth emails.
 - **Compliance base**: consent checkbox, audit logs, legal settings, public legal pages.
 - **Repo lint + typecheck green** (root-cause fixes, no eslint-disable).
+- **Calendars**: real month grid + filters + clickthrough. COMPLETO.
+- **⌘K search**: spotlight palette con búsqueda real sobre jobs y candidates. COMPLETO.
+- **Inbound email**: webhook receiver, reply tracking, settings UI. COMPLETO.
 
 ## Visible holes
 
-- `calendars` — ComingSoon stub. Datos existen (`interviews` + Cal.com sync), falta UI de calendario.
 - `templates` — ComingSoon stub.
 - `apps/docs` — stub vacío.
 - `apps/marketing` — stub vacío.
 - `@harly/config`, `@harly/ui`, `@harly/validators` — packages vacíos.
-- Búsqueda ⌘K — solo quick-nav, no indexa entidades reales.
 
 ---
 
@@ -29,26 +30,17 @@ Trabajo para llevar Harly a nivel Workable/Ashby. Self-hosting / OSS P0 excluido
 
 4 templates implementados: Minimal, Playful, Ashby, Greenhouse. Builder con live preview. Board público con SEO por slug.
 
-## Workstream 2 — Calendars ← SIGUIENTE
+## Workstream 2 — Calendars ✅ COMPLETO
 
-Calendar view de entrevistas. Data ya existe (`interviews` table + Cal.com sync).
-
-- **Data**: `features/calendars/data.ts` — `listInterviewsForRange({ workspaceId, from, to })`.
-- **UI**: `dashboard/calendars` — month/week grid (build dependency-free, app `Tile` styling), interview chips colored by `type`, click → candidate drawer / detail. Filters: interviewer, job, type.
-- Reuse `setInterviewStatus` (ya envía emails al cancelar).
-- **Verify**: scheduled interviews aparecen en el día correcto; week/month toggle; click abre detail.
+Calendar view de entrevistas. Implementado: real month grid + filters + clickthrough.
 
 ## Workstream 3 — Tasks ✅ COMPLETO
 
 Board con cards/rows, crear/asignar/completar, filtros (mine/all/overdue), linked a candidatos/jobs.
 
-## Workstream 4 — Real ⌘K search
+## Workstream 4 — Real ⌘K search ✅ COMPLETO
 
-Hoy es quick-nav. Falta indexar entidades reales.
-
-- **Data**: `features/search/data.ts` — `searchWorkspace(q)` con jobs (title/slug), candidates (name/email/headline), members (name/email) con `ilike` + ranking. Workspace-scoped. Add trigram indexes (`pg_trgm`) si se necesita.
-- **UI**: extender CommandMenu con resultados agrupados (Jobs / Candidates / People), icons, keyboard nav, recents. Debounced server action.
-- **Verify**: typing candidate name/email salta a su profile; jobs/members resuelven.
+Spotlight palette con búsqueda real sobre jobs y candidates (ilike, workspace-scoped).
 
 ## Workstream 5 — SEO / Google for Jobs ← parcialmente hecho
 
@@ -68,13 +60,9 @@ Career pages ya tienen SEO básico. Falta:
 - [ ] **Turnstile (optional)**: Cloudflare Turnstile en apply form + intake API, env-gated.
 - **Verify**: export produce bundle completo; delete scrub PII; audit rows escritos; Turnstile bloquea tokens inválidos cuando está habilitado.
 
-## Workstream 7 — Two-way email / inbox
+## Workstream 7 — Two-way email / inbox ✅ COMPLETO
 
-Candidate replies en thread del timeline (hoy solo outbound via `candidateMessages`).
-
-- **Inbound**: provider inbound webhook (Resend inbound / IMAP) → match por candidate email + thread → store como `candidateMessages` (direction `inbound`) → surface en timeline + inbox page.
-- **Inbox page**: terminar `dashboard/inbox` — conversation list + thread view + reply (reutiliza `sendWorkspaceEmail`).
-- **Verify**: reply a outbound email aparece en candidate timeline + inbox.
+Inbound email integration: webhook receiver (Resend + Postmark), reply tracking, settings UI.
 
 ## Workstream 8 — Enterprise (después)
 
@@ -87,10 +75,10 @@ Candidate replies en thread del timeline (hoy solo outbound via `candidateMessag
 ## Sequencing recomendado
 
 1. ~~Career-page builder + templates~~ ✅
-2. **Calendars** ← SIGUIENTE (terminar stub, data ya existe)
-3. **⌘K search** (quick win, alto valor diario)
-4. **Compliance export/delete** (GDPR)
-5. **Two-way email / inbox**
+2. ~~Calendars~~ ✅
+3. ~~⌘K search~~ ✅
+4. **Compliance export/delete** (GDPR) ← SIGUIENTE
+5. ~~Two-way email / inbox~~ ✅
 6. **SEO / Google for Jobs** (inbound, pequeño, combina con career page)
 7. **Enterprise** (SSO, custom fields, approvals)
 

@@ -22,26 +22,31 @@ Harly is built for startups, agencies, and technical teams that want:
 
 - Next.js App Router
 - TypeScript
-- Server Actions (no tRPC)
+- Server Actions
 - Drizzle ORM + PostgreSQL
-- Better Auth (email/password, OAuth, passkeys, organizations)
+- Better Auth (email/password, OAuth, passkeys, organizations, SSO)
 - Tailwind CSS + shadcn/ui
-- Resend + react.email
+- Resend + React Email
 - S3-compatible storage (AWS S3 / Cloudflare R2 / MinIO)
 - Turborepo
 
 ## Project Structure
 
 ```txt
-apps/web        Next.js application (main product)
-packages/db     Database schema + 39 migrations (Drizzle)
-packages/auth   Better Auth integration
-packages/api    REST API v1 + API key auth + webhooks
-packages/storage Abstract storage adapters (local + S3)
-packages/emails 19 React Email templates
-packages/config Shared config (placeholder)
-packages/ui     Shared UI components (placeholder)
-packages/validators Shared validation schemas (placeholder)
+apps/web          Next.js application (core ATS product)
+apps/docs         Placeholder — public docs (docs.harly.dev)
+apps/marketing    Placeholder — marketing site (harly.dev)
+packages/db       Drizzle schema + 53 migrations + client
+packages/auth     Better Auth integration (OAuth, passkeys, 2FA, SSO)
+packages/api      REST API v1 contracts + API key auth + webhooks
+packages/storage  Abstract storage adapters (local + S3/R2)
+packages/emails   19 React Email templates + Resend sender
+packages/config   Placeholder — shared config
+packages/ui       Placeholder — shared UI primitives
+packages/validators Placeholder — shared Zod schemas
+tooling/create-harly Placeholder — bootstrap CLI
+tooling/docker    Docker and deployment helpers
+tooling/scripts   Release and maintenance scripts
 ```
 
 ## Local Development
@@ -74,8 +79,8 @@ pnpm db:down
 
 - **Jobs**: CRUD, custom questions, branding, public board with SEO, hiring team, AI-powered description generation
 - **Pipeline**: Kanban board + list view, drag & drop, bulk actions, search, filters
-- **Candidates**: profiles, notes, timeline, files, AI scoring, tags, talent pool
-- **Interviews**: scheduling, Cal.com integration, calendar sync
+- **Candidates**: profiles, notes, timeline, files, AI scoring, tags, talent pool, CSV import
+- **Interviews**: scheduling, Cal.com integration, Google Calendar sync
 - **Offers**: extend/withdraw with email notifications
 - **API v1**: REST with API keys, OpenAPI spec, outbound webhooks
 - **Integrations**: Google Calendar, Cal.com, Slack
@@ -83,7 +88,10 @@ pnpm db:down
 - **Reports**: funnel, time-to-hire, source analytics
 - **Tasks**: board view, assign to candidates/jobs
 - **Legal**: GDPR compliance, consent, audit logs
-- **Security**: 2FA, passkeys, audit logs, RBAC roles
+- **Security**: 2FA, passkeys, audit logs, RBAC roles, SSO/SAML
+- **Candidate Portal**: OAuth login, dashboard, job browsing, profile management
+- **Emails**: 19 transactional templates, AI drafting, inbound email
+- **Dark Mode**: full dark/light theme support
 
 ## License
 

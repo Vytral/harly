@@ -1,6 +1,8 @@
-# Auditoría de la Lista de Deseos (OpenHire / Harly)
+# Auditoría de la Lista de Deseos (Harly)
 
-Esta auditoría compara el estado actual de la base de código de **OpenHire (Harly)** contra los requerimientos y sugerencias listados en [listadedeseos.md](file:///Users/maximiliano/downloads/curious-monkey/listadedeseos.md), utilizando el registro de [PROGRESO.md](file:///Users/maximiliano/downloads/curious-monkey/PROGRESO.md) y la verificación directa de la base de código.
+_Última actualización: 2026-07-05_
+
+Esta auditoría compara el estado actual de la base de código de **Harly** contra los requerimientos y sugerencias listados en [listadedeseos.md](file:///Users/maximiliano/downloads/curious-monkey/listadedeseos.md), utilizando el registro de [PROGRESO.md](file:///Users/maximiliano/downloads/curious-monkey/PROGRESO.md) y la verificación directa de la base de código.
 
 ---
 
@@ -41,23 +43,23 @@ Requerimientos de la lista de deseos que aún no tienen código asociado en la p
 
 ### Integraciones y Correo
 *   **SMTP, AWS SES y alternativas**: El sistema de emails solo soporta Resend. Falta agregar opciones para configurar SMTP genérico o AWS SES.
-*   **Roadmap de Integraciones (Greenhouse, LinkedIn, Gmail, Google Calendar)**: Estas integraciones se muestran visualmente en [IntegrationsSettingsPage](file:///Users/maximiliano/downloads/curious-monkey/apps/web/src/app/(dashboard)/settings/integrations/page.tsx) como "Próximamente" (Coming soon), pero no tienen lógica de conexión.
-*   **Publicación directa en LinkedIn**: Falta programar la funcionalidad para publicar las ofertas de trabajo directamente en LinkedIn desde el wizard de publicación e incluir una vista previa de la tarjeta del post.
+*   **Roadmap de Integraciones**: Google Calendar y Cal.com ya están integrados. Greenhouse, LinkedIn y Gmail se muestran como "Próximamente" en la UI.
+*   **Publicación directa en LinkedIn**: Falta programar la funcionalidad para publicar las ofertas de trabajo directamente desde el wizard de publicación.
 
 ### Seguridad y Aspectos Legales
-*   **Cumplimiento Legal (GDPR, CCPA, ISO 42001, SOC 2)**: No hay bases de configuración ni flujos de control para el cumplimiento de normativas de privacidad.
-*   **Términos, Condiciones y Privacidad Personalizables**: El administrador no cuenta con campos en la configuración para establecer la política de privacidad ni los términos del servicio (esencial para candidatos de la UE y EE. UU.).
-*   **Protección anti-bots (Cloudflare Turnstile)**: El formulario de aplicación pública no cuenta con validación opcional de Turnstile para evitar que bots automatizados de IA envíen solicitudes masivas.
+*   **Cumplimiento Legal (GDPR, CCPA, ISO 42001, SOC 2)**: GDPR base implementado (consent checkbox, audit logs, legal settings, public legal pages). Falta CCPA, ISO 42001, SOC 2.
+*   **Términos, Condiciones y Privacidad Personalizables**: Settings admin con campos para privacy policy y terms of service + public legal pages ya implementados.
+*   **Protección anti-bots (Cloudflare Turnstile)**: Server actions listos, falta UI para habilitar.
 
 ### Funcionalidades de Producto / Dashboard
-*   **Creación y limpieza de Datos de Ejemplo**: No existe el banner del Overview ni el botón para "Completar la cuenta con datos de ejemplo" (puestos, candidatos, informes ficticios) ni la opción para eliminarlos en lote.
-*   **Dashboard / Overview Personalizable**: La disposición de widgets en el dashboard es estática. Falta implementar el sistema para añadir, quitar o reordenar widgets (tareas pendientes, próximos eventos, resumen de candidatos, etc.).
+*   **Creación y limpieza de Datos de Ejemplo**: No existe el banner del Overview ni el botón para "Completar la cuenta con datos de ejemplo".
+*   **Dashboard / Overview Personalizable**: La disposición de widgets en el dashboard es estática. Falta implementar el sistema para añadir, quitar o reordenar widgets.
 *   **Restricción a correos corporativos (Work Email)**: No existe una regla de validación de dominios de correo para restringir el registro a correos de empresa en la versión Cloud.
-*   **Sección de "Quiénes Somos / Sobre Nosotros" y "Testimonios" en Career Page**: El creador visual en [CareerPageBuilder.tsx](file:///Users/maximiliano/downloads/curious-monkey/apps/web/src/app/(onboarding)/onboarding/_components/OnboardingWizard.tsx) no cuenta con bloques opcionales para la historia de la empresa ni testimonios de empleados para atraer candidatos.
-*   **Formulario directo vs. flotante**: El formulario de solicitud pública siempre es en página directa. Falta implementar la personalización de formulario flotante (modal/drawer) a elección del usuario.
-*   **Historial general/Actividad en TopBar**: El botón de actividad en el [TopBar.tsx](file:///Users/maximiliano/downloads/curious-monkey/apps/web/src/components/dashboard/TopBar.tsx#L64) abre un popover estático de prueba en lugar de un listado dinámico de actividades del espacio de trabajo.
-*   **Módulos de HRIS avanzados**: Calendario laboral, bandeja de entrada unificada de equipo, chat interno, saldos de vacaciones (PTO), y registro de horas (Cloud).
-*   **Portal de Candidatos**: Login para candidatos con Google/LinkedIn, permitiéndoles tener un perfil, subir CVs y ver sus aplicaciones.
+*   **Sección de "Quiénes Somos" y "Testimonios" en Career Page**: El creador visual no cuenta con bloques opcionales para la historia de la empresa ni testimonios.
+*   **Formulario directo vs. flotante**: El formulario de solicitud pública siempre es en página directa.
+*   **Historial general/Actividad en TopBar**: El botón de actividad abre un popover estático de prueba.
+*   **Módulos de HRIS avanzados**: Calendario laboral, bandeja de entrada unificada, chat interno, PTO, registro de horas.
+*   **Portal de Candidatos**: ✅ Implementado — OAuth (Google, GitHub, LinkedIn), login, dashboard, jobs, profile.
 
 ---
 

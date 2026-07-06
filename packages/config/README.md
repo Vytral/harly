@@ -1,10 +1,12 @@
 # @harly/config
 
-Future home for shared configuration.
+Shared configuration for Harly.
 
-Responsibilities:
+> **Status:** Placeholder — not yet implemented. Environment validation currently lives in `apps/web`.
 
-- Environment variable validation
+## Planned responsibilities
+
+- Environment variable validation (Zod schemas at boot)
 - Feature flags
 - Self-hosted vs cloud config
 - Public app metadata

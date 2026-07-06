@@ -1,11 +1,45 @@
 # @harly/emails
 
-Future home for transactional email templates and sending.
+Transactional email templates and sending for Harly.
 
-Examples:
+Built with [React Email](https://react.email/) + [Resend](https://resend.com/).
 
-- Candidate confirmation
-- Application status updates
-- Workspace invites
-- Interview scheduling emails
-- Provider adapters for Resend, SMTP, and self-hosted options
+## What's inside
+
+- **Templates** (`src/templates/`) — 19 React Email templates:
+  - `ApplicationReceivedCandidate` / `ApplicationReceivedRecruiter`
+  - `CandidateRejected` / `CandidateStageUpdate`
+  - `InterviewScheduled` / `InterviewCanceled` / `InterviewRescheduled`
+  - `OfferExtended` / `OfferWithdrawn`
+  - `PortalMagicLink` / `ResetPassword` / `VerifyEmail` / `WelcomeEmail`
+  - `WorkspaceInvitation`
+  - `CustomTemplateEmail` — user-defined templates with variable interpolation
+  - `calendarLinks` — ICS attachment generation
+- **Sender** (`src/sender.ts`) — Resend provider with console fallback for dev.
+- **Logo** (`src/logo.ts`) — Harly logo asset for email headers.
+- **Inbound** (`src/inbound/`) — webhook receiver for inbound email → candidate timeline.
+- **Layout** (`HarlyLayout.tsx`, `WorkspaceLayout.tsx`) — shared email layout wrappers.
+
+## Usage
+
+```ts
+import { sendEmail } from "@harly/emails";
+import { ApplicationReceivedCandidate } from "@harly/emails/templates";
+
+await sendEmail({
+  to: candidate.email,
+  subject: "We received your application",
+  react: <ApplicationReceivedCandidate candidateName={candidate.name} jobTitle={job.title} />,
+});
+```
+
+## Configuration
+
+Set in `.env`:
+
+```bash
+RESEND_API_KEY="re_..."
+EMAIL_FROM="noreply@harly.com"
+```
+
+Without `RESEND_API_KEY`, emails are logged to console (development fallback).

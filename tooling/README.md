@@ -1,9 +1,11 @@
-# OpenHire Tooling
+# Harly Tooling
 
-Developer and distribution tooling for OpenHire.
+Developer and distribution tooling for Harly.
 
 ## Directories
 
-- `create-harly`: future `npx @harly/create` project/bootstrap CLI.
-- `docker`: Docker and deployment helpers.
-- `scripts`: release, setup, and maintenance scripts.
+| Directory | Description | Status |
+|-----------|-------------|--------|
+| `create-harly` | `npx @harly/create` bootstrap CLI for self-hosting. | Placeholder |
+| `docker` | Docker and deployment helpers. | In progress |
+| `scripts` | Release, setup, and maintenance scripts. | Active |

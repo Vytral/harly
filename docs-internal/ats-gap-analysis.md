@@ -1,6 +1,6 @@
 # Harly — Gap Analysis para ATS open-source completo
 
-_Última actualización: 2026-07-02_
+_Última actualización: 2026-07-05_
 
 Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo Cal.com / Twenty: código abierto + cloud managed como monetización).
 
@@ -18,9 +18,9 @@ Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo 
 - **Interviews**: tabla real `interviews`, Cal.com integration (OAuth + webhook firmado), mark complete/cancel.
 - **Offers**: drawer/panel, extend/withdraw, emails.
 - **Templates**: email templates + interpolación de variables + TemplatesManager UI.
-- **Calendars**: agenda de entrevistas próximas agrupada por fecha con badges de modo/duración/GCal link.
+- **Calendars**: real month grid + filters + clickthrough.
 - **Storage**: adapter abstracto local + S3/R2 con presigned URLs.
-- **Emails**: 19 react-email templates + Resend (fallback consola) + AI email drafting + UI para conectar Resend/SMTP.
+- **Emails**: 19 react-email templates + Resend (fallback consola) + AI email drafting + UI para conectar Resend/SMTP + inbound email (webhook receiver, reply tracking).
 - **Search ⌘K**: spotlight palette con búsqueda real sobre jobs y candidates (ilike, workspace-scoped).
 - **API v1**: REST `/api/v1/*`, API keys por workspace, OpenAPI spec, webhooks outbound con HMAC signing, cron dispatch, public endpoints.
 - **Integrations**: Google Calendar (OAuth + sync), Cal.com, Slack OAuth.
@@ -50,7 +50,7 @@ Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo 
 
 ### P1 — Core faltante
 
-5. **Two-way email / inbox**: hoy solo outbound; falta inbound webhook → thread → timeline.
+5. ~~**Two-way email / inbox**~~ ✅ Implementado — inbound webhook (Resend + Postmark), reply tracking, settings UI.
 
 6. **Scorecards estructurados**: hiring team + scheduling ✅. Falta: kit de entrevista (criterios por stage), evaluaciones estructuradas con rúbrica.
 
@@ -63,6 +63,8 @@ Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo 
 9. **Cal.com webhook real sin probar**: requiere `NEXT_PUBLIC_APP_URL` público (túnel/deploy) y API key con scope webhook. `cal-api-version` sin confirmar contra changelog.
 
 10. **apps/docs y apps/marketing**: stubs vacíos — pendiente hasta lanzamiento.
+
+11. **README actualizado**: ✅ Tech stack correcto, features list, estructura de packages real.
 
 ### P3 — Enterprise / futuro
 

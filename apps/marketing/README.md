@@ -1,11 +1,9 @@
 # Harly Marketing
 
-Future home for `harly.dev`.
+Marketing site for Harly — `harly.dev`.
 
-This app should contain only marketing pages, launch assets, pricing, changelog,
-SEO pages, and comparison pages. It should not import product server logic from
-the core app.
+> **Status:** Placeholder. Build this after the core product foundation is production-ready.
 
-## Status
+## Direction
 
-Placeholder. Build this after the core product foundation is production-ready.
+Should contain only marketing pages, launch assets, pricing, changelog, SEO pages, and comparison pages. Should not import product server logic from the core app.

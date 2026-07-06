@@ -1,8 +1,10 @@
 # @harly/validators
 
-Future home for shared validation schemas.
+Shared Zod validation schemas for Harly.
 
-Examples:
+> **Status:** Placeholder — not yet implemented. Validation schemas currently live alongside their features in `apps/web`.
+
+## Planned contents
 
 - Job forms
 - Application forms
