@@ -43,9 +43,11 @@ const KNOWN_KEYS = new Set<string>(TEMPLATE_VARIABLES.map((v) => v.key));
 // Matches {{ variable-name_with.dots }} — letters, digits, underscores, hyphens, dots
 const VARIABLE_REGEX = /\{\{\s*([a-zA-Z0-9_.\-]+)\s*\}\}/g;
 
-/** Normalize a variable key to lowercase for case-insensitive matching. */
-function normalizeKey(key: string): string {
-  return key.toLowerCase();
+/** Canonicalize a variable key for interpolation: lowercase and treat hyphens
+ *  and dots as underscores so `Candidate_First_Name`, `candidate-first-name`,
+ *  and `candidate.first.name` all resolve to `candidate_first_name`. */
+function canonicalizeKey(key: string): string {
+  return key.toLowerCase().replace(/[-.]/g, "_");
 }
 
 /** Replace `{{variable}}` placeholders with values. Unknown keys stay literal. */
@@ -54,18 +56,24 @@ export function interpolateTemplate(
   values: TemplateValues,
 ): string {
   return template.replace(VARIABLE_REGEX, (match, key: string) => {
-    const normalized = normalizeKey(key);
-    if (!KNOWN_KEYS.has(normalized)) return match;
-    return values[normalized as TemplateVariableKey] ?? "";
+    const canonical = canonicalizeKey(key);
+    if (!KNOWN_KEYS.has(canonical)) return match;
+    return values[canonical as TemplateVariableKey] ?? "";
   });
 }
 
-/** Variables referenced in a template that aren't in the whitelist. */
+/** Variables referenced in a template that aren't in the whitelist.
+ *
+ *  This is stricter than `interpolateTemplate`: it checks the raw key exactly
+ *  as written (without case or separator normalization) so authors see a
+ *  warning when they deviate from the canonical `snake_case` form, even though
+ *  interpolation will still try to forgive common variants at send time.
+ */
 export function findUnknownVariables(template: string): string[] {
   const unknown = new Set<string>();
   for (const match of template.matchAll(VARIABLE_REGEX)) {
-    const normalized = normalizeKey(match[1]);
-    if (!KNOWN_KEYS.has(normalized)) unknown.add(match[1]);
+    const key = match[1];
+    if (!KNOWN_KEYS.has(key)) unknown.add(key);
   }
   return [...unknown];
 }

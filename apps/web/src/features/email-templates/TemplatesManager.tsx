@@ -15,7 +15,7 @@ import {
   SYSTEM_TEMPLATE_TYPES,
   type EmailTemplateItem,
   type TemplateType,
-} from "@/features/email-templates/data";
+} from "@/features/email-templates/shared";
 import {
   findUnknownVariables,
   interpolateTemplate,
