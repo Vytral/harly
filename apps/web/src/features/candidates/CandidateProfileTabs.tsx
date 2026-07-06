@@ -194,6 +194,10 @@ const activityDotStyles: Record<string, string> = {
   "file.uploaded": "bg-slate-info",
   "application.hired": "bg-primary",
   "application.rejected": "bg-destructive",
+  "interview.scheduled": "bg-indigo-500",
+  "interview.canceled": "bg-destructive",
+  "interview.completed": "bg-emerald-500",
+  "interview.rescheduled": "bg-amber-500",
 };
 
 const RATING_META = {
@@ -636,6 +640,42 @@ function InterviewCard({
             <MapPin className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
             <span className="truncate">{interview.location}</span>
           </div>
+        ) : null}
+
+        {/* Meet link */}
+        {interview.teamsMeetingId && interview.meetLink ? (
+          <Button asChild size="sm" variant="outline" className="w-fit">
+            <a
+              href={interview.meetLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Video className="size-4" />
+              Join Teams Meeting
+            </a>
+          </Button>
+        ) : interview.zoomMeetingId && interview.meetLink ? (
+          <Button asChild size="sm" variant="outline" className="w-fit">
+            <a
+              href={interview.meetLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Video className="size-4" />
+              Join Zoom Meeting
+            </a>
+          </Button>
+        ) : interview.meetLink ? (
+          <Button asChild size="sm" variant="outline" className="w-fit">
+            <a
+              href={interview.meetLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Video className="size-4" />
+              Join Google Meet
+            </a>
+          </Button>
         ) : null}
 
         {/* Notes */}

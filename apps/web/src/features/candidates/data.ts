@@ -22,6 +22,11 @@ import {
   user as authUsers,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import {
+  interviewTypeLabel,
+  interviewModeLabel,
+} from "@/features/interviews/shared";
+import type { InterviewType, InterviewMode } from "@/features/interviews/shared";
 import { cancelInterviewGCalEvent } from "@/lib/gcal/sync";
 
 export type CandidateApplicationStatus =
@@ -637,6 +642,28 @@ export async function getCandidateProfile(candidateId: string) {
         id: event.id,
         type: event.type,
         label: "Marked as rejected",
+        actorName: event.actorName,
+        createdAt: event.createdAt,
+      };
+    }
+
+    if (event.type.startsWith("interview.")) {
+      const interviewLabels: Record<string, string> = {
+        "interview.scheduled": "Interview scheduled",
+        "interview.canceled": "Interview canceled",
+        "interview.completed": "Interview completed",
+        "interview.rescheduled": "Interview rescheduled",
+      };
+      const meta = isRecord(event.metadata) ? event.metadata : null;
+      const interviewType = meta && typeof meta.type === "string" ? (meta.type as InterviewType) : null;
+      const interviewMode = meta && typeof meta.mode === "string" ? (meta.mode as InterviewMode) : null;
+      const typeLabel = interviewType ? interviewTypeLabel(interviewType) : null;
+      const modeLabel = interviewMode ? interviewModeLabel(interviewMode) : null;
+      const suffix = [typeLabel, modeLabel].filter(Boolean).join(" · ");
+      return {
+        id: event.id,
+        type: event.type,
+        label: `${interviewLabels[event.type] ?? event.type}${suffix ? ` — ${suffix}` : ""}`,
         actorName: event.actorName,
         createdAt: event.createdAt,
       };

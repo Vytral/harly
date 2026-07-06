@@ -25,6 +25,10 @@ const DOT_STYLES: Record<string, string> = {
   "file.uploaded": "bg-muted-foreground",
   "evaluation.ai_generated": "bg-primary",
   "candidate.updated": "bg-muted-foreground",
+  "interview.scheduled": "bg-indigo-500",
+  "interview.canceled": "bg-destructive",
+  "interview.completed": "bg-emerald-500",
+  "interview.rescheduled": "bg-amber-500",
 };
 
 /**
