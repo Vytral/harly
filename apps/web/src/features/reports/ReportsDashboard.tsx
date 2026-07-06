@@ -5,7 +5,6 @@ import { useMemo } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { Tile } from "@/components/dashboard/widgets/primitives";
-import { PageHeader } from "@/components/ui/PageHeader";
 import {
   ArrowDownRightIcon,
   ArrowUpRightIcon,
@@ -209,28 +208,23 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
 
   return (
     <div className="space-y-5">
-      <PageHeader
-        eyebrow="Recruiter analytics"
-        title="Reports"
-        description="Hiring momentum, funnel health, and source quality — read straight from real workspace activity."
-        actions={
-          <Select
-            value={String(comparison.rangeDays)}
-            onValueChange={(v) => router.push(`/dashboard/reports?range=${v}`)}
-          >
-            <SelectTrigger className="h-8 w-auto min-w-40 text-xs">
-              <SelectValue>{rangeLabel}</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              {RANGE_OPTIONS.map((o) => (
-                <SelectItem key={o.value} value={o.value}>
-                  {o.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        }
-      />
+      <div className="flex justify-end">
+        <Select
+          value={String(comparison.rangeDays)}
+          onValueChange={(v) => router.push(`/dashboard/reports?range=${v}`)}
+        >
+          <SelectTrigger className="h-8 w-auto min-w-40 text-xs">
+            <SelectValue>{rangeLabel}</SelectValue>
+          </SelectTrigger>
+          <SelectContent>
+            {RANGE_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
 
       <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((s, i) => (

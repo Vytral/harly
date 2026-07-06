@@ -231,9 +231,9 @@ export default async function CandidateDetailPage({
           >
             {/* Identity header — one cohesive block, no decorative banner */}
             <div className="rounded-2xl border border-border/70 bg-card p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
               {/* Identity + contact, all in one column tight to the avatar */}
-              <div className="flex min-w-0 items-start gap-4">
+              <div className="flex min-w-0 lg:min-w-[400px] flex-1 items-start gap-4">
                 <CandidateAvatarEdit
                   candidateId={candidate.id}
                   workspaceId={workspaceId}
@@ -356,7 +356,7 @@ export default async function CandidateDetailPage({
               </div>
 
               {/* Actions — grouped with clear hierarchy, delete isolated */}
-              <div className="shrink-0 lg:pl-2">
+              <div className="w-full shrink-0 lg:w-auto lg:pl-2">
                 <CandidateActionBar
                   candidate={actionCandidate}
                   name={fullName}

@@ -141,15 +141,10 @@ export function CalendarBoard({
   return (
     <div className="space-y-4">
       <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
-            Calendars
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {filtered.length} interview{filtered.length === 1 ? "" : "s"} this
-            month{hasAnyFilter ? " (filtered)" : ""}.
-          </p>
-        </div>
+        <p className="text-sm text-muted-foreground">
+          {filtered.length} interview{filtered.length === 1 ? "" : "s"} this
+          month{hasAnyFilter ? " (filtered)" : ""}.
+        </p>
         <div className="flex items-center gap-1">
           <button
             type="button"

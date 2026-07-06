@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { PageHeader } from "@/components/ui/PageHeader";
 import {
   Select,
   SelectContent,
@@ -172,19 +171,6 @@ export function TasksView({
     <div className="space-y-5">
       <PageTitle title="Tasks" />
 
-      <PageHeader
-        eyebrow="Workspace"
-        title="Tasks"
-        description="Follow-ups across candidates, jobs, and interviews — triaged by urgency."
-        actions={
-          <div className="flex items-center gap-1.5">
-            <SummaryChip count={summary.open} label="open" tone="bg-slate-info" />
-            <SummaryChip count={summary.overdue} label="overdue" tone="bg-rust" />
-            <SummaryChip count={summary.done} label="done" tone="bg-primary" />
-          </div>
-        }
-      />
-
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative sm:w-60">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -225,7 +211,13 @@ export function TasksView({
           </SelectContent>
         </Select>
 
-        <div className="flex items-center gap-2 sm:ml-auto">
+        <div className="flex items-center gap-1.5 sm:ml-auto">
+          <SummaryChip count={summary.open} label="open" tone="bg-slate-info" />
+          <SummaryChip count={summary.overdue} label="overdue" tone="bg-rust" />
+          <SummaryChip count={summary.done} label="done" tone="bg-primary" />
+        </div>
+
+        <div className="flex items-center gap-2">
           <div className="inline-flex rounded-full border bg-card p-0.5">
             {([
               { key: "list", icon: List, label: "List view" },
