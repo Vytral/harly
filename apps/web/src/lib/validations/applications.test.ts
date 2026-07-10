@@ -128,11 +128,222 @@ describe("applicationFormSchema", () => {
   it("accepts missing resume when resume is optional", () => {
     const optionalResumeSchema = createApplicationFormSchema({
       resumeRequired: false,
+      profileLinks: {
+        linkedin: { enabled: true, required: false },
+        github: { enabled: true, required: false },
+        website: { enabled: true, required: false },
+      },
+      sections: {
+        personal: {
+          phone: { visibility: "optional" },
+          address: { visibility: "optional" },
+          photo: { visibility: "disabled" },
+          headline: { visibility: "optional" },
+        },
+        profile: {
+          resume: { visibility: "optional" },
+          education: { visibility: "optional" },
+          experience: { visibility: "optional" },
+          linkedinUrl: { visibility: "optional" },
+          githubUrl: { visibility: "optional" },
+          websiteUrl: { visibility: "optional" },
+        },
+        details: {
+          coverLetter: { visibility: "optional" },
+        },
+      },
+      questions: [],
     });
     const result = optionalResumeSchema.safeParse({
       firstName: "Ada",
       lastName: "Lovelace",
       email: "ada@example.com",
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("requires configured address and cover letter fields", () => {
+    const schema = createApplicationFormSchema({
+      resumeRequired: false,
+      profileLinks: {
+        linkedin: { enabled: false, required: false },
+        github: { enabled: false, required: false },
+        website: { enabled: false, required: false },
+      },
+      sections: {
+        personal: {
+          phone: { visibility: "optional" },
+          address: { visibility: "required" },
+          photo: { visibility: "disabled" },
+          headline: { visibility: "optional" },
+        },
+        profile: {
+          resume: { visibility: "disabled" },
+          education: { visibility: "optional" },
+          experience: { visibility: "optional" },
+          linkedinUrl: { visibility: "disabled" },
+          githubUrl: { visibility: "disabled" },
+          websiteUrl: { visibility: "disabled" },
+        },
+        details: {
+          coverLetter: { visibility: "required" },
+        },
+      },
+      questions: [],
+    });
+
+    const result = schema.safeParse({
+      firstName: "Ada",
+      lastName: "Lovelace",
+      email: "ada@example.com",
+      address: "",
+      coverLetter: "",
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.address).toBeDefined();
+      expect(result.error.flatten().fieldErrors.coverLetter).toBeDefined();
+    }
+  });
+
+  it("requires configured education and experience collections", () => {
+    const schema = createApplicationFormSchema({
+      resumeRequired: false,
+      profileLinks: {
+        linkedin: { enabled: false, required: false },
+        github: { enabled: false, required: false },
+        website: { enabled: false, required: false },
+      },
+      sections: {
+        personal: {
+          phone: { visibility: "optional" },
+          address: { visibility: "optional" },
+          photo: { visibility: "disabled" },
+          headline: { visibility: "optional" },
+        },
+        profile: {
+          resume: { visibility: "disabled" },
+          education: { visibility: "required" },
+          experience: { visibility: "required" },
+          linkedinUrl: { visibility: "disabled" },
+          githubUrl: { visibility: "disabled" },
+          websiteUrl: { visibility: "disabled" },
+        },
+        details: {
+          coverLetter: { visibility: "disabled" },
+        },
+      },
+      questions: [],
+    });
+
+    const result = schema.safeParse({
+      firstName: "Ada",
+      lastName: "Lovelace",
+      email: "ada@example.com",
+      educationEntries: [],
+      experienceEntries: [],
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.flatten().fieldErrors.educationEntries).toBeDefined();
+      expect(result.error.flatten().fieldErrors.experienceEntries).toBeDefined();
+    }
+  });
+
+  it("accepts structured education and experience entries", () => {
+    const schema = createApplicationFormSchema({
+      resumeRequired: false,
+      profileLinks: {
+        linkedin: { enabled: false, required: false },
+        github: { enabled: false, required: false },
+        website: { enabled: false, required: false },
+      },
+      sections: {
+        personal: {
+          phone: { visibility: "optional" },
+          address: { visibility: "optional" },
+          photo: { visibility: "disabled" },
+          headline: { visibility: "optional" },
+        },
+        profile: {
+          resume: { visibility: "disabled" },
+          education: { visibility: "optional" },
+          experience: { visibility: "optional" },
+          linkedinUrl: { visibility: "disabled" },
+          githubUrl: { visibility: "disabled" },
+          websiteUrl: { visibility: "disabled" },
+        },
+        details: {
+          coverLetter: { visibility: "disabled" },
+        },
+      },
+      questions: [],
+    });
+
+    const result = schema.safeParse({
+      firstName: "Ada",
+      lastName: "Lovelace",
+      email: "ada@example.com",
+      educationEntries: [
+        {
+          id: "0b6c8966-a5c8-4266-bb7d-bae0c6e39900",
+          school: "University of London",
+          degree: "Bachelor's degree",
+        },
+      ],
+      experienceEntries: [
+        {
+          id: "89c08002-8ec3-4bf3-bb5b-d482719ceef3",
+          company: "Analytical Engines",
+          title: "Programmer",
+          current: false,
+        },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+  });
+
+  it("ignores disabled fields if a client submits them anyway", () => {
+    const schema = createApplicationFormSchema({
+      resumeRequired: false,
+      profileLinks: {
+        linkedin: { enabled: false, required: false },
+        github: { enabled: false, required: false },
+        website: { enabled: false, required: false },
+      },
+      sections: {
+        personal: {
+          phone: { visibility: "disabled" },
+          address: { visibility: "disabled" },
+          photo: { visibility: "disabled" },
+          headline: { visibility: "disabled" },
+        },
+        profile: {
+          resume: { visibility: "disabled" },
+          education: { visibility: "disabled" },
+          experience: { visibility: "disabled" },
+          linkedinUrl: { visibility: "disabled" },
+          githubUrl: { visibility: "disabled" },
+          websiteUrl: { visibility: "disabled" },
+        },
+        details: {
+          coverLetter: { visibility: "disabled" },
+        },
+      },
+      questions: [],
+    });
+
+    const result = schema.safeParse({
+      firstName: "Ada",
+      lastName: "Lovelace",
+      email: "ada@example.com",
+      linkedinUrl: "not-a-url",
+      coverLetter: "hello",
+      resumeUrl: "bad",
     });
 
     expect(result.success).toBe(true);

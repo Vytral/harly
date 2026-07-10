@@ -7,6 +7,7 @@ import {
   parseJobContentSections,
   parseKeywords,
   parseOfficePhotos,
+  type ApplicationFieldVisibility,
   type JobApplicationConfig,
   type JobBoardConfig,
   type JobContentSection,
@@ -36,13 +37,13 @@ const optionalSlug = z.preprocess(
     .transform((value) => (value.length > 0 ? slugify(value) : undefined)),
 );
 
-const checkboxBoolean = (defaultValue: boolean) =>
+const fieldVisibility = (defaultValue: ApplicationFieldVisibility) =>
   z.preprocess(
     (value) =>
-      value == null
+      value == null || value === ""
         ? defaultValue
-        : value === true || value === "true" || value === "on",
-    z.boolean(),
+        : value,
+    z.enum(["required", "optional", "disabled"]),
   );
 
 export const jobFormSchema = z
@@ -73,13 +74,39 @@ export const jobFormSchema = z
     ),
     officeAddress: optionalText,
     officePhotosJson: z.string().optional(),
-    resumeRequired: checkboxBoolean(defaultJobApplicationConfig.resumeRequired),
-    profileLinkLinkedin: checkboxBoolean(true),
-    profileLinkLinkedinRequired: checkboxBoolean(false),
-    profileLinkGithub: checkboxBoolean(true),
-    profileLinkGithubRequired: checkboxBoolean(false),
-    profileLinkWebsite: checkboxBoolean(true),
-    profileLinkWebsiteRequired: checkboxBoolean(false),
+    applicationPhoneVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.personal.phone.visibility,
+    ),
+    applicationAddressVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.personal.address.visibility,
+    ),
+    applicationPhotoVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.personal.photo.visibility,
+    ),
+    applicationHeadlineVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.personal.headline.visibility,
+    ),
+    applicationResumeVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.profile.resume.visibility,
+    ),
+    applicationLinkedinVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.profile.linkedinUrl.visibility,
+    ),
+    applicationGithubVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.profile.githubUrl.visibility,
+    ),
+    applicationWebsiteVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.profile.websiteUrl.visibility,
+    ),
+    applicationEducationVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.profile.education.visibility,
+    ),
+    applicationExperienceVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.profile.experience.visibility,
+    ),
+    applicationCoverLetterVisibility: fieldVisibility(
+      defaultJobApplicationConfig.sections.details.coverLetter.visibility,
+    ),
     applicationQuestionsJson: z.string().optional(),
   })
   .superRefine((values, ctx) => {
@@ -98,19 +125,38 @@ export const jobFormSchema = z
   })
   .transform((values) => {
     const applicationConfig: JobApplicationConfig = {
-      resumeRequired: values.resumeRequired,
+      resumeRequired: values.applicationResumeVisibility === "required",
       profileLinks: {
         linkedin: {
-          enabled: values.profileLinkLinkedin,
-          required: values.profileLinkLinkedin && values.profileLinkLinkedinRequired,
+          enabled: values.applicationLinkedinVisibility !== "disabled",
+          required: values.applicationLinkedinVisibility === "required",
         },
         github: {
-          enabled: values.profileLinkGithub,
-          required: values.profileLinkGithub && values.profileLinkGithubRequired,
+          enabled: values.applicationGithubVisibility !== "disabled",
+          required: values.applicationGithubVisibility === "required",
         },
         website: {
-          enabled: values.profileLinkWebsite,
-          required: values.profileLinkWebsite && values.profileLinkWebsiteRequired,
+          enabled: values.applicationWebsiteVisibility !== "disabled",
+          required: values.applicationWebsiteVisibility === "required",
+        },
+      },
+      sections: {
+        personal: {
+          phone: { visibility: values.applicationPhoneVisibility },
+          address: { visibility: values.applicationAddressVisibility },
+          photo: { visibility: values.applicationPhotoVisibility },
+          headline: { visibility: values.applicationHeadlineVisibility },
+        },
+        profile: {
+          resume: { visibility: values.applicationResumeVisibility },
+          linkedinUrl: { visibility: values.applicationLinkedinVisibility },
+          githubUrl: { visibility: values.applicationGithubVisibility },
+          websiteUrl: { visibility: values.applicationWebsiteVisibility },
+          education: { visibility: values.applicationEducationVisibility },
+          experience: { visibility: values.applicationExperienceVisibility },
+        },
+        details: {
+          coverLetter: { visibility: values.applicationCoverLetterVisibility },
         },
       },
       questions: parseJobApplicationQuestions(values.applicationQuestionsJson),

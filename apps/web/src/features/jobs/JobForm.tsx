@@ -100,9 +100,17 @@ const FIELD_TO_SECTION: Record<string, string> = {
   currency: "compensation",
   salaryPeriod: "compensation",
   resumeRequired: "application",
-  profileLinkLinkedin: "application",
-  profileLinkGithub: "application",
-  profileLinkWebsite: "application",
+  applicationPhoneVisibility: "application",
+  applicationAddressVisibility: "application",
+  applicationPhotoVisibility: "application",
+  applicationHeadlineVisibility: "application",
+  applicationResumeVisibility: "application",
+  applicationLinkedinVisibility: "application",
+  applicationGithubVisibility: "application",
+  applicationWebsiteVisibility: "application",
+  applicationEducationVisibility: "application",
+  applicationExperienceVisibility: "application",
+  applicationCoverLetterVisibility: "application",
   applicationQuestionsJson: "application",
   slug: "advanced",
   experienceLevel: "advanced",
@@ -134,7 +142,16 @@ export function JobForm({ action, job, submitLabel, departments }: JobFormProps)
   // Collapsible section state — auto-expand on edit if data present
   const [openSections, setOpenSections] = useState<Record<DisclosureKey, boolean>>({
     compensation: Boolean(job?.salaryMin || job?.salaryMax),
-    application: applicationConfig.questions.length > 0 || !applicationConfig.resumeRequired,
+    application:
+      applicationConfig.questions.length > 0 ||
+      applicationConfig.sections.personal.phone.visibility !== "optional" ||
+      applicationConfig.sections.personal.address.visibility !== "optional" ||
+      applicationConfig.sections.personal.photo.visibility !== "disabled" ||
+      applicationConfig.sections.personal.headline.visibility !== "optional" ||
+      applicationConfig.sections.profile.resume.visibility !== "required" ||
+      applicationConfig.sections.profile.education.visibility !== "optional" ||
+      applicationConfig.sections.profile.experience.visibility !== "optional" ||
+      applicationConfig.sections.details.coverLetter.visibility !== "optional",
     advanced: Boolean(
       job?.slug || job?.experienceLevel || job?.education || parseKeywords(job?.keywords).length > 0,
     ),
@@ -199,10 +216,17 @@ export function JobForm({ action, job, submitLabel, departments }: JobFormProps)
         salaryPeriod: fd.get("salaryPeriod"),
         officeAddress: fd.get("officeAddress"),
         officePhotosJson: fd.get("officePhotosJson"),
-        resumeRequired: fd.get("resumeRequired"),
-        profileLinkLinkedin: fd.get("profileLinkLinkedin"),
-        profileLinkGithub: fd.get("profileLinkGithub"),
-        profileLinkWebsite: fd.get("profileLinkWebsite"),
+        applicationPhoneVisibility: fd.get("applicationPhoneVisibility"),
+        applicationAddressVisibility: fd.get("applicationAddressVisibility"),
+        applicationPhotoVisibility: fd.get("applicationPhotoVisibility"),
+        applicationHeadlineVisibility: fd.get("applicationHeadlineVisibility"),
+        applicationResumeVisibility: fd.get("applicationResumeVisibility"),
+        applicationLinkedinVisibility: fd.get("applicationLinkedinVisibility"),
+        applicationGithubVisibility: fd.get("applicationGithubVisibility"),
+        applicationWebsiteVisibility: fd.get("applicationWebsiteVisibility"),
+        applicationEducationVisibility: fd.get("applicationEducationVisibility"),
+        applicationExperienceVisibility: fd.get("applicationExperienceVisibility"),
+        applicationCoverLetterVisibility: fd.get("applicationCoverLetterVisibility"),
         applicationQuestionsJson: fd.get("applicationQuestionsJson"),
       });
 

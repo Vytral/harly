@@ -1,36 +1,102 @@
-import { useState } from "react";
+"use client";
 
-import type { JobApplicationConfig } from "../config";
+import type { ReactNode } from "react";
+
+import type {
+  ApplicationFieldVisibility,
+  JobApplicationConfig,
+  JobApplicationFieldConfig,
+} from "../config";
 import { JobQuestionBuilder } from "../JobQuestionBuilder";
-import { Switch } from "@/components/ui/switch";
+import { cn } from "@/lib/utils";
 
-function LinkToggle({
+const visibilityOptions: Array<{
+  value: ApplicationFieldVisibility;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "required",
+    label: "Required",
+    description: "Candidates must fill this field.",
+  },
+  {
+    value: "optional",
+    label: "Optional",
+    description: "Show it, but let candidates skip it.",
+  },
+  {
+    value: "disabled",
+    label: "Disabled",
+    description: "Hide it from the application form.",
+  },
+];
+
+function VisibilityField({
   name,
-  requiredName,
   label,
-  setting,
+  value,
+  description,
 }: {
   name: string;
-  requiredName: string;
   label: string;
-  setting: { enabled: boolean; required: boolean };
+  value: JobApplicationFieldConfig;
+  description?: string;
 }) {
-  const [enabled, setEnabled] = useState(setting.enabled);
-
   return (
-    <div className="rounded-lg border bg-muted/40 px-4 py-3">
-      <label className="flex items-center justify-between gap-3">
-        <span className="text-sm font-medium">{label}</span>
-        <Switch name={name} checked={enabled} onCheckedChange={setEnabled} />
-      </label>
-      {enabled ? (
-        <label className="mt-2.5 flex items-center justify-between gap-3 border-t pt-2.5">
-          <span className="text-xs text-muted-foreground">
-            Require candidates to fill this in
-          </span>
-          <Switch name={requiredName} defaultChecked={setting.required} />
-        </label>
+    <fieldset className="rounded-lg border bg-muted/30 px-4 py-3">
+      <legend className="px-1 text-sm font-medium">{label}</legend>
+      {description ? (
+        <p className="mb-3 text-xs text-muted-foreground">{description}</p>
       ) : null}
+      <div className="grid gap-2 sm:grid-cols-3">
+        {visibilityOptions.map((option) => {
+          const checked = value.visibility === option.value;
+          return (
+            <label
+              key={option.value}
+              className={cn(
+                "flex cursor-pointer flex-col rounded-md border px-3 py-2 transition",
+                checked
+                  ? "border-foreground bg-background"
+                  : "border-border bg-background/60 hover:border-foreground/40",
+              )}
+            >
+              <input
+                type="radio"
+                name={name}
+                value={option.value}
+                defaultChecked={checked}
+                className="sr-only"
+              />
+              <span className="text-sm font-medium">{option.label}</span>
+              <span className="mt-1 text-xs text-muted-foreground">
+                {option.description}
+              </span>
+            </label>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+function FieldGroup({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <p className="text-sm font-semibold">{title}</p>
+        <p className="text-sm text-muted-foreground">{description}</p>
+      </div>
+      <div className="space-y-3">{children}</div>
     </div>
   );
 }
@@ -47,55 +113,91 @@ export function ApplicationSection({
   };
 }) {
   return (
-    <div className="space-y-5">
-      <label className="flex items-start justify-between gap-4 rounded-lg border bg-muted/40 p-4">
-        <span>
-          <span className="block text-sm font-medium">Require CV / resume</span>
-          <span className="mt-1 block text-sm text-muted-foreground">
-            Candidates must upload a PDF, DOC, or DOCX.
-          </span>
-        </span>
-        <Switch
-          name="resumeRequired"
-          defaultChecked={applicationConfig.resumeRequired}
+    <div className="space-y-6">
+      <FieldGroup
+        title="Personal information"
+        description="Name and email stay required. Configure the additional fields shown in the first section of the application form."
+      >
+        <VisibilityField
+          name="applicationPhoneVisibility"
+          label="Phone"
+          value={applicationConfig.sections.personal.phone}
         />
-      </label>
+        <VisibilityField
+          name="applicationAddressVisibility"
+          label="Address"
+          value={applicationConfig.sections.personal.address}
+        />
+        <VisibilityField
+          name="applicationPhotoVisibility"
+          label="Photo"
+          value={applicationConfig.sections.personal.photo}
+          description="Candidates can upload a profile photo."
+        />
+        <VisibilityField
+          name="applicationHeadlineVisibility"
+          label="Headline"
+          value={applicationConfig.sections.personal.headline}
+          description="Short professional title or summary."
+        />
+      </FieldGroup>
 
-      <div className="space-y-3">
-        <p className="text-sm font-semibold">Candidate links (optional)</p>
-        <p className="text-sm text-muted-foreground">
-          Pick which profile links to offer — candidates can leave any of them
-          blank.
-        </p>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <LinkToggle
-            name="profileLinkLinkedin"
-            requiredName="profileLinkLinkedinRequired"
-            label="LinkedIn"
-            setting={applicationConfig.profileLinks.linkedin}
-          />
-          <LinkToggle
-            name="profileLinkGithub"
-            requiredName="profileLinkGithubRequired"
-            label="GitHub"
-            setting={applicationConfig.profileLinks.github}
-          />
-          <LinkToggle
-            name="profileLinkWebsite"
-            requiredName="profileLinkWebsiteRequired"
-            label="Website / Portfolio"
-            setting={applicationConfig.profileLinks.website}
+      <FieldGroup
+        title="Profile"
+        description="Control resume and profile links."
+      >
+        <VisibilityField
+          name="applicationResumeVisibility"
+          label="Resume / CV"
+          value={applicationConfig.sections.profile.resume}
+          description="Candidates can upload PDF, DOC, or DOCX."
+        />
+        <VisibilityField
+          name="applicationLinkedinVisibility"
+          label="LinkedIn"
+          value={applicationConfig.sections.profile.linkedinUrl}
+        />
+        <VisibilityField
+          name="applicationGithubVisibility"
+          label="GitHub"
+          value={applicationConfig.sections.profile.githubUrl}
+        />
+        <VisibilityField
+          name="applicationWebsiteVisibility"
+          label="Website / Portfolio"
+          value={applicationConfig.sections.profile.websiteUrl}
+        />
+        <VisibilityField
+          name="applicationEducationVisibility"
+          label="Education"
+          value={applicationConfig.sections.profile.education}
+          description="Candidates can add one or more education entries."
+        />
+        <VisibilityField
+          name="applicationExperienceVisibility"
+          label="Experience"
+          value={applicationConfig.sections.profile.experience}
+          description="Candidates can add one or more work experience entries."
+        />
+      </FieldGroup>
+
+      <FieldGroup
+        title="Details"
+        description="Additional written context and screening questions."
+      >
+        <VisibilityField
+          name="applicationCoverLetterVisibility"
+          label="Cover letter"
+          value={applicationConfig.sections.details.coverLetter}
+        />
+        <div>
+          <h3 className="mb-3 text-sm font-semibold">Custom questions</h3>
+          <JobQuestionBuilder
+            initialQuestions={applicationConfig.questions}
+            aiContext={aiContext}
           />
         </div>
-      </div>
-
-      <div>
-        <h3 className="mb-3 text-sm font-semibold">Custom questions</h3>
-        <JobQuestionBuilder
-          initialQuestions={applicationConfig.questions}
-          aiContext={aiContext}
-        />
-      </div>
+      </FieldGroup>
     </div>
   );
 }

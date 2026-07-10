@@ -151,11 +151,13 @@ export default async function CandidateDetailPage({
     lastName: candidate.lastName,
     email: candidate.email,
     phone: candidate.phone,
+    address: candidate.address,
     location: candidate.location,
     linkedinUrl: candidate.linkedinUrl,
     githubUrl: candidate.githubUrl,
     websiteUrl: candidate.websiteUrl,
     headline: candidate.headline,
+    summary: candidate.summary,
   };
   const actionCal = {
     enabled: calStatus.enabled,
@@ -388,6 +390,14 @@ export default async function CandidateDetailPage({
             workspaceId={workspaceId}
             candidateEmail={candidate.email}
             candidateName={fullName}
+            candidatePhone={candidate.phone}
+            candidateAddress={candidate.address ?? candidate.location}
+            candidateLinkedinUrl={candidate.linkedinUrl}
+            candidateGithubUrl={candidate.githubUrl}
+            candidateWebsiteUrl={candidate.websiteUrl}
+            candidateSummary={candidate.summary}
+            candidateEducationEntries={candidate.educationEntries ?? []}
+            candidateExperienceEntries={candidate.experienceEntries ?? []}
             stageName={latestApplication?.currentStageName ?? null}
             applications={applications.map((application) => ({
               ...application,

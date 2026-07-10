@@ -28,6 +28,59 @@ describe("normalizeJobApplicationConfig", () => {
         github: { enabled: true, required: false },
         website: { enabled: true, required: false },
       },
+      sections: {
+        profile: {
+          resume: { visibility: "optional" },
+          education: { visibility: "optional" },
+          experience: { visibility: "optional" },
+        },
+      },
+    });
+  });
+
+  it("accepts the new sections shape", () => {
+    expect(
+      normalizeJobApplicationConfig({
+        sections: {
+          personal: {
+            phone: "required",
+            address: "optional",
+            photo: "disabled",
+            headline: "optional",
+          },
+          profile: {
+            resume: "required",
+            education: "optional",
+            experience: "required",
+            linkedinUrl: "disabled",
+            githubUrl: "optional",
+            websiteUrl: "required",
+          },
+          details: {
+            coverLetter: "required",
+          },
+        },
+        questions: [],
+      }),
+    ).toMatchObject({
+      sections: {
+        personal: {
+          phone: { visibility: "required" },
+        },
+        profile: {
+          education: { visibility: "optional" },
+          experience: { visibility: "required" },
+          websiteUrl: { visibility: "required" },
+        },
+        details: {
+          coverLetter: { visibility: "required" },
+        },
+      },
+      profileLinks: {
+        linkedin: { enabled: false, required: false },
+        github: { enabled: true, required: false },
+        website: { enabled: true, required: true },
+      },
     });
   });
 });

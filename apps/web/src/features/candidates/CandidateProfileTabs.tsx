@@ -1,15 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { Route } from "next";
 import {
   AlertTriangle,
   ArrowDownLeft,
-  ArrowRight,
   BrainCircuit,
-  Calendar,
   CalendarClock,
   Check,
   ClipboardCheck,
@@ -30,9 +26,7 @@ import {
 import { toast } from "sonner";
 
 import { AiScoreCard } from "@/features/candidates/AiScoreCard";
-import { CandidateFileUpload } from "@/features/candidates/CandidateFileUpload";
-import { EducationList } from "@/features/candidates/EducationList";
-import { ExperienceTimeline } from "@/features/candidates/ExperienceTimeline";
+import { CandidateDetailsPanel } from "@/features/candidates/CandidateDetailsPanel";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { EnvelopeSimpleDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { EditInterviewDialog } from "@/features/candidates/EditInterviewDialog";
@@ -59,7 +53,12 @@ import {
   interviewTypeLabel,
   type CandidateInterviewItem,
 } from "@/features/interviews/shared";
-import type { ResumeEducationItem, ResumeExperienceItem } from "@harly/db";
+import type {
+  CandidateEducationEntry,
+  CandidateExperienceEntry,
+  ResumeEducationItem,
+  ResumeExperienceItem,
+} from "@harly/db";
 import type { InterviewBrief, InterviewNotesSummary } from "@/lib/ai/schemas";
 import type {
   CandidateActivityItem,
@@ -68,7 +67,6 @@ import type {
   CandidateNoteItem,
   NoteMention,
 } from "@/features/candidates/data";
-import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { AiButton } from "@/components/ui/AiButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -87,7 +85,7 @@ import { Sheet, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { ShortDate, RelativeTime } from "@/lib/date-hydration";
+import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
 type CandidateProfileApplication = {
@@ -146,6 +144,14 @@ type CandidateProfileTabsProps = {
   workspaceId: string;
   candidateEmail: string;
   candidateName: string;
+  candidatePhone: string | null;
+  candidateAddress: string | null;
+  candidateLinkedinUrl: string | null;
+  candidateGithubUrl: string | null;
+  candidateWebsiteUrl: string | null;
+  candidateSummary: string | null;
+  candidateEducationEntries: CandidateEducationEntry[];
+  candidateExperienceEntries: CandidateExperienceEntry[];
   stageName: string | null;
   applications: CandidateProfileApplication[];
   notes: CandidateNoteItem[];
@@ -212,20 +218,6 @@ const MESSAGE_STATUS_LABEL: Record<CandidateMessage["status"], string> = {
   failed: "Failed",
 };
 
-const APPLICATION_SOURCE_LABEL: Record<string, string> = {
-  public_form: "Job board",
-  csv_import: "CSV import",
-  referral: "Referral",
-  linkedin: "LinkedIn",
-  career_page: "Career page",
-  agency: "Agency",
-  direct_apply: "Direct apply",
-  internal: "Internal",
-  email: "Email",
-  event: "Event",
-  manual: "Manual",
-};
-
 function TabCount({ value }: { value: number }) {
   if (value <= 0) return null;
   return (
@@ -240,6 +232,14 @@ export function CandidateProfileTabs({
   workspaceId,
   candidateEmail,
   candidateName,
+  candidatePhone,
+  candidateAddress,
+  candidateLinkedinUrl,
+  candidateGithubUrl,
+  candidateWebsiteUrl,
+  candidateSummary,
+  candidateEducationEntries,
+  candidateExperienceEntries,
   stageName,
   applications,
   notes,
@@ -259,7 +259,6 @@ export function CandidateProfileTabs({
   scheduleCal,
   currentUserId,
 }: CandidateProfileTabsProps) {
-  const latestFile = files[0] ?? null;
   const [tab, setTab] = useState("profile");
 
   return (
@@ -291,7 +290,7 @@ export function CandidateProfileTabs({
         </TabsTrigger>
       </TabsList>
 
-      {/* ── Profile — AI match leads, résumé + application context follows ── */}
+      {/* ── Profile — AI match leads, single "Details" panel follows ── */}
       <TabsContent value="profile" className="mt-5 space-y-4">
         <AiScoreCard
           applications={applications.map((application) => ({
@@ -304,29 +303,21 @@ export function CandidateProfileTabs({
           onViewDetailsAction={() => setTab("evaluation")}
         />
 
-        <CandidateFileUpload
+        <CandidateDetailsPanel
           candidateId={candidateId}
           workspaceId={workspaceId}
-          initialFiles={files}
+          files={files}
+          applications={applications}
+          email={candidateEmail}
+          phone={candidatePhone}
+          address={candidateAddress}
+          linkedinUrl={candidateLinkedinUrl}
+          githubUrl={candidateGithubUrl}
+          websiteUrl={candidateWebsiteUrl}
+          summary={candidateSummary}
+          educationEntries={candidateEducationEntries}
+          experienceEntries={candidateExperienceEntries}
         />
-
-        {latestFile ? (
-          <div className="space-y-4">
-            <ExperienceTimeline experience={latestFile.parsedExperience} />
-            <EducationList
-              education={latestFile.parsedEducationItems}
-              fallback={latestFile.parsedEducation}
-            />
-          </div>
-        ) : null}
-
-        {applications.length === 0 ? null : (
-          <div className="divide-y divide-border/60 rounded-xl border">
-            {applications.map((application) => (
-              <ApplicationRow key={application.id} application={application} />
-            ))}
-          </div>
-        )}
       </TabsContent>
 
       {/* ── Interviews ── */}
@@ -1124,75 +1115,7 @@ function SummarizeNotesSheet({
   );
 }
 
-/** One compact row per application: job · stage · date · source · pipeline
- * link, with answers tucked behind a disclosure toggle so the row stays a
- * single line by default (Workable-style, redundant stage progress already
- * lives in the header spine). */
-function ApplicationRow({ application }: { application: CandidateProfileApplication }) {
-  const [open, setOpen] = useState(false);
-  const hasAnswers = application.answers.length > 0;
-
-  return (
-    <div className="px-4 py-2.5">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => hasAnswers && setOpen((v) => !v)}
-          disabled={!hasAnswers}
-          className={cn(
-            "flex min-w-0 flex-1 items-center gap-x-3 gap-y-0.5 text-left",
-            hasAnswers && "cursor-pointer",
-          )}
-        >
-          <h2 className="truncate text-sm font-medium text-foreground">{application.jobTitle}</h2>
-          <ApplicationStatusBadge status={application.status} />
-          <span className="hidden shrink-0 text-xs text-foreground/70 sm:inline">
-            {application.currentStageName ?? "No stage"}
-          </span>
-          <span className="hidden shrink-0 items-center gap-1 text-xs text-muted-foreground sm:inline-flex">
-            <Calendar className="size-3" />
-            <ShortDate value={application.appliedAt} />
-          </span>
-          {application.source ? (
-            <span className="hidden shrink-0 text-xs text-muted-foreground sm:inline">
-              {APPLICATION_SOURCE_LABEL[application.source] ?? application.source}
-            </span>
-          ) : null}
-          {hasAnswers ? (
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {application.answers.length} answer{application.answers.length === 1 ? "" : "s"}
-            </span>
-          ) : null}
-        </button>
-        <Button asChild variant="link" size="sm" className="h-auto shrink-0 p-0 text-xs text-primary">
-          <Link href={`/dashboard/pipeline?job=${application.jobId}` as Route}>
-            View in pipeline
-            <ArrowRight className="size-3.5" />
-          </Link>
-        </Button>
-      </div>
-
-      {open && hasAnswers ? (
-        <div className="mt-3 rounded-lg border bg-muted/40 p-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Application answers
-          </p>
-          <dl className="mt-3 space-y-3">
-            {application.answers.map((answer) => (
-              <div key={answer.id}>
-                <dt className="text-xs font-semibold text-muted-foreground">
-                  {answer.label}
-                </dt>
-                <dd className="mt-1 whitespace-pre-line text-sm">{answer.answer}</dd>
-              </div>
-            ))}
-          </dl>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
+/** Empty-state slot for tabs that have no data yet. */
 function EmptyTab({ icon: Icon, text }: { icon: typeof MessageSquare; text: string }) {
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">

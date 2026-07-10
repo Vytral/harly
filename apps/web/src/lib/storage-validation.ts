@@ -93,3 +93,7 @@ export function getImageFileValidationError(file: File) {
 export function createImageStorageKey(filename: string) {
   return `images/${crypto.randomUUID()}/${sanitizeFilename(filename)}`;
 }
+
+export function createPublicApplicationImageStorageKey(filename: string) {
+  return `images/public-applications/${crypto.randomUUID()}/${sanitizeFilename(filename)}`;
+}

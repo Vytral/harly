@@ -21,12 +21,21 @@ import type { ResumeAutofillFields } from "@/features/applications/resume-autofi
 import {
   hasAnyProfileLink,
   hasRequiredProfileLink,
+  isFieldEnabled,
+  isFieldRequired,
   type JobApplicationConfig,
   type JobApplicationQuestion,
 } from "@/features/jobs/config";
-import type { ApplicationFormValues } from "@/lib/validations/applications";
+import type {
+  ApplicationFormValues,
+  CandidateEducationEntryInput,
+  CandidateExperienceEntryInput,
+} from "@/lib/validations/applications";
 import { cn, formatFileSize } from "@/lib/utils";
-import { getResumeFileValidationError } from "@/lib/storage-validation";
+import {
+  getImageFileValidationError,
+  getResumeFileValidationError,
+} from "@/lib/storage-validation";
 import { PhoneInput } from "@/components/ui/PhoneInput";
 import { Button } from "@/components/ui/button";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
@@ -59,7 +68,9 @@ type TextField =
   | "lastName"
   | "email"
   | "phone"
-  | "location"
+  | "address"
+  | "headline"
+  | "photoUrl"
   | "linkedinUrl"
   | "githubUrl"
   | "websiteUrl";
@@ -69,7 +80,9 @@ const initialFields: Record<TextField, string> = {
   lastName: "",
   email: "",
   phone: "",
-  location: "",
+  address: "",
+  headline: "",
+  photoUrl: "",
   linkedinUrl: "",
   githubUrl: "",
   websiteUrl: "",
@@ -87,11 +100,49 @@ type UploadedResume = PresignResponse & {
   fileSize: number;
 };
 
+type UploadedImage = PresignResponse & {
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+};
+
 type DetectedSummary = {
   skills: string[];
   experienceYears?: number;
   education?: string;
 };
+
+type EducationEntry = CandidateEducationEntryInput;
+type ExperienceEntry = CandidateExperienceEntryInput;
+type EntryFieldErrors<T extends { id: string }> = Record<
+  string,
+  Partial<Record<string, string[]>>
+>;
+
+function createEducationEntry(): EducationEntry {
+  return {
+    id: crypto.randomUUID(),
+    school: "",
+    degree: undefined,
+    field: undefined,
+    startDate: undefined,
+    endDate: undefined,
+    description: undefined,
+  };
+}
+
+function createExperienceEntry(): ExperienceEntry {
+  return {
+    id: crypto.randomUUID(),
+    company: "",
+    title: "",
+    startDate: undefined,
+    endDate: undefined,
+    current: false,
+    location: undefined,
+    description: undefined,
+  };
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -364,6 +415,14 @@ function ConsentCheckbox({
   );
 }
 
+function entryErrorFor<T extends { id: string }>(
+  errors: EntryFieldErrors<T>,
+  id: string,
+  field: string,
+) {
+  return errors[id]?.[field];
+}
+
 // ---------------------------------------------------------------------------
 // Form state reducer — unifies fields + answers + client-side validation
 // errors so a single dispatch replaces three separate setState calls and
@@ -372,25 +431,56 @@ function ConsentCheckbox({
 type FormState = {
   fields: Record<TextField, string>;
   answers: Record<string, string>;
+  educationEntries: EducationEntry[];
+  experienceEntries: ExperienceEntry[];
   fieldErrors: Partial<Record<keyof ApplicationFormValues, string[]>>;
   questionErrors: Record<string, string[]>;
+  educationErrors: EntryFieldErrors<EducationEntry>;
+  experienceErrors: EntryFieldErrors<ExperienceEntry>;
 };
 
 type FormAction =
   | { type: "SET_FIELD"; field: TextField; value: string }
   | { type: "SET_ANSWER"; id: string; value: string }
+  | { type: "ADD_EDUCATION_ENTRY" }
+  | {
+      type: "UPDATE_EDUCATION_ENTRY";
+      id: string;
+      field: keyof EducationEntry;
+      value: string | boolean | undefined;
+    }
+  | { type: "REMOVE_EDUCATION_ENTRY"; id: string }
+  | { type: "ADD_EXPERIENCE_ENTRY" }
+  | {
+      type: "UPDATE_EXPERIENCE_ENTRY";
+      id: string;
+      field: keyof ExperienceEntry;
+      value: string | boolean | undefined;
+    }
+  | { type: "REMOVE_EXPERIENCE_ENTRY"; id: string }
   | { type: "CLEAR_PERSONAL" }
   | { type: "SET_FIELD_ERRORS"; errors: Partial<Record<keyof ApplicationFormValues, string[]>> }
   | { type: "SET_QUESTION_ERRORS"; errors: Record<string, string[]> }
+  | { type: "SET_EDUCATION_ERRORS"; errors: EntryFieldErrors<EducationEntry> }
+  | { type: "SET_EXPERIENCE_ERRORS"; errors: EntryFieldErrors<ExperienceEntry> }
   | { type: "CLEAR_FIELD_ERROR"; field: keyof ApplicationFormValues }
   | { type: "CLEAR_QUESTION_ERROR"; id: string }
-  | { type: "APPLY_AUTOFILL"; extracted: Partial<Record<TextField, string>> };
+  | {
+      type: "APPLY_AUTOFILL";
+      extracted: Partial<Record<TextField, string>>;
+      educationEntries?: EducationEntry[];
+      experienceEntries?: ExperienceEntry[];
+    };
 
 const initialFormState: FormState = {
   fields: initialFields,
   answers: {},
+  educationEntries: [],
+  experienceEntries: [],
   fieldErrors: {},
   questionErrors: {},
+  educationErrors: {},
+  experienceErrors: {},
 };
 
 function formReducer(state: FormState, action: FormAction): FormState {
@@ -417,6 +507,87 @@ function formReducer(state: FormState, action: FormAction): FormState {
           return next;
         })(),
       };
+    case "ADD_EDUCATION_ENTRY":
+      return {
+        ...state,
+        educationEntries: [...state.educationEntries, createEducationEntry()],
+      };
+    case "UPDATE_EDUCATION_ENTRY":
+      return {
+        ...state,
+        educationEntries: state.educationEntries.map((entry) =>
+          entry.id === action.id
+            ? {
+                ...entry,
+                [action.field]:
+                  typeof action.value === "string" && action.value === ""
+                    ? undefined
+                    : action.value,
+              }
+            : entry,
+        ),
+        educationErrors: (() => {
+          const next = { ...state.educationErrors };
+          if (next[action.id]) {
+            delete next[action.id][action.field as Extract<keyof EducationEntry, string>];
+            if (Object.keys(next[action.id]).length === 0) {
+              delete next[action.id];
+            }
+          }
+          return next;
+        })(),
+      };
+    case "REMOVE_EDUCATION_ENTRY": {
+      const nextErrors = { ...state.educationErrors };
+      delete nextErrors[action.id];
+      return {
+        ...state,
+        educationEntries: state.educationEntries.filter((entry) => entry.id !== action.id),
+        educationErrors: nextErrors,
+      };
+    }
+    case "ADD_EXPERIENCE_ENTRY":
+      return {
+        ...state,
+        experienceEntries: [...state.experienceEntries, createExperienceEntry()],
+      };
+    case "UPDATE_EXPERIENCE_ENTRY":
+      return {
+        ...state,
+        experienceEntries: state.experienceEntries.map((entry) =>
+          entry.id === action.id
+            ? {
+                ...entry,
+                [action.field]:
+                  typeof action.value === "string" && action.value === ""
+                    ? undefined
+                    : action.value,
+                ...(action.field === "current" && action.value === true
+                  ? { endDate: undefined }
+                  : {}),
+              }
+            : entry,
+        ),
+        experienceErrors: (() => {
+          const next = { ...state.experienceErrors };
+          if (next[action.id]) {
+            delete next[action.id][action.field as Extract<keyof ExperienceEntry, string>];
+            if (Object.keys(next[action.id]).length === 0) {
+              delete next[action.id];
+            }
+          }
+          return next;
+        })(),
+      };
+    case "REMOVE_EXPERIENCE_ENTRY": {
+      const nextErrors = { ...state.experienceErrors };
+      delete nextErrors[action.id];
+      return {
+        ...state,
+        experienceEntries: state.experienceEntries.filter((entry) => entry.id !== action.id),
+        experienceErrors: nextErrors,
+      };
+    }
     case "CLEAR_PERSONAL":
       return {
         ...state,
@@ -426,13 +597,19 @@ function formReducer(state: FormState, action: FormAction): FormState {
           lastName: "",
           email: "",
           phone: "",
-          location: "",
+          address: "",
+          headline: "",
+          photoUrl: "",
         },
       };
     case "SET_FIELD_ERRORS":
       return { ...state, fieldErrors: action.errors };
     case "SET_QUESTION_ERRORS":
       return { ...state, questionErrors: action.errors };
+    case "SET_EDUCATION_ERRORS":
+      return { ...state, educationErrors: action.errors };
+    case "SET_EXPERIENCE_ERRORS":
+      return { ...state, experienceErrors: action.errors };
     case "CLEAR_FIELD_ERROR": {
       const next = { ...state.fieldErrors };
       delete next[action.field];
@@ -449,7 +626,18 @@ function formReducer(state: FormState, action: FormAction): FormState {
         const key = k as TextField;
         if (!next[key] && v) next[key] = v as string;
       }
-      return { ...state, fields: next };
+      return {
+        ...state,
+        fields: next,
+        educationEntries:
+          action.educationEntries && action.educationEntries.length > 0
+            ? action.educationEntries
+            : state.educationEntries,
+        experienceEntries:
+          action.experienceEntries && action.experienceEntries.length > 0
+            ? action.experienceEntries
+            : state.experienceEntries,
+      };
     }
   }
 }
@@ -473,14 +661,27 @@ export function ApplyForm({
   const [state, formAction, isPending] = useActionState(action, initialState);
   const formRef = useRef<HTMLFormElement>(null);
   const [form, dispatch] = useReducer(formReducer, initialFormState);
-  const { fields, answers, fieldErrors: clientFieldErrors, questionErrors: clientQuestionErrors } = form;
+  const {
+    fields,
+    answers,
+    educationEntries,
+    experienceEntries,
+    fieldErrors: clientFieldErrors,
+    questionErrors: clientQuestionErrors,
+    educationErrors: clientEducationErrors,
+    experienceErrors: clientExperienceErrors,
+  } = form;
   const [showLinks, setShowLinks] = useState(false);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [uploadedPhoto, setUploadedPhoto] = useState<UploadedImage | null>(null);
   const [detected, setDetected] = useState<DetectedSummary | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [autofillMessage, setAutofillMessage] = useState<string | null>(null);
   const [isUploadingResume, setIsUploadingResume] = useState(false);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [consentGiven, setConsentGiven] = useState(false);
   const [consentError, setConsentError] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -493,6 +694,27 @@ export function ApplyForm({
     ? `/legal/privacy-policy`
     : null;
   const consentText = consentCheckboxText || "I agree to the privacy policy and consent to the processing of my personal data.";
+  const showPhone = isFieldEnabled(applicationConfig.sections.personal.phone);
+  const showAddress = isFieldEnabled(applicationConfig.sections.personal.address);
+  const showPhoto = isFieldEnabled(applicationConfig.sections.personal.photo);
+  const showHeadline = isFieldEnabled(applicationConfig.sections.personal.headline);
+  const showResume = isFieldEnabled(applicationConfig.sections.profile.resume);
+  const showEducation = isFieldEnabled(applicationConfig.sections.profile.education);
+  const showExperience = isFieldEnabled(applicationConfig.sections.profile.experience);
+  const showCoverLetter = isFieldEnabled(applicationConfig.sections.details.coverLetter);
+
+  function focusTargetForField(field: string | undefined) {
+    if (!field) {
+      return undefined;
+    }
+    if (field === "educationEntries") {
+      return "education-add-button";
+    }
+    if (field === "experienceEntries") {
+      return "experience-add-button";
+    }
+    return field;
+  }
 
   function updateField(field: TextField, value: string) {
     dispatch({ type: "SET_FIELD", field, value });
@@ -500,6 +722,38 @@ export function ApplyForm({
 
   function updateAnswer(id: string, value: string) {
     dispatch({ type: "SET_ANSWER", id, value });
+  }
+
+  function addEducationEntry() {
+    dispatch({ type: "ADD_EDUCATION_ENTRY" });
+  }
+
+  function updateEducationEntry(
+    id: string,
+    field: keyof EducationEntry,
+    value: string | boolean | undefined,
+  ) {
+    dispatch({ type: "UPDATE_EDUCATION_ENTRY", id, field, value });
+  }
+
+  function removeEducationEntry(id: string) {
+    dispatch({ type: "REMOVE_EDUCATION_ENTRY", id });
+  }
+
+  function addExperienceEntry() {
+    dispatch({ type: "ADD_EXPERIENCE_ENTRY" });
+  }
+
+  function updateExperienceEntry(
+    id: string,
+    field: keyof ExperienceEntry,
+    value: string | boolean | undefined,
+  ) {
+    dispatch({ type: "UPDATE_EXPERIENCE_ENTRY", id, field, value });
+  }
+
+  function removeExperienceEntry(id: string) {
+    dispatch({ type: "REMOVE_EXPERIENCE_ENTRY", id });
   }
 
   function clearPersonalInfo() {
@@ -521,6 +775,63 @@ export function ApplyForm({
   function validateClientFields() {
     const nextErrors: Partial<Record<keyof ApplicationFormValues, string[]>> = {};
     const nextQuestionErrors: Record<string, string[]> = {};
+    const nextEducationErrors: EntryFieldErrors<EducationEntry> = {};
+    const nextExperienceErrors: EntryFieldErrors<ExperienceEntry> = {};
+    const personalFields = applicationConfig.sections.personal;
+    const profileFields = applicationConfig.sections.profile;
+
+    if (isFieldRequired(personalFields.phone) && !fields.phone.trim()) {
+      nextErrors.phone = ["This field is required."];
+    }
+
+    if (isFieldRequired(personalFields.address) && !fields.address.trim()) {
+      nextErrors.address = ["This field is required."];
+    }
+
+    if (isFieldRequired(personalFields.headline) && !fields.headline.trim()) {
+      nextErrors.headline = ["This field is required."];
+    }
+
+    if (isFieldRequired(personalFields.photo) && !fields.photoUrl.trim()) {
+      nextErrors.photoUrl = ["This field is required."];
+    }
+
+    if (
+      isFieldRequired(profileFields.education) &&
+      educationEntries.length === 0
+    ) {
+      nextErrors.educationEntries = ["Add at least one education entry."];
+    }
+
+    if (
+      isFieldRequired(profileFields.experience) &&
+      experienceEntries.length === 0
+    ) {
+      nextErrors.experienceEntries = ["Add at least one experience entry."];
+    }
+
+    for (const entry of educationEntries) {
+      const entryErrors: Partial<Record<Extract<keyof EducationEntry, string>, string[]>> = {};
+      if (!entry.school?.trim()) {
+        entryErrors.school = ["School is required."];
+      }
+      if (Object.keys(entryErrors).length > 0) {
+        nextEducationErrors[entry.id] = entryErrors;
+      }
+    }
+
+    for (const entry of experienceEntries) {
+      const entryErrors: Partial<Record<Extract<keyof ExperienceEntry, string>, string[]>> = {};
+      if (!entry.company?.trim()) {
+        entryErrors.company = ["Company is required."];
+      }
+      if (!entry.title?.trim()) {
+        entryErrors.title = ["Job title is required."];
+      }
+      if (Object.keys(entryErrors).length > 0) {
+        nextExperienceErrors[entry.id] = entryErrors;
+      }
+    }
 
     const linkPlatforms = {
       linkedinUrl: applicationConfig.profileLinks.linkedin,
@@ -553,12 +864,25 @@ export function ApplyForm({
 
     dispatch({ type: "SET_FIELD_ERRORS", errors: nextErrors });
     dispatch({ type: "SET_QUESTION_ERRORS", errors: nextQuestionErrors });
+    dispatch({ type: "SET_EDUCATION_ERRORS", errors: nextEducationErrors });
+    dispatch({ type: "SET_EXPERIENCE_ERRORS", errors: nextExperienceErrors });
 
     const firstError = Object.keys(nextErrors)[0];
     const firstQuestionError = Object.keys(nextQuestionErrors)[0];
+    const firstEducationError = Object.keys(nextEducationErrors)[0];
+    const firstExperienceError = Object.keys(nextExperienceErrors)[0];
 
-    if (firstError || firstQuestionError) {
-      focusField(firstError ?? firstQuestionError);
+    if (firstError || firstQuestionError || firstEducationError || firstExperienceError) {
+      focusField(
+        focusTargetForField(firstError) ??
+          firstQuestionError ??
+          (firstEducationError
+            ? `education-school-${firstEducationError}`
+            : undefined) ??
+          (firstExperienceError
+            ? `experience-company-${firstExperienceError}`
+            : ""),
+      );
       return false;
     }
 
@@ -571,17 +895,22 @@ export function ApplyForm({
       "lastName",
       "email",
       "phone",
-      "location",
+      "address",
+      "headline",
       "linkedinUrl",
       "githubUrl",
       "websiteUrl",
     ];
 
+    const nextExtracted: Partial<Record<TextField, string>> = {
+      ...extracted,
+      address: extracted.location,
+    };
     const filledCount = contactKeys.filter(
-      (key) => !fields[key] && extracted[key],
+      (key) => !fields[key] && nextExtracted[key],
     ).length;
 
-    dispatch({ type: "APPLY_AUTOFILL", extracted });
+    dispatch({ type: "APPLY_AUTOFILL", extracted: nextExtracted });
 
     if (extracted.linkedinUrl || extracted.githubUrl || extracted.websiteUrl) {
       setShowLinks(true);
@@ -715,9 +1044,86 @@ export function ApplyForm({
     };
   }
 
+  async function uploadImage(file: File) {
+    const workspaceParam = workspaceSlug
+      ? `?workspace=${encodeURIComponent(workspaceSlug)}`
+      : "";
+    const presignResponse = await fetch(`/api/public/v1/image/presign${workspaceParam}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        filename: file.name,
+        contentType: file.type,
+        contentLength: file.size,
+      }),
+    });
+
+    const presignPayload: unknown = await presignResponse.json();
+
+    if (!presignResponse.ok || !isPresignResponse(presignPayload)) {
+      throw new Error("Unable to prepare photo upload.");
+    }
+
+    const uploadResponse = await fetch(presignPayload.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+
+    if (!uploadResponse.ok) {
+      throw new Error("Unable to upload photo.");
+    }
+
+    return {
+      ...presignPayload,
+      fileName: file.name,
+      fileType: file.type,
+      fileSize: file.size,
+    };
+  }
+
+  async function handlePhotoChange(file: File | null) {
+    setPhotoError(null);
+    setUploadedPhoto(null);
+
+    if (!file) {
+      setPhotoFile(null);
+      updateField("photoUrl", "");
+      return;
+    }
+
+    const validationError = getImageFileValidationError(file);
+    if (validationError) {
+      setPhotoFile(null);
+      updateField("photoUrl", "");
+      setPhotoError(validationError);
+      return;
+    }
+
+    setPhotoFile(file);
+    setIsUploadingPhoto(true);
+
+    try {
+      const uploaded = await uploadImage(file);
+      setUploadedPhoto(uploaded);
+      updateField("photoUrl", uploaded.fileUrl);
+    } catch (error) {
+      setPhotoFile(null);
+      updateField("photoUrl", "");
+      setPhotoError(
+        error instanceof Error
+          ? error.message
+          : "Unable to upload this photo. Please try again.",
+      );
+    } finally {
+      setIsUploadingPhoto(false);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setResumeError(null);
+    setPhotoError(null);
 
     if (!validateClientFields()) {
       return;
@@ -754,6 +1160,13 @@ export function ApplyForm({
           ? uploadedResume
           : await uploadResume(resumeFile)
         : null;
+      const uploadedImage = photoFile
+        ? uploadedPhoto &&
+          uploadedPhoto.fileName === photoFile.name &&
+          uploadedPhoto.fileSize === photoFile.size
+          ? uploadedPhoto
+          : await uploadImage(photoFile)
+        : uploadedPhoto;
       const form = formRef.current;
 
       if (!form) {
@@ -768,6 +1181,12 @@ export function ApplyForm({
         formData.set("resumeFileType", uploaded.fileType);
         formData.set("resumeFileSize", String(uploaded.fileSize));
       }
+      if (uploadedImage) {
+        formData.set("photoUrl", uploadedImage.fileUrl);
+      }
+      formData.set("educationEntries", JSON.stringify(educationEntries));
+      formData.set("experienceEntries", JSON.stringify(experienceEntries));
+      formData.delete("location");
       if (consentGiven) {
         formData.set("consentGiven", "true");
       }
@@ -800,7 +1219,21 @@ export function ApplyForm({
     const firstQuestionError = state.questionErrors
       ? Object.keys(state.questionErrors)[0]
       : undefined;
-    const firstError = firstFieldError ?? firstQuestionError;
+    const firstEducationError = state.educationErrors
+      ? Object.keys(state.educationErrors)[0]
+      : undefined;
+    const firstExperienceError = state.experienceErrors
+      ? Object.keys(state.experienceErrors)[0]
+      : undefined;
+    const firstError =
+      focusTargetForField(firstFieldError) ??
+      firstQuestionError ??
+      (firstEducationError
+        ? `education-school-${firstEducationError}`
+        : undefined) ??
+      (firstExperienceError
+        ? `experience-company-${firstExperienceError}`
+        : undefined);
 
     if (firstError) {
       focusField(firstError);
@@ -875,6 +1308,300 @@ export function ApplyForm({
     </>
   );
 
+  const photoStatus = (
+    <>
+      {isUploadingPhoto ? (
+        <p className="mt-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
+          Uploading your photo…
+        </p>
+      ) : photoFile ? (
+        <p className="mt-2 rounded-md bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-zinc-800/50 dark:text-zinc-400">
+          {photoFile.name}
+        </p>
+      ) : null}
+      {photoError ? (
+        <p className="mt-2 text-xs font-medium text-red-600">{photoError}</p>
+      ) : null}
+      <FieldError errors={fieldErrorsFor(state, "photoUrl")} />
+    </>
+  );
+
+  const profileSectionEnabled = showEducation || showExperience;
+  const entryCardClass = isFolio
+    ? "space-y-4 border border-folio-ink/20 p-4"
+    : isAshby
+      ? "space-y-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/50"
+      : "space-y-4 rounded-lg border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40";
+  const subLabelClass = isFolio
+    ? "font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55"
+    : "text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400";
+  const secondaryButtonClass = isFolio
+    ? "inline-flex items-center gap-1.5 rounded-none border border-folio-ink/30 px-3.5 py-2 font-mono text-xs uppercase tracking-[0.16em] text-folio-ink/70 transition hover:border-folio-ink/60 hover:text-folio-ink"
+    : isAshby
+      ? "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
+      : "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50";
+  const removeButtonClass = isFolio
+    ? "inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55 transition hover:text-folio-ink"
+    : "inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition hover:text-zinc-900 dark:hover:text-zinc-100";
+  const educationFieldErrors = mergeErrors(
+    fieldErrorsFor(state, "educationEntries"),
+    clientFieldErrors.educationEntries,
+  );
+  const experienceFieldErrors = mergeErrors(
+    fieldErrorsFor(state, "experienceEntries"),
+    clientFieldErrors.experienceEntries,
+  );
+
+  function renderEducationEntry(entry: EducationEntry, index: number) {
+    const entryErrors = state.educationErrors?.[entry.id] ?? {};
+    const clientErrors = clientEducationErrors[entry.id] ?? {};
+
+    return (
+      <div key={entry.id} className={entryCardClass}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className={subLabelClass}>Education {index + 1}</p>
+            <p className={isFolio ? "mt-1 font-fraunces text-base text-folio-ink" : "mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100"}>
+              Add a school, degree, and dates if relevant.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => removeEducationEntry(entry.id)}
+            className={removeButtonClass}
+          >
+            <TrashIcon className="size-3.5" />
+            Remove
+          </button>
+        </div>
+        <FieldError errors={mergeErrors(entryErrors._entry, clientErrors._entry)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <FieldLabel ashby={isAshby} folio={isFolio} required>
+              School
+            </FieldLabel>
+            <input
+              id={`education-school-${entry.id}`}
+              name={`education-school-${entry.id}`}
+              type="text"
+              value={entry.school}
+              onChange={(event) => updateEducationEntry(entry.id, "school", event.target.value)}
+              placeholder="University of..."
+              className={`${input} mt-1.5`}
+            />
+            <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "school"), entryErrorFor(clientEducationErrors, entry.id, "school"))} />
+          </label>
+          <label className="block">
+            <FieldLabel ashby={isAshby} folio={isFolio}>
+              Degree
+            </FieldLabel>
+            <input
+              id={`education-degree-${entry.id}`}
+              name={`education-degree-${entry.id}`}
+              type="text"
+              value={entry.degree ?? ""}
+              onChange={(event) => updateEducationEntry(entry.id, "degree", event.target.value)}
+              placeholder="Bachelor's degree"
+              className={`${input} mt-1.5`}
+            />
+            <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "degree"), entryErrorFor(clientEducationErrors, entry.id, "degree"))} />
+          </label>
+          <label className="block">
+            <FieldLabel ashby={isAshby} folio={isFolio}>
+              Field of study
+            </FieldLabel>
+            <input
+              id={`education-field-${entry.id}`}
+              name={`education-field-${entry.id}`}
+              type="text"
+              value={entry.field ?? ""}
+              onChange={(event) => updateEducationEntry(entry.id, "field", event.target.value)}
+              placeholder="Computer science"
+              className={`${input} mt-1.5`}
+            />
+            <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "field"), entryErrorFor(clientEducationErrors, entry.id, "field"))} />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <FieldLabel ashby={isAshby} folio={isFolio}>
+                Start date
+              </FieldLabel>
+              <input
+                id={`education-startDate-${entry.id}`}
+                name={`education-startDate-${entry.id}`}
+                type="month"
+                value={entry.startDate ?? ""}
+                onChange={(event) => updateEducationEntry(entry.id, "startDate", event.target.value)}
+                className={`${input} mt-1.5`}
+              />
+              <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "startDate"), entryErrorFor(clientEducationErrors, entry.id, "startDate"))} />
+            </label>
+            <label className="block">
+              <FieldLabel ashby={isAshby} folio={isFolio}>
+                End date
+              </FieldLabel>
+              <input
+                id={`education-endDate-${entry.id}`}
+                name={`education-endDate-${entry.id}`}
+                type="month"
+                value={entry.endDate ?? ""}
+                onChange={(event) => updateEducationEntry(entry.id, "endDate", event.target.value)}
+                className={`${input} mt-1.5`}
+              />
+              <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "endDate"), entryErrorFor(clientEducationErrors, entry.id, "endDate"))} />
+            </label>
+          </div>
+        </div>
+        <label className="block">
+          <FieldLabel ashby={isAshby} folio={isFolio}>
+            Description
+          </FieldLabel>
+          <textarea
+            id={`education-description-${entry.id}`}
+            name={`education-description-${entry.id}`}
+            rows={3}
+            value={entry.description ?? ""}
+            onChange={(event) => updateEducationEntry(entry.id, "description", event.target.value)}
+            placeholder="Achievements, honors, thesis, or relevant notes."
+            className={`${textarea} mt-1.5`}
+          />
+          <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "description"), entryErrorFor(clientEducationErrors, entry.id, "description"))} />
+        </label>
+      </div>
+    );
+  }
+
+  function renderExperienceEntry(entry: ExperienceEntry, index: number) {
+    const entryErrors = state.experienceErrors?.[entry.id] ?? {};
+    const clientErrors = clientExperienceErrors[entry.id] ?? {};
+
+    return (
+      <div key={entry.id} className={entryCardClass}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className={subLabelClass}>Experience {index + 1}</p>
+            <p className={isFolio ? "mt-1 font-fraunces text-base text-folio-ink" : "mt-1 text-sm font-medium text-zinc-900 dark:text-zinc-100"}>
+              Add your role, company, and scope of work.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => removeExperienceEntry(entry.id)}
+            className={removeButtonClass}
+          >
+            <TrashIcon className="size-3.5" />
+            Remove
+          </button>
+        </div>
+        <FieldError errors={mergeErrors(entryErrors._entry, clientErrors._entry)} />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <FieldLabel ashby={isAshby} folio={isFolio} required>
+              Company
+            </FieldLabel>
+            <input
+              id={`experience-company-${entry.id}`}
+              name={`experience-company-${entry.id}`}
+              type="text"
+              value={entry.company}
+              onChange={(event) => updateExperienceEntry(entry.id, "company", event.target.value)}
+              placeholder="Company name"
+              className={`${input} mt-1.5`}
+            />
+            <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "company"), entryErrorFor(clientExperienceErrors, entry.id, "company"))} />
+          </label>
+          <label className="block">
+            <FieldLabel ashby={isAshby} folio={isFolio} required>
+              Job title
+            </FieldLabel>
+            <input
+              id={`experience-title-${entry.id}`}
+              name={`experience-title-${entry.id}`}
+              type="text"
+              value={entry.title}
+              onChange={(event) => updateExperienceEntry(entry.id, "title", event.target.value)}
+              placeholder="Senior software engineer"
+              className={`${input} mt-1.5`}
+            />
+            <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "title"), entryErrorFor(clientExperienceErrors, entry.id, "title"))} />
+          </label>
+          <label className="block">
+            <FieldLabel ashby={isAshby} folio={isFolio}>
+              Location
+            </FieldLabel>
+            <input
+              id={`experience-location-${entry.id}`}
+              name={`experience-location-${entry.id}`}
+              type="text"
+              value={entry.location ?? ""}
+              onChange={(event) => updateExperienceEntry(entry.id, "location", event.target.value)}
+              placeholder="Remote, Santiago, Chile"
+              className={`${input} mt-1.5`}
+            />
+            <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "location"), entryErrorFor(clientExperienceErrors, entry.id, "location"))} />
+          </label>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <FieldLabel ashby={isAshby} folio={isFolio}>
+                Start date
+              </FieldLabel>
+              <input
+                id={`experience-startDate-${entry.id}`}
+                name={`experience-startDate-${entry.id}`}
+                type="month"
+                value={entry.startDate ?? ""}
+                onChange={(event) => updateExperienceEntry(entry.id, "startDate", event.target.value)}
+                className={`${input} mt-1.5`}
+              />
+              <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "startDate"), entryErrorFor(clientExperienceErrors, entry.id, "startDate"))} />
+            </label>
+            <label className="block">
+              <FieldLabel ashby={isAshby} folio={isFolio}>
+                End date
+              </FieldLabel>
+              <input
+                id={`experience-endDate-${entry.id}`}
+                name={`experience-endDate-${entry.id}`}
+                type="month"
+                value={entry.endDate ?? ""}
+                onChange={(event) => updateExperienceEntry(entry.id, "endDate", event.target.value)}
+                disabled={Boolean(entry.current)}
+                className={`${input} mt-1.5`}
+              />
+              <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "endDate"), entryErrorFor(clientExperienceErrors, entry.id, "endDate"))} />
+            </label>
+          </div>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+          <input
+            id={`experience-current-${entry.id}`}
+            name={`experience-current-${entry.id}`}
+            type="checkbox"
+            checked={Boolean(entry.current)}
+            onChange={(event) => updateExperienceEntry(entry.id, "current", event.target.checked)}
+            className="size-4 rounded border-zinc-300 text-[var(--board-primary)] focus:ring-[var(--board-primary)]"
+          />
+          I currently work here
+        </label>
+        <label className="block">
+          <FieldLabel ashby={isAshby} folio={isFolio}>
+            Description
+          </FieldLabel>
+          <textarea
+            id={`experience-description-${entry.id}`}
+            name={`experience-description-${entry.id}`}
+            rows={4}
+            value={entry.description ?? ""}
+            onChange={(event) => updateExperienceEntry(entry.id, "description", event.target.value)}
+            placeholder="Scope, achievements, technologies, or impact."
+            className={`${textarea} mt-1.5`}
+          />
+          <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "description"), entryErrorFor(clientExperienceErrors, entry.id, "description"))} />
+        </label>
+      </div>
+    );
+  }
+
   return (
     <form
       ref={formRef}
@@ -891,6 +1618,16 @@ export function ApplyForm({
           void handleResumeChange(event.target.files?.[0] ?? null);
         }}
       />
+      <input
+        id="photoFile"
+        type="file"
+        accept="image/png,image/jpeg,image/svg+xml,image/webp"
+        className="sr-only"
+        onChange={(event) => {
+          void handlePhotoChange(event.target.files?.[0] ?? null);
+        }}
+      />
+      <input type="hidden" name="photoUrl" value={fields.photoUrl} />
       {/* Hidden fields for resume-parsed data */}
       <input type="hidden" name="skills" value={detected?.skills ? JSON.stringify(detected.skills) : "[]"} />
       <input type="hidden" name="experienceYears" value={detected?.experienceYears ?? ""} />
@@ -905,6 +1642,7 @@ export function ApplyForm({
         /* ─────────────────────────── Folio variant ─────────────────────────── */
         <>
           {/* ── Resume — hairline, no card ── */}
+          {showResume ? (
           <section className={cn("space-y-4", reveal)} style={{ animationDelay: "0ms" }}>
             <div className="flex flex-col gap-4 border-b border-folio-ink/15 pb-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
@@ -970,6 +1708,7 @@ export function ApplyForm({
             )}
             {resumeStatus}
           </section>
+          ) : null}
 
           <p className="font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
             <span style={{ color: "var(--board-primary)" }}>*</span> Required fields
@@ -1040,6 +1779,23 @@ export function ApplyForm({
               <FieldError errors={fieldErrorsFor(state, "email")} />
             </label>
 
+            {showPhoto ? (
+            <div className="block">
+              <FieldLabel folio required={isFieldRequired(applicationConfig.sections.personal.photo)}>
+                Photo
+              </FieldLabel>
+              <label
+                htmlFor="photoFile"
+                className="mt-1.5 flex cursor-pointer items-center justify-between border border-dashed border-folio-ink/30 px-4 py-3 text-sm text-folio-ink/75 transition hover:border-folio-ink/55"
+              >
+                <span>{photoFile ? photoFile.name : "Upload a profile photo"}</span>
+                <span className="font-mono text-[10px] uppercase tracking-[0.16em]">PNG · JPG · WEBP</span>
+              </label>
+              {photoStatus}
+            </div>
+            ) : null}
+
+            {showPhone ? (
             <label className="block">
               <FieldLabel folio>Phone</FieldLabel>
               <PhoneInput
@@ -1053,36 +1809,139 @@ export function ApplyForm({
               </p>
               <FieldError errors={fieldErrorsFor(state, "phone")} />
             </label>
+            ) : null}
 
+            {showAddress ? (
             <label className="block">
-              <FieldLabel folio>Current location</FieldLabel>
+              <FieldLabel folio required={isFieldRequired(applicationConfig.sections.personal.address)}>
+                Address
+              </FieldLabel>
               <div className="relative mt-1.5">
                 <InputIcon>
                   <MapPin className="size-4" strokeWidth={1.8} />
                 </InputIcon>
                 <input
-                  name="location"
+                  name="address"
                   type="text"
-                  autoComplete="address-level2"
-                  value={fields.location}
-                  onChange={(event) => updateField("location", event.target.value)}
-                  placeholder="City, country"
+                  autoComplete="street-address"
+                  value={fields.address}
+                  onChange={(event) => updateField("address", event.target.value)}
+                  placeholder="City, region, country"
                   className={`${input} ${inputIconClass}`}
                 />
               </div>
               <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
                 City, region, country — helps the team evaluate your application.
               </p>
-              <FieldError errors={fieldErrorsFor(state, "location")} />
+              <FieldError errors={fieldErrorsFor(state, "address")} />
             </label>
+            ) : null}
+
+            {showHeadline ? (
+            <label className="block">
+              <FieldLabel folio required={isFieldRequired(applicationConfig.sections.personal.headline)}>
+                Headline
+              </FieldLabel>
+              <input
+                name="headline"
+                type="text"
+                value={fields.headline}
+                onChange={(event) => updateField("headline", event.target.value)}
+                placeholder="Senior backend engineer"
+                className={`${input} mt-1.5`}
+              />
+              <FieldError errors={fieldErrorsFor(state, "headline")} />
+            </label>
+            ) : null}
           </section>
 
-          {/* ── III. Links ── */}
-          {hasAnyProfileLink(applicationConfig.profileLinks) ? (
+          {/* ── III. Profile ── */}
+          {profileSectionEnabled ? (
             <section className={cn("space-y-5", reveal)} style={{ animationDelay: "160ms" }}>
               <div className="border-b border-folio-ink/15 pb-3">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--board-primary)" }}>
                   § III
+                </p>
+                <h2 className="mt-1 font-fraunces text-xl tracking-tight text-folio-ink">Profile</h2>
+              </div>
+              <div className="space-y-5">
+                {showEducation ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-fraunces text-base text-folio-ink">
+                          Education
+                          {isFieldRequired(applicationConfig.sections.profile.education) ? (
+                            <span className="ml-0.5" style={{ color: "var(--board-primary)" }}>*</span>
+                          ) : null}
+                        </p>
+                        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
+                          Add one or more education entries
+                        </p>
+                      </div>
+                      <button
+                        id="education-add-button"
+                        name="educationEntries"
+                        type="button"
+                        onClick={addEducationEntry}
+                        className={secondaryButtonClass}
+                      >
+                        <Plus className="size-4" strokeWidth={2} />
+                        Add education
+                      </button>
+                    </div>
+                    <FieldError errors={educationFieldErrors} />
+                    {educationEntries.length > 0 ? (
+                      <div className="space-y-4">
+                        {educationEntries.map(renderEducationEntry)}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {showExperience ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="font-fraunces text-base text-folio-ink">
+                          Experience
+                          {isFieldRequired(applicationConfig.sections.profile.experience) ? (
+                            <span className="ml-0.5" style={{ color: "var(--board-primary)" }}>*</span>
+                          ) : null}
+                        </p>
+                        <p className="mt-1 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
+                          Add one or more work experience entries
+                        </p>
+                      </div>
+                      <button
+                        id="experience-add-button"
+                        name="experienceEntries"
+                        type="button"
+                        onClick={addExperienceEntry}
+                        className={secondaryButtonClass}
+                      >
+                        <Plus className="size-4" strokeWidth={2} />
+                        Add experience
+                      </button>
+                    </div>
+                    <FieldError errors={experienceFieldErrors} />
+                    {experienceEntries.length > 0 ? (
+                      <div className="space-y-4">
+                        {experienceEntries.map(renderExperienceEntry)}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
+          {/* ── IV. Links ── */}
+          {hasAnyProfileLink(applicationConfig.profileLinks) ? (
+            <section className={cn("space-y-5", reveal)} style={{ animationDelay: "240ms" }}>
+              <div className="border-b border-folio-ink/15 pb-3">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--board-primary)" }}>
+                  § IV
                 </p>
                 <h2 className="mt-1 font-fraunces text-xl tracking-tight text-folio-ink">Links</h2>
               </div>
@@ -1187,18 +2046,34 @@ export function ApplyForm({
             </section>
           ) : null}
 
-          {/* ── IV. Additional information ── */}
-          {applicationConfig.questions.length > 0 ? (
-            <section className={cn("space-y-5", reveal)} style={{ animationDelay: "240ms" }}>
+          {/* ── V. Additional information ── */}
+          {showCoverLetter || applicationConfig.questions.length > 0 ? (
+            <section className={cn("space-y-5", reveal)} style={{ animationDelay: "320ms" }}>
               <div className="border-b border-folio-ink/15 pb-3">
                 <p className="font-mono text-[10px] uppercase tracking-[0.2em]" style={{ color: "var(--board-primary)" }}>
-                  § IV
+                  § V
                 </p>
                 <h2 className="mt-1 font-fraunces text-xl tracking-tight text-folio-ink">
                   Additional information
                 </h2>
               </div>
               <div className="space-y-5">
+                {showCoverLetter ? (
+                  <label className="block">
+                    <FieldLabel folio required={isFieldRequired(applicationConfig.sections.details.coverLetter)}>
+                      Cover letter
+                    </FieldLabel>
+                    <textarea
+                      name="coverLetter"
+                      rows={5}
+                      value={answers.coverLetter ?? ""}
+                      onChange={(event) => updateAnswer("coverLetter", event.target.value)}
+                      placeholder="Tell the team why you're interested in this role."
+                      className={`${textarea} mt-1.5`}
+                    />
+                    <FieldError errors={fieldErrorsFor(state, "coverLetter")} />
+                  </label>
+                ) : null}
                 {applicationConfig.questions.map((question) => {
                   const yesNo = isYesNoQuestion(question);
                   return (
@@ -1331,6 +2206,7 @@ export function ApplyForm({
         /* ─────────────────────────── Ashby variant ─────────────────────────── */
         <>
           {/* Autofill from resume */}
+          {showResume ? (
           <div className={cn(cardClass, reveal)} style={{ animationDelay: "0ms" }}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex items-start gap-3">
@@ -1411,6 +2287,7 @@ export function ApplyForm({
             ) : null}
             {resumeStatus}
           </div>
+          ) : null}
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             <span className={requiredMarkClass}>*</span> Required fields
@@ -1479,6 +2356,23 @@ export function ApplyForm({
               <FieldError errors={fieldErrorsFor(state, "email")} />
             </label>
 
+            {showPhoto ? (
+            <div className="block">
+              <FieldLabel ashby required={isFieldRequired(applicationConfig.sections.personal.photo)}>
+                Photo
+              </FieldLabel>
+              <label
+                htmlFor="photoFile"
+                className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
+              >
+                <span>{photoFile ? photoFile.name : "Upload a profile photo"}</span>
+                <span className="text-xs text-zinc-500">PNG, JPG, WEBP</span>
+              </label>
+              {photoStatus}
+            </div>
+            ) : null}
+
+            {showPhone ? (
             <label className="block">
               <FieldLabel ashby>Phone</FieldLabel>
               <PhoneInput
@@ -1492,20 +2386,24 @@ export function ApplyForm({
               </p>
               <FieldError errors={fieldErrorsFor(state, "phone")} />
             </label>
+            ) : null}
 
+            {showAddress ? (
             <label className="block">
-              <FieldLabel ashby>Current location</FieldLabel>
+              <FieldLabel ashby required={isFieldRequired(applicationConfig.sections.personal.address)}>
+                Address
+              </FieldLabel>
               <div className="relative mt-1.5">
                 <InputIcon>
                   <MapPin className="size-4" strokeWidth={1.8} />
                 </InputIcon>
                 <input
-                  name="location"
+                  name="address"
                   type="text"
-                  autoComplete="address-level2"
-                  value={fields.location}
-                  onChange={(event) => updateField("location", event.target.value)}
-                  placeholder="City, country"
+                  autoComplete="street-address"
+                  value={fields.address}
+                  onChange={(event) => updateField("address", event.target.value)}
+                  placeholder="City, region, country"
                   className={`${input} ${inputIconClass}`}
                 />
               </div>
@@ -1513,15 +2411,112 @@ export function ApplyForm({
                 Include your city, region, and country so the hiring team can
                 evaluate your application.
               </p>
-              <FieldError errors={fieldErrorsFor(state, "location")} />
+              <FieldError errors={fieldErrorsFor(state, "address")} />
             </label>
+            ) : null}
+
+            {showHeadline ? (
+            <label className="block">
+              <FieldLabel ashby required={isFieldRequired(applicationConfig.sections.personal.headline)}>
+                Headline
+              </FieldLabel>
+              <input
+                name="headline"
+                type="text"
+                value={fields.headline}
+                onChange={(event) => updateField("headline", event.target.value)}
+                placeholder="Senior backend engineer"
+                className={`${input} mt-1.5`}
+              />
+              <FieldError errors={fieldErrorsFor(state, "headline")} />
+            </label>
+            ) : null}
           </section>
+
+          {/* Profile */}
+          {profileSectionEnabled ? (
+            <section
+              className={cn("space-y-4", reveal)}
+              style={{ animationDelay: "160ms" }}
+            >
+              <div className="border-b border-zinc-200 pb-2.5 dark:border-zinc-800">
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                  Profile
+                </h2>
+              </div>
+              <div className="space-y-5">
+                {showEducation ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          Education
+                          {isFieldRequired(applicationConfig.sections.profile.education) ? (
+                            <span className={requiredMarkClass}>*</span>
+                          ) : null}
+                        </p>
+                        <p className={hintClass}>Add one or more education entries.</p>
+                      </div>
+                      <button
+                        id="education-add-button"
+                        name="educationEntries"
+                        type="button"
+                        onClick={addEducationEntry}
+                        className={secondaryButtonClass}
+                      >
+                        <Plus className="size-4" strokeWidth={2} />
+                        Add education
+                      </button>
+                    </div>
+                    <FieldError errors={educationFieldErrors} />
+                    {educationEntries.length > 0 ? (
+                      <div className="space-y-4">
+                        {educationEntries.map(renderEducationEntry)}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {showExperience ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          Experience
+                          {isFieldRequired(applicationConfig.sections.profile.experience) ? (
+                            <span className={requiredMarkClass}>*</span>
+                          ) : null}
+                        </p>
+                        <p className={hintClass}>Add one or more work experience entries.</p>
+                      </div>
+                      <button
+                        id="experience-add-button"
+                        name="experienceEntries"
+                        type="button"
+                        onClick={addExperienceEntry}
+                        className={secondaryButtonClass}
+                      >
+                        <Plus className="size-4" strokeWidth={2} />
+                        Add experience
+                      </button>
+                    </div>
+                    <FieldError errors={experienceFieldErrors} />
+                    {experienceEntries.length > 0 ? (
+                      <div className="space-y-4">
+                        {experienceEntries.map(renderExperienceEntry)}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
 
           {/* Links */}
           {hasAnyProfileLink(applicationConfig.profileLinks) ? (
             <section
               className={cn("space-y-4", reveal)}
-              style={{ animationDelay: "160ms" }}
+              style={{ animationDelay: "240ms" }}
             >
               <div className="border-b border-zinc-200 pb-2.5 dark:border-zinc-800">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
@@ -1630,10 +2625,10 @@ export function ApplyForm({
           ) : null}
 
           {/* Additional information */}
-          {applicationConfig.questions.length > 0 ? (
+          {showCoverLetter || applicationConfig.questions.length > 0 ? (
             <section
               className={cn("space-y-5", reveal)}
-              style={{ animationDelay: "240ms" }}
+              style={{ animationDelay: "320ms" }}
             >
               <div className="border-b border-zinc-200 pb-2.5 dark:border-zinc-800">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
@@ -1641,6 +2636,24 @@ export function ApplyForm({
                 </h2>
               </div>
               <div className="space-y-5">
+                {showCoverLetter ? (
+                  <label className="block">
+                    <FieldLabel ashby required={isFieldRequired(applicationConfig.sections.details.coverLetter)}>
+                      Cover letter
+                    </FieldLabel>
+                    <textarea
+                      name="coverLetter"
+                      rows={5}
+                      value={answers.coverLetter ?? ""}
+                      onChange={(event) =>
+                        updateAnswer("coverLetter", event.target.value)
+                      }
+                      placeholder="Tell the team why you're interested in this role."
+                      className={`${textarea} mt-1.5`}
+                    />
+                    <FieldError errors={fieldErrorsFor(state, "coverLetter")} />
+                  </label>
+                ) : null}
                 {applicationConfig.questions.map((question) => {
                   const yesNo = isYesNoQuestion(question);
                   return (
@@ -1775,6 +2788,7 @@ export function ApplyForm({
       ) : (
         /* ────────────────────────── Default variant ────────────────────────── */
         <>
+          {showResume ? (
           <div className={cardClass}>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -1853,6 +2867,7 @@ export function ApplyForm({
             )}
             {resumeStatus}
           </div>
+          ) : null}
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
             <span className={requiredMarkClass}>*</span> Required fields
@@ -1914,6 +2929,23 @@ export function ApplyForm({
               <FieldError errors={fieldErrorsFor(state, "email")} />
             </label>
 
+            {showPhoto ? (
+            <div className="mt-4 block">
+              <FieldLabel required={isFieldRequired(applicationConfig.sections.personal.photo)}>
+                Photo
+              </FieldLabel>
+              <label
+                htmlFor="photoFile"
+                className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
+              >
+                <span>{photoFile ? photoFile.name : "Upload a profile photo"}</span>
+                <span className="text-xs text-zinc-500">PNG, JPG, WEBP</span>
+              </label>
+              {photoStatus}
+            </div>
+            ) : null}
+
+            {showPhone ? (
             <label className="mt-4 block">
               <FieldLabel>Phone</FieldLabel>
               <PhoneInput
@@ -1927,24 +2959,46 @@ export function ApplyForm({
               </p>
               <FieldError errors={fieldErrorsFor(state, "phone")} />
             </label>
+            ) : null}
 
+            {showAddress ? (
             <label className="mt-4 block">
-              <FieldLabel>Current location</FieldLabel>
+              <FieldLabel required={isFieldRequired(applicationConfig.sections.personal.address)}>
+                Address
+              </FieldLabel>
               <input
-                name="location"
+                name="address"
                 type="text"
-                autoComplete="address-level2"
-                value={fields.location}
-                onChange={(event) => updateField("location", event.target.value)}
-                placeholder="City, country"
+                autoComplete="street-address"
+                value={fields.address}
+                onChange={(event) => updateField("address", event.target.value)}
+                placeholder="City, region, country"
                 className={`${input} mt-1.5`}
               />
               <p className={hintClass}>
                 Include your city, region, and country so the hiring team can
                 evaluate your application.
               </p>
-              <FieldError errors={fieldErrorsFor(state, "location")} />
+              <FieldError errors={fieldErrorsFor(state, "address")} />
             </label>
+            ) : null}
+
+            {showHeadline ? (
+            <label className="mt-4 block">
+              <FieldLabel required={isFieldRequired(applicationConfig.sections.personal.headline)}>
+                Headline
+              </FieldLabel>
+              <input
+                name="headline"
+                type="text"
+                value={fields.headline}
+                onChange={(event) => updateField("headline", event.target.value)}
+                placeholder="Senior backend engineer"
+                className={`${input} mt-1.5`}
+              />
+              <FieldError errors={fieldErrorsFor(state, "headline")} />
+            </label>
+            ) : null}
 
             {hasAnyProfileLink(applicationConfig.profileLinks) ? (
               <div className="mt-5">
@@ -2046,12 +3100,105 @@ export function ApplyForm({
             ) : null}
           </section>
 
-          {applicationConfig.questions.length > 0 ? (
+          {profileSectionEnabled ? (
+            <section className={cardClass}>
+              <div className="border-b border-zinc-100 pb-4 dark:border-zinc-800">
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                  Profile
+                </h2>
+              </div>
+              <div className="mt-5 space-y-5">
+                {showEducation ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          Education
+                          {isFieldRequired(applicationConfig.sections.profile.education) ? (
+                            <span className={requiredMarkClass}>*</span>
+                          ) : null}
+                        </p>
+                        <p className={hintClass}>Add one or more education entries.</p>
+                      </div>
+                      <button
+                        id="education-add-button"
+                        name="educationEntries"
+                        type="button"
+                        onClick={addEducationEntry}
+                        className={secondaryButtonClass}
+                      >
+                        <Plus className="size-4" strokeWidth={2} />
+                        Add education
+                      </button>
+                    </div>
+                    <FieldError errors={educationFieldErrors} />
+                    {educationEntries.length > 0 ? (
+                      <div className="space-y-4">
+                        {educationEntries.map(renderEducationEntry)}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {showExperience ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                          Experience
+                          {isFieldRequired(applicationConfig.sections.profile.experience) ? (
+                            <span className={requiredMarkClass}>*</span>
+                          ) : null}
+                        </p>
+                        <p className={hintClass}>Add one or more work experience entries.</p>
+                      </div>
+                      <button
+                        id="experience-add-button"
+                        name="experienceEntries"
+                        type="button"
+                        onClick={addExperienceEntry}
+                        className={secondaryButtonClass}
+                      >
+                        <Plus className="size-4" strokeWidth={2} />
+                        Add experience
+                      </button>
+                    </div>
+                    <FieldError errors={experienceFieldErrors} />
+                    {experienceEntries.length > 0 ? (
+                      <div className="space-y-4">
+                        {experienceEntries.map(renderExperienceEntry)}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+          ) : null}
+
+          {showCoverLetter || applicationConfig.questions.length > 0 ? (
             <section className={cardClass}>
               <div className="border-b border-zinc-100 pb-4 dark:border-zinc-800">
                 <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Details</h2>
               </div>
               <div className="mt-5 space-y-5">
+                {showCoverLetter ? (
+                  <label className="block">
+                    <FieldLabel required={isFieldRequired(applicationConfig.sections.details.coverLetter)}>
+                      Cover letter
+                    </FieldLabel>
+                    <textarea
+                      name="coverLetter"
+                      rows={5}
+                      value={answers.coverLetter ?? ""}
+                      onChange={(event) =>
+                        updateAnswer("coverLetter", event.target.value)
+                      }
+                      placeholder="Tell the team why you're interested in this role."
+                      className={`${textarea} mt-1.5`}
+                    />
+                    <FieldError errors={fieldErrorsFor(state, "coverLetter")} />
+                  </label>
+                ) : null}
                 {applicationConfig.questions.map((question) => (
                   <label key={question.id} className="block">
                     <FieldLabel required={question.required}>

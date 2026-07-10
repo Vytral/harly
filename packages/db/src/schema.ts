@@ -678,14 +678,24 @@ export const candidates = pgTable(
     lastName: text("last_name").notNull(),
     email: text("email").notNull(),
     phone: text("phone"),
+    address: text("address"),
     location: text("location"),
     linkedinUrl: text("linkedin_url"),
     githubUrl: text("github_url"),
     websiteUrl: text("website_url"),
     avatarUrl: text("avatar_url"),
     headline: text("headline"),
+    summary: text("summary"),
     skills: jsonb("skills").default(sql`'[]'::jsonb`).notNull(),
     experienceYears: integer("experience_years"),
+    educationEntries: jsonb("education_entries")
+      .$type<CandidateEducationEntry[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    experienceEntries: jsonb("experience_entries")
+      .$type<CandidateExperienceEntry[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ...timestamps(),
   },
@@ -730,6 +740,8 @@ export const applications = pgTable(
     pipelineOrder: integer("pipeline_order").default(0).notNull(),
     source: text("source"),
     status: applicationStatusEnum("status").default("active").notNull(),
+    coverLetter: text("cover_letter"),
+    snapshot: jsonb("snapshot").default(sql`'{}'::jsonb`).notNull(),
     appliedAt: timestamp("applied_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -877,6 +889,27 @@ export type ResumeEducationItem = {
   degree: string | null;
   field: string | null;
   dateRange: string | null;
+};
+
+export type CandidateEducationEntry = {
+  id: string;
+  school: string;
+  degree: string | null;
+  field: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  description: string | null;
+};
+
+export type CandidateExperienceEntry = {
+  id: string;
+  company: string;
+  title: string;
+  startDate: string | null;
+  endDate: string | null;
+  current: boolean | null;
+  location: string | null;
+  description: string | null;
 };
 
 export const candidateFiles = pgTable(

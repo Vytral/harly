@@ -50,9 +50,7 @@ export const POST = withApi(async (request, context) => {
     throw ApiError.notFound("Job not available.");
   }
 
-  const schema = createApplicationFormSchema({
-    resumeRequired: jobContext.applicationConfig.resumeRequired,
-  });
+  const schema = createApplicationFormSchema(jobContext.applicationConfig);
   const parsed = schema.safeParse(body);
   if (!parsed.success) {
     throw ApiError.unprocessable(

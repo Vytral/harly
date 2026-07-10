@@ -28,10 +28,46 @@ export type JobProfileLinks = {
   website: JobProfileLinkSetting;
 };
 
+export const applicationFieldVisibilityValues = [
+  "required",
+  "optional",
+  "disabled",
+] as const;
+
+export type ApplicationFieldVisibility =
+  (typeof applicationFieldVisibilityValues)[number];
+
+export type JobApplicationFieldConfig = {
+  visibility: ApplicationFieldVisibility;
+  label?: string;
+  hint?: string;
+};
+
+export type JobApplicationSections = {
+  personal: {
+    phone: JobApplicationFieldConfig;
+    address: JobApplicationFieldConfig;
+    photo: JobApplicationFieldConfig;
+    headline: JobApplicationFieldConfig;
+  };
+  profile: {
+    resume: JobApplicationFieldConfig;
+    linkedinUrl: JobApplicationFieldConfig;
+    githubUrl: JobApplicationFieldConfig;
+    websiteUrl: JobApplicationFieldConfig;
+    education: JobApplicationFieldConfig;
+    experience: JobApplicationFieldConfig;
+  };
+  details: {
+    coverLetter: JobApplicationFieldConfig;
+  };
+};
+
 export type JobApplicationConfig = {
   resumeRequired: boolean;
   /** Per-link visibility — each is independently optional for candidates. */
   profileLinks: JobProfileLinks;
+  sections: JobApplicationSections;
   questions: JobApplicationQuestion[];
 };
 
@@ -132,15 +168,44 @@ const defaultLinkSetting: JobProfileLinkSetting = {
   required: false,
 };
 
+const optionalFieldSetting = (): JobApplicationFieldConfig => ({
+  visibility: "optional",
+});
+
+const disabledFieldSetting = (): JobApplicationFieldConfig => ({
+  visibility: "disabled",
+});
+
 export const defaultProfileLinks: JobProfileLinks = {
   linkedin: { ...defaultLinkSetting },
   github: { ...defaultLinkSetting },
   website: { ...defaultLinkSetting },
 };
 
+export const defaultJobApplicationSections: JobApplicationSections = {
+  personal: {
+    phone: optionalFieldSetting(),
+    address: optionalFieldSetting(),
+    photo: disabledFieldSetting(),
+    headline: optionalFieldSetting(),
+  },
+  profile: {
+    resume: { visibility: "required" },
+    linkedinUrl: optionalFieldSetting(),
+    githubUrl: optionalFieldSetting(),
+    websiteUrl: optionalFieldSetting(),
+    education: optionalFieldSetting(),
+    experience: optionalFieldSetting(),
+  },
+  details: {
+    coverLetter: optionalFieldSetting(),
+  },
+};
+
 export const defaultJobApplicationConfig: JobApplicationConfig = {
   resumeRequired: true,
   profileLinks: { ...defaultProfileLinks },
+  sections: defaultJobApplicationSections,
   questions: [],
 };
 
@@ -152,6 +217,14 @@ export function hasAnyProfileLink(links: JobProfileLinks) {
 /** True when at least one enabled link is required from candidates. */
 export function hasRequiredProfileLink(links: JobProfileLinks) {
   return links.linkedin.required || links.github.required || links.website.required;
+}
+
+export function isFieldEnabled(field: JobApplicationFieldConfig) {
+  return field.visibility !== "disabled";
+}
+
+export function isFieldRequired(field: JobApplicationFieldConfig) {
+  return field.visibility === "required";
 }
 
 export const defaultJobBoardConfig: JobBoardConfig = {
@@ -219,6 +292,72 @@ const profileLinksSchema = z.object({
   website: linkSettingSchema.default({ ...defaultLinkSetting }),
 });
 
+const fieldConfigSchema = z.union([
+  z.enum(applicationFieldVisibilityValues).transform(
+    (visibility): JobApplicationFieldConfig => ({ visibility }),
+  ),
+  z
+    .object({
+      visibility: z.enum(applicationFieldVisibilityValues),
+      label: optionalTrimmed,
+      hint: optionalTrimmed,
+    })
+    .transform((value): JobApplicationFieldConfig => ({
+      visibility: value.visibility,
+      label: value.label,
+      hint: value.hint,
+    })),
+]);
+
+const sectionsSchema = z
+  .object({
+    personal: z
+      .object({
+        phone: fieldConfigSchema.default(optionalFieldSetting()),
+        address: fieldConfigSchema.default(optionalFieldSetting()),
+        photo: fieldConfigSchema.default(disabledFieldSetting()),
+        headline: fieldConfigSchema.default(optionalFieldSetting()),
+      })
+      .default(defaultJobApplicationSections.personal),
+    profile: z
+      .object({
+        resume: fieldConfigSchema.default({ visibility: "required" }),
+        linkedinUrl: fieldConfigSchema.default(optionalFieldSetting()),
+        githubUrl: fieldConfigSchema.default(optionalFieldSetting()),
+        websiteUrl: fieldConfigSchema.default(optionalFieldSetting()),
+        education: fieldConfigSchema.default(optionalFieldSetting()),
+        experience: fieldConfigSchema.default(optionalFieldSetting()),
+      })
+      .default(defaultJobApplicationSections.profile),
+    details: z
+      .object({
+        coverLetter: fieldConfigSchema.default(optionalFieldSetting()),
+      })
+      .default(defaultJobApplicationSections.details),
+  })
+  .transform((sections): JobApplicationSections => sections);
+
+function visibilityToLinkSetting(
+  field: JobApplicationFieldConfig,
+): JobProfileLinkSetting {
+  return {
+    enabled: isFieldEnabled(field),
+    required: isFieldRequired(field),
+  };
+}
+
+function linkSettingToFieldConfig(
+  setting: JobProfileLinkSetting,
+): JobApplicationFieldConfig {
+  return {
+    visibility: setting.required
+      ? "required"
+      : setting.enabled
+        ? "optional"
+        : "disabled",
+  };
+}
+
 const applicationConfigSchema = z
   .object({
     resumeRequired: z
@@ -228,6 +367,7 @@ const applicationConfigSchema = z
     profileLinks: profileLinksSchema.optional(),
     // Legacy single toggle — mapped to all three when present.
     profileLinksEnabled: z.boolean().optional(),
+    sections: sectionsSchema.optional(),
     questions: z.array(questionSchema).max(10).default([]),
   })
   .transform((config): JobApplicationConfig => {
@@ -241,9 +381,37 @@ const applicationConfigSchema = z
             website: { enabled: config.profileLinksEnabled, required: false },
           });
 
+    const sections: JobApplicationSections = config.sections ?? {
+      ...defaultJobApplicationSections,
+      personal: {
+        ...defaultJobApplicationSections.personal,
+      },
+      profile: {
+        ...defaultJobApplicationSections.profile,
+        resume: {
+          visibility: config.resumeRequired ? "required" : "optional",
+        },
+        linkedinUrl: linkSettingToFieldConfig(profileLinks.linkedin),
+        githubUrl: linkSettingToFieldConfig(profileLinks.github),
+        websiteUrl: linkSettingToFieldConfig(profileLinks.website),
+        education: { ...defaultJobApplicationSections.profile.education },
+        experience: { ...defaultJobApplicationSections.profile.experience },
+      },
+      details: {
+        ...defaultJobApplicationSections.details,
+      },
+    };
+
+    const derivedProfileLinks: JobProfileLinks = {
+      linkedin: visibilityToLinkSetting(sections.profile.linkedinUrl),
+      github: visibilityToLinkSetting(sections.profile.githubUrl),
+      website: visibilityToLinkSetting(sections.profile.websiteUrl),
+    };
+
     return {
-      resumeRequired: config.resumeRequired,
-      profileLinks,
+      resumeRequired: isFieldRequired(sections.profile.resume),
+      profileLinks: derivedProfileLinks,
+      sections,
       questions: config.questions,
     };
   });

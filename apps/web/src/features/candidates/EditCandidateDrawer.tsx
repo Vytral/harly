@@ -12,6 +12,7 @@ import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 
 export type EditableCandidate = {
@@ -21,11 +22,13 @@ export type EditableCandidate = {
   lastName: string;
   email: string;
   phone: string | null;
+  address: string | null;
   location: string | null;
   linkedinUrl: string | null;
   githubUrl: string | null;
   websiteUrl: string | null;
   headline: string | null;
+  summary: string | null;
 };
 
 export function EditCandidateDrawer({
@@ -70,11 +73,12 @@ export function EditCandidateDrawer({
                 lastName: String(formData.get("lastName") ?? ""),
                 email: String(formData.get("email") ?? ""),
                 phone: String(formData.get("phone") ?? ""),
-                location: String(formData.get("location") ?? ""),
+                address: String(formData.get("address") ?? ""),
                 linkedinUrl: String(formData.get("linkedinUrl") ?? ""),
                 githubUrl: String(formData.get("githubUrl") ?? ""),
                 websiteUrl: String(formData.get("websiteUrl") ?? ""),
                 headline: String(formData.get("headline") ?? ""),
+                summary: String(formData.get("summary") ?? ""),
               });
               if (!result.success) {
                 toast.error(result.error ?? "Unable to update candidate.");
@@ -94,7 +98,16 @@ export function EditCandidateDrawer({
           <Field name="headline" label="Headline" defaultValue={candidate.headline ?? ""} />
           <div className="grid grid-cols-2 gap-3">
             <Field name="phone" label="Phone" defaultValue={candidate.phone ?? ""} />
-            <Field name="location" label="Location" defaultValue={candidate.location ?? ""} />
+            <Field name="address" label="Address" defaultValue={candidate.address ?? candidate.location ?? ""} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="edit-summary">Profile summary</Label>
+            <Textarea
+              id="edit-summary"
+              name="summary"
+              defaultValue={candidate.summary ?? ""}
+              rows={5}
+            />
           </div>
           <Field name="linkedinUrl" label="LinkedIn" type="url" defaultValue={candidate.linkedinUrl ?? ""} placeholder="https://linkedin.com/in/…" icon={<LinkedinLogo className="size-3.5" />} />
           <Field name="githubUrl" label="GitHub" type="url" defaultValue={candidate.githubUrl ?? ""} placeholder="https://github.com/…" icon={<GithubIcon className="size-3.5" />} />

@@ -18,6 +18,10 @@ import {
   organization,
   user as authUsers,
 } from "@harly/db";
+import type {
+  CandidateEducationEntry,
+  CandidateExperienceEntry,
+} from "@harly/db";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { buildQuestionAnswerRows } from "@/features/applications/questions";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
@@ -39,6 +43,35 @@ export type PublicApplicationResult =
       };
     }
   | { ok: false; message: string };
+
+function normalizeEducationEntries(
+  entries: ApplicationFormValues["educationEntries"],
+): CandidateEducationEntry[] {
+  return entries.map((entry) => ({
+    id: entry.id,
+    school: entry.school,
+    degree: entry.degree ?? null,
+    field: entry.field ?? null,
+    startDate: entry.startDate ?? null,
+    endDate: entry.endDate ?? null,
+    description: entry.description ?? null,
+  }));
+}
+
+function normalizeExperienceEntries(
+  entries: ApplicationFormValues["experienceEntries"],
+): CandidateExperienceEntry[] {
+  return entries.map((entry) => ({
+    id: entry.id,
+    company: entry.company,
+    title: entry.title,
+    startDate: entry.startDate ?? null,
+    endDate: entry.current ? null : (entry.endDate ?? null),
+    current: entry.current ?? null,
+    location: entry.location ?? null,
+    description: entry.description ?? null,
+  }));
+}
 
 export async function getPublicJobApplicationContext(input: {
   jobSlug: string;
@@ -139,6 +172,10 @@ export async function createPublicApplication(
       throw new Error("Workspace could not be resolved.");
     }
 
+    const submittedAddress = values.address ?? values.location ?? null;
+    const educationEntries = normalizeEducationEntries(values.educationEntries);
+    const experienceEntries = normalizeExperienceEntries(values.experienceEntries);
+
     const [existingCandidate] = await tx
       .select()
       .from(candidates)
@@ -158,10 +195,14 @@ export async function createPublicApplication(
               firstName: values.firstName,
               lastName: values.lastName,
               phone: values.phone,
-              location: values.location,
+              address: submittedAddress,
               linkedinUrl: values.linkedinUrl,
               githubUrl: values.githubUrl,
               websiteUrl: values.websiteUrl,
+              avatarUrl: values.photoUrl,
+              headline: values.headline,
+              educationEntries,
+              experienceEntries,
               ...(values.skills && values.skills.length > 0
                 ? { skills: values.skills }
                 : {}),
@@ -182,10 +223,14 @@ export async function createPublicApplication(
               lastName: values.lastName,
               email: values.email,
               phone: values.phone,
-              location: values.location,
+              address: submittedAddress,
               linkedinUrl: values.linkedinUrl,
               githubUrl: values.githubUrl,
               websiteUrl: values.websiteUrl,
+              avatarUrl: values.photoUrl,
+              headline: values.headline,
+              educationEntries,
+              experienceEntries,
               skills: values.skills ?? [],
               experienceYears: values.experienceYears ?? null,
             })
@@ -257,6 +302,23 @@ export async function createPublicApplication(
         source: "public_form",
         status: "active",
         appliedAt: now,
+        coverLetter: values.coverLetter ?? null,
+        snapshot: {
+          phone: values.phone ?? null,
+          address: submittedAddress,
+          photoUrl: values.photoUrl ?? null,
+          headline: values.headline ?? null,
+          linkedinUrl: values.linkedinUrl ?? null,
+          githubUrl: values.githubUrl ?? null,
+          websiteUrl: values.websiteUrl ?? null,
+          coverLetter: values.coverLetter ?? null,
+          educationEntries,
+          experienceEntries,
+          resumeUrl: values.resumeUrl ?? null,
+          resumeFileName: values.resumeFileName ?? null,
+          resumeFileType: values.resumeFileType ?? null,
+          resumeFileSize: values.resumeFileSize ?? null,
+        },
       })
       .returning({ id: applications.id });
 

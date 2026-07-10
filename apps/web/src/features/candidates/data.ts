@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNotNull, isNull, or } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -20,6 +20,10 @@ import {
   poolEntries,
   scorecards,
   user as authUsers,
+} from "@harly/db";
+import type {
+  CandidateEducationEntry,
+  CandidateExperienceEntry,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
@@ -142,7 +146,7 @@ export async function listCandidates() {
       lastName: candidates.lastName,
       email: candidates.email,
       phone: candidates.phone,
-      location: candidates.location,
+      location: sql<string | null>`coalesce(${candidates.address}, ${candidates.location})`,
       avatarUrl: candidates.avatarUrl,
       candidateCreatedAt: candidates.createdAt,
       candidateUpdatedAt: candidates.updatedAt,
@@ -272,6 +276,13 @@ export async function getCandidateProfile(candidateId: string) {
   if (!candidate) {
     return null;
   }
+
+  const educationEntries = Array.isArray(candidate.educationEntries)
+    ? (candidate.educationEntries as CandidateEducationEntry[])
+    : [];
+  const experienceEntries = Array.isArray(candidate.experienceEntries)
+    ? (candidate.experienceEntries as CandidateExperienceEntry[])
+    : [];
 
   const candidateApplications = await db
     .select({
@@ -713,7 +724,12 @@ export async function getCandidateProfile(candidateId: string) {
 
   return {
     workspaceId: workspace.id,
-    candidate,
+    candidate: {
+      ...candidate,
+      location: candidate.address ?? candidate.location,
+      educationEntries,
+      experienceEntries,
+    },
     inPool,
     applications: candidateApplications.map((application) => ({
       ...application,

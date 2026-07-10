@@ -8,6 +8,8 @@ import { db, workspaceSettings } from "@harly/db";
 import { createPublicApplication } from "@/features/applications/data";
 import { verifyTurnstileToken } from "@/lib/turnstile";
 import {
+  candidateEducationEntrySchema,
+  candidateExperienceEntrySchema,
   createApplicationFormSchema,
   type ApplicationFormValues,
   validateApplicationQuestionAnswers,
@@ -128,7 +130,66 @@ export type ApplyJobActionState = {
   message?: string;
   fieldErrors?: Partial<Record<keyof ApplicationFormValues, string[]>>;
   questionErrors?: Record<string, string[]>;
+  educationErrors?: Record<string, Record<string, string[]>>;
+  experienceErrors?: Record<string, Record<string, string[]>>;
 };
+
+function parseEntryArray<T>(
+  raw: FormDataEntryValue | null,
+  schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } },
+): T[] {
+  if (typeof raw !== "string" || !raw.trim()) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry) => {
+      const result = schema.safeParse(entry);
+      return result.success ? [result.data] : [];
+    });
+  } catch {
+    return [];
+  }
+}
+
+function splitEntryErrors(
+  parsed: {
+    issues: Array<{ path: PropertyKey[]; message: string }>;
+  },
+  values: Pick<ApplicationFormValues, "educationEntries" | "experienceEntries">,
+) {
+  const fieldErrors: Record<string, string[]> = {};
+  const educationErrors: Record<string, Record<string, string[]>> = {};
+  const experienceErrors: Record<string, Record<string, string[]>> = {};
+
+  for (const issue of parsed.issues) {
+    const [root, second, third] = issue.path;
+    if (root === "educationEntries" && typeof second === "number") {
+      const entryId = values.educationEntries[second]?.id ?? `index:${second}`;
+      const field = typeof third === "string" ? third : "_entry";
+      educationErrors[entryId] ??= {};
+      educationErrors[entryId][field] ??= [];
+      educationErrors[entryId][field].push(issue.message);
+      continue;
+    }
+    if (root === "experienceEntries" && typeof second === "number") {
+      const entryId = values.experienceEntries[second]?.id ?? `index:${second}`;
+      const field = typeof third === "string" ? third : "_entry";
+      experienceErrors[entryId] ??= {};
+      experienceErrors[entryId][field] ??= [];
+      experienceErrors[entryId][field].push(issue.message);
+      continue;
+    }
+    if (typeof root === "string") {
+      fieldErrors[root] ??= [];
+      fieldErrors[root].push(issue.message);
+    }
+  }
+
+  return { fieldErrors, educationErrors, experienceErrors };
+}
 
 export async function submitApplicationAction(
   input: { jobSlug: string; workspaceSlug?: string },
@@ -164,18 +225,30 @@ export async function submitApplicationAction(
     };
   }
 
-  const applicationFormSchema = createApplicationFormSchema({
-    resumeRequired: jobContext.applicationConfig.resumeRequired,
-  });
-  const parsed = applicationFormSchema.safeParse({
+  const applicationFormSchema = createApplicationFormSchema(
+    jobContext.applicationConfig,
+  );
+  const values = {
     firstName: formData.get("firstName"),
     lastName: formData.get("lastName"),
     email: formData.get("email"),
     phone: formData.get("phone"),
+    address: formData.get("address"),
     location: formData.get("location"),
+    headline: formData.get("headline"),
+    photoUrl: formData.get("photoUrl"),
     linkedinUrl: formData.get("linkedinUrl"),
     githubUrl: formData.get("githubUrl"),
     websiteUrl: formData.get("websiteUrl"),
+    coverLetter: formData.get("coverLetter"),
+    educationEntries: parseEntryArray(
+      formData.get("educationEntries"),
+      candidateEducationEntrySchema,
+    ),
+    experienceEntries: parseEntryArray(
+      formData.get("experienceEntries"),
+      candidateExperienceEntrySchema,
+    ),
     resumeUrl: formData.get("resumeUrl"),
     resumeKey: formData.get("resumeKey"),
     resumeFileName: formData.get("resumeFileName"),
@@ -204,13 +277,17 @@ export async function submitApplicationAction(
       }
       return undefined;
     })(),
-  });
+  };
+  const parsed = applicationFormSchema.safeParse(values);
 
   if (!parsed.success) {
+    const split = splitEntryErrors(parsed.error, values);
     return {
       status: "error",
       message: "Review the highlighted fields and try again.",
-      fieldErrors: parsed.error.flatten().fieldErrors,
+      fieldErrors: split.fieldErrors,
+      educationErrors: split.educationErrors,
+      experienceErrors: split.experienceErrors,
     };
   }
 

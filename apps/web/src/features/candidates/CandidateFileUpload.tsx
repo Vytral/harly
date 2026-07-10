@@ -1,8 +1,13 @@
 "use client";
 
 import { useMemo, useRef, useState, useTransition } from "react";
-import { Download, ExternalLink, FileText, GraduationCap, Upload } from "lucide-react";
+import { Download, ExternalLink, FileText, Upload } from "lucide-react";
 import { toast } from "sonner";
+
+import type {
+  ResumeEducationItem,
+  ResumeExperienceItem,
+} from "@harly/db";
 
 import { attachCandidateFile } from "@/features/candidates/actions";
 import { getResumeFileValidationError } from "@/lib/storage-validation";
@@ -29,12 +34,13 @@ function isPdfFile(file: { fileType: string | null; fileName: string }) {
 
 function isDocxFile(file: { fileType: string | null; fileName: string }) {
   return (
-    file.fileType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
+    file.fileType ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
     file.fileName.toLowerCase().endsWith(".docx")
   );
 }
 
-type CandidateFileItem = {
+export type CandidateFileItem = {
   id: string;
   fileName: string;
   fileUrl: string;
@@ -44,7 +50,9 @@ type CandidateFileItem = {
   parsedSummary: string | null;
   parsedSkills: string[];
   parsedEducation: string | null;
+  parsedEducationItems: ResumeEducationItem[];
   parsedExperienceYears: number | null;
+  parsedExperience: ResumeExperienceItem[];
   parsedAt: string | null;
   createdAt: string;
   uploadedByName: string | null;
@@ -134,86 +142,6 @@ function groupFiles(files: CandidateFileItem[]): GroupedFile[] {
   });
 }
 
-function hasParsedDetails(file: CandidateFileItem) {
-  return Boolean(
-    file.parsedSummary ||
-      file.parsedEducation ||
-      file.parsedExperienceYears !== null ||
-      file.parsedSkills.length > 0,
-  );
-}
-
-function ResumeDetailsCard({ file }: { file: CandidateFileItem }) {
-  if (!hasParsedDetails(file)) return null;
-
-  return (
-    <div className="rounded-lg border bg-muted/20">
-      <div className="border-b px-4 py-3">
-        <div className="flex items-center gap-2">
-          <FileText className="size-4 text-primary" strokeWidth={1.8} />
-          <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Details extracted from résumé
-          </h4>
-        </div>
-      </div>
-      <div className="divide-y divide-border/60">
-        {file.parsedSummary ? (
-          <section className="px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Summary
-            </p>
-            <p className="mt-2 max-w-3xl text-sm leading-6 text-foreground/85">
-              {file.parsedSummary}
-            </p>
-          </section>
-        ) : null}
-
-        {file.parsedEducation || file.parsedExperienceYears !== null ? (
-          <section className="grid gap-3 px-4 py-3 sm:grid-cols-2">
-            {file.parsedEducation ? (
-              <div>
-                <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  <GraduationCap className="size-3.5" />
-                  Education
-                </p>
-                <p className="mt-1.5 text-sm font-medium">{file.parsedEducation}</p>
-              </div>
-            ) : null}
-            {file.parsedExperienceYears !== null ? (
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Experience
-                </p>
-                <p className="mt-1.5 text-sm font-medium">
-                  {file.parsedExperienceYears}+ years
-                </p>
-              </div>
-            ) : null}
-          </section>
-        ) : null}
-
-        {file.parsedSkills.length > 0 ? (
-          <section className="px-4 py-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Skills
-            </p>
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {file.parsedSkills.slice(0, 18).map((skill) => (
-                <Badge key={skill} variant="secondary" className="font-medium">
-                  {skill}
-                </Badge>
-              ))}
-              {file.parsedSkills.length > 18 ? (
-                <Badge variant="outline">+{file.parsedSkills.length - 18}</Badge>
-              ) : null}
-            </div>
-          </section>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 function FileRow({ file, duplicateCount }: { file: CandidateFileItem; duplicateCount: number }) {
   const meta = (
     <div className="min-w-0 flex-1">
@@ -248,13 +176,13 @@ function FileRow({ file, duplicateCount }: { file: CandidateFileItem; duplicateC
         <DialogTrigger asChild>
           <button
             type="button"
-            className="flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition hover:border-ring/40 hover:bg-accent/40"
+            className="flex w-full items-center gap-3 rounded-md px-1 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {icon}
             {meta}
           </button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-3 pr-8">
               <span className="truncate">{file.fileName}</span>
@@ -272,7 +200,7 @@ function FileRow({ file, duplicateCount }: { file: CandidateFileItem; duplicateC
           <PdfViewer
             fileUrl={file.fileUrl}
             fileName={file.fileName}
-            className="h-[75vh]"
+            className="h-[82vh]"
           />
         </DialogContent>
       </Dialog>
@@ -285,13 +213,13 @@ function FileRow({ file, duplicateCount }: { file: CandidateFileItem; duplicateC
         <DialogTrigger asChild>
           <button
             type="button"
-            className="flex w-full items-center gap-3 rounded-lg border bg-card p-3 text-left transition hover:border-ring/40 hover:bg-accent/40"
+            className="flex w-full items-center gap-3 rounded-md px-1 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             {icon}
             {meta}
           </button>
         </DialogTrigger>
-        <DialogContent className="sm:max-w-3xl">
+        <DialogContent className="sm:max-w-5xl">
           <DialogHeader>
             <DialogTitle className="flex items-center justify-between gap-3 pr-8">
               <span className="truncate">{file.fileName}</span>
@@ -306,7 +234,7 @@ function FileRow({ file, duplicateCount }: { file: CandidateFileItem; duplicateC
               Preview for {file.fileName}
             </DialogDescription>
           </DialogHeader>
-          <div className="h-[75vh] overflow-hidden rounded-lg border">
+          <div className="h-[82vh] overflow-hidden rounded-lg border">
             <DocxViewer fileUrl={file.fileUrl} className="h-full rounded-none border-0" />
           </div>
         </DialogContent>
@@ -319,7 +247,7 @@ function FileRow({ file, duplicateCount }: { file: CandidateFileItem; duplicateC
       href={file.fileUrl}
       target="_blank"
       rel="noreferrer"
-      className="flex items-center gap-3 rounded-lg border bg-card p-3 transition hover:border-ring/40 hover:bg-accent/40"
+      className="flex items-center gap-3 rounded-md px-1 py-3 transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
     >
       {icon}
       {meta}
@@ -378,25 +306,25 @@ export function CandidateFileUpload({
           if (result.file!.contentHash && current.some((f) => f.contentHash === result.file!.contentHash)) {
             return current;
           }
-          return [
-            {
-              id: result.file!.id,
-              fileName: result.file!.fileName,
-              fileUrl: result.file!.fileUrl,
-              fileType: result.file!.fileType,
-              fileSize: result.file!.fileSize,
-              contentHash: result.file!.contentHash,
-              parsedSummary: result.file!.parsedSummary,
-              parsedSkills: result.file!.parsedSkills,
-              parsedEducation: result.file!.parsedEducation,
-              parsedExperienceYears: result.file!.parsedExperienceYears,
-              parsedAt: result.file!.parsedAt,
-              createdAt: result.file!.createdAt,
-              uploadedByName: result.file!.uploadedByName,
-              uploadedByEmail: null,
-            },
-            ...current,
-          ];
+          const next: CandidateFileItem = {
+            id: result.file!.id,
+            fileName: result.file!.fileName,
+            fileUrl: result.file!.fileUrl,
+            fileType: result.file!.fileType,
+            fileSize: result.file!.fileSize,
+            contentHash: result.file!.contentHash,
+            parsedSummary: result.file!.parsedSummary,
+            parsedSkills: result.file!.parsedSkills,
+            parsedEducation: result.file!.parsedEducation,
+            parsedEducationItems: [],
+            parsedExperienceYears: result.file!.parsedExperienceYears,
+            parsedExperience: [],
+            parsedAt: result.file!.parsedAt,
+            createdAt: result.file!.createdAt,
+            uploadedByName: result.file!.uploadedByName,
+            uploadedByEmail: null,
+          };
+          return [next, ...current];
         });
         toast.success("File uploaded.");
       } catch (uploadError) {
@@ -412,7 +340,7 @@ export function CandidateFileUpload({
   }
 
   return (
-    <div className="space-y-3 rounded-xl border bg-card p-4">
+    <div className="space-y-3">
       <input
         ref={inputRef}
         type="file"
@@ -421,15 +349,32 @@ export function CandidateFileUpload({
         onChange={(event) => handleFile(event.target.files?.[0] ?? null)}
       />
 
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold">Résumé &amp; files</h3>
-          <p className="text-xs text-muted-foreground">
-            {latestFile
-              ? `Latest: ${latestFile.fileName}`
-              : "PDF, DOC, or DOCX · max 10MB"}
-          </p>
+      {/* Inline preview of the latest previewable file. Keep it embedded and
+       * legible by default instead of thumbnail-sized. */}
+      {latestFile && isPdfFile(latestFile) ? (
+        <PdfViewer
+          fileUrl={latestFile.fileUrl}
+          fileName={latestFile.fileName}
+          className="min-h-[28rem] md:h-[34rem]"
+          pageMaxWidth={720}
+        />
+      ) : latestFile && isDocxFile(latestFile) ? (
+        <div className="overflow-hidden rounded-lg border border-border bg-background">
+          <DocxViewer
+            fileUrl={latestFile.fileUrl}
+            className="min-h-[28rem] md:h-[34rem] rounded-none border-0"
+          />
         </div>
+      ) : null}
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-xs text-muted-foreground">
+          {files.length > 1
+            ? `Latest resume: ${latestFile?.fileName ?? ""}`
+            : files.length === 1
+              ? "PDF, DOC, or DOCX · max 10MB"
+              : "PDF, DOC, or DOCX · max 10MB"}
+        </p>
         <Button
           type="button"
           size="sm"
@@ -442,22 +387,6 @@ export function CandidateFileUpload({
         </Button>
       </div>
 
-      {latestFile ? <ResumeDetailsCard file={latestFile} /> : null}
-
-      {/* Inline preview for latest file — capped height, internal scroll;
-       * the viewer's own fullscreen button is the way to see it large. */}
-      {latestFile && isPdfFile(latestFile) ? (
-        <PdfViewer
-          fileUrl={latestFile.fileUrl}
-          fileName={latestFile.fileName}
-          className="h-[560px]"
-        />
-      ) : latestFile && isDocxFile(latestFile) ? (
-        <div className="overflow-hidden rounded-lg border">
-          <DocxViewer fileUrl={latestFile.fileUrl} className="h-[560px]" />
-        </div>
-      ) : null}
-
       {files.length === 0 ? (
         <button
           type="button"
@@ -467,7 +396,7 @@ export function CandidateFileUpload({
           Drop in a resume or supporting file.
         </button>
       ) : (
-        <div className="space-y-2">
+        <div className="rounded-md border border-border/70 bg-background px-3 divide-y divide-border/60">
           {groupedFiles.map(({ latest, duplicates }) => (
             <FileRow
               key={latest.contentHash ?? latest.id}

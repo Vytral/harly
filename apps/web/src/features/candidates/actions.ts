@@ -117,11 +117,12 @@ const candidateUpdateSchema = z.object({
   lastName: z.string().trim().min(1, "Last name is required."),
   email: z.string().trim().email("Enter a valid email address."),
   phone: optionalText,
-  location: optionalText,
+  address: optionalText,
   linkedinUrl: optionalHttpsUrl,
   githubUrl: optionalHttpsUrl,
   websiteUrl: optionalHttpsUrl,
   headline: optionalText,
+  summary: optionalText,
 });
 
 const candidateFileSchema = z.object({
@@ -419,11 +420,12 @@ export async function updateCandidateProfile(input: {
   lastName: string;
   email: string;
   phone: string;
-  location: string;
+  address: string;
   linkedinUrl: string;
   githubUrl: string;
   websiteUrl: string;
   headline: string;
+  summary: string;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const parsed = candidateUpdateSchema.safeParse(input);
@@ -448,11 +450,12 @@ export async function updateCandidateProfile(input: {
         lastName: parsed.data.lastName,
         email: parsed.data.email.toLowerCase(),
         phone: parsed.data.phone,
-        location: parsed.data.location,
+        address: parsed.data.address,
         linkedinUrl: parsed.data.linkedinUrl,
         githubUrl: parsed.data.githubUrl,
         websiteUrl: parsed.data.websiteUrl,
         headline: parsed.data.headline,
+        summary: parsed.data.summary,
         updatedAt: new Date(),
       })
       .where(

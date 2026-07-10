@@ -41,7 +41,7 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
 
   return (
     <aside className="lg:sticky lg:top-20 lg:self-start">
-      <div className="rounded-2xl border border-border/70 bg-card">
+      <div className="rounded-lg border border-border/60 bg-background/92 shadow-sm shadow-black/[0.02] backdrop-blur-sm">
         <button
           type="button"
           onClick={() => setOpen((value) => !value)}
@@ -58,7 +58,7 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
           </span>
           <ChevronDown
             className={cn(
-              "size-4 text-muted-foreground transition-transform duration-300",
+              "size-4 text-muted-foreground transition-transform duration-200 ease-out",
               open ? "" : "-rotate-90",
             )}
           />
@@ -66,11 +66,11 @@ export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }
 
         <div
           className={cn(
-            "overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.16,1,0.3,1)]",
+            "overflow-hidden transition-all duration-200 ease-out",
             open ? "max-h-[70vh] opacity-100" : "max-h-0 opacity-0",
           )}
         >
-          <div className="border-t border-border/60 px-4 py-3">
+          <div className="border-t border-border/60 bg-background px-4 py-3">
             {activity.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-8 text-center">
                 <span className="flex size-10 items-center justify-center rounded-xl bg-muted text-muted-foreground">

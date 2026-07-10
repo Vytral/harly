@@ -10,6 +10,7 @@ type PdfViewerProps = {
   fileUrl: string;
   fileName?: string | null;
   className?: string;
+  pageMaxWidth?: number;
 };
 
 type LoadState =
@@ -27,7 +28,12 @@ let workerConfigured = false;
  *
  * Mirrors the client-side, no-server-round-trip approach of DocxViewer.
  */
-export function PdfViewer({ fileUrl, fileName, className }: PdfViewerProps) {
+export function PdfViewer({
+  fileUrl,
+  fileName,
+  className,
+  pageMaxWidth,
+}: PdfViewerProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pagesRef = useRef<HTMLDivElement>(null);
@@ -95,7 +101,10 @@ export function PdfViewer({ fileUrl, fileName, className }: PdfViewerProps) {
 
     const token = ++renderTokenRef.current;
     const outputScale = Math.min(window.devicePixelRatio || 1, 2);
-    const available = scroller.clientWidth - 24; // account for scroller padding
+    const unclamped = scroller.clientWidth - 40;
+    const available = pageMaxWidth
+      ? Math.min(unclamped, pageMaxWidth)
+      : unclamped;
     if (available <= 0) return;
 
     host.replaceChildren();
@@ -113,8 +122,7 @@ export function PdfViewer({ fileUrl, fileName, className }: PdfViewerProps) {
       canvas.height = Math.floor(viewport.height * outputScale);
       canvas.style.width = `${Math.floor(viewport.width)}px`;
       canvas.style.height = `${Math.floor(viewport.height)}px`;
-      canvas.className =
-        "mx-auto rounded-md border border-border/60 bg-white shadow-sm";
+      canvas.className = "mx-auto bg-white ring-1 ring-black/5";
       const ctx = canvas.getContext("2d");
       if (!ctx) continue;
       host.appendChild(canvas);
@@ -132,7 +140,7 @@ export function PdfViewer({ fileUrl, fileName, className }: PdfViewerProps) {
         // render canceled (newer run) or failed — leave the blank canvas
       }
     }
-  }, [zoom]);
+  }, [pageMaxWidth, zoom]);
 
   useEffect(() => {
     if (state.status !== "ready") return;
@@ -161,12 +169,12 @@ export function PdfViewer({ fileUrl, fileName, className }: PdfViewerProps) {
     <div
       ref={rootRef}
       className={cn(
-        "flex flex-col overflow-hidden rounded-lg border bg-card",
+        "flex flex-col overflow-hidden rounded-lg border border-border bg-background shadow-sm shadow-black/[0.03]",
         className,
       )}
     >
       {/* Toolbar — our iconography, not the browser's */}
-      <div className="flex items-center gap-1 border-b bg-card px-2 py-1.5">
+      <div className="flex items-center gap-1 border-b bg-muted/35 px-2 py-1.5">
         <Button
           size="sm"
           variant="ghost"
@@ -242,7 +250,7 @@ export function PdfViewer({ fileUrl, fileName, className }: PdfViewerProps) {
       {/* Page canvases */}
       <div
         ref={scrollRef}
-        className="relative flex-1 overflow-auto bg-muted/40 p-3"
+        className="relative flex-1 overflow-auto bg-muted/35 p-4 md:p-5"
       >
         {state.status === "loading" ? (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -262,7 +270,7 @@ export function PdfViewer({ fileUrl, fileName, className }: PdfViewerProps) {
             </a>
           </div>
         ) : null}
-        <div ref={pagesRef} className="flex flex-col items-center gap-3" />
+        <div ref={pagesRef} className="flex flex-col items-center gap-4" />
       </div>
     </div>
   );

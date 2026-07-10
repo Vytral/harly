@@ -4,6 +4,10 @@ import { and, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
 import { db, candidates, type Candidate } from "@harly/db";
+import type {
+  CandidateEducationEntry,
+  CandidateExperienceEntry,
+} from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 
@@ -14,11 +18,15 @@ export type CandidateApiInput = {
   lastName: string;
   email: string;
   phone?: string | null;
+  address?: string | null;
   location?: string | null;
   headline?: string | null;
+  summary?: string | null;
   linkedinUrl?: string | null;
   githubUrl?: string | null;
   websiteUrl?: string | null;
+  educationEntries?: CandidateEducationEntry[] | null;
+  experienceEntries?: CandidateExperienceEntry[] | null;
 };
 
 export function serializeCandidate(candidate: Candidate) {
@@ -28,11 +36,15 @@ export function serializeCandidate(candidate: Candidate) {
     lastName: candidate.lastName,
     email: candidate.email,
     phone: candidate.phone,
-    location: candidate.location,
+    address: candidate.address,
+    location: candidate.address ?? candidate.location,
     headline: candidate.headline,
+    summary: candidate.summary,
     linkedinUrl: candidate.linkedinUrl,
     githubUrl: candidate.githubUrl,
     websiteUrl: candidate.websiteUrl,
+    educationEntries: candidate.educationEntries,
+    experienceEntries: candidate.experienceEntries,
     createdAt: candidate.createdAt.toISOString(),
     updatedAt: candidate.updatedAt.toISOString(),
   };
@@ -113,11 +125,14 @@ export async function createCandidateForApi(input: {
       lastName: input.values.lastName,
       email,
       phone: input.values.phone ?? null,
-      location: input.values.location ?? null,
+      address: input.values.address ?? null,
       headline: input.values.headline ?? null,
+      summary: input.values.summary ?? null,
       linkedinUrl: input.values.linkedinUrl ?? null,
       githubUrl: input.values.githubUrl ?? null,
       websiteUrl: input.values.websiteUrl ?? null,
+      educationEntries: input.values.educationEntries ?? [],
+      experienceEntries: input.values.experienceEntries ?? [],
     })
     .returning();
 
@@ -143,11 +158,16 @@ export async function updateCandidateForApi(input: {
       firstName: input.values.firstName ?? existing.firstName,
       lastName: input.values.lastName ?? existing.lastName,
       phone: input.values.phone ?? existing.phone,
-      location: input.values.location ?? existing.location,
+      address: input.values.address ?? existing.address,
       headline: input.values.headline ?? existing.headline,
+      summary: input.values.summary ?? existing.summary,
       linkedinUrl: input.values.linkedinUrl ?? existing.linkedinUrl,
       githubUrl: input.values.githubUrl ?? existing.githubUrl,
       websiteUrl: input.values.websiteUrl ?? existing.websiteUrl,
+      educationEntries:
+        input.values.educationEntries ?? existing.educationEntries,
+      experienceEntries:
+        input.values.experienceEntries ?? existing.experienceEntries,
       updatedAt: new Date(),
     })
     .where(
