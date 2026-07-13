@@ -40,6 +40,7 @@ export default async function PortalSettingsPage() {
         row?.hasLinkedinClientId && row?.hasLinkedinSecret,
       )}
       linkedinClientId={row?.hasLinkedinClientId ?? ""}
+      appUrl={process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}
       showApplicationStatus={row?.portalShowApplicationStatus ?? true}
     />
   );

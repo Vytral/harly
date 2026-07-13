@@ -252,6 +252,7 @@ export function CandidatePortalCard({
   githubClientId,
   linkedinConfigured,
   linkedinClientId,
+  appUrl,
   showApplicationStatus,
 }: {
   enabled: boolean;
@@ -262,6 +263,7 @@ export function CandidatePortalCard({
   githubClientId: string;
   linkedinConfigured: boolean;
   linkedinClientId: string;
+  appUrl: string;
   showApplicationStatus: boolean;
 }) {
   const router = useRouter();
@@ -272,7 +274,6 @@ export function CandidatePortalCard({
   const [toggling, startToggle] = useTransition();
   const [savingUi, startSaveUi] = useTransition();
 
-  const appUrl = typeof window !== "undefined" ? window.location.origin : "";
   const googleRedirect = `${appUrl}/api/portal/auth/callback/google`;
   const githubRedirect = `${appUrl}/api/portal/auth/callback/github`;
   const linkedinRedirect = `${appUrl}/api/portal/auth/callback/linkedin`;
