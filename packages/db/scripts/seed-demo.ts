@@ -405,6 +405,10 @@ async function main() {
       schema.tasks,
       schema.interviews,
       schema.activityEvents,
+      schema.mailUnificationMigrations,
+      schema.mailAttachments,
+      schema.mailMessages,
+      schema.mailThreads,
       schema.candidateMessages,
       schema.scorecards,
       schema.candidateTags,
@@ -652,16 +656,27 @@ async function main() {
     // ── Messages ──
     for (const message of MESSAGES) {
       const cand = CANDIDATES[message.c];
-      await db.insert(schema.candidateMessages).values({
+      const [thread] = await db.insert(schema.mailThreads).values({
         workspaceId,
+        source: "provider",
+        mailboxId: null,
         candidateId: candidateIds[message.c],
-        authorId: user.id,
-        direction: "outbound",
-        toEmail: cand.email,
-        fromEmail: SEED_EMAIL,
         subject: message.subject,
-        body: message.body,
-        status: "sent",
+        normalizedSubject: message.subject.toLowerCase(),
+        participantEmail: cand.email,
+        lastMessageAt: daysAgo(3),
+      }).returning({ id: schema.mailThreads.id });
+      await db.insert(schema.mailMessages).values({
+        workspaceId,
+        threadId: thread.id,
+        candidateId: candidateIds[message.c],
+        direction: "outbound",
+        fromEmail: SEED_EMAIL,
+        toEmails: [cand.email],
+        subject: message.subject,
+        textBody: message.body,
+        messageId: `seed:${message.c}:${message.subject}`,
+        receivedAt: daysAgo(3),
         createdAt: daysAgo(3),
       });
     }

@@ -1,0 +1,54 @@
+import { NextResponse, type NextRequest } from "next/server";
+import { and, eq } from "drizzle-orm";
+
+import { db, mailAttachments } from "@harly/db";
+import { getWorkspaceContext } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import { storage } from "@/lib/storage";
+
+export const runtime = "nodejs";
+
+/** Authenticated, workspace-scoped download for IMAP Inbox attachments. */
+export async function GET(
+  _request: NextRequest,
+  { params }: { params: Promise<{ attachmentId: string }> },
+) {
+  try {
+    await requirePermission("collab:write");
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  const { attachmentId } = await params;
+  const { organization } = await getWorkspaceContext();
+  const [attachment] = await db
+    .select({
+      filename: mailAttachments.filename,
+      contentType: mailAttachments.contentType,
+      size: mailAttachments.size,
+      storageKey: mailAttachments.storageKey,
+    })
+    .from(mailAttachments)
+    .where(
+      and(
+        eq(mailAttachments.id, attachmentId),
+        eq(mailAttachments.workspaceId, organization.id),
+      ),
+    )
+    .limit(1);
+  if (!attachment) return NextResponse.json({ error: "Attachment not found." }, { status: 404 });
+
+  try {
+    const content = await storage.read(attachment.storageKey);
+    return new NextResponse(new Uint8Array(content).slice(), {
+      headers: {
+        "Content-Type": attachment.contentType,
+        "Content-Length": String(content.length),
+        "Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(attachment.filename)}`,
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: "Attachment is unavailable." }, { status: 404 });
+  }
+}

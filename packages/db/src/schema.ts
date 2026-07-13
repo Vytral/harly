@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   doublePrecision,
   index,
   integer,
@@ -78,6 +79,12 @@ export const messageDirectionEnum = pgEnum("message_direction", [
   "inbound",
 ]);
 
+export const mailSourceEnum = pgEnum("mail_source", [
+  "imap",
+  "legacy-webhook",
+  "provider",
+]);
+
 export const messageStatusEnum = pgEnum("message_status", [
   "queued",
   "sent",
@@ -152,6 +159,7 @@ export const user = pgTable("user", {
   onboardingCompletedAt: timestamp("onboarding_completed_at", {
     withTimezone: true,
   }),
+  onboardingRole: text("onboarding_role"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .defaultNow()
@@ -525,6 +533,165 @@ export const workspaceSettings = pgTable("workspace_settings", {
   zoomEvents: jsonb("zoom_events").default(sql`'[]'::jsonb`),
   ...timestamps(),
 });
+
+/**
+ * One shared recruiting mailbox per workspace in v1. Secrets are kept as
+ * AES-GCM triples; plaintext credentials never leave the server process.
+ */
+export const mailboxes = pgTable(
+  "mailboxes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    address: text("address").notNull(),
+    enabled: boolean("enabled").default(false).notNull(),
+    imapHost: text("imap_host").notNull(),
+    imapPort: integer("imap_port").notNull(),
+    imapTls: boolean("imap_tls").default(true).notNull(),
+    imapUser: text("imap_user").notNull(),
+    imapPasswordCiphertext: text("imap_password_ciphertext").notNull(),
+    imapPasswordIv: text("imap_password_iv").notNull(),
+    imapPasswordTag: text("imap_password_tag").notNull(),
+    sourceFolder: text("source_folder").default("INBOX").notNull(),
+    sentFolder: text("sent_folder"),
+    smtpHost: text("smtp_host").notNull(),
+    smtpPort: integer("smtp_port").notNull(),
+    smtpTls: boolean("smtp_tls").default(true).notNull(),
+    smtpUser: text("smtp_user").notNull(),
+    smtpPasswordCiphertext: text("smtp_password_ciphertext").notNull(),
+    smtpPasswordIv: text("smtp_password_iv").notNull(),
+    smtpPasswordTag: text("smtp_password_tag").notNull(),
+    uidValidity: text("uid_validity"),
+    lastUid: integer("last_uid").default(0).notNull(),
+    lastSyncedAt: timestamp("last_synced_at", { withTimezone: true }),
+    lastHealthyAt: timestamp("last_healthy_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("mailboxes_workspace_unique").on(table.workspaceId),
+    index("mailboxes_workspace_enabled_idx").on(table.workspaceId, table.enabled),
+  ],
+);
+
+export const mailThreads = pgTable(
+  "mail_threads",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    mailboxId: uuid("mailbox_id").references(() => mailboxes.id, {
+      onDelete: "cascade",
+    }),
+    source: mailSourceEnum("source").default("imap").notNull(),
+    conversationId: uuid("conversation_id").defaultRandom().notNull(),
+    subject: text("subject").notNull(),
+    normalizedSubject: text("normalized_subject").notNull(),
+    participantEmail: text("participant_email"),
+    candidateId: uuid("candidate_id").references(() => candidates.id, {
+      onDelete: "set null",
+    }),
+    applicationId: uuid("application_id").references(() => applications.id, {
+      onDelete: "set null",
+    }),
+    ownerId: text("owner_id").references(() => user.id, { onDelete: "set null" }),
+    status: text("status").default("open").notNull(),
+    unreadCount: integer("unread_count").default(0).notNull(),
+    lastMessageAt: timestamp("last_message_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    index("mail_threads_workspace_status_last_idx").on(
+      table.workspaceId,
+      table.status,
+      table.lastMessageAt,
+    ),
+    index("mail_threads_mailbox_participant_idx").on(
+      table.mailboxId,
+      table.participantEmail,
+    ),
+    index("mail_threads_candidate_idx").on(table.candidateId),
+    index("mail_threads_workspace_conversation_idx").on(
+      table.workspaceId,
+      table.conversationId,
+    ),
+    check(
+      "mail_threads_source_mailbox_check",
+      sql`(${table.source} = 'imap' AND ${table.mailboxId} IS NOT NULL) OR (${table.source} IN ('legacy-webhook', 'provider') AND ${table.mailboxId} IS NULL)`,
+    ),
+  ],
+);
+
+export const mailMessages = pgTable(
+  "mail_messages",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    threadId: uuid("thread_id")
+      .notNull()
+      .references(() => mailThreads.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id").references(() => candidates.id, {
+      onDelete: "set null",
+    }),
+    applicationId: uuid("application_id").references(() => applications.id, {
+      onDelete: "set null",
+    }),
+    imapUid: integer("imap_uid"),
+    messageId: text("message_id"),
+    inReplyTo: text("in_reply_to"),
+    references: text("references"),
+    direction: messageDirectionEnum("direction").notNull(),
+    fromEmail: text("from_email").notNull(),
+    toEmails: jsonb("to_emails").default(sql`'[]'::jsonb`).notNull(),
+    subject: text("subject").notNull(),
+    textBody: text("text_body").notNull(),
+    htmlBody: text("html_body"),
+    receivedAt: timestamp("received_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("mail_messages_thread_uid_unique").on(table.threadId, table.imapUid),
+    uniqueIndex("mail_messages_workspace_message_id_unique").on(
+      table.workspaceId,
+      table.messageId,
+    ),
+    index("mail_messages_thread_received_idx").on(table.threadId, table.receivedAt),
+  ],
+);
+
+export const mailAttachments = pgTable(
+  "mail_attachments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => mailMessages.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    storageKey: text("storage_key").notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    index("mail_attachments_workspace_message_idx").on(
+      table.workspaceId,
+      table.messageId,
+    ),
+  ],
+);
 
 // Custom roles — admin-defined roles with their own permission sets. Built-in
 // roles (owner/admin/recruiter/hiring_manager) live in code; these extend them.
@@ -1072,6 +1239,36 @@ export const offers = pgTable(
 export type Offer = typeof offers.$inferSelect;
 export type NewOffer = typeof offers.$inferInsert;
 
+/** Durable queue for outbound candidate communications. Workers may retry a
+ * pending row safely; application mutations never depend on a dropped promise. */
+export const emailOutbox = pgTable(
+  "email_outbox",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(),
+    payload: jsonb("payload").notNull(),
+    status: text("status").default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("email_outbox_workspace_status_retry_idx").on(
+      table.workspaceId,
+      table.status,
+      table.nextRetryAt,
+    ),
+  ],
+);
+
+export type EmailOutbox = typeof emailOutbox.$inferSelect;
+export type NewEmailOutbox = typeof emailOutbox.$inferInsert;
+
 // Reusable outbound email templates with {{variable}} placeholders.
 export const emailTemplates = pgTable(
   "email_templates",
@@ -1385,6 +1582,9 @@ export const candidateMessages = pgTable(
     // Inbound attachment metadata only — bytes live in the configured
     // StorageAdapter, this just points at the key.
     attachments: jsonb("attachments"),
+    // A reply stays unread until a workspace member opens it from the
+    // dedicated replies mailbox or from the candidate communication thread.
+    readAt: timestamp("read_at", { withTimezone: true }),
     ...timestamps(),
   },
   (table) => [
@@ -1394,6 +1594,46 @@ export const candidateMessages = pgTable(
       table.createdAt,
     ),
     index("candidate_messages_author_idx").on(table.authorId),
+    uniqueIndex("candidate_messages_workspace_provider_message_id_unique").on(
+      table.workspaceId,
+      table.providerMessageId,
+    ),
+    index("candidate_messages_workspace_direction_read_created_idx").on(
+      table.workspaceId,
+      table.direction,
+      table.readAt,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const mailUnificationMigrations = pgTable(
+  "mail_unification_migrations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    candidateMessageId: uuid("candidate_message_id")
+      .notNull()
+      .references(() => candidateMessages.id, { onDelete: "cascade" }),
+    mailMessageId: uuid("mail_message_id").references(() => mailMessages.id, {
+      onDelete: "set null",
+    }),
+    fingerprint: text("fingerprint").notNull(),
+    status: text("status").default("migrated").notNull(),
+    error: text("error"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("mail_unification_migrations_candidate_unique").on(
+      table.workspaceId,
+      table.candidateMessageId,
+    ),
+    index("mail_unification_migrations_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
   ],
 );
 
@@ -1494,6 +1734,14 @@ export type JobHiringTeamMember = typeof jobHiringTeam.$inferSelect;
 export type NewJobHiringTeamMember = typeof jobHiringTeam.$inferInsert;
 export type CandidateMessage = typeof candidateMessages.$inferSelect;
 export type NewCandidateMessage = typeof candidateMessages.$inferInsert;
+export type MailThread = typeof mailThreads.$inferSelect;
+export type NewMailThread = typeof mailThreads.$inferInsert;
+export type MailMessage = typeof mailMessages.$inferSelect;
+export type NewMailMessage = typeof mailMessages.$inferInsert;
+export type MailAttachment = typeof mailAttachments.$inferSelect;
+export type NewMailAttachment = typeof mailAttachments.$inferInsert;
+export type MailUnificationMigration = typeof mailUnificationMigrations.$inferSelect;
+export type NewMailUnificationMigration = typeof mailUnificationMigrations.$inferInsert;
 export type Interview = typeof interviews.$inferSelect;
 export type NewInterview = typeof interviews.$inferInsert;
 
@@ -2003,6 +2251,12 @@ export const aiConversations = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    // Set when the conversation is opened from a specific candidate's context,
+    // so a candidate erasure (GDPR Art. 17) can cascade-delete the chat history
+    // that embeds their PII. Null for general workspace copilot chats.
+    candidateId: uuid("candidate_id").references(() => candidates.id, {
+      onDelete: "cascade",
+    }),
     // Derived from the first user message; null until the first turn lands.
     title: text("title"),
     // Drives the history sort order; bumped on every new message.
@@ -2017,6 +2271,7 @@ export const aiConversations = pgTable(
       table.userId,
       table.lastMessageAt,
     ),
+    index("ai_conversations_candidate_idx").on(table.candidateId),
   ],
 );
 
@@ -2047,6 +2302,94 @@ export const aiMessages = pgTable(
 );
 
 export type AiConversation = typeof aiConversations.$inferSelect;
+
+/**
+ * Per-call AI token accounting (IA-04). One row per model invocation, so an
+ * employer can see how much of their provider spend each surface consumed.
+ * `workspaceId` is nullable because surfaces called outside an explicit
+ * workspace scope (e.g. during intake) may not carry it; the provider/model/
+ * surface columns are always present.
+ */
+export const aiUsageEvents = pgTable(
+  "ai_usage_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id").references(() => organization.id, {
+      onDelete: "cascade",
+    }),
+    userId: text("user_id").references(() => user.id, { onDelete: "cascade" }),
+    surface: text("surface").notNull(),
+    provider: text("provider").notNull(),
+    modelId: text("model_id").notNull(),
+    promptTokens: integer("prompt_tokens").notNull().default(0),
+    completionTokens: integer("completion_tokens").notNull().default(0),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("ai_usage_events_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type AiUsageEvent = typeof aiUsageEvents.$inferSelect;
+
+/**
+ * Server-side OAuth state nonces. Each integration install creates a nonce
+ * bound to the acting user + workspace; the provider redirects back to the
+ * callback which redeems it. This is single-use, TTL-scoped, and ties the
+ * callback to the actor who started the flow (not just the active workspace),
+ * closing CSRF/replay/escalation on integration OAuth (F1-04 / F2-01 / F2-02).
+ */
+export const oauthStateNonces = pgTable(
+  "oauth_state_nonces",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    provider: text("provider").notNull(),
+    nonce: text("nonce").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("oauth_state_nonces_nonce_idx").on(table.nonce),
+    index("oauth_state_nonces_ws_idx").on(table.workspaceId, table.provider),
+  ],
+);
+
+export type OAuthStateNonce = typeof oauthStateNonces.$inferSelect;
+export type NewOAuthStateNonce = typeof oauthStateNonces.$inferInsert;
+
+/**
+ * Shared fixed-window rate-limit buckets. Used by the database-backed
+ * RateLimitStore so limits are enforced consistently across multiple app
+ * instances (single-instance self-hosts use the in-memory store instead).
+ */
+export const rateLimitBuckets = pgTable(
+  "rate_limit_buckets",
+  {
+    key: text("key").primaryKey(),
+    count: integer("count").notNull().default(0),
+    resetAt: timestamp("reset_at", { withTimezone: true }).notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("rate_limit_buckets_reset_idx").on(table.resetAt)],
+);
+
+export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect;
+export type NewRateLimitBucket = typeof rateLimitBuckets.$inferInsert;
+
 export type NewAiConversation = typeof aiConversations.$inferInsert;
 export type AiMessage = typeof aiMessages.$inferSelect;
 export type NewAiMessage = typeof aiMessages.$inferInsert;

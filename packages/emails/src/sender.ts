@@ -5,10 +5,13 @@ export type SendEmailOptions = {
   subject: string;
   react: React.ReactElement;
   replyTo?: string;
+  messageId?: string;
 };
 
+export type SendEmailResult = { messageId?: string };
+
 export type EmailSender = {
-  send(options: SendEmailOptions): Promise<void>;
+  send(options: SendEmailOptions): Promise<SendEmailResult>;
   /**
    * Cheap connectivity/credentials check that doesn't send mail. Only
    * available for providers that support it (SMTP). Resend has no such
@@ -37,7 +40,7 @@ export type EmailProviderConfig = ResendProviderConfig | SmtpProviderConfig;
 
 function createResendSender(config: ResendProviderConfig): EmailSender {
   return {
-    async send({ to, subject, react, replyTo }) {
+    async send({ to, subject, react, replyTo, messageId }) {
       const [{ render }, { Resend }] = await Promise.all([
         import("@react-email/render"),
         import("resend"),
@@ -45,13 +48,15 @@ function createResendSender(config: ResendProviderConfig): EmailSender {
       const resend = new Resend(config.apiKey);
       const html = await render(react);
 
-      await resend.emails.send({
+      const result = await resend.emails.send({
         from: config.from,
         to,
         subject,
         html,
         replyTo,
+        headers: messageId ? { "Message-ID": messageId } : undefined,
       });
+      return { messageId: messageId ?? result.data?.id };
     },
   };
 }
@@ -69,20 +74,22 @@ function createSmtpSender(config: SmtpProviderConfig): EmailSender {
   }
 
   return {
-    async send({ to, subject, react, replyTo }) {
+    async send({ to, subject, react, replyTo, messageId }) {
       const [{ render }, transport] = await Promise.all([
         import("@react-email/render"),
         transporter(),
       ]);
       const html = await render(react);
 
-      await transport.sendMail({
+      const info = await transport.sendMail({
         from: config.from,
         to,
         subject,
         html,
         replyTo,
+        messageId,
       });
+      return { messageId: info.messageId };
     },
     async verify() {
       const transport = await transporter();

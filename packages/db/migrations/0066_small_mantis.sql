@@ -1,0 +1,1 @@
+ALTER TABLE "mail_threads" ADD CONSTRAINT "mail_threads_source_mailbox_check" CHECK (("mail_threads"."source" = 'imap' AND "mail_threads"."mailbox_id" IS NOT NULL) OR ("mail_threads"."source" IN ('legacy-webhook', 'provider') AND "mail_threads"."mailbox_id" IS NULL));

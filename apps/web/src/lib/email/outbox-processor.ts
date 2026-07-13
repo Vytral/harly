@@ -1,0 +1,476 @@
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { createElement } from "react";
+
+import {
+  activityEvents,
+  candidates,
+  db,
+  emailOutbox,
+  offers,
+  organization,
+} from "@harly/db";
+import {
+  ApplicationReceivedCandidate,
+  ApplicationReceivedRecruiter,
+  applicationReceivedCandidateSubject,
+  applicationReceivedRecruiterSubject,
+  CandidateRejected,
+  CandidateStageUpdate,
+  candidateRejectedSubject,
+  candidateStageUpdateSubject,
+  CustomTemplateEmail,
+  OfferExtended,
+  offerExtendedSubject,
+} from "@harly/emails";
+
+import { renderActiveEmailTemplate } from "@/features/email-templates/data";
+import { sendWorkspaceEmail } from "@/lib/email";
+import { getWorkspaceEmailBranding } from "@/lib/email/branding";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("email-outbox");
+
+const MAX_ATTEMPTS = 5;
+
+const dateFormatter = new Intl.DateTimeFormat("en", {
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+});
+
+function formatOfferDate(value: Date | null): string | undefined {
+  return value ? dateFormatter.format(value) : undefined;
+}
+
+function formatOfferSalary(
+  amount: number | null,
+  currency: string | null,
+  period: "annual" | "monthly" | null,
+): string | undefined {
+  if (!amount) return undefined;
+  let money: string;
+  try {
+    money = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "USD",
+      maximumFractionDigits: 0,
+    }).format(amount);
+  } catch {
+    money = `${amount.toLocaleString()} ${currency ?? ""}`.trim();
+  }
+  return period === "monthly" ? `${money} / month` : `${money} / year`;
+}
+
+type OutboxRow = typeof emailOutbox.$inferSelect;
+
+export type ProcessResult = {
+  processed: number;
+  sent: number;
+  failed: number;
+};
+
+/**
+ * Process pending/failed email_outbox rows. Delivery is idempotent: an offer
+ * that is already `sent` marks its outbox row `sent` without re-sending, so a
+ * crash between send and bookkeeping can never deliver the same email twice.
+ */
+export async function processEmailOutbox(opts?: {
+  workspaceId?: string;
+  limit?: number;
+  ids?: string[];
+}): Promise<ProcessResult> {
+  const now = new Date();
+
+  const rows = await db
+    .select()
+    .from(emailOutbox)
+    .where(
+      and(
+        eq(emailOutbox.status, "pending"),
+        opts?.ids?.length ? inArray(emailOutbox.id, opts.ids) : undefined,
+        opts?.workspaceId ? eq(emailOutbox.workspaceId, opts.workspaceId) : undefined,
+        sql`(${emailOutbox.nextRetryAt} IS NULL OR ${emailOutbox.nextRetryAt} <= ${now})`,
+      ),
+    )
+    .orderBy(emailOutbox.createdAt)
+    .limit(opts?.limit ?? 50);
+
+  let sent = 0;
+  let failed = 0;
+  for (const row of rows) {
+    const ok = await deliverRow(row);
+    if (ok) sent += 1;
+    else failed += 1;
+  }
+  return { processed: rows.length, sent, failed };
+}
+
+async function deliverRow(row: OutboxRow): Promise<boolean> {
+  try {
+    switch (row.kind) {
+      case "offer.extended":
+        return await deliverOffer(row);
+      case "application.received.candidate":
+        return await deliverApplicationReceived(row, "candidate");
+      case "application.received.recruiter":
+        return await deliverApplicationReceived(row, "recruiter");
+      case "pipeline.stage":
+      case "pipeline.rejected":
+        return await deliverPipelineEmail(row);
+      default:
+        log.warn({ kind: row.kind }, "unknown email_outbox kind");
+        await db
+          .update(emailOutbox)
+          .set({ status: "failed", lastError: `Unknown kind: ${row.kind}`, nextRetryAt: null })
+          .where(eq(emailOutbox.id, row.id));
+        return false;
+    }
+  } catch (error) {
+    log.error(error, "email_outbox delivery threw");
+    await markFailed(row.id, error instanceof Error ? error.message : "delivery error");
+    return false;
+  }
+}
+
+/** Insert a durable outbox row and return its id. The caller is expected to
+ *  invoke `processEmailOutbox({ ids })` to attempt immediate delivery; any row
+ *  left `pending`/`failed` is retried by the scheduler (F4-03). */
+export async function enqueueEmailOutbox(
+  workspaceId: string,
+  kind: string,
+  payload: Record<string, unknown>,
+): Promise<string> {
+  const [row] = await db
+    .insert(emailOutbox)
+    .values({ workspaceId, kind, payload })
+    .returning({ id: emailOutbox.id });
+  return row.id;
+}
+
+async function deliverOffer(row: OutboxRow): Promise<boolean> {
+  const offerId = (row.payload as { offerId?: string } | null)?.offerId;
+  if (!offerId) {
+    await markFailed(row.id, "Missing offerId in payload.");
+    return false;
+  }
+
+  const [offer] = await db
+    .select()
+    .from(offers)
+    .where(and(eq(offers.workspaceId, row.workspaceId), eq(offers.id, offerId)))
+    .limit(1);
+
+  // Idempotency: if the offer was already extended, just acknowledge the row.
+  if (offer?.status === "sent") {
+    await db
+      .update(emailOutbox)
+      .set({ status: "sent", sentAt: new Date(), nextRetryAt: null })
+      .where(eq(emailOutbox.id, row.id));
+    return true;
+  }
+
+  if (!offer || offer.status !== "draft") {
+    await markFailed(row.id, `Offer is not deliverable (status: ${offer?.status ?? "missing"}).`);
+    return false;
+  }
+
+  const [recipient] = await db
+    .select({
+      email: candidates.email,
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      companyName: organization.name,
+    })
+    .from(candidates)
+    .innerJoin(organization, eq(organization.id, candidates.workspaceId))
+    .where(and(eq(candidates.id, offer.candidateId), eq(candidates.workspaceId, row.workspaceId)))
+    .limit(1);
+
+  if (!recipient?.email) {
+    await markFailed(row.id, "The candidate does not have an email address.");
+    return false;
+  }
+
+  let delivered = false;
+  try {
+    const branding = await getWorkspaceEmailBranding(row.workspaceId);
+    const startDate = formatOfferDate(offer.startDate);
+    const expiresAt = formatOfferDate(offer.expiresAt);
+    const salary = formatOfferSalary(offer.salaryAmount, offer.currency, offer.salaryPeriod);
+
+    const custom = await renderActiveEmailTemplate(row.workspaceId, "offer", {
+      candidate_first_name: recipient.firstName,
+      candidate_last_name: recipient.lastName,
+      candidate_full_name: `${recipient.firstName} ${recipient.lastName}`,
+      job_title: offer.title,
+      company_name: recipient.companyName,
+      offer_salary: salary ?? undefined,
+      offer_expiry: expiresAt ?? undefined,
+      offer_start_date: startDate ?? undefined,
+    });
+
+    delivered = await sendWorkspaceEmail(
+      row.workspaceId,
+      custom
+        ? {
+            to: recipient.email,
+            subject: custom.subject,
+            react: createElement(CustomTemplateEmail, {
+              bodyHtml: custom.bodyHtml,
+              companyName: recipient.companyName,
+              companyLogoUrl: branding.logoUrl ?? undefined,
+              accentColor: branding.primaryColor ?? undefined,
+              socialLinks: branding.socialLinks,
+            }),
+          }
+        : {
+            to: recipient.email,
+            subject: offerExtendedSubject({
+              companyName: recipient.companyName,
+              jobTitle: offer.title,
+            }),
+            react: createElement(OfferExtended, {
+              candidateName: recipient.firstName,
+              companyName: recipient.companyName,
+              companyLogoUrl: branding.logoUrl ?? undefined,
+              accentColor: branding.primaryColor ?? undefined,
+              socialLinks: branding.socialLinks,
+              jobTitle: offer.title,
+              salary,
+              startDate,
+              expiresAt,
+              equity: offer.equity ?? undefined,
+            }),
+          },
+    );
+  } catch (error) {
+    log.error(error, "offer email render/send failed");
+  }
+
+  if (!delivered) {
+    await markFailed(row.id, "Email provider did not accept the offer.");
+    return false;
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(offers)
+      .set({ status: "sent" })
+      .where(and(eq(offers.workspaceId, row.workspaceId), eq(offers.id, offer.id)));
+    await tx
+      .update(emailOutbox)
+      .set({ status: "sent", sentAt: new Date(), nextRetryAt: null })
+      .where(eq(emailOutbox.id, row.id));
+  });
+
+  const actorId = (row.payload as { actorId?: string } | null)?.actorId;
+  if (actorId) {
+    await db.insert(activityEvents).values({
+      workspaceId: row.workspaceId,
+      actorId,
+      entityType: "application",
+      entityId: offer.applicationId,
+      type: "offer.sent",
+      metadata: { title: offer.title, outboxId: row.id },
+    });
+  }
+
+  return true;
+}
+
+function appBaseUrl(): string {
+  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+}
+
+function splitName(full: string): { first: string; last: string } {
+  const parts = full.trim().split(/\s+/);
+  if (parts.length === 0) return { first: "", last: "" };
+  if (parts.length === 1) return { first: parts[0], last: "" };
+  return { first: parts[0], last: parts.slice(1).join(" ") };
+}
+
+async function deliverApplicationReceived(
+  row: OutboxRow,
+  variant: "candidate" | "recruiter",
+): Promise<boolean> {
+  const p = row.payload as {
+    candidateEmail?: string;
+    ownerEmail?: string;
+    candidateFirstName?: string;
+    candidateName?: string;
+    jobTitle?: string;
+    workspaceName?: string;
+    workspaceSlug?: string;
+  } | null;
+
+  const branding = await getWorkspaceEmailBranding(row.workspaceId);
+
+  if (variant === "candidate") {
+    if (!p?.candidateEmail) {
+      await markFailed(row.id, "Missing candidateEmail in payload.");
+      return false;
+    }
+    const jobBoardUrl = `${appBaseUrl()}/board/${p.workspaceSlug ?? ""}`;
+    const delivered = await sendWorkspaceEmail(row.workspaceId, {
+      to: p.candidateEmail,
+      subject: applicationReceivedCandidateSubject({
+        jobTitle: p.jobTitle ?? "",
+        companyName: p.workspaceName ?? "",
+      }),
+      react: createElement(ApplicationReceivedCandidate, {
+        candidateName: p.candidateFirstName ?? "",
+        jobTitle: p.jobTitle ?? "",
+        companyName: p.workspaceName ?? "",
+        companyLogoUrl: branding.logoUrl ?? undefined,
+        accentColor: branding.primaryColor ?? undefined,
+        socialLinks: branding.socialLinks,
+        jobBoardUrl,
+      }),
+    });
+    if (!delivered) {
+      await markFailed(row.id, "Email provider did not accept the application confirmation.");
+      return false;
+    }
+  } else {
+    if (!p?.ownerEmail) {
+      await markFailed(row.id, "Missing ownerEmail in payload.");
+      return false;
+    }
+    const dashboardUrl = `${appBaseUrl()}/dashboard/candidates`;
+    const delivered = await sendWorkspaceEmail(row.workspaceId, {
+      to: p.ownerEmail,
+      subject: applicationReceivedRecruiterSubject({
+        candidateName: p.candidateName ?? "",
+        jobTitle: p.jobTitle ?? "",
+      }),
+      react: createElement(ApplicationReceivedRecruiter, {
+        candidateName: p.candidateName ?? "",
+        candidateEmail: p.candidateEmail ?? "",
+        jobTitle: p.jobTitle ?? "",
+        dashboardUrl,
+        branding,
+      }),
+    });
+    if (!delivered) {
+      await markFailed(row.id, "Email provider did not accept the recruiter notification.");
+      return false;
+    }
+  }
+
+  await db
+    .update(emailOutbox)
+    .set({ status: "sent", sentAt: new Date(), nextRetryAt: null })
+    .where(eq(emailOutbox.id, row.id));
+  return true;
+}
+
+async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
+  const p = row.payload as {
+    candidateEmail?: string;
+    candidateName?: string;
+    jobTitle?: string;
+    stageName?: string;
+    workspaceName?: string;
+    type?: "stage" | "rejected";
+  } | null;
+
+  if (!p?.candidateEmail) {
+    await markFailed(row.id, "Missing candidateEmail in payload.");
+    return false;
+  }
+
+  const branding = await getWorkspaceEmailBranding(row.workspaceId);
+  const { first, last } = splitName(p.candidateName ?? "");
+  const isStage = p.type === "stage";
+  const templateType = isStage ? "stage_change" : "rejection";
+
+  const custom = await renderActiveEmailTemplate(row.workspaceId, templateType, {
+    candidate_first_name: first,
+    candidate_last_name: last,
+    candidate_full_name: p.candidateName ?? "",
+    job_title: p.jobTitle ?? "",
+    stage_name: isStage ? p.stageName : undefined,
+    company_name: p.workspaceName ?? "",
+  });
+
+  let delivered = false;
+  try {
+    if (custom) {
+      delivered = await sendWorkspaceEmail(row.workspaceId, {
+        to: p.candidateEmail,
+        subject: custom.subject,
+        react: createElement(CustomTemplateEmail, {
+          bodyHtml: custom.bodyHtml,
+          companyName: p.workspaceName ?? "",
+          companyLogoUrl: branding.logoUrl ?? undefined,
+          accentColor: branding.primaryColor ?? undefined,
+          socialLinks: branding.socialLinks,
+        }),
+      });
+    } else if (isStage) {
+      delivered = await sendWorkspaceEmail(row.workspaceId, {
+        to: p.candidateEmail,
+        subject: candidateStageUpdateSubject({
+          jobTitle: p.jobTitle ?? "",
+          stageName: p.stageName ?? "",
+        }),
+        react: createElement(CandidateStageUpdate, {
+          candidateName: p.candidateName ?? "",
+          jobTitle: p.jobTitle ?? "",
+          stageName: p.stageName ?? "",
+          companyName: p.workspaceName ?? "",
+          companyLogoUrl: branding.logoUrl ?? undefined,
+          accentColor: branding.primaryColor ?? undefined,
+          socialLinks: branding.socialLinks,
+        }),
+      });
+    } else {
+      delivered = await sendWorkspaceEmail(row.workspaceId, {
+        to: p.candidateEmail,
+        subject: candidateRejectedSubject({
+          jobTitle: p.jobTitle ?? "",
+          companyName: p.workspaceName ?? "",
+        }),
+        react: createElement(CandidateRejected, {
+          candidateName: p.candidateName ?? "",
+          jobTitle: p.jobTitle ?? "",
+          companyName: p.workspaceName ?? "",
+          companyLogoUrl: branding.logoUrl ?? undefined,
+          accentColor: branding.primaryColor ?? undefined,
+          socialLinks: branding.socialLinks,
+        }),
+      });
+    }
+  } catch (error) {
+    log.error(error, "pipeline email render/send failed");
+  }
+
+  if (!delivered) {
+    await markFailed(row.id, "Email provider did not accept the pipeline email.");
+    return false;
+  }
+
+  await db
+    .update(emailOutbox)
+    .set({ status: "sent", sentAt: new Date(), nextRetryAt: null })
+    .where(eq(emailOutbox.id, row.id));
+  return true;
+}
+
+async function markFailed(id: string, message: string) {
+  await db
+    .update(emailOutbox)
+    .set({
+      attempts: sql`${emailOutbox.attempts} + 1`,
+      lastError: message,
+      nextRetryAt: sql`CASE
+        WHEN ${emailOutbox.attempts} + 1 >= ${MAX_ATTEMPTS} THEN NULL
+        ELSE now() + ((${emailOutbox.attempts} + 1) * interval '1 minute')
+      END`,
+      status: sql`CASE
+        WHEN ${emailOutbox.attempts} + 1 >= ${MAX_ATTEMPTS} THEN 'failed'::text
+        ELSE 'pending'::text
+      END`,
+    })
+    .where(eq(emailOutbox.id, id));
+}

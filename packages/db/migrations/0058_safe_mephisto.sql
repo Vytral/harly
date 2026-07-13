@@ -1,0 +1,3 @@
+ALTER TABLE "candidate_messages" ADD COLUMN "read_at" timestamp with time zone;--> statement-breakpoint
+CREATE UNIQUE INDEX "candidate_messages_workspace_provider_message_id_unique" ON "candidate_messages" USING btree ("workspace_id","provider_message_id");--> statement-breakpoint
+CREATE INDEX "candidate_messages_workspace_direction_read_created_idx" ON "candidate_messages" USING btree ("workspace_id","direction","read_at","created_at");

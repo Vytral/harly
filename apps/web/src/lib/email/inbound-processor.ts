@@ -3,10 +3,16 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 import type { CanonicalInboundEmail } from "@harly/emails";
 
-import { applications, candidateMessages, db } from "@harly/db";
+import { applications, db, mailAttachments } from "@harly/db";
 
 import { createLogger } from "@/lib/logger";
+import { validateMailboxAttachment } from "@/lib/mailbox/attachments";
 import { storage } from "@/lib/storage";
+import { notifyInboundEmail } from "@/server/notify/inbox";
+import {
+  insertCanonicalMessage,
+  legacyMailFingerprint,
+} from "@/lib/mail/canonical";
 
 const log = createLogger("inbound-email");
 
@@ -31,21 +37,39 @@ async function storeAttachments(
   workspaceId: string,
   applicationId: string,
   email: CanonicalInboundEmail,
+  messageKey: string,
 ): Promise<AttachmentMeta[]> {
   const stored: AttachmentMeta[] = [];
 
   for (const attachment of email.attachments) {
-    const key = `inbound/${workspaceId}/${applicationId}/${email.messageId}/${attachment.filename}`;
+    // Public email senders are untrusted: validate size, content type and
+    // sanitize the filename before it ever reaches storage (mirrors the IMAP
+    // mailbox path). Without this, anyone could drive unbounded storage writes
+    // or smuggle a hostile filename into the object key.
+    const validation = validateMailboxAttachment({
+      filename: attachment.filename,
+      contentType: attachment.contentType,
+      size: attachment.content.length,
+    });
+    if (!validation.ok) {
+      log.warn(
+        { filename: attachment.filename, reason: validation.error },
+        "inbound attachment rejected",
+      );
+      continue;
+    }
+
+    const key = `inbound/${workspaceId}/${applicationId}/${messageKey}/${validation.filename}`;
     const upload = await storage.getPresignedUploadUrl({
       key,
-      contentType: attachment.contentType,
+      contentType: validation.contentType,
       contentLength: attachment.content.length,
     });
 
     try {
       const putResponse = await fetch(upload.uploadUrl, {
         method: "PUT",
-        headers: { "Content-Type": attachment.contentType },
+        headers: { "Content-Type": validation.contentType },
         body: new Uint8Array(attachment.content).buffer,
       });
       if (!putResponse.ok) {
@@ -61,8 +85,8 @@ async function storeAttachments(
     }
 
     stored.push({
-      filename: attachment.filename,
-      contentType: attachment.contentType,
+      filename: validation.filename,
+      contentType: validation.contentType,
       size: attachment.content.length,
       storageKey: key,
     });
@@ -89,9 +113,18 @@ export async function processInboundEmail(
   }
 
   const [application] = await db
-    .select({ id: applications.id, candidateId: applications.candidateId })
+    .select({
+      id: applications.id,
+      candidateId: applications.candidateId,
+      jobId: applications.jobId,
+    })
     .from(applications)
-    .where(eq(applications.inboundToken, token))
+    .where(
+      and(
+        eq(applications.inboundToken, token),
+        eq(applications.workspaceId, workspaceId),
+      ),
+    )
     .limit(1);
 
   if (!application) {
@@ -99,46 +132,70 @@ export async function processInboundEmail(
     return;
   }
 
-  // Idempotency: skip if we've already processed this message (provider retries).
-  if (email.messageId) {
-    const [existing] = await db
-      .select({ id: candidateMessages.id })
-      .from(candidateMessages)
-      .where(
-        and(
-          eq(candidateMessages.workspaceId, workspaceId),
-          eq(candidateMessages.providerMessageId, email.messageId),
-        ),
-      )
-      .limit(1);
-
-    if (existing) {
-      log.info(
-        { messageId: email.messageId },
-        "inbound email: already processed, skipping",
-      );
-      return;
-    }
-  }
-
-  const attachments = await storeAttachments(workspaceId, application.id, email);
-
-  await db.insert(candidateMessages).values({
+  const messageId =
+    email.messageId ||
+    legacyMailFingerprint({
+      workspaceId,
+      candidateId: application.candidateId,
+      applicationId: application.id,
+      direction: "inbound",
+      fromEmail: email.from,
+      toEmails: email.to,
+      subject: email.subject,
+      body: email.textBody,
+      createdAt: email.receivedAt,
+    });
+  const inserted = await insertCanonicalMessage({
     workspaceId,
+    source: "legacy-webhook",
     candidateId: application.candidateId,
     applicationId: application.id,
-    direction: "inbound",
-    toEmail: email.to[0] ?? "",
-    fromEmail: email.from,
     subject: email.subject,
-    body: email.textBody,
-    status: "sent",
-    providerMessageId: email.messageId,
+    participantEmail: email.from,
     inReplyTo: email.inReplyTo,
-    references: email.references?.join(" "),
-    attachments: attachments.length > 0 ? attachments : null,
+    references: email.references?.join(" ") ?? null,
+    receivedAt: email.receivedAt,
+    messageId,
+    direction: "inbound",
+    fromEmail: email.from,
+    toEmails: email.to,
+    textBody: email.textBody,
+  });
+
+  if (inserted.duplicate) {
+    log.info({ messageId }, "inbound email: duplicate skipped");
+    return;
+  }
+
+  const attachments = await storeAttachments(
+    workspaceId,
+    application.id,
+    email,
+    messageId,
+  );
+  if (attachments.length > 0) {
+    await db.insert(mailAttachments).values(
+      attachments.map((attachment) => ({
+        workspaceId,
+        messageId: inserted.messageId,
+        ...attachment,
+      })),
+    );
+  }
+
+  // A notification failure must never make a verified provider retry the
+  // inbound message. The reply is already durable at this point.
+  void notifyInboundEmail({
+    workspaceId,
+    jobId: application.jobId,
+    candidateId: application.candidateId,
+    candidateName: email.from,
+    subject: email.subject,
   });
 
   const { revalidatePath } = await import("next/cache");
   revalidatePath(`/dashboard/candidates/${application.candidateId}`);
+  revalidatePath("/dashboard/inbox");
+  revalidatePath("/dashboard/replies");
+  revalidatePath("/dashboard", "layout");
 }

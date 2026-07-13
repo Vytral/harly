@@ -3,6 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "bin": {
-    "create-harly": "./src/index.ts"
+    "create-harly": "./src/index.ts",
+    "harly": "./src/index.ts"
+  },
+  "dependencies": {
+    "@harly/db": "workspace:*",
+    "dotenv": "^17.4.2"
   }
 }

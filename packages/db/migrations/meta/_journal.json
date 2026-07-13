@@ -407,6 +407,69 @@
       "when": 1783561738766,
       "tag": "0057_dashing_king_bedlam",
       "breakpoints": true
+    },
+    {
+      "idx": 58,
+      "version": "7",
+      "when": 1783738677994,
+      "tag": "0058_safe_mephisto",
+      "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1783825659627,
+      "tag": "0059_married_adam_warlock",
+      "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1783836156767,
+      "tag": "0060_loose_alex_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 61,
+      "version": "7",
+      "when": 1783877188821,
+      "tag": "0061_equal_deadpool",
+      "breakpoints": true
+    },
+    {
+      "idx": 62,
+      "version": "7",
+      "when": 1783885070476,
+      "tag": "0062_rare_yellow_claw",
+      "breakpoints": true
+    },
+    {
+      "idx": 63,
+      "version": "7",
+      "when": 1783891111386,
+      "tag": "0063_elite_iron_fist",
+      "breakpoints": true
+    },
+    {
+      "idx": 64,
+      "version": "7",
+      "when": 1783892027452,
+      "tag": "0064_striped_psynapse",
+      "breakpoints": true
+    },
+    {
+      "idx": 65,
+      "version": "7",
+      "when": 1783894926858,
+      "tag": "0065_friendly_virginia_dare",
+      "breakpoints": true
+    },
+    {
+      "idx": 66,
+      "version": "7",
+      "when": 1783894943566,
+      "tag": "0066_small_mantis",
+      "breakpoints": true
     }
   ]
 }
