@@ -56,7 +56,7 @@ const sections: SettingsSection[] = [
   {
     href: "/settings/email" as Route,
     label: "Email",
-    hint: "Sending options, domain, signature, and email sync settings.",
+    hint: "Email delivery and reply routing settings.",
     icon: EnvelopeIcon,
   },
   {

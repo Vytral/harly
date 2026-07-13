@@ -1,6 +1,5 @@
 import { EmailSettingsCard } from "@/features/workspaces/EmailSettingsCard";
-import { InboundEmailSettingsCard } from "@/features/workspaces/InboundEmailSettingsCard";
-import { MailboxSettingsCard } from "@/features/workspaces/MailboxSettingsCard";
+import { ReplyHandlingSettingsCard } from "@/features/workspaces/ReplyHandlingSettingsCard";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import {
@@ -24,9 +23,9 @@ export default async function EmailSettingsPage() {
   return (
     <div className="space-y-6">
       <EmailSettingsCard status={status} canEdit={canEdit} />
-      <MailboxSettingsCard status={mailboxStatus} canEdit={canEdit} />
-      <InboundEmailSettingsCard
-        status={inboundStatus}
+      <ReplyHandlingSettingsCard
+        mailboxStatus={mailboxStatus}
+        inboundStatus={inboundStatus}
         canEdit={canEdit}
         workspaceId={organization.id}
       />

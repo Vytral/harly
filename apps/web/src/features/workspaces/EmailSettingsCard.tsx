@@ -77,8 +77,8 @@ export function EmailSettingsCard({
       router.refresh();
     });
   }
-  
-    const badge = isConfigured ? (
+
+  const badge = isConfigured ? (
     <StatusPill tone={status.enabled ? "on" : "off"}>
       {status.enabled ? "Connected" : "Disabled"}
     </StatusPill>
@@ -88,7 +88,6 @@ export function EmailSettingsCard({
     <StatusPill tone="neutral">Not connected</StatusPill>
   );
 
-
   return (
     <div className="space-y-5">
       {!status.encryptionReady ? <EncryptionWarning /> : null}
@@ -96,7 +95,7 @@ export function EmailSettingsCard({
         <div className="p-6">
           <SectionHeader
             icon={EnvelopeIcon}
-            title="Email"
+            title="Email delivery"
             badge={badge}
             description="Send candidate and recruiter emails from your own domain via Resend or SMTP. Without it, Harly sends from a shared address."
             action={
@@ -149,7 +148,9 @@ export function EmailSettingsCard({
             {PROVIDER_LABEL[status.provider!]}
           </StatCell>
           <StatCell label="From address">
-            <span className="truncate font-mono text-[13px]">{status.from}</span>
+            <span className="truncate font-mono text-[13px]">
+              {status.from}
+            </span>
           </StatCell>
         </div>
       </Card>
@@ -157,7 +158,7 @@ export function EmailSettingsCard({
   );
 }
 
-        function EncryptionWarning() {
+function EncryptionWarning() {
   return (
     <div className="flex items-start gap-2 rounded-2xl border border-clay/30 bg-clay/5 px-4 py-3 text-sm text-clay">
       <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
