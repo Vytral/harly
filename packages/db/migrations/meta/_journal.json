@@ -470,6 +470,13 @@
       "when": 1783894943566,
       "tag": "0066_small_mantis",
       "breakpoints": true
+    },
+    {
+      "idx": 67,
+      "version": "7",
+      "when": 1783915970444,
+      "tag": "0067_wealthy_firestar",
+      "breakpoints": true
     }
   ]
 }

@@ -39,7 +39,10 @@ function generateToken(): string {
 }
 
 export async function getPortalWorkspaceId(): Promise<string | null> {
-  const [row] = await db.select({ id: organization.id }).from(organization).limit(1);
+  const [row] = await db
+    .select({ id: organization.id })
+    .from(organization)
+    .limit(1);
   return row?.id ?? null;
 }
 
@@ -69,9 +72,15 @@ export async function getPortalGoogleCredentials(): Promise<PortalOAuthCredentia
       .limit(1);
     if (row?.clientId && row.ciphertext && row.iv && row.tag) {
       try {
-        const clientSecret = decryptSecret({ ciphertext: row.ciphertext, iv: row.iv, tag: row.tag });
+        const clientSecret = decryptSecret({
+          ciphertext: row.ciphertext,
+          iv: row.iv,
+          tag: row.tag,
+        });
         return { clientId: row.clientId, clientSecret };
-      } catch { /* fall through */ }
+      } catch {
+        /* fall through */
+      }
     }
   }
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -95,9 +104,15 @@ export async function getPortalGitHubCredentials(): Promise<PortalOAuthCredentia
       .limit(1);
     if (row?.clientId && row.ciphertext && row.iv && row.tag) {
       try {
-        const clientSecret = decryptSecret({ ciphertext: row.ciphertext, iv: row.iv, tag: row.tag });
+        const clientSecret = decryptSecret({
+          ciphertext: row.ciphertext,
+          iv: row.iv,
+          tag: row.tag,
+        });
         return { clientId: row.clientId, clientSecret };
-      } catch { /* fall through */ }
+      } catch {
+        /* fall through */
+      }
     }
   }
   const clientId = process.env.GITHUB_CLIENT_ID;
@@ -107,25 +122,68 @@ export async function getPortalGitHubCredentials(): Promise<PortalOAuthCredentia
 }
 
 export async function getPortalLinkedInCredentials(): Promise<PortalOAuthCredentials | null> {
-  // LinkedIn uses env vars (no DB storage yet — add portalLinkedin* columns in a future migration)
+  const workspaceId = await getPortalWorkspaceId();
+  if (workspaceId && isEncryptionConfigured()) {
+    const [row] = await db
+      .select({
+        clientId: workspaceSettings.portalLinkedinClientId,
+        ciphertext: workspaceSettings.portalLinkedinClientSecretCiphertext,
+        iv: workspaceSettings.portalLinkedinClientSecretIv,
+        tag: workspaceSettings.portalLinkedinClientSecretTag,
+      })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.organizationId, workspaceId))
+      .limit(1);
+    if (row?.clientId && row.ciphertext && row.iv && row.tag) {
+      try {
+        const clientSecret = decryptSecret({
+          ciphertext: row.ciphertext,
+          iv: row.iv,
+          tag: row.tag,
+        });
+        return { clientId: row.clientId, clientSecret };
+      } catch {
+        /* fall through */
+      }
+    }
+  }
   const clientId = process.env.LINKEDIN_CLIENT_ID;
   const clientSecret = process.env.LINKEDIN_CLIENT_SECRET;
   if (clientId && clientSecret) return { clientId, clientSecret };
   return null;
 }
 
-export async function createPortalSession(candidateId: string, workspaceId: string, userAgent?: string): Promise<string> {
+export async function createPortalSession(
+  candidateId: string,
+  workspaceId: string,
+  userAgent?: string,
+): Promise<string> {
   const raw = generateToken();
   const tokenHash = hashToken(raw);
   const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 86_400_000);
-  await db.delete(candidatePortalSessions).where(
-    and(eq(candidatePortalSessions.candidateId, candidateId), lt(candidatePortalSessions.expiresAt, new Date())),
-  );
-  await db.insert(candidatePortalSessions).values({ candidateId, workspaceId, tokenHash, userAgent: userAgent ?? null, expiresAt });
+  await db
+    .delete(candidatePortalSessions)
+    .where(
+      and(
+        eq(candidatePortalSessions.candidateId, candidateId),
+        lt(candidatePortalSessions.expiresAt, new Date()),
+      ),
+    );
+  await db
+    .insert(candidatePortalSessions)
+    .values({
+      candidateId,
+      workspaceId,
+      tokenHash,
+      userAgent: userAgent ?? null,
+      expiresAt,
+    });
   return raw;
 }
 
-export async function resolvePortalSession(rawToken: string): Promise<PortalSession | null> {
+export async function resolvePortalSession(
+  rawToken: string,
+): Promise<PortalSession | null> {
   const tokenHash = hashToken(rawToken);
   const [row] = await db
     .select({
@@ -137,15 +195,31 @@ export async function resolvePortalSession(rawToken: string): Promise<PortalSess
       email: candidates.email,
     })
     .from(candidatePortalSessions)
-    .innerJoin(candidates, eq(candidates.id, candidatePortalSessions.candidateId))
-    .where(and(eq(candidatePortalSessions.tokenHash, tokenHash), gt(candidatePortalSessions.expiresAt, new Date())))
+    .innerJoin(
+      candidates,
+      eq(candidates.id, candidatePortalSessions.candidateId),
+    )
+    .where(
+      and(
+        eq(candidatePortalSessions.tokenHash, tokenHash),
+        gt(candidatePortalSessions.expiresAt, new Date()),
+      ),
+    )
     .limit(1);
   if (!row) return null;
-  return { candidateId: row.candidateId, workspaceId: row.workspaceId, firstName: row.firstName, lastName: row.lastName, email: row.email };
+  return {
+    candidateId: row.candidateId,
+    workspaceId: row.workspaceId,
+    firstName: row.firstName,
+    lastName: row.lastName,
+    email: row.email,
+  };
 }
 
 export async function deletePortalSession(rawToken: string): Promise<void> {
-  await db.delete(candidatePortalSessions).where(eq(candidatePortalSessions.tokenHash, hashToken(rawToken)));
+  await db
+    .delete(candidatePortalSessions)
+    .where(eq(candidatePortalSessions.tokenHash, hashToken(rawToken)));
 }
 
 export async function findOrCreateCandidateByEmail(
@@ -157,19 +231,35 @@ export async function findOrCreateCandidateByEmail(
 ): Promise<string> {
   const normalizedEmail = email.toLowerCase().trim();
   const [existing] = await db
-    .select({ id: candidates.id, avatarUrl: candidates.avatarUrl, linkedinUrl: candidates.linkedinUrl, githubUrl: candidates.githubUrl })
+    .select({
+      id: candidates.id,
+      avatarUrl: candidates.avatarUrl,
+      linkedinUrl: candidates.linkedinUrl,
+      githubUrl: candidates.githubUrl,
+    })
     .from(candidates)
-    .where(and(eq(candidates.workspaceId, workspaceId), eq(candidates.email, normalizedEmail)))
+    .where(
+      and(
+        eq(candidates.workspaceId, workspaceId),
+        eq(candidates.email, normalizedEmail),
+      ),
+    )
     .limit(1);
 
   if (existing) {
     // Sync profile data from OAuth provider on each login
     const updates: Record<string, unknown> = {};
-    if (avatarUrl && avatarUrl !== existing.avatarUrl) updates.avatarUrl = avatarUrl;
-    if (extra?.linkedinUrl && extra.linkedinUrl !== existing.linkedinUrl) updates.linkedinUrl = extra.linkedinUrl;
-    if (extra?.githubUrl && extra.githubUrl !== existing.githubUrl) updates.githubUrl = extra.githubUrl;
+    if (avatarUrl && avatarUrl !== existing.avatarUrl)
+      updates.avatarUrl = avatarUrl;
+    if (extra?.linkedinUrl && extra.linkedinUrl !== existing.linkedinUrl)
+      updates.linkedinUrl = extra.linkedinUrl;
+    if (extra?.githubUrl && extra.githubUrl !== existing.githubUrl)
+      updates.githubUrl = extra.githubUrl;
     if (Object.keys(updates).length > 0) {
-      await db.update(candidates).set(updates).where(eq(candidates.id, existing.id));
+      await db
+        .update(candidates)
+        .set(updates)
+        .where(eq(candidates.id, existing.id));
     }
     return existing.id;
   }
@@ -190,64 +280,157 @@ export async function findOrCreateCandidateByEmail(
   return created.id;
 }
 
-export async function createMagicLinkToken(workspaceId: string, email: string): Promise<string> {
+export async function createMagicLinkToken(
+  workspaceId: string,
+  email: string,
+): Promise<string> {
   const raw = generateToken();
   const tokenHash = hashToken(raw);
   const expiresAt = new Date(Date.now() + MAGIC_LINK_TTL_MINUTES * 60_000);
-  await db.delete(candidatePortalMagicLinks).where(
-    and(eq(candidatePortalMagicLinks.email, email.toLowerCase()), eq(candidatePortalMagicLinks.workspaceId, workspaceId), isNull(candidatePortalMagicLinks.usedAt)),
-  );
-  await db.insert(candidatePortalMagicLinks).values({ email: email.toLowerCase().trim(), workspaceId, tokenHash, expiresAt });
+  await db
+    .delete(candidatePortalMagicLinks)
+    .where(
+      and(
+        eq(candidatePortalMagicLinks.email, email.toLowerCase()),
+        eq(candidatePortalMagicLinks.workspaceId, workspaceId),
+        isNull(candidatePortalMagicLinks.usedAt),
+      ),
+    );
+  await db
+    .insert(candidatePortalMagicLinks)
+    .values({
+      email: email.toLowerCase().trim(),
+      workspaceId,
+      tokenHash,
+      expiresAt,
+    });
   return raw;
 }
 
-export async function consumeMagicLinkToken(rawToken: string): Promise<{ email: string; workspaceId: string } | null> {
+export async function consumeMagicLinkToken(
+  rawToken: string,
+): Promise<{ email: string; workspaceId: string } | null> {
   const tokenHash = hashToken(rawToken);
   const now = new Date();
   const [row] = await db
-    .select({ id: candidatePortalMagicLinks.id, email: candidatePortalMagicLinks.email, workspaceId: candidatePortalMagicLinks.workspaceId, expiresAt: candidatePortalMagicLinks.expiresAt, usedAt: candidatePortalMagicLinks.usedAt })
+    .select({
+      id: candidatePortalMagicLinks.id,
+      email: candidatePortalMagicLinks.email,
+      workspaceId: candidatePortalMagicLinks.workspaceId,
+      expiresAt: candidatePortalMagicLinks.expiresAt,
+      usedAt: candidatePortalMagicLinks.usedAt,
+    })
     .from(candidatePortalMagicLinks)
     .where(eq(candidatePortalMagicLinks.tokenHash, tokenHash))
     .limit(1);
   if (!row || row.usedAt || row.expiresAt < now) return null;
-  await db.update(candidatePortalMagicLinks).set({ usedAt: now }).where(eq(candidatePortalMagicLinks.id, row.id));
+  await db
+    .update(candidatePortalMagicLinks)
+    .set({ usedAt: now })
+    .where(eq(candidatePortalMagicLinks.id, row.id));
   return { email: row.email, workspaceId: row.workspaceId };
 }
 
-export async function exchangeGoogleCode(code: string, redirectUri: string): Promise<{ email: string; firstName: string; lastName: string; avatarUrl?: string }> {
+export async function exchangeGoogleCode(
+  code: string,
+  redirectUri: string,
+): Promise<{
+  email: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string;
+}> {
   const creds = await getPortalGoogleCredentials();
   if (!creds) throw new Error("Google OAuth not configured.");
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ code, client_id: creds.clientId, client_secret: creds.clientSecret, redirect_uri: redirectUri, grant_type: "authorization_code" }),
+    body: new URLSearchParams({
+      code,
+      client_id: creds.clientId,
+      client_secret: creds.clientSecret,
+      redirect_uri: redirectUri,
+      grant_type: "authorization_code",
+    }),
   });
   if (!tokenRes.ok) throw new Error("Google token exchange failed.");
-  const { access_token } = await tokenRes.json() as { access_token: string };
-  const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", { headers: { Authorization: `Bearer ${access_token}` } });
+  const { access_token } = (await tokenRes.json()) as { access_token: string };
+  const userRes = await fetch("https://www.googleapis.com/oauth2/v2/userinfo", {
+    headers: { Authorization: `Bearer ${access_token}` },
+  });
   if (!userRes.ok) throw new Error("Google userinfo fetch failed.");
-  const user = await userRes.json() as { email: string; given_name?: string; family_name?: string; picture?: string };
-  return { email: user.email, firstName: user.given_name ?? user.email.split("@")[0] ?? "Candidate", lastName: user.family_name ?? "", avatarUrl: user.picture };
+  const user = (await userRes.json()) as {
+    email: string;
+    given_name?: string;
+    family_name?: string;
+    picture?: string;
+  };
+  return {
+    email: user.email,
+    firstName: user.given_name ?? user.email.split("@")[0] ?? "Candidate",
+    lastName: user.family_name ?? "",
+    avatarUrl: user.picture,
+  };
 }
 
-export async function exchangeGitHubCode(code: string): Promise<{ email: string; firstName: string; lastName: string; avatarUrl?: string; githubUrl?: string }> {
+export async function exchangeGitHubCode(
+  code: string,
+  redirectUri: string,
+): Promise<{
+  email: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl?: string;
+  githubUrl?: string;
+}> {
   const creds = await getPortalGitHubCredentials();
   if (!creds) throw new Error("GitHub OAuth not configured.");
   const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
-    body: new URLSearchParams({ code, client_id: creds.clientId, client_secret: creds.clientSecret }),
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Accept: "application/json",
+    },
+    body: new URLSearchParams({
+      code,
+      client_id: creds.clientId,
+      client_secret: creds.clientSecret,
+      redirect_uri: redirectUri,
+    }),
   });
   if (!tokenRes.ok) throw new Error("GitHub token exchange failed.");
-  const { access_token } = await tokenRes.json() as { access_token: string };
+  const { access_token } = (await tokenRes.json()) as { access_token: string };
   const [userRes, emailsRes] = await Promise.all([
-    fetch("https://api.github.com/user", { headers: { Authorization: `Bearer ${access_token}`, Accept: "application/vnd.github+json" } }),
-    fetch("https://api.github.com/user/emails", { headers: { Authorization: `Bearer ${access_token}`, Accept: "application/vnd.github+json" } }),
+    fetch("https://api.github.com/user", {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+        Accept: "application/vnd.github+json",
+      },
+    }),
+    fetch("https://api.github.com/user/emails", {
+      headers: {
+        Authorization: `Bearer ${access_token}`,
+        Accept: "application/vnd.github+json",
+      },
+    }),
   ]);
   if (!userRes.ok) throw new Error("GitHub user fetch failed.");
-  const ghUser = await userRes.json() as { name?: string; avatar_url?: string; login: string; html_url: string };
-  const emails = emailsRes.ok ? (await emailsRes.json() as Array<{ email: string; primary: boolean; verified: boolean }>) : [];
-  const primaryEmail = emails.find((e) => e.primary && e.verified)?.email ?? emails.find((e) => e.verified)?.email;
+  const ghUser = (await userRes.json()) as {
+    name?: string;
+    avatar_url?: string;
+    login: string;
+    html_url: string;
+  };
+  const emails = emailsRes.ok
+    ? ((await emailsRes.json()) as Array<{
+        email: string;
+        primary: boolean;
+        verified: boolean;
+      }>)
+    : [];
+  const primaryEmail =
+    emails.find((e) => e.primary && e.verified)?.email ??
+    emails.find((e) => e.verified)?.email;
   if (!primaryEmail) throw new Error("No verified email on GitHub account.");
   const nameParts = (ghUser.name ?? ghUser.login).split(" ");
   return {
@@ -259,21 +442,43 @@ export async function exchangeGitHubCode(code: string): Promise<{ email: string;
   };
 }
 
-export async function buildGoogleAuthUrl(redirectUri: string, state: string): Promise<string> {
+export async function buildGoogleAuthUrl(
+  redirectUri: string,
+  state: string,
+): Promise<string> {
   const creds = await getPortalGoogleCredentials();
   if (!creds) throw new Error("Google OAuth not configured.");
-  const params = new URLSearchParams({ client_id: creds.clientId, redirect_uri: redirectUri, response_type: "code", scope: "openid email profile", state, access_type: "online", prompt: "select_account" });
+  const params = new URLSearchParams({
+    client_id: creds.clientId,
+    redirect_uri: redirectUri,
+    response_type: "code",
+    scope: "openid email profile",
+    state,
+    access_type: "online",
+    prompt: "select_account",
+  });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
 }
 
-export async function buildGitHubAuthUrl(state: string): Promise<string> {
+export async function buildGitHubAuthUrl(
+  redirectUri: string,
+  state: string,
+): Promise<string> {
   const creds = await getPortalGitHubCredentials();
   if (!creds) throw new Error("GitHub OAuth not configured.");
-  const params = new URLSearchParams({ client_id: creds.clientId, scope: "user:email", state });
+  const params = new URLSearchParams({
+    client_id: creds.clientId,
+    redirect_uri: redirectUri,
+    scope: "user:email",
+    state,
+  });
   return `https://github.com/login/oauth/authorize?${params.toString()}`;
 }
 
-export async function exchangeLinkedInCode(code: string, redirectUri: string): Promise<{
+export async function exchangeLinkedInCode(
+  code: string,
+  redirectUri: string,
+): Promise<{
   email: string;
   firstName: string;
   lastName: string;
@@ -285,26 +490,29 @@ export async function exchangeLinkedInCode(code: string, redirectUri: string): P
   if (!creds) throw new Error("LinkedIn OAuth not configured.");
 
   // Exchange code for access token
-  const tokenRes = await fetch("https://www.linkedin.com/oauth/v2/accessToken", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      code,
-      client_id: creds.clientId,
-      client_secret: creds.clientSecret,
-      redirect_uri: redirectUri,
-      grant_type: "authorization_code",
-    }),
-  });
+  const tokenRes = await fetch(
+    "https://www.linkedin.com/oauth/v2/accessToken",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id: creds.clientId,
+        client_secret: creds.clientSecret,
+        redirect_uri: redirectUri,
+        grant_type: "authorization_code",
+      }),
+    },
+  );
   if (!tokenRes.ok) throw new Error("LinkedIn token exchange failed.");
-  const { access_token } = await tokenRes.json() as { access_token: string };
+  const { access_token } = (await tokenRes.json()) as { access_token: string };
 
   // Fetch user info from LinkedIn OpenID Connect (always works with openid scope)
   const userRes = await fetch("https://api.linkedin.com/v2/userinfo", {
     headers: { Authorization: `Bearer ${access_token}` },
   });
   if (!userRes.ok) throw new Error("LinkedIn userinfo fetch failed.");
-  const user = await userRes.json() as {
+  const user = (await userRes.json()) as {
     sub: string;
     email: string;
     name: string;
@@ -322,8 +530,13 @@ export async function exchangeLinkedInCode(code: string, redirectUri: string): P
     linkedinUrl?: string;
   } = {
     email: user.email,
-    firstName: user.given_name ?? user.name?.split(" ")[0] ?? user.email.split("@")[0] ?? "Candidate",
-    lastName: user.family_name ?? user.name?.split(" ").slice(1).join(" ") ?? "",
+    firstName:
+      user.given_name ??
+      user.name?.split(" ")[0] ??
+      user.email.split("@")[0] ??
+      "Candidate",
+    lastName:
+      user.family_name ?? user.name?.split(" ").slice(1).join(" ") ?? "",
     avatarUrl: user.picture,
   };
 
@@ -336,15 +549,24 @@ export async function exchangeLinkedInCode(code: string, redirectUri: string): P
     );
 
     if (profileRes.ok) {
-      const profile = await profileRes.json() as {
+      const profile = (await profileRes.json()) as {
         id?: string;
-        firstName?: { localized?: Record<string, string>; preferredLocale?: { country: string; language: string } };
-        lastName?: { localized?: Record<string, string>; preferredLocale?: { country: string; language: string } };
-        headline?: { localized?: Record<string, string>; preferredLocale?: { country: string; language: string } };
+        firstName?: {
+          localized?: Record<string, string>;
+          preferredLocale?: { country: string; language: string };
+        };
+        lastName?: {
+          localized?: Record<string, string>;
+          preferredLocale?: { country: string; language: string };
+        };
+        headline?: {
+          localized?: Record<string, string>;
+          preferredLocale?: { country: string; language: string };
+        };
         vanityName?: string;
         profilePicture?: {
           displayImage?: string;
-         "displayImage~"?: {
+          "displayImage~"?: {
             elements?: Array<{
               identification: string;
               medialets: string;
@@ -356,8 +578,12 @@ export async function exchangeLinkedInCode(code: string, redirectUri: string): P
       // Extract headline
       if (profile.headline?.localized) {
         const locale = profile.headline.preferredLocale;
-        const localeKey = locale ? `${locale.language}_${locale.country}` : undefined;
-        result.headline = localeKey ? profile.headline.localized[localeKey] : Object.values(profile.headline.localized)[0];
+        const localeKey = locale
+          ? `${locale.language}_${locale.country}`
+          : undefined;
+        result.headline = localeKey
+          ? profile.headline.localized[localeKey]
+          : Object.values(profile.headline.localized)[0];
       }
 
       // Extract LinkedIn URL from vanityName
@@ -367,12 +593,13 @@ export async function exchangeLinkedInCode(code: string, redirectUri: string): P
 
       // Extract higher resolution profile picture if available
       if (profile.profilePicture?.["displayImage~"]?.elements?.length) {
-        const largestImage = profile.profilePicture["displayImage~"].elements
-          .sort((a, b) => {
-            const sizeA = parseInt(a.medialets || "0", 10);
-            const sizeB = parseInt(b.medialets || "0", 10);
-            return sizeB - sizeA;
-          })[0];
+        const largestImage = profile.profilePicture[
+          "displayImage~"
+        ].elements.sort((a, b) => {
+          const sizeA = parseInt(a.medialets || "0", 10);
+          const sizeB = parseInt(b.medialets || "0", 10);
+          return sizeB - sizeA;
+        })[0];
         if (largestImage?.identification) {
           result.avatarUrl = largestImage.identification;
         }
@@ -386,7 +613,10 @@ export async function exchangeLinkedInCode(code: string, redirectUri: string): P
   return result;
 }
 
-export async function buildLinkedInAuthUrl(redirectUri: string, state: string): Promise<string> {
+export async function buildLinkedInAuthUrl(
+  redirectUri: string,
+  state: string,
+): Promise<string> {
   const creds = await getPortalLinkedInCredentials();
   if (!creds) throw new Error("LinkedIn OAuth not configured.");
   const params = new URLSearchParams({

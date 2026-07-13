@@ -42,7 +42,9 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const userInfo = await exchangeGitHubCode(code!);
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const redirectUri = `${appUrl}/api/portal/auth/callback/github`;
+    const userInfo = await exchangeGitHubCode(code!, redirectUri);
     const workspaceId = await getPortalWorkspaceId();
     if (!workspaceId) redirect("/portal/login?error=no_workspace" as Route);
 

@@ -19,7 +19,10 @@ export default async function PortalSettingsPage() {
       hasGoogleSecret: workspaceSettings.portalGoogleClientSecretCiphertext,
       hasGithubClientId: workspaceSettings.portalGithubClientId,
       hasGithubSecret: workspaceSettings.portalGithubClientSecretCiphertext,
-      portalShowApplicationStatus: workspaceSettings.portalShowApplicationStatus,
+      hasLinkedinClientId: workspaceSettings.portalLinkedinClientId,
+      hasLinkedinSecret: workspaceSettings.portalLinkedinClientSecretCiphertext,
+      portalShowApplicationStatus:
+        workspaceSettings.portalShowApplicationStatus,
     })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, organization.id))
@@ -33,6 +36,10 @@ export default async function PortalSettingsPage() {
       googleClientId={row?.hasGoogleClientId ?? ""}
       githubConfigured={Boolean(row?.hasGithubClientId && row?.hasGithubSecret)}
       githubClientId={row?.hasGithubClientId ?? ""}
+      linkedinConfigured={Boolean(
+        row?.hasLinkedinClientId && row?.hasLinkedinSecret,
+      )}
+      linkedinClientId={row?.hasLinkedinClientId ?? ""}
       showApplicationStatus={row?.portalShowApplicationStatus ?? true}
     />
   );

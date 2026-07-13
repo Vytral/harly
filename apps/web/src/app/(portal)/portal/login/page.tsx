@@ -3,6 +3,11 @@ import { asc, eq, sql } from "drizzle-orm";
 
 import { db, jobs, organization, workspaceSettings } from "@harly/db";
 import { PortalLoginForm } from "@/features/portal/PortalLoginForm";
+import {
+  getPortalGitHubCredentials,
+  getPortalGoogleCredentials,
+  getPortalLinkedInCredentials,
+} from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +21,10 @@ async function getOrgBranding() {
       heroImageUrl: workspaceSettings.heroImageUrl,
     })
     .from(organization)
-    .leftJoin(workspaceSettings, eq(workspaceSettings.organizationId, organization.id))
+    .leftJoin(
+      workspaceSettings,
+      eq(workspaceSettings.organizationId, organization.id),
+    )
     .orderBy(asc(organization.createdAt))
     .limit(1);
 
@@ -27,22 +35,39 @@ async function getOrgBranding() {
     .orderBy(sql`${jobs.department} asc nulls last`)
     .limit(6);
 
-  const departments = deptRows.map((r) => r.department).filter(Boolean) as string[];
+  const departments = deptRows
+    .map((r) => r.department)
+    .filter(Boolean) as string[];
 
   return {
-    ...(row ?? { name: "Careers Portal", logo: null, tagline: null, primaryColor: null, heroImageUrl: null }),
+    ...(row ?? {
+      name: "Careers Portal",
+      logo: null,
+      tagline: null,
+      primaryColor: null,
+      heroImageUrl: null,
+    }),
     departments,
   };
 }
 
 export default async function PortalLoginPage() {
   const org = await getOrgBranding();
-  const hasGoogle = Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
-  const hasGitHub = Boolean(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET);
-  const hasLinkedIn = Boolean(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET);
+  const [googleCredentials, githubCredentials, linkedinCredentials] =
+    await Promise.all([
+      getPortalGoogleCredentials(),
+      getPortalGitHubCredentials(),
+      getPortalLinkedInCredentials(),
+    ]);
+  const hasGoogle = Boolean(googleCredentials);
+  const hasGitHub = Boolean(githubCredentials);
+  const hasLinkedIn = Boolean(linkedinCredentials);
 
   const accentColor = org.primaryColor ?? "#18181b";
-  const departments = org.departments.length > 0 ? org.departments : ["Engineering", "Design", "Product"];
+  const departments =
+    org.departments.length > 0
+      ? org.departments
+      : ["Engineering", "Design", "Product"];
 
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
@@ -99,7 +124,8 @@ export default async function PortalLoginPage() {
           </h1>
 
           <p className="mt-3 max-w-xs text-sm leading-relaxed text-white/70">
-            {org.tagline ?? "Sign in to track your applications and explore open opportunities."}
+            {org.tagline ??
+              "Sign in to track your applications and explore open opportunities."}
           </p>
 
           {/* Decorative role pills */}
@@ -129,7 +155,11 @@ export default async function PortalLoginPage() {
           </div>
 
           <Suspense>
-            <PortalLoginForm hasGoogle={hasGoogle} hasGitHub={hasGitHub} hasLinkedIn={hasLinkedIn} />
+            <PortalLoginForm
+              hasGoogle={hasGoogle}
+              hasGitHub={hasGitHub}
+              hasLinkedIn={hasLinkedIn}
+            />
           </Suspense>
 
           <p className="text-center text-xs text-muted-foreground">

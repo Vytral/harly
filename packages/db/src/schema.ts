@@ -494,6 +494,11 @@ export const workspaceSettings = pgTable("workspace_settings", {
   portalGithubClientSecretCiphertext: text("portal_github_client_secret_ciphertext"),
   portalGithubClientSecretIv: text("portal_github_client_secret_iv"),
   portalGithubClientSecretTag: text("portal_github_client_secret_tag"),
+  // Portal OAuth — LinkedIn. Client secret encrypted at rest (AES-256-GCM).
+  portalLinkedinClientId: text("portal_linkedin_client_id"),
+  portalLinkedinClientSecretCiphertext: text("portal_linkedin_client_secret_ciphertext"),
+  portalLinkedinClientSecretIv: text("portal_linkedin_client_secret_iv"),
+  portalLinkedinClientSecretTag: text("portal_linkedin_client_secret_tag"),
   // Portal UI options.
   portalShowApplicationStatus: boolean("portal_show_application_status").default(true).notNull(),
   // Shareable invite link — anyone with the token can join with inviteLinkRole.

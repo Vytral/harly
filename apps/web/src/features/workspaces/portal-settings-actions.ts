@@ -17,7 +17,10 @@ export async function savePortalSettingsAction(
 
   await db
     .insert(workspaceSettings)
-    .values({ organizationId: context.organization.id, candidatePortalEnabled: enabled })
+    .values({
+      organizationId: context.organization.id,
+      candidatePortalEnabled: enabled,
+    })
     .onConflictDoUpdate({
       target: workspaceSettings.organizationId,
       set: { candidatePortalEnabled: enabled, updatedAt: new Date() },
@@ -28,13 +31,13 @@ export async function savePortalSettingsAction(
 }
 
 const oauthSchema = z.object({
-  provider: z.enum(["google", "github"]),
+  provider: z.enum(["google", "github", "linkedin"]),
   clientId: z.string().trim().max(200),
   clientSecret: z.string().trim().max(500).optional(),
 });
 
 export async function savePortalOAuthAction(input: {
-  provider: "google" | "github";
+  provider: "google" | "github" | "linkedin";
   clientId: string;
   clientSecret?: string;
 }): Promise<PortalSettingsResult> {
@@ -45,25 +48,44 @@ export async function savePortalOAuthAction(input: {
   }
 
   const parsed = oauthSchema.safeParse(input);
-  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  if (!parsed.success)
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
 
   const { provider, clientId, clientSecret } = parsed.data;
 
   const [existing] = await db
     .select(
       provider === "google"
-        ? { hasCiphertext: workspaceSettings.portalGoogleClientSecretCiphertext }
-        : { hasCiphertext: workspaceSettings.portalGithubClientSecretCiphertext },
+        ? {
+            hasCiphertext: workspaceSettings.portalGoogleClientSecretCiphertext,
+          }
+        : provider === "github"
+          ? {
+              hasCiphertext:
+                workspaceSettings.portalGithubClientSecretCiphertext,
+            }
+          : {
+              hasCiphertext:
+                workspaceSettings.portalLinkedinClientSecretCiphertext,
+            },
     )
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, context.organization.id))
     .limit(1);
 
-  const hasStored = Boolean((existing as { hasCiphertext: string | null } | undefined)?.hasCiphertext);
+  const hasStored = Boolean(
+    (existing as { hasCiphertext: string | null } | undefined)?.hasCiphertext,
+  );
 
   // If no new secret provided, keep existing (must have one stored already for ID-only updates).
   if (!clientSecret && !hasStored) {
-    return { ok: false, error: "Provide the Client Secret to configure this provider." };
+    return {
+      ok: false,
+      error: "Provide the Client Secret to configure this provider.",
+    };
   }
 
   let set: Record<string, unknown>;
@@ -75,13 +97,21 @@ export async function savePortalOAuthAction(input: {
       set.portalGoogleClientSecretIv = enc.iv;
       set.portalGoogleClientSecretTag = enc.tag;
     }
-  } else {
+  } else if (provider === "github") {
     set = { portalGithubClientId: clientId || null, updatedAt: new Date() };
     if (clientSecret) {
       const enc = encryptSecret(clientSecret);
       set.portalGithubClientSecretCiphertext = enc.ciphertext;
       set.portalGithubClientSecretIv = enc.iv;
       set.portalGithubClientSecretTag = enc.tag;
+    }
+  } else {
+    set = { portalLinkedinClientId: clientId || null, updatedAt: new Date() };
+    if (clientSecret) {
+      const enc = encryptSecret(clientSecret);
+      set.portalLinkedinClientSecretCiphertext = enc.ciphertext;
+      set.portalLinkedinClientSecretIv = enc.iv;
+      set.portalLinkedinClientSecretTag = enc.tag;
     }
   }
 
@@ -95,7 +125,7 @@ export async function savePortalOAuthAction(input: {
 }
 
 export async function disconnectPortalOAuthAction(
-  provider: "google" | "github",
+  provider: "google" | "github" | "linkedin",
 ): Promise<PortalSettingsResult> {
   const context = await requirePermission("settings:edit");
 
@@ -108,13 +138,21 @@ export async function disconnectPortalOAuthAction(
           portalGoogleClientSecretTag: null,
           updatedAt: new Date(),
         }
-      : {
-          portalGithubClientId: null,
-          portalGithubClientSecretCiphertext: null,
-          portalGithubClientSecretIv: null,
-          portalGithubClientSecretTag: null,
-          updatedAt: new Date(),
-        };
+      : provider === "github"
+        ? {
+            portalGithubClientId: null,
+            portalGithubClientSecretCiphertext: null,
+            portalGithubClientSecretIv: null,
+            portalGithubClientSecretTag: null,
+            updatedAt: new Date(),
+          }
+        : {
+            portalLinkedinClientId: null,
+            portalLinkedinClientSecretCiphertext: null,
+            portalLinkedinClientSecretIv: null,
+            portalLinkedinClientSecretTag: null,
+            updatedAt: new Date(),
+          };
 
   await db
     .update(workspaceSettings)
@@ -132,10 +170,16 @@ export async function savePortalUiOptionsAction(input: {
 
   await db
     .insert(workspaceSettings)
-    .values({ organizationId: context.organization.id, portalShowApplicationStatus: input.showApplicationStatus })
+    .values({
+      organizationId: context.organization.id,
+      portalShowApplicationStatus: input.showApplicationStatus,
+    })
     .onConflictDoUpdate({
       target: workspaceSettings.organizationId,
-      set: { portalShowApplicationStatus: input.showApplicationStatus, updatedAt: new Date() },
+      set: {
+        portalShowApplicationStatus: input.showApplicationStatus,
+        updatedAt: new Date(),
+      },
     });
 
   revalidatePath("/settings/portal");

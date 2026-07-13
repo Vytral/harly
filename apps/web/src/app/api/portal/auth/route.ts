@@ -22,7 +22,9 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get("next") ?? "/portal/dashboard";
 
   // CSRF state encodes the intended redirect.
-  const state = Buffer.from(JSON.stringify({ next, ts: Date.now() })).toString("base64url");
+  const state = Buffer.from(JSON.stringify({ next, ts: Date.now() })).toString(
+    "base64url",
+  );
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -34,7 +36,8 @@ export async function GET(request: NextRequest) {
     }
 
     if (provider === "github") {
-      const url = await buildGitHubAuthUrl(state);
+      const redirectUri = `${appUrl}/api/portal/auth/callback/github`;
+      const url = await buildGitHubAuthUrl(redirectUri, state);
       return NextResponse.redirect(url);
     }
 
