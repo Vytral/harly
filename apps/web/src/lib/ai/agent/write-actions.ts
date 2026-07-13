@@ -1,9 +1,13 @@
 "use server";
 
 import { z } from "zod";
+import { revalidatePath } from "next/cache";
 
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
-import { moveApplicationStage, updateApplicationStatus } from "@/features/pipeline/actions";
+import {
+  moveApplicationStage,
+  updateApplicationStatus,
+} from "@/features/pipeline/actions";
 import { createTask } from "@/features/tasks/actions";
 import {
   createCandidateNote,
@@ -18,6 +22,9 @@ import {
   assignFromPoolToJobAction,
 } from "@/features/pool/actions";
 import { isAgentWriteTool, type AgentWriteTool } from "./write-tool-names";
+import { createJobForApi } from "@/features/jobs/service";
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import { logAuditEvent } from "@/lib/audit-log";
 
 /**
  * Central dispatcher for Harly AI WRITE actions.
@@ -52,6 +59,45 @@ const createTaskSchema = z.object({
   applicationId: z.uuid().optional().nullable(),
   jobId: z.uuid().optional().nullable(),
 });
+
+const createJobSchema = z.object({
+  title: z.string().trim().min(3).max(200),
+  jobSummary: z.string().trim().min(10).max(2000),
+  sections: z
+    .array(
+      z.object({
+        title: z.string().trim().min(1).max(120),
+        bullets: z.array(z.string().trim().min(1).max(500)).min(1).max(8),
+      }),
+    )
+    .min(2)
+    .max(6),
+  department: z.string().trim().max(120).nullable(),
+  location: z.string().trim().max(200).nullable(),
+  employmentType: z.enum(["full_time", "part_time", "contract", "internship"]),
+  workplaceType: z.enum(["remote", "hybrid", "onsite"]),
+  experienceLevel: z.string().trim().max(120).nullable(),
+  keywords: z.array(z.string().trim().min(1).max(80)).max(20),
+});
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function jobDraftToHtml(input: z.infer<typeof createJobSchema>): string {
+  const sections = input.sections.map(
+    (section) =>
+      `<h2>${escapeHtml(section.title)}</h2><ul>${section.bullets
+        .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
+        .join("")}</ul>`,
+  );
+  return `<p>${escapeHtml(input.jobSummary)}</p>${sections.join("")}`;
+}
 
 const addNoteSchema = z.object({
   candidateId: z.string().min(1),
@@ -134,7 +180,11 @@ const HANDLERS = {
         toStageId: input.toStageId,
         workspaceId: ctx.workspaceId,
       });
-      return { success: res.success, error: res.error, message: "Stage updated." };
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Stage updated.",
+      };
     },
   },
 
@@ -149,7 +199,11 @@ const HANDLERS = {
         workspaceId: ctx.workspaceId,
         status: "rejected",
       });
-      return { success: res.success, error: res.error, message: "Candidate rejected." };
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Candidate rejected.",
+      };
     },
   },
 
@@ -171,7 +225,56 @@ const HANDLERS = {
         applicationId: input.applicationId,
         jobId: input.jobId,
       });
-      return { success: res.success, error: res.error, message: "Task created." };
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Task created.",
+      };
+    },
+  },
+
+  createJob: {
+    schema: createJobSchema,
+    run: async (
+      input: z.infer<typeof createJobSchema>,
+      ctx: { workspaceId: string; userId: string },
+    ): Promise<WriteResult> => {
+      const permission = await requirePermission("jobs:create");
+      if (permission.organization.id !== ctx.workspaceId) {
+        return {
+          success: false,
+          error: "Workspace changed. Please try again.",
+        };
+      }
+
+      const job = await createJobForApi({
+        workspaceId: ctx.workspaceId,
+        actorUserId: ctx.userId,
+        values: {
+          title: input.title,
+          description: jobDraftToHtml(input),
+          department: input.department,
+          location: input.location,
+          employmentType: input.employmentType,
+          workplaceType: input.workplaceType,
+          experienceLevel: input.experienceLevel,
+          keywords: input.keywords,
+          status: "draft",
+        },
+      });
+
+      await logAuditEvent({
+        workspaceId: ctx.workspaceId,
+        actorId: ctx.userId,
+        actorEmail: permission.user.email,
+        action: "job.created",
+        resourceType: "job",
+        resourceId: job.id,
+        severity: "info",
+        metadata: { title: job.title, slug: job.slug, source: "harly_ai" },
+      });
+      revalidatePath("/dashboard/jobs");
+      return { success: true, message: `Draft job created: ${job.title}.` };
     },
   },
 
@@ -221,7 +324,11 @@ const HANDLERS = {
         expiresAt: input.expiresAt,
         notes: input.notes,
       });
-      return { success: res.success, error: res.error, message: "Offer drafted." };
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Offer drafted.",
+      };
     },
   },
 
@@ -266,7 +373,11 @@ const HANDLERS = {
         durationMins: input.durationMins,
         interviewerId: input.interviewerId ?? "",
       });
-      return { success: res.success, error: res.error, message: "Interview scheduled." };
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Interview scheduled.",
+      };
     },
   },
 
@@ -318,7 +429,11 @@ const HANDLERS = {
         comment: input.comment,
         stageName: input.stageName,
       });
-      return { success: res.success, error: res.error, message: "Scorecard added." };
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Scorecard added.",
+      };
     },
   },
 

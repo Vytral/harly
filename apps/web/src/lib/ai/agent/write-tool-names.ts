@@ -10,6 +10,7 @@ export const AGENT_WRITE_TOOLS = [
   "moveCandidateStage",
   "rejectCandidate",
   "createTask",
+  "createJob",
   "addCandidateNote",
   "addCandidateTag",
   "createOffer",

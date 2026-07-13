@@ -1,8 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, ilike, isNull, ne, notInArray, or, sql } from "drizzle-orm";
-import { generateText } from "ai";
+import { and, eq, notInArray } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -18,9 +17,13 @@ import {
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
-import { getModel } from "@/lib/ai/registry";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
 import { loadResumeText } from "@/lib/resume/load-resume-text";
+import { enforceRateLimit } from "@/server/api/ratelimit";
+import {
+  detectCandidateDuplicatesForWorkspace,
+  type DuplicateMatch,
+} from "@/features/candidates/duplicate-detection";
 
 const generateSchema = z.object({
   applicationId: z.uuid(),
@@ -226,6 +229,20 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
   }
   const workspaceId = context.organization.id;
 
+  // Bound abuse: a member with collab:write could otherwise loop bulk scoring
+  // and drain the workspace's AI key (IA-01).
+  try {
+    await enforceRateLimit(`bulk-ai:${workspaceId}`, {
+      limit: 20,
+      windowMs: 10 * 60_000,
+    });
+  } catch {
+    return {
+      success: false,
+      error: "Too many bulk scoring requests. Slow down and try again shortly.",
+    };
+  }
+
   const aiConfig = await getWorkspaceAiConfig(workspaceId);
   if (!aiConfig) {
     return {
@@ -265,7 +282,9 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
   for (let i = 0; i < batch.length; i += CONCURRENCY) {
     const chunk = batch.slice(i, i + CONCURRENCY);
     const results = await Promise.allSettled(
-      chunk.map(({ applicationId }) => generateAiEvaluationAction({ applicationId })),
+      chunk.map(({ applicationId }) =>
+        generateAiEvaluationAction({ applicationId }),
+      ),
     );
     for (const r of results) {
       if (r.status === "fulfilled" && r.value.success) {
@@ -281,13 +300,7 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
 
 // ── Duplicate detection ─────────────────────────────────────────────────────
 
-export type DuplicateMatch = {
-  candidateId: string;
-  confidence: "high" | "medium";
-  reason: string;
-  fullName: string;
-  email: string;
-};
+export type { DuplicateMatch } from "@/features/candidates/duplicate-detection";
 
 export type DetectDuplicatesResult =
   | { ok: true; matches: DuplicateMatch[] }
@@ -311,7 +324,10 @@ export async function detectCandidateDuplicatesAction(input: {
   try {
     context = await requirePermission("collab:write");
   } catch {
-    return { ok: false, error: "You do not have permission to run AI duplicate detection." };
+    return {
+      ok: false,
+      error: "You do not have permission to run AI duplicate detection.",
+    };
   }
   const workspaceId = context.organization.id;
 
@@ -320,107 +336,18 @@ export async function detectCandidateDuplicatesAction(input: {
     return { ok: false, error: "AI is not configured for this workspace." };
   }
 
-  // Load the target candidate.
-  const [target] = await db
-    .select({
-      id: candidates.id,
-      firstName: candidates.firstName,
-      lastName: candidates.lastName,
-      email: candidates.email,
-      headline: candidates.headline,
-    })
-    .from(candidates)
-    .where(and(eq(candidates.workspaceId, workspaceId), eq(candidates.id, parsed.data.candidateId)))
-    .limit(1);
-
-  if (!target) {
-    return { ok: false, error: "Candidate not found." };
-  }
-
-  // Find candidates with similar names (heuristic pre-filter).
-  const suspects = await db
-    .select({
-      id: candidates.id,
-      firstName: candidates.firstName,
-      lastName: candidates.lastName,
-      email: candidates.email,
-      headline: candidates.headline,
-    })
-    .from(candidates)
-    .where(
-      and(
-        eq(candidates.workspaceId, workspaceId),
-        ne(candidates.id, parsed.data.candidateId),
-        isNull(candidates.deletedAt),
-        or(
-          ilike(candidates.firstName, `%${target.firstName}%`),
-          ilike(candidates.lastName, `%${target.lastName}%`),
-          sql`lower(${candidates.email}) = lower(${target.email})`,
-        ),
-      ),
-    )
-    .limit(10);
-
-  if (suspects.length === 0) {
-    return { ok: true, matches: [] };
-  }
-
-  // Build a prompt and ask the AI to classify each suspect.
-
-  const targetBlock = `Target: ${target.firstName} ${target.lastName} <${target.email}>${target.headline ? ` — ${target.headline}` : ""}`;
-  const suspectsBlock = suspects
-    .map(
-      (s, i) =>
-        `${i + 1}. id=${s.id} name="${s.firstName} ${s.lastName}" email="${s.email}"${s.headline ? ` headline="${s.headline}"` : ""}`,
-    )
-    .join("\n");
-
-  const prompt = [
-    `You are a recruiting data-quality assistant. Decide if each suspect candidate is a duplicate of the target.`,
-    ``,
-    targetBlock,
-    ``,
-    `Suspects:`,
-    suspectsBlock,
-    ``,
-    `For each suspect, output one JSON object per line (no array brackets) with keys:`,
-    `  id (string), confidence ("high"|"medium"|"none"), reason (short string, max 10 words)`,
-    `Only include suspects with confidence "high" or "medium". Omit "none" matches entirely.`,
-    `Output raw JSON lines only — no prose, no markdown.`,
-  ].join("\n");
-
   try {
-    const model = getModel(aiConfig);
-    const { text } = await generateText({ model, prompt, maxOutputTokens: 512 });
-
-    const matches: DuplicateMatch[] = [];
-    for (const line of text.split("\n")) {
-      const trimmed = line.trim();
-      if (!trimmed.startsWith("{")) continue;
-      try {
-        const parsed = JSON.parse(trimmed) as {
-          id: string;
-          confidence: "high" | "medium" | "none";
-          reason: string;
-        };
-        if (parsed.confidence === "none") continue;
-        const suspect = suspects.find((s) => s.id === parsed.id);
-        if (!suspect) continue;
-        matches.push({
-          candidateId: suspect.id,
-          confidence: parsed.confidence,
-          reason: parsed.reason ?? "",
-          fullName: `${suspect.firstName} ${suspect.lastName}`,
-          email: suspect.email,
-        });
-      } catch {
-        // skip malformed line
-      }
-    }
-
+    const matches = await detectCandidateDuplicatesForWorkspace({
+      workspaceId,
+      candidateId: parsed.data.candidateId,
+      config: aiConfig,
+    });
     return { ok: true, matches };
   } catch (error) {
     console.error("Duplicate detection AI call failed", error);
-    return { ok: false, error: "AI duplicate detection failed. Try again later." };
+    return {
+      ok: false,
+      error: "AI duplicate detection failed. Try again later.",
+    };
   }
 }

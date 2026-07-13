@@ -47,10 +47,18 @@ export async function generateScreeningQuestionsWithAI(
       ? `Key skills: ${input.keywords.slice(0, 10).join(", ")}`
       : null,
     input.description
-      ? `Description excerpt: ${input.description.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 800)}`
+      ? `Description excerpt: ${input.description
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 800)}`
       : null,
     input.requirements
-      ? `Requirements excerpt: ${input.requirements.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 600)}`
+      ? `Requirements excerpt: ${input.requirements
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 600)}`
       : null,
   ]
     .filter(Boolean)
@@ -60,7 +68,11 @@ export async function generateScreeningQuestionsWithAI(
     model: getModel(config),
     system: SYSTEM_PROMPT,
     prompt: `Generate screening questions for this role:\n\n${facts}`,
-    output: Output.object({ schema: suggestedQuestionsSchema }),
+    output: Output.object({
+      schema: suggestedQuestionsSchema,
+      name: "screening_questions",
+      description: "Role-specific application screening questions.",
+    }),
   });
 
   if (!output) throw new Error("AI returned no questions.");

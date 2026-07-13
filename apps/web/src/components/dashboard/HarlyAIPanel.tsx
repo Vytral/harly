@@ -9,8 +9,8 @@ import { DefaultChatTransport } from "ai";
 import {
   X,
   ArrowUp,
-  Paperclip,
   Check,
+  Paperclip,
   Settings,
   Square,
   PanelLeft,
@@ -34,10 +34,6 @@ import {
   PromptInputActions,
   PromptInputAction,
 } from "@/components/ui/prompt-input";
-import {
-  createFileUploadItem,
-  type FileUploadItem,
-} from "@/components/ui/file-upload";
 import { confirmAgentWriteAction } from "@/lib/ai/agent/write-actions";
 import { isAgentWriteTool } from "@/lib/ai/agent/write-tool-names";
 import {
@@ -229,7 +225,7 @@ function ToolStatus({
   }
   // Collapsed once finished — a quiet one-liner.
   return (
-    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/70">
+    <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
       {state === "error" ? (
         <PhWarning className="shrink-0 text-rose-500" />
       ) : (
@@ -514,7 +510,7 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
           </Row>
         ))}
         {list.length > 8 && (
-          <p className="px-2 pt-1 text-[10px] text-muted-foreground/60">+{list.length - 8} more</p>
+          <p className="px-2 pt-1 text-[10px] text-muted-foreground">+{list.length - 8} more</p>
         )}
       </Card>
     );
@@ -843,7 +839,7 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
     return (
       <Card className="gap-0 overflow-hidden border-border/70 p-0 shadow-none">
         <div className="border-b border-border/50 bg-muted/40 px-3 py-2">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground/60">Subject</span>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Subject</span>
           <p className="text-[12px] font-medium text-foreground">{String(o.subject ?? "")}</p>
         </div>
         <p className="whitespace-pre-wrap px-3 py-2.5 text-[12px] leading-snug text-foreground/85">
@@ -1083,6 +1079,8 @@ type HarlyChatProps = {
   conversationId: string;
   initialMessages: StoredUIMessage[];
   userName: string;
+  /** Optional candidate context, so the conversation is erased with the candidate (IA-02). */
+  candidateId?: string;
   onConversationActivity: () => void;
 };
 
@@ -1090,15 +1088,13 @@ function HarlyChat({
   conversationId,
   initialMessages,
   userName,
+  candidateId,
   onConversationActivity,
 }: HarlyChatProps) {
   const [input, setInput] = useState("");
-  const [isDragging, setIsDragging] = useState(false);
-  const [files, setFiles] = useState<FileUploadItem[]>([]);
   const [writeResults, setWriteResults] = useState<
     Record<string, { confirmed: boolean; error?: string; message?: string }>
   >({});
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const firstName = userName.split(" ")[0] ?? userName;
   const notifiedRef = useRef(false);
 
@@ -1107,7 +1103,7 @@ function HarlyChat({
     messages: initialMessages as never,
     transport: new DefaultChatTransport({
       api: "/api/ai/chat",
-      body: { conversationId },
+      body: { conversationId, candidateId },
     }),
   });
 
@@ -1127,12 +1123,6 @@ function HarlyChat({
     if (!text || isBusy) return;
     sendMessage({ text });
     setInput("");
-    setFiles([]);
-  }
-
-  function addFiles(incoming: File[]) {
-    const items = incoming.map((f, i) => createFileUploadItem(f, i));
-    setFiles((prev) => [...prev, ...items]);
   }
 
   async function handleWriteConfirm(
@@ -1171,23 +1161,7 @@ function HarlyChat({
   const hasMessages = messages.length > 0;
 
   return (
-    <div
-      className="flex min-h-0 flex-1 flex-col"
-      onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
-      onDragLeave={() => setIsDragging(false)}
-      onDrop={(e) => {
-        e.preventDefault();
-        setIsDragging(false);
-        addFiles(Array.from(e.dataTransfer.files));
-      }}
-    >
-      {isDragging && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
-          <p className="rounded-md bg-primary px-3 py-1.5 text-[13px] font-medium text-primary-foreground shadow-lg">
-            Drop files to attach
-          </p>
-        </div>
-      )}
+    <div className="flex min-h-0 flex-1 flex-col">
       <>
             {/* Chat area */}
             <ChatContainerRoot className="h-0 min-h-0 flex-1 px-4">
@@ -1332,42 +1306,8 @@ function HarlyChat({
               </ChatContainerContent>
             </ChatContainerRoot>
 
-            {/* Attached files */}
-            {files.length > 0 && (
-              <div className="flex shrink-0 flex-wrap gap-1.5 border-t border-border/60 px-3 py-2">
-                {files.map((f) => (
-                  <span
-                    key={f.id}
-                    className="flex items-center gap-1 rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground"
-                  >
-                    {f.name}
-                    <button
-                      type="button"
-                      onClick={() => setFiles((prev) => prev.filter((x) => x.id !== f.id))}
-                      className="ml-0.5 hover:text-foreground"
-                      aria-label={`Remove ${f.name}`}
-                    >
-                      <X className="size-2.5" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
             {/* Input */}
             <div className="shrink-0 border-t border-border/60 p-3">
-              <input
-                ref={fileInputRef}
-                type="file"
-                multiple
-                className="sr-only"
-                aria-hidden="true"
-                tabIndex={-1}
-                onChange={(e) => {
-                  addFiles(Array.from(e.currentTarget.files ?? []));
-                  e.currentTarget.value = "";
-                }}
-              />
               <PromptInput
                 value={input}
                 onValueChange={setInput}
@@ -1381,14 +1321,14 @@ function HarlyChat({
                   className="min-h-[36px] py-1 text-[13px]"
                 />
                 <PromptInputActions className="justify-between pt-1">
-                  <PromptInputAction tooltip="Attach file">
+                  <PromptInputAction tooltip="Attach files (coming soon)">
                     <Button
                       type="button"
                       variant="ghost"
                       size="icon"
-                      className="size-7 rounded-md text-muted-foreground hover:text-foreground"
-                      onClick={() => fileInputRef.current?.click()}
-                      aria-label="Attach file"
+                      disabled
+                      className="size-7 cursor-not-allowed rounded-md text-muted-foreground/50"
+                      aria-label="Attach files (coming soon)"
                     >
                       <Paperclip className="size-3.5" />
                     </Button>
@@ -1491,7 +1431,7 @@ function HistoryDrawer({
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {conversations.length === 0 ? (
-            <p className="px-2 py-4 text-center text-[11px] text-muted-foreground/60">No conversations yet.</p>
+            <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">No conversations yet.</p>
           ) : (
             conversations.map((c, i) => (
               <div
@@ -1514,7 +1454,7 @@ function HistoryDrawer({
                 <button
                   type="button"
                   onClick={() => onDelete(c.id)}
-                  className="shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground/70 hover:!text-rose-500"
+                  className="shrink-0 text-muted-foreground/0 transition-colors group-hover:text-muted-foreground hover:!text-rose-500"
                   aria-label="Delete conversation"
                 >
                   <Trash2 className="size-3.5" />
@@ -1535,6 +1475,8 @@ type HarlyAIPanelProps = {
   aiEnabled: boolean;
   open: boolean;
   onClose: () => void;
+  /** Optional candidate context, so the conversation is erased with the candidate (IA-02). */
+  candidateId?: string;
 };
 
 function freshId(): string {
@@ -1543,7 +1485,13 @@ function freshId(): string {
     : `c-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-export function HarlyAIPanel({ userName, aiEnabled, open, onClose }: HarlyAIPanelProps) {
+export function HarlyAIPanel({
+  userName,
+  aiEnabled,
+  open,
+  onClose,
+  candidateId,
+}: HarlyAIPanelProps) {
   const [conversationId, setConversationId] = useState<string>(() => freshId());
   const [initialMessages, setInitialMessages] = useState<StoredUIMessage[]>([]);
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
@@ -1641,6 +1589,7 @@ export function HarlyAIPanel({ userName, aiEnabled, open, onClose }: HarlyAIPane
               conversationId={conversationId}
               initialMessages={initialMessages}
               userName={userName}
+              candidateId={candidateId}
               onConversationActivity={refreshList}
             />
             <HistoryDrawer

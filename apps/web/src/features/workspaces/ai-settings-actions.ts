@@ -11,6 +11,7 @@ import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { getWorkspaceAiConfig, getWorkspaceAiStatus } from "@/lib/ai/config";
 import { fetchOpenRouterModels, getModel } from "@/lib/ai/registry";
+import { assertSafeAiBaseUrl } from "@/lib/ai/base-url";
 import { isAiProviderId, type OpenRouterModel } from "@/lib/ai/providers";
 
 export type AiSettingsActionResult = { ok: boolean; error?: string };
@@ -52,6 +53,12 @@ export async function saveAiSettingsAction(input: {
   const { provider, modelId, apiKey, baseUrl, enabled, autoScore } = parsed.data;
   if (!isAiProviderId(provider)) {
     return { ok: false, error: "Unknown provider." };
+  }
+
+  try {
+    assertSafeAiBaseUrl(provider, baseUrl);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Invalid AI baseUrl." };
   }
 
   const status = await getWorkspaceAiStatus(context.organization.id);
@@ -125,6 +132,11 @@ export async function testAiConnectionAction(input: {
   if (!input.modelId.trim()) {
     return { ok: false, error: "Choose a model first." };
   }
+  try {
+    assertSafeAiBaseUrl(input.provider, input.baseUrl);
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Invalid AI baseUrl." };
+  }
 
   let apiKey = input.apiKey?.trim();
   if (!apiKey) {
@@ -151,13 +163,12 @@ export async function testAiConnectionAction(input: {
       ? { ok: true }
       : { ok: false, error: "The model returned an empty response." };
   } catch (error) {
-    return {
-      ok: false,
-      error:
-        error instanceof Error
-          ? `Connection failed: ${error.message}`
-          : "Connection failed.",
-    };
+    const raw =
+      error instanceof Error ? error.message : "Connection failed.";
+    // Redact any API-key material (e.g. "Incorrect API key provided: sk-***AB")
+    // before surfacing the provider's error to the client (IA-13).
+    const redacted = raw.replace(/(sk-)[A-Za-z0-9_-]{4,}/g, "$1***REDACTED***");
+    return { ok: false, error: `Connection failed: ${redacted}` };
   }
 }
 

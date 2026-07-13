@@ -15,13 +15,19 @@ import {
   getInbox,
 } from "@/features/dashboard/widgets";
 import { searchWorkspace } from "@/features/search/data";
-import { listCandidates, getCandidateProfile } from "@/features/candidates/data";
+import {
+  listCandidates,
+  getCandidateProfile,
+} from "@/features/candidates/data";
 import { listJobsWithStats, getDashboardJob } from "@/features/jobs/data";
 import { listUpcomingInterviews } from "@/features/interviews/data";
 import { listTasks, getTaskCounts } from "@/features/tasks/data";
 import { listOffersForCandidate } from "@/features/offers/data";
 import { listPoolCandidates, getPoolStats } from "@/features/pool/data";
-import { listEmailTemplates, getEmailTemplate } from "@/features/email-templates/data";
+import {
+  listEmailTemplates,
+  getEmailTemplate,
+} from "@/features/email-templates/data";
 import { getReportsData } from "@/features/reports/data";
 import {
   generateAiEvaluationAction,
@@ -75,6 +81,7 @@ function plain(html: string | null | undefined, max = 2000): string | null {
 function buildReadTools(ctx: HarlyToolContext) {
   return {
     reviewPipeline: tool({
+      strict: true,
       description:
         "Get the live hiring pipeline for a job: stage names and how many active candidates sit in each. Omit jobId to use the busiest open job. Use for 'how's my pipeline', funnel, 'where are candidates' questions.",
       inputSchema: z.object({
@@ -101,6 +108,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     candidatesNeedingReview: tool({
+      strict: true,
       description:
         "List active candidates waiting on a review/decision, with how long they've waited. Use for 'who needs review', 'who's stuck', 'what should I look at'.",
       inputSchema: z.object({}),
@@ -134,6 +142,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     jobsAtRisk: tool({
+      strict: true,
       description:
         "List open jobs needing attention (no applicants, stalled, low conversion) with the reason. Use for 'which jobs are at risk', 'what's not working'.",
       inputSchema: z.object({}),
@@ -144,6 +153,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     hiringReport: tool({
+      strict: true,
       description:
         "Get hiring KPIs over the recent period: applications, interviews, hires, offer acceptance, each with % change vs the prior period. Use for 'how are we doing', metrics, trends.",
       inputSchema: z.object({}),
@@ -154,10 +164,15 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     searchCandidates: tool({
+      strict: true,
       description:
         "Search candidates and jobs by name, email, or title. Use to resolve a person/job the user names before reading details or proposing an action.",
       inputSchema: z.object({
-        query: z.string().min(1).max(100).describe("Name, email, or job title."),
+        query: z
+          .string()
+          .min(1)
+          .max(100)
+          .describe("Name, email, or job title."),
       }),
       execute: async ({ query }) => {
         const results = await searchWorkspace(query);
@@ -169,6 +184,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     listCandidates: tool({
+      strict: true,
       description:
         "List candidates in the workspace (most recent first) with their contact basics. Use for 'show me candidates', browsing, or counting. For one candidate's full history use candidateProfile.",
       inputSchema: z.object({
@@ -177,7 +193,6 @@ function buildReadTools(ctx: HarlyToolContext) {
           .int()
           .min(1)
           .max(50)
-          .default(25)
           .describe("Max candidates to return."),
       }),
       execute: async ({ limit }) => {
@@ -196,6 +211,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     candidateProfile: tool({
+      strict: true,
       description:
         "Get one candidate's full profile: contact info, applications + current stage, tags, scorecards, AI evaluations, and recent notes. Resolve candidateId via searchCandidates first. Use for 'tell me about X', 'what's the status of X'.",
       inputSchema: z.object({
@@ -241,6 +257,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     listJobs: tool({
+      strict: true,
       description:
         "List all jobs with applicant stats (total, active, new this week) and status. Use for 'show my jobs', 'which roles are open', job-level counts.",
       inputSchema: z.object({}),
@@ -262,6 +279,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     jobDetail: tool({
+      strict: true,
       description:
         "Get one job's details plus its pipeline stages (with stage ids, in order). REQUIRED before proposing a stage move — read the destination stage id from here. Resolve jobId via searchCandidates or listJobs.",
       inputSchema: z.object({
@@ -291,6 +309,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     upcomingInterviews: tool({
+      strict: true,
       description:
         "List upcoming scheduled interviews (future), with candidate, job, type, and time. Use for 'what interviews are coming up', 'my schedule'.",
       inputSchema: z.object({}),
@@ -303,13 +322,15 @@ function buildReadTools(ctx: HarlyToolContext) {
             candidate: (r as { candidate?: string }).candidate ?? null,
             job: (r as { job?: string }).job ?? null,
             type: (r as { type?: string }).type ?? null,
-            scheduledAt: (r as { scheduledAt?: Date | string }).scheduledAt ?? null,
+            scheduledAt:
+              (r as { scheduledAt?: Date | string }).scheduledAt ?? null,
           })),
         };
       },
     }),
 
     todayInterviews: tool({
+      strict: true,
       description:
         "List interviews scheduled for today, with candidate, job, type, time, and interviewer. Use for 'what's on today', 'today's interviews'.",
       inputSchema: z.object({}),
@@ -330,6 +351,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     listTasks: tool({
+      strict: true,
       description:
         "List workspace tasks, optionally filtered by status. Returns title, status, priority, due date, owner, and any linked candidate/job. Use for 'what tasks are open', 'what's due', 'my to-dos'.",
       inputSchema: z.object({
@@ -357,6 +379,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     taskCounts: tool({
+      strict: true,
       description:
         "Get task counts by status (pending, in progress, completed, canceled). Use for 'how many tasks', task summaries.",
       inputSchema: z.object({}),
@@ -366,6 +389,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     inbox: tool({
+      strict: true,
       description:
         "Get the recruiter's action inbox: derived to-dos (feedback due, interviews to schedule, screens, approvals) with urgency. Use for 'what needs my attention', 'what should I do next'.",
       inputSchema: z.object({}),
@@ -379,6 +403,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     getCandidateScore: tool({
+      strict: true,
       description:
         "Read the latest AI fit evaluation for one application: score, recommendation, summary, strengths, gaps. Requires applicationId (resolve via searchCandidates / candidateProfile / candidatesNeedingReview first).",
       inputSchema: z.object({
@@ -418,6 +443,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     generateCandidateScore: tool({
+      strict: true,
       description:
         "Generate (or regenerate) the AI fit evaluation for one application, then return the result: score, recommendation, summary, strengths, gaps. This is how you 'review a CV' or 'evaluate' a candidate — it automatically reads the candidate's latest uploaded resume plus their application answers, scores the fit against the job, and gives the result in one step. Use this when getCandidateScore returns scored:false, or whenever the user asks you to review/assess/recommend on a candidate. Runs server-side immediately (no confirmation needed). Requires applicationId.",
       inputSchema: z.object({
@@ -454,7 +480,11 @@ function buildReadTools(ctx: HarlyToolContext) {
           .orderBy(desc(aiEvaluations.updatedAt))
           .limit(1);
 
-        if (!row) return { scored: false as const, error: "Evaluation not found after generating." };
+        if (!row)
+          return {
+            scored: false as const,
+            error: "Evaluation not found after generating.",
+          };
         return {
           scored: true as const,
           score: row.score,
@@ -468,6 +498,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     candidateScorecards: tool({
+      strict: true,
       description:
         "Read the hiring team's scorecards (manual evaluations) for one candidate: rating, stage, comment, author. Use for 'what did the team think of X', 'show me the feedback'. Resolve candidateId first.",
       inputSchema: z.object({
@@ -489,6 +520,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     listCandidateOffers: tool({
+      strict: true,
       description:
         "List offers for one candidate: title, status (draft/sent/accepted/declined/withdrawn), salary, equity, start date. Use for 'what offers does X have', 'offer status'. Resolve candidateId first.",
       inputSchema: z.object({
@@ -516,6 +548,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     talentPool: tool({
+      strict: true,
       description:
         "Browse the talent pool (candidates kept warm, not tied to an active application) with totals by source, optionally filtered by a search term. Use for 'who's in the talent pool', 'show me sourced candidates', pool size.",
       inputSchema: z.object({
@@ -546,6 +579,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     listEmailTemplates: tool({
+      strict: true,
       description:
         "List the workspace's saved email templates (name + subject). Use for 'what templates do we have', or to pick one before drafting a candidate email. Read the full body with emailTemplate.",
       inputSchema: z.object({}),
@@ -563,6 +597,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     emailTemplate: tool({
+      strict: true,
       description:
         "Read one email template's full subject and body (may contain {{variables}}). Resolve templateId via listEmailTemplates first. Use to base a candidate message on a template.",
       inputSchema: z.object({
@@ -581,6 +616,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     reportsOverview: tool({
+      strict: true,
       description:
         "Get the full recruiting analytics report: headline summary (open roles, total candidates, 90-day applications, hires, avg time-to-hire, offer acceptance), the hiring funnel with conversion %, candidate sources with conversion, and time-to-hire distribution. Use for deep analytics, 'show me the funnel', 'where do candidates drop off', 'time to hire', 'best sources'.",
       inputSchema: z.object({}),
@@ -596,12 +632,19 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     draftCandidateEmail: tool({
+      strict: true,
       description:
         "Draft an email to a candidate with AI (does NOT send) — returns a subject + body you then show the user and, if they want, send via sendCandidateEmail. Pick the type that matches intent. Resolve candidateId first.",
       inputSchema: z.object({
         candidateId: z.string().describe("The candidate id."),
         type: z
-          .enum(["screening", "interview_invite", "rejection", "offer", "followup"])
+          .enum([
+            "screening",
+            "interview_invite",
+            "rejection",
+            "offer",
+            "followup",
+          ])
           .describe("The kind of email to draft."),
       }),
       execute: async ({ candidateId, type }) => {
@@ -614,6 +657,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     generateJobDraft: tool({
+      strict: true,
       description:
         "Generate an AI job description draft (summary + sections of bullets) for a role. Returns the draft for the user to review — does not create the job. Use for 'write a JD for X', 'draft a job post'.",
       inputSchema: z.object({
@@ -623,7 +667,9 @@ function buildReadTools(ctx: HarlyToolContext) {
           .enum(["remote", "hybrid", "onsite"])
           .nullable()
           .describe("Workplace type, or null."),
-        keywords: z.array(z.string()).describe("Relevant skills/keywords (can be empty)."),
+        keywords: z
+          .array(z.string())
+          .describe("Relevant skills/keywords (can be empty)."),
       }),
       execute: async ({ title, department, workplaceType, keywords }) => {
         const res = await generateJobDraftAction({
@@ -638,13 +684,19 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     generateScreeningQuestions: tool({
+      strict: true,
       description:
         "Generate AI screening questions for a role (label + input type). Returns suggestions for the user to review — does not save them. Use for 'suggest screening questions for X'.",
       inputSchema: z.object({
         title: z.string().describe("Job title."),
-        description: z.string().nullable().describe("Job description, or null."),
+        description: z
+          .string()
+          .nullable()
+          .describe("Job description, or null."),
         requirements: z.string().nullable().describe("Requirements, or null."),
-        keywords: z.array(z.string()).describe("Relevant keywords (can be empty)."),
+        keywords: z
+          .array(z.string())
+          .describe("Relevant keywords (can be empty)."),
       }),
       execute: async ({ title, description, requirements, keywords }) => {
         const res = await generateScreeningQuestionsAction({
@@ -659,6 +711,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     interviewBrief: tool({
+      strict: true,
       description:
         "Generate (and persist) an AI pre-interview brief for a scheduled interview: candidate summary, key areas to probe, suggested questions, red flags. Use before an interview, for 'prep me for X's interview'. Resolve interviewId from upcomingInterviews/todayInterviews.",
       inputSchema: z.object({
@@ -666,12 +719,14 @@ function buildReadTools(ctx: HarlyToolContext) {
       }),
       execute: async ({ interviewId }) => {
         const res = await generateInterviewBriefAction({ interviewId });
-        if (!res.success) return { generated: false as const, error: res.error };
+        if (!res.success)
+          return { generated: false as const, error: res.error };
         return { generated: true as const, brief: res.brief };
       },
     }),
 
     summarizeInterviewNotes: tool({
+      strict: true,
       description:
         "Summarize raw post-interview notes into a structured AI read: executive summary, positive signals, concerns, and a suggested decision. The user provides the notes. Use for 'summarize my interview notes', 'what's the verdict from these notes'.",
       inputSchema: z.object({
@@ -679,13 +734,18 @@ function buildReadTools(ctx: HarlyToolContext) {
         rawNotes: z.string().describe("The raw notes text to summarize."),
       }),
       execute: async ({ interviewId, rawNotes }) => {
-        const res = await summarizeInterviewNotesAction({ interviewId, rawNotes });
-        if (!res.success) return { summarized: false as const, error: res.error };
+        const res = await summarizeInterviewNotesAction({
+          interviewId,
+          rawNotes,
+        });
+        if (!res.success)
+          return { summarized: false as const, error: res.error };
         return { summarized: true as const, summary: res.summary };
       },
     }),
 
     detectDuplicates: tool({
+      strict: true,
       description:
         "Find likely duplicate candidate records for one candidate (same person applied twice, etc.), with confidence + reason. Use for 'is X a duplicate', 'check for duplicates of X'. Resolve candidateId first.",
       inputSchema: z.object({
@@ -699,6 +759,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     compareCandidates: tool({
+      strict: true,
       description:
         "Compare two or more candidates side by side using their AI fit scores (score + recommendation + summary each). Use for 'compare X and Y', 'who's the stronger candidate'. Pass the applicationIds (resolve via candidateProfile/candidatesNeedingReview). Only candidates with a generated score are included; generate scores first if missing.",
       inputSchema: z.object({
@@ -723,7 +784,10 @@ function buildReadTools(ctx: HarlyToolContext) {
 
         const byApp = new Map<string, (typeof rows)[number]>();
         for (const r of rows) {
-          if (applicationIds.includes(r.applicationId) && !byApp.has(r.applicationId)) {
+          if (
+            applicationIds.includes(r.applicationId) &&
+            !byApp.has(r.applicationId)
+          ) {
             byApp.set(r.applicationId, r);
           }
         }
@@ -743,6 +807,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     }),
 
     bulkScoreJob: tool({
+      strict: true,
       description:
         "Generate AI fit scores for ALL not-yet-scored active applicants of a job, in one batch (server-side, no per-candidate confirmation). Use for 'score everyone for X', 'evaluate all applicants to this role'. Resolve jobId first. Returns how many succeeded/failed and how many remain (call again to continue if remaining > 0).",
       inputSchema: z.object({
@@ -751,7 +816,10 @@ function buildReadTools(ctx: HarlyToolContext) {
       execute: async ({ jobId }) => {
         const res = await bulkGenerateAiEvaluationsForJobAction({ jobId });
         if (!res.success) {
-          return { ok: false as const, error: res.error ?? "Bulk scoring failed." };
+          return {
+            ok: false as const,
+            error: res.error ?? "Bulk scoring failed.",
+          };
         }
         return {
           ok: true as const,

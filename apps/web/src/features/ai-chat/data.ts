@@ -90,6 +90,8 @@ type PersistInput = {
   conversationId: string;
   workspaceId: string;
   userId: string;
+  /** Optional linkage so a candidate erasure can cascade-delete the chat (IA-02). */
+  candidateId?: string;
   messages: Array<{ role: string; parts: unknown[] }>;
 };
 
@@ -115,7 +117,7 @@ function deriveTitle(messages: PersistInput["messages"]): string | null {
  * (vs appending) keeps the stored set exactly aligned with the client's state.
  */
 export async function persistConversation(input: PersistInput): Promise<void> {
-  const { conversationId, workspaceId, userId, messages } = input;
+  const { conversationId, workspaceId, userId, candidateId, messages } = input;
   if (messages.length === 0) return;
 
   const now = new Date();
@@ -141,6 +143,7 @@ export async function persistConversation(input: PersistInput): Promise<void> {
         id: conversationId,
         workspaceId,
         userId,
+        candidateId: candidateId ?? null,
         title,
         lastMessageAt: now,
       });
@@ -164,4 +167,17 @@ export async function persistConversation(input: PersistInput): Promise<void> {
       );
     }
   });
+}
+
+/**
+ * Delete a candidate's linked AI conversations (and their messages, via the FK
+ * cascade). Called during candidate erasure (IA-02 / GDPR Art. 17) so chat
+ * history embedding the candidate's PII is removed with the candidate.
+ */
+export async function deleteConversationsForCandidate(
+  candidateId: string,
+): Promise<void> {
+  await db
+    .delete(aiConversations)
+    .where(eq(aiConversations.candidateId, candidateId));
 }

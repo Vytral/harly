@@ -1,6 +1,7 @@
 import "server-only";
 
-import { generateText } from "ai";
+import { Output, generateText } from "ai";
+import { z } from "zod";
 
 import { getModel } from "@/lib/ai/registry";
 import type { AiModelConfig } from "@/lib/ai/providers";
@@ -42,9 +43,13 @@ const SYSTEM_PROMPT =
   "Never use buzzwords, clichés, or hollow phrases like 'excited to share', " +
   "'best-in-class', or 'fast-paced environment'. " +
   "Write as a real person would to another real person. " +
-  "Return ONLY valid JSON: { \"subject\": string, \"body\": string }. " +
   "The body must use plain text with line breaks (\\n\\n between paragraphs). " +
   "Sign off with the sender's name on a new line. No HTML.";
+
+const emailDraftSchema = z.object({
+  subject: z.string().trim().min(1).max(200),
+  body: z.string().trim().min(1).max(10_000),
+});
 
 export async function draftEmailWithAI(
   config: AiModelConfig,
@@ -65,30 +70,19 @@ export async function draftEmailWithAI(
     scoreContext +
     `\n\nInstruction: ${TYPE_INSTRUCTIONS[input.type]}`;
 
-  const { text } = await generateText({
+  const { output } = await generateText({
     model: getModel(config),
     system: SYSTEM_PROMPT,
     prompt,
-    maxOutputTokens: 512,
+    output: Output.object({
+      schema: emailDraftSchema,
+      name: "candidate_email_draft",
+      description:
+        "A candidate email with a concise subject and plain-text body.",
+    }),
   });
 
-  // Parse JSON — strip possible markdown fences
-  const cleaned = text
-    .trim()
-    .replace(/^```(?:json)?\n?/, "")
-    .replace(/\n?```$/, "")
-    .trim();
+  if (!output) throw new Error("AI returned no email draft.");
 
-  let parsed: { subject: string; body: string };
-  try {
-    parsed = JSON.parse(cleaned) as { subject: string; body: string };
-  } catch {
-    throw new Error("AI returned malformed JSON. Try again or switch to a different model.");
-  }
-
-  if (!parsed.subject || !parsed.body) {
-    throw new Error("AI returned incomplete draft.");
-  }
-
-  return { subject: parsed.subject.trim(), body: parsed.body.trim() };
+  return output;
 }

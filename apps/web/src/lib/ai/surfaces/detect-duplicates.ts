@@ -3,7 +3,12 @@ import "server-only";
 import { Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
-import { duplicateCandidateSchema, type DuplicateCandidateResult } from "@/lib/ai/schemas";
+import { recordAiUsage } from "@/lib/ai/usage";
+import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
+import {
+  duplicateCandidateSchema,
+  type DuplicateCandidateResult,
+} from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
 
 export type DuplicateCheckInput = {
@@ -29,7 +34,7 @@ const SYSTEM_PROMPT =
   "Return only matches with confidence 'high' (near-certain same person) or 'medium' (probable same person). " +
   "Omit suspects that are clearly different people. " +
   "`reason` should be a short phrase explaining the match signal (e.g. 'Same name and email domain', 'Identical skills and headline'). " +
-  "Never guess — only return matches with real evidence.";
+  "Never guess — only return matches with real evidence." + "\n\n" + UNTRUSTED_DATA_GUARDRAIL;
 
 export async function detectDuplicatesWithAI(
   config: AiModelConfig,
@@ -40,7 +45,9 @@ export async function detectDuplicatesWithAI(
     `Name: ${input.target.fullName}\n` +
     `Email: ${input.target.email}\n` +
     (input.target.headline ? `Headline: ${input.target.headline}\n` : "") +
-    (input.target.skills.length > 0 ? `Skills: ${input.target.skills.slice(0, 15).join(", ")}\n` : "");
+    (input.target.skills.length > 0
+      ? `Skills: ${input.target.skills.slice(0, 15).join(", ")}\n`
+      : "");
 
   const suspectsBlock = input.suspects
     .map(
@@ -49,17 +56,32 @@ export async function detectDuplicatesWithAI(
         `Name: ${s.fullName}\n` +
         `Email: ${s.email}\n` +
         (s.headline ? `Headline: ${s.headline}\n` : "") +
-        (s.skills.length > 0 ? `Skills: ${s.skills.slice(0, 15).join(", ")}\n` : ""),
+        (s.skills.length > 0
+          ? `Skills: ${s.skills.slice(0, 15).join(", ")}\n`
+          : ""),
     )
     .join("\n---\n");
 
-  const { output } = await generateText({
+  const result = await generateText({
     model: getModel(config),
     system: SYSTEM_PROMPT,
     prompt: `Check if any suspect is a duplicate of the target candidate.\n\n## Target\n${targetBlock}\n\n## Suspects\n${suspectsBlock}`,
-    output: Output.object({ schema: duplicateCandidateSchema }),
+    output: Output.object({
+      schema: duplicateCandidateSchema,
+      name: "candidate_duplicate_matches",
+      description: "Evidence-backed likely duplicate candidate records.",
+    }),
   });
 
+  recordAiUsage({
+    surface: "detect_duplicates",
+    provider: config.provider,
+    modelId: config.modelId,
+    promptTokens: result.usage.inputTokens ?? 0,
+    completionTokens: result.usage.outputTokens ?? 0,
+  });
+
+  const output = result.output;
   if (!output) return { matches: [] };
 
   return { matches: output.matches.slice(0, 5) };

@@ -3,6 +3,8 @@ import "server-only";
 import { Output, generateText } from "ai";
 
 import { getModel } from "@/lib/ai/registry";
+import { recordAiUsage } from "@/lib/ai/usage";
+import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
 import { candidateScoreSchema, type CandidateScore } from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
 
@@ -14,7 +16,7 @@ const SYSTEM_PROMPT =
   "(e.g. core skills, seniority, domain experience), each scored 0-100 with a " +
   "short evidence quote or null when nothing supports it. `strengths` and `gaps` " +
   "are concise bullet phrases. `summary` is 2-3 plain sentences for a recruiter. " +
-  "Missing information is a gap, not a guess.";
+  "Missing information is a gap, not a guess." + "\n\n" + UNTRUSTED_DATA_GUARDRAIL;
 
 export type ScoreCandidateInput = {
   job: {
@@ -80,8 +82,12 @@ export async function scoreCandidateWithAI(
     `Name: ${candidate.fullName}`,
     candidate.headline ? `Headline: ${candidate.headline}` : null,
     candidate.location ? `Location: ${candidate.location}` : null,
-    candidate.experienceYears != null ? `Experience: ${candidate.experienceYears} years` : null,
-    candidate.skills && candidate.skills.length > 0 ? `Skills: ${candidate.skills.slice(0, 20).join(", ")}` : null,
+    candidate.experienceYears != null
+      ? `Experience: ${candidate.experienceYears} years`
+      : null,
+    candidate.skills && candidate.skills.length > 0
+      ? `Skills: ${candidate.skills.slice(0, 20).join(", ")}`
+      : null,
     answersBlock ? `Application answers:\n${answersBlock}` : null,
     candidate.resumeText
       ? `Resume:\n"""\n${candidate.resumeText.slice(0, 12000)}\n"""`
@@ -90,13 +96,27 @@ export async function scoreCandidateWithAI(
     .filter(Boolean)
     .join("\n");
 
-  const { output } = await generateText({
+  const result = await generateText({
     model: getModel(config),
     system: SYSTEM_PROMPT,
     prompt: `Score this candidate against this job.\n\n## Job\n${jobBlock}\n\n## Candidate\n${candidateBlock}`,
-    output: Output.object({ schema: candidateScoreSchema }),
+    output: Output.object({
+      schema: candidateScoreSchema,
+      name: "candidate_fit_evaluation",
+      description:
+        "A calibrated candidate-to-job fit evaluation with evidence.",
+    }),
   });
 
+  recordAiUsage({
+    surface: "score",
+    provider: config.provider,
+    modelId: config.modelId,
+    promptTokens: result.usage.inputTokens ?? 0,
+    completionTokens: result.usage.outputTokens ?? 0,
+  });
+
+  const output = result.output;
   if (!output) {
     throw new Error("AI returned no structured output for the evaluation.");
   }

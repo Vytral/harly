@@ -8,10 +8,15 @@ import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
 
 import type { AiModelConfig, OpenRouterModel } from "./providers";
+import { assertSafeAiBaseUrl } from "./base-url";
 
 /** Build a Vercel AI SDK LanguageModel for the given provider + key + model id. */
 export function getModel(config: AiModelConfig): LanguageModel {
   const { provider, modelId, apiKey, baseUrl } = config;
+
+  // Defense in depth: custom base URLs are validated at save time, but reject
+  // any unsafe value here too (e.g. a key set via env or a future path).
+  assertSafeAiBaseUrl(provider, baseUrl);
 
   const opts = { apiKey, baseURL: baseUrl };
 
