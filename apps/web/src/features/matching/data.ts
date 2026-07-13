@@ -15,6 +15,7 @@ import {
 import type { AiModelConfig } from "@/lib/ai/providers";
 import { cosineSimilarity, embedText, EMBEDDING_MODEL_ID } from "@/lib/ai/embeddings";
 import { loadResumeText } from "@/lib/resume/load-resume-text";
+import { enforceRateLimit } from "@/server/api/ratelimit";
 
 function hashText(text: string): string {
   return createHash("sha256").update(text).digest("hex");
@@ -24,6 +25,17 @@ function hashText(text: string): string {
 function plain(html: string | null): string {
   if (!html) return "";
   return html.replace(/<[^>]+>/g, " ").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+}
+
+/** Per-workspace budget so one workspace can't drain its (or a shared) OpenAI
+ *  embeddings quota. Re-throws as a plain Error so callers can treat it as a
+ *  transient failure rather than an API error. */
+async function consumeEmbeddingBudget(workspaceId: string): Promise<void> {
+  try {
+    await enforceRateLimit(`embed:${workspaceId}`, { limit: 300, windowMs: 60_000 });
+  } catch {
+    throw new Error("Embedding rate limit exceeded. Try again shortly.");
+  }
 }
 
 function buildJobEmbeddingText(job: {
@@ -103,6 +115,7 @@ export async function ensureJobEmbedding(
     return { skipped: true };
   }
 
+  await consumeEmbeddingBudget(workspaceId);
   const embedding = await embedText(config, text);
 
   await db
@@ -155,6 +168,7 @@ export async function ensureCandidateEmbedding(
     return { skipped: true };
   }
 
+  await consumeEmbeddingBudget(workspaceId);
   const embedding = await embedText(config, text);
 
   await db

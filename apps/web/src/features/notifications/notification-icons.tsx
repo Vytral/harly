@@ -42,6 +42,13 @@ export const NOTIFICATION_TYPE_CONFIG: Record<
     bg: "bg-amber-50 dark:bg-amber-950/50",
   },
 
+  // Candidate email
+  "email.received": {
+    icon: "solar:letter-unread-bold",
+    color: "text-sky-600 dark:text-sky-400",
+    bg: "bg-sky-50 dark:bg-sky-950/50",
+  },
+
   // Notes & Mentions
   "note.mentioned": {
     icon: "solar:at-bold",

@@ -1,4 +1,8 @@
 import sharp from "sharp";
+import { eq } from "drizzle-orm";
+
+import { db, organization as organizationTable } from "@harly/db";
+import { safeFetchImage } from "@/lib/ssrf";
 
 export type ImageFormat = "png" | "jpeg" | "webp";
 
@@ -71,6 +75,107 @@ export async function convertLogoForEmail(
   return { buffer, mimeType, extension };
 }
 
+/**
+ * Fetch a logo URL (SSRF-safe), convert it to an email-friendly format, upload
+ * it, and persist the resulting URL on the organization row. The organization
+ * is resolved server-side from the session — callers must NOT pass a
+ * client-supplied workspace id, which would let one org overwrite another's
+ * email logo.
+ */
+export async function convertAndStoreLogo(input: {
+  organizationId: string;
+  logoUrl: string;
+  storage: {
+    getPresignedUploadUrl(params: {
+      key: string;
+      contentType: string;
+      contentLength: number;
+    }): Promise<{ uploadUrl: string; fileUrl: string }>;
+  };
+}): Promise<{ success: boolean; logoEmailUrl?: string; format?: string }> {
+  const { organizationId, logoUrl, storage } = input;
+
+  const response = await safeFetchImage(logoUrl);
+  if (!response.ok) {
+    throw new Error("Failed to fetch logo.");
+  }
+
+  const contentType =
+    response.headers.get("content-type") || "image/png";
+  const buffer = Buffer.from(await response.arrayBuffer());
+
+  if (!needsEmailConversion(contentType)) {
+    const format = getRecommendedEmailFormat(contentType);
+    const converted = await convertLogoForEmail(buffer, contentType, {
+      format,
+      width: 400,
+      height: 120,
+      quality: 90,
+    });
+
+    const emailKey = `logos/${organizationId}/email.${converted.extension}`;
+    const uploadResult = await storage.getPresignedUploadUrl({
+      key: emailKey,
+      contentType: converted.mimeType,
+      contentLength: converted.buffer.length,
+    });
+
+    const putResponse = await fetch(uploadResult.uploadUrl, {
+      method: "PUT",
+      headers: { "Content-Type": converted.mimeType },
+      body: new Uint8Array(converted.buffer).buffer,
+    });
+
+    if (!putResponse.ok) {
+      throw new Error("Failed to upload converted logo.");
+    }
+
+    await db
+      .update(organizationTable)
+      .set({ logoEmail: uploadResult.fileUrl })
+      .where(eq(organizationTable.id, organizationId));
+
+    return {
+      success: true,
+      logoEmailUrl: uploadResult.fileUrl,
+      format: converted.extension,
+    };
+  }
+
+  const converted = await convertLogoForEmail(buffer, contentType, {
+    format: "png",
+    width: 400,
+    height: 120,
+  });
+
+  const emailKey = `logos/${organizationId}/email.png`;
+  const uploadResult = await storage.getPresignedUploadUrl({
+    key: emailKey,
+    contentType: "image/png",
+    contentLength: converted.buffer.length,
+  });
+
+  const putResponse = await fetch(uploadResult.uploadUrl, {
+    method: "PUT",
+    headers: { "Content-Type": "image/png" },
+    body: new Uint8Array(converted.buffer).buffer,
+  });
+
+  if (!putResponse.ok) {
+    throw new Error("Failed to upload converted logo.");
+  }
+
+  await db
+    .update(organizationTable)
+    .set({ logoEmail: uploadResult.fileUrl })
+    .where(eq(organizationTable.id, organizationId));
+
+  return { success: true, logoEmailUrl: uploadResult.fileUrl, format: "png" };
+}
+
+/**
+ * Get the recommended email format for a given MIME type.
+ */
 /**
  * Check if a MIME type needs conversion for email compatibility.
  * SVG images must be converted; raster formats are generally fine.

@@ -139,7 +139,7 @@ export default async function IntegrationsSettingsPage() {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             On the roadmap
           </h3>
-          <p className="text-xs text-muted-foreground/70">
+          <p className="text-xs text-muted-foreground">
             Want one sooner? Tell us in Developers &amp; API.
           </p>
         </div>

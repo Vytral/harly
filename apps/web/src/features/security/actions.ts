@@ -1,14 +1,14 @@
 "use server";
 
 import { headers } from "next/headers";
-import { eq, desc, and } from "drizzle-orm";
-import { db, auditLogs, passkeys, workspaceSettings, oauthProviders } from "@harly/db";
+import { and, eq } from "drizzle-orm";
+import { db, passkeys, workspaceSettings, oauthProviders } from "@harly/db";
 import { auth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
-import { encryptSecret, decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 
 const log = createLogger("security");
 
@@ -16,40 +16,6 @@ async function getSession() {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) throw new Error("Unauthorized");
   return session;
-}
-
-export async function getAuditLogsAction(workspaceId: string) {
-  await getSession();
-
-  const rows = await db
-    .select()
-    .from(auditLogs)
-    .where(eq(auditLogs.workspaceId, workspaceId))
-    .orderBy(desc(auditLogs.createdAt))
-    .limit(200);
-
-  return rows.map((r) => ({
-    ...r,
-    createdAt: r.createdAt.toISOString(),
-  }));
-}
-
-export async function getUserPasskeysAction() {
-  const session = await getSession();
-
-  const rows = await db
-    .select()
-    .from(passkeys)
-    .where(eq(passkeys.userId, session.user.id));
-
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    deviceType: r.deviceType,
-    backedUp: r.backedUp,
-    createdAt: r.createdAt.toISOString(),
-    lastUsedAt: r.lastUsedAt?.toISOString() ?? null,
-  }));
 }
 
 export async function deletePasskeyAction(passkeyId: string) {
@@ -67,15 +33,6 @@ export async function deletePasskeyAction(passkeyId: string) {
     resourceId: passkeyId,
     severity: "warning",
   });
-}
-
-export async function renamePasskeyAction(passkeyId: string, name: string) {
-  const { user } = await getSession();
-
-  await db
-    .update(passkeys)
-    .set({ name: name.slice(0, 50) })
-    .where(and(eq(passkeys.id, passkeyId), eq(passkeys.userId, user.id)));
 }
 
 export async function toggleForce2FAAction(
@@ -294,44 +251,6 @@ export async function deleteOAuthProviderAction(
   } catch (error) {
     log.error(error, "deleteOAuthProviderAction failed");
     return { ok: false, error: error instanceof Error ? error.message : "Failed." };
-  }
-}
-
-/** Get decrypted OAuth credentials for a provider (server-only, for auth). */
-export async function getOAuthCredentials(
-  workspaceId: string,
-  provider: OAuthProvider,
-): Promise<{ clientId: string; clientSecret: string } | null> {
-  const [row] = await db
-    .select()
-    .from(oauthProviders)
-    .where(
-      and(
-        eq(oauthProviders.workspaceId, workspaceId),
-        eq(oauthProviders.provider, provider),
-        eq(oauthProviders.enabled, true),
-      ),
-    )
-    .limit(1);
-
-  if (!row || !row.clientSecretCiphertext || !row.clientSecretIv || !row.clientSecretTag) {
-    return null;
-  }
-
-  try {
-    const clientSecret = decryptSecret({
-      ciphertext: row.clientSecretCiphertext,
-      iv: row.clientSecretIv,
-      tag: row.clientSecretTag,
-    });
-
-    return {
-      clientId: row.clientId,
-      clientSecret,
-    };
-  } catch (error) {
-    log.error(error, `Failed to decrypt ${provider} credentials`);
-    return null;
   }
 }
 

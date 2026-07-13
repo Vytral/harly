@@ -11,12 +11,14 @@ import {
   applicationQuestions,
   candidates,
   candidateFiles,
-  candidateMessages,
   candidateNotes,
   candidateTags,
   interviews,
   jobs,
   jobStages,
+  mailAttachments,
+  mailMessages,
+  mailThreads,
   poolEntries,
   scorecards,
   user as authUsers,
@@ -26,6 +28,7 @@ import type {
   CandidateExperienceEntry,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { deleteConversationsForCandidate } from "@/features/ai-chat/data";
 import {
   interviewTypeLabel,
   interviewModeLabel,
@@ -466,25 +469,48 @@ export async function getCandidateProfile(candidateId: string) {
 
   const messageRows = await db
     .select({
-      id: candidateMessages.id,
-      direction: candidateMessages.direction,
-      subject: candidateMessages.subject,
-      body: candidateMessages.body,
-      toEmail: candidateMessages.toEmail,
-      fromEmail: candidateMessages.fromEmail,
-      status: candidateMessages.status,
-      authorName: authUsers.name,
-      createdAt: candidateMessages.createdAt,
+      id: mailMessages.id,
+      direction: mailMessages.direction,
+      subject: mailMessages.subject,
+      body: mailMessages.textBody,
+      toEmails: mailMessages.toEmails,
+      fromEmail: mailMessages.fromEmail,
+      source: mailThreads.source,
+      createdAt: mailMessages.receivedAt,
     })
-    .from(candidateMessages)
-    .leftJoin(authUsers, eq(authUsers.id, candidateMessages.authorId))
+    .from(mailMessages)
+    .innerJoin(mailThreads, eq(mailThreads.id, mailMessages.threadId))
     .where(
       and(
-        eq(candidateMessages.workspaceId, workspace.id),
-        eq(candidateMessages.candidateId, candidate.id),
+        eq(mailMessages.workspaceId, workspace.id),
+        eq(mailMessages.candidateId, candidate.id),
       ),
     )
-    .orderBy(desc(candidateMessages.createdAt));
+    .orderBy(desc(mailMessages.receivedAt));
+
+  const messageAttachments = messageRows.length
+    ? await db
+        .select({
+          messageId: mailAttachments.messageId,
+          filename: mailAttachments.filename,
+          contentType: mailAttachments.contentType,
+          size: mailAttachments.size,
+          storageKey: mailAttachments.storageKey,
+        })
+        .from(mailAttachments)
+        .where(
+          and(
+            eq(mailAttachments.workspaceId, workspace.id),
+            inArray(mailAttachments.messageId, messageRows.map((message) => message.id)),
+          ),
+        )
+    : [];
+  const attachmentsByMessage = new Map<string, typeof messageAttachments>();
+  for (const attachment of messageAttachments) {
+    const list = attachmentsByMessage.get(attachment.messageId) ?? [];
+    list.push(attachment);
+    attachmentsByMessage.set(attachment.messageId, list);
+  }
 
   const applicationIds = candidateApplications.map(
     (application) => application.id,
@@ -775,12 +801,14 @@ export async function getCandidateProfile(candidateId: string) {
     messages: messageRows.map((row) => ({
       id: row.id,
       direction: row.direction,
+      transport: row.source,
       subject: row.subject,
       body: row.body,
-      toEmail: row.toEmail,
+      toEmail: Array.isArray(row.toEmails) ? String(row.toEmails[0] ?? "") : "",
       fromEmail: row.fromEmail,
-      status: row.status,
-      authorName: row.authorName,
+      status: "sent" as const,
+      authorName: null,
+      attachments: attachmentsByMessage.get(row.id) ?? [],
       createdAt: row.createdAt.toISOString(),
     })),
   };
@@ -900,6 +928,11 @@ export async function permanentlyDeleteCandidate(candidateId: string) {
       });
     }
   }
+
+  // Erase the candidate's AI chat history (IA-02 / GDPR Art. 17). Conversations
+  // linked via candidateId also cascade-delete their messages; this explicit
+  // delete covers the same rows and is safe to run regardless.
+  await deleteConversationsForCandidate(candidateId);
 
   const [deleted] = await db
     .delete(candidates)

@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { notFound, redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
+
+import { db, workspaceSettings } from "@harly/db";
 
 import {
   createJob,
@@ -17,6 +20,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { generateJobDraftWithAI } from "@/lib/ai/surfaces/generate-job";
 import type { JobDraft } from "@/lib/ai/schemas";
+import { normalizeCareerPageConfig } from "@/features/career-page/config";
 
 function parseJobFormData(formData: FormData) {
   return jobFormSchema.parse({
@@ -40,14 +44,24 @@ function parseJobFormData(formData: FormData) {
     applicationPhoneVisibility: formData.get("applicationPhoneVisibility"),
     applicationAddressVisibility: formData.get("applicationAddressVisibility"),
     applicationPhotoVisibility: formData.get("applicationPhotoVisibility"),
-    applicationHeadlineVisibility: formData.get("applicationHeadlineVisibility"),
+    applicationHeadlineVisibility: formData.get(
+      "applicationHeadlineVisibility",
+    ),
     applicationResumeVisibility: formData.get("applicationResumeVisibility"),
-    applicationLinkedinVisibility: formData.get("applicationLinkedinVisibility"),
+    applicationLinkedinVisibility: formData.get(
+      "applicationLinkedinVisibility",
+    ),
     applicationGithubVisibility: formData.get("applicationGithubVisibility"),
     applicationWebsiteVisibility: formData.get("applicationWebsiteVisibility"),
-    applicationEducationVisibility: formData.get("applicationEducationVisibility"),
-    applicationExperienceVisibility: formData.get("applicationExperienceVisibility"),
-    applicationCoverLetterVisibility: formData.get("applicationCoverLetterVisibility"),
+    applicationEducationVisibility: formData.get(
+      "applicationEducationVisibility",
+    ),
+    applicationExperienceVisibility: formData.get(
+      "applicationExperienceVisibility",
+    ),
+    applicationCoverLetterVisibility: formData.get(
+      "applicationCoverLetterVisibility",
+    ),
     applicationQuestionsJson: formData.get("applicationQuestionsJson"),
   });
 }
@@ -214,11 +228,30 @@ export async function generateJobDraftAction(input: {
   }
 
   try {
+    const [settings] = await db
+      .select({
+        tagline: workspaceSettings.tagline,
+        description: workspaceSettings.description,
+        careerPageConfig: workspaceSettings.careerPageConfig,
+      })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.organizationId, context.organization.id))
+      .limit(1);
+    const career = normalizeCareerPageConfig(settings?.careerPageConfig);
     const draft = await generateJobDraftWithAI(config, {
       title: input.title.trim(),
       department: input.department?.trim() || undefined,
       workplaceType: input.workplaceType,
       keywords: input.keywords,
+      brand: {
+        name: context.organization.name,
+        tagline: settings?.tagline,
+        description: settings?.description,
+        careerHeadline: career.hero.headline,
+        careerSubhead: career.hero.subhead,
+        careerIntro: career.intro.body,
+        values: career.values.enabled ? career.values.items : [],
+      },
     });
     return { ok: true, draft };
   } catch {
@@ -230,7 +263,14 @@ export async function generateJobDraftAction(input: {
 }
 
 export type GenerateQuestionsResult =
-  | { ok: true; questions: Array<{ label: string; type: "text" | "textarea"; placeholder: string }> }
+  | {
+      ok: true;
+      questions: Array<{
+        label: string;
+        type: "text" | "textarea";
+        placeholder: string;
+      }>;
+    }
   | { ok: false; error: string; reason?: "not_configured" };
 
 export async function generateScreeningQuestionsAction(input: {
@@ -247,13 +287,16 @@ export async function generateScreeningQuestionsAction(input: {
 
   const config = await getWorkspaceAiConfig(context.organization.id);
   if (!config) {
-    return { ok: false, error: "Enable AI in Settings to generate questions.", reason: "not_configured" };
+    return {
+      ok: false,
+      error: "Enable AI in Settings to generate questions.",
+      reason: "not_configured",
+    };
   }
 
   try {
-    const { generateScreeningQuestionsWithAI } = await import(
-      "@/lib/ai/surfaces/generate-questions"
-    );
+    const { generateScreeningQuestionsWithAI } =
+      await import("@/lib/ai/surfaces/generate-questions");
     const questions = await generateScreeningQuestionsWithAI(config, {
       title: input.title.trim(),
       description: input.description,

@@ -25,7 +25,7 @@ export const STATUS_COLOR: Record<TaskStatus, string> = {
   pending: "text-muted-foreground",
   in_progress: "text-clay",
   completed: "text-primary",
-  canceled: "text-muted-foreground/60",
+  canceled: "text-muted-foreground",
 };
 
 export const STATUS_DOT: Record<TaskStatus, string> = {
@@ -110,7 +110,7 @@ export const URGENCY_DOT: Record<UrgencyKey, string> = {
 export function RelativeDate({ iso }: { iso: string | null }) {
   // Reading the clock is impure, so it lives in useMemo (not the render body).
   const view = useMemo(() => {
-    if (!iso) return { label: "No date", cls: "text-muted-foreground/60" };
+    if (!iso) return { label: "No date", cls: "text-muted-foreground" };
     const d = new Date(iso);
     const label = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(d);
     const dueDateUtc = d.toISOString().slice(0, 10);

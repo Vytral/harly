@@ -13,6 +13,8 @@ import {
   db,
   jobs,
   jobStages,
+  workspaceSettings,
+  consentRecords,
 } from "@harly/db";
 import {
   PortalMagicLinkEmail,
@@ -28,6 +30,8 @@ import {
   resolvePortalSession,
 } from "@/lib/portal-auth";
 import { createLogger } from "@/lib/logger";
+import { normalizeJobApplicationConfig } from "@/features/jobs/config";
+import { validatePortalApplication } from "@/features/portal/application-validation";
 
 const log = createLogger("portal-actions");
 
@@ -89,7 +93,8 @@ export async function signOutPortalAction(): Promise<void> {
 type ApplyInput = {
   jobId: string;
   answers: Record<string, string>;
-  resumeUrl?: string;
+  resumeKey?: string;
+  consentGiven?: boolean;
 };
 
 export async function applyToJobAction(
@@ -104,7 +109,7 @@ export async function applyToJobAction(
     if (!session) return { ok: false, error: "Unauthorized." };
 
     const [job] = await db
-      .select({ id: jobs.id, status: jobs.status })
+      .select({ id: jobs.id, status: jobs.status, applicationConfig: jobs.applicationConfig })
       .from(jobs)
       .where(
         and(
@@ -116,6 +121,41 @@ export async function applyToJobAction(
 
     if (!job || job.status !== "open") {
       return { ok: false, error: "Job is no longer open." };
+    }
+
+    const questions = await db
+      .select({
+        id: applicationQuestions.id,
+        key: applicationQuestions.key,
+        type: applicationQuestions.type,
+        required: applicationQuestions.required,
+        minLength: applicationQuestions.minLength,
+        options: applicationQuestions.options,
+      })
+      .from(applicationQuestions)
+      .where(
+        and(
+          eq(applicationQuestions.workspaceId, session.workspaceId),
+          eq(applicationQuestions.jobId, input.jobId),
+        ),
+      );
+    const applicationConfig = normalizeJobApplicationConfig(job.applicationConfig);
+    const validation = validatePortalApplication({
+      workspaceId: session.workspaceId,
+      resumeRequired: applicationConfig.sections.profile.resume.visibility === "required",
+      resumeKey: input.resumeKey,
+      answers: input.answers,
+      questions,
+    });
+    if (!validation.ok) return validation;
+
+    const [settings] = await db
+      .select({ consentCheckboxText: workspaceSettings.consentCheckboxText })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.organizationId, session.workspaceId))
+      .limit(1);
+    if (settings?.consentCheckboxText && !input.consentGiven) {
+      return { ok: false, error: "You must consent to data processing to apply." };
     }
 
     const [existing] = await db
@@ -160,39 +200,44 @@ export async function applyToJobAction(
       return { ok: false, error: "Failed to create application." };
     }
 
-    // Save resume to candidate files if provided
-    if (input.resumeUrl) {
+    // Save only the server-validated, workspace-scoped upload key.
+    if (input.resumeKey) {
       await db.insert(candidateFiles).values({
         workspaceId: session.workspaceId,
         candidateId: session.candidateId,
         fileName: "Resume",
-        fileUrl: input.resumeUrl,
+        fileUrl: `/uploads/${input.resumeKey}`,
         fileType: "resume",
       });
     }
 
-    const questionKeys = Object.keys(input.answers);
-    if (questionKeys.length > 0) {
-      const questions = await db
-        .select({ id: applicationQuestions.id, key: applicationQuestions.key })
-        .from(applicationQuestions)
-        .where(eq(applicationQuestions.jobId, input.jobId));
-
+    if (Object.keys(validation.answers).length > 0) {
       const questionMap = new Map(questions.map((q) => [q.key, q.id]));
-
-      const answerValues = questionKeys
-        .filter((key) => input.answers[key]?.trim())
+      const answerValues = Object.keys(validation.answers)
         .map((key) => ({
           workspaceId: session.workspaceId,
           applicationId: application.id,
           questionId: questionMap.get(key)!,
-          answer: input.answers[key],
+          answer: validation.answers[key],
         }))
         .filter((a) => a.questionId);
 
       if (answerValues.length > 0) {
         await db.insert(applicationAnswers).values(answerValues);
       }
+    }
+
+    if (input.consentGiven) {
+      await db.insert(consentRecords).values({
+        workspaceId: session.workspaceId,
+        candidateId: session.candidateId,
+        applicationId: application.id,
+        consentType: "data_processing",
+        consentText:
+          settings?.consentCheckboxText ??
+          "I agree to the privacy policy and consent to the processing of my personal data.",
+        granted: true,
+      });
     }
 
     return { ok: true, applicationId: application.id };

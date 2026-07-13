@@ -361,7 +361,7 @@ export function InviteTeammatesSheet({
                 }
               }}
             />
-            <p className="text-[11px] text-muted-foreground/70">
+            <p className="text-[11px] text-muted-foreground">
               Paste emails separated by commas, spaces, or new lines. They join
               with the role above (editable per row after).
             </p>

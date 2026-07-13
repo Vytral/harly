@@ -48,8 +48,23 @@ export function getResumeFileValidationError(file: File) {
   return null;
 }
 
-export function createResumeStorageKey(filename: string) {
-  return `resumes/${crypto.randomUUID()}/${sanitizeFilename(filename)}`;
+function workspacePrefix(workspaceId: string) {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(workspaceId)) {
+    throw new Error("Invalid workspace storage namespace.");
+  }
+  return `workspaces/${workspaceId}`;
+}
+
+export function isWorkspaceStorageKey(
+  workspaceId: string,
+  key: string,
+  kind: "resumes" | "images",
+) {
+  return key.startsWith(`${workspacePrefix(workspaceId)}/${kind}/`) && !key.includes("..");
+}
+
+export function createResumeStorageKey(workspaceId: string, filename: string) {
+  return `${workspacePrefix(workspaceId)}/resumes/${crypto.randomUUID()}/${sanitizeFilename(filename)}`;
 }
 
 // Images (workspace logo / banner). Smaller cap than resumes.
@@ -90,10 +105,13 @@ export function getImageFileValidationError(file: File) {
   return null;
 }
 
-export function createImageStorageKey(filename: string) {
-  return `images/${crypto.randomUUID()}/${sanitizeFilename(filename)}`;
+export function createImageStorageKey(workspaceId: string, filename: string) {
+  return `${workspacePrefix(workspaceId)}/images/${crypto.randomUUID()}/${sanitizeFilename(filename)}`;
 }
 
-export function createPublicApplicationImageStorageKey(filename: string) {
-  return `images/public-applications/${crypto.randomUUID()}/${sanitizeFilename(filename)}`;
+export function createPublicApplicationImageStorageKey(
+  workspaceId: string,
+  filename: string,
+) {
+  return `${workspacePrefix(workspaceId)}/images/public-applications/${crypto.randomUUID()}/${sanitizeFilename(filename)}`;
 }

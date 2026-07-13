@@ -9,6 +9,7 @@ import {
   maxImageFileSize,
   maxResumeFileSize,
 } from "@/lib/storage-validation";
+import { verifyStorageUploadIntent } from "@/lib/storage-upload-intent";
 
 export const runtime = "nodejs";
 
@@ -36,15 +37,21 @@ async function handleUpload(request: NextRequest) {
   }
 
   const key = request.nextUrl.searchParams.get("key");
+  const intent = verifyStorageUploadIntent(
+    request.nextUrl.searchParams.get("intent"),
+  );
 
-  if (!key || key.includes("..")) {
+  if (!key || !intent || key !== intent.key || key.includes("..")) {
     return NextResponse.json({ error: "Invalid key." }, { status: 400 });
   }
 
-  const isResume = key.startsWith("resumes/");
-  const isImage = key.startsWith("images/");
+  const isResume = key.includes("/resumes/");
+  const isImage = key.includes("/images/");
 
-  if (!isResume && !isImage) {
+  if (
+    (!isResume && !isImage) ||
+    !key.startsWith(`workspaces/${intent.workspaceId}/`)
+  ) {
     return NextResponse.json({ error: "Invalid key." }, { status: 400 });
   }
 
@@ -55,7 +62,10 @@ async function handleUpload(request: NextRequest) {
 
   const contentType = request.headers.get("content-type") ?? "";
 
-  if (!(allowedTypes as readonly string[]).includes(contentType)) {
+  if (
+    contentType !== intent.contentType ||
+    !(allowedTypes as readonly string[]).includes(contentType)
+  ) {
     return NextResponse.json(
       { error: "Unsupported file type." },
       { status: 400 },
@@ -64,13 +74,20 @@ async function handleUpload(request: NextRequest) {
 
   const contentLength = Number(request.headers.get("content-length") ?? 0);
 
-  if (!Number.isFinite(contentLength) || contentLength > maxSize) {
+  if (
+    !Number.isFinite(contentLength) ||
+    contentLength > maxSize ||
+    (contentLength > 0 && contentLength !== intent.contentLength)
+  ) {
     return NextResponse.json({ error: "File too large." }, { status: 400 });
   }
 
   const fileBuffer = Buffer.from(await request.arrayBuffer());
 
-  if (fileBuffer.byteLength > maxSize) {
+  if (
+    fileBuffer.byteLength > maxSize ||
+    fileBuffer.byteLength !== intent.contentLength
+  ) {
     return NextResponse.json({ error: "File too large." }, { status: 400 });
   }
 

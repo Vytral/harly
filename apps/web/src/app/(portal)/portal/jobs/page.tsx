@@ -88,7 +88,7 @@ export default async function PortalJobsPage() {
     <PortalShell>
       <div className="space-y-8">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
+          <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
             Open positions
           </p>
           <h1 className="mt-1 text-2xl font-bold tracking-tight text-foreground">
@@ -113,7 +113,7 @@ export default async function PortalJobsPage() {
             {depts.map((dept) => (
               <section key={dept}>
                 <div className="mb-3 flex items-center gap-3">
-                  <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground/70">
+                  <h2 className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">
                     {dept}
                   </h2>
                   <div className="h-px flex-1 bg-border" />

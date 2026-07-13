@@ -279,7 +279,7 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
         </Tile>
       </motion.div>
 
-      <p className="px-1 text-xs text-muted-foreground/70">
+      <p className="px-1 text-xs text-muted-foreground">
         {`${totalApplications.toLocaleString()} applications · ${last12Hires.toLocaleString()} hires in the last 12 months · ${data.summary.totalCandidates.toLocaleString()} candidates tracked · comparing to ${rangeLabel.toLowerCase()}.`}
       </p>
     </div>

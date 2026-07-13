@@ -111,7 +111,7 @@ export function StatCell({
 }) {
   return (
     <div className={cn("px-5 py-4", className)}>
-      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground/70">
+      <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
       <div className="mt-1 flex min-h-6 items-center gap-2 text-sm font-medium text-foreground">

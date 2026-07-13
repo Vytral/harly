@@ -483,13 +483,13 @@ export function CandidatesTable({
               onCheckedChange={toggleAll}
               aria-label="Select all"
             />
-            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               Candidate
             </span>
-            <span className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 sm:block">
+            <span className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:block">
               Pipeline
             </span>
-            <span className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground/70 sm:block">
+            <span className="hidden text-[11px] font-semibold uppercase tracking-[0.12em] text-muted-foreground sm:block">
               Status
             </span>
             <span aria-hidden className="hidden sm:block" />
@@ -556,7 +556,7 @@ export function CandidatesTable({
                             </span>
                           ))}
                           {row.tags.length > 3 ? (
-                            <span className="text-muted-foreground/70">
+                            <span className="text-muted-foreground">
                               +{row.tags.length - 3}
                             </span>
                           ) : null}

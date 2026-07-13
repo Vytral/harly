@@ -17,14 +17,16 @@ import { useStickyBar } from "@/components/dashboard/StickyBarContext";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/ui/ThemeToggle";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import type { NotificationItem } from "@/features/notifications/data";
 import type { WorkspaceOption } from "@/features/workspaces/data";
+import type { Permission } from "@/features/workspaces/permissions";
 
 type TopBarProps = {
   user: { name: string; email: string; image: string | null };
@@ -32,6 +34,7 @@ type TopBarProps = {
   workspace: { id: string; name: string; logoUrl: string | null };
   workspaceOptions: WorkspaceOption[];
   notifications: NotificationItem[];
+  userPermissions: Permission[];
 };
 
 export function TopBar({
@@ -40,6 +43,7 @@ export function TopBar({
   workspace,
   workspaceOptions,
   notifications,
+  userPermissions,
 }: TopBarProps) {
   const [commandOpen, setCommandOpen] = useState(false);
   const { title, breadcrumb } = usePageTitle();
@@ -67,6 +71,8 @@ export function TopBar({
         stickyBarVisible && "pointer-events-none",
       )}
     >
+      <SidebarTrigger className="md:hidden" />
+
       {displayTitle ? (
         <div className="ml-1 flex min-w-0 items-center gap-1.5">
           {SectionIcon ? (
@@ -74,7 +80,7 @@ export function TopBar({
           ) : null}
           {breadcrumb ? (
             <>
-              <span className="hidden truncate text-[15px] text-muted-foreground/70 sm:block">
+              <span className="hidden truncate text-[15px] text-muted-foreground sm:block">
                 {breadcrumb}
               </span>
               <ChevronRight className="hidden size-3 shrink-0 text-muted-foreground/40 sm:block" />
@@ -108,12 +114,7 @@ export function TopBar({
 
       <div className="flex items-center gap-1 sm:ml-0">
         <QuickCreateMenu />
-        <IconPopover
-          icon={Activity}
-          label="Activity"
-          title="Activity"
-          body="Recent moves across your pipeline will show up here."
-        />
+        <ComingSoonButton icon={Activity} label="Activity" />
         <NotificationsBell notifications={notifications} />
         <ThemeToggle />
         <div className="ml-1.5 pl-1.5">
@@ -126,39 +127,40 @@ export function TopBar({
         </div>
       </div>
 
-      <CommandMenu open={commandOpen} onOpenChange={setCommandOpen} />
+      <CommandMenu
+        open={commandOpen}
+        onOpenChange={setCommandOpen}
+        userPermissions={userPermissions}
+      />
     </header>
     </div>
   );
 }
 
-function IconPopover({
+function ComingSoonButton({
   icon: Icon,
   label,
-  title,
-  body,
 }: {
   icon: LucideIcon;
   label: string;
-  title: string;
-  body: string;
 }) {
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="text-muted-foreground"
-          aria-label={label}
-        >
-          <Icon className="size-[18px]" strokeWidth={1.5} />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-72">
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="mt-1 text-sm text-muted-foreground">{body}</p>
-      </PopoverContent>
-    </Popover>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span className="inline-flex">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground"
+            aria-label={label}
+            disabled
+            aria-disabled="true"
+          >
+            <Icon className="size-[18px]" strokeWidth={1.5} />
+          </Button>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent>Coming soon — recent pipeline moves will show up here.</TooltipContent>
+    </Tooltip>
   );
 }

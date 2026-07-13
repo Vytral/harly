@@ -1,14 +1,16 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { Inbox, type LucideIcon } from "lucide-react";
+import { Inbox } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
+type IconType = React.ComponentType<{ className?: string }>;
+
 type EmptyStateProps = {
   title: string;
   description: string;
-  icon?: LucideIcon;
+  icon?: IconType;
   action?: {
     href: Route;
     label: string;

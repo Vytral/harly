@@ -54,7 +54,7 @@ export function SignupForm() {
     try {
       const result = await authClient.signIn.social({
         provider: "google",
-        callbackURL: "/dashboard",
+        callbackURL: "/onboarding",
       });
 
       if (result.error) {
@@ -84,7 +84,7 @@ export function SignupForm() {
             value={name}
             onChange={(e) => { setName(e.target.value); setError(null); }}
             placeholder="Ada Lovelace"
-            className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-ring"
+            className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
           />
         </div>
 
@@ -103,7 +103,7 @@ export function SignupForm() {
             value={email}
             onChange={(e) => { setEmail(e.target.value); setError(null); }}
             placeholder="you@company.com"
-            className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-ring"
+            className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
           />
         </div>
 
@@ -123,7 +123,7 @@ export function SignupForm() {
               value={password}
               onChange={(e) => { setPassword(e.target.value); setError(null); }}
               placeholder="At least 8 characters"
-              className="w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-ring"
+              className="w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
             />
             <button
               type="button"
@@ -152,7 +152,7 @@ export function SignupForm() {
               value={confirmPassword}
               onChange={(e) => { setConfirmPassword(e.target.value); setError(null); }}
               placeholder="Repeat your password"
-              className="w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-ring"
+              className="w-full border-0 border-b border-input bg-transparent pb-2.5 pr-10 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
             />
             <button
               type="button"

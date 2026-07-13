@@ -4,7 +4,8 @@ import {
   createPublicApplicationImageStorageKey,
   imageUploadRequestSchema,
 } from "@/lib/storage-validation";
-import { storage } from "@/lib/storage";
+import { storage, storageProvider } from "@/lib/storage";
+import { appendStorageUploadIntent, createStorageUploadIntent } from "@/lib/storage-upload-intent";
 import { resolvePublicWorkspace } from "@/server/api/public";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
@@ -21,7 +22,7 @@ export const POST = withApi(async (request) => {
     windowMs: 60_000,
   });
 
-  await resolvePublicWorkspace(request, "applications:write");
+  const workspace = await resolvePublicWorkspace(request, "applications:write");
 
   const parsed = imageUploadRequestSchema.safeParse(
     await request.json().catch(() => null),
@@ -30,14 +31,15 @@ export const POST = withApi(async (request) => {
     throw ApiError.badRequest("Invalid upload request.");
   }
 
-  const key = createPublicApplicationImageStorageKey(parsed.data.filename);
+  const key = createPublicApplicationImageStorageKey(workspace.workspaceId, parsed.data.filename);
   const result = await storage.getPresignedUploadUrl({
     key,
     contentType: parsed.data.contentType,
     contentLength: parsed.data.contentLength,
   });
 
-  return apiOk({ ...result, key }, { cors: true });
+  const intent = createStorageUploadIntent({ workspaceId: workspace.workspaceId, key, contentType: parsed.data.contentType, contentLength: parsed.data.contentLength, expiresAt: Date.now() + 10 * 60_000 });
+  return apiOk({ ...result, uploadUrl: storageProvider === "local" ? appendStorageUploadIntent(result.uploadUrl, intent) : result.uploadUrl, key }, { cors: true });
 }, { cors: true });
 
 export function OPTIONS() {

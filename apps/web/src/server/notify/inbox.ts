@@ -69,6 +69,41 @@ async function getJobTeamMemberIds(
   return rows.map((r) => r.userId);
 }
 
+/**
+ * Notify the hiring team when a candidate reply reaches the workspace.
+ * This bypasses the outbound-webhook event registry deliberately: inbound
+ * email is a first-class mailbox concern, not an externally delivered event.
+ */
+export async function notifyInboundEmail(params: {
+  workspaceId: string;
+  jobId: string;
+  candidateId: string;
+  candidateName: string;
+  subject: string;
+}): Promise<void> {
+  try {
+    let recipientIds = await getJobTeamMemberIds(params.jobId);
+    if (recipientIds.length === 0) {
+      recipientIds = await getWorkspaceMemberIds(params.workspaceId);
+    }
+
+    await createNotification({
+      workspaceId: params.workspaceId,
+      recipientIds,
+      type: "email.received",
+      title: `${params.candidateName} replied`,
+      body: params.subject || "New candidate reply",
+      href: `/dashboard/candidates/${params.candidateId}`,
+      metadata: { candidateId: params.candidateId, jobId: params.jobId },
+    });
+  } catch (error) {
+    console.error("[notify] inbound email notify failed", {
+      workspaceId: params.workspaceId,
+      error,
+    });
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Event → in-app notification bridge
 // ---------------------------------------------------------------------------

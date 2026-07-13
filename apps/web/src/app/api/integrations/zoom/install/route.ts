@@ -1,17 +1,17 @@
-import { createHmac } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { getZoomCredentials } from "@/lib/zoom/config";
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import { createInstallState } from "@/server/oauth-state";
 
 export const runtime = "nodejs";
 
 /**
- * GET /api/integrations/zoom/install?ws=<workspaceId>
+ * GET /api/integrations/zoom/install
  *
- * Initiates Zoom OAuth flow. Generates HMAC-signed state, stores pending
- * state in workspace_settings, and redirects to Zoom authorization URL.
+ * Requires integrations:manage, creates a server-side nonce bound to the
+ * acting user + workspace, then redirects to Zoom's authorization URL.
  */
 export async function GET(req: NextRequest) {
   const session = await auth.api.getSession({ headers: req.headers });
@@ -19,17 +19,23 @@ export async function GET(req: NextRequest) {
     return redirectWithError("Unauthorized. Please log in first.");
   }
 
-  const wsId = req.nextUrl.searchParams.get("ws");
+  const wsId = session.session.activeOrganizationId;
   if (!wsId) {
-    return redirectWithError("Missing workspace ID.");
+    return redirectWithError("No workspace available for this account.");
   }
+
+  await requirePermission("integrations:manage");
 
   const credentials = await getZoomCredentials(wsId);
   if (!credentials) {
     return redirectWithError("Zoom credentials not configured for this workspace.");
   }
 
-  const state = buildState(wsId);
+  const state = await createInstallState({
+    userId: session.user.id,
+    workspaceId: wsId,
+    provider: "zoom",
+  });
 
   const appUrl = (
     process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
@@ -43,22 +49,6 @@ export async function GET(req: NextRequest) {
   authUrl.searchParams.set("scope", "meeting:write");
 
   return NextResponse.redirect(authUrl);
-}
-
-function buildState(wsId: string): string {
-  const payload = Buffer.from(
-    JSON.stringify({ ws: wsId, t: Date.now() }),
-  ).toString("base64url");
-
-  const sig = createHmac("sha256", getSigningKey())
-    .update(payload)
-    .digest("base64url");
-
-  return `${payload}.${sig}`;
-}
-
-function getSigningKey(): string {
-  return process.env.AI_ENCRYPTION_KEY ?? "fallback-dev-only";
 }
 
 function redirectWithError(msg: string) {

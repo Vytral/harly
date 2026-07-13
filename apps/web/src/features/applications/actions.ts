@@ -3,10 +3,12 @@
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
+import { after } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
 import { createPublicApplication } from "@/features/applications/data";
 import { verifyTurnstileToken } from "@/lib/turnstile";
+import { clientIp } from "@/server/api/ratelimit";
 import {
   candidateEducationEntrySchema,
   candidateExperienceEntrySchema,
@@ -18,14 +20,18 @@ import { getPublicJobApplicationContext } from "@/features/applications/data";
 import { sendApplicationReceivedEmails } from "@/features/applications/notifications";
 import { storage } from "@/lib/storage";
 import { extractResumeText } from "@/lib/resume/extract-text";
-import { maxResumeFileSize } from "@/lib/storage-validation";
+import { isWorkspaceStorageKey, maxResumeFileSize } from "@/lib/storage-validation";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { parseResumeWithAI } from "@/lib/ai/surfaces/parse-resume";
+import { getServerLogger } from "@/lib/logger";
+
+const aiParseLogger = getServerLogger().child({ component: "public-ai-parse" });
 import {
   extractResumeAutofillFields,
   type ResumeAutofillFields,
 } from "@/features/applications/resume-autofill";
 import { scheduleAutoScore } from "@/features/applications/auto-score";
+import { scheduleAutoDuplicateCheck } from "@/features/applications/auto-duplicates";
 
 // Rate limiter: IP → {count, resetAt}. Per IP, max 5 parse calls per 60s window.
 // Stricter than before to prevent API key drain on public AI parsing.
@@ -52,7 +58,7 @@ export type ParseResumeResult =
 /**
  * Parse an already-uploaded resume (by storage key) into autofill fields.
  * Public — runs during the unauthenticated apply flow — so it only ever reads
- * objects under the `resumes/` prefix and never an arbitrary key.
+ * a resume that is namespaced to the job's workspace.
  */
 export async function parseResumeAction(input: {
   key: string;
@@ -62,7 +68,7 @@ export async function parseResumeAction(input: {
 }): Promise<ParseResumeResult> {
   const key = typeof input?.key === "string" ? input.key : "";
 
-  if (!key.startsWith("resumes/") || key.includes("..")) {
+  if (key.includes("..")) {
     return { ok: false };
   }
 
@@ -73,6 +79,16 @@ export async function parseResumeAction(input: {
     requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     "unknown";
   if (!checkParseRateLimit(ip)) {
+    return { ok: false };
+  }
+
+  const jobContext = input.jobSlug
+    ? await getPublicJobApplicationContext({
+        jobSlug: input.jobSlug,
+        workspaceSlug: input.workspaceSlug,
+      })
+    : null;
+  if (!jobContext || !isWorkspaceStorageKey(jobContext.workspaceId, key, "resumes")) {
     return { ok: false };
   }
 
@@ -96,24 +112,38 @@ export async function parseResumeAction(input: {
     let jobKeywords: string[] | undefined;
     let aiConfig: Awaited<ReturnType<typeof getWorkspaceAiConfig>> = null;
 
-    if (input.jobSlug) {
-      const jobContext = await getPublicJobApplicationContext({
-        jobSlug: input.jobSlug,
-        workspaceSlug: input.workspaceSlug,
-      });
-      if (jobContext) {
-        jobKeywords = jobContext.keywords;
-        aiConfig = await getWorkspaceAiConfig(jobContext.workspaceId);
-      }
-    }
+    jobKeywords = jobContext.keywords;
+    aiConfig = await getWorkspaceAiConfig(jobContext.workspaceId);
 
     if (aiConfig) {
+      const startedAt = Date.now();
+      let ok = false;
       try {
         const fields = await parseResumeWithAI(aiConfig, text, jobKeywords);
+        ok = true;
         return { ok: true, fields };
       } catch (error) {
         // Fall back to the heuristic — AI failures must never break apply.
         console.error("AI resume parse failed; using heuristic", error);
+      } finally {
+        // Attribution for the employer's public AI spend (IA-09): who consumed
+        // the key, on which job, via which provider/model, and how long it took.
+        // Deferred so it never delays the apply response.
+        after(() => {
+          aiParseLogger.info(
+            {
+              workspaceId: jobContext.workspaceId,
+              ip,
+              jobSlug: input.jobSlug,
+              fileName,
+              provider: aiConfig?.provider,
+              modelId: aiConfig?.modelId,
+              ok,
+              durationMs: Date.now() - startedAt,
+            },
+            "public resume AI parse",
+          );
+        });
       }
     }
 
@@ -136,7 +166,11 @@ export type ApplyJobActionState = {
 
 function parseEntryArray<T>(
   raw: FormDataEntryValue | null,
-  schema: { safeParse: (value: unknown) => { success: true; data: T } | { success: false } },
+  schema: {
+    safeParse: (
+      value: unknown,
+    ) => { success: true; data: T } | { success: false };
+  },
 ): T[] {
   if (typeof raw !== "string" || !raw.trim()) {
     return [];
@@ -206,17 +240,22 @@ export async function submitApplicationAction(
   }
 
   // Bot protection — verified against the workspace's Turnstile secret (or the
-  // env fallback). When neither is configured, verification is skipped.
+  // env fallback). A global TURNSTILE_SECRET_KEY makes verification mandatory
+  // for every workspace (enforced), consistent with the public apply API.
   const turnstileToken = formData.get("cf-turnstile-response") as string | null;
   const requestHeaders = await headers();
-  const remoteIp =
-    requestHeaders.get("cf-connecting-ip") ??
-    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    null;
+  const remoteIp = clientIp({
+    headers: new Headers({
+      "x-forwarded-for": requestHeaders.get("x-forwarded-for") ?? "",
+      "x-real-ip": requestHeaders.get("x-real-ip") ?? "",
+      "cf-connecting-ip": requestHeaders.get("cf-connecting-ip") ?? "",
+    }),
+  } as Request);
   const turnstileValid = await verifyTurnstileToken(
     turnstileToken,
     jobContext.workspaceId,
     remoteIp,
+    true,
   );
   if (!turnstileValid) {
     return {
@@ -338,10 +377,16 @@ export async function submitApplicationAction(
       };
     }
 
-    sendApplicationReceivedEmails(result.email);
+    void sendApplicationReceivedEmails(result.email);
 
-    // Fire-and-forget auto-score — never blocks the apply response.
-    void scheduleAutoScore(result.applicationId, jobContext.workspaceId);
+    // Run opted-in AI automations after the response without risking a dropped
+    // fire-and-forget promise in serverless runtimes.
+    after(async () => {
+      await Promise.allSettled([
+        scheduleAutoScore(result.applicationId, jobContext.workspaceId),
+        scheduleAutoDuplicateCheck(result.candidateId, jobContext.workspaceId),
+      ]);
+    });
 
     revalidatePath("/dashboard/candidates");
     return {

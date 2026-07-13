@@ -333,6 +333,7 @@ export async function getPublicJobDetail(input: {
       and(
         eq(jobs.slug, input.jobSlug),
         eq(jobs.status, "open"),
+        isNull(jobs.deletedAt),
         input.workspaceSlug ? eq(organization.slug, input.workspaceSlug) : undefined,
       ),
     )

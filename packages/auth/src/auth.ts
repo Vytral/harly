@@ -1,11 +1,11 @@
-import { betterAuth } from "better-auth";
+import { betterAuth, APIError } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies } from "better-auth/next-js";
 import { magicLink, organization, twoFactor } from "better-auth/plugins";
 import { sso } from "@better-auth/sso";
 
-import { db, schema, oauthProviders } from "@harly/db";
-import { eq, and } from "drizzle-orm";
+import { db, schema, organization as organizationTable, oauthProviders } from "@harly/db";
+import { eq, and, sql } from "drizzle-orm";
 import {
   createEmailSender,
   ResetPasswordEmail,
@@ -18,6 +18,15 @@ import { decryptSecret, isEncryptionConfigured } from "./crypto-adapter";
 
 const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 const emailFrom = process.env.EMAIL_FROM ?? "Harly <noreply@harly.dev>";
+
+if (
+  process.env.NODE_ENV === "production" &&
+  (!process.env.AI_ENCRYPTION_KEY || process.env.AI_ENCRYPTION_KEY.trim() === "")
+) {
+  console.warn(
+    "[Harly] AI_ENCRYPTION_KEY is not set — OAuth provider secrets, mailbox credentials, and AI provider keys cannot be encrypted at rest. Set AI_ENCRYPTION_KEY before configuring those integrations.",
+  );
+}
 
 /**
  * Send an auth email via Resend, falling back to a server-console log when no
@@ -198,6 +207,18 @@ function getSocialProviders() {
   return socialProvidersPromise;
 }
 
+async function organizationExists(): Promise<boolean> {
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(919191)`);
+    const [row] = await tx
+      .select({ id: organizationTable.id })
+      .from(organizationTable)
+      .limit(1);
+    return Boolean(row);
+  });
+  return result;
+}
+
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? appUrl,
   secret: process.env.BETTER_AUTH_SECRET,
@@ -206,7 +227,17 @@ export const auth = betterAuth({
     schema,
   }),
   plugins: [
-    organization(),
+    organization({
+      organizationHooks: {
+        beforeCreateOrganization: async () => {
+          if (await organizationExists()) {
+            throw new APIError("FORBIDDEN", {
+              message: "This deployment already has a workspace.",
+            });
+          }
+        },
+      },
+    }),
     twoFactor(),
     magicLink({
       sendMagicLink: async ({ email, url }) => {

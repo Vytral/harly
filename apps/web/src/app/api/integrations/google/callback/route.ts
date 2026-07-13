@@ -1,5 +1,3 @@
-import { createHmac } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -8,12 +6,14 @@ import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { createOAuth2Client } from "@/lib/gcal/config";
 import { createLogger } from "@/lib/logger";
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  verifyAndConsumeOauthStateNonce,
+} from "@/server/oauth-state";
 
 const log = createLogger("api-google-callback");
 
 export const runtime = "nodejs";
-
-const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 /**
  * GET /api/integrations/google/callback?code=...&state=...
@@ -39,10 +39,28 @@ export async function GET(req: NextRequest) {
     return redirectWithError("Missing code or state from Google.");
   }
 
-  const wsId = verifyState(state);
-  if (!wsId) {
-    return redirectWithError("Invalid or expired state. Please try again.");
+  // Verify the server-side nonce: single-use, TTL-scoped, bound to the user +
+  // workspace that started the install. This replaces the old CSRF-only state
+  // check and closes replay/escalation on the integration OAuth flow.
+  const actor = session.session;
+  const userId = session.user.id;
+  const workspaceId = actor.activeOrganizationId;
+  if (!workspaceId) {
+    return redirectWithError("No workspace available for this account.");
   }
+
+  const nonceCheck = await verifyAndConsumeOauthStateNonce({
+    state,
+    userId,
+    workspaceId,
+  });
+  if (!nonceCheck.ok) {
+    return redirectWithError(`${nonceCheck.error} Please try again.`);
+  }
+
+  await requirePermission("integrations:manage");
+
+  const wsId = nonceCheck.workspaceId;
 
   const oauth2Client = createOAuth2Client();
   if (!oauth2Client) {
@@ -99,34 +117,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.redirect(
     `${appUrl}/settings/integrations?gcal=connected`,
   );
-}
-
-function verifyState(state: string): string | null {
-  const [payload, sig] = state.split(".");
-  if (!payload || !sig) return null;
-
-  const expected = createHmac("sha256", getSigningKey())
-    .update(payload)
-    .digest("base64url");
-  if (sig !== expected) return null;
-
-  try {
-    const data = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
-    ) as { ws?: string; t?: number };
-
-    if (!data.ws) return null;
-    if (data.t && Date.now() - data.t > STATE_MAX_AGE_MS) return null;
-
-    return data.ws;
-  } catch (error) {
-    log.error(error, "google callback verifyState failed");
-    return null;
-  }
-}
-
-function getSigningKey(): string {
-  return process.env.AI_ENCRYPTION_KEY ?? "fallback-dev-only";
 }
 
 function getAppUrl(): string {

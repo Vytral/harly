@@ -264,7 +264,7 @@ function MembersPanel({
               className="pl-9"
             />
           </div>
-          <p className="hidden shrink-0 text-xs text-muted-foreground/60 md:block">
+          <p className="hidden shrink-0 text-xs text-muted-foreground md:block">
             Showing {visible.length} member{visible.length !== 1 ? "s" : ""}
           </p>
         </div>
@@ -309,10 +309,10 @@ function MembersPanel({
 
       <Card className="gap-0 overflow-hidden py-0">
         <div className="flex items-center justify-between border-b bg-muted/20 px-5 py-2.5">
-          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
+          <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
             {visible.length} {visible.length === 1 ? "member" : "members"}
           </p>
-          <p className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground/70 sm:block">
+          <p className="hidden text-xs font-medium uppercase tracking-wide text-muted-foreground sm:block">
             Role
           </p>
         </div>

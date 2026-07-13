@@ -94,7 +94,7 @@ export function ResetPasswordForm({
             setError(null);
           }}
           placeholder="At least 8 characters"
-          className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-ring"
+          className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
         />
       </div>
 
@@ -116,7 +116,7 @@ export function ResetPasswordForm({
             setError(null);
           }}
           placeholder="Repeat your new password"
-          className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground/60 focus:border-ring"
+          className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
         />
       </div>
 

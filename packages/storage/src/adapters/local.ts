@@ -11,8 +11,13 @@ function safeKey(key: string) {
     .join("/");
 }
 
+function getUploadsRoot() {
+  const dir = process.env.UPLOADS_DIR;
+  return dir ? path.resolve(dir) : path.resolve(process.cwd(), "uploads");
+}
+
 export function getLocalUploadPath(key: string) {
-  const uploadsRoot = path.resolve(process.cwd(), "uploads");
+  const uploadsRoot = getUploadsRoot();
   const resolvedPath = path.resolve(uploadsRoot, safeKey(key));
 
   if (!resolvedPath.startsWith(`${uploadsRoot}${path.sep}`)) {

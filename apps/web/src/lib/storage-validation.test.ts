@@ -78,20 +78,20 @@ describe("sanitizeFilename", () => {
 });
 
 describe("createResumeStorageKey", () => {
-  it("produces a key with resumes/ prefix", () => {
-    const key = createResumeStorageKey("resume.pdf");
-    expect(key).toMatch(/^resumes\/[\w-]+\/resume\.pdf$/);
+  it("produces a key namespaced to its workspace", () => {
+    const key = createResumeStorageKey("workspace_a", "resume.pdf");
+    expect(key).toMatch(/^workspaces\/workspace_a\/resumes\/[\w-]+\/resume\.pdf$/);
   });
 
   it("sanitizes filename in key", () => {
-    const key = createResumeStorageKey("my résumé!.pdf");
+    const key = createResumeStorageKey("workspace_a", "my résumé!.pdf");
     expect(key).not.toContain("!");
     expect(key).toMatch(/\.pdf$/);
   });
 
   it("generates unique keys for same filename", () => {
-    const key1 = createResumeStorageKey("resume.pdf");
-    const key2 = createResumeStorageKey("resume.pdf");
+    const key1 = createResumeStorageKey("workspace_a", "resume.pdf");
+    const key2 = createResumeStorageKey("workspace_a", "resume.pdf");
     expect(key1).not.toBe(key2);
   });
 });

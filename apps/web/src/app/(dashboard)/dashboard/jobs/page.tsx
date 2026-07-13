@@ -179,7 +179,7 @@ function StatTile({
         <span
           className={cn(
             "flex size-8 items-center justify-center rounded-lg transition-colors duration-200",
-            accent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground/70",
+            accent ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
           )}
         >
           <Icon className="size-4" strokeWidth={1.8} />

@@ -1,5 +1,6 @@
 import { decodeCursor, paginate, parseLimit } from "@harly/api";
 import type { Application } from "@harly/db";
+import { after } from "next/server";
 
 import {
   createApplicationForApi,
@@ -9,8 +10,11 @@ import {
 import { authenticateApiKey } from "@/server/api/auth";
 import { applicationCreateSchema } from "@/server/api/schemas";
 import { apiOk, withApi } from "@/server/api/respond";
+import { scheduleAutoScore } from "@/features/applications/auto-score";
+import { scheduleAutoDuplicateCheck } from "@/features/applications/auto-duplicates";
 
 export const runtime = "nodejs";
+export const maxDuration = 60;
 
 /** GET /api/v1/applications — list applications (filters: jobId, status). */
 export const GET = withApi(async (request) => {
@@ -47,6 +51,12 @@ export const POST = withApi(async (request) => {
     jobId: values.jobId,
     candidateId: values.candidateId,
     source: values.source,
+  });
+  after(async () => {
+    await Promise.allSettled([
+      scheduleAutoScore(application.id, ctx.workspaceId),
+      scheduleAutoDuplicateCheck(application.candidateId, ctx.workspaceId),
+    ]);
   });
   return apiOk(serializeApplication(application), { status: 201 });
 });

@@ -1,14 +1,26 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { auth } from "@/lib/auth";
+import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
 import {
   createResumeStorageKey,
   resumeUploadRequestSchema,
 } from "@/lib/storage-validation";
-import { storage } from "@/lib/storage";
+import { storage, storageProvider } from "@/lib/storage";
+import { appendStorageUploadIntent, createStorageUploadIntent } from "@/lib/storage-upload-intent";
 
 export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
+  const session = await auth.api.getSession({ headers: request.headers });
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+  const context = await getWorkspaceContextOrNull();
+  if (!context) {
+    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  }
+
   const parsed = resumeUploadRequestSchema.safeParse(await request.json());
 
   if (!parsed.success) {
@@ -18,12 +30,13 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const key = createResumeStorageKey(parsed.data.filename);
+  const key = createResumeStorageKey(context.organization.id, parsed.data.filename);
   const result = await storage.getPresignedUploadUrl({
     key,
     contentType: parsed.data.contentType,
     contentLength: parsed.data.contentLength,
   });
 
-  return NextResponse.json({ ...result, key });
+  const intent = createStorageUploadIntent({ workspaceId: context.organization.id, key, contentType: parsed.data.contentType, contentLength: parsed.data.contentLength, expiresAt: Date.now() + 10 * 60_000 });
+  return NextResponse.json({ ...result, uploadUrl: storageProvider === "local" ? appendStorageUploadIntent(result.uploadUrl, intent) : result.uploadUrl, key });
 }

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createElement } from "react";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { Output, generateText } from "ai";
 import { z } from "zod";
 
@@ -32,15 +32,18 @@ import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
 import { syncInterviewToGCal, cancelInterviewGCalEvent, updateInterviewGCalEvent } from "@/lib/gcal/sync";
+import { getWorkspaceGCalConfig } from "@/lib/gcal/config";
 import { syncInterviewToTeams, cancelInterviewTeamsMeeting } from "@/lib/outlook/teams-sync";
+import { getWorkspaceOutlookConfig } from "@/lib/outlook/config";
 import { syncInterviewToZoom, cancelInterviewZoomMeeting } from "@/lib/zoom/sync";
+import { getZoomToken } from "@/lib/zoom/config";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { getModel } from "@/lib/ai/registry";
+import { summarizeInterviewNotesWithAI } from "@/lib/ai/surfaces/summarize-interview-notes";
 import {
   interviewBriefSchema,
-  interviewNotesSummarySchema,
   type InterviewBrief,
   type InterviewNotesSummary,
 } from "@/lib/ai/schemas";
@@ -157,6 +160,8 @@ export async function scheduleInterview(
       return { success: false, error: "Workspace access denied." };
     }
 
+    await requirePermission("collab:write");
+
     const data = parsed.data;
     const when = new Date(data.scheduledAt);
 
@@ -183,6 +188,28 @@ export async function scheduleInterview(
 
       if (!application) {
         return { success: false as const, error: "Application not found." };
+      }
+
+      if (data.interviewerId) {
+        const [conflict] = await tx
+          .select({ id: interviews.id })
+          .from(interviews)
+          .where(
+            and(
+              eq(interviews.workspaceId, workspace.id),
+              eq(interviews.interviewerId, data.interviewerId),
+              eq(interviews.status, "scheduled"),
+              sql`${interviews.scheduledAt} < ${new Date(when.getTime() + data.durationMins * 60_000)}`,
+              sql`${interviews.scheduledAt} + (${interviews.durationMins} * interval '1 minute') > ${when}`,
+            ),
+          )
+          .limit(1);
+        if (conflict) {
+          return {
+            success: false as const,
+            error: "This interviewer already has an overlapping interview.",
+          };
+        }
       }
 
       const [interview] = await tx
@@ -263,40 +290,28 @@ export async function scheduleInterview(
         (e): e is string => Boolean(e),
       );
 
-      // Sync to Google Calendar (fire-and-forget).
-      // Google sends official calendar invitations to all attendees.
-      void syncInterviewToGCal({
-        workspaceId: workspace.id,
-        interviewId: result.interviewId,
-        summary: data.title ?? INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
-        description: data.notes ?? undefined,
-        start: when,
-        durationMins: data.durationMins,
-        attendees: attendees.length > 0 ? attendees : undefined,
-        location: data.location ?? undefined,
-        mode: data.mode,
-      });
-
-      // Create Teams meeting for video interviews (fire-and-forget).
+      const summary = data.title ?? INTERVIEW_TYPE_LABEL[data.type] ?? "Interview";
+      let deliveryLocation = data.location ?? undefined;
       if (data.mode === "video") {
-        void syncInterviewToTeams({
-          workspaceId: workspace.id,
-          interviewId: result.interviewId,
-          summary: data.title ?? INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
-          start: when,
-          durationMins: data.durationMins,
-        });
-      }
-
-      // Create Zoom meeting for video interviews (fire-and-forget).
-      if (data.mode === "video") {
-        void syncInterviewToZoom({
-          workspaceId: workspace.id,
-          interviewId: result.interviewId,
-          summary: data.title ?? INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
-          start: when,
-          durationMins: data.durationMins,
-        });
+        // A video interview gets exactly one provider. Priority is explicit and
+        // stable: Zoom, then Teams, then Google Meet. Await its persistence so
+        // the candidate receives the same link Harly stores on the interview.
+        const [zoomToken, outlookConfig, gcalConfig] = await Promise.all([
+          getZoomToken(workspace.id),
+          getWorkspaceOutlookConfig(workspace.id),
+          getWorkspaceGCalConfig(workspace.id),
+        ]);
+        if (zoomToken) {
+          await syncInterviewToZoom({ workspaceId: workspace.id, interviewId: result.interviewId, summary, start: when, durationMins: data.durationMins });
+        } else if (outlookConfig) {
+          await syncInterviewToTeams({ workspaceId: workspace.id, interviewId: result.interviewId, summary, start: when, durationMins: data.durationMins });
+        } else if (gcalConfig) {
+          await syncInterviewToGCal({ workspaceId: workspace.id, interviewId: result.interviewId, summary, description: data.notes ?? undefined, start: when, durationMins: data.durationMins, attendees: attendees.length > 0 ? attendees : undefined, location: data.location ?? undefined, mode: data.mode });
+        }
+        const [synced] = await db.select({ meetLink: interviews.meetLink }).from(interviews).where(and(eq(interviews.id, result.interviewId), eq(interviews.workspaceId, workspace.id))).limit(1);
+        deliveryLocation = synced?.meetLink ?? deliveryLocation;
+      } else {
+        void syncInterviewToGCal({ workspaceId: workspace.id, interviewId: result.interviewId, summary, description: data.notes ?? undefined, start: when, durationMins: data.durationMins, attendees: attendees.length > 0 ? attendees : undefined, location: data.location ?? undefined, mode: data.mode });
       }
 
       if (recipient?.email) {
@@ -312,7 +327,7 @@ export async function scheduleInterview(
           company_name: recipient.companyName,
           interview_date: interviewWhenFormatter.format(when),
           interview_time: interviewWhenFormatter.format(when),
-          interview_location: data.location ?? undefined,
+          interview_location: deliveryLocation,
           interview_duration: duration,
           interviewer_name: interviewerName,
         });
@@ -347,7 +362,7 @@ export async function scheduleInterview(
                 interviewType: INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
                 when: interviewWhenFormatter.format(when),
                 mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
-                location: data.location ?? undefined,
+                location: deliveryLocation,
                 duration,
                 startIso: when.toISOString(),
                 durationMins: data.durationMins,
@@ -402,6 +417,8 @@ export async function setInterviewStatus(input: {
       return { success: false, error: "Invalid request." };
     }
     const { organization: workspace } = await getWorkspaceContext();
+
+    await requirePermission("collab:write");
 
     const updated = await db
       .update(interviews)
@@ -559,32 +576,32 @@ export async function rescheduleInterview(input: {
     const data = parsed.data;
     const when = new Date(data.scheduledAt);
 
-    const updated = await db
-      .update(interviews)
-      .set({
-        scheduledAt: when,
-        durationMins: data.durationMins,
-        location: data.location ?? null,
-        updatedAt: new Date(),
+    await requirePermission("collab:write");
+
+    // Load the current interview first so the provider meeting is recreated
+    // BEFORE we mutate the row. If the provider call fails, the database keeps
+    // the original time and a still-valid meeting, so a retry stays consistent.
+    const [row] = await db
+      .select({
+        id: interviews.id,
+        gcalEventId: interviews.gcalEventId,
+        teamsMeetingId: interviews.teamsMeetingId,
+        zoomMeetingId: interviews.zoomMeetingId,
+        title: interviews.title,
+        type: interviews.type,
       })
+      .from(interviews)
       .where(
         and(
           eq(interviews.id, data.interviewId),
           eq(interviews.workspaceId, workspace.id),
         ),
       )
-      .returning({
-        id: interviews.id,
-        gcalEventId: interviews.gcalEventId,
-        title: interviews.title,
-        type: interviews.type,
-      });
+      .limit(1);
 
-    if (updated.length === 0) {
+    if (!row) {
       return { success: false, error: "Interview not found." };
     }
-
-    const row = updated[0];
 
     // Fetch interview context for GCal attendees + candidate notification.
     const [info] = await db
@@ -647,6 +664,37 @@ export async function rescheduleInterview(input: {
       });
     }
 
+    // Teams and Zoom meetings are standalone objects. Recreate them after
+    // their old meeting is deleted so their provider never keeps stale time.
+    const summary = row?.title ?? INTERVIEW_TYPE_LABEL[row?.type ?? "screening"] ?? "Interview";
+    if (info?.mode === "video" && row?.teamsMeetingId) {
+      await cancelInterviewTeamsMeeting({ workspaceId: workspace.id, interviewId: row.id, teamsMeetingId: row.teamsMeetingId });
+      await syncInterviewToTeams({ workspaceId: workspace.id, interviewId: row.id, summary, start: when, durationMins: data.durationMins });
+    } else if (info?.mode === "video" && row?.zoomMeetingId) {
+      await cancelInterviewZoomMeeting({ workspaceId: workspace.id, interviewId: row.id, zoomMeetingId: row.zoomMeetingId });
+      await syncInterviewToZoom({ workspaceId: workspace.id, interviewId: row.id, summary, start: when, durationMins: data.durationMins });
+    }
+
+    // Persist the new time/location only after the provider meeting was
+    // successfully recreated, keeping DB and provider state consistent.
+    await db
+      .update(interviews)
+      .set({
+        scheduledAt: when,
+        durationMins: data.durationMins,
+        location: data.location ?? null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(interviews.id, data.interviewId),
+          eq(interviews.workspaceId, workspace.id),
+        ),
+      );
+
+    const [synced] = await db.select({ meetLink: interviews.meetLink }).from(interviews).where(and(eq(interviews.id, row!.id), eq(interviews.workspaceId, workspace.id))).limit(1);
+    const deliveryLocation = synced?.meetLink ?? data.location ?? undefined;
+
     if (info?.email) {
       const branding = await getWorkspaceEmailBranding(workspace.id);
       const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
@@ -667,7 +715,7 @@ export async function rescheduleInterview(input: {
           interviewType: INTERVIEW_TYPE_LABEL[info.type] ?? "Interview",
           when: interviewWhenFormatter.format(when),
           mode: INTERVIEW_MODE_LABEL[info.mode] ?? info.mode,
-          location: data.location ?? undefined,
+          location: deliveryLocation,
           duration: data.durationMins ? `${data.durationMins} min` : undefined,
           startIso: when.toISOString(),
           durationMins: data.durationMins,
@@ -764,6 +812,8 @@ export async function updateInterview(input: {
     const { organization: workspace } = await getWorkspaceContext();
     const data = parsed.data;
 
+    await requirePermission("collab:write");
+
     // Build the update payload — only set fields that were explicitly provided.
     const set: Record<string, unknown> = { updatedAt: new Date() };
     if (data.type !== undefined) set.type = data.type;
@@ -777,28 +827,31 @@ export async function updateInterview(input: {
       set.scheduledAt = new Date(data.scheduledAt);
     }
 
-    const updated = await db
-      .update(interviews)
-      .set(set)
+    // Load the current interview first and recreate the provider meeting
+    // before mutating the row, so a provider failure leaves a consistent state.
+    const [row] = await db
+      .select({
+        id: interviews.id,
+        gcalEventId: interviews.gcalEventId,
+        teamsMeetingId: interviews.teamsMeetingId,
+        zoomMeetingId: interviews.zoomMeetingId,
+        scheduledAt: interviews.scheduledAt,
+        type: interviews.type,
+        mode: interviews.mode,
+        title: interviews.title,
+      })
+      .from(interviews)
       .where(
         and(
           eq(interviews.id, data.interviewId),
           eq(interviews.workspaceId, workspace.id),
         ),
       )
-      .returning({
-        id: interviews.id,
-        gcalEventId: interviews.gcalEventId,
-        scheduledAt: interviews.scheduledAt,
-        type: interviews.type,
-        mode: interviews.mode,
-      });
+      .limit(1);
 
-    if (updated.length === 0) {
+    if (!row) {
       return { success: false, error: "Interview not found." };
     }
-
-    const row = updated[0];
 
     // Fetch full context for GCal sync and email.
     const [info] = await db
@@ -808,6 +861,7 @@ export async function updateInterview(input: {
         companyName: organization.name,
         jobTitle: jobs.title,
         interviewerId: interviews.interviewerId,
+        mode: interviews.mode,
         scheduledAt: interviews.scheduledAt,
         applicationId: interviews.applicationId,
       })
@@ -842,12 +896,46 @@ export async function updateInterview(input: {
       void updateInterviewGCalEvent({
         workspaceId: workspace.id,
         gcalEventId: row.gcalEventId,
-        start: info?.scheduledAt ?? new Date(),
+        start: data.scheduledAt ? new Date(data.scheduledAt) : (info?.scheduledAt ?? new Date()),
         durationMins: data.durationMins ?? 45,
         attendees: attendees.length > 0 ? attendees : undefined,
         location: data.location ?? undefined,
       });
     }
+
+    // Keep the video-provider meeting aligned with edits made from the detail
+    // form too (not only the dedicated reschedule action). Provider objects do
+    // not share a universal update API, so recreate the existing provider's
+    // meeting after its old one is cancelled.
+    const changesMeeting = data.scheduledAt !== undefined || data.durationMins !== undefined || data.mode !== undefined || data.title !== undefined;
+    if (changesMeeting && row && info) {
+      const start = data.scheduledAt ? new Date(data.scheduledAt) : (info.scheduledAt ?? new Date());
+      const durationMins = data.durationMins ?? 45;
+      const summary = row.title ?? INTERVIEW_TYPE_LABEL[row.type] ?? "Interview";
+      if (row.teamsMeetingId) {
+        await cancelInterviewTeamsMeeting({ workspaceId: workspace.id, interviewId: row.id, teamsMeetingId: row.teamsMeetingId });
+        if (info.mode === "video") {
+          await syncInterviewToTeams({ workspaceId: workspace.id, interviewId: row.id, summary, start, durationMins });
+        }
+      } else if (row.zoomMeetingId) {
+        await cancelInterviewZoomMeeting({ workspaceId: workspace.id, interviewId: row.id, zoomMeetingId: row.zoomMeetingId });
+        if (info.mode === "video") {
+          await syncInterviewToZoom({ workspaceId: workspace.id, interviewId: row.id, summary, start, durationMins });
+        }
+      }
+    }
+
+    // Persist the edits only after the provider meeting was successfully
+    // recreated, keeping DB and provider state consistent.
+    await db
+      .update(interviews)
+      .set(set)
+      .where(
+        and(
+          eq(interviews.id, data.interviewId),
+          eq(interviews.workspaceId, workspace.id),
+        ),
+      );
 
     // Send rescheduled email if date/time changed.
     if (data.scheduledAt && data.scheduledAt !== "" && info?.email) {
@@ -1142,28 +1230,14 @@ export async function summarizeInterviewNotesAction(input: {
   }
 
   try {
-    const { output: sumOutput } = await generateText({
-      model: getModel(aiConfig),
-      system:
-        "You are a recruiting analyst. Summarize post-interview notes into a structured " +
-        "debrief. `executiveSummary` is 2-3 plain sentences. `positiveSignals` and " +
-        "`concerns` are concise bullet phrases derived strictly from the notes — do not " +
-        "invent information. `suggestedDecision` reflects the overall sentiment: " +
-        "strong_yes / yes / maybe / no. Use plain text only, no markdown.",
-      prompt:
-        `Summarize these interview notes.\n\n` +
-        `Candidate: ${sumRow.candidateFirst} ${sumRow.candidateLast}\n` +
-        `Role: ${sumRow.jobTitle}\n` +
-        `Interview: ${sumRow.title ?? INTERVIEW_TYPE_LABEL[sumRow.type] ?? sumRow.type}\n\n` +
-        `Notes:\n"""\n${parsed.data.rawNotes.slice(0, 8000)}\n"""`,
-      output: Output.object({ schema: interviewNotesSummarySchema }),
+    const summary = await summarizeInterviewNotesWithAI(aiConfig, {
+      rawNotes: parsed.data.rawNotes,
+      candidateName: `${sumRow.candidateFirst} ${sumRow.candidateLast}`,
+      jobTitle: sumRow.jobTitle,
+      interviewType: sumRow.title ?? INTERVIEW_TYPE_LABEL[sumRow.type] ?? sumRow.type,
     });
 
-    if (!sumOutput) {
-      return { success: false, error: "AI returned no structured output." };
-    }
-
-    return { success: true, summary: sumOutput };
+    return { success: true, summary };
   } catch (sumError) {
     log.error(sumError, "summarizeInterviewNotesAction failed");
     return {

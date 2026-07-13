@@ -81,7 +81,7 @@ export function BuilderTopBar({
                 : "border-border bg-kraft/60 text-ink-soft hover:bg-kraft hover:text-foreground",
             )}
           >
-            <span className="text-ink-soft/70 font-medium">Template</span>
+            <span className="text-ink-soft font-medium">Template</span>
             <span className="text-foreground">{meta.label}</span>
             <ChevronDownIcon
               className={cn(

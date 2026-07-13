@@ -167,7 +167,7 @@ export function TwoFactorCard({ enabled }: { enabled: boolean }) {
 
             {/* Backup codes */}
             <div className="flex-1 space-y-2">
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                 Backup codes
               </p>
               <div className="grid grid-cols-2 gap-1 rounded-lg border bg-card p-2.5 font-mono text-xs">

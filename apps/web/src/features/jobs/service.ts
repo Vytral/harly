@@ -33,6 +33,7 @@ export type JobApiInput = {
   location?: string | null;
   employmentType: Job["employmentType"];
   workplaceType: Job["workplaceType"];
+  experienceLevel?: string | null;
   status?: JobStatus;
   requirements?: string | null;
   benefits?: string | null;
@@ -174,6 +175,7 @@ export async function createJobForApi(input: {
         location: values.location ?? null,
         employmentType: values.employmentType,
         workplaceType: values.workplaceType,
+        experienceLevel: values.experienceLevel ?? null,
         requirements: values.requirements ?? null,
         benefits: values.benefits ?? null,
         keywords: values.keywords ?? [],
@@ -219,8 +221,7 @@ export async function updateJobForApi(input: {
   });
 
   const nextStatus = input.values.status ?? existing.status;
-  const becomesPublished =
-    nextStatus === "open" && !existing.publishedAt;
+  const becomesPublished = nextStatus === "open" && !existing.publishedAt;
 
   const [updated] = await db
     .update(jobs)

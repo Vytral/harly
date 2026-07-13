@@ -1,9 +1,9 @@
-import { createHmac, randomBytes } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { getWorkspaceOutlookCredentials } from "@/lib/outlook/config";
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import { createInstallState } from "@/server/oauth-state";
 
 export const runtime = "nodejs";
 
@@ -16,9 +16,10 @@ const SCOPES = [
 ].join(" ");
 
 /**
- * GET /api/integrations/outlook/install?ws=<workspaceId>
+ * GET /api/integrations/outlook/install
  *
- * Generates a Microsoft OAuth2 authorization URL and redirects the user.
+ * Requires integrations:manage, creates a server-side nonce bound to the
+ * acting user + workspace, then redirects to Microsoft's consent screen.
  */
 export async function GET(req: NextRequest) {
   const session = await auth.api.getSession({ headers: req.headers });
@@ -26,13 +27,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const workspaceId = req.nextUrl.searchParams.get("ws");
+  const workspaceId = session.session.activeOrganizationId;
   if (!workspaceId) {
     return NextResponse.json(
-      { error: "Missing ws parameter." },
+      { error: "No workspace available for this account." },
       { status: 400 },
     );
   }
+
+  await requirePermission("integrations:manage");
 
   const credentials = await getWorkspaceOutlookCredentials(workspaceId);
   if (!credentials) {
@@ -50,17 +53,11 @@ export async function GET(req: NextRequest) {
   ).replace(/\/$/, "");
   const redirectUri = `${appUrl}/api/integrations/outlook/callback`;
 
-  // Build a signed state: base64url(JSON{wsId, nonce, ts}) + "." + hmac
-  const statePayload = JSON.stringify({
-    ws: workspaceId,
-    n: randomBytes(16).toString("hex"),
-    t: Date.now(),
+  const state = await createInstallState({
+    userId: session.user.id,
+    workspaceId,
+    provider: "outlook",
   });
-  const stateB64 = Buffer.from(statePayload).toString("base64url");
-  const hmac = createHmac("sha256", getSigningKey())
-    .update(stateB64)
-    .digest("base64url");
-  const state = `${stateB64}.${hmac}`;
 
   const url = new URL(
     "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
@@ -73,8 +70,4 @@ export async function GET(req: NextRequest) {
   url.searchParams.set("response_mode", "query");
 
   return NextResponse.redirect(url.toString());
-}
-
-function getSigningKey(): string {
-  return process.env.AI_ENCRYPTION_KEY ?? "fallback-dev-only";
 }

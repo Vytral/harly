@@ -185,13 +185,14 @@ export async function assignFromPoolToJobAction(input: {
       and(
         eq(jobs.id, parsed.data.jobId),
         eq(jobs.workspaceId, workspace.id),
+        eq(jobs.status, "open"),
         isNull(jobs.deletedAt),
       ),
     )
     .limit(1);
 
   if (!job) {
-    return { success: false, error: "Job not found." };
+    return { success: false, error: "Job is not open or was not found." };
   }
 
   // Check for duplicate application
@@ -242,28 +243,45 @@ export async function assignFromPoolToJobAction(input: {
     );
 
   // Create application
-  const [created] = await db
-    .insert(applications)
-    .values({
-      workspaceId: workspace.id,
-      candidateId: parsed.data.candidateId,
-      jobId: parsed.data.jobId,
-      currentStageId: firstStage.id,
-      pipelineOrder: nextOrder?.value ?? 1,
-      source: "sourced",
-      status: "active",
-      appliedAt: new Date(),
-    })
-    .returning();
+  const created = await db.transaction(async (tx) => {
+    const [application] = await tx
+      .insert(applications)
+      .values({
+        workspaceId: workspace.id,
+        candidateId: parsed.data.candidateId,
+        jobId: parsed.data.jobId,
+        currentStageId: firstStage.id,
+        pipelineOrder: nextOrder?.value ?? 1,
+        source: "sourced",
+        status: "active",
+        appliedAt: new Date(),
+      })
+      .onConflictDoNothing({
+        target: [
+          applications.workspaceId,
+          applications.candidateId,
+          applications.jobId,
+        ],
+      })
+      .returning();
 
-  // Record stage history
-  await db.insert(applicationStageHistory).values({
-    workspaceId: workspace.id,
-    applicationId: created.id,
-    fromStageId: null,
-    toStageId: firstStage.id,
-    movedById: null,
+    if (!application) return null;
+    await tx.insert(applicationStageHistory).values({
+      workspaceId: workspace.id,
+      applicationId: application.id,
+      fromStageId: null,
+      toStageId: firstStage.id,
+      movedById: null,
+    });
+    return application;
   });
+
+  if (!created) {
+    return {
+      success: false,
+      error: "Candidate already has an application for this job.",
+    };
+  }
 
   revalidatePath("/dashboard/pool");
   revalidatePath("/dashboard/candidates");

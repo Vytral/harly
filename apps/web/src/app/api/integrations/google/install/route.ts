@@ -1,9 +1,8 @@
-import { createHmac, randomBytes } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { createOAuth2Client } from "@/lib/gcal/config";
+import { createInstallState } from "@/server/oauth-state";
 
 export const runtime = "nodejs";
 
@@ -16,8 +15,9 @@ const SCOPES = [
 /**
  * GET /api/integrations/google/install?ws=<workspaceId>
  *
- * Redirects to Google OAuth consent screen. Requests offline access so we
- * receive a refresh token for long-lived calendar access.
+ * Creates a server-side nonce bound to the acting user + workspace, then
+ * redirects to Google's OAuth consent screen. Offline access is requested so
+ * we receive a refresh token for long-lived calendar access.
  */
 export async function GET(req: NextRequest) {
   const session = await auth.api.getSession({ headers: req.headers });
@@ -41,16 +41,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const statePayload = JSON.stringify({
-    ws: workspaceId,
-    n: randomBytes(16).toString("hex"),
-    t: Date.now(),
+  const state = await createInstallState({
+    userId: session.user.id,
+    workspaceId: session.session.activeOrganizationId ?? workspaceId,
+    provider: "google",
   });
-  const stateB64 = Buffer.from(statePayload).toString("base64url");
-  const hmac = createHmac("sha256", getSigningKey())
-    .update(stateB64)
-    .digest("base64url");
-  const state = `${stateB64}.${hmac}`;
 
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
@@ -61,8 +56,4 @@ export async function GET(req: NextRequest) {
   });
 
   return NextResponse.redirect(url);
-}
-
-function getSigningKey(): string {
-  return process.env.AI_ENCRYPTION_KEY ?? "fallback-dev-only";
 }

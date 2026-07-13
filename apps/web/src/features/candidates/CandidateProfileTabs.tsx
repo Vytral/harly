@@ -15,6 +15,7 @@ import {
   MapPin,
   MessageSquare,
   Minus,
+  Paperclip,
   Pencil,
   Phone,
   Plus,
@@ -130,12 +131,19 @@ type Scorecard = {
 type CandidateMessage = {
   id: string;
   direction: "outbound" | "inbound";
+  transport: "imap" | "legacy-webhook" | "provider";
   subject: string;
   body: string;
   toEmail: string;
   fromEmail: string | null;
   status: "queued" | "sent" | "failed";
   authorName: string | null;
+  attachments: Array<{
+    filename: string;
+    contentType: string;
+    size: number;
+    storageKey: string;
+  }>;
   createdAt: string;
 };
 
@@ -473,6 +481,20 @@ export function CandidateProfileTabs({
                   {message.authorName ? ` · ${message.authorName}` : ""} ·{" "}
                   <RelativeTime value={message.createdAt} />
                 </p>
+                {message.attachments.length > 0 ? (
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    {message.attachments.map((attachment, index) => (
+                      <a
+                        key={`${attachment.storageKey}-${index}`}
+                        href={`/api/inbound-email/attachments/${message.id}/${index}`}
+                        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        <Paperclip className="size-3" />
+                        {attachment.filename}
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
               </CardContent>
             </Card>
           ))

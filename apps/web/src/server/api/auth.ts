@@ -11,6 +11,7 @@ import {
   type ApiScope,
 } from "@harly/api";
 import { db, apiKeys } from "@harly/db";
+import { enforceRateLimit } from "@/server/api/ratelimit";
 
 export type ApiKeyContext = {
   workspaceId: string;
@@ -21,6 +22,10 @@ export type ApiKeyContext = {
 };
 
 const LAST_USED_THROTTLE_MS = 60_000;
+
+// Per-key budget so a single API key can't abuse the developer API (F2-07).
+const API_KEY_RATE_LIMIT = 1000;
+const API_KEY_RATE_WINDOW_MS = 10 * 60_000;
 
 /** Pull the presented key from the standard places. */
 function extractKey(request: Request): { raw: string; fromQuery: boolean } | null {
@@ -94,6 +99,14 @@ export async function authenticateApiKey(
       `This key is missing the \`${requiredScope}\` scope.`,
     );
   }
+
+  // Per-key rate limit (F2-07): each key gets its own budget, enforced before
+  // any work is done. This is what the in-memory limiter on public routes
+  // didn't cover for authenticated API keys.
+  enforceRateLimit(`apikey:${row.id}`, {
+    limit: API_KEY_RATE_LIMIT,
+    windowMs: API_KEY_RATE_WINDOW_MS,
+  });
 
   // Throttled last-used stamp; fire-and-forget so it never blocks the request.
   if (

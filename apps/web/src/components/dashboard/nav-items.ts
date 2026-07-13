@@ -9,7 +9,6 @@ import {
   Home,
   Inbox,
   KanbanSquare,
-  LayoutGrid,
   ListTodo,
   Settings,
   Users,
@@ -53,14 +52,6 @@ export const workspaceNav: NavItem[] = [
     icon: Settings,
     requiredPermission: "settings:edit",
   },
-];
-
-/** Legacy flat nav kept for the command palette / any residual consumers. */
-export const navItems: NavItem[] = [
-  { label: "Overview", href: "/dashboard", icon: LayoutGrid, exact: true },
-  { label: "Jobs", href: "/dashboard/jobs", icon: Briefcase },
-  { label: "Pipeline", href: "/dashboard/pipeline", icon: KanbanSquare },
-  { label: "Candidates", href: "/dashboard/candidates", icon: Users },
 ];
 
 export function isNavActive(pathname: string, item: NavItem) {

@@ -1,18 +1,15 @@
 import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import type { Route } from "next";
 
-import {
-  applications,
-  db,
-  jobs,
-  jobStages,
-  interviews,
-  user,
-} from "@harly/db";
+import { applications, db, jobs, workspaceSettings } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
+import {
+  getPortalApplicationInterviews,
+  getPortalJobStages,
+} from "@/server/portal-applications";
 import { PortalShell } from "@/features/portal/PortalShellServer";
 import { formatShort, formatTime } from "@/lib/date";
 import { cn } from "@/lib/utils";
@@ -83,33 +80,19 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
 
   if (!appRow) notFound();
 
-  const stages = await db
-    .select({ id: jobStages.id, name: jobStages.name, order: jobStages.order })
-    .from(jobStages)
-    .where(eq(jobStages.jobId, appRow.jobId))
-    .orderBy(asc(jobStages.order));
+  const [settingsRow] = await db
+    .select({ showStatus: workspaceSettings.portalShowApplicationStatus })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, session.workspaceId))
+    .limit(1);
+  const showStatus = settingsRow?.showStatus !== false;
+
+  const stages = await getPortalJobStages(appRow.jobId);
 
   const currentIdx = stages.findIndex((s) => s.id === appRow.currentStageId);
   const isTerminal = appRow.status === "rejected" || appRow.status === "withdrawn";
 
-  const interviewsList = await db
-    .select({
-      id: interviews.id,
-      title: interviews.title,
-      type: interviews.type,
-      mode: interviews.mode,
-      status: interviews.status,
-      scheduledAt: interviews.scheduledAt,
-      durationMins: interviews.durationMins,
-      location: interviews.location,
-      notes: interviews.notes,
-      interviewerName: user.name,
-      interviewerImage: user.image,
-    })
-    .from(interviews)
-    .leftJoin(user, eq(user.id, interviews.interviewerId))
-    .where(eq(interviews.applicationId, appRow.id))
-    .orderBy(asc(interviews.scheduledAt));
+  const interviewsList = await getPortalApplicationInterviews(appRow.id);
 
   const WORKPLACE_LABELS: Record<string, string> = {
     remote: "Remote",
@@ -166,8 +149,9 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
         </div>
 
         {/* 2-column layout */}
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
+        <div className={cn("grid grid-cols-1 gap-6", showStatus && "lg:grid-cols-[320px_1fr]")}>
           {/* LEFT: Pipeline */}
+          {showStatus && (
           <div className="space-y-6">
             <section>
               <h3 className="mb-3 text-sm font-semibold text-foreground">Interview plan</h3>
@@ -222,6 +206,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
               </div>
             </section>
           </div>
+          )}
 
           {/* RIGHT: Interviews */}
           <div className="space-y-6">
@@ -287,15 +272,6 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
                           <span className="text-xs text-muted-foreground">
                             with <span className="font-medium text-foreground">{iv.interviewerName}</span>
                           </span>
-                        </div>
-                      )}
-
-                      {iv.notes && (
-                        <div className="mt-3 flex items-start gap-2 border-t border-border pt-3">
-                          <svg className="mt-0.5 size-3.5 shrink-0 text-muted-foreground" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z" />
-                          </svg>
-                          <p className="text-xs leading-relaxed text-muted-foreground">{iv.notes}</p>
                         </div>
                       )}
                     </div>

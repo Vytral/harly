@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 
 import { authClient } from "@harly/auth/client";
+import { saveOnboardingRoleAction } from "@/features/onboarding/actions";
 import { BoardPreview } from "@/features/workspaces/BoardPreview";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -107,6 +108,8 @@ export function OnboardingWizard({ userName }: { userName: string }) {
   const [invites, setInvites] = useState<Invite[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [orgId, setOrgId] = useState<string | null>(null);
+  const [inviteFailures, setInviteFailures] = useState<Invite[]>([]);
 
   const generatedSlug = useMemo(() => slugify(name), [name]);
   const resolvedSlug = customSlug || generatedSlug;
@@ -151,37 +154,81 @@ export function OnboardingWizard({ userName }: { userName: string }) {
     await finish(invites);
   }
 
+  async function sendInvites(
+    targetOrgId: string,
+    pending: Invite[],
+  ): Promise<Invite[]> {
+    if (pending.length === 0) return [];
+    const results = await Promise.allSettled(
+      pending.map((inv) =>
+        authClient.organization.inviteMember({
+          email: inv.email,
+          role: inv.role as "admin" | "owner" | "member",
+          organizationId: targetOrgId,
+        }),
+      ),
+    );
+    return pending.filter((inv, i) => {
+      const r = results[i];
+      return r.status === "rejected" || (r.status === "fulfilled" && r.value?.error);
+    });
+  }
+
   async function finish(pendingInvites: Invite[]) {
     setIsLoading(true);
     try {
-      const createResult = await authClient.organization.create({
-        name: name.trim(),
-        slug: slugify(resolvedSlug),
-      });
+      let targetOrgId = orgId;
 
-      if (createResult.error) {
-        setError(createResult.error.message ?? "Failed to create workspace.");
+      if (!targetOrgId) {
+        const createResult = await authClient.organization.create({
+          name: name.trim(),
+          slug: slugify(resolvedSlug),
+        });
+
+        if (createResult.error) {
+          setError(createResult.error.message ?? "Failed to create workspace.");
+          return;
+        }
+
+        targetOrgId = createResult.data?.id;
+        if (!targetOrgId) {
+          setError("Workspace created but ID was missing.");
+          return;
+        }
+
+        setOrgId(targetOrgId);
+        await authClient.organization.setActive({ organizationId: targetOrgId });
+
+        if (role) {
+          await saveOnboardingRoleAction(role).catch(() => {});
+        }
+      }
+
+      const failed = await sendInvites(targetOrgId, pendingInvites);
+      if (failed.length > 0) {
+        setInviteFailures(failed);
+        setError(null);
         return;
       }
 
-      const orgId = createResult.data?.id;
-      if (!orgId) {
-        setError("Workspace created but ID was missing.");
+      setInviteFailures([]);
+      router.replace(openIntegrations ? "/settings/integrations" : "/dashboard");
+      router.refresh();
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  async function retryInvites() {
+    if (!orgId || inviteFailures.length === 0) return;
+    setIsLoading(true);
+    try {
+      const failed = await sendInvites(orgId, inviteFailures);
+      if (failed.length > 0) {
+        setInviteFailures(failed);
         return;
       }
-
-      await authClient.organization.setActive({ organizationId: orgId });
-
-      await Promise.allSettled(
-        pendingInvites.map((inv) =>
-          authClient.organization.inviteMember({
-            email: inv.email,
-            role: inv.role as "admin" | "owner" | "member",
-            organizationId: orgId,
-          }),
-        ),
-      );
-
+      setInviteFailures([]);
       router.replace(openIntegrations ? "/settings/integrations" : "/dashboard");
       router.refresh();
     } finally {
@@ -241,15 +288,59 @@ export function OnboardingWizard({ userName }: { userName: string }) {
             )}
 
             {step === 3 && (
-              <StepInvite
-                invites={invites}
-                email={inviteEmail}
-                role={inviteRole}
-                onEmailChange={setInviteEmail}
-                onRoleChange={setInviteRole}
-                onAdd={addInvite}
-                onRemove={removeInvite}
-              />
+              <>
+                {inviteFailures.length > 0 && (
+                  <div className="mt-4 rounded-lg border border-destructive/25 bg-destructive/5 p-3">
+                    <p className="text-sm font-medium text-destructive">
+                      Some invitations could not be sent
+                    </p>
+                    <ul className="mt-1.5 space-y-0.5">
+                      {inviteFailures.map((inv) => (
+                        <li
+                          key={inv.email}
+                          className="text-xs text-destructive/90"
+                        >
+                          {inv.email}
+                        </li>
+                      ))}
+                    </ul>
+                    <div className="mt-3 flex items-center gap-2">
+                      <Button
+                        size="sm"
+                        variant="secondary"
+                        disabled={isLoading}
+                        onClick={retryInvites}
+                      >
+                        Retry failed
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="text-muted-foreground"
+                        disabled={isLoading}
+                        onClick={() => {
+                          setInviteFailures([]);
+                          router.replace(
+                            openIntegrations ? "/settings/integrations" : "/dashboard",
+                          );
+                          router.refresh();
+                        }}
+                      >
+                        Continue to dashboard
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                <StepInvite
+                  invites={invites}
+                  email={inviteEmail}
+                  role={inviteRole}
+                  onEmailChange={setInviteEmail}
+                  onRoleChange={setInviteRole}
+                  onAdd={addInvite}
+                  onRemove={removeInvite}
+                />
+              </>
             )}
 
             {error ? (

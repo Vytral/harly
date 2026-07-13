@@ -20,7 +20,7 @@
   --paper-raised: #ffffff; /* pure white surfaces */
   --kraft: #efefed;        /* muted surface — soft grey */
   --ink: #171717;          /* near-black */
-  --ink-soft: #8a8a86;     /* mid grey text */
+  --ink-soft: #6a6a67;     /* mid grey text — tuned for ≥4.5:1 AA on --paper/--card */
   --pine: #3f6212;         /* action color — dark olive, same tonal family as lime */
   --pine-strong: #365314;  /* pressed/hover */
   --sage: #eaf6c8;         /* lime wash — soft active/highlight tint */

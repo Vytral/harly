@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { db } from "@harly/db";
 import { activityEvents, notifications, tasks } from "@harly/db";
-import { getWorkspaceContext } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("tasks");
@@ -38,7 +38,7 @@ export async function createTask(
       return { success: false, error: parsed.error.issues[0]?.message };
     }
 
-    const { organization: workspace, user } = await getWorkspaceContext();
+    const { organization: workspace, user } = await requirePermission("collab:write");
     const data = parsed.data;
 
     const [task] = await db
@@ -120,7 +120,7 @@ export async function updateTask(
       return { success: false, error: parsed.error.issues[0]?.message };
     }
 
-    const { organization: workspace, user } = await getWorkspaceContext();
+    const { organization: workspace, user } = await requirePermission("collab:write");
     const { taskId, ...fields } = parsed.data;
 
     const set: Record<string, unknown> = {};
@@ -180,7 +180,7 @@ export async function deleteTask(
   taskId: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { organization: workspace } = await getWorkspaceContext();
+    const { organization: workspace } = await requirePermission("collab:write");
 
     const deleted = await db
       .delete(tasks)

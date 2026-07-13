@@ -101,7 +101,9 @@ export default async function JobDetailPage({ params }: PageProps) {
       label: applicationQuestions.label,
       type: applicationQuestions.type,
       required: applicationQuestions.required,
+      minLength: applicationQuestions.minLength,
       placeholder: applicationQuestions.placeholder,
+      options: applicationQuestions.options,
     })
     .from(applicationQuestions)
     .where(eq(applicationQuestions.jobId, jobId))

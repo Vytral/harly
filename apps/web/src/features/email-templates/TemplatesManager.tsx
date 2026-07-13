@@ -517,7 +517,7 @@ export function TemplatesManager({
                   <div className="space-y-2 pt-1">
                     {VARIABLE_GROUPS.map(([group, vars]) => (
                       <div key={group}>
-                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/60">{group}</p>
+                        <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{group}</p>
                         <div className="flex flex-wrap gap-1.5">
                           {vars.map((variable) => (
                             <button

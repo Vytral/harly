@@ -1,25 +1,20 @@
-import { createHmac } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
 
 import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
-import { createLogger } from "@/lib/logger";
 import { getWorkspaceSlackCredentials } from "@/lib/slack/config";
-
-const log = createLogger("api-slack-callback");
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 
 export const runtime = "nodejs";
-
-const STATE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * GET /api/integrations/slack/callback?code=...&state=...
  *
  * Slack redirects here after the user approves the OAuth install. We:
- * 1. Verify state (HMAC + expiry)
+ * 1. Verify + redeem the server-side nonce (single-use, TTL, actor-bound)
  * 2. Load workspace credentials from DB (or env fallback)
  * 3. Exchange the code for an access token via slack.com/api/oauth.v2.access
  * 4. Encrypt and store the bot token in workspace_settings
@@ -43,11 +38,24 @@ export async function GET(req: NextRequest) {
     return redirectWithError("Missing code or state from Slack.");
   }
 
-  // Verify state
-  const wsId = verifyState(state);
-  if (!wsId) {
-    return redirectWithError("Invalid or expired state. Please try again.");
+  // Verify + redeem the server-side nonce: single-use, TTL-scoped, bound to the
+  // user + workspace that started the install. Closes replay/escalation.
+  const workspaceId = session.session.activeOrganizationId;
+  if (!workspaceId) {
+    return redirectWithError("No workspace available for this account.");
   }
+  const nonceCheck = await verifyAndConsumeOauthStateNonce({
+    state,
+    userId: session.user.id,
+    workspaceId,
+  });
+  if (!nonceCheck.ok) {
+    return redirectWithError(`${nonceCheck.error} Please try again.`);
+  }
+
+  await requirePermission("integrations:manage");
+
+  const wsId = nonceCheck.workspaceId;
 
   // Load credentials from workspace DB row (or env fallback)
   const credentials = await getWorkspaceSlackCredentials(wsId);
@@ -111,34 +119,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.redirect(
     `${appUrl}/settings/integrations?slack=connected`,
   );
-}
-
-function verifyState(state: string): string | null {
-  const [payload, sig] = state.split(".");
-  if (!payload || !sig) return null;
-
-  const expected = createHmac("sha256", getSigningKey())
-    .update(payload)
-    .digest("base64url");
-  if (sig !== expected) return null;
-
-  try {
-    const data = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
-    ) as { ws?: string; t?: number };
-
-    if (!data.ws) return null;
-    if (data.t && Date.now() - data.t > STATE_MAX_AGE_MS) return null;
-
-    return data.ws;
-  } catch (error) {
-    log.error(error, "slack callback verifyState failed");
-    return null;
-  }
-}
-
-function getSigningKey(): string {
-  return process.env.AI_ENCRYPTION_KEY ?? "fallback-dev-only";
 }
 
 function redirectWithError(msg: string) {

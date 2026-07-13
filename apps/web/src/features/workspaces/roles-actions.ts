@@ -9,7 +9,10 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { db } from "@harly/db";
 import { customRoles, member as authMembers } from "@harly/db";
 
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  grantPermissionsPrivilegeError,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import {
   PERMISSIONS,
   isBuiltinRole,
@@ -38,6 +41,14 @@ export async function createCustomRole(input: {
   const parsed = roleSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid role." };
+  }
+
+  const privilegeError = await grantPermissionsPrivilegeError(
+    context,
+    parsed.data.permissions,
+  );
+  if (privilegeError) {
+    return { ok: false, error: privilegeError };
   }
 
   const key = slugify(parsed.data.name);
@@ -87,6 +98,14 @@ export async function updateCustomRole(input: {
   const parsed = roleSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid role." };
+  }
+
+  const privilegeError = await grantPermissionsPrivilegeError(
+    context,
+    parsed.data.permissions,
+  );
+  if (privilegeError) {
+    return { ok: false, error: privilegeError };
   }
 
   const builtin = isBuiltinRole(input.key);
@@ -160,7 +179,6 @@ export async function deleteCustomRole(input: {
     metadata: { key: input.key },
   });
 
-  revalidatePath("/settings/members");
   revalidatePath("/settings/members");
   return { ok: true };
 }

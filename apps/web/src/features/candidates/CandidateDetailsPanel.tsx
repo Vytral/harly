@@ -81,7 +81,7 @@ function SectionLabel({
     <p className="flex items-baseline gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
       <span>{children}</span>
       {meta ? (
-        <span className="font-medium normal-case tracking-normal text-muted-foreground/70">
+        <span className="font-medium normal-case tracking-normal text-muted-foreground">
           {meta}
         </span>
       ) : null}
@@ -322,7 +322,7 @@ export function CandidateDetailsPanel({
           <Section>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <SectionLabel>Resume</SectionLabel>
-              <p className="text-xs text-muted-foreground/70">
+              <p className="text-xs text-muted-foreground">
                 {files.length} {files.length === 1 ? "file" : "files"}
               </p>
             </div>

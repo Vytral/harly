@@ -99,20 +99,34 @@ async function resolveTurnstileSecret(
 }
 
 /**
- * Verify a Turnstile token for a workspace's application form. When no secret is
- * configured (neither org nor env), verification is skipped (returns true) so
- * self-hosters without Turnstile aren't blocked. `remoteip` is sent when known
- * for stronger validation.
+ * Verify a Turnstile token for a workspace's application form.
+ *
+ * When no secret is configured (neither org nor env), verification is skipped
+ * (returns true) so self-hosters without Turnstile aren't blocked.
+ *
+ * When `enforced` (default true) and a global TURNSTILE_SECRET_KEY is set,
+ * verification is REQUIRED regardless of the per-workspace toggle — the global
+ * secret is a platform-wide anti-abuse control, so the public apply API cannot
+ * skip it by leaving the workspace toggle off.
+ *
+ * `remoteip` is sent when known for stronger validation.
  */
 export async function verifyTurnstileToken(
   token: string | null,
   workspaceId: string,
   remoteIp?: string | null,
+  enforced = true,
 ): Promise<boolean> {
   const secret = await resolveTurnstileSecret(workspaceId);
   if (!secret) return true; // Not configured -> skip
 
-  if (!token) return false;
+  // Platform-enforced mode: a global secret means the token is mandatory.
+  if (enforced) {
+    if (!token) return false;
+  } else if (!token) {
+    // Org-scoped mode only: if this workspace didn't send a token, skip.
+    return true;
+  }
 
   const res = await fetch(VERIFY_URL, {
     method: "POST",

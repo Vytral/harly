@@ -169,7 +169,7 @@ export function InviteLinkButton({
               </Button>
             </div>
             <div className="flex items-center justify-between gap-2">
-              <p className="text-[11px] text-muted-foreground/70">
+              <p className="text-[11px] text-muted-foreground">
                 Joins as{" "}
                 <span className="font-medium capitalize text-foreground">
                   {inviteLink.role.replace("_", " ")}
@@ -205,7 +205,7 @@ export function InviteLinkButton({
                 ))}
               </SelectContent>
             </Select>
-            <p className="text-[11px] text-muted-foreground/70">
+            <p className="text-[11px] text-muted-foreground">
               Enable the toggle above to generate the link.
             </p>
           </div>

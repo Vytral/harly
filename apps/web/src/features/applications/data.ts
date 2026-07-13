@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -26,11 +26,13 @@ import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { buildQuestionAnswerRows } from "@/features/applications/questions";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import type { ApplicationFormValues } from "@/lib/validations/applications";
+import { isWorkspaceStorageKey } from "@/lib/storage-validation";
 
 export type PublicApplicationResult =
   | {
       ok: true;
       applicationId: string;
+      candidateId: string;
       email: {
         candidateEmail: string;
         candidateFirstName: string;
@@ -90,6 +92,7 @@ export async function getPublicJobApplicationContext(input: {
       and(
         eq(jobs.slug, input.jobSlug),
         eq(jobs.status, "open"),
+        isNull(jobs.deletedAt),
         input.workspaceSlug ? eq(organization.slug, input.workspaceSlug) : undefined,
       ),
     )
@@ -159,6 +162,12 @@ export async function createPublicApplication(
     }
 
     const workspaceId = job.workspaceId;
+    if (
+      values.resumeKey &&
+      !isWorkspaceStorageKey(workspaceId, values.resumeKey, "resumes")
+    ) {
+      return { ok: false, message: "Resume upload is invalid." };
+    }
     const [workspace] = await tx
       .select({
         name: organization.name,
@@ -186,6 +195,30 @@ export async function createPublicApplication(
         ),
       )
       .limit(1);
+
+    // A duplicate application must be rejected before updating an existing
+    // candidate. A retry should never overwrite contact/profile fields just
+    // because the application itself is not accepted.
+    if (existingCandidate) {
+      const [duplicateApplication] = await tx
+        .select({ id: applications.id })
+        .from(applications)
+        .where(
+          and(
+            eq(applications.workspaceId, workspaceId),
+            eq(applications.candidateId, existingCandidate.id),
+            eq(applications.jobId, job.id),
+          ),
+        )
+        .limit(1);
+
+      if (duplicateApplication) {
+        return {
+          ok: false,
+          message: "You've already applied to this job",
+        };
+      }
+    }
 
     const candidate = existingCandidate
       ? (
@@ -239,25 +272,6 @@ export async function createPublicApplication(
 
     if (!candidate) {
       throw new Error("Candidate could not be created.");
-    }
-
-    const [duplicateApplication] = await tx
-      .select({ id: applications.id })
-      .from(applications)
-      .where(
-        and(
-          eq(applications.workspaceId, workspaceId),
-          eq(applications.candidateId, candidate.id),
-          eq(applications.jobId, job.id),
-        ),
-      )
-      .limit(1);
-
-    if (duplicateApplication) {
-      return {
-        ok: false,
-        message: "You've already applied to this job",
-      };
     }
 
     const [firstStage] = await tx
@@ -431,6 +445,7 @@ export async function createPublicApplication(
     return {
       ok: true,
       applicationId: application.id,
+      candidateId: candidate.id,
       email: {
         candidateEmail: candidate.email,
         candidateFirstName: candidate.firstName,

@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@harly/auth";
 import { getSessionCookie } from "@harly/auth/cookies";
 
+import { mustSetUp2fa } from "@/lib/two-factor";
+
 const PORTAL_SESSION_COOKIE = "harly_portal_session";
 
 const PUBLIC_PATHS = [
@@ -35,7 +37,7 @@ const PROTECTED_PATH_PREFIXES = ["/dashboard", "/settings"];
 const SECURITY_EXEMPT_PREFIXES = ["/settings/security", "/account", "/api"];
 
 // Portal protected paths — require portal session cookie (no DB needed)
-const PORTAL_PROTECTED = ["/portal/dashboard", "/portal/jobs", "/portal/profile"];
+const PORTAL_PROTECTED = ["/portal/dashboard", "/portal/jobs", "/portal/profile", "/portal/notifications"];
 
 function isProtected(pathname: string): boolean {
   return PROTECTED_PATH_PREFIXES.some((p) => pathname.startsWith(p));
@@ -90,7 +92,7 @@ export async function proxy(request: NextRequest) {
 
     try {
       const { db, workspaceSettings } = await import("@harly/db");
-      const { eq } = await import("drizzle-orm");
+      const { and, eq } = await import("drizzle-orm");
 
       const { member: authMembers, user: userTable } = await import("@harly/db");
 
@@ -116,7 +118,12 @@ export async function proxy(request: NextRequest) {
           db
             .select({ role: authMembers.role })
             .from(authMembers)
-            .where(eq(authMembers.userId, session.user.id))
+            .where(
+              and(
+                eq(authMembers.userId, session.user.id),
+                eq(authMembers.organizationId, orgId),
+              ),
+            )
             .limit(1),
           db
             .select({ twoFactorEnabled: userTable.twoFactorEnabled })
@@ -125,11 +132,13 @@ export async function proxy(request: NextRequest) {
             .limit(1),
         ]);
 
-        // Owner is exempt from 2FA enforcement (temporary — for testing).
-        const isOwner = memberRow?.role === "owner";
-        const has2fa = userRow?.twoFactorEnabled ?? false;
-
-        if (wsRow?.require2fa && !has2fa && !isOwner) {
+        if (
+          mustSetUp2fa({
+            workspaceRequires2fa: wsRow?.require2fa ?? false,
+            userHas2fa: userRow?.twoFactorEnabled ?? false,
+            roleKey: memberRow?.role,
+          })
+        ) {
           return NextResponse.redirect(new URL("/setup-2fa", request.url));
         }
       }

@@ -1,16 +1,6 @@
 import "server-only";
 
-import { createElement } from "react";
-
-import {
-  ApplicationReceivedCandidate,
-  ApplicationReceivedRecruiter,
-  applicationReceivedCandidateSubject,
-  applicationReceivedRecruiterSubject,
-} from "@harly/emails";
-
-import { sendWorkspaceEmail } from "@/lib/email";
-import { getWorkspaceEmailBranding } from "@/lib/email/branding";
+import { enqueueEmailOutbox, processEmailOutbox } from "@/lib/email/outbox-processor";
 import type { PublicApplicationResult } from "@/features/applications/data";
 
 type ApplicationEmail = Extract<
@@ -19,48 +9,33 @@ type ApplicationEmail = Extract<
 >["email"];
 
 /**
- * Fire the candidate confirmation + recruiter notification emails for a freshly
- * submitted application. Shared by the public apply server action and the public
- * REST intake endpoint so both behave identically. Fire-and-forget.
+ * Enqueue the candidate confirmation + recruiter notification emails for a
+ * freshly submitted application as durable outbox rows, then attempt immediate
+ * delivery. Shared by the public apply server action and the public REST intake
+ * endpoint so both behave identically. Any row the provider rejects stays
+ * `pending`/`failed` and is retried by the scheduler (F4-03).
  */
-export function sendApplicationReceivedEmails(email: ApplicationEmail): void {
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const jobBoardUrl = `${appUrl}/board/${email.workspaceSlug}`;
-  const dashboardUrl = `${appUrl}/dashboard/candidates`;
+export async function sendApplicationReceivedEmails(email: ApplicationEmail): Promise<void> {
+  const ids: string[] = [
+    await enqueueEmailOutbox(email.workspaceId, "application.received.candidate", {
+      candidateEmail: email.candidateEmail,
+      candidateFirstName: email.candidateFirstName,
+      jobTitle: email.jobTitle,
+      workspaceName: email.workspaceName,
+      workspaceSlug: email.workspaceSlug,
+    }),
+  ];
 
-  void (async () => {
-    const branding = await getWorkspaceEmailBranding(email.workspaceId);
-
-    await Promise.allSettled([
-      sendWorkspaceEmail(email.workspaceId, {
-        to: email.candidateEmail,
-        subject: applicationReceivedCandidateSubject({ jobTitle: email.jobTitle, companyName: email.workspaceName }),
-        react: createElement(ApplicationReceivedCandidate, {
-          candidateName: email.candidateFirstName,
-          jobTitle: email.jobTitle,
-          companyName: email.workspaceName,
-          companyLogoUrl: branding.logoUrl ?? undefined,
-          accentColor: branding.primaryColor ?? undefined,
-          socialLinks: branding.socialLinks,
-          jobBoardUrl,
-        }),
+  for (const ownerEmail of email.ownerEmails) {
+    ids.push(
+      await enqueueEmailOutbox(email.workspaceId, "application.received.recruiter", {
+        ownerEmail,
+        candidateName: email.candidateName,
+        candidateEmail: email.candidateEmail,
+        jobTitle: email.jobTitle,
       }),
-      ...email.ownerEmails.map((ownerEmail) =>
-        sendWorkspaceEmail(email.workspaceId, {
-          to: ownerEmail,
-          subject: applicationReceivedRecruiterSubject({
-            candidateName: email.candidateName,
-            jobTitle: email.jobTitle,
-          }),
-          react: createElement(ApplicationReceivedRecruiter, {
-            candidateName: email.candidateName,
-            candidateEmail: email.candidateEmail,
-            jobTitle: email.jobTitle,
-            dashboardUrl,
-            branding,
-          }),
-        }),
-      ),
-    ]);
-  })();
+    );
+  }
+
+  await processEmailOutbox({ ids, workspaceId: email.workspaceId });
 }

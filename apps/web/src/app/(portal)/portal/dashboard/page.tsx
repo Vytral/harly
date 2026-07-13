@@ -148,7 +148,7 @@ export default async function PortalDashboardPage() {
         <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
           <BriefcaseIcon className="mx-auto mb-3 size-8 text-muted-foreground/50" />
           <p className="text-sm font-medium text-muted-foreground">No applications yet</p>
-          <p className="mt-1 text-xs text-muted-foreground/70">
+          <p className="mt-1 text-xs text-muted-foreground">
             Browse open positions and apply to get started.
           </p>
           <Link

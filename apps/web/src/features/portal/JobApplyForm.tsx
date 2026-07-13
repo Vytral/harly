@@ -12,7 +12,9 @@ type Question = {
   label: string;
   type: string;
   required: boolean;
+  minLength: number | null;
   placeholder: string | null;
+  options: unknown;
 };
 
 export function JobApplyForm({
@@ -26,6 +28,8 @@ export function JobApplyForm({
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [resumeFile, setResumeFile] = useState<File | null>(null);
   const [resumeUrl, setResumeUrl] = useState<string | null>(null);
+  const [resumeKey, setResumeKey] = useState<string | null>(null);
+  const [consentGiven, setConsentGiven] = useState(false);
   const [uploading, setUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -33,7 +37,7 @@ export function JobApplyForm({
     setAnswers((prev) => ({ ...prev, [key]: value }));
   }
 
-  async function uploadResume(file: File): Promise<string | null> {
+  async function uploadResume(file: File): Promise<{ url: string; key: string } | null> {
     const validationError = validateResumeFile(file);
     if (validationError) {
       toast.error(validationError);
@@ -72,7 +76,7 @@ export function JobApplyForm({
       }
 
       // Return the public URL
-      return `/uploads/${key}`;
+      return { url: `/uploads/${key}`, key };
     } catch (err) {
       console.error("Resume upload error:", err);
       toast.error("Failed to upload resume. Please try again.");
@@ -102,9 +106,10 @@ export function JobApplyForm({
     if (!file) return;
 
     setResumeFile(file);
-    const url = await uploadResume(file);
-    if (url) {
-      setResumeUrl(url);
+    const uploaded = await uploadResume(file);
+    if (uploaded) {
+      setResumeUrl(uploaded.url);
+      setResumeKey(uploaded.key);
     } else {
       setResumeFile(null);
     }
@@ -116,7 +121,8 @@ export function JobApplyForm({
       const result = await applyToJobAction({
         jobId,
         answers,
-        resumeUrl: resumeUrl ?? undefined,
+        resumeKey: resumeKey ?? undefined,
+        consentGiven,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -168,6 +174,7 @@ export function JobApplyForm({
               onClick={() => {
                 setResumeFile(null);
                 setResumeUrl(null);
+                setResumeKey(null);
                 if (fileInputRef.current) fileInputRef.current.value = "";
               }}
               className="text-xs text-muted-foreground hover:text-foreground"
@@ -215,6 +222,7 @@ export function JobApplyForm({
                     placeholder={q.placeholder ?? undefined}
                     required={q.required}
                     rows={4}
+                    minLength={q.minLength ?? undefined}
                     className={cn(
                       "w-full rounded-lg border border-border bg-card px-3.5 py-2.5 text-sm text-foreground",
                       "placeholder:text-muted-foreground",
@@ -222,6 +230,19 @@ export function JobApplyForm({
                       "transition-colors resize-none",
                     )}
                   />
+                ) : q.type === "select" ? (
+                  <select
+                    id={q.key}
+                    value={answers[q.key] ?? ""}
+                    onChange={(e) => setAnswer(q.key, e.target.value)}
+                    required={q.required}
+                    className={cn("h-10 w-full rounded-lg border border-border bg-card px-3.5 text-sm text-foreground", "outline-none focus:ring-2 focus:ring-ring focus:border-transparent")}
+                  >
+                    <option value="">Select an option</option>
+                    {(Array.isArray(q.options) ? q.options : []).filter((option): option is string => typeof option === "string").map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
                 ) : (
                   <input
                     id={q.key}
@@ -230,6 +251,7 @@ export function JobApplyForm({
                     onChange={(e) => setAnswer(q.key, e.target.value)}
                     placeholder={q.placeholder ?? undefined}
                     required={q.required}
+                    minLength={q.minLength ?? undefined}
                     className={cn(
                       "h-10 w-full rounded-lg border border-border bg-card px-3.5 text-sm text-foreground",
                       "placeholder:text-muted-foreground",
@@ -243,6 +265,16 @@ export function JobApplyForm({
           </div>
         </div>
       )}
+
+      <label className="flex items-start gap-2 text-sm text-muted-foreground">
+        <input
+          type="checkbox"
+          checked={consentGiven}
+          onChange={(event) => setConsentGiven(event.target.checked)}
+          className="mt-0.5"
+        />
+        <span>I agree to the processing of my personal data for this application.</span>
+      </label>
 
       <div className="flex justify-end">
         <button

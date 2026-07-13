@@ -1,15 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createElement } from "react";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import {
-  CandidateRejected,
-  CandidateStageUpdate,
-  CustomTemplateEmail,
-  candidateRejectedSubject,
-  candidateStageUpdateSubject,
-} from "@harly/emails";
 
 import { db } from "@harly/db";
 import {
@@ -22,17 +14,10 @@ import {
   organization,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { sendWorkspaceEmail } from "@/lib/email";
-import { getWorkspaceEmailBranding } from "@/lib/email/branding";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { normalizeStageEmailConfig } from "@/features/pipeline/data";
-import { renderActiveEmailTemplate } from "@/features/email-templates/data";
-
-/** `candidateName` in PipelineEmail is always "first last" — split for template variables. */
-function splitName(fullName: string): { first: string; last: string } {
-  const [first, ...rest] = fullName.trim().split(/\s+/);
-  return { first: first ?? fullName, last: rest.join(" ") };
-}
+import { enqueueEmailOutbox, processEmailOutbox } from "@/lib/email/outbox-processor";
 
 type ApplicationStatus = "active" | "hired" | "rejected" | "withdrawn";
 
@@ -87,65 +72,27 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("pipeline");
 
 async function sendPipelineEmails(workspaceId: string, emails: PipelineEmail[]) {
-  const branding = await getWorkspaceEmailBranding(workspaceId);
+  if (emails.length === 0) return;
 
-  await Promise.allSettled(
-    emails.map(async (email) => {
-      const { first, last } = splitName(email.candidateName);
-      const templateType = email.type === "stage" ? "stage_change" : "rejection";
-      const custom = await renderActiveEmailTemplate(workspaceId, templateType, {
-        candidate_first_name: first,
-        candidate_last_name: last,
-        candidate_full_name: email.candidateName,
-        job_title: email.jobTitle,
-        stage_name: email.type === "stage" ? email.stageName : undefined,
-        company_name: email.workspaceName,
-      });
-
-      if (custom) {
-        return sendWorkspaceEmail(workspaceId, {
-          to: email.candidateEmail,
-          subject: custom.subject,
-          react: createElement(CustomTemplateEmail, {
-            bodyHtml: custom.bodyHtml,
-            companyName: email.workspaceName,
-            companyLogoUrl: branding.logoUrl ?? undefined,
-            accentColor: branding.primaryColor ?? undefined,
-            socialLinks: branding.socialLinks,
-          }),
-        });
-      }
-
-      if (email.type === "stage") {
-        return sendWorkspaceEmail(workspaceId, {
-          to: email.candidateEmail,
-          subject: candidateStageUpdateSubject({ jobTitle: email.jobTitle, stageName: email.stageName }),
-          react: createElement(CandidateStageUpdate, {
-            candidateName: email.candidateName,
-            jobTitle: email.jobTitle,
-            stageName: email.stageName,
-            companyName: email.workspaceName,
-            companyLogoUrl: branding.logoUrl ?? undefined,
-            accentColor: branding.primaryColor ?? undefined,
-            socialLinks: branding.socialLinks,
-          }),
-        });
-      }
-
-      return sendWorkspaceEmail(workspaceId, {
-        to: email.candidateEmail,
-        subject: candidateRejectedSubject({ jobTitle: email.jobTitle, companyName: email.workspaceName }),
-        react: createElement(CandidateRejected, {
+  const ids: string[] = [];
+  for (const email of emails) {
+    ids.push(
+      await enqueueEmailOutbox(
+        workspaceId,
+        email.type === "stage" ? "pipeline.stage" : "pipeline.rejected",
+        {
+          candidateEmail: email.candidateEmail,
           candidateName: email.candidateName,
           jobTitle: email.jobTitle,
-          companyName: email.workspaceName,
-          companyLogoUrl: branding.logoUrl ?? undefined,
-          accentColor: branding.primaryColor ?? undefined,
-          socialLinks: branding.socialLinks,
-        }),
-      });
-    }),
-  );
+          stageName: email.type === "stage" ? email.stageName : undefined,
+          workspaceName: email.workspaceName,
+          type: email.type,
+        },
+      ),
+    );
+  }
+
+  await processEmailOutbox({ ids, workspaceId });
 }
 
 async function getApplicationsForAction(
@@ -188,16 +135,21 @@ async function getApplicationsForAction(
 export async function moveApplicationInPipeline(
   input: MoveApplicationInPipelineInput,
 ): Promise<{ success: boolean; error?: string }> {
-  try {
-    const { organization: workspace, user } = await getWorkspaceContext();
+  await requirePermission("candidates:move");
+  const { organization: workspace, user } = await getWorkspaceContext();
 
+  try {
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
 
     // Captured inside the transaction, emitted after commit (see data.ts note).
     const stageEvent: {
-      current: { status: ApplicationStatus; becameRejected: boolean } | null;
+      current: {
+        status: ApplicationStatus;
+        becameRejected: boolean;
+        fromStageId: string | null;
+      } | null;
     } = { current: null };
 
     const emails = await db.transaction<PipelineEmail[]>(async (tx) => {
@@ -205,6 +157,7 @@ export async function moveApplicationInPipeline(
         .select({
           id: applications.id,
           currentStageId: applications.currentStageId,
+          updatedAt: applications.updatedAt,
           status: applications.status,
           candidateEmail: candidates.email,
           candidateFirstName: candidates.firstName,
@@ -234,6 +187,7 @@ export async function moveApplicationInPipeline(
           jobStages,
           and(
             eq(jobStages.workspaceId, input.workspaceId),
+            eq(jobStages.jobId, applications.jobId),
             eq(jobStages.id, input.toStageId),
           ),
         )
@@ -245,8 +199,10 @@ export async function moveApplicationInPipeline(
         )
         .limit(1);
 
+      // The join above also requires the target stage to belong to the
+      // application's own job, so a stage from another job fails here.
       if (!application) {
-        throw new Error("Application not found.");
+        throw new Error("Application or target stage not found.");
       }
 
       const now = new Date();
@@ -256,7 +212,7 @@ export async function moveApplicationInPipeline(
           ? "rejected"
           : application.status;
 
-      await tx
+      const [updatedApplication] = await tx
         .update(applications)
         .set({
           currentStageId: input.toStageId,
@@ -267,8 +223,14 @@ export async function moveApplicationInPipeline(
           and(
             eq(applications.id, input.applicationId),
             eq(applications.workspaceId, input.workspaceId),
+            eq(applications.updatedAt, application.updatedAt),
           ),
-        );
+        )
+        .returning({ id: applications.id });
+
+      if (!updatedApplication) {
+        throw new Error("Application changed by another recruiter. Refresh and try again.");
+      }
 
       if (input.orderedApplicationIds.length > 0) {
         await tx
@@ -302,7 +264,7 @@ export async function moveApplicationInPipeline(
       await tx.insert(applicationStageHistory).values({
         workspaceId: input.workspaceId,
         applicationId: input.applicationId,
-        fromStageId: input.fromStageId,
+        fromStageId: application.currentStageId,
         toStageId: input.toStageId,
         movedById: user.id,
       });
@@ -310,6 +272,7 @@ export async function moveApplicationInPipeline(
       stageEvent.current = {
         status: nextStatus,
         becameRejected: application.status === "active" && nextStatus === "rejected",
+        fromStageId: application.currentStageId,
       };
 
       await tx.insert(activityEvents).values({
@@ -319,7 +282,7 @@ export async function moveApplicationInPipeline(
         entityId: input.applicationId,
         type: "stage.changed",
         metadata: {
-          fromStageId: input.fromStageId,
+          fromStageId: application.currentStageId,
           toStageId: input.toStageId,
           status: nextStatus,
         },
@@ -364,7 +327,7 @@ export async function moveApplicationInPipeline(
     if (stageEvent.current) {
       await emitWebhookEvent(input.workspaceId, "application.stage_changed", {
         application: { id: input.applicationId },
-        fromStageId: input.fromStageId,
+        fromStageId: stageEvent.current.fromStageId,
         toStageId: input.toStageId,
         status: stageEvent.current.status,
       });
@@ -395,6 +358,7 @@ export async function bulkMoveApplications(
   input: BulkMoveApplicationsInput,
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await requirePermission("candidates:move");
     const { organization: workspace, user } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {
@@ -434,7 +398,7 @@ export async function bulkMoveApplications(
       const isRejectionStage = toStageName.toLowerCase() === "rejected";
 
       const targetStageApplications = await tx
-        .select({ id: applications.id })
+        .select({ id: applications.id, updatedAt: applications.updatedAt })
         .from(applications)
         .where(
           and(
@@ -444,6 +408,9 @@ export async function bulkMoveApplications(
         )
         .orderBy(asc(applications.pipelineOrder), asc(applications.appliedAt));
       const existingIds = new Set(targetStageApplications.map((item) => item.id));
+      const versionById = new Map(
+        targetStageApplications.map((item) => [item.id, item.updatedAt]),
+      );
       const orderedIds = [
         ...targetStageApplications.map((item) => item.id),
         ...input.applicationIds.filter((id) => !existingIds.has(id)),
@@ -454,6 +421,7 @@ export async function bulkMoveApplications(
         .select({
           id: applications.id,
           currentStageId: applications.currentStageId,
+          updatedAt: applications.updatedAt,
           status: applications.status,
           candidateEmail: candidates.email,
           candidateFirstName: candidates.firstName,
@@ -474,6 +442,13 @@ export async function bulkMoveApplications(
           and(
             eq(jobs.workspaceId, input.workspaceId),
             eq(jobs.id, applications.jobId),
+          ),
+        )
+        .innerJoin(
+          jobStages,
+          and(
+            eq(jobStages.id, input.toStageId),
+            eq(jobStages.jobId, applications.jobId),
           ),
         )
         .innerJoin(organization, eq(organization.id, applications.workspaceId))
@@ -501,19 +476,29 @@ export async function bulkMoveApplications(
 
         const nextStatus = isRejectionStage ? "rejected" : undefined;
 
-        await tx
-          .update(applications)
-          .set({
-            currentStageId: input.toStageId,
-            ...(nextStatus ? { status: nextStatus } : {}),
-            updatedAt: now,
-          })
-          .where(
-            and(
-              inArray(applications.id, appIds),
-              eq(applications.workspaceId, input.workspaceId),
-            ),
-          );
+        for (const applicationId of appIds) {
+          const appData = appDataById.get(applicationId);
+          if (!appData) throw new Error("Application not found.");
+          const [updated] = await tx
+            .update(applications)
+            .set({
+              currentStageId: input.toStageId,
+              ...(nextStatus ? { status: nextStatus } : {}),
+              updatedAt: now,
+            })
+            .where(
+              and(
+                eq(applications.id, applicationId),
+                eq(applications.workspaceId, input.workspaceId),
+                eq(applications.updatedAt, appData.updatedAt),
+              ),
+            )
+            .returning({ id: applications.id });
+          if (!updated) {
+            throw new Error("An application changed by another recruiter. Refresh and try again.");
+          }
+          versionById.set(applicationId, now);
+        }
 
         await tx.insert(applicationStageHistory).values(
           appIds.map((applicationId) => ({
@@ -583,7 +568,11 @@ export async function bulkMoveApplications(
       }
 
       for (const [index, applicationId] of orderedIds.entries()) {
-        await tx
+        const expectedVersion = versionById.get(applicationId);
+        if (!expectedVersion) {
+          throw new Error("Application ordering changed. Refresh and try again.");
+        }
+        const [updated] = await tx
           .update(applications)
           .set({ pipelineOrder: index + 1, updatedAt: now })
           .where(
@@ -591,8 +580,14 @@ export async function bulkMoveApplications(
               eq(applications.id, applicationId),
               eq(applications.workspaceId, input.workspaceId),
               eq(applications.currentStageId, input.toStageId),
+              eq(applications.updatedAt, expectedVersion),
             ),
-          );
+          )
+          .returning({ id: applications.id });
+        if (!updated) {
+          throw new Error("Application ordering changed. Refresh and try again.");
+        }
+        versionById.set(applicationId, now);
       }
 
       return collectedEmails;
@@ -626,6 +621,7 @@ export async function updateApplicationStatus(
   input: UpdateApplicationStatusInput,
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await requirePermission("candidates:edit");
     const { organization: workspace, user } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {
@@ -704,6 +700,7 @@ export async function updateStageEmailSettings(
   input: UpdateStageEmailSettingsInput,
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await requirePermission("settings:edit");
     const { organization: workspace } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {

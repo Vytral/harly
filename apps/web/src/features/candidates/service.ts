@@ -10,6 +10,7 @@ import type {
 } from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import { logAuditEvent } from "@/lib/audit-log";
 
 /** Workspace-scoped candidate service for the REST API. */
 
@@ -139,6 +140,14 @@ export async function createCandidateForApi(input: {
   await emitWebhookEvent(input.workspaceId, "candidate.created", {
     candidate: serializeCandidate(candidate),
   });
+  await logAuditEvent({
+    workspaceId: input.workspaceId,
+    action: "candidate.created",
+    resourceType: "candidate",
+    resourceId: candidate.id,
+    severity: "info",
+    metadata: { via: "api" },
+  });
   return candidate;
 }
 
@@ -181,6 +190,14 @@ export async function updateCandidateForApi(input: {
   await emitWebhookEvent(input.workspaceId, "candidate.updated", {
     candidate: serializeCandidate(updated),
   });
+  await logAuditEvent({
+    workspaceId: input.workspaceId,
+    action: "candidate.updated",
+    resourceType: "candidate",
+    resourceId: input.candidateId,
+    severity: "info",
+    metadata: { via: "api" },
+  });
   return updated;
 }
 
@@ -201,4 +218,12 @@ export async function deleteCandidateForApi(input: {
         eq(candidates.workspaceId, input.workspaceId),
       ),
     );
+  await logAuditEvent({
+    workspaceId: input.workspaceId,
+    action: "candidate.deleted",
+    resourceType: "candidate",
+    resourceId: input.candidateId,
+    severity: "warning",
+    metadata: { via: "api" },
+  });
 }

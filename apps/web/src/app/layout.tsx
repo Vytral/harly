@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
+import localFont from "next/font/local";
 import { GeistMono } from "geist/font/mono";
 import { GeistSans } from "geist/font/sans";
-import { Inter, Fraunces } from "next/font/google";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
@@ -12,22 +12,21 @@ import "./globals.css";
 
 // Inter carries both body and display roles (bold + tight tracking for
 // headings) — single-family system per the off-white/lime design language.
-const inter = Inter({
-  subsets: ["latin"],
+// Self-hosted (F5-04) so the build never reaches fonts.googleapis.com.
+const inter = localFont({
+  src: "./fonts/inter.woff2",
   variable: "--font-inter",
   display: "swap",
 });
 
 // Fraunces is the editorial display face for the Folio career template only —
-// a variable serif with optical sizing and a "soft" axis. Loaded here so the
-// CSS variable is always available; templates opt in via `.font-fraunces`.
-// `opsz` keeps body-sized text crisp while headings get the display cut.
-// Variable font → no fixed weight/style, the full range is available.
-const fraunces = Fraunces({
-  subsets: ["latin"],
+// a variable serif with optical sizing and a "soft" axis. Self-hosted (F5-04)
+// so the CSS variable is always available without a build-time network fetch;
+// templates opt in via `.font-fraunces`.
+const fraunces = localFont({
+  src: "./fonts/fraunces.woff2",
   variable: "--font-fraunces",
   display: "swap",
-  axes: ["opsz", "SOFT"],
 });
 
 export const metadata: Metadata = {

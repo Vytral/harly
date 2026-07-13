@@ -10,7 +10,9 @@ import { db, user as userTable, workspaceSettings } from "@harly/db";
 import { auth } from "@/lib/auth";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { mustSetUp2fa } from "@/lib/two-factor";
 import { createLogger } from "@/lib/logger";
+import { logAuditEvent } from "@/lib/audit-log";
 
 const log = createLogger("onboarding");
 
@@ -73,9 +75,13 @@ export async function saveAcquisitionAction(
   source: string,
 ): Promise<OnboardingResult> {
   try {
+    const parsed = z.string().trim().min(1).max(60).safeParse(source);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
+    }
     const { organization } = await requirePermission("settings:edit");
     await patchWorkspaceSettings(organization.id, {
-      acquisitionSource: source.slice(0, 60),
+      acquisitionSource: parsed.data,
     });
     return { ok: true };
   } catch (error) {
@@ -89,10 +95,37 @@ export async function saveUserRoleAction(
   jobTitle: string,
 ): Promise<OnboardingResult> {
   try {
+    const parsed = z.string().trim().min(1).max(80).safeParse(jobTitle);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
+    }
     const session = await requireSession();
     await db
       .update(userTable)
-      .set({ jobTitle: jobTitle.slice(0, 80) })
+      .set({ jobTitle: parsed.data })
+      .where(eq(userTable.id, session.user.id));
+    return { ok: true };
+  } catch (error) {
+    log.error(error, "onboarding action failed");
+    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+  }
+}
+
+/** Any user: the self-described role chosen during onboarding. */
+export async function saveOnboardingRoleAction(
+  role: string,
+): Promise<OnboardingResult> {
+  try {
+    const parsed = z
+      .enum(["founder", "recruiter", "hr_manager", "hiring_manager", "other"])
+      .safeParse(role);
+    if (!parsed.success) {
+      return { ok: false, error: "Invalid role." };
+    }
+    const session = await requireSession();
+    await db
+      .update(userTable)
+      .set({ onboardingRole: parsed.data })
       .where(eq(userTable.id, session.user.id));
     return { ok: true };
   } catch (error) {
@@ -106,9 +139,16 @@ export async function setRequire2faAction(
   require2fa: boolean,
 ): Promise<OnboardingResult> {
   try {
-    const { organization, roleKey } = await getWorkspaceContext();
-    if (roleKey !== "owner") throw new Error("Owner only.");
+    const { organization, user } = await requirePermission("security:manage");
     await patchWorkspaceSettings(organization.id, { require2fa });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      actorEmail: user.email,
+      action: require2fa ? "settings.2fa_enforced" : "settings.2fa_unenforced",
+      severity: "critical",
+      metadata: { require2fa, source: "onboarding" },
+    });
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");
@@ -123,7 +163,7 @@ export async function setRequire2faAction(
  */
 export async function completeRecruiterOnboardingAction(): Promise<OnboardingResult> {
   try {
-    const { organization, user } = await getWorkspaceContext();
+    const { organization, user, roleKey } = await getWorkspaceContext();
 
     const [settings] = await db
       .select({ require2fa: workspaceSettings.require2fa })
@@ -137,7 +177,15 @@ export async function completeRecruiterOnboardingAction(): Promise<OnboardingRes
         .from(userTable)
         .where(eq(userTable.id, user.id))
         .limit(1);
-      if (!row?.twoFactorEnabled) {
+      // Owner is exempt from 2FA enforcement — keep this consistent with the
+      // middleware policy via the shared helper.
+      if (
+        mustSetUp2fa({
+          workspaceRequires2fa: settings.require2fa,
+          userHas2fa: row?.twoFactorEnabled ?? false,
+          roleKey,
+        })
+      ) {
         return {
           ok: false,
           error: "This workspace requires two-factor authentication. Set it up to continue.",

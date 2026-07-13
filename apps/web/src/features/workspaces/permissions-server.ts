@@ -7,11 +7,15 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@harly/db";
 import { customRoles, member as authMembers, user as authUsers } from "@harly/db";
 
-import { getWorkspaceContext } from "@/features/workspaces/context";
+import {
+  getWorkspaceContext,
+  type WorkspaceContext,
+} from "@/features/workspaces/context";
 import {
   BUILTIN_ROLES,
   BUILTIN_ROLE_PERMISSIONS,
   PERMISSIONS,
+  exceedsPrivilege,
   isBuiltinRole,
   roleIsAllPowerful,
   roleLabel,
@@ -107,6 +111,53 @@ export async function requirePagePermission(permission: Permission) {
     redirect("/dashboard" as Route);
   }
   return context;
+}
+
+/**
+ * Privilege-ceiling guard for assigning a role to a member (invite, invite
+ * link, role change). Returns a user-facing error string, or `null` when the
+ * assignment is allowed. Rules for anyone who is not the owner:
+ *   - may never grant the all-powerful `owner` role, and
+ *   - may only assign a role whose permission set is a subset of their own,
+ *     so no one can mint a role more powerful than themselves.
+ */
+export async function assignRolePrivilegeError(
+  context: WorkspaceContext,
+  targetRoleKey: string,
+): Promise<string | null> {
+  if (roleIsAllPowerful(context.roleKey)) return null;
+  if (roleIsAllPowerful(targetRoleKey)) {
+    return "Only an owner can grant the Owner role.";
+  }
+  const [actorPerms, targetPerms] = await Promise.all([
+    getRolePermissions(context.organization.id, context.roleKey),
+    getRolePermissions(context.organization.id, targetRoleKey),
+  ]);
+  if (exceedsPrivilege(actorPerms, targetPerms)) {
+    return "You can't assign a role with more access than your own.";
+  }
+  return null;
+}
+
+/**
+ * Privilege-ceiling guard for editing a role's permission set (create/update
+ * custom or built-in override). Returns a user-facing error string, or `null`
+ * when allowed. A non-owner can never grant a permission they don't hold
+ * themselves — this closes self-escalation via `roles:manage`.
+ */
+export async function grantPermissionsPrivilegeError(
+  context: WorkspaceContext,
+  permissions: readonly Permission[],
+): Promise<string | null> {
+  if (roleIsAllPowerful(context.roleKey)) return null;
+  const actorPerms = await getRolePermissions(
+    context.organization.id,
+    context.roleKey,
+  );
+  if (exceedsPrivilege(actorPerms, permissions)) {
+    return "You can't grant permissions you don't have yourself.";
+  }
+  return null;
 }
 
 export type WorkspaceRoleMember = {

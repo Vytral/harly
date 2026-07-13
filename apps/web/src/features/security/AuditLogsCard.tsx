@@ -92,7 +92,7 @@ export function AuditLogsCard({ logs }: { logs: AuditLogRow[] }) {
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b text-left text-xs font-medium uppercase tracking-wide text-muted-foreground/70">
+            <tr className="border-b text-left text-xs font-medium uppercase tracking-wide text-muted-foreground">
               <th className="pb-2 pr-4">When</th>
               <th className="pb-2 pr-4">Action</th>
               <th className="pb-2 pr-4">Actor</th>

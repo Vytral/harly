@@ -10,4 +10,5 @@ export function createStorage(config: StorageConfig): StorageAdapter {
   return new S3Adapter(config);
 }
 
+export { getLocalUploadPath, LocalAdapter } from "./adapters/local";
 export * from "./types";

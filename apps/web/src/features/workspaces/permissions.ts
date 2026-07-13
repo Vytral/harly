@@ -4,7 +4,8 @@
  * enforcement layer and the UI matrix read from the same list.
  *
  * A permission key is `resource:action`. Roles (built-in or custom) own a set
- * of these keys. `owner` and `admin` are implicitly all-powerful.
+ * of these keys. `owner` is unconditionally all-powerful; `admin` receives the
+ * full explicit permission set (see `roleIsAllPowerful`).
  */
 
 export const PERMISSIONS = [
@@ -92,7 +93,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = Object.fromEntries(
   PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => [p.key, p.label])),
 ) as Record<Permission, string>;
 
-/** Built-in role keys (cannot be deleted; admins/owners are all-powerful). */
+/** Built-in role keys (cannot be deleted; only `owner` is unconditionally all-powerful — `admin` gets the full explicit permission set). */
 export const BUILTIN_ROLES = [
   "owner",
   "admin",
@@ -136,6 +137,20 @@ export function hasPermission(
   key: Permission,
 ): boolean {
   return permissions.includes(key);
+}
+
+/**
+ * Privilege-ceiling check: true when `granted` contains any permission the
+ * `actor` doesn't already hold — i.e. granting it would be an escalation.
+ * The single source of truth used by every server guard that assigns a role
+ * or edits a role's permission set. Client-safe and pure so it's unit-testable.
+ */
+export function exceedsPrivilege(
+  actor: readonly string[],
+  granted: readonly string[],
+): boolean {
+  const held = new Set(actor);
+  return granted.some((p) => !held.has(p));
 }
 
 export function roleLabel(role: string): string {

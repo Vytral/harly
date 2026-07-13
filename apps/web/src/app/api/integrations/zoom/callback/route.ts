@@ -1,5 +1,3 @@
-import { createHmac } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -8,12 +6,12 @@ import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { getZoomCredentials } from "@/lib/zoom/config";
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 
 const log = createLogger("api-zoom-callback");
 
 export const runtime = "nodejs";
-
-const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 
 type ZoomTokenResponse = {
   access_token: string;
@@ -35,7 +33,7 @@ type ZoomUserInfoResponse = {
  * GET /api/integrations/zoom/callback?code=...&state=...
  *
  * Zoom redirects here after the user approves the OAuth install. We:
- * 1. Verify state (HMAC + expiry)
+ * 1. Verify + redeem the server-side nonce (single-use, TTL, actor-bound)
  * 2. Load workspace credentials from DB (or env fallback)
  * 3. Exchange the code for an access token
  * 4. Fetch user info to get account details
@@ -60,11 +58,24 @@ export async function GET(req: NextRequest) {
     return redirectWithError("Missing code or state from Zoom.");
   }
 
-  // Verify state
-  const wsId = verifyState(state);
-  if (!wsId) {
-    return redirectWithError("Invalid or expired state. Please try again.");
+  // Verify + redeem the server-side nonce: single-use, TTL-scoped, bound to the
+  // user + workspace that started the install. Closes replay/escalation.
+  const workspaceId = session.session.activeOrganizationId;
+  if (!workspaceId) {
+    return redirectWithError("No workspace available for this account.");
   }
+  const nonceCheck = await verifyAndConsumeOauthStateNonce({
+    state,
+    userId: session.user.id,
+    workspaceId,
+  });
+  if (!nonceCheck.ok) {
+    return redirectWithError(`${nonceCheck.error} Please try again.`);
+  }
+
+  await requirePermission("integrations:manage");
+
+  const wsId = nonceCheck.workspaceId;
 
   // Load credentials
   const credentials = await getZoomCredentials(wsId);
@@ -136,34 +147,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.redirect(
     `${appUrl}/settings/integrations?zoom=connected`,
   );
-}
-
-function verifyState(state: string): string | null {
-  const [payload, sig] = state.split(".");
-  if (!payload || !sig) return null;
-
-  const expected = createHmac("sha256", getSigningKey())
-    .update(payload)
-    .digest("base64url");
-  if (sig !== expected) return null;
-
-  try {
-    const data = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
-    ) as { ws?: string; t?: number };
-
-    if (!data.ws) return null;
-    if (data.t && Date.now() - data.t > STATE_MAX_AGE_MS) return null;
-
-    return data.ws;
-  } catch (error) {
-    log.error(error, "zoom callback verifyState failed");
-    return null;
-  }
-}
-
-function getSigningKey(): string {
-  return process.env.AI_ENCRYPTION_KEY ?? "fallback-dev-only";
 }
 
 function redirectWithError(msg: string) {

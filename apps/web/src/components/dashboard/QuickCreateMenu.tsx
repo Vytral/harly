@@ -28,7 +28,7 @@ export function QuickCreateMenu() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="min-w-52">
-        <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
+        <DropdownMenuLabel className="text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
           Create
         </DropdownMenuLabel>
         <DropdownMenuItem asChild className="gap-2.5">

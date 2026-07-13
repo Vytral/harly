@@ -18,22 +18,12 @@ import {
 } from "@/components/ui/command";
 import {
   BriefcaseIcon,
-  GearSixIcon,
-  KanbanIcon,
   MagnifyingGlassIcon,
   PlusCircleIcon,
-  SquaresFourIcon,
   UserCircleIcon,
 } from "@/components/ui/icons/command";
-import { UsersThreeIcon } from "@/components/ui/icons/settings";
-
-const navItems = [
-  { label: "Overview", href: "/dashboard", icon: SquaresFourIcon },
-  { label: "Jobs", href: "/dashboard/jobs", icon: BriefcaseIcon },
-  { label: "Pipeline", href: "/dashboard/pipeline", icon: KanbanIcon },
-  { label: "Candidates", href: "/dashboard/candidates", icon: UsersThreeIcon },
-  { label: "Settings", href: "/settings", icon: GearSixIcon },
-] as const;
+import { primaryNav, workspaceNav } from "@/components/dashboard/nav-items";
+import type { Permission } from "@/features/workspaces/permissions";
 
 const emptyResults: SearchResults = { jobs: [], candidates: [] };
 
@@ -42,10 +32,19 @@ const SKELETON_ROWS = 4;
 export function CommandMenu({
   open,
   onOpenChange,
+  userPermissions,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  userPermissions: Permission[];
 }) {
+  const navItems = [
+    ...primaryNav,
+    ...workspaceNav.filter(
+      (item) => !item.requiredPermission || userPermissions.includes(item.requiredPermission),
+    ),
+  ];
+
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResults>(emptyResults);
@@ -220,7 +219,7 @@ export function CommandMenu({
                   onSelect={() => go(item.href)}
                   className="gap-3 rounded-2xl"
                 >
-                  <item.icon />
+                  <item.icon className="size-4" strokeWidth={1.8} />
                   {item.label}
                 </CommandItem>
               ))}
@@ -236,7 +235,7 @@ export function CommandMenu({
               </CommandItem>
               <CommandItem
                 value="action-account"
-                onSelect={() => go("/settings/account")}
+                onSelect={() => go("/account")}
                 className="gap-3 rounded-2xl"
               >
                 <UserCircleIcon />

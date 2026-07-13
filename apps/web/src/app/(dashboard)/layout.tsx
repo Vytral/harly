@@ -65,6 +65,7 @@ export default async function DashboardLayout({
             workspace={workspace}
             workspaceOptions={workspaceOptions}
             notifications={notifications}
+            userPermissions={userPermissions}
           />
           {!user.emailVerified ? <VerifyEmailBanner email={user.email} /> : null}
           <PageTitleProvider>

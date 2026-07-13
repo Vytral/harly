@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { desc, eq, and } from "drizzle-orm";
+import { desc, eq, and, inArray } from "drizzle-orm";
 import type { Route } from "next";
 
 import {
@@ -72,11 +72,7 @@ export default async function PortalNotificationsPage() {
         })
         .from(interviews)
         .leftJoin(user, eq(user.id, interviews.interviewerId))
-        .where(
-          appIds.length === 1
-            ? eq(interviews.applicationId, appIds[0])
-            : undefined,
-        )
+        .where(inArray(interviews.applicationId, appIds))
         .orderBy(desc(interviews.scheduledAt))
     : [];
 
@@ -169,7 +165,7 @@ export default async function PortalNotificationsPage() {
           <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
             <BellIcon className="mx-auto mb-3 size-8 text-muted-foreground/50" />
             <p className="text-sm font-medium text-muted-foreground">No notifications yet</p>
-            <p className="mt-1 text-xs text-muted-foreground/70">
+            <p className="mt-1 text-xs text-muted-foreground">
               You&apos;ll see updates here when there&apos;s activity on your applications.
             </p>
           </div>
@@ -191,7 +187,7 @@ export default async function PortalNotificationsPage() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-foreground">{n.title}</p>
                       <p className="mt-0.5 text-xs text-muted-foreground">{n.description}</p>
-                      <p className="mt-1 text-[11px] text-muted-foreground/70">
+                      <p className="mt-1 text-[11px] text-muted-foreground">
                         {formatRelative(n.createdAt)}
                       </p>
                     </div>

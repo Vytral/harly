@@ -42,26 +42,26 @@ export async function emitWebhookEvent(
     const subscribed = endpoints.filter((endpoint) =>
       (Array.isArray(endpoint.events) ? endpoint.events : []).includes(event),
     );
-    if (subscribed.length === 0) return;
+    if (subscribed.length > 0) {
+      const created = Math.floor(Date.now() / 1000);
 
-    const created = Math.floor(Date.now() / 1000);
+      for (const endpoint of subscribed) {
+        const payload = { event, created, workspace: workspaceId, data };
+        const [row] = await db
+          .insert(webhookDeliveries)
+          .values({
+            workspaceId,
+            endpointId: endpoint.id,
+            event,
+            payload,
+            status: "pending",
+          })
+          .returning();
 
-    for (const endpoint of subscribed) {
-      const payload = { event, created, workspace: workspaceId, data };
-      const [row] = await db
-        .insert(webhookDeliveries)
-        .values({
-          workspaceId,
-          endpointId: endpoint.id,
-          event,
-          payload,
-          status: "pending",
-        })
-        .returning();
-
-      if (!row) continue;
-      // Best-effort immediate delivery; the dispatcher is the safety net.
-      void deliverWebhook(row, endpoint).catch((err) => log.error(err, "deliverWebhook failed"));
+        if (!row) continue;
+        // Best-effort immediate delivery; the dispatcher is the safety net.
+        void deliverWebhook(row, endpoint).catch((err) => log.error(err, "deliverWebhook failed"));
+      }
     }
   } catch (error) {
     log.error({ workspaceId, event, error }, "[webhooks] emit failed");

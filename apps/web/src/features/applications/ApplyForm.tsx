@@ -114,10 +114,7 @@ type DetectedSummary = {
 
 type EducationEntry = CandidateEducationEntryInput;
 type ExperienceEntry = CandidateExperienceEntryInput;
-type EntryFieldErrors<T extends { id: string }> = Record<
-  string,
-  Partial<Record<string, string[]>>
->;
+type EntryFieldErrors = Record<string, Partial<Record<string, string[]>>>;
 
 function createEducationEntry(): EducationEntry {
   return {
@@ -415,8 +412,8 @@ function ConsentCheckbox({
   );
 }
 
-function entryErrorFor<T extends { id: string }>(
-  errors: EntryFieldErrors<T>,
+function entryErrorFor(
+  errors: EntryFieldErrors,
   id: string,
   field: string,
 ) {
@@ -435,8 +432,8 @@ type FormState = {
   experienceEntries: ExperienceEntry[];
   fieldErrors: Partial<Record<keyof ApplicationFormValues, string[]>>;
   questionErrors: Record<string, string[]>;
-  educationErrors: EntryFieldErrors<EducationEntry>;
-  experienceErrors: EntryFieldErrors<ExperienceEntry>;
+  educationErrors: EntryFieldErrors;
+  experienceErrors: EntryFieldErrors;
 };
 
 type FormAction =
@@ -461,8 +458,8 @@ type FormAction =
   | { type: "CLEAR_PERSONAL" }
   | { type: "SET_FIELD_ERRORS"; errors: Partial<Record<keyof ApplicationFormValues, string[]>> }
   | { type: "SET_QUESTION_ERRORS"; errors: Record<string, string[]> }
-  | { type: "SET_EDUCATION_ERRORS"; errors: EntryFieldErrors<EducationEntry> }
-  | { type: "SET_EXPERIENCE_ERRORS"; errors: EntryFieldErrors<ExperienceEntry> }
+  | { type: "SET_EDUCATION_ERRORS"; errors: EntryFieldErrors }
+  | { type: "SET_EXPERIENCE_ERRORS"; errors: EntryFieldErrors }
   | { type: "CLEAR_FIELD_ERROR"; field: keyof ApplicationFormValues }
   | { type: "CLEAR_QUESTION_ERROR"; id: string }
   | {
@@ -775,8 +772,8 @@ export function ApplyForm({
   function validateClientFields() {
     const nextErrors: Partial<Record<keyof ApplicationFormValues, string[]>> = {};
     const nextQuestionErrors: Record<string, string[]> = {};
-    const nextEducationErrors: EntryFieldErrors<EducationEntry> = {};
-    const nextExperienceErrors: EntryFieldErrors<ExperienceEntry> = {};
+    const nextEducationErrors: EntryFieldErrors = {};
+    const nextExperienceErrors: EntryFieldErrors = {};
     const personalFields = applicationConfig.sections.personal;
     const profileFields = applicationConfig.sections.profile;
 

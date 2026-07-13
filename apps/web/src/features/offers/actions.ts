@@ -15,22 +15,17 @@ import {
   jobStages,
   notifications,
   offers,
+  emailOutbox,
   organization,
 } from "@harly/db";
-import {
-  CustomTemplateEmail,
-  OfferExtended,
-  offerExtendedSubject,
-  OfferWithdrawn,
-  offerWithdrawnSubject,
-} from "@harly/emails";
+import { OfferWithdrawn, offerWithdrawnSubject } from "@harly/emails";
 
-import { renderActiveEmailTemplate } from "@/features/email-templates/data";
 import { requirePermission } from "@/features/workspaces/permissions-server";
-import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
+import { sendWorkspaceEmail } from "@/lib/email";
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import { processEmailOutbox } from "@/lib/email/outbox-processor";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   year: "numeric",
@@ -197,29 +192,31 @@ export async function createOffer(input: {
     return { success: false, error: "Application not found." };
   }
 
-  await db.insert(offers).values({
-    workspaceId,
-    applicationId: application.id,
-    candidateId: application.candidateId,
-    jobId: application.jobId,
-    status: "draft",
-    title: parsed.data.title,
-    salaryAmount: parsed.data.salaryAmount,
-    currency: parsed.data.currency,
-    salaryPeriod: parsed.data.salaryPeriod,
-    equity: parsed.data.equity,
-    startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : null,
-    expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
-    notes: parsed.data.notes,
-    createdById: context.user.id,
-  });
+  await db.transaction(async (tx) => {
+    await tx.insert(offers).values({
+      workspaceId,
+      applicationId: application.id,
+      candidateId: application.candidateId,
+      jobId: application.jobId,
+      status: "draft",
+      title: parsed.data.title,
+      salaryAmount: parsed.data.salaryAmount,
+      currency: parsed.data.currency,
+      salaryPeriod: parsed.data.salaryPeriod,
+      equity: parsed.data.equity,
+      startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : null,
+      expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
+      notes: parsed.data.notes,
+      createdById: context.user.id,
+    });
 
-  await logOfferActivity({
-    workspaceId,
-    actorId: context.user.id,
-    applicationId: application.id,
-    type: "offer.created",
-    metadata: { title: parsed.data.title },
+    await logOfferActivity({
+      workspaceId,
+      actorId: context.user.id,
+      applicationId: application.id,
+      type: "offer.created",
+      metadata: { title: parsed.data.title },
+    });
   });
 
   revalidatePath(`/dashboard/candidates/${application.candidateId}`);
@@ -301,72 +298,33 @@ export async function sendOffer(input: { offerId: string }): Promise<ActionResul
     return { success: false, error: "Only draft offers can be sent." };
   }
 
-  await db
-    .update(offers)
-    .set({ status: "sent" })
-    .where(and(eq(offers.workspaceId, workspaceId), eq(offers.id, offer.id)));
-
-  await logOfferActivity({
-    workspaceId,
-    actorId: context.user.id,
-    applicationId: offer.applicationId,
-    type: "offer.sent",
-    metadata: { title: offer.title, salaryAmount: offer.salaryAmount },
-  });
-
-  // Email the candidate their offer. Fire-and-forget so a mail hiccup never
-  // blocks the state change — matches the apply / stage-change flows.
   const recipient = await getOfferRecipient(workspaceId, offer.candidateId);
+  if (!recipient?.email) {
+    return { success: false, error: "The candidate does not have an email address." };
+  }
 
-  if (recipient?.email) {
-    const branding = await getWorkspaceEmailBranding(workspaceId);
-    const startDate = formatOfferDate(offer.startDate);
-    const expiresAt = formatOfferDate(offer.expiresAt);
-    const salary = formatOfferSalary(offer.salaryAmount, offer.currency, offer.salaryPeriod);
+  // A durable outbox row is the single source of truth: the worker sends the
+  // email and only then flips the offer to `sent`, so a crash mid-flight can
+  // never leave the offer as `sent` without a delivered email (or resend it).
+  const [outbox] = await db
+    .insert(emailOutbox)
+    .values({
+      workspaceId,
+      kind: "offer.extended",
+      payload: { offerId: offer.id, actorId: context.user.id },
+    })
+    .returning({ id: emailOutbox.id });
 
-    void renderActiveEmailTemplate(workspaceId, "offer", {
-      candidate_first_name: recipient.firstName,
-      candidate_last_name: recipient.lastName,
-      candidate_full_name: `${recipient.firstName} ${recipient.lastName}`,
-      job_title: offer.title,
-      company_name: recipient.companyName,
-      offer_salary: salary ?? undefined,
-      offer_expiry: expiresAt ?? undefined,
-      offer_start_date: startDate ?? undefined,
-    }).then((custom) =>
-      sendWorkspaceEmail(workspaceId, custom
-        ? {
-            to: recipient.email,
-            subject: custom.subject,
-            react: createElement(CustomTemplateEmail, {
-              bodyHtml: custom.bodyHtml,
-              companyName: recipient.companyName,
-              companyLogoUrl: branding.logoUrl ?? undefined,
-              accentColor: branding.primaryColor ?? undefined,
-              socialLinks: branding.socialLinks,
-            }),
-          }
-        : {
-            to: recipient.email,
-            subject: offerExtendedSubject({
-              companyName: recipient.companyName,
-              jobTitle: offer.title,
-            }),
-            react: createElement(OfferExtended, {
-              candidateName: recipient.firstName,
-              companyName: recipient.companyName,
-              companyLogoUrl: branding.logoUrl ?? undefined,
-              accentColor: branding.primaryColor ?? undefined,
-              socialLinks: branding.socialLinks,
-              jobTitle: offer.title,
-              salary,
-              startDate,
-              expiresAt,
-              equity: offer.equity ?? undefined,
-            }),
-          },
-      ),
-    );
+  await processEmailOutbox({ ids: [outbox.id] });
+
+  const [updated] = await db
+    .select({ status: emailOutbox.status })
+    .from(emailOutbox)
+    .where(eq(emailOutbox.id, outbox.id))
+    .limit(1);
+
+  if (updated?.status !== "sent") {
+    return { success: false, error: "Offer delivery failed. It has been queued for retry." };
   }
 
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
@@ -399,6 +357,9 @@ export async function decideOffer(input: {
   if (!offer) return { success: false, error: "Offer not found." };
   if (offer.status !== "sent") {
     return { success: false, error: "Only sent offers can be decided." };
+  }
+  if (offer.expiresAt && offer.expiresAt.getTime() < Date.now()) {
+    return { success: false, error: "This offer has expired and can no longer be decided." };
   }
 
   const decision = parsed.data.decision;
@@ -527,17 +488,19 @@ export async function withdrawOffer(input: {
     return { success: false, error: "This offer can no longer be withdrawn." };
   }
 
-  await db
-    .update(offers)
-    .set({ status: "withdrawn", decidedAt: new Date() })
-    .where(and(eq(offers.workspaceId, workspaceId), eq(offers.id, offer.id)));
+  await db.transaction(async (tx) => {
+    await tx
+      .update(offers)
+      .set({ status: "withdrawn", decidedAt: new Date() })
+      .where(and(eq(offers.workspaceId, workspaceId), eq(offers.id, offer.id)));
 
-  await logOfferActivity({
-    workspaceId,
-    actorId: context.user.id,
-    applicationId: offer.applicationId,
-    type: "offer.withdrawn",
-    metadata: { title: offer.title },
+    await logOfferActivity({
+      workspaceId,
+      actorId: context.user.id,
+      applicationId: offer.applicationId,
+      type: "offer.withdrawn",
+      metadata: { title: offer.title },
+    });
   });
 
   // Only notify the candidate if they had actually received the offer.

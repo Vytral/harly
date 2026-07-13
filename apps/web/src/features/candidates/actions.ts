@@ -1,6 +1,7 @@
 "use server";
 
 import { createElement } from "react";
+import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, inArray } from "drizzle-orm";
@@ -12,7 +13,6 @@ import {
   applications,
   candidates,
   candidateFiles,
-  candidateMessages,
   candidateNotes,
   candidateTags,
   jobStages,
@@ -28,6 +28,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceEmailSender } from "@/lib/email";
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
+import { insertCanonicalMessage } from "@/lib/mail/canonical";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
 import {
@@ -43,7 +44,9 @@ import {
 import { extractResumeAutofillFields } from "@/features/applications/resume-autofill";
 import { extractResumeText } from "@/lib/resume/extract-text";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
+import { isWorkspaceStorageKey } from "@/lib/storage-validation";
 import { storage } from "@/lib/storage";
+import { createLogger } from "@/lib/logger";
 
 export type CandidateActionState = {
   success: boolean;
@@ -54,6 +57,8 @@ const bulkStatusSchema = z.object({
   applicationIds: z.array(z.string().min(1)).min(1).max(200),
   status: z.enum(["active", "hired", "rejected", "withdrawn"]),
 });
+
+const emailLog = createLogger("candidate-email");
 
 /** Apply a status to many applications at once from the candidates list. */
 export async function bulkUpdateCandidateStatusAction(input: {
@@ -190,7 +195,13 @@ async function parseCandidateFileDetails(input: {
   } satisfies ParsedResumeDetails;
 
   const key = resumeKeyFromUrl(input.fileUrl);
-  if (!key || input.fileSize > maxResumeFileSize) return empty;
+  if (
+    !key ||
+    !isWorkspaceStorageKey(input.workspaceId, key, "resumes") ||
+    input.fileSize > maxResumeFileSize
+  ) {
+    return empty;
+  }
 
   try {
     const buffer = await storage.read(key);
@@ -284,6 +295,8 @@ export async function createCandidateNote(input: {
         error: "Workspace access denied.",
       };
     }
+
+    await requirePermission("collab:write");
 
     // Only keep mentions that resolve to real members of this workspace.
     const memberRows = await db
@@ -443,43 +456,51 @@ export async function updateCandidateProfile(input: {
       return { success: false, error: "Workspace access denied." };
     }
 
-    const [candidate] = await db
-      .update(candidates)
-      .set({
-        firstName: parsed.data.firstName,
-        lastName: parsed.data.lastName,
-        email: parsed.data.email.toLowerCase(),
-        phone: parsed.data.phone,
-        address: parsed.data.address,
-        linkedinUrl: parsed.data.linkedinUrl,
-        githubUrl: parsed.data.githubUrl,
-        websiteUrl: parsed.data.websiteUrl,
-        headline: parsed.data.headline,
-        summary: parsed.data.summary,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(candidates.id, input.candidateId),
-          eq(candidates.workspaceId, input.workspaceId),
-        ),
-      )
-      .returning({ id: candidates.id });
+    await requirePermission("candidates:edit");
+
+    const [candidate] = await db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(candidates)
+        .set({
+          firstName: parsed.data.firstName,
+          lastName: parsed.data.lastName,
+          email: parsed.data.email.toLowerCase(),
+          phone: parsed.data.phone,
+          address: parsed.data.address,
+          linkedinUrl: parsed.data.linkedinUrl,
+          githubUrl: parsed.data.githubUrl,
+          websiteUrl: parsed.data.websiteUrl,
+          headline: parsed.data.headline,
+          summary: parsed.data.summary,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(candidates.id, input.candidateId),
+            eq(candidates.workspaceId, input.workspaceId),
+          ),
+        )
+        .returning({ id: candidates.id });
+
+      if (!row) return [undefined];
+
+      await tx.insert(activityEvents).values({
+        workspaceId: input.workspaceId,
+        actorId: user.id,
+        entityType: "candidate",
+        entityId: input.candidateId,
+        type: "candidate.updated",
+        metadata: {
+          candidateName: `${parsed.data.firstName} ${parsed.data.lastName}`,
+        },
+      });
+
+      return [row];
+    });
 
     if (!candidate) {
       return { success: false, error: "Candidate not found." };
     }
-
-    await db.insert(activityEvents).values({
-      workspaceId: input.workspaceId,
-      actorId: user.id,
-      entityType: "candidate",
-      entityId: input.candidateId,
-      type: "candidate.updated",
-      metadata: {
-        candidateName: `${parsed.data.firstName} ${parsed.data.lastName}`,
-      },
-    });
 
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
     revalidatePath("/dashboard/candidates");
@@ -505,6 +526,8 @@ export async function updateCandidateAvatarAction(input: {
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
+
+    await requirePermission("candidates:edit");
 
     const [candidate] = await db
       .update(candidates)
@@ -573,6 +596,13 @@ export async function attachCandidateFile(input: {
 
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
+    }
+
+    await requirePermission("candidates:edit");
+
+    const key = resumeKeyFromUrl(parsed.data.fileUrl);
+    if (!key || !isWorkspaceStorageKey(workspace.id, key, "resumes")) {
+      return { success: false, error: "File upload is invalid." };
     }
 
     const parsedDetails = await parseCandidateFileDetails({
@@ -762,6 +792,7 @@ export async function createScorecard(input: {
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
+    await requirePermission("collab:write");
     if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
       return { success: false, error: "Candidate not found." };
     }
@@ -804,6 +835,7 @@ export async function addCandidateTag(input: {
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
+    await requirePermission("candidates:edit");
     if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
       return { success: false, error: "Candidate not found." };
     }
@@ -836,6 +868,7 @@ export async function removeCandidateTag(input: {
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
+    await requirePermission("candidates:edit");
     await db
       .delete(candidateTags)
       .where(and(eq(candidateTags.id, input.tagId), eq(candidateTags.workspaceId, input.workspaceId)));
@@ -883,6 +916,8 @@ export async function sendBulkCandidateEmail(input: {
       failed: 0,
     };
   }
+
+  await requirePermission("collab:write");
 
   const { interpolateTemplate } = await import(
     "@/features/email-templates/interpolate"
@@ -966,6 +1001,7 @@ export async function sendBulkCandidateEmail(input: {
     const replyTo = applicationId
       ? await getInboundReplyTo(workspace.id, applicationId)
       : undefined;
+    const messageId = `<${randomUUID()}@harly.local>`;
 
     let status: "sent" | "queued" | "failed" = sender ? "sent" : "queued";
     if (sender) {
@@ -974,6 +1010,7 @@ export async function sendBulkCandidateEmail(input: {
           to: candidate.email,
           subject,
           replyTo,
+          messageId,
           react: createElement(
             "div",
             { style: { whiteSpace: "pre-wrap", fontFamily: "sans-serif" } },
@@ -981,21 +1018,27 @@ export async function sendBulkCandidateEmail(input: {
           ),
         });
       } catch (sendError) {
-        console.error("Bulk email send failed", sendError);
+        emailLog.error(
+          { err: sendError, workspaceId: workspace.id, candidateId: candidate.id },
+          "bulk candidate email provider rejected message",
+        );
         status = "failed";
       }
     }
 
-    await db.insert(candidateMessages).values({
+    await insertCanonicalMessage({
       workspaceId: workspace.id,
+      source: "provider",
       candidateId: candidate.id,
-      authorId: user.id,
-      direction: "outbound",
-      toEmail: candidate.email,
-      fromEmail: process.env.EMAIL_FROM ?? null,
+      applicationId: applicationId ?? null,
+      participantEmail: candidate.email,
       subject,
-      body,
-      status,
+      receivedAt: new Date(),
+      messageId,
+      direction: "outbound",
+      fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
+      toEmails: [candidate.email],
+      textBody: body,
     });
 
     if (status === "failed") failed += 1;
@@ -1026,6 +1069,7 @@ export async function generateEmailDraftAction(input: {
     return { ok: false, error: "Invalid input." };
   }
 
+  await requirePermission("collab:write");
   const { organization: workspace, user } = await getWorkspaceContext();
 
   const { getWorkspaceAiConfig } = await import("@/lib/ai/config");
@@ -1116,10 +1160,11 @@ export async function sendCandidateMessage(input: {
     if (!parsed.success) {
       return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid message." };
     }
-    const { organization: workspace, user } = await getWorkspaceContext();
+    const { organization: workspace } = await getWorkspaceContext();
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
+    await requirePermission("collab:write");
     if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
       return { success: false, error: "Candidate not found." };
     }
@@ -1140,6 +1185,7 @@ export async function sendCandidateMessage(input: {
     const replyTo = latestApplication
       ? await getInboundReplyTo(workspace.id, latestApplication.id)
       : undefined;
+    const messageId = `<${randomUUID()}@harly.local>`;
 
     // Send via the workspace's configured provider (or platform default);
     // otherwise persist as queued.
@@ -1151,6 +1197,7 @@ export async function sendCandidateMessage(input: {
           to: parsed.data.toEmail,
           subject: parsed.data.subject,
           replyTo,
+          messageId,
           react: createElement(
             "div",
             { style: { whiteSpace: "pre-wrap", fontFamily: "sans-serif" } },
@@ -1158,21 +1205,27 @@ export async function sendCandidateMessage(input: {
           ),
         });
       } catch (sendError) {
-        console.error("Resend send failed", sendError);
+        emailLog.error(
+          { err: sendError, workspaceId: workspace.id, candidateId: input.candidateId },
+          "candidate email provider rejected message",
+        );
         status = "failed";
       }
     }
 
-    await db.insert(candidateMessages).values({
+    await insertCanonicalMessage({
       workspaceId: input.workspaceId,
+      source: "provider",
       candidateId: input.candidateId,
-      authorId: user.id,
-      direction: "outbound",
-      toEmail: parsed.data.toEmail,
-      fromEmail: process.env.EMAIL_FROM ?? null,
+      applicationId: latestApplication?.id ?? null,
+      participantEmail: parsed.data.toEmail,
       subject: parsed.data.subject,
-      body: parsed.data.body,
-      status,
+      receivedAt: new Date(),
+      messageId,
+      direction: "outbound",
+      fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
+      toEmails: [parsed.data.toEmail],
+      textBody: parsed.data.body,
     });
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
 
@@ -1180,7 +1233,8 @@ export async function sendCandidateMessage(input: {
       return { success: false, error: "Email failed to send.", delivered: false };
     }
     return { success: true, delivered: status === "sent" };
-  } catch {
+  } catch (error) {
+    emailLog.error(error, "candidate email action failed before delivery completed");
     return {
       success: false,
       error: "Unable to send message.",

@@ -6,7 +6,8 @@ import {
   createResumeStorageKey,
   resumeUploadRequestSchema,
 } from "@/lib/storage-validation";
-import { storage } from "@/lib/storage";
+import { storage, storageProvider } from "@/lib/storage";
+import { appendStorageUploadIntent, createStorageUploadIntent } from "@/lib/storage-upload-intent";
 
 export const runtime = "nodejs";
 
@@ -31,7 +32,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const key = createResumeStorageKey(parsed.data.filename);
+  const key = createResumeStorageKey(session.workspaceId, parsed.data.filename);
 
   const result = await storage.getPresignedUploadUrl({
     key,
@@ -39,5 +40,6 @@ export async function POST(request: NextRequest) {
     contentLength: parsed.data.contentLength,
   });
 
-  return NextResponse.json({ ...result, key });
+  const intent = createStorageUploadIntent({ workspaceId: session.workspaceId, key, contentType: parsed.data.contentType, contentLength: parsed.data.contentLength, expiresAt: Date.now() + 10 * 60_000 });
+  return NextResponse.json({ ...result, uploadUrl: storageProvider === "local" ? appendStorageUploadIntent(result.uploadUrl, intent) : result.uploadUrl, key });
 }

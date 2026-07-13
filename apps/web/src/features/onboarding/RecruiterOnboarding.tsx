@@ -97,7 +97,7 @@ export function RecruiterOnboarding({
       <div className="grid lg:grid-cols-[256px_minmax(0,1fr)]">
         {/* Left rail */}
         <aside className="hidden flex-col border-r border-border/70 bg-muted/30 p-7 lg:flex">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground/70">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             Welcome
           </p>
           <nav className="mt-6 space-y-1">
@@ -127,7 +127,7 @@ export function RecruiterOnboarding({
                       "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-lg",
                       doneStep && "bg-pine text-white",
                       active && "bg-sage text-pine ring-1 ring-pine/15",
-                      !doneStep && !active && "bg-muted text-muted-foreground/70",
+                      !doneStep && !active && "bg-muted text-muted-foreground",
                     )}
                   >
                     {doneStep ? <CheckIcon className="size-4" /> : <Icon className="size-4" />}
@@ -136,13 +136,13 @@ export function RecruiterOnboarding({
                     <span className={cn("block text-sm font-medium", active || doneStep ? "text-foreground" : "text-muted-foreground")}>
                       {s.label}
                     </span>
-                    <span className="block truncate text-xs text-muted-foreground/70">{s.desc}</span>
+                    <span className="block truncate text-xs text-muted-foreground">{s.desc}</span>
                   </span>
                 </div>
               );
             })}
           </nav>
-          <p className="mt-auto pt-8 text-xs leading-relaxed text-muted-foreground/70">
+          <p className="mt-auto pt-8 text-xs leading-relaxed text-muted-foreground">
             Less than a minute. You can update these in your account anytime.
           </p>
         </aside>

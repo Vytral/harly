@@ -1,5 +1,3 @@
-import { createHmac } from "node:crypto";
-
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -9,18 +7,18 @@ import { encryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { getWorkspaceOutlookCredentials } from "@/lib/outlook/config";
 import { getMe } from "@/lib/outlook/client";
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 
 const log = createLogger("api-outlook-callback");
 
 export const runtime = "nodejs";
 
-const STATE_MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
-
 /**
  * GET /api/integrations/outlook/callback?code=...&state=...
  *
  * Microsoft redirects here after the user approves OAuth consent.
- * 1. Verify state (HMAC + expiry)
+ * 1. Verify + redeem the server-side nonce (single-use, TTL, actor-bound)
  * 2. Exchange code for tokens
  * 3. Fetch user profile
  * 4. Encrypt + store tokens in workspace_settings
@@ -44,11 +42,24 @@ export async function GET(req: NextRequest) {
     return redirectWithError("Missing code or state from Microsoft.");
   }
 
-  // Verify state
-  const wsId = verifyState(state);
-  if (!wsId) {
-    return redirectWithError("Invalid or expired state. Please try again.");
+  // Verify + redeem the server-side nonce: single-use, TTL-scoped, bound to the
+  // user + workspace that started the install. Closes replay/escalation.
+  const workspaceId = session.session.activeOrganizationId;
+  if (!workspaceId) {
+    return redirectWithError("No workspace available for this account.");
   }
+  const nonceCheck = await verifyAndConsumeOauthStateNonce({
+    state,
+    userId: session.user.id,
+    workspaceId,
+  });
+  if (!nonceCheck.ok) {
+    return redirectWithError(`${nonceCheck.error} Please try again.`);
+  }
+
+  await requirePermission("integrations:manage");
+
+  const wsId = nonceCheck.workspaceId;
 
   // Load credentials from workspace DB row (or env fallback)
   const credentials = await getWorkspaceOutlookCredentials(wsId);
@@ -131,34 +142,6 @@ export async function GET(req: NextRequest) {
   return NextResponse.redirect(
     `${appUrl}/settings/integrations?outlook=connected`,
   );
-}
-
-function verifyState(state: string): string | null {
-  const [payload, sig] = state.split(".");
-  if (!payload || !sig) return null;
-
-  const expected = createHmac("sha256", getSigningKey())
-    .update(payload)
-    .digest("base64url");
-  if (sig !== expected) return null;
-
-  try {
-    const data = JSON.parse(
-      Buffer.from(payload, "base64url").toString("utf8"),
-    ) as { ws?: string; t?: number };
-
-    if (!data.ws) return null;
-    if (data.t && Date.now() - data.t > STATE_MAX_AGE_MS) return null;
-
-    return data.ws;
-  } catch (error) {
-    log.error(error, "outlook callback verifyState failed");
-    return null;
-  }
-}
-
-function getSigningKey(): string {
-  return process.env.AI_ENCRYPTION_KEY ?? "fallback-dev-only";
 }
 
 function redirectWithError(msg: string) {

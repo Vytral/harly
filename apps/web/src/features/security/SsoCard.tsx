@@ -125,7 +125,7 @@ export function SsoCard({
                       <>
                         Configured
                         {source === "env" && (
-                          <span className="ml-1 text-muted-foreground/60">(via env vars)</span>
+                          <span className="ml-1 text-muted-foreground">(via env vars)</span>
                         )}
                       </>
                     ) : (

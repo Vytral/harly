@@ -8,11 +8,13 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { auth } from "@/lib/auth";
+import { storage } from "@/lib/storage";
 import { logAuditEvent } from "@/lib/audit-log";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { createLogger } from "@/lib/logger";
 import { db } from "@harly/db";
+import { convertAndStoreLogo } from "@/lib/logo-convert";
 import {
   customRoles,
   invitation,
@@ -30,7 +32,10 @@ import {
 import {
   getWorkspaceContext,
 } from "@/features/workspaces/context";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  assignRolePrivilegeError,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import {
   boardBrandingSchema,
   boardStyles,
@@ -258,14 +263,10 @@ export async function updateWorkspaceProfileAction(
     // Convert logo for email compatibility if a new logo was uploaded
     if (parsed.data.logoUrl) {
       try {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-        await fetch(`${appUrl}/api/logo/convert`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            logoUrl: parsed.data.logoUrl,
-            organizationId: context.organization.id,
-          }),
+        await convertAndStoreLogo({
+          organizationId: context.organization.id,
+          logoUrl: parsed.data.logoUrl,
+          storage,
         });
       } catch (error) {
         // Log but don't fail the profile update
@@ -472,6 +473,14 @@ export async function inviteWorkspaceMemberAction(
       return { success: false, error: "Unknown role." };
     }
 
+    const privilegeError = await assignRolePrivilegeError(
+      context,
+      parsed.data.role,
+    );
+    if (privilegeError) {
+      return { success: false, error: privilegeError };
+    }
+
     const result = await inviteOneMember(
       context,
       parsed.data.email,
@@ -552,6 +561,11 @@ export async function inviteWorkspaceMembersAction(
         skipped.push({ email, reason: "Unknown role." });
         continue;
       }
+      const privilegeError = await assignRolePrivilegeError(context, role);
+      if (privilegeError) {
+        skipped.push({ email, reason: privilegeError });
+        continue;
+      }
       const result = await inviteOneMember(context, email, role);
       if (!result.ok) {
         skipped.push({ email, reason: result.reason });
@@ -593,6 +607,14 @@ export async function updateWorkspaceMemberRoleAction(
       return { success: false, error: "Unknown role." };
     }
 
+    const privilegeError = await assignRolePrivilegeError(
+      context,
+      parsed.data.role,
+    );
+    if (privilegeError) {
+      return { success: false, error: privilegeError };
+    }
+
     const [targetMember] = await db
       .select({
         id: authMembers.id,
@@ -609,6 +631,27 @@ export async function updateWorkspaceMemberRoleAction(
 
     if (!targetMember) {
       return { success: false, error: "Member not found." };
+    }
+
+    // Only an owner may modify another owner's role — stops a non-owner from
+    // demoting or hijacking the workspace's keyholders.
+    if (
+      isOwnerRole(targetMember.role) &&
+      !isOwnerRole(context.roleKey)
+    ) {
+      return {
+        success: false,
+        error: "Only an owner can change an owner's role.",
+      };
+    }
+
+    // Consistent with the bulk action: you can't strip your own Owner role.
+    if (
+      targetMember.id === context.membership.id &&
+      isOwnerRole(targetMember.role) &&
+      parsed.data.role !== "owner"
+    ) {
+      return { success: false, error: "You can't remove your own Owner role." };
     }
 
     if (
@@ -676,6 +719,13 @@ export async function updateMemberRolesAction(input: {
       if (!(await isAssignableRole(context.organization.id, change.role))) {
         return { success: false, error: "Unknown role." };
       }
+      const privilegeError = await assignRolePrivilegeError(
+        context,
+        change.role,
+      );
+      if (privilegeError) {
+        return { success: false, error: privilegeError };
+      }
     }
 
     const ids = parsed.data.changes.map((c) => c.memberId);
@@ -698,6 +748,13 @@ export async function updateMemberRolesAction(input: {
       }
       const wasOwner = target.role === "owner";
       const willOwner = change.role === "owner";
+      // Only an owner may modify another owner's role.
+      if (wasOwner && !isOwnerRole(context.roleKey)) {
+        return {
+          success: false,
+          error: "Only an owner can change an owner's role.",
+        };
+      }
       if (target.id === context.membership.id && wasOwner && !willOwner) {
         return { success: false, error: "You can't remove your own Owner role." };
       }
@@ -1022,6 +1079,14 @@ export async function enableInviteLinkAction(
     }
     if (!(await isAssignableRole(context.organization.id, parsed.data.role))) {
       return { success: false, error: "Unknown role." };
+    }
+
+    const privilegeError = await assignRolePrivilegeError(
+      context,
+      parsed.data.role,
+    );
+    if (privilegeError) {
+      return { success: false, error: privilegeError };
     }
 
     const existing = await readInviteLink(context.organization.id);

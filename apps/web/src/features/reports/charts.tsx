@@ -89,7 +89,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
                 aria-pressed={!off}
                 className={cn(
                   "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition",
-                  off ? "text-muted-foreground/60" : "text-foreground hover:bg-muted/60",
+                  off ? "text-muted-foreground" : "text-foreground hover:bg-muted/60",
                 )}
               >
                 <span
@@ -398,7 +398,7 @@ export function Histogram({ data, color = "var(--chart-2)" }: { data: { bucket: 
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-1 text-center">
         <p className="text-sm text-muted-foreground">No hires yet</p>
-        <p className="text-xs text-muted-foreground/70">Distribution appears once roles are filled.</p>
+        <p className="text-xs text-muted-foreground">Distribution appears once roles are filled.</p>
       </div>
     );
   }

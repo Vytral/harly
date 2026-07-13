@@ -9,7 +9,6 @@ import {
   Check,
   ExternalLink,
   LogOut,
-  Plus,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -17,10 +16,7 @@ import Link from "next/link";
 import { authClient, signOut } from "@/lib/auth-client";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { GithubIcon } from "@/components/ui/icons/GithubIcon";
-import {
-  WorkspaceMark,
-  CreateOrganizationDialog,
-} from "@/components/dashboard/WorkspaceSwitcher";
+import { WorkspaceMark } from "@/components/dashboard/WorkspaceSwitcher";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { WorkspaceOption } from "@/features/workspaces/data";
@@ -48,7 +44,6 @@ export function UserMenu({
   const router = useRouter();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
-  const [createOpen, setCreateOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [coords, setCoords] = useState<{ top: number; right: number } | null>(
     null,
@@ -146,7 +141,7 @@ export function UserMenu({
 
               {/* ── Workspace switcher ── */}
               <div className="px-3 py-3">
-                <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground/60">
+                <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
                   Workspace
                 </p>
                 <div className="space-y-0.5">
@@ -176,18 +171,6 @@ export function UserMenu({
                       )}
                     </button>
                   ))}
-                  <button
-                    onClick={() => {
-                      setOpen(false);
-                      setCreateOpen(true);
-                    }}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                  >
-                    <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-dashed">
-                      <Plus className="size-3.5" />
-                    </span>
-                    <span>New workspace</span>
-                  </button>
                 </div>
               </div>
 
@@ -261,10 +244,6 @@ export function UserMenu({
           document.body,
         )}
 
-      <CreateOrganizationDialog
-        open={createOpen}
-        onOpenChange={setCreateOpen}
-      />
     </>
   );
 }
