@@ -115,6 +115,25 @@ export function serializeWebhookEndpoint(endpoint: WebhookEndpoint) {
   };
 }
 
+/** Most recent delivery attempt for an endpoint, or null if never triggered. */
+export async function getLastWebhookDelivery(input: {
+  workspaceId: string;
+  endpointId: string;
+}) {
+  const [delivery] = await db
+    .select()
+    .from(webhookDeliveries)
+    .where(
+      and(
+        eq(webhookDeliveries.workspaceId, input.workspaceId),
+        eq(webhookDeliveries.endpointId, input.endpointId),
+      ),
+    )
+    .orderBy(desc(webhookDeliveries.createdAt))
+    .limit(1);
+  return delivery ? serializeDelivery(delivery) : null;
+}
+
 function validateEvents(events: string[]): WebhookEvent[] {
   const valid = events.filter(isWebhookEvent);
   if (valid.length === 0) {

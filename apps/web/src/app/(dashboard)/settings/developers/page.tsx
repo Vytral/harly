@@ -2,6 +2,7 @@ import { API_SCOPES, PUBLISHABLE_SCOPES } from "@harly/api";
 
 import { DevelopersSettings } from "@/features/developers/DevelopersSettings";
 import {
+  getLastWebhookDelivery,
   listApiKeys,
   listWebhookEndpoints,
   serializeApiKey,
@@ -30,6 +31,16 @@ export default async function DevelopersSettingsPage() {
     listWebhookEndpoints(organization.id),
   ]);
 
+  const webhooks = await Promise.all(
+    endpoints.map(async (endpoint) => ({
+      ...serializeWebhookEndpoint(endpoint),
+      lastDelivery: await getLastWebhookDelivery({
+        workspaceId: organization.id,
+        endpointId: endpoint.id,
+      }),
+    })),
+  );
+
   const appUrl = (
     process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
   ).replace(/\/$/, "");
@@ -40,7 +51,7 @@ export default async function DevelopersSettingsPage() {
       workspaceSlug={organization.slug}
       appUrl={appUrl}
       apiKeys={keys.map(serializeApiKey)}
-      webhooks={endpoints.map(serializeWebhookEndpoint)}
+      webhooks={webhooks}
       scopes={[...API_SCOPES]}
       publishableScopes={[...PUBLISHABLE_SCOPES]}
       webhookEvents={WEBHOOK_EVENTS.map((event) => ({
