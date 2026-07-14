@@ -43,6 +43,8 @@ export async function getWorkspaceAuditLogs(workspaceId: string) {
     resourceType: r.resourceType,
     resourceId: r.resourceId,
     ipAddress: r.ipAddress,
+    userAgent: r.userAgent,
+    metadata: r.metadata as Record<string, unknown> | null,
     severity: r.severity,
     createdAt: r.createdAt.toISOString(),
   }));
