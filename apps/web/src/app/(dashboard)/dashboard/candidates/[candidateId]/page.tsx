@@ -95,6 +95,7 @@ export default async function CandidateDetailPage({
 
   const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags, aiEvaluations, inPool } =
     profile;
+  const isHired = applications.some((application) => application.status === "hired");
   const [calStatus, aiStatus, workspaceContext] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
     getWorkspaceAiStatus(workspaceId),
@@ -140,6 +141,7 @@ export default async function CandidateDetailPage({
     applicationId: application.id,
     jobTitle: application.jobTitle,
     currentStageName: application.currentStageName,
+    status: application.status,
   }));
   const activeIndex = railCandidates.findIndex((entry) => entry.id === candidate.id);
   const prevId = activeIndex > 0 ? railCandidates[activeIndex - 1]?.id ?? null : null;
@@ -358,7 +360,9 @@ export default async function CandidateDetailPage({
               </div>
 
               {/* Actions — grouped with clear hierarchy, delete isolated */}
-              <div className="w-full shrink-0 lg:w-auto lg:pl-2">
+              <div
+                className={`w-full shrink-0 lg:w-auto lg:pl-2${isHired ? " lg:mx-auto lg:-translate-x-[82px]" : ""}`}
+              >
                 <CandidateActionBar
                   candidate={actionCandidate}
                   name={fullName}

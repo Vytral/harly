@@ -26,6 +26,7 @@ export type ScheduleApplicationOption = {
   applicationId: string;
   jobTitle: string;
   currentStageName: string | null;
+  status: string | null;
 };
 
 export type ScheduleMemberOption = {
@@ -213,7 +214,7 @@ export function ScheduleDrawer({
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
         title="Schedule interview"
-        description="Added to the candidate timeline and the team agenda."
+        description="Set the date, time, and interviewers for this meeting."
         footer={
           <>
             <SheetClose asChild>

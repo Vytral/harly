@@ -400,13 +400,15 @@ export function CandidateActionBar({
     />
   );
 
-  const reject = (
+  const isHired = applications.some((app) => app.status === "hired");
+  const reject = isHired ? null : (
     <RejectButton
       name={name}
       applicationIds={applicationIds}
       compact={variant === "compact"}
     />
   );
+  const moveTarget = isHired ? null : move;
 
   // ── Compact (sticky bar): fast-path actions only ──
   if (variant === "compact") {
@@ -416,7 +418,7 @@ export function CandidateActionBar({
         {schedule}
         {evaluate}
         {reject}
-        <MoveStageButton target={move} />
+        <MoveStageButton target={moveTarget} />
       </div>
     );
   }
@@ -425,7 +427,7 @@ export function CandidateActionBar({
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
       {/* Primary — advance the pipeline */}
-      <MoveStageButton target={move} />
+      <MoveStageButton target={moveTarget} />
 
       {/* Communication */}
       <div className="flex items-center gap-2">
@@ -494,28 +496,32 @@ export function CandidateActionBar({
       </div>
 
       {/* Reject — prominent, isolated */}
-      <div className="flex items-center sm:border-l sm:border-border/70 sm:pl-2">
-        {reject}
-      </div>
+      {reject && (
+        <div className="flex items-center sm:border-l sm:border-border/70 sm:pl-2">
+          {reject}
+        </div>
+      )}
 
       {/* Destructive — far right so it can't be hit by accident */}
-      <div className="ml-auto flex items-center sm:ml-1 sm:border-l sm:border-border/70 sm:pl-2">
-        <DeleteCandidateButton
-          candidateId={candidate.id}
-          name={name}
-          trigger={
-            <Button
-              size="sm"
-              variant="ghost"
-              className="size-8 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
-              title="Delete candidate"
-            >
-              <Trash2 className="size-4" />
-              <span className="sr-only">Delete</span>
-            </Button>
-          }
-        />
-      </div>
+      {!isHired && (
+        <div className="ml-auto flex items-center sm:ml-1 sm:border-l sm:border-border/70 sm:pl-2">
+          <DeleteCandidateButton
+            candidateId={candidate.id}
+            name={name}
+            trigger={
+              <Button
+                size="sm"
+                variant="ghost"
+                className="size-8 p-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                title="Delete candidate"
+              >
+                <Trash2 className="size-4" />
+                <span className="sr-only">Delete</span>
+              </Button>
+            }
+          />
+        </div>
+      )}
     </div>
   );
 }
