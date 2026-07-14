@@ -12,9 +12,28 @@ import { AiButton } from "@/components/ui/AiButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  ClaudeLogo,
+  GeminiLogo,
+  OpenAiLogo,
+  OpenRouterLogo,
+  XaiLogo,
+} from "@/components/ui/icons/brands";
 import { Brain } from "lucide-react";
 import { RelativeTime } from "@/lib/date-hydration";
+import { formatModelLabel, type AiProviderId } from "@/lib/ai/providers";
 import { cn } from "@/lib/utils";
+
+const PROVIDER_LOGO: Record<
+  AiProviderId,
+  React.ComponentType<{ className?: string }>
+> = {
+  openai: OpenAiLogo,
+  anthropic: ClaudeLogo,
+  google: GeminiLogo,
+  xai: XaiLogo,
+  openrouter: OpenRouterLogo,
+};
 
 const RECOMMENDATION_META = {
   strong_yes: { label: "Strong yes", className: "bg-primary/10 text-primary" },
@@ -349,8 +368,12 @@ export function AiScoreCard({
               ) : null}
 
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t pt-3 text-xs text-muted-foreground">
-                <Badge variant="outline" className="font-normal">
-                  {evaluation.modelId}
+                <Badge variant="outline" className="gap-1.5 font-normal">
+                  {(() => {
+                    const Logo = PROVIDER_LOGO[evaluation.provider as AiProviderId];
+                    return Logo ? <Logo className="size-3.5" /> : null;
+                  })()}
+                  {formatModelLabel(evaluation.modelId)}
                 </Badge>
                 <span className="inline-flex items-center gap-1">
                   <FileText className="size-3.5" />
