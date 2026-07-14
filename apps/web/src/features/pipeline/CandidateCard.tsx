@@ -148,7 +148,7 @@ export function CandidateCard({
         }
       }}
       className={cn(
-        "group cursor-pointer rounded-xl border-l-[3px] bg-card p-3 shadow-sm transition-all duration-150",
+        "group cursor-pointer rounded-xl border border-border/70 border-l-[3px] bg-card p-3 shadow-sm transition-[transform,box-shadow,background-color] duration-150 ease-out active:scale-[0.98]",
         accentStyles[application.status],
         selected
           ? "ring-2 ring-primary/30 bg-accent/20"
@@ -174,7 +174,7 @@ export function CandidateCard({
             aria-label={`Select ${fullName}`}
           />
         </span>
-        <UserAvatar name={fullName} size="sm" />
+        <UserAvatar name={fullName} src={application.candidateAvatarUrl} size="sm" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-tight">{fullName}</p>
           <p className="truncate text-[11px] text-muted-foreground">
@@ -243,12 +243,12 @@ export function CandidateCardOverlay({ application }: CandidateCardOverlayProps)
   return (
     <article
       className={cn(
-        "w-56 cursor-grabbing rounded-xl border-l-[3px] bg-card p-3 shadow-2xl lg:w-64",
+        "w-56 cursor-grabbing rounded-xl border border-border/70 border-l-[3px] bg-card p-3 shadow-2xl lg:w-64",
         accentStyles[application.status],
       )}
     >
       <div className="flex items-center gap-2">
-        <UserAvatar name={fullName} size="sm" />
+        <UserAvatar name={fullName} src={application.candidateAvatarUrl} size="sm" />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-tight">{fullName}</p>
           <p className="truncate text-[11px] text-muted-foreground">

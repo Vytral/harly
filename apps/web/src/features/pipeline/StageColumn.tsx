@@ -5,7 +5,11 @@ import {
   SortableContext,
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
-import { BellIcon, BellSlashIcon } from "@/components/ui/icons/phosphor";
+import {
+  BellIcon,
+  BellSlashIcon,
+  TrayIcon,
+} from "@/components/ui/icons/phosphor";
 import { CandidateCard } from "@/features/pipeline/CandidateCard";
 import type {
   PipelineApplication,
@@ -44,11 +48,11 @@ export function StageColumn({
     <section
       ref={setNodeRef}
       className={cn(
-        "flex w-56 shrink-0 flex-col rounded-xl border bg-muted/40 transition lg:w-64",
+        "flex min-w-0 flex-col rounded-xl border bg-muted/60 transition-colors duration-150",
         isOver && "border-primary/40 bg-accent/60",
       )}
     >
-      <div className="sticky top-0 z-10 rounded-t-xl border-b bg-muted/60 p-2.5 backdrop-blur">
+      <div className="sticky top-0 z-10 rounded-t-xl border-b bg-muted p-2.5">
         <div className="flex items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2">
             <span
@@ -101,8 +105,9 @@ export function StageColumn({
             />
           ))}
           {applications.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed p-4 text-center text-xs font-medium text-muted-foreground">
-              Drop candidates here
+            <div className="flex min-h-24 flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed p-4 text-center text-muted-foreground">
+              <TrayIcon className="size-4 opacity-50" />
+              <span className="text-xs font-medium">Drop candidates here</span>
             </div>
           ) : null}
         </div>

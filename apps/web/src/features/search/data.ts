@@ -13,6 +13,7 @@ export type SearchResults = {
     name: string;
     email: string;
     headline: string | null;
+    avatarUrl: string | null;
   }[];
 };
 
@@ -56,6 +57,7 @@ export async function searchWorkspace(query: string): Promise<SearchResults> {
         lastName: candidates.lastName,
         email: candidates.email,
         headline: candidates.headline,
+        avatarUrl: candidates.avatarUrl,
       })
       .from(candidates)
       .where(
@@ -83,6 +85,7 @@ export async function searchWorkspace(query: string): Promise<SearchResults> {
       name: `${c.firstName} ${c.lastName}`,
       email: c.email,
       headline: c.headline,
+      avatarUrl: c.avatarUrl,
     })),
   };
 }

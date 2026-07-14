@@ -609,7 +609,7 @@ export function PipelineBoard({
           onDragEnd={handleDragEnd}
           onDragCancel={() => setActiveApplication(null)}
         >
-          <div className="flex gap-3 overflow-x-auto overscroll-x-contain pb-2">
+          <div className="grid grid-flow-col auto-cols-[minmax(15rem,1fr)] gap-3 overflow-x-auto overscroll-x-contain pb-2">
             {visibleStages.map((stage) => (
               <StageColumn
                 key={stage.id}

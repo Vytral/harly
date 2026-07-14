@@ -101,7 +101,7 @@ function StatTile({
   tone?: "positive" | "warning" | "neutral";
 }) {
   return (
-    <div className="rounded-lg bg-background px-3 py-2">
+    <div className="rounded-lg border border-border/70 bg-card px-3 py-2">
       <p
         className={`text-xl font-semibold tabular-nums ${
           tone === "positive"

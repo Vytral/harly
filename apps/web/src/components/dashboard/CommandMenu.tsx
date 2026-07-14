@@ -191,6 +191,7 @@ export function CommandMenu({
               >
                 <UserAvatar
                   name={candidate.name}
+                  src={candidate.avatarUrl}
                   size="sm"
                   className="size-9 shrink-0 text-sm"
                 />

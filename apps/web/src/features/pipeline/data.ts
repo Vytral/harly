@@ -40,6 +40,7 @@ export type PipelineApplication = {
   candidateFirstName: string;
   candidateLastName: string;
   candidateEmail: string;
+  candidateAvatarUrl: string | null;
   source: string | null;
   status: "active" | "hired" | "rejected" | "withdrawn";
   appliedAt: string;
@@ -210,6 +211,7 @@ export async function getPipelineData(
         candidateFirstName: candidates.firstName,
         candidateLastName: candidates.lastName,
         candidateEmail: candidates.email,
+        candidateAvatarUrl: candidates.avatarUrl,
         source: applications.source,
         status: applications.status,
         appliedAt: applications.appliedAt,
