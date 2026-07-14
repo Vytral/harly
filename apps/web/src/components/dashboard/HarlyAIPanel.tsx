@@ -1033,12 +1033,13 @@ function EmptyState({
         </p>
       </div>
       <div className="flex flex-wrap justify-center gap-1.5">
-        {QUICK_PROMPTS.map(({ icon: Icon, label, color }) => (
+        {QUICK_PROMPTS.map(({ icon: Icon, label, color }, i) => (
           <button
             key={label}
             type="button"
             onClick={() => onPromptClick(label)}
-            className="flex h-6.5 items-center gap-1.5 rounded-md bg-secondary px-2.5 text-[12px] font-medium transition-colors hover:bg-accent"
+            className="flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-card px-3 text-[12px] font-medium text-foreground/80 duration-300 animate-in fade-in slide-in-from-bottom-1 fill-mode-both transition-[background-color,border-color,color,transform] hover:-translate-y-[1px] hover:border-primary/30 hover:bg-muted/60 hover:text-foreground"
+            style={{ animationDelay: `${i * 40}ms` }}
           >
             <span className={cn("shrink-0", color)}>
               <Icon />
@@ -1314,20 +1315,20 @@ function HarlyChat({
                 onSubmit={submit}
                 isLoading={isBusy}
                 maxHeight={120}
-                className="rounded-xl border-border/60 px-3 py-2 shadow-none"
+                className="rounded-3xl border-border/60 bg-muted/30 px-3 py-2 shadow-none"
               >
                 <PromptInputTextarea
                   placeholder="Ask Harly AI…"
-                  className="min-h-[36px] py-1 text-[13px]"
+                  className="min-h-[36px] bg-transparent py-1 text-[13px] dark:bg-transparent"
                 />
                 <PromptInputActions className="justify-between pt-1">
                   <PromptInputAction tooltip="Attach files (coming soon)">
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon"
+                      size="icon-sm"
                       disabled
-                      className="size-7 cursor-not-allowed rounded-md text-muted-foreground/50"
+                      className="cursor-not-allowed text-muted-foreground/50"
                       aria-label="Attach files (coming soon)"
                     >
                       <Paperclip className="size-3.5" />
@@ -1337,19 +1338,17 @@ function HarlyChat({
                     {isBusy ? (
                       <Button
                         type="button"
-                        size="icon"
+                        size="icon-sm"
                         onClick={() => void stop()}
-                        className="size-7 rounded-md"
                         aria-label="Stop"
                       >
                         <Square className="size-3 fill-current" strokeWidth={0} />
                       </Button>
                     ) : (
                       <Button
-                        size="icon"
+                        size="icon-sm"
                         disabled={!input.trim()}
                         onClick={submit}
-                        className="size-7 rounded-md"
                         aria-label="Send"
                       >
                         <ArrowUp className="size-3.5" strokeWidth={2.5} />
@@ -1529,22 +1528,21 @@ export function HarlyAIPanel({
   return (
     <div
       className={cn(
-        "fixed bottom-20 right-6 z-50 w-[440px] transition-all duration-200 ease-out",
+        "fixed bottom-20 right-6 z-50 w-[440px] text-sm leading-6 transition-all duration-200 ease-out",
         open
           ? "translate-y-0 opacity-100 pointer-events-auto"
           : "translate-y-3 opacity-0 pointer-events-none",
       )}
-      style={{ fontFamily: 'ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Ubuntu, "Helvetica Neue", sans-serif', fontSize: "14px", lineHeight: "24px" }}
     >
-      <Card className="relative flex h-[560px] flex-col overflow-hidden border border-border/80 p-0 shadow-2xl">
+      <Card className="relative flex h-[560px] flex-col overflow-hidden border border-border/50 p-0 shadow-[0_1px_2px_rgba(23,23,23,0.04),0_4px_16px_rgba(23,23,23,0.03)]">
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-3">
           <div className="flex items-center gap-1.5">
             {aiEnabled && (
               <Button
                 variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground"
+                size="icon-sm"
+                className="text-muted-foreground"
                 onClick={() => setHistoryOpen(true)}
                 aria-label="Chat history"
               >
@@ -1552,14 +1550,14 @@ export function HarlyAIPanel({
               </Button>
             )}
             <HarlyLogoMark className="size-5 shrink-0" />
-            <span className="text-[13px] font-semibold tracking-tight">Harly AI</span>
+            <span className="text-sm font-semibold tracking-tight">Harly AI</span>
           </div>
           <div className="flex items-center gap-0.5">
             {aiEnabled && (
               <Button
                 variant="ghost"
-                size="icon"
-                className="size-7 text-muted-foreground"
+                size="icon-sm"
+                className="text-muted-foreground"
                 onClick={startNewChat}
                 aria-label="New chat"
               >
@@ -1568,8 +1566,8 @@ export function HarlyAIPanel({
             )}
             <Button
               variant="ghost"
-              size="icon"
-              className="size-7 text-muted-foreground"
+              size="icon-sm"
+              className="text-muted-foreground"
               onClick={onClose}
               aria-label="Close Harly AI"
             >
