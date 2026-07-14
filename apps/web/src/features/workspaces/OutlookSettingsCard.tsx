@@ -60,6 +60,10 @@ export function OutlookSettingsCard({
 
   function toggleEnabled(next: boolean) {
     if (!isConnected) return;
+    if (next && !status.calendarId) {
+      toast.error("Select a calendar first.");
+      return;
+    }
     startToggle(async () => {
       const result = await saveOutlookSettingsAction({
         enabled: next,

@@ -11,6 +11,7 @@ export type ZoomConfig = {
   installationState: "not_installed" | "installed";
   credentialsSource: "env" | "database";
   accountEmail: string | null;
+  encryptionReady: boolean;
 };
 
 export type ZoomCredentials = {
@@ -45,6 +46,7 @@ export async function getZoomConfig(workspaceId: string): Promise<ZoomConfig> {
     installationState: row?.zoomEnabled ? "installed" : "not_installed",
     credentialsSource: hasEnvCredentials ? "env" : "database",
     accountEmail: row?.zoomAccountEmail ?? null,
+    encryptionReady: isEncryptionConfigured(),
   };
 }
 

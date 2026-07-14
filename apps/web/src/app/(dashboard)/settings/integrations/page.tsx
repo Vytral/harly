@@ -105,7 +105,11 @@ export default async function IntegrationsSettingsPage() {
           workspaceId={organization.id}
         />
 
-        <ZoomSettingsCard config={zoomConfig} />
+        <ZoomSettingsCard
+          config={zoomConfig}
+          canEdit={canEdit}
+          workspaceId={organization.id}
+        />
 
         <Card className="gap-0 p-5">
           <div className="flex items-start gap-3">

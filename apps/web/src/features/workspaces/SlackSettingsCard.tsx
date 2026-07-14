@@ -56,6 +56,10 @@ export function SlackSettingsCard({
 
   function toggleEnabled(next: boolean) {
     if (!isConnected) return;
+    if (next && !status.channelId) {
+      toast.error("Select a channel first.");
+      return;
+    }
     startToggle(async () => {
       const result = await saveSlackSettingsAction({
         enabled: next,
