@@ -67,7 +67,7 @@ export function EvaluationDrawer({
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
         title={`Add evaluation${stageName ? ` · ${stageName}` : ""}`}
-        description="Saved as a structured evaluation on this candidate."
+        description="Rate this candidate and leave feedback for the team."
         footer={
           <>
             <SheetClose asChild>

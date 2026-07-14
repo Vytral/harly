@@ -47,7 +47,7 @@ export function EditCandidateDrawer({
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
         title="Edit candidate"
-        description="Update contact details and profile links."
+        description="Name, email, phone, and social links."
         footer={
           <>
             <SheetClose asChild>

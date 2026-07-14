@@ -129,7 +129,7 @@ export function EmailDrawer({
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
         title={`Email ${name}`}
-        description="Sends via Resend when configured and saves to the candidate's communication thread."
+        description="Compose and send an email directly to this candidate."
         footer={
           <>
             <SheetClose asChild>
