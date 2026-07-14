@@ -5,7 +5,7 @@ export const runtime = "nodejs";
  *
  * A company drops this on their existing careers page:
  *
- *   <div id="openhire-jobs-container"></div>
+ *   <div id="harly-jobs-container"></div>
  *   <script src="https://<host>/embed/widget.js"
  *           data-workspace="acme" data-pk="harly_pk_live_..." defer></script>
  *
@@ -24,7 +24,7 @@ const WIDGET = String.raw`(function () {
   var origin = new URL(script.src).origin;
   var workspace = script.getAttribute("data-workspace") || "";
   var pk = script.getAttribute("data-pk") || "";
-  var containerId = script.getAttribute("data-container") || "openhire-jobs-container";
+  var containerId = script.getAttribute("data-container") || "harly-jobs-container";
 
   function api(path) {
     var url = origin + path;
@@ -252,7 +252,7 @@ const WIDGET = String.raw`(function () {
     container.appendChild(el("div", "oh-empty", "Loading open roles…"));
     if (!workspace && !pk) {
       container.innerHTML = "";
-      container.appendChild(el("div", "oh-error", "OpenHire widget: set data-workspace or data-pk."));
+      container.appendChild(el("div", "oh-error", "Harly widget: set data-workspace or data-pk."));
       return;
     }
     fetch(api("/api/public/v1/jobs"))
