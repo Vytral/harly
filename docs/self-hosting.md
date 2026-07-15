@@ -118,6 +118,23 @@ single migrator, wait for readiness, and finish with doctor.
 Migrations are forward-only. Restore the full backup when a release does not
 declare schema-compatible image rollback.
 
+### Verify your backups actually restore (do this before you rely on them)
+
+A backup you have never restored is a guess. Prove recovery end-to-end against a
+**throwaway** installation with the destructive harness:
+
+```bash
+HARLY_DESTRUCTIVE_OK=1 \
+  tooling/create-harly/test/backup-restore.destructive.sh /path/to/installation
+```
+
+It seeds known rows and an uploaded object, backs them up, drops the entire
+database schema and deletes the upload, restores from the archive, and fails
+loudly unless row counts, a content checksum, the owner/user count, and the
+upload's SHA-256 all come back identical. It refuses to run without
+`HARLY_DESTRUCTIVE_OK=1` because it wipes the database it points at — never aim
+it at production.
+
 ## Development database
 
 Repository contributors use the separate development Compose file:

@@ -21,6 +21,7 @@
     "build": "esbuild src/index.ts --bundle --packages=external --platform=node --format=esm --target=node20 --outfile=dist/index.js",
     "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --types node src/index.ts",
     "test": "pnpm build && node --test test/*.test.mjs",
+    "test:backup-restore": "pnpm build && ./test/backup-restore.destructive.sh",
     "pack:check": "pnpm build && npm pack --dry-run"
   },
   "devDependencies": {
