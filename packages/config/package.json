@@ -4,5 +4,17 @@
   "private": true,
   "exports": {
     ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --types node src/index.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^6.0.3",
+    "vitest": "^3.2.4"
   }
 }

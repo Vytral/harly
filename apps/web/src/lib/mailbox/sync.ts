@@ -1,10 +1,15 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+import { mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
+
 import { and, desc, eq, or, sql } from "drizzle-orm";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
+import { getLocalUploadPath } from "@harly/storage";
 
-import { candidates, db, mailAttachments, mailMessages, mailThreads, mailboxes } from "@harly/db";
+import { candidates, db, mailAttachments, mailMessages, mailThreads, mailboxes, sql as postgresSql } from "@harly/db";
 
 import { getMailboxConfig } from "@/lib/mailbox/config";
 import { createLogger } from "@/lib/logger";
@@ -38,6 +43,12 @@ async function uploadAttachment(workspaceId: string, messageId: string, attachme
   if (!validation.ok) throw new Error(validation.error);
   const { filename, contentType } = validation;
   const key = `mailboxes/${workspaceId}/${messageId}/${filename}`;
+  if ((process.env.STORAGE_PROVIDER ?? "local") === "local") {
+    const target = getLocalUploadPath(key);
+    await mkdir(path.dirname(target), { recursive: true });
+    await writeFile(target, attachment.content);
+    return { filename, contentType, size: attachment.content.length, storageKey: key };
+  }
   const upload = await storage.getPresignedUploadUrl({ key, contentType, contentLength: attachment.content.length });
   const response = await fetch(upload.uploadUrl, { method: "PUT", headers: { "Content-Type": contentType }, body: new Uint8Array(attachment.content).buffer });
   if (!response.ok) throw new Error(`Attachment upload failed (${response.status})`);
@@ -58,7 +69,7 @@ async function findOrCreateThread(input: { workspaceId: string; mailboxId: strin
   return thread.id;
 }
 
-export async function syncMailbox(workspaceId: string): Promise<{ imported: number; skipped: number }> {
+async function syncMailboxOnce(workspaceId: string): Promise<{ imported: number; skipped: number }> {
   const config = await getMailboxConfig(workspaceId);
   if (!config) return { imported: 0, skipped: 0 };
   const client = new ImapFlow({ host: config.imap.host, port: config.imap.port, secure: config.imap.tls, auth: { user: config.imap.user, pass: config.imap.password }, logger: false });
@@ -83,8 +94,21 @@ export async function syncMailbox(workspaceId: string): Promise<{ imported: numb
         const references = Array.isArray(parsed.references) ? parsed.references.join(" ") : parsed.references ?? null;
         const threadId = await findOrCreateThread({ workspaceId, mailboxId: config.id, subject: parsed.subject ?? "", participantEmail: participant, inReplyTo: parsed.inReplyTo, references, receivedAt });
         const [saved] = await db.insert(mailMessages).values({ workspaceId, threadId, imapUid: message.uid, messageId, inReplyTo: parsed.inReplyTo ?? null, references, direction: "inbound", fromEmail, toEmails: addresses(parsed.to), subject: parsed.subject ?? "(No subject)", textBody: parsed.text ?? "", htmlBody: parsed.html || null, receivedAt, readAt: message.flags?.has("\\Seen") ? receivedAt : null }).returning({ id: mailMessages.id });
-        for (const attachment of parsed.attachments) {
-          try { const stored = await uploadAttachment(workspaceId, saved.id, attachment); await db.insert(mailAttachments).values({ workspaceId, messageId: saved.id, ...stored }); } catch (error) { log.warn({ error, messageId: saved.id }, "mail attachment could not be stored"); }
+        const storedAttachments: Array<Awaited<ReturnType<typeof uploadAttachment>>> = [];
+        try {
+          for (const attachment of parsed.attachments) {
+            storedAttachments.push(await uploadAttachment(workspaceId, saved.id, attachment));
+          }
+          if (storedAttachments.length > 0) {
+            await db.insert(mailAttachments).values(
+              storedAttachments.map((stored) => ({ workspaceId, messageId: saved.id, ...stored })),
+            );
+          }
+        } catch (error) {
+          await Promise.allSettled(storedAttachments.map(({ storageKey }) => storage.delete(storageKey)));
+          await db.delete(mailMessages).where(eq(mailMessages.id, saved.id));
+          log.warn({ messageId: saved.id }, "mail attachment could not be stored; message will be retried");
+          throw error;
         }
         await db.update(mailThreads).set({ lastMessageAt: receivedAt, ...(message.flags?.has("\\Seen") ? {} : { unreadCount: sql`${mailThreads.unreadCount} + 1` }) }).where(eq(mailThreads.id, threadId));
         imported++;
@@ -97,4 +121,25 @@ export async function syncMailbox(workspaceId: string): Promise<{ imported: numb
     throw error;
   } finally { await client.logout().catch(() => undefined); }
   return { imported, skipped };
+}
+
+/** Prevent settings actions and scheduler replicas from syncing one workspace concurrently. */
+export async function syncMailbox(workspaceId: string): Promise<{ imported: number; skipped: number }> {
+  const digest = createHash("sha256").update(`mailbox:${workspaceId}`).digest();
+  const keyHi = digest.readInt32BE(0);
+  const keyLo = digest.readInt32BE(4);
+  const connection = await postgresSql.reserve();
+  try {
+    const [row] = await connection`
+      select pg_try_advisory_lock(${keyHi}, ${keyLo}) as locked
+    `;
+    if (!row?.locked) return { imported: 0, skipped: 0 };
+    try {
+      return await syncMailboxOnce(workspaceId);
+    } finally {
+      await connection`select pg_advisory_unlock(${keyHi}, ${keyLo})`;
+    }
+  } finally {
+    connection.release();
+  }
 }

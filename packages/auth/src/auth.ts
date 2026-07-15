@@ -15,8 +15,18 @@ import {
   type SendEmailOptions,
 } from "@harly/emails";
 import { decryptSecret, isEncryptionConfigured } from "./crypto-adapter";
+import { loadHarlyConfig } from "@harly/config";
+import {
+  authorizeUserCreation,
+  setupClaimCookieName,
+} from "./setup";
 
-const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+const config = loadHarlyConfig(
+  process.env.NEXT_PHASE === "phase-production-build"
+    ? { ...process.env, NODE_ENV: "development" }
+    : process.env,
+);
+const appUrl = config.HARLY_URL;
 const emailFrom = process.env.EMAIL_FROM ?? "Harly <noreply@harly.dev>";
 
 if (
@@ -220,21 +230,34 @@ async function organizationExists(): Promise<boolean> {
 }
 
 export const auth = betterAuth({
-  baseURL: process.env.BETTER_AUTH_URL ?? appUrl,
+  baseURL: appUrl,
   secret: process.env.BETTER_AUTH_SECRET,
   database: drizzleAdapter(db, {
     provider: "pg",
     schema,
   }),
+  databaseHooks: {
+    user: {
+      create: {
+        before: async (newUser, context) => {
+          await authorizeUserCreation({
+            email: newUser.email,
+            claimId: context?.getCookie(setupClaimCookieName(appUrl)),
+          });
+          return { data: newUser };
+        },
+      },
+    },
+  },
   plugins: [
     organization({
       organizationHooks: {
         beforeCreateOrganization: async () => {
-          if (await organizationExists()) {
-            throw new APIError("FORBIDDEN", {
-              message: "This deployment already has a workspace.",
-            });
-          }
+          throw new APIError("FORBIDDEN", {
+            message: (await organizationExists())
+              ? "This deployment already has a workspace."
+              : "Complete the initial workspace through the protected setup flow.",
+          });
         },
       },
     }),

@@ -5,7 +5,6 @@ import { magicLinkClient, organizationClient, twoFactorClient } from "better-aut
 import { ssoClient } from "@better-auth/sso/client";
 
 export const authClient = createAuthClient({
-  baseURL: process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000",
   plugins: [organizationClient(), twoFactorClient(), magicLinkClient(), ssoClient()],
 });
 

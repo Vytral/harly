@@ -109,10 +109,9 @@ export async function parseResumeAction(input: {
     // Resolve the job's workspace for keyword hints and (if enabled) its AI key.
     // Note: this runs in the public apply flow — the employer opts into AI and
     // bears the cost. Abuse hardening (rate-limit / Turnstile) is tracked separately.
-    let jobKeywords: string[] | undefined;
+    const jobKeywords = jobContext.keywords;
     let aiConfig: Awaited<ReturnType<typeof getWorkspaceAiConfig>> = null;
 
-    jobKeywords = jobContext.keywords;
     aiConfig = await getWorkspaceAiConfig(jobContext.workspaceId);
 
     if (aiConfig) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
 import { cn } from "@/lib/utils";
 
 interface AiButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
@@ -48,6 +49,7 @@ export function AiButton({
         className,
       )}
     >
+      <HarlyAILogoMark className="size-3.5 shrink-0" />
       {loading ? (
         <span className="flex items-center gap-0.5">
           {loadingText ?? "Generating"}

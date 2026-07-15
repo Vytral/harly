@@ -25,6 +25,7 @@
     "@fontsource-variable/inter": "^5.2.8",
     "@harly/api": "workspace:*",
     "@harly/auth": "workspace:*",
+    "@harly/config": "workspace:*",
     "@harly/db": "workspace:*",
     "@harly/emails": "workspace:*",
     "@harly/storage": "workspace:*",

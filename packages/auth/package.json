@@ -7,16 +7,22 @@
     "./client": "./src/client.ts",
     "./cookies": "./src/cookies.ts",
     "./next": "./src/next.ts",
+    "./setup": "./src/setup.ts",
     "./server": "./src/auth.ts"
   },
   "dependencies": {
     "@better-auth/sso": "^1.6.22",
+    "@harly/config": "workspace:*",
     "@harly/db": "workspace:*",
     "@harly/emails": "workspace:*",
     "better-auth": "^1.6.11",
     "resend": "^6.12.3"
   },
+  "scripts": {
+    "test": "vitest run"
+  },
   "devDependencies": {
-    "@better-auth/cli": "^1.4.21"
+    "@better-auth/cli": "^1.4.21",
+    "vitest": "^3.2.4"
   }
 }

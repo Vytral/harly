@@ -380,16 +380,21 @@ export function CalendarBoard({
                           {iv.durationMins}m
                         </Badge>
                         {iv.gcalEventId ? (
-                          <a
-                            href={`https://calendar.google.com/calendar/r/search?q=${encodeURIComponent(iv.gcalEventId)}`}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={(e) => e.stopPropagation()}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              window.open(
+                                `https://calendar.google.com/calendar/r/search?q=${encodeURIComponent(iv.gcalEventId!)}`,
+                                "_blank",
+                                "noopener,noreferrer",
+                              );
+                            }}
                             className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
                             title="View in Google Calendar"
                           >
                             <ArrowUpRightIcon className="size-4" />
-                          </a>
+                          </button>
                         ) : null}
                       </Link>
                     );

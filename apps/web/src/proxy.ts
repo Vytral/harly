@@ -1,6 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { auth } from "@harly/auth";
 import { getSessionCookie } from "@harly/auth/cookies";
 
 import { mustSetUp2fa } from "@/lib/two-factor";
@@ -15,6 +14,8 @@ const PUBLIC_PATHS = [
   "/reset-password",
   "/setup",
   "/api/auth",
+  "/api/health",
+  "/api/setup",
   "/api/webhooks",
   "/api/public",
   "/api/v1",
@@ -82,6 +83,7 @@ export async function proxy(request: NextRequest) {
 
   // 2FA + org enforcement for protected paths
   if (isProtected(pathname) && !isSecurityExempt(pathname)) {
+    const { auth } = await import("@harly/auth");
     const session = await auth.api.getSession({ headers: request.headers });
 
     if (!session?.user) {

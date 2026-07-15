@@ -430,6 +430,7 @@ export function CandidateProfileTabs({
             name={candidateName}
             templates={emailTemplates}
             templateValues={emailTemplateValues}
+            aiConfigured={aiConfigured}
             trigger={
               <Button size="sm">
                 <Mail className="size-4" />
@@ -801,7 +802,6 @@ function InterviewCard({
                     interview={interview}
                     trigger={
                       <AiButton size="sm" variant="outline">
-                        <BrainCircuit className="size-4" />
                         Interview Brief
                       </AiButton>
                     }

@@ -6,6 +6,7 @@ export type SendEmailOptions = {
   react: React.ReactElement;
   replyTo?: string;
   messageId?: string;
+  idempotencyKey?: string;
 };
 
 export type SendEmailResult = { messageId?: string };
@@ -40,7 +41,7 @@ export type EmailProviderConfig = ResendProviderConfig | SmtpProviderConfig;
 
 function createResendSender(config: ResendProviderConfig): EmailSender {
   return {
-    async send({ to, subject, react, replyTo, messageId }) {
+    async send({ to, subject, react, replyTo, messageId, idempotencyKey }) {
       const [{ render }, { Resend }] = await Promise.all([
         import("@react-email/render"),
         import("resend"),
@@ -48,15 +49,18 @@ function createResendSender(config: ResendProviderConfig): EmailSender {
       const resend = new Resend(config.apiKey);
       const html = await render(react);
 
-      const result = await resend.emails.send({
-        from: config.from,
-        to,
-        subject,
-        html,
-        replyTo,
-        headers: messageId ? { "Message-ID": messageId } : undefined,
-      });
-      return { messageId: messageId ?? result.data?.id };
+      const result = await resend.emails.send(
+        {
+          from: config.from,
+          to,
+          subject,
+          html,
+          replyTo,
+          headers: messageId ? { "Message-ID": messageId } : undefined,
+        },
+        idempotencyKey ? { idempotencyKey } : undefined,
+      );
+      return { messageId: result.data?.id ?? messageId };
     },
   };
 }

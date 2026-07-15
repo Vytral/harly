@@ -79,7 +79,7 @@ describe("F1-09 talent pool assignment", () => {
       [{ id: "stage-1" }], // first stage
       [{ value: 1 }], // next order
     );
-    mocks.transactionImpl.mockImplementation(async (fn: (tx: any) => Promise<unknown>) => {
+    mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
       const tx = {
         insert: () => ({
           values: () => ({

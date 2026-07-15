@@ -95,7 +95,17 @@ Create a project from the repository using the Railway button above, add a Postg
 
 ### Docker / self-hosting
 
-The repository includes Docker Compose for PostgreSQL. The web app can run as a standard Node.js process after `pnpm build`; see the self-hosting guide for the production sequence, storage requirements, reverse proxy notes, backups, and cron setup.
+Install without cloning the repository:
+
+```bash
+npx @harly/create init harly
+cd harly
+npx @harly/create launch . --yes
+```
+
+This creates the PostgreSQL, migrator, app, scheduler, and optional Caddy
+topology with a version-pinned image. See the self-hosting guide for secure
+first-owner setup, proxy modes, storage, backups, restore, and upgrades.
 
 ## Repository layout
 

@@ -3,12 +3,15 @@ import "server-only";
 import { eq, and, lt } from "drizzle-orm";
 import { db, passkeys, passkeyChallenge } from "@harly/db";
 
-const RP_ID = process.env.NEXT_PUBLIC_APP_DOMAIN ?? "localhost";
+const publicUrl = new URL(
+  process.env.HARLY_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.BETTER_AUTH_URL ??
+    "http://localhost:3000",
+);
+const RP_ID = publicUrl.hostname;
 const RP_NAME = "Harly";
-const ORIGIN =
-  process.env.NODE_ENV === "production"
-    ? `https://${RP_ID}`
-    : `http://${RP_ID}:3000`;
+const ORIGIN = publicUrl.origin;
 
 export { RP_ID, RP_NAME, ORIGIN };
 

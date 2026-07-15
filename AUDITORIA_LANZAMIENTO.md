@@ -130,7 +130,7 @@ Estado: `bloqueado` — no es posible ejecutar los escenarios E2E exigidos en un
 | F2-03 | Storage cross-workspace | P0 | `api/storage/upload` y presign usan keys sin namespace workspace ni prueba de propiedad; un usuario autenticado puede sobrescribir objetos. | Namespaces inmutables por workspace/candidato, upload intent y autorización antes de PUT/adjuntar. | Completado ✅ |
 | F2-04 | Permisos de mutación | P0 | Pipeline, entrevistas, scorecards, replies e Inbox usan contexto pero no permisos granulares. | Aplicar RBAC servidor por acción y pruebas negativas de cada rol. | Completado ✅ |
 | F2-05 | Presign público | P1 | Presign de imagen/CV acepta slug público; permite consumir storage ajeno. Rate limit es local y toma IP de headers. | Cuotas/abuse controls compartidos, claves efímeras por intento y una fuente de IP confiable. | Completado ✅ |
-| F2-06 | Cron | P1 | Mailbox/webhook cron acepta secreto por query y compara texto directamente; no hay lock/replay guard. | Sólo header, comparación timing-safe, lock distribuido y auditoría de ejecución. | Completado ✅ |
+| F2-06 | Cron | P1 | Mailbox/webhook cron aceptaba secreto por query y usaba un lock local. | Sólo header, comparación timing-safe, lock distribuido y auditoría de ejecución. | Completado ✅ — GET y `?secret=` fueron eliminados; los tres endpoints usan Bearer con hash + `timingSafeEqual`, advisory locks PostgreSQL y el scheduler registra `cron_runs`. |
 | F2-07 | Rate limit | P1 | Limitador en memoria por proceso no protege topologías multi-instancia; API keys tampoco tienen control de intentos. | Store compartido y límites por key/origen/ruta; métricas y alertas. | Completado ✅ — `enforceRateLimit` ahora usa un `RateLimitStore` enchufable: `MemoryStore` por defecto (instancia única) y `DatabaseStore` compartido vía Postgres con `SELECT … FOR UPDATE` para topologías multi-instancia (`RATE_LIMIT_STORE=database`). Las API keys ahora tienen presupuesto propio (`apikey:<id>`, 1000/10 min) aplicado en `authenticateApiKey`. Cubierto por `src/server/api/ratelimit.test.ts` (límite en memoria, store enchufable y `DatabaseStore` atómico) y `src/server/api/auth.test.ts` (presupuesto por key aplicado y rechazo al agotarlo). |
 | F2-08 | Secretos y logs | P1 | Secretos de webhook quedan en claro; logger no redacta globalmente y se registran emails/tokens inbound. | Cifrar/rotar secretos, logger con `redact` y eliminar/hash de PII/token en logs. | Completado ✅ |
 | F2-09 | Portal OAuth | P1 | State de portal es base64 sin firma/nonce, susceptible a login-CSRF. | State firmado, ligado a sesión y uso único. | N/A ✅ (portal usa login por email, sin OAuth) |
@@ -163,14 +163,14 @@ Estado: `bloqueado` — no es posible ejecutar los escenarios E2E exigidos en un
 | F3-25 | Calendario/candidatos en pantallas pequeñas o grandes | P1 | Calendario siempre conserva siete columnas y celdas `min-h-24`; Candidates carga/filtra localmente sin paginación y muestra rail IA incompleta (`CalendarBoard.tsx:238-314`, `CandidatesTable.tsx:130-199,370-477,634-653`). | Agenda/lista móvil con zona horaria; búsqueda/filtros server-side y paginación; ocultar rail no operativa. | pendiente |
 | F3-26 | Perfil y settings navegables a medias | P2 | Perfil de candidato concentra seis tabs no persistidas en URL; Settings muestra nueve secciones como cinta horizontal en móvil (`CandidateProfileTabs.tsx:269-298`, `SettingsNav.tsx:88-149`). | Tabs con deep-link/recuentos y selector/accordion/búsqueda para settings en móvil. | pendiente |
 | F3-27 | Estados públicos de carga/error | P1 | Job y apply públicos son dinámicos pero carecen de boundaries de carga/error; portal login/upload no anuncia estado de forma accesible. | Añadir loading/error/retry contextual y live regions a upload/login/submit. | pendiente |
-| F4-01 | Docker deployable | P0 | `docker-compose.yml` sólo contiene PostgreSQL; `tooling/docker/README.md` confirma que no hay imagen/app/overlays productivos. | Imagen multi-stage y Compose productivo con app, migrator, storage persistente, healthchecks y smoke limpio. | pendiente |
-| F4-02 | CLI/wizard | P0 | `tooling/create-harly/src/index.ts` sólo imprime “not implemented” y el paquete es skeleton/private. | CLI publicable e idempotente: preflight, env/secrets, admin, storage, dominio y modo no interactivo. | pendiente |
-| F4-03 | Scheduler | P0 | Inbox/webhooks requieren cron, pero no hay sidecar/service/systemd/K8s/CLI; endpoints procesan workspaces sin lock. | Scheduler instalable, lock distribuido, métricas/reintentos y prueba de solapamiento/fallo. | pendiente |
+| F4-01 | Docker deployable | P0 | La auditoría original quedó obsoleta: existen Dockerfile multi-stage y Compose productivo con migrator/app/scheduler/Caddy, pero todavía no existe una imagen GHCR públicamente pullable ni smoke de VPS limpia. | Imagen multi-stage y Compose productivo con app, migrator, storage persistente, healthchecks y smoke limpio. | en progreso; SELFHOST-IMAGE-01 |
+| F4-02 | CLI/wizard | P0 | La auditoría original quedó obsoleta: el CLI ya implementa `init`, `launch`, `doctor`, `backup`, `restore` y `upgrade`, pero sigue en beta funcional y carece de la experiencia guiada final. | CLI publicable e idempotente: preflight, env/secrets, admin, storage, dominio y modo no interactivo; completar los siete items SELFHOST. | en progreso |
+| F4-03 | Scheduler | P0 | Existe scheduler instalable con cron privado, locks/claims y registro de runs; falta probar solapamiento, recuperación y fallo en la imagen distribuida. | Scheduler instalable, lock distribuido, métricas/reintentos y prueba de solapamiento/fallo. | en progreso; SELFHOST-RC-01 |
 | F4-04 | Storage local | P1 | Sin volumen de app en Compose; escritura respeta `UPLOADS_DIR` pero LocalAdapter lee/elimina en ruta distinta. | Contrato único de path, volumen persistente y pruebas de reinicio/lectura/borrado. | pendiente |
 | F4-05 | Health y seguridad DB | P1 | Health no está integrado a orquestador y expone error DB; Compose publica Postgres y defaults dev. | Liveness/readiness seguros, probes/timeout y red privada/credenciales obligatorias en producción. | pendiente |
-| F4-06 | Upgrade/rollback | P1 | Guía sólo indica migrar y arrancar; no hay preflight, compatibilidad, rollback ni smoke post-upgrade. | Runbook/script versionado con backup previo, upgrade probado y política de rollback. | pendiente |
-| F4-07 | Backup/restore | P1 | Docs dan recomendaciones, no comandos/procedimiento/restauración de DB + objetos. | Backup cifrado, retención, restore reproducible y prueba periódica. | pendiente |
-| F4-08 | CI operativo | P1 | CI sólo ejecuta lint/typecheck/test; no build, migration check, Docker smoke, E2E ni dependency scan. | Pipeline de artefacto y DB real: build/run/health, migraciones, Compose, E2E y seguridad. | pendiente |
+| F4-06 | Upgrade/rollback | P1 | `upgrade` existe, pero aún no tiene prueba N-1 → actual, rollback de configuración ante fallo ni validación de compatibilidad. | Runbook/script versionado con backup previo, upgrade probado y política de rollback. | en progreso; bloqueado por SELFHOST-DATA-01 |
+| F4-07 | Backup/restore | P1 | `backup` y `restore` existen como prototipos de alto riesgo; faltan prueba destructiva, credenciales DB configurables, checksums completos y cobertura S3. | Backup cifrado, retención, restore reproducible y prueba periódica. | en progreso; SELFHOST-DATA-01 |
+| F4-08 | CI operativo | P1 | CI ya incluye PostgreSQL 16 y migraciones, E2E de `init`, smoke del tarball y build/inspección de imagen; faltan Compose smoke ejecutado en los tres modos, escaneo de dependencias/imagen y RC limpio. | Pipeline de artefacto y DB real: build/run/health, migraciones, Compose, E2E y seguridad. | en progreso; SELFHOST-RC-01 |
 | F4-09 | Configuración producción | P1 | No existe schema/preflight fail-fast; `.env.example` tiene defaults dev y variables incompletas. | Validación de env obligatoria, matriz por proveedor y error seguro antes de servir tráfico. | pendiente |
 | F4-10 | Observabilidad/runbooks | P1 | Logs sin redacción/correlación y docs sin troubleshooting de OAuth, storage, SMTP/IMAP, cron o migración. | Métricas/alertas, dashboards de estado y runbooks accionables. | pendiente |
 | F4-11 | Documentación obsoleta | P2 | Guías refieren Dockerfile/contadores de migración que no coinciden con el repositorio. | Corregir documentos y validarlos como parte de CI. | pendiente |
@@ -226,9 +226,9 @@ No se ejecutaron screenshots ni E2E visuales porque aún falta el runtime self-h
 
 ## Dictamen actual
 
-**NO-GO para first launch.** La reconciliación del 12 de julio redujo de 18 a **7 bloqueadores P0 abiertos**: navegación móvil (F3-21), Docker/CLI/scheduler (F4-01…03) y los tres hitos E2E/RC (F5-01, F5-02, F5-05). Los P0 de pipeline, RBAC, OAuth, cron, secretos, privacidad del portal, Inbox canónico y storage aislado tienen corrección y prueba dirigida; aún requieren los escenarios E2E finales, no una nueva corrección de base.
+**NO-GO para promover `latest`.** La reconciliación del 14 de julio cerró navegación móvil (F3-21) y entregó una base local Docker/CLI/scheduler, pero F4-01…03 siguen en progreso hasta publicar la imagen y ejecutar sus pruebas de distribución. Los hitos E2E/RC (F5-01, F5-02 y F5-05) siguen condicionando la promoción del mismo digest a `latest`.
 
-El orden mínimo para cambiar este dictamen es: restaurar navegación móvil; entregar runtime self-hosted + scheduler; y ejecutar los dos escenarios E2E completos en una instalación limpia.
+El orden mínimo para cambiar este dictamen es ejecutar los escenarios E2E completos en una instalación limpia, validar upgrade desde la beta anterior y promover exactamente el digest aprobado por el RC.
 
 ## Evidencia de verificación — Fase 1
 
@@ -315,3 +315,66 @@ Recorrido de cada flujo de negocio para confirmar: (1) existencia de la acción/
 - **Baja (arquitectónico):** mapear los scopes gruesos de la REST API (`candidates:write`, etc.) al RBAC interno por acción. Hoy la REST API autentica por API-key + scope propio; alinearla con `requirePermission` interno es un cambio de superficie mayor y queda fuera del alcance de robustez transaccional.
 
 Suite tras este pass: **215 passed / 1 skipped** (web), typecheck limpio.
+
+## Tracking de lanzamiento self-hosted — 14 de julio de 2026
+
+Estado de los siete pasos acordados, en orden estricto. No se inicia el paso 6
+mientras 1–3 no estén resueltos; el paso 2 está bloqueado por acceso externo.
+
+- [x] **SELFHOST-CLI-01 — Corregir y verificar los ejecutables npm.**
+  `tooling/create-harly/package.json:16-23` usa `dist/index.js` sin `./` para
+  `create-harly` y `harly`. `npm publish --dry-run --json` finalizó sin
+  autocorrecciones, empaquetó 3 archivos (7.7 kB) e incluyó `dist/index.js`
+  ejecutable con modo decimal `493`.
+- [ ] **SELFHOST-IMAGE-01 — Publicar la imagen canónica y hacerla pullable.**
+  El nombre canónico es `ghcr.io/vytral/harly`: lo fijan
+  `.github/workflows/release-image.yml:25-42` y
+  `tooling/create-harly/src/index.ts:256,440`; `vytral/curious-monkey` no es el
+  target. Ambos nombres devuelven HTTP 403 al pull anónimo y 404 en sus páginas
+  públicas. GHCR no permite distinguir paquete privado de paquete ausente sin
+  autenticación. Bloqueado: las credenciales locales de `gh` no son válidas y
+  no hay tags `v*` locales que disparen el workflow de publicación.
+- [x] **SELFHOST-CLI-02 — E2E mínimo de `init` en un directorio vacío.**
+  `tooling/create-harly/test/init.e2e.test.mjs:23-90` ejecuta el bin compilado
+  y valida siete artefactos, `.env` `0600`, secretos independientes, config y
+  Compose. `tooling/create-harly/package.json:23` lo expone como `test` y
+  `.github/workflows/ci.yml:225-234` lo ejecuta antes del smoke del tarball.
+  Resultado local: 1/1 verde.
+- [ ] **SELFHOST-DATA-01 — Endurecer backup, restore y upgrade.**
+  Prototipos en `tooling/create-harly/src/index.ts:366-451`; no se promocionan
+  hasta cerrar el tracking destructivo independiente descrito abajo.
+- [ ] **SELFHOST-RC-01 — Instalación limpia y upgrade en una VPS.**
+  Requiere SELFHOST-IMAGE-01 y SELFHOST-DATA-01. Debe validar los tres modos de
+  proxy, persistencia, reinicio, HTTPS, doctor y upgrade N-1 → actual.
+- [ ] **SELFHOST-CLI-03 — Wizard guiado con `@clack/prompts`.**
+  Decisión aprobada: logo ASCII estático en inglés, `@clack/prompts` y color
+  liviano si aporta claridad. Se acepta conscientemente dejar de ser zero-deps.
+  Hoy sigue usando `node:readline/promises` en
+  `tooling/create-harly/src/index.ts:91-109`; no comenzar hasta desbloquear
+  SELFHOST-IMAGE-01.
+- [ ] **SELFHOST-RELEASE-01 — RC completo y publicación npm/GHCR.**
+  Publicar semver y digest inmutable, ejecutar instalación limpia y upgrade,
+  y promover exactamente el mismo digest sólo después de pasar el RC. El
+  workflow actual se dispara con tags `v*` en
+  `.github/workflows/release-image.yml:3-5`.
+
+### Contrato vinculante del CLI
+
+- [ ] **SELFHOST-CLI-CONTRACT-01 — Modo no interactivo seguro.**
+  `launch` sin `--yes` y sin TTY debe terminar con exit code `2`; hoy retorna
+  silenciosamente en `tooling/create-harly/src/index.ts:326-337`. Ningún
+  secreto se aceptará por argumentos. Los secretos sólo podrán recibirse con
+  prompt enmascarado o mediante `--config`; antes de leer este archivo se
+  exigirán permisos restrictivos y nunca se imprimirán sus valores.
+
+### Tracking destructivo independiente
+
+- [ ] **SELFHOST-DATA-01 / escenario obligatorio: backup → destrucción → restore.**
+  En una instalación aislada con PostgreSQL 16 y uploads locales: crear datos y
+  adjuntos con conteos/hashes conocidos; generar backup cifrado; destruir DB y
+  objetos; restaurar en destino vacío; ejecutar migraciones y doctor; comprobar
+  conteos, hashes, owner, configuración y readiness. Repetir con fallo inyectado
+  para verificar que servicios se reinician. Antes de ejecutar el escenario se
+  deben eliminar los valores DB hardcodeados (`src/index.ts:374,421`), verificar
+  checksum de todos los artefactos (`src/index.ts:380,416-418`), limpiar tmpdirs
+  y definir el contrato S3. Este item no se mezcla con UI ni publicación.

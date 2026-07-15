@@ -22,19 +22,8 @@ ALTER TABLE "tasks" ALTER COLUMN "priority" SET DEFAULT 'medium';--> statement-b
 ALTER TABLE "workspace_settings" ALTER COLUMN "chat_events" DROP NOT NULL;--> statement-breakpoint
 ALTER TABLE "candidate_files" ADD COLUMN "content_hash" text;--> statement-breakpoint
 ALTER TABLE "passkeys" ADD COLUMN "updated_at" timestamp with time zone DEFAULT now() NOT NULL;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_client_id" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_client_secret_ciphertext" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_client_secret_iv" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_client_secret_tag" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_enabled" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_team_id" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_team_name" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_channel_id" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_channel_name" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_bot_token_ciphertext" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_bot_token_iv" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_bot_token_tag" text;--> statement-breakpoint
-ALTER TABLE "workspace_settings" ADD COLUMN "slack_events" jsonb DEFAULT '[]'::jsonb;--> statement-breakpoint
+-- Slack columns are created by 0032_slack_oauth.sql. The original generated
+-- migration repeated them, which made a clean migration chain fail here.
 ALTER TABLE "audit_logs" ADD CONSTRAINT "audit_logs_workspace_id_organization_id_fk" FOREIGN KEY ("workspace_id") REFERENCES "public"."organization"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "passkey_challenge" ADD CONSTRAINT "passkey_challenge_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "tasks" ADD CONSTRAINT "tasks_created_by_id_user_id_fk" FOREIGN KEY ("created_by_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint

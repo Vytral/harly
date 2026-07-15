@@ -44,12 +44,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
+import { FilterPill, FILTER_ALL } from "@/components/ui/FilterPill";
 import { cn } from "@/lib/utils";
 
 export type CandidateRow = {
@@ -75,7 +70,6 @@ export type CandidateRow = {
 };
 
 type SortKey = "recent" | "oldest" | "modified" | "name";
-const ALL = "__all__";
 
 function uniqueSorted(values: (string | null)[]) {
   return Array.from(new Set(values.filter((v): v is string => Boolean(v)))).sort(
@@ -139,12 +133,12 @@ export function CandidatesTable({
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("recent");
-  const [dept, setDept] = useState(ALL);
-  const [role, setRole] = useState(ALL);
-  const [stage, setStage] = useState(ALL);
-  const [status, setStatus] = useState(ALL);
-  const [source, setSource] = useState(ALL);
-  const [tag, setTag] = useState(ALL);
+  const [dept, setDept] = useState(FILTER_ALL);
+  const [role, setRole] = useState(FILTER_ALL);
+  const [stage, setStage] = useState(FILTER_ALL);
+  const [status, setStatus] = useState(FILTER_ALL);
+  const [source, setSource] = useState(FILTER_ALL);
+  const [tag, setTag] = useState(FILTER_ALL);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -169,12 +163,12 @@ export function CandidatesTable({
           (r.location ?? "").toLowerCase().includes(q);
         if (!hit) return false;
       }
-      if (dept !== ALL && r.department !== dept) return false;
-      if (role !== ALL && r.role !== role) return false;
-      if (stage !== ALL && r.stage !== stage) return false;
-      if (status !== ALL && r.status !== status) return false;
-      if (source !== ALL && r.source !== source) return false;
-      if (tag !== ALL && !r.tags.includes(tag)) return false;
+      if (dept !== FILTER_ALL && r.department !== dept) return false;
+      if (role !== FILTER_ALL && r.role !== role) return false;
+      if (stage !== FILTER_ALL && r.stage !== stage) return false;
+      if (status !== FILTER_ALL && r.status !== status) return false;
+      if (source !== FILTER_ALL && r.source !== source) return false;
+      if (tag !== FILTER_ALL && !r.tags.includes(tag)) return false;
       return true;
     });
 
@@ -190,22 +184,22 @@ export function CandidatesTable({
   }, [rows, query, dept, role, stage, status, source, tag, sortKey]);
 
   const filtersActive =
-    dept !== ALL ||
-    role !== ALL ||
-    stage !== ALL ||
-    status !== ALL ||
-    source !== ALL ||
-    tag !== ALL ||
+    dept !== FILTER_ALL ||
+    role !== FILTER_ALL ||
+    stage !== FILTER_ALL ||
+    status !== FILTER_ALL ||
+    source !== FILTER_ALL ||
+    tag !== FILTER_ALL ||
     query.trim() !== "";
 
   function clearFilters() {
     setQuery("");
-    setDept(ALL);
-    setRole(ALL);
-    setStage(ALL);
-    setStatus(ALL);
-    setSource(ALL);
-    setTag(ALL);
+    setDept(FILTER_ALL);
+    setRole(FILTER_ALL);
+    setStage(FILTER_ALL);
+    setStatus(FILTER_ALL);
+    setSource(FILTER_ALL);
+    setTag(FILTER_ALL);
   }
 
   const allVisibleSelected =
@@ -653,57 +647,6 @@ export function CandidatesTable({
         </aside>
       </div>
     </div>
-  );
-}
-
-/**
- * Remote-style filter pill: muted label + bold current value in one rounded
- * chip. `allValue` marks the neutral option (no "All" item is injected when
- * the options list already covers every state, e.g. sort).
- */
-function FilterPill({
-  label,
-  value,
-  onChange,
-  options,
-  labelMap,
-  allValue,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: string[];
-  labelMap?: Record<string, string>;
-  allValue?: string;
-}) {
-  const neutral = allValue ?? ALL;
-  const active = value !== neutral;
-  const display =
-    value === ALL ? "All" : (labelMap?.[value] ?? value);
-
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger
-        size="sm"
-        className={cn(
-          "h-9 w-auto gap-1.5 rounded-full border bg-card px-3.5 shadow-none",
-          active && "border-primary/40 bg-accent/40",
-        )}
-      >
-        <span className="text-muted-foreground">{label}</span>
-        <span className="max-w-32 truncate font-semibold text-foreground">
-          {display}
-        </span>
-      </SelectTrigger>
-      <SelectContent position="popper" align="start" className="max-h-60">
-        {allValue === undefined ? <SelectItem value={ALL}>All</SelectItem> : null}
-        {options.map((opt) => (
-          <SelectItem key={opt} value={opt}>
-            {labelMap?.[opt] ?? opt}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
   );
 }
 

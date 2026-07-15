@@ -1,0 +1,141 @@
+name: harly
+
+x-harly-image: &harly-image ${HARLY_IMAGE:?Set HARLY_IMAGE to an immutable tag or digest}
+x-logging: &harly-logging
+  driver: json-file
+  options:
+    max-size: ${HARLY_LOG_MAX_SIZE:-10m}
+    max-file: ${HARLY_LOG_MAX_FILES:-3}
+x-harly-env: &harly-env
+  NODE_ENV: production
+  HARLY_URL: ${HARLY_URL:?Set HARLY_URL}
+  NEXT_PUBLIC_APP_URL: ${HARLY_URL:?Set HARLY_URL}
+  BETTER_AUTH_URL: ${HARLY_URL:?Set HARLY_URL}
+  HARLY_VERSION: ${HARLY_VERSION:?Set HARLY_VERSION}
+  DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB}
+  BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET}
+  AI_ENCRYPTION_KEY: ${AI_ENCRYPTION_KEY:?Set AI_ENCRYPTION_KEY}
+  STORAGE_UPLOAD_SECRET: ${STORAGE_UPLOAD_SECRET:?Set STORAGE_UPLOAD_SECRET}
+  CRON_SECRET: ${CRON_SECRET:?Set CRON_SECRET}
+  HARLY_SETUP_SECRET: ${HARLY_SETUP_SECRET:?Set HARLY_SETUP_SECRET}
+  HARLY_INITIAL_ADMIN_EMAIL: ${HARLY_INITIAL_ADMIN_EMAIL:?Set HARLY_INITIAL_ADMIN_EMAIL}
+  STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+  UPLOADS_DIR: /data/uploads
+  S3_BUCKET: ${S3_BUCKET:-}
+  S3_REGION: ${S3_REGION:-}
+  S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID:-}
+  S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY:-}
+  S3_ENDPOINT: ${S3_ENDPOINT:-}
+  S3_PUBLIC_URL: ${S3_PUBLIC_URL:-}
+  HARLY_ALLOW_PRIVATE_WEBHOOKS: ${HARLY_ALLOW_PRIVATE_WEBHOOKS:-false}
+  RESEND_API_KEY: ${RESEND_API_KEY:-}
+  EMAIL_FROM: ${EMAIL_FROM:-}
+  HARLY_CACHE_MAX_MB: ${HARLY_CACHE_MAX_MB:-512}
+  HARLY_CACHE_MAX_AGE_DAYS: ${HARLY_CACHE_MAX_AGE_DAYS:-7}
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    mem_limit: ${HARLY_POSTGRES_MEMORY:-768m}
+    cpus: ${HARLY_POSTGRES_CPUS:-1.0}
+    shm_size: 128m
+    logging: *harly-logging
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  migrate:
+    image: *harly-image
+    command: ["migrate"]
+    environment: *harly-env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    mem_limit: ${HARLY_MIGRATE_MEMORY:-768m}
+    cpus: ${HARLY_MIGRATE_CPUS:-1.0}
+    logging: *harly-logging
+
+  app:
+    image: *harly-image
+    command: ["serve"]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: ${HARLY_APP_MEMORY:-1536m}
+    cpus: ${HARLY_APP_CPUS:-2.0}
+    logging: *harly-logging
+    read_only: true
+    tmpfs:
+      - /tmp:size=256m,mode=1777
+    environment:
+      <<: *harly-env
+      NODE_OPTIONS: ${HARLY_APP_NODE_OPTIONS:---max-old-space-size=1024}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - "127.0.0.1:${HARLY_PORT:-3000}:3000"
+    volumes:
+      - uploads:/data/uploads
+      - next-cache:/app/apps/web/.next/cache
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 12
+
+  scheduler:
+    image: *harly-image
+    command: ["scheduler"]
+    restart: unless-stopped
+    stop_grace_period: 30s
+    mem_limit: ${HARLY_SCHEDULER_MEMORY:-256m}
+    cpus: ${HARLY_SCHEDULER_CPUS:-0.5}
+    logging: *harly-logging
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m,mode=1777
+    environment:
+      <<: *harly-env
+      HARLY_INTERNAL_URL: http://app:3000
+      NODE_OPTIONS: ${HARLY_SCHEDULER_NODE_OPTIONS:---max-old-space-size=160}
+    depends_on:
+      app:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2.10-alpine
+    profiles: ["proxy"]
+    restart: unless-stopped
+    mem_limit: ${HARLY_CADDY_MEMORY:-256m}
+    cpus: ${HARLY_CADDY_CPUS:-0.5}
+    logging: *harly-logging
+    environment:
+      HARLY_DOMAIN: ${HARLY_DOMAIN:-localhost}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+
+volumes:
+  postgres-data:
+  uploads:
+  next-cache:
+  caddy-data:
+  caddy-config:

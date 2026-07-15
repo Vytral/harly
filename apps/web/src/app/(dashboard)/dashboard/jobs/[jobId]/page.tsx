@@ -2,10 +2,10 @@ import { notFound } from "next/navigation";
 import { ExternalLink } from "lucide-react";
 
 import { PageHeader } from "@/components/ui/PageHeader";
+import { JobStatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { updateJobAction } from "@/features/jobs/actions";
 import {
-  formatJobStatus,
   getDashboardJob,
   listWorkspaceDepartments,
 } from "@/features/jobs/data";
@@ -15,11 +15,8 @@ import {
 } from "@/features/jobs/hiring-team-data";
 import { JobForm } from "@/features/jobs/JobForm";
 import { JobActionsMenu } from "@/features/jobs/JobActionsMenu";
-import { JobHiringTeam } from "@/features/jobs/JobHiringTeam";
-import { PublicJobPreview } from "@/features/jobs/PublicJobPreview";
 import { JobShareButton } from "@/features/jobs/JobShareButton";
 import { JobStatusActions } from "@/features/jobs/JobStatusActions";
-import { SemanticMatchPanel } from "@/features/matching/SemanticMatchPanel";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
@@ -57,7 +54,8 @@ export default async function DashboardJobPage({
       <PageHeader
         eyebrow="Job detail"
         title={job.title}
-        description={`Status: ${formatJobStatus(job.status)} · /${job.slug}`}
+        titleBadge={<JobStatusBadge status={job.status} className="px-2.5 py-1 text-sm" />}
+        description={`/${job.slug}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
@@ -78,14 +76,10 @@ export default async function DashboardJobPage({
         job={job}
         submitLabel="Save changes"
         departments={departments}
+        hiringTeam={hiringTeam}
+        workspaceMembers={workspaceMembers}
+        aiConfigured={aiStatus.enabled && aiStatus.hasApiKey}
       />
-      <JobHiringTeam
-        jobId={job.id}
-        team={hiringTeam}
-        members={workspaceMembers}
-      />
-      <SemanticMatchPanel jobId={job.id} aiConfigured={aiStatus.enabled && aiStatus.hasApiKey} />
-      <PublicJobPreview slug={job.slug} />
     </div>
   );
 }

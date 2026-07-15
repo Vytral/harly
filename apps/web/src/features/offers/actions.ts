@@ -27,36 +27,6 @@ import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { processEmailOutbox } from "@/lib/email/outbox-processor";
 
-const dateFormatter = new Intl.DateTimeFormat("en", {
-  year: "numeric",
-  month: "long",
-  day: "numeric",
-});
-
-function formatOfferDate(value: Date | null): string | undefined {
-  return value ? dateFormatter.format(value) : undefined;
-}
-
-/** Human-readable compensation line, e.g. "$120,000 / year". */
-function formatOfferSalary(
-  amount: number | null,
-  currency: string | null,
-  period: "annual" | "monthly" | null,
-): string | undefined {
-  if (!amount) return undefined;
-  let money: string;
-  try {
-    money = new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency || "USD",
-      maximumFractionDigits: 0,
-    }).format(amount);
-  } catch {
-    money = `${amount.toLocaleString()} ${currency ?? ""}`.trim();
-  }
-  return period === "monthly" ? `${money} / month` : `${money} / year`;
-}
-
 const log = createLogger("offers");
 
 const offerFieldsSchema = z.object({

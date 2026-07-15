@@ -33,6 +33,7 @@ vi.mock("@harly/db", () => {
   };
   return {
     db: {
+      execute: vi.fn(async () => [{ id: "outbox-1" }]),
       select: vi.fn(makeQuery),
       insert: vi.fn(() => ({
         values: () => ({ returning: async () => mocks.insertQueue.shift() ?? [{ id: "x" }] }),
@@ -87,7 +88,7 @@ function reset() {
   mocks.sendWorkspaceEmail.mockReset();
   mocks.renderActiveEmailTemplate.mockResolvedValue(null);
   mocks.getWorkspaceEmailBranding.mockResolvedValue({});
-  mocks.transactionImpl.mockImplementation(async (fn: (tx: any) => Promise<unknown>) => {
+  mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
     const tx = {
       update: () => ({
         set: (set: Record<string, unknown>) => {

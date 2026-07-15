@@ -282,6 +282,32 @@ export const invitation = pgTable(
   ],
 );
 
+/**
+ * One row per deployment. It is deliberately separate from Better Auth so the
+ * first account and workspace can be reserved and completed under a
+ * PostgreSQL row lock.
+ */
+export const deploymentBootstrap = pgTable(
+  "deployment_bootstrap",
+  {
+    id: integer("id").default(1).primaryKey(),
+    authorizedEmail: text("authorized_email").notNull(),
+    claimId: uuid("claim_id"),
+    claimExpiresAt: timestamp("claim_expires_at", { withTimezone: true }),
+    ownerUserId: text("owner_user_id").references(() => user.id, {
+      onDelete: "restrict",
+    }),
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "restrict",
+    }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    check("deployment_bootstrap_singleton_check", sql`${table.id} = 1`),
+  ],
+);
+
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
@@ -1259,6 +1285,12 @@ export const emailOutbox = pgTable(
     attempts: integer("attempts").default(0).notNull(),
     nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
     lastError: text("last_error"),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    dedupeKey: text("dedupe_key")
+      .default(sql`'legacy:' || gen_random_uuid()::text`)
+      .notNull(),
+    providerMessageId: text("provider_message_id"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
     ...timestamps(),
   },
@@ -1268,6 +1300,30 @@ export const emailOutbox = pgTable(
       table.status,
       table.nextRetryAt,
     ),
+    uniqueIndex("email_outbox_workspace_dedupe_uidx").on(
+      table.workspaceId,
+      table.dedupeKey,
+    ),
+  ],
+);
+
+/** Operational history only: no job payloads and no raw errors. */
+export const cronRuns = pgTable(
+  "cron_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    job: text("job").notNull(),
+    runId: uuid("run_id").notNull(),
+    status: text("status").notNull(),
+    durationMs: integer("duration_ms").notNull(),
+    counters: jsonb("counters").default(sql`'{}'::jsonb`).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("cron_runs_run_id_uidx").on(table.runId),
+    index("cron_runs_job_created_idx").on(table.job, table.createdAt),
   ],
 );
 
@@ -1937,6 +1993,8 @@ export const webhookDeliveries = pgTable(
     responseStatus: integer("response_status"),
     responseBody: text("response_body"),
     nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
     ...timestamps(),
   },

@@ -1,27 +1,23 @@
 import { NextResponse } from "next/server";
 
-import { sql } from "@harly/db";
-
 import { getServerLogger } from "@/lib/logger";
+import { harlyVersion, isReady } from "@/lib/readiness";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-// Liveness/readiness probe for self-hosted deployments. Returns 200 only when
-// the database is reachable so container orchestrators / load balancers can
-// keep the instance out of rotation until it is actually ready.
+/** Backwards-compatible alias of /api/health/ready. */
 export async function GET() {
   try {
-    await sql`select 1`;
-    return NextResponse.json(
-      { status: "ok", time: new Date().toISOString() },
-      { status: 200 },
-    );
+    if (await isReady()) {
+      return NextResponse.json({ status: "ok", version: harlyVersion });
+    }
   } catch (error) {
-    // Never leak internal DB details to unauthenticated probes; log server-side.
+    // Preserve the original hardening: never expose DB details publicly.
     getServerLogger().error(error, "health check failed");
-    return NextResponse.json(
-      { status: "unhealthy", error: "database unreachable" },
-      { status: 503 },
-    );
   }
+  return NextResponse.json(
+    { status: "unavailable", version: harlyVersion },
+    { status: 503 },
+  );
 }

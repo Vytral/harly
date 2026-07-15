@@ -312,6 +312,7 @@ export function CandidateActionBar({
   emailTemplateValues = {},
   inPool = false,
   variant = "full",
+  aiConfigured = false,
 }: {
   candidate: EditableCandidate;
   name: string;
@@ -327,6 +328,7 @@ export function CandidateActionBar({
   emailTemplateValues?: TemplateValues;
   inPool?: boolean;
   variant?: "full" | "compact";
+  aiConfigured?: boolean;
 }) {
   const applicationIds = applications.map((application) => application.applicationId);
 
@@ -338,6 +340,7 @@ export function CandidateActionBar({
       name={name}
       templates={emailTemplates}
       templateValues={emailTemplateValues}
+      aiConfigured={aiConfigured}
       trigger={
         variant === "compact" ? (
           <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="Email">

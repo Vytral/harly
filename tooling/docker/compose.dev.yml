@@ -1,8 +1,18 @@
+name: curious-monkey
+
 services:
   postgres:
     image: postgres:16-alpine
     container_name: harly-postgres
     restart: unless-stopped
+    mem_limit: ${HARLY_DEV_POSTGRES_MEMORY:-512m}
+    cpus: ${HARLY_DEV_POSTGRES_CPUS:-1.0}
+    shm_size: 128m
+    logging:
+      driver: json-file
+      options:
+        max-size: ${HARLY_DEV_LOG_MAX_SIZE:-10m}
+        max-file: ${HARLY_DEV_LOG_MAX_FILES:-2}
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-harly}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-harly}

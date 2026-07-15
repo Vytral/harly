@@ -19,7 +19,7 @@ import {
   OpenRouterLogo,
   XaiLogo,
 } from "@/components/ui/icons/brands";
-import { Brain } from "lucide-react";
+import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
 import { RelativeTime } from "@/lib/date-hydration";
 import { formatModelLabel, type AiProviderId } from "@/lib/ai/providers";
 import { cn } from "@/lib/utils";
@@ -154,8 +154,8 @@ export function AiScoreCard({
       <Card>
         <CardContent className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-              <Brain className="size-4.5" />
+            <span className="flex size-9 items-center justify-center rounded-lg bg-muted">
+              <HarlyAILogoMark className="size-4.5" />
             </span>
             <div>
               <p className="text-sm font-medium">AI candidate scoring</p>
@@ -185,8 +185,8 @@ export function AiScoreCard({
               <Card key={application.id} className="gap-0 py-0">
                 <CardContent className="flex items-center justify-between gap-3 px-4 py-3">
                   <div className="flex min-w-0 items-center gap-2.5">
-                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                      <Brain className="size-4" />
+                    <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10">
+                      <HarlyAILogoMark className="size-4" />
                     </span>
                     <p className="truncate text-sm text-muted-foreground">
                       No AI evaluation yet for {application.jobTitle}.
@@ -251,8 +251,8 @@ export function AiScoreCard({
             <Card key={application.id}>
               <CardContent className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-2.5">
-                  <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <Brain className="size-4.5" />
+                  <span className="flex size-9 items-center justify-center rounded-lg bg-primary/10">
+                    <HarlyAILogoMark className="size-4.5" />
                   </span>
                   <div>
                     <p className="text-sm font-medium">{application.jobTitle}</p>

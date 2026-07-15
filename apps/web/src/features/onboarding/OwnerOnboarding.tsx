@@ -133,16 +133,18 @@ export function OwnerOnboarding({
         const data = (await res.json()) as { available: boolean };
         if (!data.available) return setError("That slug is taken — try another.");
 
-        const created = await authClient.organization.create({
-          name: trimmed,
-          slug: slugify(resolvedSlug),
+        const response = await fetch("/api/setup/complete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: trimmed, slug: slugify(resolvedSlug) }),
         });
-        if (created.error || !created.data?.id) {
-          return setError(created.error?.message ?? "Couldn't create workspace.");
+        const created = (await response.json()) as { id?: string; error?: string };
+        if (!response.ok || !created.id) {
+          return setError(created.error ?? "Couldn't create workspace.");
         }
-        setOrgId(created.data.id);
+        setOrgId(created.id);
         await authClient.organization.setActive({
-          organizationId: created.data.id,
+          organizationId: created.id,
         });
       }
       setStep(1);

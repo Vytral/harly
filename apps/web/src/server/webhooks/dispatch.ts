@@ -1,6 +1,8 @@
 import "server-only";
 
-import { and, asc, eq, inArray, isNull, lte, or } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
+
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { EVENT_HEADER, SIGNATURE_HEADER, signWebhookPayload } from "@harly/api";
 import {
@@ -11,6 +13,7 @@ import {
   type WebhookEndpoint,
 } from "@harly/db";
 import { decryptSecret } from "@/lib/crypto";
+import { safeFetchWebhook } from "@/lib/ssrf";
 
 import { MAX_WEBHOOK_ATTEMPTS, RETRY_BACKOFF_MS } from "./events";
 
@@ -45,7 +48,7 @@ export async function deliverWebhook(
       tag: endpoint.secretTag,
     });
 
-    const response = await fetch(endpoint.url, {
+    const response = await safeFetchWebhook(endpoint.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -86,6 +89,8 @@ export async function deliverWebhook(
       responseBody,
       deliveredAt: ok ? new Date() : null,
       nextRetryAt: status === "failed" ? nextRetryAt(attemptNumber) : null,
+      lockedAt: null,
+      lockedBy: null,
       updatedAt: new Date(),
     })
     .where(eq(webhookDeliveries.id, delivery.id));
@@ -99,8 +104,33 @@ export async function deliverWebhook(
  */
 export async function dispatchDueWebhooks(
   limit = 50,
+  ids?: string[],
 ): Promise<{ processed: number; success: number; failed: number }> {
-  const now = new Date();
+  const workerId = randomUUID();
+  const idsFilter = ids?.length
+    ? sql`and "id" in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`
+    : sql``;
+  const claimed = (await db.execute(sql`
+    with candidates as (
+      select "id"
+      from "webhook_deliveries"
+      where (
+        ("status" in ('pending', 'failed') and ("next_retry_at" is null or "next_retry_at" <= now()))
+        or ("status" = 'processing' and "locked_at" < now() - interval '5 minutes')
+      )
+      ${idsFilter}
+      order by "created_at"
+      for update skip locked
+      limit ${limit}
+    )
+    update "webhook_deliveries" as delivery
+    set "status" = 'processing', "locked_at" = now(), "locked_by" = ${workerId}, "updated_at" = now()
+    from candidates
+    where delivery."id" = candidates."id"
+    returning delivery."id"
+  `)) as unknown as Array<{ id: string }>;
+
+  if (claimed.length === 0) return { processed: 0, success: 0, failed: 0 };
 
   const due = await db
     .select({ delivery: webhookDeliveries, endpoint: webhookEndpoints })
@@ -111,12 +141,9 @@ export async function dispatchDueWebhooks(
     )
     .where(
       and(
-        inArray(webhookDeliveries.status, ["pending", "failed"]),
+        inArray(webhookDeliveries.id, claimed.map((row) => row.id)),
+        eq(webhookDeliveries.lockedBy, workerId),
         eq(webhookEndpoints.enabled, true),
-        or(
-          isNull(webhookDeliveries.nextRetryAt),
-          lte(webhookDeliveries.nextRetryAt, now),
-        ),
       ),
     )
     .orderBy(asc(webhookDeliveries.createdAt))

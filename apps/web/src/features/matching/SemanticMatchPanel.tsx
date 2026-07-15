@@ -97,7 +97,7 @@ export function SemanticMatchPanel({
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Rank your entire candidate pool against this role by embedding
-            similarity — no per-candidate AI call needed.
+            similarity.
           </p>
         </div>
         {aiConfigured ? (

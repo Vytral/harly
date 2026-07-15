@@ -4,7 +4,7 @@ import { and, eq } from "drizzle-orm";
 
 import { db, webhookEndpoints, webhookDeliveries } from "@harly/db";
 
-import { deliverWebhook } from "./dispatch";
+import { dispatchDueWebhooks } from "./dispatch";
 import type { WebhookEvent } from "./events";
 import { notifySlackEvent } from "@/server/notify/slack";
 import { notifyChatEvent } from "@/server/notify/dispatch";
@@ -60,7 +60,7 @@ export async function emitWebhookEvent(
 
         if (!row) continue;
         // Best-effort immediate delivery; the dispatcher is the safety net.
-        void deliverWebhook(row, endpoint).catch((err) => log.error(err, "deliverWebhook failed"));
+        void dispatchDueWebhooks(1, [row.id]).catch((err) => log.error(err, "deliverWebhook failed"));
       }
     }
   } catch (error) {

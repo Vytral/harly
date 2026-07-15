@@ -44,7 +44,7 @@ function makeTx(queue: unknown[]) {
     {
       get(_t, prop) {
         if (prop === "then") return (resolve: (v: unknown) => void) => resolve(queue.shift());
-        return (..._a: unknown[]) => runnable;
+        return () => runnable;
       },
       apply() {
         return runnable;
@@ -52,15 +52,15 @@ function makeTx(queue: unknown[]) {
     },
   );
   const tx = {
-    select: (..._a: unknown[]) => {
+    select: () => {
       calls.select += 1;
       return runnable;
     },
-    update: (..._a: unknown[]) => {
+    update: () => {
       calls.update += 1;
       return runnable;
     },
-    insert: (..._a: unknown[]) => {
+    insert: () => {
       calls.insert += 1;
       return runnable;
     },

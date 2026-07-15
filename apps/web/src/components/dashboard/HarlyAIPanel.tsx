@@ -22,6 +22,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
 import { Markdown } from "@/components/ui/markdown";
 import {
   ChatContainerRoot,
@@ -45,39 +46,6 @@ import type {
   ConversationListItem,
   StoredUIMessage,
 } from "@/features/ai-chat/data";
-
-// ─── Logo ─────────────────────────────────────────────────────────────────────
-
-const HarlyLogoMark = ({ className }: { className?: string }) => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    viewBox="0 0 666 617"
-    className={className}
-    aria-hidden="true"
-    style={{ fillRule: "evenodd" }}
-  >
-    <defs>
-      <linearGradient
-        id="harly-ai-grad-panel"
-        x1="-6.76692" y1="525.898"
-        x2="-1.07519" y2="83.5598"
-        gradientUnits="userSpaceOnUse"
-      >
-        <stop offset="0" stopColor="rgb(249,18,247)" />
-        <stop offset="0.0909091" stopColor="rgb(229,21,243)" />
-        <stop offset="0.272727" stopColor="rgb(112,33,231)" />
-        <stop offset="0.454545" stopColor="rgb(48,38,223)" />
-        <stop offset="0.681818" stopColor="rgb(0,80,228)" />
-        <stop offset="0.863636" stopColor="rgb(0,130,239)" />
-        <stop offset="1" stopColor="rgb(0,204,255)" />
-      </linearGradient>
-    </defs>
-    <path
-      d="M 105.052 296.5 C 107.214 264.163, 113.849 239.422, 128.159 210.336 C 153.21 159.418, 197.415 119.505, 250.32 100.035 C 273.272 91.5881, 303.76 86.0157, 327.089 86.0035 C 337.333 85.9981, 364.28 88.8181, 375.428 91.0621 C 398.777 95.762, 429.905 108.861, 451.174 122.937 C 484.155 144.763, 512.489 177.447, 529.486 213.269 C 543.979 243.814, 551.032 275.177, 550.969 308.801 C 550.9 345.759, 544.423 373.979, 528.547 406.5 C 516.774 430.616, 506.254 445.641, 488.039 464.354 C 461.27 491.854, 433.487 509.368, 398.169 521.008 C 374.36 528.854, 360.648 531.144, 333.954 531.732 C 314.449 532.162, 309.423 531.941, 296.704 530.097 C 262.293 525.108, 231.357 513.369, 203.5 494.729 C 172.864 474.231, 144.475 442.082, 128.237 409.5 C 116.2 385.348, 106.853 351.518, 105.484 327.147 C 105.186 321.841, 104.801 315.25, 104.629 312.5 C 104.457 309.75, 104.648 302.55, 105.052 296.5 Z M 466.545 287.5 C 463.293 266.817, 456.544 249.612, 444.379 231 C 426.372 203.45, 395.939 182.053, 362.252 173.257 C 348.815 169.749, 348.065 169.666, 329.5 169.654 C 309.459 169.64, 299.774 171.017, 284 176.126 C 262.882 182.966, 236.77 200.252, 223 216.508 C 206.162 236.386, 198 251.923, 191.754 275.989 C 189.213 285.779, 188.691 289.968, 188.262 304.014 C 187.488 329.3, 191.235 349.164, 200.457 368.664 C 213.041 395.272, 231.048 414.801, 257.848 430.909 C 268.705 437.434, 278.362 441.354, 292.677 445.048 C 325.481 453.512, 358.621 450.24, 388.5 435.587 C 404.134 427.92, 415.147 420.222, 426.624 408.937 C 448.803 387.128, 460.778 363.749, 466.488 331.11 C 468.296 320.77, 468.325 298.826, 466.545 287.5 Z"
-      fill="url(#harly-ai-grad-panel)"
-    />
-  </svg>
-);
 
 // ─── Phosphor icons ────────────────────────────────────────────────────────────
 
@@ -1549,7 +1517,7 @@ export function HarlyAIPanel({
                 <PanelLeft className="size-4" />
               </Button>
             )}
-            <HarlyLogoMark className="size-5 shrink-0" />
+            <HarlyAILogoMark className="size-5 shrink-0" />
             <span className="text-sm font-semibold tracking-tight">Harly AI</span>
           </div>
           <div className="flex items-center gap-0.5">
@@ -1626,7 +1594,7 @@ export function HarlyAIButton({ open, onClick }: HarlyAIButtonProps) {
           : "bg-background hover:bg-accent",
       )}
     >
-      {open ? <X className="size-5" /> : <HarlyLogoMark className="size-7" />}
+      {open ? <X className="size-5" /> : <HarlyAILogoMark className="size-7" />}
     </button>
   );
 }

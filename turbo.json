@@ -2,6 +2,8 @@
   "$schema": "https://turbo.build/schema.json",
   "globalPassThroughEnv": [
     "DATABASE_URL",
+    "HARLY_URL",
+    "HARLY_DEV_MEMORY_MB",
     "NEXT_PUBLIC_APP_URL",
     "OPENHIRE_APP_NAME",
     "BETTER_AUTH_SECRET",

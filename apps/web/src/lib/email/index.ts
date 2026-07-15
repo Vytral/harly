@@ -2,7 +2,11 @@ import "server-only";
 
 import type React from "react";
 
-import { createEmailSender, type EmailSender } from "@harly/emails";
+import {
+  createEmailSender,
+  type EmailSender,
+  type SendEmailResult,
+} from "@harly/emails";
 
 import { getWorkspaceEmailConfig } from "./config";
 import { createLogger } from "@/lib/logger";
@@ -16,6 +20,8 @@ export type SendEmailOptions = {
   subject: string;
   react: React.ReactElement;
   replyTo?: string;
+  messageId?: string;
+  idempotencyKey?: string;
 };
 
 /** Send a platform-level email (welcome, invitations...) using the env-configured sender. */
@@ -51,15 +57,14 @@ export async function getWorkspaceEmailSender(
 export async function sendWorkspaceEmail(
   workspaceId: string,
   options: SendEmailOptions,
-): Promise<boolean> {
+): Promise<SendEmailResult | false> {
   const sender = await getWorkspaceEmailSender(workspaceId);
   if (!sender) {
     return false;
   }
 
   try {
-    await sender.send(options);
-    return true;
+    return await sender.send(options);
   } catch (error) {
     log.error(error, "[email] Failed to send workspace email");
     return false;

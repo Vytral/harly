@@ -230,6 +230,7 @@ export default async function CandidateDetailPage({
                 emailTemplateValues={actionTemplateValues}
                 inPool={inPool}
                 variant="compact"
+                aiConfigured={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady}
               />
             }
           >
@@ -361,7 +362,7 @@ export default async function CandidateDetailPage({
 
               {/* Actions — grouped with clear hierarchy, delete isolated */}
               <div
-                className={`w-full shrink-0 lg:w-auto lg:pl-2${isHired ? " lg:mx-auto lg:-translate-x-[82px]" : ""}`}
+                className={`w-full min-w-0 lg:pl-2${isHired ? " lg:mx-auto lg:-translate-x-[82px]" : ""}`}
               >
                 <CandidateActionBar
                   candidate={actionCandidate}
@@ -377,6 +378,7 @@ export default async function CandidateDetailPage({
                   emailTemplates={emailTemplates}
                   emailTemplateValues={actionTemplateValues}
                   inPool={inPool}
+                  aiConfigured={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady}
                 />
               </div>
             </div>

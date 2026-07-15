@@ -1,13 +1,10 @@
 # @harly/config
 
-Shared configuration for Harly.
+Shared, fail-fast runtime configuration for the web app, migrator, scheduler,
+and self-hosting tooling. `HARLY_URL` is the canonical public origin;
+`NEXT_PUBLIC_APP_URL` and `BETTER_AUTH_URL` remain temporary, deprecated
+fallbacks.
 
-> **Status:** Placeholder — not yet implemented. Environment validation currently lives in `apps/web`.
-
-## Planned responsibilities
-
-- Environment variable validation (Zod schemas at boot)
-- Feature flags
-- Self-hosted vs cloud config
-- Public app metadata
-- Deployment defaults
+Use `loadHarlyConfig()` at process startup and
+`validateRuntimeFilesystem()` before serving traffic when local storage is
+selected.

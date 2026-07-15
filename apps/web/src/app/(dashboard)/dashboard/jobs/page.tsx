@@ -1,21 +1,18 @@
 import Link from "next/link";
 import type { Route } from "next";
-import { Briefcase, MapPin, Plus, TrendingUp, Trash2, Users } from "lucide-react";
+import { Briefcase, Plus, TrendingUp, Trash2, Users } from "lucide-react";
 
 import { EmptyState } from "@/components/ui/EmptyState";
-import { JobStatusBadge } from "@/components/ui/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
-  formatEmploymentType,
-  formatWorkplaceType,
   listJobsWithStats,
   listTrashedJobs,
 } from "@/features/jobs/data";
-import { JobActionsMenu } from "@/features/jobs/JobActionsMenu";
+import { JobsTable } from "@/features/jobs/JobsTable";
+import { JobIdentity } from "@/features/jobs/JobIdentity";
 import { TrashJobActions } from "@/features/jobs/TrashJobActions";
 import { cn } from "@/lib/utils";
-import { formatRelative } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +36,6 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
   const draftRoles = jobs.filter((j) => j.status === "draft").length;
   const totalApplicants = jobs.reduce((sum, j) => sum + j.applicants, 0);
   const newApplicants = jobs.reduce((sum, j) => sum + j.newApplicants, 0);
-  const maxApplicants = Math.max(1, ...jobs.map((j) => j.applicants));
 
   return (
     <div className="space-y-5">
@@ -98,49 +94,7 @@ export default async function DashboardJobsPage({ searchParams }: JobsPageProps)
           />
         )
       ) : jobs.length > 0 ? (
-        <Card className="gap-0 divide-y divide-border/60 overflow-hidden py-0">
-          {jobs.map((job) => (
-            <div
-              key={job.id}
-              className="group grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-3 px-4 py-4 transition-colors hover:bg-muted/40 sm:grid-cols-[minmax(0,1fr)_10rem_9rem_auto] sm:px-5"
-            >
-              <Link href={`/dashboard/jobs/${job.id}` as Route} className="min-w-0">
-                <JobIdentity title={job.title} department={job.department} location={job.location} />
-              </Link>
-
-              <div className="hidden text-xs text-muted-foreground sm:block">
-                {formatEmploymentType(job.employmentType)}
-                <span className="mx-1 text-border">·</span>
-                {formatWorkplaceType(job.workplaceType)}
-              </div>
-
-              {/* Applicants — count + mini bar (the "graph") */}
-              <div className="hidden min-w-0 sm:block">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm font-semibold tabular-nums">{job.applicants}</span>
-                  {job.newApplicants > 0 ? (
-                    <span className="text-[0.65rem] font-medium text-primary">+{job.newApplicants} new</span>
-                  ) : null}
-                </div>
-                <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
-                  <div
-                    className="h-full rounded-full bg-primary/70"
-                    style={{ width: `${(job.applicants / maxApplicants) * 100}%` }}
-                  />
-                </div>
-                <p className="mt-1 text-[0.65rem] text-muted-foreground">
-                  {job.applicants === 1 ? "Candidate" : "Candidates"}
-                  {job.activeApplicants > 0 ? ` · ${job.activeApplicants} active` : ""}
-                </p>
-              </div>
-
-              <div className="col-start-2 row-start-1 flex items-center justify-end gap-2 sm:col-auto sm:row-auto">
-                <JobStatusBadge status={job.status} />
-                <JobActionsMenu jobId={job.id} slug={job.slug} />
-              </div>
-            </div>
-          ))}
-        </Card>
+        <JobsTable jobs={jobs} />
       ) : (
         <EmptyState
           icon={Briefcase}
@@ -212,49 +166,5 @@ function Tab({
     >
       {children}
     </Link>
-  );
-}
-
-function JobIdentity({
-  title,
-  department,
-  location,
-  deletedAt,
-  muted = false,
-}: {
-  title: string;
-  department: string | null;
-  location: string | null;
-  deletedAt?: Date | null;
-  muted?: boolean;
-}) {
-  return (
-    <span className="flex items-center gap-3">
-      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-        <Briefcase className="size-4" />
-      </span>
-      <span className="min-w-0">
-        <span
-          className={cn(
-            "block truncate font-medium",
-            muted ? "text-muted-foreground" : "text-foreground group-hover:text-primary",
-          )}
-        >
-          {title}
-        </span>
-        <span className="mt-0.5 flex items-center gap-1 truncate text-xs text-muted-foreground">
-          {deletedAt ? (
-            <>Deleted {formatRelative(deletedAt)}</>
-          ) : location ? (
-            <>
-              <MapPin className="size-3 shrink-0" />
-              {[department, location].filter(Boolean).join(" · ")}
-            </>
-          ) : (
-            (department ?? "No location set")
-          )}
-        </span>
-      </span>
-    </span>
   );
 }

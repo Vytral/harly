@@ -477,6 +477,13 @@
       "when": 1783915970444,
       "tag": "0067_wealthy_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 68,
+      "version": "7",
+      "when": 1784007021478,
+      "tag": "0068_parched_omega_sentinel",
+      "breakpoints": true
     }
   ]
 }

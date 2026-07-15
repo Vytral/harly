@@ -1,13 +1,31 @@
 {
   "name": "@harly/create",
   "version": "0.1.0",
-  "private": true,
-  "bin": {
-    "create-harly": "./src/index.ts",
-    "harly": "./src/index.ts"
+  "private": false,
+  "type": "module",
+  "engines": {
+    "node": ">=20"
   },
-  "dependencies": {
-    "@harly/db": "workspace:*",
-    "dotenv": "^17.4.2"
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "bin": {
+    "create-harly": "dist/index.js",
+    "harly": "dist/index.js"
+  },
+  "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --format=esm --target=node20 --outfile=dist/index.js",
+    "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --types node src/index.ts",
+    "test": "pnpm build && node --test test/*.test.mjs",
+    "pack:check": "pnpm build && npm pack --dry-run"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "esbuild": "^0.27.7",
+    "typescript": "^6.0.3"
   }
 }

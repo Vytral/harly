@@ -1,5 +1,6 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createElement } from "react";
+import { createHash, randomUUID } from "node:crypto";
 
 import {
   activityEvents,
@@ -78,18 +79,44 @@ export async function processEmailOutbox(opts?: {
   workspaceId?: string;
   limit?: number;
   ids?: string[];
+  workerId?: string;
 }): Promise<ProcessResult> {
-  const now = new Date();
+  const workerId = opts?.workerId ?? randomUUID();
+  const idsFilter = opts?.ids?.length
+    ? sql`and "id" in (${sql.join(opts.ids.map((id) => sql`${id}`), sql`, `)})`
+    : sql``;
+  const workspaceFilter = opts?.workspaceId
+    ? sql`and "workspace_id" = ${opts.workspaceId}`
+    : sql``;
+  const claimed = (await db.execute(sql`
+    with candidates as (
+      select "id"
+      from "email_outbox"
+      where (
+        ("status" = 'pending' and ("next_retry_at" is null or "next_retry_at" <= now()))
+        or ("status" = 'processing' and "locked_at" < now() - interval '5 minutes')
+      )
+      ${idsFilter}
+      ${workspaceFilter}
+      order by "created_at"
+      for update skip locked
+      limit ${opts?.limit ?? 50}
+    )
+    update "email_outbox" as queue
+    set "status" = 'processing', "locked_at" = now(), "locked_by" = ${workerId}, "updated_at" = now()
+    from candidates
+    where queue."id" = candidates."id"
+    returning queue."id"
+  `)) as unknown as Array<{ id: string }>;
 
+  if (claimed.length === 0) return { processed: 0, sent: 0, failed: 0 };
   const rows = await db
     .select()
     .from(emailOutbox)
     .where(
       and(
-        eq(emailOutbox.status, "pending"),
-        opts?.ids?.length ? inArray(emailOutbox.id, opts.ids) : undefined,
-        opts?.workspaceId ? eq(emailOutbox.workspaceId, opts.workspaceId) : undefined,
-        sql`(${emailOutbox.nextRetryAt} IS NULL OR ${emailOutbox.nextRetryAt} <= ${now})`,
+        inArray(emailOutbox.id, claimed.map((row) => row.id)),
+        eq(emailOutbox.lockedBy, workerId),
       ),
     )
     .orderBy(emailOutbox.createdAt)
@@ -121,7 +148,7 @@ async function deliverRow(row: OutboxRow): Promise<boolean> {
         log.warn({ kind: row.kind }, "unknown email_outbox kind");
         await db
           .update(emailOutbox)
-          .set({ status: "failed", lastError: `Unknown kind: ${row.kind}`, nextRetryAt: null })
+          .set({ status: "failed", lastError: `Unknown kind: ${row.kind}`, nextRetryAt: null, lockedAt: null, lockedBy: null })
           .where(eq(emailOutbox.id, row.id));
         return false;
     }
@@ -139,12 +166,38 @@ export async function enqueueEmailOutbox(
   workspaceId: string,
   kind: string,
   payload: Record<string, unknown>,
+  dedupeKey?: string,
 ): Promise<string> {
+  const resolvedDedupeKey = dedupeKey ?? createHash("sha256")
+    .update(`${kind}:${JSON.stringify(payload)}`)
+    .digest("hex");
   const [row] = await db
     .insert(emailOutbox)
-    .values({ workspaceId, kind, payload })
+    .values({ workspaceId, kind, payload, dedupeKey: resolvedDedupeKey })
+    .onConflictDoNothing({
+      target: [emailOutbox.workspaceId, emailOutbox.dedupeKey],
+    })
     .returning({ id: emailOutbox.id });
-  return row.id;
+  if (row) return row.id;
+  const [existing] = await db
+    .select({ id: emailOutbox.id })
+    .from(emailOutbox)
+    .where(
+      and(
+        eq(emailOutbox.workspaceId, workspaceId),
+        eq(emailOutbox.dedupeKey, resolvedDedupeKey),
+      ),
+    )
+    .limit(1);
+  if (!existing) throw new Error("Email outbox deduplication failed.");
+  return existing.id;
+}
+
+function deliveryOptions(row: OutboxRow) {
+  return {
+    messageId: `<${row.id}@harly.local>`,
+    idempotencyKey: row.id,
+  };
 }
 
 async function deliverOffer(row: OutboxRow): Promise<boolean> {
@@ -164,7 +217,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
   if (offer?.status === "sent") {
     await db
       .update(emailOutbox)
-      .set({ status: "sent", sentAt: new Date(), nextRetryAt: null })
+      .set({ status: "sent", sentAt: new Date(), nextRetryAt: null, lockedAt: null, lockedBy: null })
       .where(eq(emailOutbox.id, row.id));
     return true;
   }
@@ -191,7 +244,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
     return false;
   }
 
-  let delivered = false;
+  let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
   try {
     const branding = await getWorkspaceEmailBranding(row.workspaceId);
     const startDate = formatOfferDate(offer.startDate);
@@ -222,6 +275,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
               accentColor: branding.primaryColor ?? undefined,
               socialLinks: branding.socialLinks,
             }),
+            ...deliveryOptions(row),
           }
         : {
             to: recipient.email,
@@ -241,6 +295,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
               expiresAt,
               equity: offer.equity ?? undefined,
             }),
+            ...deliveryOptions(row),
           },
     );
   } catch (error) {
@@ -259,7 +314,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
       .where(and(eq(offers.workspaceId, row.workspaceId), eq(offers.id, offer.id)));
     await tx
       .update(emailOutbox)
-      .set({ status: "sent", sentAt: new Date(), nextRetryAt: null })
+      .set({ status: "sent", sentAt: new Date(), nextRetryAt: null, lockedAt: null, lockedBy: null, providerMessageId: delivered.messageId ?? null })
       .where(eq(emailOutbox.id, row.id));
   });
 
@@ -279,7 +334,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
 }
 
 function appBaseUrl(): string {
-  return process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  return process.env.HARLY_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 }
 
 function splitName(full: string): { first: string; last: string } {
@@ -304,6 +359,7 @@ async function deliverApplicationReceived(
   } | null;
 
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
+  let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
 
   if (variant === "candidate") {
     if (!p?.candidateEmail) {
@@ -311,7 +367,7 @@ async function deliverApplicationReceived(
       return false;
     }
     const jobBoardUrl = `${appBaseUrl()}/board/${p.workspaceSlug ?? ""}`;
-    const delivered = await sendWorkspaceEmail(row.workspaceId, {
+    delivered = await sendWorkspaceEmail(row.workspaceId, {
       to: p.candidateEmail,
       subject: applicationReceivedCandidateSubject({
         jobTitle: p.jobTitle ?? "",
@@ -326,6 +382,7 @@ async function deliverApplicationReceived(
         socialLinks: branding.socialLinks,
         jobBoardUrl,
       }),
+      ...deliveryOptions(row),
     });
     if (!delivered) {
       await markFailed(row.id, "Email provider did not accept the application confirmation.");
@@ -337,7 +394,7 @@ async function deliverApplicationReceived(
       return false;
     }
     const dashboardUrl = `${appBaseUrl()}/dashboard/candidates`;
-    const delivered = await sendWorkspaceEmail(row.workspaceId, {
+    delivered = await sendWorkspaceEmail(row.workspaceId, {
       to: p.ownerEmail,
       subject: applicationReceivedRecruiterSubject({
         candidateName: p.candidateName ?? "",
@@ -350,6 +407,7 @@ async function deliverApplicationReceived(
         dashboardUrl,
         branding,
       }),
+      ...deliveryOptions(row),
     });
     if (!delivered) {
       await markFailed(row.id, "Email provider did not accept the recruiter notification.");
@@ -357,10 +415,7 @@ async function deliverApplicationReceived(
     }
   }
 
-  await db
-    .update(emailOutbox)
-    .set({ status: "sent", sentAt: new Date(), nextRetryAt: null })
-    .where(eq(emailOutbox.id, row.id));
+  await markSent(row.id, delivered);
   return true;
 }
 
@@ -393,7 +448,7 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
     company_name: p.workspaceName ?? "",
   });
 
-  let delivered = false;
+  let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
   try {
     if (custom) {
       delivered = await sendWorkspaceEmail(row.workspaceId, {
@@ -406,6 +461,7 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
           accentColor: branding.primaryColor ?? undefined,
           socialLinks: branding.socialLinks,
         }),
+        ...deliveryOptions(row),
       });
     } else if (isStage) {
       delivered = await sendWorkspaceEmail(row.workspaceId, {
@@ -423,6 +479,7 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
           accentColor: branding.primaryColor ?? undefined,
           socialLinks: branding.socialLinks,
         }),
+        ...deliveryOptions(row),
       });
     } else {
       delivered = await sendWorkspaceEmail(row.workspaceId, {
@@ -439,6 +496,7 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
           accentColor: branding.primaryColor ?? undefined,
           socialLinks: branding.socialLinks,
         }),
+        ...deliveryOptions(row),
       });
     }
   } catch (error) {
@@ -450,11 +508,25 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
     return false;
   }
 
+  await markSent(row.id, delivered);
+  return true;
+}
+
+async function markSent(
+  id: string,
+  result: Exclude<Awaited<ReturnType<typeof sendWorkspaceEmail>>, false>,
+) {
   await db
     .update(emailOutbox)
-    .set({ status: "sent", sentAt: new Date(), nextRetryAt: null })
-    .where(eq(emailOutbox.id, row.id));
-  return true;
+    .set({
+      status: "sent",
+      sentAt: new Date(),
+      nextRetryAt: null,
+      lockedAt: null,
+      lockedBy: null,
+      providerMessageId: result.messageId ?? null,
+    })
+    .where(eq(emailOutbox.id, id));
 }
 
 async function markFailed(id: string, message: string) {
@@ -471,6 +543,8 @@ async function markFailed(id: string, message: string) {
         WHEN ${emailOutbox.attempts} + 1 >= ${MAX_ATTEMPTS} THEN 'failed'::text
         ELSE 'pending'::text
       END`,
+      lockedAt: null,
+      lockedBy: null,
     })
     .where(eq(emailOutbox.id, id));
 }

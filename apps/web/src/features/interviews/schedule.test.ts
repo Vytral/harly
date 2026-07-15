@@ -149,7 +149,7 @@ beforeEach(() => {
 });
 
 function txMock(application: unknown[], conflict: unknown[]) {
-  mocks.transactionImpl.mockImplementation(async (fn: (tx: any) => Promise<unknown>) => {
+  mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
     let step = 0;
     const tx = {
       select: () => txQuery(step++ === 0 ? application : conflict),

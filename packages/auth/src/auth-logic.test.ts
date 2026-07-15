@@ -41,10 +41,11 @@ describe("buildSocialProviders", () => {
       GOOGLE_CLIENT_ID: "g-id",
       GOOGLE_CLIENT_SECRET: "g-secret",
     });
-    expect(providers.google).toEqual({
+    expect(providers.google).toEqual(expect.objectContaining({
       clientId: "g-id",
       clientSecret: "g-secret",
-    });
+    }));
+    expect(providers.google?.mapProfileToUser).toBeTypeOf("function");
     expect(providers.microsoft).toBeUndefined();
     expect(providers.github).toBeUndefined();
   });
@@ -54,11 +55,11 @@ describe("buildSocialProviders", () => {
       MICROSOFT_CLIENT_ID: "ms-id",
       MICROSOFT_CLIENT_SECRET: "ms-secret",
     });
-    expect(providers.microsoft).toEqual({
+    expect(providers.microsoft).toEqual(expect.objectContaining({
       clientId: "ms-id",
       clientSecret: "ms-secret",
       tenantId: "common",
-    });
+    }));
   });
 
   it("includes github when both GITHUB_* vars are set", () => {
@@ -66,10 +67,10 @@ describe("buildSocialProviders", () => {
       GITHUB_CLIENT_ID: "gh-id",
       GITHUB_CLIENT_SECRET: "gh-secret",
     });
-    expect(providers.github).toEqual({
+    expect(providers.github).toEqual(expect.objectContaining({
       clientId: "gh-id",
       clientSecret: "gh-secret",
-    });
+    }));
   });
 
   it("includes all three providers when all vars are set", () => {
@@ -89,10 +90,10 @@ describe("buildSocialProviders", () => {
       LINKEDIN_CLIENT_ID: "li-id",
       LINKEDIN_CLIENT_SECRET: "li-secret",
     });
-    expect(providers.linkedin).toEqual({
+    expect(providers.linkedin).toEqual(expect.objectContaining({
       clientId: "li-id",
       clientSecret: "li-secret",
-    });
+    }));
   });
 
   it("includes all four providers when all vars are set", () => {

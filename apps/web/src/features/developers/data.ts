@@ -19,6 +19,7 @@ import {
   type WebhookEndpoint,
 } from "@harly/db";
 import { encryptSecret } from "@/lib/crypto";
+import { validateWebhookUrl } from "@/lib/ssrf";
 import { isWebhookEvent, type WebhookEvent } from "@/server/webhooks/events";
 
 /**
@@ -159,9 +160,9 @@ export async function createWebhookEndpoint(input: {
   description?: string | null;
   createdById?: string | null;
 }): Promise<{ endpoint: WebhookEndpoint; secret: string }> {
-  if (!/^https?:\/\//.test(input.url)) {
-    throw ApiError.badRequest("Endpoint URL must be http(s).");
-  }
+  await validateWebhookUrl(input.url).catch((error) => {
+    throw ApiError.badRequest(error instanceof Error ? error.message : "Invalid webhook URL.");
+  });
   const events = validateEvents(input.events);
   const secret = generateWebhookSecret();
   const enc = encryptSecret(secret);
@@ -192,9 +193,9 @@ export async function updateWebhookEndpoint(input: {
     updatedAt: new Date(),
   };
   if (input.patch.url !== undefined) {
-    if (!/^https?:\/\//.test(input.patch.url)) {
-      throw ApiError.badRequest("Endpoint URL must be http(s).");
-    }
+    await validateWebhookUrl(input.patch.url).catch((error) => {
+      throw ApiError.badRequest(error instanceof Error ? error.message : "Invalid webhook URL.");
+    });
     set.url = input.patch.url;
   }
   if (input.patch.events !== undefined) set.events = validateEvents(input.patch.events);

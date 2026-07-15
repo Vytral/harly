@@ -26,10 +26,20 @@ export function ApplicationStatusBadge({ status }: { status: string }) {
   return <Badge variant={entry.variant}>{entry.label}</Badge>;
 }
 
-export function JobStatusBadge({ status }: { status: string }) {
+export function JobStatusBadge({
+  status,
+  className,
+}: {
+  status: string;
+  className?: string;
+}) {
   const entry = jobStatusMap[status] ?? {
     variant: "neutral" as const,
     label: status,
   };
-  return <Badge variant={entry.variant}>{entry.label}</Badge>;
+  return (
+    <Badge variant={entry.variant} className={className}>
+      {entry.label}
+    </Badge>
+  );
 }

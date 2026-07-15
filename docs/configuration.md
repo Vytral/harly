@@ -1,53 +1,55 @@
 # Configuration
 
-Harly reads configuration from environment variables. Start with `.env.example`; values in `.env.local` are ignored by Git.
+`HARLY_URL` is the canonical public origin. It must be an origin without a
+path, for example `https://hiring.example.com`. The old
+`NEXT_PUBLIC_APP_URL` and `BETTER_AUTH_URL` variables remain temporary
+fallbacks and emit a deprecation warning.
 
-## Required in production
+Production startup fails before accepting traffic when any required value is
+missing or malformed:
 
 ```dotenv
-NODE_ENV=production
-NEXT_PUBLIC_APP_URL=https://harly.example.com
-BETTER_AUTH_URL=https://harly.example.com
-BETTER_AUTH_SECRET=<random-32-byte-secret>
-DATABASE_URL=postgresql://user:password@host:5432/harly
-AI_ENCRYPTION_KEY=<random-32-byte-secret>
+HARLY_URL=https://hiring.example.com
+DATABASE_URL=postgresql://user:password@postgres:5432/harly
+BETTER_AUTH_SECRET=<independent-32-byte-secret>
+AI_ENCRYPTION_KEY=<independent-32-byte-secret>
+STORAGE_UPLOAD_SECRET=<independent-32-byte-secret>
+CRON_SECRET=<independent-32-byte-secret>
+HARLY_SETUP_SECRET=<independent-32-byte-secret>
+HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
 ```
 
-Generate secrets with:
-
-```bash
-openssl rand -base64 32
-```
-
-`NEXT_PUBLIC_APP_URL` and `BETTER_AUTH_URL` must use the public HTTPS origin in production. Do not reuse development secrets or commit them to the repository.
+Do not reuse secrets. `create-harly init` generates each independently and
+writes `.env` with mode `0600`.
 
 ## Storage
 
-The default `STORAGE_PROVIDER=local` stores uploads on the application filesystem. This is suitable for local development and a single durable server only. For ephemeral or multi-instance deployments, use `STORAGE_PROVIDER=s3` with an S3-compatible bucket and set `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_ENDPOINT`, and `S3_PUBLIC_URL`.
+`STORAGE_PROVIDER=local` stores files below `UPLOADS_DIR` (`/data/uploads` in
+the official image). The directory is validated as writable during startup and
+must use the `uploads` volume. For S3, R2, or MinIO set
+`STORAGE_PROVIDER=s3` plus `S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`,
+`S3_SECRET_ACCESS_KEY`, and optional `S3_ENDPOINT`/`S3_PUBLIC_URL`.
 
 ## Optional integrations
 
-OAuth providers, Resend, AI providers, Slack, Outlook, Turnstile, Redis, and webhook retries are configured through the remaining variables in `.env.example`. Unconfigured optional integrations are disabled or fall back to the local behavior documented in the app.
+OAuth ID/secret pairs are all-or-nothing. Resend, SMTP, OAuth, IMAP, branding,
+Turnstile, and invitations can be configured from Harly after bootstrap.
+Turnstile secrets are resolved server-side.
 
-## Recruiting inbox (IMAP/SMTP)
+Outbound webhook URLs must use HTTPS and resolve only to public addresses.
+Loopback, private, link-local, and metadata networks are blocked before every
+request and redirect. `HARLY_ALLOW_PRIVATE_WEBHOOKS=true` is an explicit,
+high-trust exception for private networks.
 
-Configure the self-hosted recruiting inbox per workspace in **Settings → Email → Recruiting inbox**. It supports one shared mailbox such as `jobs@company.com`; IMAP and SMTP passwords are encrypted with `AI_ENCRYPTION_KEY`.
+## Cron
 
-Enter the provider's host, port, TLS setting, username/app-password, source folder (normally `INBOX`), and optional Sent folder. After saving, use **Test connection**. Schedule `GET` or `POST /api/cron/mailbox-sync` every two minutes with `Authorization: Bearer $CRON_SECRET`; the endpoint is deliberately disabled if that secret is absent.
+The scheduler calls these private endpoints with
+`Authorization: Bearer $CRON_SECRET`:
 
-- **Google Workspace/Gmail:** enable IMAP and create an app password (requires 2-Step Verification). Use `imap.gmail.com:993` and `smtp.gmail.com:465` with TLS; folders are commonly `INBOX` and `[Gmail]/Sent Mail`.
-- **Microsoft 365:** use an app password when available, or enable SMTP AUTH for the mailbox. Typical values: `outlook.office365.com:993` and `smtp.office365.com:587` (STARTTLS); Sent is usually `Sent Items`.
-- **Zoho:** use an app-specific password. Typical values: `imap.zoho.com:993`, `smtp.zoho.com:465`, and `Sent`.
-- **Generic IMAP:** use the provider's TLS settings. Only the configured source folder is polled; personal folders are not replicated.
+- `POST /api/cron/email-outbox` every 60 seconds
+- `POST /api/cron/webhooks/dispatch` every 60 seconds
+- `POST /api/cron/mailbox-sync` every 120 seconds
 
-Incoming mail is retained as an unassigned Inbox thread until a recruiter links or creates a candidate/application. AI actions are manual and require confirmation before data is created or a reply is sent.
-
-## Database migrations
-
-Migrations are committed in `packages/db/migrations`. Apply them once per deployment with:
-
-```bash
-pnpm db:migrate
-```
-
-Run migrations as a release/pre-deploy step, not concurrently from multiple application instances.
+GET and query-string secrets are rejected. Email, SMTP, and webhook delivery
+are at-least-once; provider idempotency and durable queue keys reduce duplicate
+delivery after crashes.
