@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -33,9 +33,9 @@ test("init creates a secure, valid installation in an empty directory", async ()
         ...process.env,
         HARLY_PROXY_MODE: "local",
         HARLY_URL: `http://localhost:${port}`,
-        HARLY_PORT: String(port),
         HARLY_INITIAL_ADMIN_EMAIL: "owner@example.com",
         HARLY_ORGANIZATION: "Harly E2E",
+        HARLY_RESOURCE_PROFILE: "compact",
         STORAGE_PROVIDER: "local",
         HARLY_IMAGE_REF: "ghcr.io/vytral/harly:0.1.0-test",
       },
@@ -71,6 +71,11 @@ test("init creates a secure, valid installation in an empty directory", async ()
     assert.equal(config.proxyMode, "local");
     assert.equal(config.publicUrl, `http://localhost:${port}`);
     assert.equal(config.image, "ghcr.io/vytral/harly:0.1.0-test");
+    assert.equal(config.resourceProfile, "compact");
+
+    assert.match(env, /^HARLY_APP_MEMORY=1024m$/m);
+    assert.match(env, /^HARLY_POSTGRES_MEMORY=384m$/m);
+    assert.match(env, new RegExp(`^HARLY_PORT="${port}"$`, "m"));
 
     const compose = await readFile(path.join(target, "compose.yaml"), "utf8");
     assert.match(compose, /services:\n/);
@@ -86,5 +91,29 @@ test("init creates a secure, valid installation in an empty directory", async ()
     assert.equal(composeConfig.status, 0, composeConfig.stderr || composeConfig.stdout);
   } finally {
     await rm(parent, { recursive: true, force: true });
+  }
+});
+
+test("launch requires --yes when stdin is not interactive", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harly-launch-e2e-"));
+  try {
+    await writeFile(path.join(directory, "harly.config.json"), JSON.stringify({
+      version: 1,
+      proxyMode: "local",
+      publicUrl: "http://localhost:3000",
+      image: "ghcr.io/vytral/harly:0.1.0-test",
+      organizationName: "Harly E2E",
+      initialAdminEmail: "owner@example.com",
+      storage: "local",
+    }));
+
+    const result = spawnSync(process.execPath, [cli, "launch", directory], {
+      cwd: packageRoot,
+      encoding: "utf8",
+    });
+    assert.equal(result.status, 2, result.stderr || result.stdout);
+    assert.match(result.stderr, /--yes is required in non-interactive mode/i);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });

@@ -37,7 +37,7 @@ HARLY_CADDY_MEMORY=128m
 
 ## Fresh install
 
-Requirements: Node 20+, Docker Engine 24+, and Compose 2.20+.
+Requirements: Node 20.12+, Docker Engine 24+, and Compose 2.20+.
 
 ```bash
 npx @harly/create init harly
@@ -51,6 +51,13 @@ independent secrets, and prints the exact services, ports, profiles, and
 volumes before launch. Re-running `init` preserves `.env` and secrets. Modified
 templates are preserved unless `--force` is supplied; `--force` still never
 rotates `.env`.
+
+The interactive flow uses a static Harly banner and guided prompts, validates
+Docker/ports/DNS/free disk, detects CPU and RAM, recommends `compact`,
+`standard`, or `performance`, masks S3 credentials, and defaults to generating
+files without launching containers. Caddy obtains and renews HTTPS certificates;
+the CLI configures and verifies the installation but does not mint certificates
+itself.
 
 Visit `/setup`, enter `HARLY_SETUP_SECRET`, and create the account matching
 `HARLY_INITIAL_ADMIN_EMAIL`. The claim lasts 15 minutes. First workspace

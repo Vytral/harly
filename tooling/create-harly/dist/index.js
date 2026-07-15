@@ -3,13 +3,49 @@
 // src/index.ts
 import { createHash, randomBytes } from "node:crypto";
 import { promises as dns } from "node:dns";
-import { chmod, cp, mkdir, mkdtemp, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, rename, rm, stat, statfs, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
+import * as p from "@clack/prompts";
+import pc from "picocolors";
+var resourceProfiles = {
+  compact: {
+    app: "1024m",
+    appNodeOptions: "--max-old-space-size=640",
+    postgres: "384m",
+    migrate: "512m",
+    scheduler: "192m",
+    caddy: "128m",
+    cacheMb: 256
+  },
+  standard: {
+    app: "1536m",
+    appNodeOptions: "--max-old-space-size=1024",
+    postgres: "768m",
+    migrate: "768m",
+    scheduler: "256m",
+    caddy: "256m",
+    cacheMb: 512
+  },
+  performance: {
+    app: "3072m",
+    appNodeOptions: "--max-old-space-size=2304",
+    postgres: "1536m",
+    migrate: "1024m",
+    scheduler: "512m",
+    caddy: "256m",
+    cacheMb: 1024
+  }
+};
+function detectResourceProfile() {
+  const memoryGb = os.totalmem() / 1024 ** 3;
+  if (memoryGb < 3.5) return "compact";
+  if (memoryGb < 7.5) return "standard";
+  return "performance";
+}
 var CliError = class extends Error {
   constructor(message, exitCode = 1) {
     super(message);
@@ -26,6 +62,15 @@ var toVersion = toIndex >= 0 ? args[toIndex + 1] : void 0;
 var force = flags.has("--force");
 var yes = flags.has("--yes");
 var json = flags.has("--json");
+var interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
+var cliVersion = "0.1.0";
+var logo = `
+\u2588\u2588\u2557  \u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557     \u2588\u2588\u2557   \u2588\u2588\u2557
+\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551     \u255A\u2588\u2588\u2557 \u2588\u2588\u2554\u255D
+\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2551      \u255A\u2588\u2588\u2588\u2588\u2554\u255D
+\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551       \u255A\u2588\u2588\u2554\u255D
+\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2551
+\u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D   \u255A\u2550\u255D`;
 function usage() {
   process.stdout.write(`create-harly \u2014 reproducible Harly self-hosting
 
@@ -37,6 +82,18 @@ Commands:
   create-harly restore <archive> [directory] --force
   create-harly upgrade [directory] [--to version] [--yes]
 `);
+}
+function showBrand() {
+  process.stdout.write(`${pc.cyan(logo)}
+
+${pc.bold("Self-hosted ATS")} ${pc.dim(`\xB7 v${cliVersion}`)}
+
+`);
+}
+function unwrapPrompt(value) {
+  if (!p.isCancel(value)) return value;
+  p.cancel("Installation cancelled.");
+  throw new CliError("", 2);
 }
 function run(program, commandArgs, options = {}) {
   const result = spawnSync(program, commandArgs, {
@@ -64,38 +121,59 @@ function atLeast(actual, expected) {
 async function portAvailable(port) {
   return new Promise((resolve) => {
     const server = createServer();
-    server.once("error", () => resolve(false));
+    server.once("error", (error) => {
+      resolve(error.code === "EACCES");
+    });
     server.listen(port, "127.0.0.1", () => server.close(() => resolve(true)));
   });
 }
-async function preflight(mode, checkPorts = true) {
-  if (!atLeast(parseVersion(process.versions.node), [20, 0, 0])) throw new CliError("Node.js 20 or newer is required.");
+async function freeDiskGb(directory) {
+  let current = path.resolve(directory);
+  while (!await exists(current)) {
+    const parent = path.dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  const filesystem = await statfs(current);
+  return filesystem.bavail * filesystem.bsize / 1024 ** 3;
+}
+async function preflight(mode, checkPorts = true, requestedPort, directory = process.cwd()) {
+  if (!atLeast(parseVersion(process.versions.node), [20, 12, 0])) throw new CliError("Node.js 20.12 or newer is required.");
   const docker = run("docker", ["version", "--format", "{{.Server.Version}}"], { allowFailure: true });
   if (docker.status !== 0 || !atLeast(parseVersion(String(docker.stdout)), [24, 0, 0])) throw new CliError("Docker Engine 24 or newer is required and must be running.");
   const plugin = run("docker", ["compose", "version", "--short"], { allowFailure: true });
   if (plugin.status !== 0 || !atLeast(parseVersion(String(plugin.stdout)), [2, 20, 0])) throw new CliError("Docker Compose 2.20 or newer is required.");
   if (checkPorts) {
-    const ports = mode === "caddy" ? [80, 443] : [Number(process.env.HARLY_PORT ?? 3e3)];
+    const ports = mode === "caddy" ? [80, 443] : [requestedPort ?? Number(process.env.HARLY_PORT ?? 3e3)];
     for (const port of ports) if (!await portAvailable(port)) throw new CliError(`Port ${port} is already in use.`);
   }
+  const diskGb = await freeDiskGb(directory);
+  if (diskGb < 5) throw new CliError(`At least 5 GB of free disk is required (${diskGb.toFixed(1)} GB available).`);
+  return { cpuCount: os.cpus().length, memoryGb: os.totalmem() / 1024 ** 3, diskGb };
 }
-async function prompt(question, fallback) {
-  if (!process.stdin.isTTY) {
-    if (fallback !== void 0) return fallback;
-    throw new CliError(`${question} is required in non-interactive mode.`, 2);
-  }
-  const rl = createInterface({ input: process.stdin, output: process.stdout });
-  try {
-    const answer = (await rl.question(`${question}${fallback ? ` (${fallback})` : ""}: `)).trim();
-    return answer || fallback || "";
-  } finally {
-    rl.close();
-  }
+function requiredEnvironment(name, value) {
+  if (value?.trim()) return value.trim();
+  throw new CliError(`${name} is required in non-interactive mode.`, 2);
 }
-async function confirm(question) {
+async function confirm2(question) {
   if (yes) return true;
-  if (!process.stdin.isTTY) return false;
-  return /^y(es)?$/i.test(await prompt(`${question} [y/N]`, "n"));
+  if (!interactive) return false;
+  return unwrapPrompt(await p.confirm({ message: question, initialValue: false }));
+}
+function progressStep(message, success, action) {
+  if (!interactive) {
+    action();
+    return;
+  }
+  const step = p.spinner();
+  step.start(message);
+  try {
+    action();
+    step.stop(success);
+  } catch (error) {
+    step.stop(`${message} failed`);
+    throw error;
+  }
 }
 function normalizeUrl(value, mode) {
   const candidate = value.includes("://") ? value : `${mode === "local" ? "http" : "https"}://${value}`;
@@ -109,6 +187,142 @@ function secret() {
 }
 function envLine(value) {
   return JSON.stringify(value);
+}
+function shellQuote(value) {
+  return `'${value.replaceAll("'", `'"'"'`)}'`;
+}
+function validateEmail(value) {
+  if (!value || !/^\S+@\S+\.\S+$/.test(value)) return "Enter a valid email address.";
+}
+function validatePublicOrigin(value) {
+  if (!value?.trim()) return "Enter a domain or public URL.";
+  try {
+    const candidate = value.includes("://") ? value : `https://${value}`;
+    const parsed = new URL(candidate);
+    if (parsed.pathname !== "/" || parsed.search || parsed.hash) return "Use an origin without a path, query, or hash.";
+  } catch {
+    return "Enter a valid domain or public URL.";
+  }
+}
+function hostSummary(host) {
+  return `${host.cpuCount} CPU \xB7 ${host.memoryGb.toFixed(1)} GB RAM \xB7 ${host.diskGb.toFixed(1)} GB free`;
+}
+async function collectNonInteractiveAnswers(directory) {
+  const mode = process.env.HARLY_PROXY_MODE ?? "caddy";
+  if (!["caddy", "external", "local"].includes(mode)) throw new CliError("Invalid proxy mode.", 2);
+  const url = normalizeUrl(requiredEnvironment("HARLY_URL", process.env.HARLY_URL), mode);
+  const requestedPort = Number(process.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : 3e3));
+  await preflight(mode, true, requestedPort, directory);
+  if (mode !== "local") await dns.lookup(url.hostname);
+  const email = requiredEnvironment("HARLY_INITIAL_ADMIN_EMAIL", process.env.HARLY_INITIAL_ADMIN_EMAIL).toLowerCase();
+  if (validateEmail(email)) throw new CliError("Invalid owner email.", 2);
+  const organization = process.env.HARLY_ORGANIZATION?.trim() || "My organization";
+  const storage = process.env.STORAGE_PROVIDER ?? "local";
+  if (!["local", "s3"].includes(storage)) throw new CliError("Invalid storage provider.", 2);
+  const resourceProfile = process.env.HARLY_RESOURCE_PROFILE ?? detectResourceProfile();
+  if (!Object.hasOwn(resourceProfiles, resourceProfile)) throw new CliError("Invalid resource profile.", 2);
+  const s3 = storage === "s3" ? {
+    bucket: requiredEnvironment("S3_BUCKET", process.env.S3_BUCKET),
+    region: process.env.S3_REGION?.trim() || "auto",
+    accessKeyId: requiredEnvironment("S3_ACCESS_KEY_ID", process.env.S3_ACCESS_KEY_ID),
+    secretAccessKey: requiredEnvironment("S3_SECRET_ACCESS_KEY", process.env.S3_SECRET_ACCESS_KEY),
+    endpoint: process.env.S3_ENDPOINT?.trim() || "",
+    publicUrl: process.env.S3_PUBLIC_URL?.trim() || ""
+  } : null;
+  const image = process.env.HARLY_IMAGE_REF ?? "ghcr.io/vytral/harly:0.1.0-beta.1";
+  if (image.endsWith(":latest")) throw new CliError("Installations must pin a version or digest, never latest.", 2);
+  return { mode, url, email, organization, storage, s3, resourceProfile, image };
+}
+async function collectInteractiveAnswers(directory) {
+  showBrand();
+  p.intro(pc.bgCyan(pc.black(" Welcome to Harly ")));
+  const publicOrigin = unwrapPrompt(await p.text({
+    message: "Public domain or URL",
+    placeholder: "harly.example.com",
+    initialValue: process.env.HARLY_URL,
+    validate: validatePublicOrigin
+  }));
+  const mode = unwrapPrompt(await p.select({
+    message: "Reverse proxy",
+    initialValue: process.env.HARLY_PROXY_MODE ?? "caddy",
+    options: [
+      { value: "caddy", label: "Automatic HTTPS with Caddy", hint: "recommended" },
+      { value: "external", label: "External Nginx or Traefik" },
+      { value: "local", label: "Local HTTP only", hint: "development" }
+    ]
+  }));
+  const url = normalizeUrl(publicOrigin, mode);
+  const preflightSpinner = p.spinner();
+  preflightSpinner.start("Checking Docker, ports, and DNS");
+  let host;
+  try {
+    const requestedPort = Number(process.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : 3e3));
+    host = await preflight(mode, true, requestedPort, directory);
+    if (mode !== "local") await dns.lookup(url.hostname);
+    preflightSpinner.stop("Host preflight passed");
+  } catch (error) {
+    preflightSpinner.stop("Host preflight failed");
+    throw error;
+  }
+  const email = unwrapPrompt(await p.text({
+    message: "Initial owner email",
+    placeholder: "owner@example.com",
+    initialValue: process.env.HARLY_INITIAL_ADMIN_EMAIL,
+    validate: validateEmail
+  })).toLowerCase();
+  const organization = unwrapPrompt(await p.text({
+    message: "Organization name",
+    placeholder: "Acme Inc.",
+    initialValue: process.env.HARLY_ORGANIZATION ?? "My organization",
+    validate: (value) => value?.trim() ? void 0 : "Enter an organization name."
+  }));
+  const storage = unwrapPrompt(await p.select({
+    message: "File storage",
+    initialValue: process.env.STORAGE_PROVIDER ?? "local",
+    options: [
+      { value: "local", label: "Local persistent volume", hint: "simple" },
+      { value: "s3", label: "S3, R2, or MinIO", hint: "recommended for growth" }
+    ]
+  }));
+  const s3 = storage === "s3" ? {
+    bucket: unwrapPrompt(await p.text({ message: "S3 bucket", initialValue: process.env.S3_BUCKET, validate: (value) => value?.trim() ? void 0 : "Enter the bucket name." })),
+    region: unwrapPrompt(await p.text({ message: "S3 region", initialValue: process.env.S3_REGION ?? "auto" })),
+    accessKeyId: unwrapPrompt(await p.text({ message: "S3 access key ID", initialValue: process.env.S3_ACCESS_KEY_ID, validate: (value) => value?.trim() ? void 0 : "Enter the access key ID." })),
+    secretAccessKey: unwrapPrompt(await p.password({ message: "S3 secret access key", mask: "\u2022", validate: (value) => value?.trim() ? void 0 : "Enter the secret access key." })),
+    endpoint: unwrapPrompt(await p.text({ message: "S3 endpoint", placeholder: "Leave blank for AWS", initialValue: process.env.S3_ENDPOINT ?? "" })),
+    publicUrl: unwrapPrompt(await p.text({ message: "S3 public URL", placeholder: "Optional", initialValue: process.env.S3_PUBLIC_URL ?? "" }))
+  } : null;
+  const detectedProfile = detectResourceProfile();
+  p.note(hostSummary(host), `Detected host \xB7 ${detectedProfile}`);
+  const resourceProfile = unwrapPrompt(await p.select({
+    message: "Resource profile",
+    initialValue: process.env.HARLY_RESOURCE_PROFILE ?? detectedProfile,
+    options: [
+      { value: "compact", label: "Compact", hint: "2 GB RAM + swap" },
+      { value: "standard", label: "Standard", hint: "4 GB RAM, recommended" },
+      { value: "performance", label: "Performance", hint: "8 GB RAM or more" }
+    ]
+  }));
+  const image = process.env.HARLY_IMAGE_REF ?? "ghcr.io/vytral/harly:0.1.0-beta.1";
+  if (image.endsWith(":latest")) throw new CliError("Installations must pin a version or digest, never latest.", 2);
+  const services = `PostgreSQL, migrator, app, scheduler${mode === "caddy" ? ", Caddy" : ""}`;
+  const localPort = process.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : "3000");
+  p.note([
+    `Directory   ${directory}`,
+    `URL         ${url.origin}`,
+    `Image       ${image}`,
+    `Services    ${services}`,
+    `Ports       ${mode === "caddy" ? "80, 443" : `127.0.0.1:${localPort}`}`,
+    `Storage     ${storage === "local" ? "Local persistent volume" : "S3-compatible"}`,
+    `Resources   ${resourceProfile}`,
+    `HTTPS       ${mode === "caddy" ? "Managed automatically by Caddy" : mode === "external" ? "Managed by external proxy" : "Disabled"}`
+  ].join("\n"), "Installation plan");
+  const approved = unwrapPrompt(await p.confirm({ message: "Generate this installation?", initialValue: true }));
+  if (!approved) {
+    p.cancel("No files were changed.");
+    throw new CliError("", 2);
+  }
+  return { mode, url, email, organization, storage, s3, resourceProfile, image };
 }
 async function atomicWrite(file, contents, mode) {
   await mkdir(path.dirname(file), { recursive: true });
@@ -241,98 +455,104 @@ HARLY_LOG_MAX_FILES=3
 `;
 async function init() {
   const directory = path.resolve(positionals[0] ?? "harly");
-  await mkdir(directory, { recursive: true });
-  const mode = await prompt("Proxy mode: caddy, external, or local", process.env.HARLY_PROXY_MODE ?? "caddy");
-  if (!["caddy", "external", "local"].includes(mode)) throw new CliError("Invalid proxy mode.", 2);
-  await preflight(mode);
-  const url = normalizeUrl(await prompt("Public Harly URL", process.env.HARLY_URL), mode);
-  if (mode !== "local") await dns.lookup(url.hostname);
-  const email = (await prompt("Initial owner email", process.env.HARLY_INITIAL_ADMIN_EMAIL)).toLowerCase();
-  if (!/^\S+@\S+\.\S+$/.test(email)) throw new CliError("Invalid owner email.", 2);
-  const organization = await prompt("Organization name", process.env.HARLY_ORGANIZATION ?? "My organization");
-  const storage = await prompt("Storage: local or s3", process.env.STORAGE_PROVIDER ?? "local");
-  if (!["local", "s3"].includes(storage)) throw new CliError("Invalid storage provider.", 2);
-  const s3 = storage === "s3" ? {
-    bucket: await prompt("S3 bucket", process.env.S3_BUCKET),
-    region: await prompt("S3 region", process.env.S3_REGION ?? "auto"),
-    accessKeyId: await prompt("S3 access key ID", process.env.S3_ACCESS_KEY_ID),
-    secretAccessKey: await prompt("S3 secret access key", process.env.S3_SECRET_ACCESS_KEY),
-    endpoint: await prompt("S3 endpoint (blank for AWS)", process.env.S3_ENDPOINT ?? ""),
-    publicUrl: await prompt("S3 public URL (optional)", process.env.S3_PUBLIC_URL ?? "")
-  } : null;
-  const image = process.env.HARLY_IMAGE_REF ?? "ghcr.io/vytral/harly:0.1.0-beta.1";
-  if (image.endsWith(":latest")) throw new CliError("Installations must pin a version or digest, never latest.", 2);
-  const envPath = path.join(directory, ".env");
-  if (!await exists(envPath)) {
-    const env = [
-      `HARLY_IMAGE=${envLine(image)}`,
-      `HARLY_VERSION=${envLine(image.includes("@sha256:") ? "digest" : image.split(":").at(-1) ?? "unknown")}`,
-      `HARLY_URL=${envLine(url.origin)}`,
-      `HARLY_PORT=${envLine(process.env.HARLY_PORT ?? "3000")}`,
-      `HARLY_DOMAIN=${envLine(url.hostname)}`,
-      `COMPOSE_PROFILES=${envLine(mode === "caddy" ? "proxy" : "")}`,
-      `POSTGRES_USER=${envLine("harly")}`,
-      `POSTGRES_PASSWORD=${envLine(secret())}`,
-      `POSTGRES_DB=${envLine("harly")}`,
-      `BETTER_AUTH_SECRET=${envLine(secret())}`,
-      `AI_ENCRYPTION_KEY=${envLine(secret())}`,
-      `STORAGE_UPLOAD_SECRET=${envLine(secret())}`,
-      `CRON_SECRET=${envLine(secret())}`,
-      `HARLY_SETUP_SECRET=${envLine(secret())}`,
-      `HARLY_INITIAL_ADMIN_EMAIL=${envLine(email)}`,
-      `STORAGE_PROVIDER=${envLine(storage)}`,
-      ...s3 ? [
-        `S3_BUCKET=${envLine(s3.bucket)}`,
-        `S3_REGION=${envLine(s3.region)}`,
-        `S3_ACCESS_KEY_ID=${envLine(s3.accessKeyId)}`,
-        `S3_SECRET_ACCESS_KEY=${envLine(s3.secretAccessKey)}`,
-        `S3_ENDPOINT=${envLine(s3.endpoint)}`,
-        `S3_PUBLIC_URL=${envLine(s3.publicUrl)}`
-      ] : [],
-      "RESEND_API_KEY=",
-      "EMAIL_FROM=",
-      "HARLY_APP_MEMORY=1536m",
-      "HARLY_POSTGRES_MEMORY=768m",
-      "HARLY_SCHEDULER_MEMORY=256m",
-      "HARLY_CADDY_MEMORY=256m",
-      "HARLY_CACHE_MAX_MB=512",
-      "HARLY_CACHE_MAX_AGE_DAYS=7",
-      "HARLY_LOG_MAX_SIZE=10m",
-      "HARLY_LOG_MAX_FILES=3",
-      ""
-    ].join("\n");
-    await atomicWrite(envPath, env, 384);
-  }
-  const config = { version: 1, proxyMode: mode, publicUrl: url.origin, image, organizationName: organization, initialAdminEmail: email, storage };
-  const templates = [
-    ["compose.yaml", composeTemplate],
-    ["Caddyfile", "{$HARLY_DOMAIN} {\n  encode zstd gzip\n  reverse_proxy app:3000\n}\n"],
-    [".env.example", envExample],
-    [".gitignore", ".env\nbackups/\n"],
-    ["harly.config.json", `${JSON.stringify(config, null, 2)}
+  const answers = interactive ? await collectInteractiveAnswers(directory) : await collectNonInteractiveAnswers(directory);
+  const { mode, url, email, organization, storage, s3, resourceProfile, image } = answers;
+  const resources = resourceProfiles[resourceProfile];
+  const generationSpinner = interactive ? p.spinner() : null;
+  generationSpinner?.start("Generating secure configuration");
+  try {
+    await mkdir(directory, { recursive: true });
+    const envPath = path.join(directory, ".env");
+    if (!await exists(envPath)) {
+      const env = [
+        `HARLY_IMAGE=${envLine(image)}`,
+        `HARLY_VERSION=${envLine(image.includes("@sha256:") ? "digest" : image.split(":").at(-1) ?? "unknown")}`,
+        `HARLY_URL=${envLine(url.origin)}`,
+        `HARLY_PORT=${envLine(process.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : "3000"))}`,
+        `HARLY_DOMAIN=${envLine(url.hostname)}`,
+        `COMPOSE_PROFILES=${envLine(mode === "caddy" ? "proxy" : "")}`,
+        `POSTGRES_USER=${envLine("harly")}`,
+        `POSTGRES_PASSWORD=${envLine(secret())}`,
+        `POSTGRES_DB=${envLine("harly")}`,
+        `BETTER_AUTH_SECRET=${envLine(secret())}`,
+        `AI_ENCRYPTION_KEY=${envLine(secret())}`,
+        `STORAGE_UPLOAD_SECRET=${envLine(secret())}`,
+        `CRON_SECRET=${envLine(secret())}`,
+        `HARLY_SETUP_SECRET=${envLine(secret())}`,
+        `HARLY_INITIAL_ADMIN_EMAIL=${envLine(email)}`,
+        `STORAGE_PROVIDER=${envLine(storage)}`,
+        ...s3 ? [
+          `S3_BUCKET=${envLine(s3.bucket)}`,
+          `S3_REGION=${envLine(s3.region)}`,
+          `S3_ACCESS_KEY_ID=${envLine(s3.accessKeyId)}`,
+          `S3_SECRET_ACCESS_KEY=${envLine(s3.secretAccessKey)}`,
+          `S3_ENDPOINT=${envLine(s3.endpoint)}`,
+          `S3_PUBLIC_URL=${envLine(s3.publicUrl)}`
+        ] : [],
+        "RESEND_API_KEY=",
+        "EMAIL_FROM=",
+        `HARLY_APP_MEMORY=${resources.app}`,
+        `HARLY_APP_NODE_OPTIONS=${resources.appNodeOptions}`,
+        `HARLY_POSTGRES_MEMORY=${resources.postgres}`,
+        `HARLY_MIGRATE_MEMORY=${resources.migrate}`,
+        `HARLY_SCHEDULER_MEMORY=${resources.scheduler}`,
+        `HARLY_CADDY_MEMORY=${resources.caddy}`,
+        `HARLY_CACHE_MAX_MB=${resources.cacheMb}`,
+        "HARLY_CACHE_MAX_AGE_DAYS=7",
+        "HARLY_LOG_MAX_SIZE=10m",
+        "HARLY_LOG_MAX_FILES=3",
+        ""
+      ].join("\n");
+      await atomicWrite(envPath, env, 384);
+    }
+    const config = { version: 1, proxyMode: mode, publicUrl: url.origin, image, organizationName: organization, initialAdminEmail: email, storage, resourceProfile };
+    const templates = [
+      ["compose.yaml", composeTemplate],
+      ["Caddyfile", "{$HARLY_DOMAIN} {\n  encode zstd gzip\n  reverse_proxy app:3000\n}\n"],
+      [".env.example", envExample],
+      [".gitignore", ".env\nbackups/\n"],
+      ["harly.config.json", `${JSON.stringify(config, null, 2)}
 `],
-    ["README.md", `# Harly self-host
+      ["README.md", `# Harly self-host
 
 - Start: \`docker compose up -d\`
 - Diagnose: \`npx @harly/create doctor .\`
 - Backup before every upgrade.
 - Complete the first owner at ${url.origin}/setup using HARLY_SETUP_SECRET from .env.
 `]
-  ];
-  for (const [name, contents, modeBits] of templates) {
-    const target = path.join(directory, name);
-    if (!await exists(target) || force) await atomicWrite(target, contents, modeBits);
+    ];
+    for (const [name, contents, modeBits] of templates) {
+      const target = path.join(directory, name);
+      if (!await exists(target) || force) await atomicWrite(target, contents, modeBits);
+    }
+  } catch (error) {
+    generationSpinner?.stop("Configuration generation failed");
+    throw error;
   }
-  process.stdout.write(`
+  generationSpinner?.stop("Configuration generated");
+  if (interactive) {
+    p.log.success(`${pc.bold(directory)} is ready`);
+    const launchNow = unwrapPrompt(await p.confirm({
+      message: "Pull the image and launch Harly now?",
+      initialValue: false
+    }));
+    if (launchNow) {
+      await launch(directory, true);
+      p.outro(`Harly is ready at ${pc.cyan(url.origin)} \xB7 run ${pc.cyan("npx @harly/create doctor .")}`);
+    } else {
+      p.outro(`Next: ${pc.cyan(`cd ${shellQuote(directory)} && npx @harly/create launch . --yes`)}`);
+    }
+  } else {
+    process.stdout.write(`
 Generated ${directory}
 Image: ${image}
 Mode: ${mode}
-Resource profile: 4 GB VPS (override HARLY_*_MEMORY in .env)
+Resource profile: ${resourceProfile}
 Services: postgres, migrate, app, scheduler${mode === "caddy" ? ", caddy" : ""}
 Volumes: postgres-data, uploads, next-cache${mode === "caddy" ? ", caddy-data, caddy-config" : ""}
 
 `);
-  if (await confirm("Pull images and launch now?")) await launch(directory);
+  }
 }
 async function readConfig(directory) {
   try {
@@ -341,22 +561,36 @@ async function readConfig(directory) {
     throw new CliError("harly.config.json is missing or invalid. Run init first.");
   }
 }
-async function launch(explicitDirectory) {
+async function launch(explicitDirectory, confirmed = false) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
-  process.stdout.write(`Image: ${config.image}
+  if (interactive && !confirmed) {
+    showBrand();
+    p.intro(pc.bgCyan(pc.black(" Launch Harly ")));
+    p.note(`Image  ${config.image}
+Mode   ${config.proxyMode}
+URL    ${config.publicUrl}`, "Launch plan");
+  } else if (!interactive) {
+    process.stdout.write(`Image: ${config.image}
 Mode: ${config.proxyMode}
-Commands: docker compose pull; docker compose up -d
+Commands: docker compose pull; docker compose up -d --wait
 `);
-  if (!yes && !await confirm("Continue?")) {
-    if (!process.stdin.isTTY) return;
+  }
+  if (!confirmed && !yes && !await confirm2("Continue?")) {
+    if (!process.stdin.isTTY) throw new CliError("--yes is required in non-interactive mode.", 2);
     throw new CliError("Launch cancelled.", 2);
   }
-  compose(directory, ["config", "--quiet"]);
-  compose(directory, ["pull"]);
-  compose(directory, ["up", "-d"]);
-  process.stdout.write(`Harly is starting at ${config.publicUrl}. Run doctor to verify readiness.
+  progressStep("Validating Docker Compose", "Compose configuration is valid", () => compose(directory, ["config", "--quiet"]));
+  progressStep("Pulling immutable container images", "Container images downloaded", () => compose(directory, ["pull"]));
+  progressStep("Starting Harly and waiting for healthchecks", "Harly services are healthy", () => {
+    compose(directory, ["up", "-d", "--wait", "--wait-timeout", "180"]);
+  });
+  if (interactive && !confirmed) {
+    p.outro(`Harly is ready at ${pc.cyan(config.publicUrl)} \xB7 run ${pc.cyan("npx @harly/create doctor .")}`);
+  } else if (!interactive) {
+    process.stdout.write(`Harly is ready at ${config.publicUrl}. Run doctor to verify the public route.
 `);
+  }
 }
 async function doctor(explicitDirectory, print = true) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
@@ -453,7 +687,7 @@ async function upgrade() {
   const directory = path.resolve(positionals[0] ?? ".");
   const config = await readConfig(directory);
   await preflight(config.proxyMode, false);
-  if (!yes && !await confirm(`Back up and upgrade ${config.image}${toVersion ? ` to ${toVersion}` : ""}?`)) throw new CliError("Upgrade cancelled.", 2);
+  if (!yes && !await confirm2(`Back up and upgrade ${config.image}${toVersion ? ` to ${toVersion}` : ""}?`)) throw new CliError("Upgrade cancelled.", 2);
   await backup(directory);
   if (toVersion) {
     if (toVersion === "latest") throw new CliError("latest is not an allowed upgrade target.", 2);
@@ -497,7 +731,7 @@ async function main() {
 }
 main().catch((error) => {
   const cliError = error instanceof CliError ? error : new CliError(error instanceof Error ? error.message : "Unexpected failure.");
-  process.stderr.write(`${cliError.message}
+  if (cliError.message) process.stderr.write(`${cliError.message}
 `);
   process.exitCode = cliError.exitCode;
 });

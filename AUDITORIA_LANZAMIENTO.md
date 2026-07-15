@@ -318,8 +318,8 @@ Suite tras este pass: **215 passed / 1 skipped** (web), typecheck limpio.
 
 ## Tracking de lanzamiento self-hosted — 14 de julio de 2026
 
-Estado de los siete pasos acordados, en orden estricto. No se inicia el paso 6
-mientras 1–3 no estén resueltos; el paso 2 está bloqueado por acceso externo.
+Estado de los siete pasos acordados. La UI guiada se adelantó por decisión
+explícita del owner; esto no convierte la beta en lanzamiento ni desbloquea RC.
 
 - [x] **SELFHOST-CLI-01 — Corregir y verificar los ejecutables npm.**
   `tooling/create-harly/package.json:16-23` usa `dist/index.js` sin `./` para
@@ -327,31 +327,30 @@ mientras 1–3 no estén resueltos; el paso 2 está bloqueado por acceso externo
   autocorrecciones, empaquetó 3 archivos (7.7 kB) e incluyó `dist/index.js`
   ejecutable con modo decimal `493`.
 - [ ] **SELFHOST-IMAGE-01 — Publicar la imagen canónica y hacerla pullable.**
-  El nombre canónico es `ghcr.io/vytral/harly`: lo fijan
-  `.github/workflows/release-image.yml:25-42` y
-  `tooling/create-harly/src/index.ts:256,440`; `vytral/curious-monkey` no es el
-  target. Ambos nombres devuelven HTTP 403 al pull anónimo y 404 en sus páginas
-  públicas. GHCR no permite distinguir paquete privado de paquete ausente sin
-  autenticación. Bloqueado: las credenciales locales de `gh` no son válidas y
-  no hay tags `v*` locales que disparen el workflow de publicación.
+  `ghcr.io/vytral/harly:0.1.0-beta.1` ya existe como índice OCI para
+  `linux/amd64` y `linux/arm64`, con digest
+  `sha256:3d6e43465b2ec073e23cb1d54a74797f3bc998ffe3b9e53344d9459506a05476`.
+  La inspección autenticada pasa, pero el token/pull anónimo aún devuelve
+  401/403: el paquete GHCR sigue privado. No se promueve `latest`.
 - [x] **SELFHOST-CLI-02 — E2E mínimo de `init` en un directorio vacío.**
-  `tooling/create-harly/test/init.e2e.test.mjs:23-90` ejecuta el bin compilado
+  `tooling/create-harly/test/init.e2e.test.mjs:23-119` ejecuta el bin compilado
   y valida siete artefactos, `.env` `0600`, secretos independientes, config y
   Compose. `tooling/create-harly/package.json:23` lo expone como `test` y
   `.github/workflows/ci.yml:225-234` lo ejecuta antes del smoke del tarball.
-  Resultado local: 1/1 verde.
+  Resultado local: 2/2 verdes, incluyendo el contrato no interactivo.
 - [ ] **SELFHOST-DATA-01 — Endurecer backup, restore y upgrade.**
-  Prototipos en `tooling/create-harly/src/index.ts:366-451`; no se promocionan
+  Prototipos en `tooling/create-harly/src/index.ts:648-733`; no se promocionan
   hasta cerrar el tracking destructivo independiente descrito abajo.
 - [ ] **SELFHOST-RC-01 — Instalación limpia y upgrade en una VPS.**
   Requiere SELFHOST-IMAGE-01 y SELFHOST-DATA-01. Debe validar los tres modos de
   proxy, persistencia, reinicio, HTTPS, doctor y upgrade N-1 → actual.
-- [ ] **SELFHOST-CLI-03 — Wizard guiado con `@clack/prompts`.**
-  Decisión aprobada: logo ASCII estático en inglés, `@clack/prompts` y color
-  liviano si aporta claridad. Se acepta conscientemente dejar de ser zero-deps.
-  Hoy sigue usando `node:readline/promises` en
-  `tooling/create-harly/src/index.ts:91-109`; no comenzar hasta desbloquear
-  SELFHOST-IMAGE-01.
+- [x] **SELFHOST-CLI-03 — Wizard guiado con `@clack/prompts`.**
+  Implementado en inglés con logo ASCII estático, selección de proxy/storage,
+  secreto S3 enmascarado, preflight con Docker/puertos/DNS/disco, detección de
+  CPU/RAM, perfiles `compact`/`standard`/`performance`, plan previo, confirmación
+  explícita y generación con progreso. `@clack/prompts` y `picocolors` son
+  dependencias runtime conscientes; la prueba TTY real generó configuración
+  válida sin lanzar contenedores.
 - [ ] **SELFHOST-RELEASE-01 — RC completo y publicación npm/GHCR.**
   Publicar semver y digest inmutable, ejecutar instalación limpia y upgrade,
   y promover exactamente el mismo digest sólo después de pasar el RC. El
@@ -361,11 +360,11 @@ mientras 1–3 no estén resueltos; el paso 2 está bloqueado por acceso externo
 ### Contrato vinculante del CLI
 
 - [ ] **SELFHOST-CLI-CONTRACT-01 — Modo no interactivo seguro.**
-  `launch` sin `--yes` y sin TTY debe terminar con exit code `2`; hoy retorna
-  silenciosamente en `tooling/create-harly/src/index.ts:326-337`. Ningún
-  secreto se aceptará por argumentos. Los secretos sólo podrán recibirse con
-  prompt enmascarado o mediante `--config`; antes de leer este archivo se
-  exigirán permisos restrictivos y nunca se imprimirán sus valores.
+  Cerrado parcialmente: `launch` sin `--yes` y sin TTY termina con exit code
+  `2`, cubierto por E2E; ningún secreto se acepta por argumentos y el secreto S3
+  interactivo queda enmascarado. Pendiente: implementar `--config`, exigir
+  permisos restrictivos antes de leerlo y comprobar que sus valores nunca se
+  imprimen.
 
 ### Tracking destructivo independiente
 
@@ -375,6 +374,6 @@ mientras 1–3 no estén resueltos; el paso 2 está bloqueado por acceso externo
   objetos; restaurar en destino vacío; ejecutar migraciones y doctor; comprobar
   conteos, hashes, owner, configuración y readiness. Repetir con fallo inyectado
   para verificar que servicios se reinician. Antes de ejecutar el escenario se
-  deben eliminar los valores DB hardcodeados (`src/index.ts:374,421`), verificar
-  checksum de todos los artefactos (`src/index.ts:380,416-418`), limpiar tmpdirs
+  deben eliminar los valores DB hardcodeados (`src/index.ts:656,703`), verificar
+  checksum de todos los artefactos (`src/index.ts:662,698-700`), limpiar tmpdirs
   y definir el contrato S3. Este item no se mezcla con UI ni publicación.
