@@ -4,6 +4,9 @@
   "version": "0.1.0",
   "description": "Open-source applicant tracking system for modern teams.",
   "license": "AGPL-3.0-only",
+  "engines": {
+    "node": ">=22"
+  },
   "scripts": {
     "dev": "pnpm db:up && pnpm db:migrate && DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo dev",
     "dev:web": "DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo dev",

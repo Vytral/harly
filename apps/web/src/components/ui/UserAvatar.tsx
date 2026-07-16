@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/avatar";
@@ -41,17 +41,15 @@ export function UserAvatar({
   const sourceKey = [src, ...fallbackSrcs]
     .filter((value): value is string => Boolean(value))
     .join("\u0000");
-  const sources = useMemo(
-    () => Array.from(new Set([src, ...fallbackSrcs].filter((value): value is string => Boolean(value)))),
-    [sourceKey],
+  const sources = Array.from(
+    new Set(
+      [src, ...fallbackSrcs].filter((value): value is string => Boolean(value)),
+    ),
   );
-  const [sourceIndex, setSourceIndex] = useState(0);
-
-  useEffect(() => {
-    setSourceIndex(0);
-  }, [sourceKey]);
-
-  const currentSrc = sources[sourceIndex] ?? null;
+  const [failedSources, setFailedSources] = useState<Set<string>>(() => new Set());
+  const currentSrc =
+    sources.find((candidate) => !failedSources.has(`${sourceKey}\u0000${candidate}`)) ??
+    null;
 
   return (
     <Avatar className={cn(sizeStyles[size], className)}>
@@ -61,7 +59,11 @@ export function UserAvatar({
           src={currentSrc}
           alt={name}
           loading={priority ? "eager" : "lazy"}
-          onError={() => setSourceIndex((index) => index + 1)}
+          onError={() =>
+            setFailedSources((failed) =>
+              new Set(failed).add(`${sourceKey}\u0000${currentSrc}`),
+            )
+          }
         />
       ) : null}
       <AvatarFallback className="overflow-hidden rounded-full">
