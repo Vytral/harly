@@ -7,6 +7,7 @@ import {
   isPortalEnabled,
 } from "@/lib/portal-auth";
 import { createLogger } from "@/lib/logger";
+import { createPortalOAuthState, PORTAL_OAUTH_STATE_COOKIE } from "@/lib/portal-oauth-state";
 
 const log = createLogger("api-portal-auth");
 
@@ -21,10 +22,7 @@ export async function GET(request: NextRequest) {
   const provider = searchParams.get("provider");
   const next = searchParams.get("next") ?? "/portal/dashboard";
 
-  // CSRF state encodes the intended redirect.
-  const state = Buffer.from(JSON.stringify({ next, ts: Date.now() })).toString(
-    "base64url",
-  );
+  const state = createPortalOAuthState(next);
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
@@ -32,19 +30,25 @@ export async function GET(request: NextRequest) {
     if (provider === "google") {
       const redirectUri = `${appUrl}/api/portal/auth/callback/google`;
       const url = await buildGoogleAuthUrl(redirectUri, state);
-      return NextResponse.redirect(url);
+      const response = NextResponse.redirect(url);
+      response.cookies.set(PORTAL_OAUTH_STATE_COOKIE, state, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/portal/auth/callback", maxAge: 60 * 10 });
+      return response;
     }
 
     if (provider === "github") {
       const redirectUri = `${appUrl}/api/portal/auth/callback/github`;
       const url = await buildGitHubAuthUrl(redirectUri, state);
-      return NextResponse.redirect(url);
+      const response = NextResponse.redirect(url);
+      response.cookies.set(PORTAL_OAUTH_STATE_COOKIE, state, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/portal/auth/callback", maxAge: 60 * 10 });
+      return response;
     }
 
     if (provider === "linkedin") {
       const redirectUri = `${appUrl}/api/portal/auth/callback/linkedin`;
       const url = await buildLinkedInAuthUrl(redirectUri, state);
-      return NextResponse.redirect(url);
+      const response = NextResponse.redirect(url);
+      response.cookies.set(PORTAL_OAUTH_STATE_COOKIE, state, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api/portal/auth/callback", maxAge: 60 * 10 });
+      return response;
     }
 
     return NextResponse.json({ error: "Unknown provider." }, { status: 400 });

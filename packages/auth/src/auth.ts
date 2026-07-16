@@ -28,6 +28,9 @@ const config = loadHarlyConfig(
 );
 const appUrl = config.HARLY_URL;
 const emailFrom = process.env.EMAIL_FROM ?? "Harly <noreply@harly.dev>";
+const allowConsoleAuthEmailFallback =
+  process.env.NODE_ENV !== "production" &&
+  process.env.AUTH_EMAIL_CONSOLE_FALLBACK === "true";
 
 if (
   process.env.NODE_ENV === "production" &&
@@ -39,22 +42,23 @@ if (
 }
 
 /**
- * Send an auth email via Resend, falling back to a server-console log when no
- * RESEND_API_KEY is configured (dev / fresh self-host) — the URL in the log
- * keeps the flow usable end-to-end.
+ * Send an auth email via Resend. A console fallback is available only through
+ * explicit opt-in in non-production local development.
  */
 async function sendAuthEmail(options: {
   to: string;
   subject: string;
   react: SendEmailOptions["react"];
-  /** Logged (and used as plain-text context) when no sender is configured. */
   fallbackLog: string;
 }) {
   const sender = createEmailSender();
 
   if (!sender) {
-    console.log(options.fallbackLog);
-    return;
+    if (allowConsoleAuthEmailFallback) {
+      console.log(options.fallbackLog);
+      return;
+    }
+    throw new Error("Email delivery is not configured.");
   }
 
   try {
@@ -65,7 +69,7 @@ async function sendAuthEmail(options: {
     });
   } catch (error) {
     console.error(`[Harly] Failed to send "${options.subject}":`, error);
-    console.log(options.fallbackLog);
+    throw new Error("Failed to send authentication email.");
   }
 }
 
@@ -73,8 +77,11 @@ async function sendMagicLinkEmail(email: string, url: string) {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey) {
-    console.log(`Magic link for ${email}: ${url}`);
-    return;
+    if (allowConsoleAuthEmailFallback) {
+      console.log(`Magic link for ${email}: ${url}`);
+      return;
+    }
+    throw new Error("Email delivery is not configured.");
   }
 
   try {
@@ -89,7 +96,7 @@ async function sendMagicLinkEmail(email: string, url: string) {
     });
   } catch (error) {
     console.error("[Harly] Failed to send magic link email:", error);
-    console.log(`Magic link for ${email}: ${url}`);
+    throw new Error("Failed to send magic link email.");
   }
 }
 

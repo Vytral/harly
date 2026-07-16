@@ -2,7 +2,7 @@
 
 import { cookies } from "next/headers";
 import { createElement } from "react";
-import { and, eq, asc } from "drizzle-orm";
+import { and, eq, asc, count, gt } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -15,6 +15,7 @@ import {
   jobStages,
   workspaceSettings,
   consentRecords,
+  candidatePortalMagicLinks,
 } from "@harly/db";
 import {
   PortalMagicLinkEmail,
@@ -56,6 +57,21 @@ export async function sendPortalMagicLinkAction(
   const workspaceId = await getPortalWorkspaceId();
   if (!workspaceId) {
     return { ok: false, error: "Workspace not found." };
+  }
+
+  // Limit delivery per recipient as well as token creation. Replacing an
+  // unconsumed token alone does not stop an unauthenticated caller from
+  // repeatedly sending branded mail.
+  const [recent] = await db
+    .select({ count: count() })
+    .from(candidatePortalMagicLinks)
+    .where(and(
+      eq(candidatePortalMagicLinks.workspaceId, workspaceId),
+      eq(candidatePortalMagicLinks.email, parsed.data),
+      gt(candidatePortalMagicLinks.createdAt, new Date(Date.now() - 15 * 60_000)),
+    ));
+  if ((recent?.count ?? 0) >= 3) {
+    return { ok: true };
   }
 
   try {

@@ -508,7 +508,7 @@ export const careerPageConfigSchema = z.object({
     buttonText: s(60),
   }),
   footer: z.object({
-    socials: z.array(z.object({ platform: z.enum(socialPlatforms), url: s(600) })).max(8),
+    socials: z.array(z.object({ platform: z.enum(socialPlatforms), url: s(600).refine((value) => !value || /^https?:\/\//i.test(value), "Social links must use http(s).") })).max(8),
     legalLinks: z.array(s(80)).max(10),
   }),
   theme: z.object({

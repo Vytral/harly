@@ -27,6 +27,14 @@ vi.mock("@harly/db", () => {
           return { returning: async () => [v] };
         },
       }),
+      delete: () => ({
+        where: async () => {
+          // The production predicate removes stale rows and an earlier pending
+          // nonce for this actor. This small in-memory adapter only needs to
+          // model the resulting bounded store.
+          mocks.store.length = 0;
+        },
+      }),
       select: () => ({
         from: () => ({ where: () => ({ limit: async () => [row()] }) }),
       }),

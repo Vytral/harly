@@ -1,44 +1,64 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { safeFetchImage } from "@/lib/ssrf";
+const mocks = vi.hoisted(() => ({ lookup: vi.fn() }));
 
-describe("safeFetchImage (SSRF guard)", () => {
-  const blocked = [
-    "http://localhost/logo.png",
-    "http://127.0.0.1/logo.png",
-    "http://10.0.0.5/logo.png",
-    "http://172.16.4.4/logo.png",
-    "http://192.168.1.1/logo.png",
-    "http://169.254.169.254/latest/meta-data/",
-    "http://[::1]/logo.png",
-    "file:///etc/passwd",
-    "ftp://example.com/logo.png",
-    "http://internal-host/logo.png",
-  ];
+vi.mock("node:dns/promises", () => ({ lookup: mocks.lookup }));
 
+import { isBlockedHost, resolveSafeAddress } from "./ssrf";
+
+describe("SSRF host filtering", () => {
   beforeEach(() => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("ok", { status: 200 })),
+    mocks.lookup.mockReset();
+  });
+
+  it.each([
+    "127.0.0.1",
+    "10.0.0.1",
+    "172.16.0.1",
+    "192.168.1.1",
+    "169.254.169.254",
+    "[::1]",
+    "localhost",
+  ])("blocks private destination %s", (host) => {
+    expect(isBlockedHost(host)).toBe(true);
+  });
+
+  it("allows a public IP", () => {
+    expect(isBlockedHost("8.8.8.8")).toBe(false);
+  });
+
+  it("rejects a hostname when any DNS answer is private", async () => {
+    mocks.lookup.mockResolvedValue([
+      { address: "93.184.216.34", family: 4 },
+      { address: "127.0.0.1", family: 4 },
+    ]);
+
+    await expect(resolveSafeAddress("attacker.example")).rejects.toThrow(
+      "blocked network",
     );
   });
 
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
+  it("pins a public DNS answer for the outbound connection", async () => {
+    mocks.lookup.mockResolvedValue([
+      { address: "93.184.216.34", family: 4 },
+    ]);
 
-  for (const url of blocked) {
-    it(`rejects ${url}`, async () => {
-      await expect(safeFetchImage(url)).rejects.toThrow();
+    await expect(resolveSafeAddress("public.example")).resolves.toEqual({
+      address: "93.184.216.34",
+      family: 4,
     });
-  }
-
-  it("allows a fetch for a public host (guard passes the request to fetch)", async () => {
-    const res = await safeFetchImage("http://example.com/logo.png");
-    expect(res).toBeInstanceOf(Response);
+    expect(mocks.lookup).toHaveBeenCalledWith("public.example", {
+      all: true,
+      verbatim: true,
+    });
   });
 
-  it("rejects malformed URLs", async () => {
-    await expect(safeFetchImage("not-a-url")).rejects.toThrow();
+  it("permits private DNS only for the explicit development opt-in", async () => {
+    mocks.lookup.mockResolvedValue([{ address: "127.0.0.1", family: 4 }]);
+
+    await expect(resolveSafeAddress("dev-webhook.example", true)).resolves.toEqual({
+      address: "127.0.0.1",
+      family: 4,
+    });
   });
 });

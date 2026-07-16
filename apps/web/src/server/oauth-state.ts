@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, lt, or } from "drizzle-orm";
 import { db, oauthStateNonces } from "@harly/db";
 
 import { getServerLogger } from "@/lib/logger";
@@ -53,6 +53,18 @@ export async function createOauthStateNonce(input: {
   provider: string;
 }): Promise<string> {
   const nonce = randomBytes(NONCE_BYTES).toString("hex");
+  // An install flow needs only one redeemable nonce per actor/workspace/provider.
+  // Replacing stale/pending rows prevents an authorized user from turning the
+  // install endpoint into an unbounded durable-write primitive.
+  await db.delete(oauthStateNonces).where(or(
+    lt(oauthStateNonces.expiresAt, new Date()),
+    and(
+      eq(oauthStateNonces.userId, input.userId),
+      eq(oauthStateNonces.workspaceId, input.workspaceId),
+      eq(oauthStateNonces.provider, input.provider),
+      isNull(oauthStateNonces.consumedAt),
+    ),
+  ));
   await db.insert(oauthStateNonces).values({
     userId: input.userId,
     workspaceId: input.workspaceId,
