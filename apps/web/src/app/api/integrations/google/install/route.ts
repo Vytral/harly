@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { createOAuth2Client } from "@/lib/gcal/config";
 import { createInstallState } from "@/server/oauth-state";
+import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 
 export const runtime = "nodejs";
 
@@ -32,6 +34,15 @@ export async function GET(req: NextRequest) {
       { status: 400 },
     );
   }
+  const context = await getWorkspaceContextOrNull();
+  if (!context || context.organization.id !== workspaceId) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  try {
+    await requirePermission("settings:edit");
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const oauth2Client = createOAuth2Client();
   if (!oauth2Client) {
@@ -43,7 +54,7 @@ export async function GET(req: NextRequest) {
 
   const state = await createInstallState({
     userId: session.user.id,
-    workspaceId: session.session.activeOrganizationId ?? workspaceId,
+    workspaceId: context.organization.id,
     provider: "google",
   });
 

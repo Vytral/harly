@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { storage } from "@/lib/storage";
 import { convertAndStoreLogo } from "@/lib/logo-convert";
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 
 export const runtime = "nodejs";
 
@@ -29,6 +30,11 @@ export async function POST(request: NextRequest) {
       { error: "No workspace available for this account." },
       { status: 403 },
     );
+  }
+  try {
+    await requirePermission("settings:edit");
+  } catch {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const body = (await request.json()) as ConvertLogoRequest;

@@ -2,6 +2,11 @@ import "server-only";
 
 import { isIP } from "node:net";
 import { lookup } from "node:dns/promises";
+import { request as httpRequest } from "node:http";
+import { request as httpsRequest } from "node:https";
+import { Readable } from "node:stream";
+
+const MAX_REDIRECTS = 5;
 
 /**
  * Reject URLs that point at the loopback interface, link-local / private
@@ -45,6 +50,66 @@ export function isBlockedHost(hostname: string): boolean {
   return false;
 }
 
+type ResolvedAddress = { address: string; family: 4 | 6 };
+
+/** Resolve once, validate every answer, then use the chosen address for TCP. */
+export async function resolveSafeAddress(
+  hostname: string,
+  allowPrivate = false,
+): Promise<ResolvedAddress> {
+  const bare = hostname.startsWith("[") && hostname.endsWith("]")
+    ? hostname.slice(1, -1)
+    : hostname;
+  if (isBlockedHost(bare) && !allowPrivate) {
+    throw new Error("URL points to a blocked host.");
+  }
+  const family = isIP(bare);
+  if (family === 4 || family === 6) return { address: bare, family };
+
+  const addresses = await lookup(bare, { all: true, verbatim: true });
+  if (addresses.length === 0 || (!allowPrivate && addresses.some(({ address }) => isBlockedHost(address)))) {
+    throw new Error("Hostname resolves to a blocked network.");
+  }
+  const address = addresses[0]!;
+  return { address: address.address, family: address.family as 4 | 6 };
+}
+
+/**
+ * Make one request using a lookup callback pinned to the already validated
+ * address. Native fetch performs its own DNS lookup after validation, which
+ * leaves a DNS-rebinding window; http(s).request lets us bind that lookup.
+ */
+async function fetchPinned(
+  url: URL,
+  init: RequestInit,
+  allowPrivate = false,
+): Promise<Response> {
+  const resolved = await resolveSafeAddress(url.hostname, allowPrivate);
+  const headers = Object.fromEntries(new Headers(init.headers).entries());
+  const body = init.body;
+  if (body != null && typeof body !== "string" && !(body instanceof Uint8Array)) {
+    throw new Error("Unsupported outbound request body.");
+  }
+
+  return new Promise<Response>((resolve, reject) => {
+    const request = url.protocol === "https:" ? httpsRequest : httpRequest;
+    const outgoing = request(url, {
+      method: init.method ?? "GET",
+      headers,
+      signal: init.signal ?? undefined,
+      lookup: (_hostname, _options, callback) => callback(null, resolved.address, resolved.family),
+    }, (incoming) => {
+      resolve(new Response(Readable.toWeb(incoming) as ReadableStream, {
+        status: incoming.statusCode ?? 502,
+        statusText: incoming.statusMessage ?? "",
+        headers: incoming.headers as HeadersInit,
+      }));
+    });
+    outgoing.once("error", reject);
+    outgoing.end(body);
+  });
+}
+
 export async function safeFetchImage(url: string): Promise<Response> {
   let parsed: URL;
   try {
@@ -57,17 +122,20 @@ export async function safeFetchImage(url: string): Promise<Response> {
     throw new Error("Only http(s) logo URLs are allowed.");
   }
 
-  if (isBlockedHost(parsed.hostname)) {
-    throw new Error("Logo URL points to a blocked host.");
+  for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
+    const response = await fetchPinned(parsed, {
+      // Bound the risk: no credentials, short timeout.
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get("location");
+    if (!location || redirects === MAX_REDIRECTS) throw new Error("Logo redirect limit exceeded.");
+    parsed = new URL(location, parsed);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      throw new Error("Only http(s) logo URLs are allowed.");
+    }
   }
-
-  const response = await fetch(parsed.toString(), {
-    redirect: "follow",
-    // Bound the risk: no credentials, short timeout.
-    signal: AbortSignal.timeout(10_000),
-  });
-
-  return response;
+  throw new Error("Logo redirect limit exceeded.");
 }
 
 export async function validateWebhookUrl(url: string): Promise<URL> {
@@ -85,15 +153,7 @@ export async function validateWebhookUrl(url: string): Promise<URL> {
   }
 
   const allowPrivate = process.env.HARLY_ALLOW_PRIVATE_WEBHOOKS === "true";
-  if (!allowPrivate && isBlockedHost(parsed.hostname)) {
-    throw new Error("Webhook URL points to a blocked host.");
-  }
-  if (!allowPrivate && !isIP(parsed.hostname)) {
-    const addresses = await lookup(parsed.hostname, { all: true, verbatim: true });
-    if (addresses.length === 0 || addresses.some(({ address }) => isBlockedHost(address))) {
-      throw new Error("Webhook hostname resolves to a blocked network.");
-    }
-  }
+  await resolveSafeAddress(parsed.hostname, allowPrivate);
   return parsed;
 }
 
@@ -103,11 +163,12 @@ export async function safeFetchWebhook(
   init: RequestInit,
 ): Promise<Response> {
   let current = await validateWebhookUrl(url);
-  for (let redirects = 0; redirects <= 5; redirects += 1) {
-    const response = await fetch(current, { ...init, redirect: "manual" });
+  const allowPrivate = process.env.HARLY_ALLOW_PRIVATE_WEBHOOKS === "true";
+  for (let redirects = 0; redirects <= MAX_REDIRECTS; redirects += 1) {
+    const response = await fetchPinned(current, init, allowPrivate);
     if (![301, 302, 303, 307, 308].includes(response.status)) return response;
     const location = response.headers.get("location");
-    if (!location || redirects === 5) {
+    if (!location || redirects === MAX_REDIRECTS) {
       throw new Error("Webhook redirect limit exceeded.");
     }
     current = await validateWebhookUrl(new URL(location, current).toString());

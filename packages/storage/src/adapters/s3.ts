@@ -44,6 +44,9 @@ export class S3Adapter implements StorageAdapter {
       Bucket: this.config.bucket,
       Key: params.key,
       ContentType: params.contentType,
+      // Signing the exact length makes S3 reject a larger PUT even if the
+      // caller bypasses the application's request schema.
+      ContentLength: params.contentLength,
     });
 
     const uploadUrl = await getSignedUrl(this.client, command, {

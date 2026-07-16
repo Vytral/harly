@@ -824,6 +824,10 @@ export async function removeWorkspaceMemberAction(
       return { success: false, error: "You cannot remove yourself." };
     }
 
+    if (isOwnerRole(targetMember.role) && !isOwnerRole(context.roleKey)) {
+      return { success: false, error: "Only an owner can remove an owner." };
+    }
+
     if (
       isOwnerRole(targetMember.role) &&
       (await countOwners(context.organization.id)) <= 1

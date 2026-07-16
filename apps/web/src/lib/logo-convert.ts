@@ -5,6 +5,29 @@ import { db, organization as organizationTable } from "@harly/db";
 import { safeFetchImage } from "@/lib/ssrf";
 
 export type ImageFormat = "png" | "jpeg" | "webp";
+const MAX_LOGO_DOWNLOAD_BYTES = 5 * 1024 * 1024;
+
+async function readLogoBody(response: Response): Promise<Buffer> {
+  const declaredLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(declaredLength) && declaredLength > MAX_LOGO_DOWNLOAD_BYTES) {
+    throw new Error("Logo is too large.");
+  }
+  const reader = response.body?.getReader();
+  if (!reader) return Buffer.alloc(0);
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_LOGO_DOWNLOAD_BYTES) {
+      await reader.cancel();
+      throw new Error("Logo is too large.");
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
 
 export type ConvertLogoOptions = {
   /** Target format for email compatibility */
@@ -102,7 +125,7 @@ export async function convertAndStoreLogo(input: {
 
   const contentType =
     response.headers.get("content-type") || "image/png";
-  const buffer = Buffer.from(await response.arrayBuffer());
+  const buffer = await readLogoBody(response);
 
   if (!needsEmailConversion(contentType)) {
     const format = getRecommendedEmailFormat(contentType);

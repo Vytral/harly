@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { Loader2 } from "lucide-react";
+import DOMPurify from "dompurify";
 
 type DocxViewerProps = {
   fileUrl: string;
@@ -30,7 +31,7 @@ export function DocxViewer({ fileUrl, className }: DocxViewerProps) {
       if (!response.ok) throw new Error("Failed to fetch document");
       const arrayBuffer = await response.arrayBuffer();
       const result = await mammoth.convertToHtml({ arrayBuffer });
-      setState({ status: "done", html: result.value });
+      setState({ status: "done", html: DOMPurify.sanitize(result.value) });
     } catch (err) {
       setState({
         status: "error",

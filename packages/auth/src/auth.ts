@@ -39,22 +39,18 @@ if (
 }
 
 /**
- * Send an auth email via Resend, falling back to a server-console log when no
- * RESEND_API_KEY is configured (dev / fresh self-host) — the URL in the log
- * keeps the flow usable end-to-end.
+ * Send an auth email via Resend. Authentication secrets must never be written
+ * to application logs, including when delivery is unavailable.
  */
 async function sendAuthEmail(options: {
   to: string;
   subject: string;
   react: SendEmailOptions["react"];
-  /** Logged (and used as plain-text context) when no sender is configured. */
-  fallbackLog: string;
 }) {
   const sender = createEmailSender();
 
   if (!sender) {
-    console.log(options.fallbackLog);
-    return;
+    throw new Error("Email delivery is not configured.");
   }
 
   try {
@@ -65,7 +61,7 @@ async function sendAuthEmail(options: {
     });
   } catch (error) {
     console.error(`[Harly] Failed to send "${options.subject}":`, error);
-    console.log(options.fallbackLog);
+    throw new Error("Failed to send authentication email.");
   }
 }
 
@@ -73,8 +69,7 @@ async function sendMagicLinkEmail(email: string, url: string) {
   const apiKey = process.env.RESEND_API_KEY;
 
   if (!apiKey) {
-    console.log(`Magic link for ${email}: ${url}`);
-    return;
+    throw new Error("Email delivery is not configured.");
   }
 
   try {
@@ -89,7 +84,7 @@ async function sendMagicLinkEmail(email: string, url: string) {
     });
   } catch (error) {
     console.error("[Harly] Failed to send magic link email:", error);
-    console.log(`Magic link for ${email}: ${url}`);
+    throw new Error("Failed to send magic link email.");
   }
 }
 
@@ -285,7 +280,6 @@ export const auth = betterAuth({
           userName: user.name || user.email,
           resetUrl: url,
         }),
-        fallbackLog: `Password reset for ${user.email}: ${url}`,
       });
     },
   },
@@ -313,7 +307,6 @@ export const auth = betterAuth({
           userName: user.name || user.email,
           verifyUrl: url,
         }),
-        fallbackLog: `Verification email for ${user.email}: ${url}`,
       });
     },
   },

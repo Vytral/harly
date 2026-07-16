@@ -11,21 +11,9 @@ import {
   getPortalWorkspaceId,
   isPortalEnabled,
 } from "@/lib/portal-auth";
+import { PORTAL_OAUTH_STATE_COOKIE, verifyPortalOAuthState } from "@/lib/portal-oauth-state";
 
 export const runtime = "nodejs";
-
-function parseState(state: string): { next: string } {
-  try {
-    const decoded = JSON.parse(Buffer.from(state, "base64url").toString());
-    const next =
-      typeof decoded.next === "string" && decoded.next.startsWith("/portal/")
-        ? decoded.next
-        : "/portal/dashboard";
-    return { next };
-  } catch {
-    return { next: "/portal/dashboard" };
-  }
-}
 
 export async function GET(request: NextRequest) {
   if (!(await isPortalEnabled())) {
@@ -35,7 +23,9 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state") ?? "";
-  const { next } = parseState(state);
+  const cookieStore = await cookies();
+  const next = verifyPortalOAuthState(cookieStore.get(PORTAL_OAUTH_STATE_COOKIE)?.value, state);
+  if (!next) redirect("/portal/login?error=oauth_state" as Route);
 
   if (!code) {
     redirect("/portal/login?error=oauth_denied" as Route);
@@ -59,7 +49,7 @@ export async function GET(request: NextRequest) {
     const ua = request.headers.get("user-agent") ?? undefined;
     const raw = await createPortalSession(candidateId, workspaceId!, ua);
 
-    const cookieStore = await cookies();
+    cookieStore.delete(PORTAL_OAUTH_STATE_COOKIE);
     cookieStore.set(PORTAL_SESSION_COOKIE, raw, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
