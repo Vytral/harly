@@ -12,6 +12,7 @@ import {
   jobStages,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 
 export type PipelineJobOption = {
   id: string;
@@ -41,6 +42,7 @@ export type PipelineApplication = {
   candidateLastName: string;
   candidateEmail: string;
   candidateAvatarUrl: string | null;
+  candidateAvatarFallbackSrcs: string[];
   source: string | null;
   status: "active" | "hired" | "rejected" | "withdrawn";
   appliedAt: string;
@@ -212,6 +214,7 @@ export async function getPipelineData(
         candidateLastName: candidates.lastName,
         candidateEmail: candidates.email,
         candidateAvatarUrl: candidates.avatarUrl,
+        candidateGithubUrl: candidates.githubUrl,
         source: applications.source,
         status: applications.status,
         appliedAt: applications.appliedAt,
@@ -253,8 +256,12 @@ export async function getPipelineData(
     kind: "ready",
     jobs: jobOptions,
     selectedJob,
-    applications: jobApplications.map((application) => ({
+    applications: jobApplications.map(({ candidateGithubUrl, ...application }) => ({
       ...application,
+      candidateAvatarFallbackSrcs: candidateAvatarFallbackSrcs(
+        application.candidateEmail,
+        candidateGithubUrl,
+      ),
       appliedAt: application.appliedAt.toISOString(),
       createdAt: application.createdAt.toISOString(),
       lastStageMovedAt: application.lastStageMovedAt

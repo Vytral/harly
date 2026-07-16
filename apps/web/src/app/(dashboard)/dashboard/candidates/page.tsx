@@ -13,7 +13,7 @@ import { listCandidates, listTrashedCandidates } from "@/features/candidates/dat
 import { TrashCandidateActions } from "@/features/candidates/TrashCandidateActions";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listJobOptions } from "@/features/jobs/data";
-import { gravatarUrl } from "@/lib/gravatar";
+import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 import { formatRelative, formatShort } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +46,8 @@ export default async function CandidatesPage({ searchParams }: CandidatesPagePro
       fullName: candidate.fullName,
       email: candidate.email,
       phone: candidate.phone,
-      avatarUrl: candidate.avatarUrl || (candidate.email ? gravatarUrl(candidate.email) : null),
+      avatarUrl: candidate.avatarUrl,
+      avatarFallbackSrcs: candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl),
       location: candidate.location,
       role: candidate.latestApplication?.jobTitle ?? null,
       department: candidate.latestApplication?.department ?? null,
@@ -86,7 +87,8 @@ export default async function CandidatesPage({ searchParams }: CandidatesPagePro
                 <span className="flex min-w-0 items-center gap-3">
                   <UserAvatar
                     name={candidate.fullName}
-                    src={candidate.email ? gravatarUrl(candidate.email) : null}
+                    src={null}
+                    fallbackSrcs={candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl)}
                     size="lg"
                   />
                   <span className="min-w-0">

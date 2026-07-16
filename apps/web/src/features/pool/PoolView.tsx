@@ -311,6 +311,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                     <UserAvatar
                       name={`${candidate.firstName} ${candidate.lastName}`}
                       src={candidate.avatarUrl}
+                      fallbackSrcs={candidate.avatarFallbackSrcs}
                       size="sm"
                     />
                     <div className="min-w-0">

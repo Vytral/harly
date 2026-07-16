@@ -259,7 +259,12 @@ export function PipelineList({
                   />
                 </div>
                 <div className="flex min-w-0 items-center gap-3">
-                  <UserAvatar name={fullName} src={a.candidateAvatarUrl} size="sm" />
+                  <UserAvatar
+                    name={fullName}
+                    src={a.candidateAvatarUrl}
+                    fallbackSrcs={a.candidateAvatarFallbackSrcs}
+                    size="sm"
+                  />
                   <div className="min-w-0">
                     <p className="truncate font-medium text-foreground group-hover:text-primary">
                       {fullName}

@@ -30,7 +30,7 @@ export function CareerFooter({
       <div className="flex flex-col items-center justify-between gap-6 sm:flex-row">
         {/* Powered by Harly */}
         <a
-          href="https://github.com/vytral/harly"
+          href="https://github.com/Vytral/harly"
           target="_blank"
           rel="noopener noreferrer"
           className="group inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200"

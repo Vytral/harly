@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { db, user as userTable, workspaceSettings } from "@harly/db";
+import { db, organization, user as userTable, workspaceSettings } from "@harly/db";
 
 import { auth } from "@/lib/auth";
 import { requirePermission } from "@/features/workspaces/permissions-server";
@@ -39,6 +39,12 @@ async function patchWorkspaceSettings(
 }
 
 const brandingSchema = z.object({
+  logoUrl: z
+    .string()
+    .trim()
+    .max(2048)
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : null)),
   tagline: z.string().trim().max(120).optional(),
   primaryColor: z
     .string()
@@ -47,22 +53,28 @@ const brandingSchema = z.object({
     .optional(),
 });
 
-/** Owner step: careers-page branding (color + tagline). Logo is handled by the
- *  existing storage upload flow and saved separately. */
+/** Owner step: careers-page branding — logo, accent color and tagline. The logo
+ *  is saved onto the Better Auth `organization` (same field the Settings →
+ *  Company flow writes), color + tagline onto the workspace_settings satellite. */
 export async function saveOnboardingBrandingAction(input: {
+  logoUrl?: string;
   tagline?: string;
   primaryColor?: string;
 }): Promise<OnboardingResult> {
   try {
-    const { organization } = await requirePermission("settings:edit");
+    const { organization: org } = await requirePermission("settings:edit");
     const parsed = brandingSchema.safeParse(input);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
     }
-    await patchWorkspaceSettings(organization.id, {
+    await patchWorkspaceSettings(org.id, {
       tagline: parsed.data.tagline ?? null,
       primaryColor: parsed.data.primaryColor ?? null,
     });
+    await db
+      .update(organization)
+      .set({ logo: parsed.data.logoUrl })
+      .where(eq(organization.id, org.id));
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");
@@ -71,25 +83,6 @@ export async function saveOnboardingBrandingAction(input: {
 }
 
 /** Owner step: acquisition source ("how did you hear about us"). */
-export async function saveAcquisitionAction(
-  source: string,
-): Promise<OnboardingResult> {
-  try {
-    const parsed = z.string().trim().min(1).max(60).safeParse(source);
-    if (!parsed.success) {
-      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
-    }
-    const { organization } = await requirePermission("settings:edit");
-    await patchWorkspaceSettings(organization.id, {
-      acquisitionSource: parsed.data,
-    });
-    return { ok: true };
-  } catch (error) {
-    log.error(error, "onboarding action failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
-  }
-}
-
 /** Any user: their own job title (shown on profile + hiring team views). */
 export async function saveUserRoleAction(
   jobTitle: string,
@@ -111,22 +104,46 @@ export async function saveUserRoleAction(
   }
 }
 
-/** Any user: the self-described role chosen during onboarding. */
-export async function saveOnboardingRoleAction(
-  role: string,
-): Promise<OnboardingResult> {
+const aboutSchema = z.object({
+  role: z
+    .enum(["founder", "recruiter", "hr_manager", "hiring_manager", "other"])
+    .optional(),
+  jobTitle: z.string().trim().max(80).optional(),
+  source: z.string().trim().max(60).optional(),
+});
+
+/**
+ * Owner step "About you": persists the self-described role (structured enum,
+ * on the user) + job title (on the user) + acquisition source (on the
+ * workspace) in one call. Every field is optional — the step is skippable — but
+ * failures surface instead of being swallowed, so a save that silently drops
+ * data can't happen.
+ */
+export async function saveOnboardingAboutAction(input: {
+  role?: string;
+  jobTitle?: string;
+  source?: string;
+}): Promise<OnboardingResult> {
   try {
-    const parsed = z
-      .enum(["founder", "recruiter", "hr_manager", "hiring_manager", "other"])
-      .safeParse(role);
+    const parsed = aboutSchema.safeParse(input);
     if (!parsed.success) {
-      return { ok: false, error: "Invalid role." };
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
     }
-    const session = await requireSession();
-    await db
-      .update(userTable)
-      .set({ onboardingRole: parsed.data })
-      .where(eq(userTable.id, session.user.id));
+    const { role, jobTitle, source } = parsed.data;
+    const { organization: org, user } = await requirePermission("settings:edit");
+
+    if (role || jobTitle) {
+      await db
+        .update(userTable)
+        .set({
+          ...(role ? { onboardingRole: role } : {}),
+          ...(jobTitle ? { jobTitle } : {}),
+        })
+        .where(eq(userTable.id, user.id));
+    }
+    if (source) {
+      await patchWorkspaceSettings(org.id, { acquisitionSource: source });
+    }
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");

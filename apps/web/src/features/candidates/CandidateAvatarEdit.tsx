@@ -52,7 +52,7 @@ type CandidateAvatarEditProps = {
   workspaceId: string;
   name: string;
   avatarUrl: string | null;
-  fallbackSrc?: string | null;
+  fallbackSrcs?: string[];
   className?: string;
 };
 
@@ -61,7 +61,7 @@ export function CandidateAvatarEdit({
   workspaceId,
   name,
   avatarUrl,
-  fallbackSrc,
+  fallbackSrcs = [],
   className,
 }: CandidateAvatarEditProps) {
   const router = useRouter();
@@ -71,7 +71,7 @@ export function CandidateAvatarEdit({
   const [cropOpen, setCropOpen] = useState(false);
   const [localAvatar, setLocalAvatar] = useState(avatarUrl);
 
-  const displaySrc = localAvatar || fallbackSrc || null;
+  const displaySrc = localAvatar || fallbackSrcs[0] || null;
 
   function handleFileSelect(file: File | null) {
     if (!file) return;
@@ -141,7 +141,8 @@ export function CandidateAvatarEdit({
         >
           <UserAvatar
             name={name}
-            src={displaySrc}
+            src={localAvatar}
+            fallbackSrcs={fallbackSrcs}
             size="xl"
             className="ring-4 ring-card"
           />

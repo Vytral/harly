@@ -35,9 +35,8 @@ export default async function OnboardingLayout({
             unoptimized
           />
         ) : (
-          <span className="font-display text-2xl tracking-tight text-pine">
-            Harly
-          </span>
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src="/harly-full-black.svg" alt="Harly" className="h-8 w-auto" />
         )}
       </header>
 

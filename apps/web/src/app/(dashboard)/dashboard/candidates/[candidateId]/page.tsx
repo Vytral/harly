@@ -39,7 +39,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
-import { gravatarUrl } from "@/lib/gravatar";
+import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 
 export const dynamic = "force-dynamic";
 
@@ -106,7 +106,7 @@ export default async function CandidateDetailPage({
   const fullName = `${candidate.firstName} ${candidate.lastName}`;
   const latestResume = files[0] ?? null;
   const latestApplication = applications[0] ?? null;
-  const avatarSrc = candidate.email ? gravatarUrl(candidate.email) : null;
+  const avatarFallbackSrcs = candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl);
 
   const [suspectCandidates, nextStage] = await Promise.all([
     // Fuzzy duplicate check (heuristic only, no AI at load time)
@@ -211,7 +211,7 @@ export default async function CandidateDetailPage({
           <CandidateStickyHeader
             name={fullName}
             avatarUrl={candidate.avatarUrl ?? null}
-            fallbackSrc={avatarSrc}
+            fallbackSrcs={avatarFallbackSrcs}
             stageName={latestApplication?.currentStageName ?? null}
             phone={candidate.phone}
             actions={
@@ -244,7 +244,7 @@ export default async function CandidateDetailPage({
                   workspaceId={workspaceId}
                   name={fullName}
                   avatarUrl={candidate.avatarUrl ?? null}
-                  fallbackSrc={avatarSrc}
+                  fallbackSrcs={avatarFallbackSrcs}
                 />
                 <div className="min-w-0 space-y-2.5">
                   <div>

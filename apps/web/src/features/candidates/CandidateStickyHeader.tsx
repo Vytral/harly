@@ -10,7 +10,7 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 type CandidateStickyHeaderProps = {
   name: string;
   avatarUrl: string | null;
-  fallbackSrc: string | null;
+  fallbackSrcs?: string[];
   stageName: string | null;
   phone: string | null;
   actions: ReactNode;
@@ -20,7 +20,7 @@ type CandidateStickyHeaderProps = {
 export function CandidateStickyHeader({
   name,
   avatarUrl,
-  fallbackSrc,
+  fallbackSrcs,
   stageName,
   phone,
   actions,
@@ -80,7 +80,7 @@ export function CandidateStickyHeader({
             pointerEvents: pinned ? "auto" : "none",
           }}
         >
-            <UserAvatar name={name} src={avatarUrl ?? fallbackSrc} size="sm" />
+            <UserAvatar name={name} src={avatarUrl} fallbackSrcs={fallbackSrcs} size="sm" />
 
             <div className="flex min-w-0 items-center gap-2">
               <span className="truncate text-sm font-semibold">{name}</span>

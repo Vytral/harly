@@ -9,10 +9,11 @@ import {
   ArrowDownRightIcon,
   ArrowUpRightIcon,
   BriefcaseIcon,
-  ChartBarIcon,
+  ChartLineUpDuotoneIcon,
+  ClockCountdownDuotoneIcon,
   ClockIcon,
-  GitBranchIcon,
-  TrayIcon,
+  FunnelDuotoneIcon,
+  TargetDuotoneIcon,
   TrendUpIcon,
   UsersIcon,
 } from "@/components/ui/icons/phosphor";
@@ -126,12 +127,14 @@ function CardHead({
   subtitle: string;
 }) {
   return (
-    <div>
-      <h2 className="flex items-center gap-2 text-sm font-semibold">
-        <Icon className="size-4 text-muted-foreground" />
-        {title}
-      </h2>
-      <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
+    <div className="flex items-start gap-3">
+      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
+        <Icon className="size-5" />
+      </span>
+      <div className="min-w-0">
+        <h2 className="text-sm font-semibold">{title}</h2>
+        <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
+      </div>
     </div>
   );
 }
@@ -238,7 +241,7 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
         transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.15 }}
       >
         <Tile className="gap-5 p-5">
-          <CardHead icon={ChartBarIcon} title="Hiring trend" subtitle="Applications received vs. hires made, by month." />
+          <CardHead icon={ChartLineUpDuotoneIcon} title="Hiring trend" subtitle="Applications received vs. hires made, by month." />
           <TrendChart series={trendSeries} />
         </Tile>
       </motion.div>
@@ -250,16 +253,16 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
         className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
       >
         <Tile className="gap-5 p-5">
-          <CardHead icon={GitBranchIcon} title="Pipeline funnel" subtitle="Stage reach and step-to-step conversion. Hover a stage." />
+          <CardHead icon={FunnelDuotoneIcon} title="Pipeline funnel" subtitle="Stage reach and step-to-step conversion. Hover a stage." />
           {data.funnel[0]?.count ? (
             <FunnelChart stages={data.funnel} />
           ) : (
-            <EmptyPanel icon={GitBranchIcon} text="Funnel data appears once candidates move through stages." />
+            <EmptyPanel icon={FunnelDuotoneIcon} text="Funnel data appears once candidates move through stages." />
           )}
         </Tile>
 
         <Tile className="gap-5 p-5">
-          <CardHead icon={ClockIcon} title="Time to hire" subtitle="How long filled roles took, from apply to hire." />
+          <CardHead icon={ClockCountdownDuotoneIcon} title="Time to hire" subtitle="How long filled roles took, from apply to hire." />
           <Histogram data={data.timeToHire} />
         </Tile>
       </motion.section>
@@ -270,7 +273,7 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
         transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.25 }}
       >
         <Tile className="gap-5 p-5">
-          <CardHead icon={TrayIcon} title="Source effectiveness" subtitle="Volume and hire conversion by application source." />
+          <CardHead icon={TargetDuotoneIcon} title="Source effectiveness" subtitle="Volume and hire conversion by application source." />
           {sourceData.length ? (
             <SourceBars sources={sourceData} />
           ) : (

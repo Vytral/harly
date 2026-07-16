@@ -1,4 +1,5 @@
 export type ImportFieldKey =
+  | "fullName"
   | "firstName"
   | "lastName"
   | "email"
@@ -15,7 +16,10 @@ export type ImportField = {
   required: boolean;
 };
 
+export type ImportMapping = Partial<Record<ImportFieldKey, number>>;
+
 export const IMPORT_FIELDS: ImportField[] = [
+  { key: "fullName", label: "Full name", required: false },
   { key: "firstName", label: "First name", required: true },
   { key: "lastName", label: "Last name", required: true },
   { key: "email", label: "Email", required: true },
@@ -28,6 +32,7 @@ export const IMPORT_FIELDS: ImportField[] = [
 ];
 
 const HEADER_ALIASES: Record<ImportFieldKey, string[]> = {
+  fullName: ["full name", "name", "candidate name", "candidate"],
   firstName: ["first name", "firstname", "first", "given name"],
   lastName: ["last name", "lastname", "last", "surname", "family name"],
   email: ["email", "email address", "e-mail", "e mail"],
@@ -50,9 +55,9 @@ function normalizeHeader(header: string): string {
 /** Best-effort header → column index mapping for the import field set. */
 export function autoMapColumns(
   headers: string[],
-): Partial<Record<ImportFieldKey, number>> {
+): ImportMapping {
   const normalized = headers.map(normalizeHeader);
-  const mapping: Partial<Record<ImportFieldKey, number>> = {};
+  const mapping: ImportMapping = {};
 
   for (const field of IMPORT_FIELDS) {
     const index = normalized.findIndex((header) =>

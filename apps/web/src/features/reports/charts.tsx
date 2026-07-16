@@ -9,14 +9,36 @@
  * HTML tooltips layered over the vector.
  */
 
-import { useId, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { cn } from "@/lib/utils";
+import { SourceLogo } from "./brand-logos";
 
-const EASE_OUT = [0.16, 1, 0.3, 1] as const;
+const EASE_OUT = [0.23, 1, 0.32, 1] as const;
 
 // ── shared helpers ──────────────────────────────────────────────────────────
+
+/**
+ * Measure a container's width so SVG charts render at true pixel dimensions
+ * instead of scaling a fixed viewBox to fill the column (which magnified text
+ * and strokes). Returns a ref to attach and the current width in px.
+ */
+function useMeasuredWidth(fallback = 640) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width;
+      if (w && w > 0) setWidth(w);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, width] as const;
+}
 
 /** Round a max up to a friendly axis ceiling so gridlines read cleanly. */
 function niceMax(value: number): number {
@@ -50,12 +72,12 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
     Math.max(0, ...visible.flatMap((s) => s.points.map((p) => p.value))),
   );
 
-  const W = 760;
+  const [wrapRef, W] = useMeasuredWidth(760);
   const H = 240;
-  const padL = 36;
-  const padR = 16;
+  const padL = 32;
+  const padR = 12;
   const padT = 16;
-  const padB = 30;
+  const padB = 28;
   const innerW = W - padL - padR;
   const innerH = H - padT - padB;
   const n = labels.length;
@@ -106,10 +128,12 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
         </div>
       </div>
 
-      <div className="relative">
+      <div ref={wrapRef} className="relative">
         <svg
           viewBox={`0 0 ${W} ${H}`}
-          className="h-auto w-full select-none"
+          width={W}
+          height={H}
+          className="block w-full select-none"
           role="img"
           aria-label="Hiring trend over time"
           onMouseLeave={() => setActive(Math.max(n - 1, 0))}
@@ -236,13 +260,7 @@ export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
   const shouldReduceMotion = useReducedMotion();
   const [selected, setSelected] = useState(0);
   const top = stages[0]?.count ?? 0;
-  const W = 360;
-  const bandH = 54;
-  const gap = 10;
-  const H = stages.length * bandH + (stages.length - 1) * gap;
-  const minW = 40;
-  const widthOf = (count: number) =>
-    top > 0 ? Math.max((count / top) * W, minW) : minW;
+  const minPct = 14; // keep the narrowest band tappable/legible
 
   const sel = stages[selected];
   const prev = selected > 0 ? stages[selected - 1] : null;
@@ -251,52 +269,60 @@ export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
 
   return (
     <div className="space-y-4">
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-auto w-full" role="img" aria-label="Hiring funnel by stage">
+      <div className="mx-auto w-full max-w-md space-y-1.5">
         {stages.map((stage, i) => {
-          const wTop = widthOf(stage.count);
-          const wBottom = widthOf(stages[i + 1]?.count ?? stage.count);
-          const top0 = i * (bandH + gap);
-          const x0 = (W - wTop) / 2;
-          const x1 = (W + wTop) / 2;
-          const xb0 = (W - wBottom) / 2;
-          const xb1 = (W + wBottom) / 2;
-          const isLast = i === stages.length - 1;
-          const path = isLast
-            ? `M ${x0} ${top0} L ${x1} ${top0} L ${x1} ${top0 + bandH} L ${x0} ${top0 + bandH} Z`
-            : `M ${x0} ${top0} L ${x1} ${top0} L ${xb1} ${top0 + bandH} L ${xb0} ${top0 + bandH} Z`;
           const isSel = i === selected;
+          const barPct =
+            top > 0 ? Math.max((stage.count / top) * 100, minPct) : minPct;
+          // Fade colour with depth so the funnel reads top-to-bottom.
+          const depth = stages.length > 1 ? i / (stages.length - 1) : 0;
+          const prevStage = i > 0 ? stages[i - 1] : null;
+          const drop =
+            prevStage && prevStage.count > 0
+              ? Math.round((stage.count / prevStage.count) * 100)
+              : null;
           return (
-            <motion.g
+            <motion.div
               key={stage.name}
-              tabIndex={0}
-              role="button"
-              aria-label={`${stage.name}: ${stage.count} (${stage.pct}% of top)`}
-              className="cursor-pointer outline-none focus-visible:[&>path]:stroke-primary focus-visible:[&>path]:[stroke-width:3px]"
-              onMouseEnter={() => setSelected(i)}
-              onFocus={() => setSelected(i)}
-              onClick={() => setSelected(i)}
-              initial={shouldReduceMotion ? false : { opacity: 0, y: -8 }}
+              initial={shouldReduceMotion ? false : { opacity: 0, y: -6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: EASE_OUT, delay: i * 0.06 }}
+              transition={{ duration: 0.28, ease: EASE_OUT, delay: i * 0.05 }}
             >
-              <path
-                d={path}
-                fill="var(--chart-1)"
-                fillOpacity={isSel ? 1 : 0.9}
-                stroke={isSel ? "var(--chart-1)" : "transparent"}
-                strokeWidth={2}
-                className="transition-[fill-opacity]"
-              />
-              <text x={W / 2} y={top0 + bandH / 2 - 3} textAnchor="middle" className="fill-[var(--primary-foreground)] text-[13px] font-semibold">
-                {stage.name}
-              </text>
-              <text x={W / 2} y={top0 + bandH / 2 + 13} textAnchor="middle" className="fill-[var(--primary-foreground)] text-[11px] tabular-nums opacity-90">
-                {fmt.format(stage.count)} · {stage.pct}%
-              </text>
-            </motion.g>
+              {drop != null ? (
+                <div className="flex items-center justify-center py-0.5">
+                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
+                    {drop}%
+                  </span>
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onMouseEnter={() => setSelected(i)}
+                onFocus={() => setSelected(i)}
+                onClick={() => setSelected(i)}
+                aria-label={`${stage.name}: ${stage.count} (${stage.pct}% of top)`}
+                aria-pressed={isSel}
+                className="group flex w-full items-center justify-center outline-none"
+              >
+                <span
+                  className="flex h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 text-[var(--primary-foreground)] transition-[width,opacity,transform] duration-300 group-active:scale-[0.98] group-focus-visible:ring-2 group-focus-visible:ring-primary group-focus-visible:ring-offset-1 group-focus-visible:ring-offset-card"
+                  style={{
+                    width: `${barPct}%`,
+                    minWidth: "fit-content",
+                    backgroundColor: "var(--chart-1)",
+                    opacity: isSel ? 1 : 0.92 - depth * 0.28,
+                  }}
+                >
+                  <span className="text-[13px] font-semibold">{stage.name}</span>
+                  <span className="text-[11px] tabular-nums opacity-90">
+                    {fmt.format(stage.count)} · {stage.pct}%
+                  </span>
+                </span>
+              </button>
+            </motion.div>
           );
         })}
-      </svg>
+      </div>
 
       <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border/60 bg-muted/20 p-3">
         <Stat label="Stage" value={sel?.name ?? "—"} />
@@ -346,7 +372,7 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
               onClick={() => setSort(key)}
               aria-pressed={sort === key}
               className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium capitalize transition",
+                "rounded-full px-3 py-1 text-xs font-medium capitalize transition active:scale-[0.97]",
                 sort === key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
               )}
             >
@@ -364,9 +390,14 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
             initial={shouldReduceMotion ? false : { opacity: 0, x: -6 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.25, ease: EASE_OUT, delay: i * 0.04 }}
-            className="grid grid-cols-[minmax(96px,150px)_1fr_auto] items-center gap-4"
+            className="grid grid-cols-[minmax(110px,160px)_1fr_auto] items-center gap-3 sm:gap-4"
           >
-            <span className="truncate text-sm font-medium">{row.label}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
+                <SourceLogo source={row.source} className="size-4" />
+              </span>
+              <span className="truncate text-sm font-medium">{row.label}</span>
+            </span>
             <span className="relative h-7 overflow-hidden rounded-lg bg-muted">
               <span
                 className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-300"

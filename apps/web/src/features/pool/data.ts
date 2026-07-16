@@ -10,6 +10,7 @@ import {
   jobs,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 
 export type PoolCandidate = {
   poolEntryId: string;
@@ -18,6 +19,7 @@ export type PoolCandidate = {
   lastName: string;
   email: string;
   avatarUrl: string | null;
+  avatarFallbackSrcs: string[];
   headline: string | null;
   location: string | null;
   skills: string[];
@@ -57,6 +59,7 @@ export async function listPoolCandidates(filters?: {
       lastName: candidates.lastName,
       email: candidates.email,
       avatarUrl: candidates.avatarUrl,
+      githubUrl: candidates.githubUrl,
       headline: candidates.headline,
       location: candidates.location,
       skills: candidates.skills,
@@ -125,6 +128,7 @@ export async function listPoolCandidates(filters?: {
     lastName: row.lastName,
     email: row.email,
     avatarUrl: row.avatarUrl,
+    avatarFallbackSrcs: candidateAvatarFallbackSrcs(row.email, row.githubUrl),
     headline: row.headline,
     location: row.location,
     skills: (row.skills as string[]) ?? [],

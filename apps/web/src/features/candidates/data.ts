@@ -51,6 +51,7 @@ export type CandidateListItem = {
   phone: string | null;
   location: string | null;
   avatarUrl: string | null;
+  githubUrl: string | null;
   applicationCount: number;
   latestApplication: {
     applicationId: string;
@@ -116,6 +117,8 @@ export type TalentPoolEntry = {
   candidateId: string;
   fullName: string;
   email: string | null;
+  avatarUrl: string | null;
+  githubUrl: string | null;
   headline: string | null;
   currentStageName: string | null;
   evaluation: {
@@ -151,6 +154,7 @@ export async function listCandidates() {
       phone: candidates.phone,
       location: sql<string | null>`coalesce(${candidates.address}, ${candidates.location})`,
       avatarUrl: candidates.avatarUrl,
+      githubUrl: candidates.githubUrl,
       candidateCreatedAt: candidates.createdAt,
       candidateUpdatedAt: candidates.updatedAt,
       applicationId: applications.id,
@@ -201,6 +205,7 @@ export async function listCandidates() {
         phone: row.phone,
         location: row.location,
         avatarUrl: row.avatarUrl,
+        githubUrl: row.githubUrl,
         applicationCount: 0,
         latestApplication: null,
         createdAt: row.candidateCreatedAt,
@@ -258,6 +263,7 @@ export async function listCandidates() {
       phone: candidate.phone,
       location: candidate.location,
       avatarUrl: candidate.avatarUrl,
+      githubUrl: candidate.githubUrl,
       updatedAt: candidate.updatedAt,
       applicationCount: candidate.applicationCount,
       latestApplication: candidate.latestApplication,
@@ -818,6 +824,7 @@ export type TrashedCandidateItem = {
   id: string;
   fullName: string;
   email: string;
+  githubUrl: string | null;
   deletedAt: Date;
 };
 
@@ -831,6 +838,7 @@ export async function listTrashedCandidates(): Promise<TrashedCandidateItem[]> {
       firstName: candidates.firstName,
       lastName: candidates.lastName,
       email: candidates.email,
+      githubUrl: candidates.githubUrl,
       deletedAt: candidates.deletedAt,
     })
     .from(candidates)
@@ -843,6 +851,7 @@ export async function listTrashedCandidates(): Promise<TrashedCandidateItem[]> {
     id: row.id,
     fullName: `${row.firstName} ${row.lastName}`,
     email: row.email,
+    githubUrl: row.githubUrl,
     deletedAt: row.deletedAt as Date,
   }));
 }

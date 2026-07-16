@@ -174,7 +174,12 @@ export function CandidateCard({
             aria-label={`Select ${fullName}`}
           />
         </span>
-        <UserAvatar name={fullName} src={application.candidateAvatarUrl} size="sm" />
+        <UserAvatar
+          name={fullName}
+          src={application.candidateAvatarUrl}
+          fallbackSrcs={application.candidateAvatarFallbackSrcs}
+          size="sm"
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-tight">{fullName}</p>
           <p className="truncate text-[11px] text-muted-foreground">
@@ -248,7 +253,12 @@ export function CandidateCardOverlay({ application }: CandidateCardOverlayProps)
       )}
     >
       <div className="flex items-center gap-2">
-        <UserAvatar name={fullName} src={application.candidateAvatarUrl} size="sm" />
+        <UserAvatar
+          name={fullName}
+          src={application.candidateAvatarUrl}
+          fallbackSrcs={application.candidateAvatarFallbackSrcs}
+          size="sm"
+        />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-semibold leading-tight">{fullName}</p>
           <p className="truncate text-[11px] text-muted-foreground">

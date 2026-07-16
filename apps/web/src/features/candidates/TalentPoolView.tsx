@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { gravatarUrl } from "@/lib/gravatar";
+import { githubAvatarUrl } from "@/lib/github";
 import { cn } from "@/lib/utils";
 
 const RECOMMENDATION_META = {
@@ -191,7 +192,11 @@ export function TalentPoolView({
                 >
                   <UserAvatar
                     name={entry.fullName}
-                    src={entry.email ? gravatarUrl(entry.email) : null}
+                    src={entry.avatarUrl}
+                    fallbackSrcs={[
+                      entry.email ? gravatarUrl(entry.email) : null,
+                      githubAvatarUrl(entry.githubUrl),
+                    ]}
                     size="lg"
                   />
                   <span className="min-w-0">

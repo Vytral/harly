@@ -170,7 +170,7 @@ export default async function LegalPage({ params }: LegalPageProps) {
             <span>
               Powered by{" "}
               <a
-                href="https://github.com/vytral/harly"
+                href="https://github.com/Vytral/harly"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="font-medium text-foreground transition hover:text-pine"

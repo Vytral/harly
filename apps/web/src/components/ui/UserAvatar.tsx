@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useMemo, useState } from "react";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getInitials } from "@/lib/avatar";
 import { cn } from "@/lib/utils";
@@ -6,6 +10,7 @@ import { Avatar as Seedface } from "seedface/react";
 type UserAvatarProps = {
   name: string;
   src?: string | null;
+  fallbackSrcs?: Array<string | null | undefined>;
   size?: "sm" | "md" | "lg" | "xl";
   className?: string;
   priority?: boolean;
@@ -28,17 +33,35 @@ const seedfacePixels: Record<NonNullable<UserAvatarProps["size"]>, number> = {
 export function UserAvatar({
   name,
   src,
+  fallbackSrcs = [],
   size = "md",
   className,
   priority,
 }: UserAvatarProps) {
+  const sourceKey = [src, ...fallbackSrcs]
+    .filter((value): value is string => Boolean(value))
+    .join("\u0000");
+  const sources = useMemo(
+    () => Array.from(new Set([src, ...fallbackSrcs].filter((value): value is string => Boolean(value)))),
+    [sourceKey],
+  );
+  const [sourceIndex, setSourceIndex] = useState(0);
+
+  useEffect(() => {
+    setSourceIndex(0);
+  }, [sourceKey]);
+
+  const currentSrc = sources[sourceIndex] ?? null;
+
   return (
     <Avatar className={cn(sizeStyles[size], className)}>
-      {src ? (
+      {currentSrc ? (
         <AvatarImage
-          src={src}
+          key={currentSrc}
+          src={currentSrc}
           alt={name}
           loading={priority ? "eager" : "lazy"}
+          onError={() => setSourceIndex((index) => index + 1)}
         />
       ) : null}
       <AvatarFallback className="overflow-hidden rounded-full">

@@ -37,7 +37,12 @@ export function CandidatesNeedingReview({
                   href={`/dashboard/candidates/${c.candidateId}` as Route}
                   className="group flex items-center gap-3 rounded-xl px-3 py-3 transition hover:bg-muted/60"
                 >
-                  <UserAvatar name={c.name} src={c.avatarUrl} size="sm" />
+                  <UserAvatar
+                    name={c.name}
+                    src={c.avatarUrl}
+                    fallbackSrcs={c.avatarFallbackSrcs}
+                    size="sm"
+                  />
                   <div className="min-w-0 flex-[1.3]">
                     <p className="truncate text-sm font-medium" title={c.name}>{c.name}</p>
                     <p className="truncate text-xs text-muted-foreground" title={c.job}>{c.job}</p>

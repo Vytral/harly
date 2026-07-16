@@ -54,6 +54,7 @@ export type CandidateRow = {
   phone: string | null;
   location: string | null;
   avatarUrl: string | null;
+  avatarFallbackSrcs: string[];
   role: string | null;
   department: string | null;
   stage: string | null;
@@ -519,7 +520,12 @@ export function CandidatesTable({
 
                   {/* Identity */}
                   <div className="flex min-w-0 items-center gap-3">
-                    <UserAvatar name={row.fullName} src={row.avatarUrl} size="lg" />
+                    <UserAvatar
+                      name={row.fullName}
+                      src={row.avatarUrl}
+                      fallbackSrcs={row.avatarFallbackSrcs}
+                      size="lg"
+                    />
                     <div className="min-w-0">
                       <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5">
                         <p className="truncate font-medium text-foreground group-hover:text-primary">

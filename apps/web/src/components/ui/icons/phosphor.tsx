@@ -899,3 +899,47 @@ export function EnvelopeSimpleDuotoneIcon(props: IconProps) {
     </Svg>
   );
 }
+
+export function FunnelDuotoneIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <g fill="currentColor">
+        <path d="M221.9 61.38L152 136v58.65a8 8 0 0 1-3.56 6.66l-32 21.33A8 8 0 0 1 104 216v-80L34.1 61.38A8 8 0 0 1 40 48h176a8 8 0 0 1 5.9 13.38" opacity=".2" />
+        <path d="M230.6 49.53A15.81 15.81 0 0 0 216 40H40a16 16 0 0 0-11.81 26.76l.08.09L96 139.17V216a16 16 0 0 0 24.87 13.32l32-21.34a16 16 0 0 0 7.13-13.32v-55.49l67.74-72.32l.08-.09a15.8 15.8 0 0 0 2.78-17.23m-84.42 81.05A8 8 0 0 0 144 136v58.66L112 216v-80a8 8 0 0 0-2.16-5.47L40 56h176Z" />
+      </g>
+    </Svg>
+  );
+}
+
+export function ChartLineUpDuotoneIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <g fill="currentColor">
+        <path d="M224 64v144H32V48h176a16 16 0 0 1 16 16" opacity=".2" />
+        <path d="M232 208a8 8 0 0 1-8 8H32a8 8 0 0 1-8-8V48a8 8 0 0 1 16 0v108.69l50.34-50.35a8 8 0 0 1 11.32 0L128 132.69L180.69 80H160a8 8 0 0 1 0-16h40a8 8 0 0 1 8 8v40a8 8 0 0 1-16 0V91.31l-58.34 58.35a8 8 0 0 1-11.32 0L96 123.31l-56 56V200h184a8 8 0 0 1 8 8" />
+      </g>
+    </Svg>
+  );
+}
+
+export function ClockCountdownDuotoneIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <g fill="currentColor">
+        <path d="M224 128a96 96 0 1 1-96-96a96 96 0 0 1 96 96" opacity=".2" />
+        <path d="M232 136.66A104.12 104.12 0 1 1 119.34 24a8 8 0 0 1 1.32 16A88.12 88.12 0 1 0 216 135.34a8 8 0 0 1 16 1.32M120 72v56a8 8 0 0 0 8 8h56a8 8 0 0 0 0-16h-48V72a8 8 0 0 0-16 0m40-24a12 12 0 1 0-12-12a12 12 0 0 0 12 12m36 24a12 12 0 1 0-12-12a12 12 0 0 0 12 12m24 36a12 12 0 1 0-12-12a12 12 0 0 0 12 12" />
+      </g>
+    </Svg>
+  );
+}
+
+export function TargetDuotoneIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <g fill="currentColor">
+        <path d="M176 128a48 48 0 1 1-48-48a48 48 0 0 1 48 48" opacity=".2" />
+        <path d="M221.87 83.16A104.1 104.1 0 1 1 195.67 49l22.67-22.68a8 8 0 0 1 11.32 11.32l-96 96a8 8 0 0 1-11.32-11.32l27.72-27.72a40 40 0 1 0 17.87 31.09a8 8 0 1 1 16-.9a56 56 0 1 1-22.38-41.65l22.75-22.75a87.88 87.88 0 1 0 23.13 29.67a8 8 0 0 1 14.44-6.9" />
+      </g>
+    </Svg>
+  );
+}
