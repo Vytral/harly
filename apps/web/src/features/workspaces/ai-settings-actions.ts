@@ -206,6 +206,26 @@ export async function saveAiDuplicateCheckAction(
   return { ok: true };
 }
 
+export async function saveAiResumeAnonymizationAction(
+  resumeAnonymization: boolean,
+): Promise<AiSettingsActionResult> {
+  const context = await requirePermission("settings:edit");
+
+  await db
+    .insert(workspaceSettings)
+    .values({
+      organizationId: context.organization.id,
+      aiResumeAnonymization: resumeAnonymization,
+    })
+    .onConflictDoUpdate({
+      target: workspaceSettings.organizationId,
+      set: { aiResumeAnonymization: resumeAnonymization, updatedAt: new Date() },
+    });
+
+  revalidatePath("/settings/ai");
+  return { ok: true };
+}
+
 export async function searchOpenRouterModelsAction(
   query: string,
 ): Promise<OpenRouterModel[]> {

@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "ai_resume_anonymization" boolean DEFAULT false NOT NULL;

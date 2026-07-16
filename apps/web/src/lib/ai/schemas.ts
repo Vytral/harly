@@ -107,6 +107,29 @@ export const interviewNotesSummarySchema = z.object({
 
 export type InterviewNotesSummary = z.infer<typeof interviewNotesSummarySchema>;
 
+export const scorecardRefinementSchema = z.object({
+  // The interviewer's comment with grammar fixed, formatting standardized, and
+  // clarity improved — same meaning, same first-person voice, no new claims.
+  refined: z.string(),
+});
+
+export type ScorecardRefinement = z.infer<typeof scorecardRefinementSchema>;
+
+export const scorecardAttributeSuggestionsSchema = z.object({
+  attributes: z.array(
+    z.object({
+      // Short evaluation dimension, e.g. "System design" or "Ownership".
+      label: z.string(),
+      // One-line description of what a strong signal looks like for this role.
+      whatGoodLooksLike: z.string(),
+    }),
+  ),
+});
+
+export type ScorecardAttributeSuggestions = z.infer<
+  typeof scorecardAttributeSuggestionsSchema
+>;
+
 export const duplicateCandidateSchema = z.object({
   matches: z.array(
     z.object({

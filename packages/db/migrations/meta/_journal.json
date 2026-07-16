@@ -484,6 +484,13 @@
       "when": 1784007021478,
       "tag": "0068_parched_omega_sentinel",
       "breakpoints": true
+    },
+    {
+      "idx": 69,
+      "version": "7",
+      "when": 1784223488904,
+      "tag": "0069_high_lilandra",
+      "breakpoints": true
     }
   ]
 }

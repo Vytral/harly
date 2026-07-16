@@ -30,6 +30,7 @@ import { CandidateStickyHeader } from "@/features/candidates/CandidateStickyHead
 import { CandidateProfileTabs } from "@/features/candidates/CandidateProfileTabs";
 import { CandidateTags } from "@/features/candidates/CandidateTags";
 import { DuplicateDetectionCard } from "@/features/candidates/DuplicateDetectionCard";
+import { IdentityShield, Redact } from "@/features/candidates/IdentityShield";
 import { getCandidateProfile, listCandidates, findSuspectDuplicates } from "@/features/candidates/data";
 import { getNextStage } from "@/features/pipeline/data";
 import { listCandidateInterviews } from "@/features/interviews/data";
@@ -235,6 +236,7 @@ export default async function CandidateDetailPage({
             }
           >
             {/* Identity header — one cohesive block, no decorative banner */}
+            <IdentityShield anonymize={aiStatus.resumeAnonymization}>
             <div className="rounded-2xl border border-border/70 bg-card p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
               {/* Identity + contact, all in one column tight to the avatar */}
@@ -250,7 +252,7 @@ export default async function CandidateDetailPage({
                   <div>
                     <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
                       <h1 className="font-display text-xl font-semibold tracking-tight">
-                        {fullName}
+                        <Redact>{fullName}</Redact>
                       </h1>
                       {latestApplication?.source ? (
                         <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
@@ -276,7 +278,7 @@ export default async function CandidateDetailPage({
                       className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                     >
                       <Mail className="size-4 shrink-0" strokeWidth={1.6} />
-                      {candidate.email}
+                      <Redact>{candidate.email}</Redact>
                     </a>
                     {candidate.phone ? (
                       <a
@@ -284,7 +286,7 @@ export default async function CandidateDetailPage({
                         className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                       >
                         <Phone className="size-4 shrink-0" strokeWidth={1.6} />
-                        {candidate.phone}
+                        <Redact>{candidate.phone}</Redact>
                       </a>
                     ) : null}
                     {candidate.location ? (
@@ -295,7 +297,7 @@ export default async function CandidateDetailPage({
                         className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                       >
                         <MapPin className="size-4 shrink-0" strokeWidth={1.6} />
-                        {candidate.location}
+                        <Redact>{candidate.location}</Redact>
                       </a>
                     ) : null}
 
@@ -315,8 +317,10 @@ export default async function CandidateDetailPage({
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                       >
-                        <LinkedinLogo className="size-4" />
-                        LinkedIn
+                        <Redact className="inline-flex items-center gap-1.5">
+                          <LinkedinLogo className="size-4" />
+                          LinkedIn
+                        </Redact>
                       </a>
                     ) : null}
                     {candidate.githubUrl ? (
@@ -326,8 +330,10 @@ export default async function CandidateDetailPage({
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                       >
-                        <GithubIcon className="size-4" />
-                        GitHub
+                        <Redact className="inline-flex items-center gap-1.5">
+                          <GithubIcon className="size-4" />
+                          GitHub
+                        </Redact>
                       </a>
                     ) : null}
                     {candidate.websiteUrl ? (
@@ -337,8 +343,10 @@ export default async function CandidateDetailPage({
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                       >
-                        <Globe className="size-4" strokeWidth={1.6} />
-                        Website
+                        <Redact className="inline-flex items-center gap-1.5">
+                          <Globe className="size-4" strokeWidth={1.6} />
+                          Website
+                        </Redact>
                       </a>
                     ) : null}
                   </div>
@@ -383,6 +391,7 @@ export default async function CandidateDetailPage({
               </div>
             </div>
           </div>
+          </IdentityShield>
           </CandidateStickyHeader>
 
           <DuplicateDetectionCard

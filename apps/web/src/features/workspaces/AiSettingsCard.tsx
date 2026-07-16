@@ -9,6 +9,7 @@ import {
   saveAiSettingsAction,
   saveAiAutoScoreAction,
   saveAiDuplicateCheckAction,
+  saveAiResumeAnonymizationAction,
   searchOpenRouterModelsAction,
   testAiConnectionAction,
 } from "@/features/workspaces/ai-settings-actions";
@@ -39,6 +40,7 @@ import {
 } from "@/components/ui/icons/brands";
 import {
   CheckIcon,
+  EyeSlashDuotoneIcon,
   GlobeIcon,
   KeyDuotoneIcon,
   LightningIcon,
@@ -217,6 +219,10 @@ export function AiSettingsCard({
             canEdit={canEdit}
           />
           <DuplicateCheckFeatureCard
+            status={status}
+            canEdit={canEdit}
+          />
+          <ResumeAnonymizationFeatureCard
             status={status}
             canEdit={canEdit}
           />
@@ -431,6 +437,63 @@ function DuplicateCheckFeatureCard({
       {!status.hasApiKey ? (
         <p className="mt-2 text-xs text-muted-foreground">Configure a provider to unlock.</p>
       ) : null}
+    </Card>
+  );
+}
+
+function ResumeAnonymizationFeatureCard({
+  status,
+  canEdit,
+}: {
+  status: WorkspaceAiStatus;
+  canEdit: boolean;
+}) {
+  const router = useRouter();
+  const [pending, startToggle] = useTransition();
+  const [optimistic, setOptimistic] = useState(status.resumeAnonymization);
+
+  // Redaction is deterministic (no model call), so it only needs edit rights —
+  // not an enabled provider like the model-backed features above.
+  const disabled = !canEdit;
+
+  function toggle(next: boolean) {
+    setOptimistic(next);
+    startToggle(async () => {
+      const result = await saveAiResumeAnonymizationAction(next);
+      if (!result.ok) {
+        setOptimistic(!next);
+        toast.error(result.error ?? "Could not update setting.");
+        return;
+      }
+      toast.success(
+        next ? "Resume anonymization enabled" : "Resume anonymization disabled",
+      );
+      router.refresh();
+    });
+  }
+
+  return (
+    <Card className="gap-0 p-5">
+      <div className="flex items-start justify-between gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted/70 text-foreground/80">
+          <EyeSlashDuotoneIcon className="size-5" />
+        </span>
+        <Switch
+          checked={optimistic}
+          onCheckedChange={toggle}
+          disabled={disabled || pending}
+          aria-label="Resume anonymization"
+          className="mt-0.5"
+        />
+      </div>
+      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">
+        Resume anonymization
+      </h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        Hide names, contacts, and links on candidate profiles during review, so
+        early screening leans on skills and experience — not identity. Reviewers
+        can reveal per candidate.
+      </p>
     </Card>
   );
 }

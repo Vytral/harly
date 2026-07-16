@@ -388,6 +388,9 @@ export const workspaceSettings = pgTable("workspace_settings", {
   aiAutoScore: boolean("ai_auto_score").default(false).notNull(),
   // Automatically detect potential duplicate candidates when AI is configured.
   aiDuplicateCheck: boolean("ai_duplicate_check").default(false).notNull(),
+  // Redact identifying candidate details (name, contact, links, demographic
+  // signals) from resumes during application review to reduce unconscious bias.
+  aiResumeAnonymization: boolean("ai_resume_anonymization").default(false).notNull(),
   // Cal.com scheduling (bring-your-own-key). Same AES-256-GCM encryption as the
   // AI key — the API key is never stored or returned in plaintext.
   calEnabled: boolean("cal_enabled").default(false).notNull(),

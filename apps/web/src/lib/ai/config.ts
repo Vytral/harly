@@ -21,6 +21,8 @@ export type WorkspaceAiStatus = {
   autoScore: boolean;
   /** Automatically flag potential duplicate candidates when a new application arrives. */
   duplicateCheck: boolean;
+  /** Redact identifying candidate details from resumes during application review. */
+  resumeAnonymization: boolean;
 };
 
 /** Public-safe status for the settings UI. Never returns the API key. */
@@ -36,6 +38,7 @@ export async function getWorkspaceAiStatus(
       aiApiKeyCiphertext: workspaceSettings.aiApiKeyCiphertext,
       aiAutoScore: workspaceSettings.aiAutoScore,
       aiDuplicateCheck: workspaceSettings.aiDuplicateCheck,
+      aiResumeAnonymization: workspaceSettings.aiResumeAnonymization,
     })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, workspaceId))
@@ -50,6 +53,7 @@ export async function getWorkspaceAiStatus(
     encryptionReady: isEncryptionConfigured(),
     autoScore: Boolean(row?.aiAutoScore),
     duplicateCheck: Boolean(row?.aiDuplicateCheck),
+    resumeAnonymization: Boolean(row?.aiResumeAnonymization),
   };
 }
 

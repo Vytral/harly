@@ -1338,3 +1338,153 @@ export async function permanentlyDeleteCandidateAction(
   revalidatePath("/dashboard");
   return { success: true };
 }
+
+// ── AI scorecard assists ──
+
+export type RefineScorecardResult =
+  | { ok: true; refined: string }
+  | { ok: false; error: string; reason?: "not_configured" };
+
+const refineScorecardSchema = z.object({
+  comment: z.string().trim().min(1, "Write a comment first.").max(6000),
+  candidateId: z.string().min(1),
+});
+
+/** Improve grammar/clarity/formatting of an interviewer's scorecard comment. */
+export async function refineScorecardTextAction(input: {
+  comment: string;
+  candidateId: string;
+}): Promise<RefineScorecardResult> {
+  const parsed = refineScorecardSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  await requirePermission("collab:write");
+  const { organization: workspace } = await getWorkspaceContext();
+
+  const config = await getWorkspaceAiConfig(workspace.id);
+  if (!config) {
+    return {
+      ok: false,
+      error: "Enable AI in Settings to refine with AI.",
+      reason: "not_configured",
+    };
+  }
+
+  const jobTitle = await getLatestJobTitleForCandidate(
+    workspace.id,
+    parsed.data.candidateId,
+  );
+
+  try {
+    const { refineScorecardTextWithAI } = await import(
+      "@/lib/ai/surfaces/refine-scorecard"
+    );
+    const result = await refineScorecardTextWithAI(config, {
+      comment: parsed.data.comment,
+      jobTitle,
+    });
+    return { ok: true, refined: result.refined };
+  } catch (error) {
+    console.error("Scorecard refine AI failed", error);
+    return { ok: false, error: "Refinement failed. Check your AI settings." };
+  }
+}
+
+export type ScorecardAttribute = { label: string; whatGoodLooksLike: string };
+
+export type SuggestScorecardAttributesResult =
+  | { ok: true; attributes: ScorecardAttribute[] }
+  | { ok: false; error: string; reason?: "not_configured" };
+
+const suggestAttributesSchema = z.object({
+  candidateId: z.string().min(1),
+  existingAttributes: z.array(z.string()).max(20).optional(),
+});
+
+/** Suggest role-specific evaluation attributes for a scorecard. */
+export async function suggestScorecardAttributesAction(input: {
+  candidateId: string;
+  existingAttributes?: string[];
+}): Promise<SuggestScorecardAttributesResult> {
+  const parsed = suggestAttributesSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+  }
+
+  await requirePermission("collab:write");
+  const { organization: workspace } = await getWorkspaceContext();
+
+  const config = await getWorkspaceAiConfig(workspace.id);
+  if (!config) {
+    return {
+      ok: false,
+      error: "Enable AI in Settings to suggest attributes.",
+      reason: "not_configured",
+    };
+  }
+
+  const [job] = await db
+    .select({
+      title: jobs.title,
+      description: jobs.description,
+      requirements: jobs.requirements,
+    })
+    .from(applications)
+    .innerJoin(
+      jobs,
+      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
+    )
+    .where(
+      and(
+        eq(applications.workspaceId, workspace.id),
+        eq(applications.candidateId, parsed.data.candidateId),
+      ),
+    )
+    .orderBy(desc(applications.appliedAt))
+    .limit(1);
+
+  if (!job) {
+    return { ok: false, error: "No job found for this candidate." };
+  }
+
+  try {
+    const { suggestScorecardAttributesWithAI } = await import(
+      "@/lib/ai/surfaces/suggest-scorecard-attributes"
+    );
+    const attributes = await suggestScorecardAttributesWithAI(config, {
+      jobTitle: job.title,
+      description: job.description,
+      requirements: job.requirements,
+      existingAttributes: parsed.data.existingAttributes,
+    });
+    return { ok: true, attributes };
+  } catch (error) {
+    console.error("Scorecard attribute AI failed", error);
+    return { ok: false, error: "Suggestion failed. Check your AI settings." };
+  }
+}
+
+/** Latest job title a candidate applied to, or null. Small shared helper. */
+async function getLatestJobTitleForCandidate(
+  workspaceId: string,
+  candidateId: string,
+): Promise<string | null> {
+  const [row] = await db
+    .select({ title: jobs.title })
+    .from(applications)
+    .innerJoin(
+      jobs,
+      and(eq(jobs.workspaceId, workspaceId), eq(jobs.id, applications.jobId)),
+    )
+    .where(
+      and(
+        eq(applications.workspaceId, workspaceId),
+        eq(applications.candidateId, candidateId),
+      ),
+    )
+    .orderBy(desc(applications.appliedAt))
+    .limit(1);
+  return row?.title ?? null;
+}

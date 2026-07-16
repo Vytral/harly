@@ -21,6 +21,8 @@ import { generateText } from "ai";
 import { scoreCandidateWithAI } from "./score-candidate";
 import { detectDuplicatesWithAI } from "./detect-duplicates";
 import { summarizeInterviewNotesWithAI } from "./summarize-interview-notes";
+import { refineScorecardTextWithAI } from "./refine-scorecard";
+import { suggestScorecardAttributesWithAI } from "./suggest-scorecard-attributes";
 
 const config: AiModelConfig = {
   provider: "openai",
@@ -124,5 +126,43 @@ describe("AI surfaces (IA-07)", () => {
 
     const call = vi.mocked(generateText).mock.calls[0]?.[0] as { system?: string };
     expect(call?.system).toContain(UNTRUSTED_DATA_GUARDRAIL);
+  });
+
+  it("refineScorecardTextWithAI returns trimmed refined text", async () => {
+    vi.mocked(generateText).mockResolvedValue({
+      output: { refined: "  Clear, corrected comment.  " },
+      usage: { inputTokens: 7, outputTokens: 4, totalTokens: 11, inputTokenDetails: { noCacheTokens: undefined, cacheReadTokens: undefined, cacheWriteTokens: undefined }, outputTokenDetails: { textTokens: undefined, reasoningTokens: undefined } },
+    } as never);
+
+    const result = await refineScorecardTextWithAI(config, {
+      comment: "clear corrected comment",
+      jobTitle: "Eng",
+    });
+
+    expect(result.refined).toBe("Clear, corrected comment.");
+
+    const call = vi.mocked(generateText).mock.calls[0]?.[0] as { system?: string };
+    expect(call?.system).toContain(UNTRUSTED_DATA_GUARDRAIL);
+  });
+
+  it("suggestScorecardAttributesWithAI caps the list to 6", async () => {
+    vi.mocked(generateText).mockResolvedValue({
+      output: {
+        attributes: Array.from({ length: 10 }, (_, i) => ({
+          label: `attr-${i}`,
+          whatGoodLooksLike: `good-${i}`,
+        })),
+      },
+      usage: { inputTokens: 9, outputTokens: 6, totalTokens: 15, inputTokenDetails: { noCacheTokens: undefined, cacheReadTokens: undefined, cacheWriteTokens: undefined }, outputTokenDetails: { textTokens: undefined, reasoningTokens: undefined } },
+    } as never);
+
+    const result = await suggestScorecardAttributesWithAI(config, {
+      jobTitle: "Eng",
+      description: "d",
+      requirements: null,
+    });
+
+    expect(result).toHaveLength(6);
+    expect(result[0]?.label).toBe("attr-0");
   });
 });
