@@ -3,6 +3,7 @@ import { HiringPerformance } from "@/components/dashboard/widgets/HiringPerforma
 import { InboxCard } from "@/components/dashboard/widgets/InboxCard";
 import { MyTasksCard } from "@/components/dashboard/widgets/MyTasksCard";
 import { PipelineOverviewCard } from "@/components/dashboard/widgets/PipelineOverviewCard";
+import { SetupChecklistCard } from "@/components/dashboard/widgets/SetupChecklistCard";
 import { TodayInterviews } from "@/components/dashboard/widgets/TodayInterviews";
 import {
   getCandidatesNeedingReview,
@@ -12,6 +13,7 @@ import {
   getPipelineOverview,
   getTodayInterviews,
 } from "@/features/dashboard/widgets";
+import { getSetupChecklist } from "@/features/dashboard/setup-checklist";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export const dynamic = "force-dynamic";
@@ -38,7 +40,7 @@ export default async function DashboardPage({
   const firstName = (user.name ?? "").trim().split(/\s+/)[0] || "there";
   const now = new Date();
 
-  const [inbox, interviews, pipeline, review, myTasks, performance] =
+  const [inbox, interviews, pipeline, review, myTasks, performance, setup] =
     await Promise.all([
       getInbox(),
       getTodayInterviews(),
@@ -46,6 +48,7 @@ export default async function DashboardPage({
       getCandidatesNeedingReview(),
       getMyDashboardTasks(),
       getHiringPerformance(),
+      getSetupChecklist(),
     ]);
 
   const overdueCount = inbox.filter((i) => i.dueState === "overdue").length;
@@ -81,6 +84,8 @@ export default async function DashboardPage({
           {todayFormatter.format(now)}
         </p>
       </header>
+
+      {setup.visible ? <SetupChecklistCard checklist={setup} /> : null}
 
       <section className="grid gap-4 duration-500 animate-in fade-in slide-in-from-bottom-2 lg:grid-cols-3">
         <InboxCard items={inbox} />
