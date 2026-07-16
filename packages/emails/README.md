@@ -42,4 +42,7 @@ RESEND_API_KEY="re_..."
 EMAIL_FROM="noreply@harly.com"
 ```
 
-Without `RESEND_API_KEY`, emails are logged to console (development fallback).
+Authentication emails require a configured sender in production. For local
+development without a provider, set `AUTH_EMAIL_CONSOLE_FALLBACK=true` to
+print one-time authentication links to the terminal. Never enable this in a
+shared environment because anyone with log access could use the link.
