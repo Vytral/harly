@@ -24,7 +24,11 @@ import { cn } from "@/lib/utils";
  * record. Deterministic and explainable — no model call.
  */
 
-const RevealContext = createContext(false);
+// Default `true` (revealed) so that when anonymization is OFF and no provider is
+// mounted (IdentityShield returns children directly), <Redact>/<RedactLink>
+// render normally instead of blurring. Inside an active shield the provider
+// supplies the real `revealed` state (false = masked until the reviewer opts in).
+const RevealContext = createContext(true);
 
 export function IdentityShield({
   anonymize,
@@ -92,5 +96,44 @@ export function Redact({
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * A link whose identifying href (mailto:/tel:/profile URL) is withheld until
+ * the reviewer reveals this candidate. While masked the anchor carries no href
+ * at all — so the raw value never appears in the DOM, on hover, or via copy —
+ * and its label is blurred like <Redact>. This closes the gap where blurred
+ * text still leaked PII through the underlying href.
+ */
+export function RedactLink({
+  href,
+  children,
+  className,
+  target,
+  rel,
+}: {
+  href: string;
+  children: ReactNode;
+  className?: string;
+  target?: string;
+  rel?: string;
+}) {
+  const revealed = useContext(RevealContext);
+  return (
+    <a
+      href={revealed ? href : undefined}
+      target={revealed ? target : undefined}
+      rel={revealed ? rel : undefined}
+      aria-hidden={!revealed}
+      className={cn(
+        "transition-[filter] duration-200 ease-out",
+        !revealed &&
+          "pointer-events-none select-none blur-[6px] [text-shadow:0_0_10px_rgba(0,0,0,0.28)]",
+        className,
+      )}
+    >
+      {children}
+    </a>
   );
 }

@@ -74,7 +74,14 @@ export function redactText(
   if (!text) return text ?? null;
   let out = text;
   for (const token of nameTokens(identity)) {
-    out = out.replace(new RegExp(escapeRegExp(token), "gi"), REDACTED_PLACEHOLDER);
+    // Word-boundary anchored so short tokens (a 2-letter name like "Li" or "Al")
+    // mask only whole-word occurrences, never substrings of unrelated words
+    // ("quality", "client"). \b sits at the alnum edge, so multi-word and
+    // hyphenated names still match.
+    out = out.replace(
+      new RegExp(`\\b${escapeRegExp(token)}\\b`, "gi"),
+      REDACTED_PLACEHOLDER,
+    );
   }
   out = out.replace(EMAIL_RE, REDACTED_PLACEHOLDER);
   out = out.replace(PHONE_RE, (match) =>

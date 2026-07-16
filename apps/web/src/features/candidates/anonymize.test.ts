@@ -16,6 +16,15 @@ describe("anonymize", () => {
     expect(out).toContain(REDACTED_PLACEHOLDER);
   });
 
+  it("does not over-redact short 2-letter names inside unrelated words", () => {
+    const li = { firstName: "Li", lastName: "Chen", fullName: "Li Chen" };
+    const out = redactText("Li improved quality for every client.", li);
+    // Whole-word "Li" is masked, but "li" inside quality/client is untouched.
+    expect(out).toContain("quality");
+    expect(out).toContain("client");
+    expect(out).toMatch(/^•+ improved quality for every client\.$/);
+  });
+
   it("masks emails and phone-length numbers but keeps years intact", () => {
     const out = redactText("Reach me at ada@x.io or +1 (312) 847-1928. Shipped in 2024.", identity);
     expect(out).not.toContain("ada@x.io");

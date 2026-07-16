@@ -71,10 +71,14 @@ export function EvaluationDrawer({
   /** Insert an attribute as a labelled prompt the interviewer fills in. */
   function addAttribute(attr: ScorecardAttribute) {
     setComment((prev) => {
-      const line = `${attr.label}: `;
-      if (prev.includes(`\n${line}`) || prev.startsWith(line)) return prev;
+      // Dedup on the label itself (any line already starting "Label:"),
+      // independent of trailing whitespace the interviewer may have edited.
+      const already = prev
+        .split("\n")
+        .some((l) => l.trimStart().toLowerCase().startsWith(`${attr.label.toLowerCase()}:`));
+      if (already) return prev;
       const prefix = prev.trim() ? `${prev.replace(/\s+$/, "")}\n\n` : "";
-      return `${prefix}${line}`;
+      return `${prefix}${attr.label}: `;
     });
     setAttributes((prev) => prev?.filter((a) => a.label !== attr.label) ?? null);
   }

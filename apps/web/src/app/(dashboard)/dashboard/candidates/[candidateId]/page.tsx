@@ -30,7 +30,7 @@ import { CandidateStickyHeader } from "@/features/candidates/CandidateStickyHead
 import { CandidateProfileTabs } from "@/features/candidates/CandidateProfileTabs";
 import { CandidateTags } from "@/features/candidates/CandidateTags";
 import { DuplicateDetectionCard } from "@/features/candidates/DuplicateDetectionCard";
-import { IdentityShield, Redact } from "@/features/candidates/IdentityShield";
+import { IdentityShield, Redact, RedactLink } from "@/features/candidates/IdentityShield";
 import { getCandidateProfile, listCandidates, findSuspectDuplicates } from "@/features/candidates/data";
 import { getNextStage } from "@/features/pipeline/data";
 import { listCandidateInterviews } from "@/features/interviews/data";
@@ -273,32 +273,32 @@ export default async function CandidateDetailPage({
 
                   {/* Contact + social — one compact inline row */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
-                    <a
+                    <RedactLink
                       href={`mailto:${candidate.email}`}
                       className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                     >
                       <Mail className="size-4 shrink-0" strokeWidth={1.6} />
-                      <Redact>{candidate.email}</Redact>
-                    </a>
+                      {candidate.email}
+                    </RedactLink>
                     {candidate.phone ? (
-                      <a
+                      <RedactLink
                         href={`tel:${candidate.phone}`}
                         className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                       >
                         <Phone className="size-4 shrink-0" strokeWidth={1.6} />
-                        <Redact>{candidate.phone}</Redact>
-                      </a>
+                        {candidate.phone}
+                      </RedactLink>
                     ) : null}
                     {candidate.location ? (
-                      <a
+                      <RedactLink
                         href={`https://maps.google.com/?q=${encodeURIComponent(candidate.location)}`}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                       >
                         <MapPin className="size-4 shrink-0" strokeWidth={1.6} />
-                        <Redact>{candidate.location}</Redact>
-                      </a>
+                        {candidate.location}
+                      </RedactLink>
                     ) : null}
 
                     {candidate.linkedinUrl ||
@@ -311,43 +311,37 @@ export default async function CandidateDetailPage({
                     ) : null}
 
                     {candidate.linkedinUrl ? (
-                      <a
+                      <RedactLink
                         href={candidate.linkedinUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                       >
-                        <Redact className="inline-flex items-center gap-1.5">
-                          <LinkedinLogo className="size-4" />
-                          LinkedIn
-                        </Redact>
-                      </a>
+                        <LinkedinLogo className="size-4" />
+                        LinkedIn
+                      </RedactLink>
                     ) : null}
                     {candidate.githubUrl ? (
-                      <a
+                      <RedactLink
                         href={candidate.githubUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                       >
-                        <Redact className="inline-flex items-center gap-1.5">
-                          <GithubIcon className="size-4" />
-                          GitHub
-                        </Redact>
-                      </a>
+                        <GithubIcon className="size-4" />
+                        GitHub
+                      </RedactLink>
                     ) : null}
                     {candidate.websiteUrl ? (
-                      <a
+                      <RedactLink
                         href={candidate.websiteUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 transition-colors hover:text-foreground"
                       >
-                        <Redact className="inline-flex items-center gap-1.5">
-                          <Globe className="size-4" strokeWidth={1.6} />
-                          Website
-                        </Redact>
-                      </a>
+                        <Globe className="size-4" strokeWidth={1.6} />
+                        Website
+                      </RedactLink>
                     ) : null}
                   </div>
 
