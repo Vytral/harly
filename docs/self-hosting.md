@@ -146,7 +146,7 @@ pnpm dev:web
 ```
 
 It lives at `tooling/docker/compose.dev.yml` and is not the production stack.
-Development needs Node 20+, pnpm, Docker, about 4 GB of available RAM and 10 GB
+Development needs Node 22+, pnpm, Docker, about 4 GB of available RAM and 10 GB
 of free disk for a comfortable full-monorepo workflow. Turbopack's persistent
 filesystem cache is disabled to prevent multi-gigabyte `.next` growth, and its
 memory graph defaults to 1024 MB. Larger workstations can set

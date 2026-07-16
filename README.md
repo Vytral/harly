@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  Open-source applicant tracking for teams that want control over their hiring stack.
+  A self-hosted, open-source applicant tracking system for teams that want control over their hiring stack.
 </p>
 
 <p align="center">
@@ -22,7 +22,7 @@
   <a href="#docker--self-hosting"><strong>Self-host with Docker/Postgres</strong></a>
 </p>
 
-> Harly is early-stage software. Expect active development, incomplete areas, and breaking changes while the foundation settles.
+> **Public beta.** Harly is usable for small, self-hosted teams, but it is still evolving. Review the [launch checklist](docs/launch-checklist.md), make a backup, and test upgrades in a non-production environment before relying on it for critical hiring.
 
 ## What Harly does
 
@@ -36,6 +36,13 @@ Harly is a self-hostable ATS for startups, agencies, and technical teams. It bri
 - REST API v1, API keys, OpenAPI output, and outbound webhooks
 - Google Calendar, Cal.com, Slack, Outlook, Zoom, email, storage, and AI integrations
 - Passkeys, two-factor authentication, RBAC, organizations, and SSO/SAML support
+
+## Why self-host Harly?
+
+- **Own your candidate data.** Run Harly in infrastructure you control, with PostgreSQL and local or S3-compatible storage.
+- **Avoid per-seat ATS pricing.** Start with a small Docker deployment and grow when your hiring operation does.
+- **Adapt the workflow.** Harly is AGPL-3.0-only open source: inspect it, contribute to it, or modify it for your team.
+- **Keep AI optional.** AI features use a workspace-configured provider key encrypted at rest; core recruiting workflows do not require an AI provider.
 
 ## Stack
 
@@ -52,7 +59,7 @@ Harly is a self-hostable ATS for startups, agencies, and technical teams. It bri
 
 ### Requirements
 
-- Node.js 20 or newer
+- Node.js 22 or newer
 - pnpm 9 (`corepack enable`)
 - Docker Desktop or another Docker-compatible runtime
 
@@ -107,6 +114,14 @@ This creates the PostgreSQL, migrator, app, scheduler, and optional Caddy
 topology with a version-pinned image. See the self-hosting guide for secure
 first-owner setup, proxy modes, storage, backups, restore, and upgrades.
 
+### Before inviting your team
+
+1. Use an HTTPS `HARLY_URL` and set independent production secrets.
+2. Run `npx @harly/create doctor .` after deployment.
+3. Configure off-host encrypted backups and prove a restore once.
+4. Create the first owner at `/setup`, then keep registration invite-only.
+5. Read the [production launch checklist](docs/launch-checklist.md).
+
 ## Repository layout
 
 ```txt
@@ -124,7 +139,13 @@ docs/             Operator and contributor documentation
 
 ## Contributing
 
-Issues and pull requests are welcome. Before opening a large change, check the existing issue tracker and describe the user-facing problem, the proposed behavior, and how it was tested. Keep secrets, production data, and uploaded files out of commits.
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+
+## Project status and support
+
+Harly is maintained by its open-source contributors. The public beta currently targets small, self-hosted teams. We do not offer a hosted service, SLA, or managed recovery; operators remain responsible for their own infrastructure, backups, access controls, and legal obligations.
+
+For feature work and bugs, use GitHub Issues. For vulnerabilities, never open a public issue — follow [SECURITY.md](SECURITY.md).
 
 ## License
 
