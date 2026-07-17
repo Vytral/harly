@@ -505,6 +505,20 @@
       "when": 1784297700000,
       "tag": "0071_small_elektra",
       "breakpoints": true
+    },
+    {
+      "idx": 72,
+      "version": "7",
+      "when": 1784297800000,
+      "tag": "0072_ordinary_ikaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 73,
+      "version": "7",
+      "when": 1784297900000,
+      "tag": "0073_seo_job_posting",
+      "breakpoints": true
     }
   ]
 }

@@ -22,8 +22,11 @@ const mocks = vi.hoisted(() => {
     getZoomToken: vi.fn(),
     getWorkspaceOutlookConfig: vi.fn(),
     getWorkspaceGCalConfig: vi.fn(),
+    getWorkspaceJitsiConfig: vi.fn(),
     syncInterviewToZoom: vi.fn(),
     cancelInterviewZoomMeeting: vi.fn(),
+    syncInterviewToJitsi: vi.fn(),
+    cancelInterviewJitsiMeeting: vi.fn(),
     syncInterviewToTeams: vi.fn(),
     cancelInterviewTeamsMeeting: vi.fn(),
     syncInterviewToGCal: vi.fn(),
@@ -111,6 +114,11 @@ vi.mock("@/lib/outlook/teams-sync", () => ({
   cancelInterviewTeamsMeeting: mocks.cancelInterviewTeamsMeeting,
 }));
 vi.mock("@/lib/gcal/config", () => ({ getWorkspaceGCalConfig: mocks.getWorkspaceGCalConfig }));
+vi.mock("@/lib/jitsi/config", () => ({ getWorkspaceJitsiConfig: mocks.getWorkspaceJitsiConfig }));
+vi.mock("@/lib/jitsi/sync", () => ({
+  syncInterviewToJitsi: mocks.syncInterviewToJitsi,
+  cancelInterviewJitsiMeeting: mocks.cancelInterviewJitsiMeeting,
+}));
 vi.mock("@/lib/gcal/sync", () => ({
   syncInterviewToGCal: mocks.syncInterviewToGCal,
   cancelInterviewGCalEvent: mocks.cancelInterviewGCalEvent,
@@ -146,6 +154,9 @@ beforeEach(() => {
   mocks.getZoomToken.mockResolvedValue(null);
   mocks.getWorkspaceOutlookConfig.mockResolvedValue(null);
   mocks.getWorkspaceGCalConfig.mockResolvedValue(null);
+  mocks.getWorkspaceJitsiConfig.mockResolvedValue(null);
+  mocks.syncInterviewToJitsi.mockReset();
+  mocks.cancelInterviewJitsiMeeting.mockReset();
 });
 
 function txMock(application: unknown[], conflict: unknown[]) {
@@ -209,6 +220,55 @@ describe("F1-10 single video provider", () => {
     expect(mocks.syncInterviewToZoom).toHaveBeenCalledTimes(1);
     expect(mocks.syncInterviewToTeams).not.toHaveBeenCalled();
     expect(mocks.syncInterviewToGCal).not.toHaveBeenCalled();
+  });
+
+  it("falls back to Jitsi when no other provider is configured", async () => {
+    txMock([{ id: "app-1", jobId: "job-1" }], []);
+    mocks.getWorkspaceJitsiConfig.mockResolvedValue({ baseUrl: "https://meet.jit.si" });
+    mocks.selectQueue.push(
+      [{ email: "c@example.com", firstName: "C", lastName: "D", companyName: "A", jobTitle: "J" }],
+      [{ meetLink: "https://meet.jit.si/abc-defg-hij" }],
+    );
+
+    const result = await scheduleInterview({
+      workspaceId: "ws-1",
+      candidateId: "candidate-1",
+      applicationId: "app-1",
+      type: "screening",
+      mode: "video",
+      scheduledAt: new Date(Date.now() + 3600_000).toISOString(),
+      durationMins: 45,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.syncInterviewToJitsi).toHaveBeenCalledTimes(1);
+    expect(mocks.syncInterviewToZoom).not.toHaveBeenCalled();
+    expect(mocks.syncInterviewToTeams).not.toHaveBeenCalled();
+    expect(mocks.syncInterviewToGCal).not.toHaveBeenCalled();
+  });
+
+  it("Zoom still wins over Jitsi when both are configured", async () => {
+    txMock([{ id: "app-1", jobId: "job-1" }], []);
+    mocks.getZoomToken.mockResolvedValue({ accessToken: "z" });
+    mocks.getWorkspaceJitsiConfig.mockResolvedValue({ baseUrl: "https://meet.jit.si" });
+    mocks.selectQueue.push(
+      [{ email: "c@example.com", firstName: "C", lastName: "D", companyName: "A", jobTitle: "J" }],
+      [{ meetLink: "https://zoom.us/j/1" }],
+    );
+
+    const result = await scheduleInterview({
+      workspaceId: "ws-1",
+      candidateId: "candidate-1",
+      applicationId: "app-1",
+      type: "screening",
+      mode: "video",
+      scheduledAt: new Date(Date.now() + 3600_000).toISOString(),
+      durationMins: 45,
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.syncInterviewToZoom).toHaveBeenCalledTimes(1);
+    expect(mocks.syncInterviewToJitsi).not.toHaveBeenCalled();
   });
 });
 

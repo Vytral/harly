@@ -38,21 +38,11 @@ export const workplaceTypeEnum = pgEnum("workplace_type", [
   "onsite",
 ]);
 
-export const jobStatusEnum = pgEnum("job_status", [
-  "draft",
-  "open",
-  "closed",
-]);
+export const jobStatusEnum = pgEnum("job_status", ["draft", "open", "closed"]);
 
-export const boardStyleEnum = pgEnum("board_style", [
-  "hero",
-  "minimal",
-]);
+export const boardStyleEnum = pgEnum("board_style", ["hero", "minimal"]);
 
-export const logoStyleEnum = pgEnum("logo_style", [
-  "bordered",
-  "full",
-]);
+export const logoStyleEnum = pgEnum("logo_style", ["bordered", "full"]);
 
 export const applicationStatusEnum = pgEnum("application_status", [
   "active",
@@ -282,6 +272,39 @@ export const invitation = pgTable(
   ],
 );
 
+// Enterprise SSO providers managed by the @better-auth/sso plugin.
+// Keep the exported model name in camelCase: Better Auth resolves this exact
+// key from the schema object passed to the Drizzle adapter.
+export const ssoProvider = pgTable(
+  "sso_provider",
+  {
+    id: text("id").primaryKey(),
+    issuer: text("issuer").notNull(),
+    domain: text("domain").notNull(),
+    oidcConfig: text("oidc_config"),
+    samlConfig: text("saml_config"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    providerId: text("provider_id").notNull().unique(),
+    organizationId: text("organization_id").references(() => organization.id, {
+      onDelete: "set null",
+    }),
+    enabled: boolean("enabled").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("sso_provider_domain_idx").on(table.domain),
+    index("sso_provider_organization_idx").on(table.organizationId),
+  ],
+);
+
 /**
  * One row per deployment. It is deliberately separate from Better Auth so the
  * first account and workspace can be reserved and completed under a
@@ -368,7 +391,9 @@ export const workspaceSettings = pgTable("workspace_settings", {
   heroImageUrl: text("hero_image_url"),
   boardStyle: boardStyleEnum("board_style").default("hero").notNull(),
   logoStyle: logoStyleEnum("logo_style").default("bordered").notNull(),
-  sidebarLogoStyle: logoStyleEnum("sidebar_logo_style").default("bordered").notNull(),
+  sidebarLogoStyle: logoStyleEnum("sidebar_logo_style")
+    .default("bordered")
+    .notNull(),
   // Extended/wordmark logo shown in the dashboard sidebar when sidebarLogoStyle
   // is "full". Separate light/dark assets so the mark stays legible on either
   // sidebar theme; dark falls back to light when unset.
@@ -390,7 +415,9 @@ export const workspaceSettings = pgTable("workspace_settings", {
   aiDuplicateCheck: boolean("ai_duplicate_check").default(false).notNull(),
   // Redact identifying candidate details (name, contact, links, demographic
   // signals) from resumes during application review to reduce unconscious bias.
-  aiResumeAnonymization: boolean("ai_resume_anonymization").default(false).notNull(),
+  aiResumeAnonymization: boolean("ai_resume_anonymization")
+    .default(false)
+    .notNull(),
   // Cal.com scheduling (bring-your-own-key). Same AES-256-GCM encryption as the
   // AI key — the API key is never stored or returned in plaintext.
   calEnabled: boolean("cal_enabled").default(false).notNull(),
@@ -423,7 +450,9 @@ export const workspaceSettings = pgTable("workspace_settings", {
   emailSmtpUser: text("email_smtp_user"),
   // Inbound email (receiving candidate replies). Independent toggle from
   // outbound — a workspace can send via SMTP and receive via Resend, etc.
-  emailInboundEnabled: boolean("email_inbound_enabled").default(false).notNull(),
+  emailInboundEnabled: boolean("email_inbound_enabled")
+    .default(false)
+    .notNull(),
   emailInboundProvider: text("email_inbound_provider"), // 'resend' | 'postmark'
   // Domain used to build the Reply-To address (reply+{token}@{domain}) on
   // outbound sends, and shown in the UI as the domain the self-hoster must
@@ -509,27 +538,39 @@ export const workspaceSettings = pgTable("workspace_settings", {
   // JSONB storing legal page content keyed by page type:
   // { privacyPolicy: string, termsOfService: string, cookiePolicy: string,
   //   candidateNotice: string, aiTransparencyNotice: string }
-  legalPages: jsonb("legal_pages").default(sql`'{}'::jsonb`).notNull(),
+  legalPages: jsonb("legal_pages")
+    .default(sql`'{}'::jsonb`)
+    .notNull(),
   legalConfigured: boolean("legal_configured").default(false).notNull(),
   // Candidate portal — self-service portal for candidates to view their applications.
-  candidatePortalEnabled: boolean("candidate_portal_enabled").default(false).notNull(),
+  candidatePortalEnabled: boolean("candidate_portal_enabled")
+    .default(false)
+    .notNull(),
   // Portal OAuth — Google. Client secret encrypted at rest (AES-256-GCM).
   portalGoogleClientId: text("portal_google_client_id"),
-  portalGoogleClientSecretCiphertext: text("portal_google_client_secret_ciphertext"),
+  portalGoogleClientSecretCiphertext: text(
+    "portal_google_client_secret_ciphertext",
+  ),
   portalGoogleClientSecretIv: text("portal_google_client_secret_iv"),
   portalGoogleClientSecretTag: text("portal_google_client_secret_tag"),
   // Portal OAuth — GitHub. Client secret encrypted at rest (AES-256-GCM).
   portalGithubClientId: text("portal_github_client_id"),
-  portalGithubClientSecretCiphertext: text("portal_github_client_secret_ciphertext"),
+  portalGithubClientSecretCiphertext: text(
+    "portal_github_client_secret_ciphertext",
+  ),
   portalGithubClientSecretIv: text("portal_github_client_secret_iv"),
   portalGithubClientSecretTag: text("portal_github_client_secret_tag"),
   // Portal OAuth — LinkedIn. Client secret encrypted at rest (AES-256-GCM).
   portalLinkedinClientId: text("portal_linkedin_client_id"),
-  portalLinkedinClientSecretCiphertext: text("portal_linkedin_client_secret_ciphertext"),
+  portalLinkedinClientSecretCiphertext: text(
+    "portal_linkedin_client_secret_ciphertext",
+  ),
   portalLinkedinClientSecretIv: text("portal_linkedin_client_secret_iv"),
   portalLinkedinClientSecretTag: text("portal_linkedin_client_secret_tag"),
   // Portal UI options.
-  portalShowApplicationStatus: boolean("portal_show_application_status").default(true).notNull(),
+  portalShowApplicationStatus: boolean("portal_show_application_status")
+    .default(true)
+    .notNull(),
   // Shareable invite link — anyone with the token can join with inviteLinkRole.
   inviteLinkToken: text("invite_link_token"),
   inviteLinkRole: text("invite_link_role").default("recruiter").notNull(),
@@ -576,6 +617,11 @@ export const workspaceSettings = pgTable("workspace_settings", {
   telegramChatId: text("telegram_chat_id"),
   telegramBotUsername: text("telegram_bot_username"),
   telegramEvents: jsonb("telegram_events").default(sql`'[]'::jsonb`),
+
+  // Jitsi Meet video links. No API, no secrets , the workspace's instance base
+  // URL is the only config; rooms are random slugs composed per interview.
+  jitsiEnabled: boolean("jitsi_enabled").default(false).notNull(),
+  jitsiBaseUrl: text("jitsi_base_url"),
   ...timestamps(),
 });
 
@@ -617,7 +663,10 @@ export const mailboxes = pgTable(
   },
   (table) => [
     uniqueIndex("mailboxes_workspace_unique").on(table.workspaceId),
-    index("mailboxes_workspace_enabled_idx").on(table.workspaceId, table.enabled),
+    index("mailboxes_workspace_enabled_idx").on(
+      table.workspaceId,
+      table.enabled,
+    ),
   ],
 );
 
@@ -642,7 +691,9 @@ export const mailThreads = pgTable(
     applicationId: uuid("application_id").references(() => applications.id, {
       onDelete: "set null",
     }),
-    ownerId: text("owner_id").references(() => user.id, { onDelete: "set null" }),
+    ownerId: text("owner_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
     status: text("status").default("open").notNull(),
     unreadCount: integer("unread_count").default(0).notNull(),
     lastMessageAt: timestamp("last_message_at", { withTimezone: true })
@@ -694,7 +745,9 @@ export const mailMessages = pgTable(
     references: text("references"),
     direction: messageDirectionEnum("direction").notNull(),
     fromEmail: text("from_email").notNull(),
-    toEmails: jsonb("to_emails").default(sql`'[]'::jsonb`).notNull(),
+    toEmails: jsonb("to_emails")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     subject: text("subject").notNull(),
     textBody: text("text_body").notNull(),
     htmlBody: text("html_body"),
@@ -705,12 +758,18 @@ export const mailMessages = pgTable(
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex("mail_messages_thread_uid_unique").on(table.threadId, table.imapUid),
+    uniqueIndex("mail_messages_thread_uid_unique").on(
+      table.threadId,
+      table.imapUid,
+    ),
     uniqueIndex("mail_messages_workspace_message_id_unique").on(
       table.workspaceId,
       table.messageId,
     ),
-    index("mail_messages_thread_received_idx").on(table.threadId, table.receivedAt),
+    index("mail_messages_thread_received_idx").on(
+      table.threadId,
+      table.receivedAt,
+    ),
   ],
 );
 
@@ -751,7 +810,9 @@ export const customRoles = pgTable(
     key: text("key").notNull(),
     name: text("name").notNull(),
     // Array of permission keys (see features/workspaces/permissions.ts).
-    permissions: jsonb("permissions").default(sql`'[]'::jsonb`).notNull(),
+    permissions: jsonb("permissions")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     ...timestamps(),
   },
   (table) => [
@@ -790,7 +851,9 @@ export const jobs = pgTable(
     sector: text("sector"),
     experienceLevel: text("experience_level"),
     education: text("education"),
-    keywords: jsonb("keywords").default(sql`'[]'::jsonb`).notNull(),
+    keywords: jsonb("keywords")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     salaryMin: integer("salary_min"),
     salaryMax: integer("salary_max"),
     currency: text("currency"),
@@ -800,11 +863,22 @@ export const jobs = pgTable(
     officeAddress: text("office_address"),
     officeLat: doublePrecision("office_lat"),
     officeLng: doublePrecision("office_lng"),
-    officePhotos: jsonb("office_photos").default(sql`'[]'::jsonb`).notNull(),
+    officePhotos: jsonb("office_photos")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    // Structured public-job fields used for JobPosting schema and Google for Jobs.
+    jobLocationCountry: text("job_location_country"),
+    jobLocationRegion: text("job_location_region"),
+    remoteEligibleCountries: jsonb("remote_eligible_countries")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    validThrough: timestamp("valid_through", { withTimezone: true }),
     applicationConfig: jsonb("application_config")
       .default(sql`'{}'::jsonb`)
       .notNull(),
-    boardConfig: jsonb("board_config").default(sql`'{}'::jsonb`).notNull(),
+    boardConfig: jsonb("board_config")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     status: jobStatusEnum("status").default("draft").notNull(),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     // Soft-delete: non-null = in trash, restorable.
@@ -817,7 +891,10 @@ export const jobs = pgTable(
   (table) => [
     uniqueIndex("jobs_workspace_slug_idx").on(table.workspaceId, table.slug),
     index("jobs_workspace_status_idx").on(table.workspaceId, table.status),
-    index("jobs_workspace_created_at_idx").on(table.workspaceId, table.createdAt),
+    index("jobs_workspace_created_at_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
     index("jobs_created_by_idx").on(table.createdById),
   ],
 );
@@ -864,15 +941,14 @@ export const applicationQuestions = pgTable(
     required: boolean("required").default(false).notNull(),
     minLength: integer("min_length"),
     placeholder: text("placeholder"),
-    options: jsonb("options").default(sql`'[]'::jsonb`).notNull(),
+    options: jsonb("options")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     order: integer("order").notNull(),
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex("application_questions_job_key_idx").on(
-      table.jobId,
-      table.key,
-    ),
+    uniqueIndex("application_questions_job_key_idx").on(table.jobId, table.key),
     index("application_questions_workspace_idx").on(table.workspaceId),
     index("application_questions_job_idx").on(table.jobId),
   ],
@@ -898,7 +974,9 @@ export const candidates = pgTable(
     avatarUrl: text("avatar_url"),
     headline: text("headline"),
     summary: text("summary"),
-    skills: jsonb("skills").default(sql`'[]'::jsonb`).notNull(),
+    skills: jsonb("skills")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     experienceYears: integer("experience_years"),
     educationEntries: jsonb("education_entries")
       .$type<CandidateEducationEntry[]>()
@@ -953,7 +1031,9 @@ export const applications = pgTable(
     source: text("source"),
     status: applicationStatusEnum("status").default("active").notNull(),
     coverLetter: text("cover_letter"),
-    snapshot: jsonb("snapshot").default(sql`'{}'::jsonb`).notNull(),
+    snapshot: jsonb("snapshot")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     appliedAt: timestamp("applied_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -1074,7 +1154,9 @@ export const candidateNotes = pgTable(
     body: text("body").notNull(),
     // @mentions: [{ userId, name }] captured at write time. Drives the
     // highlighted pills + the "mentioned you" activity events.
-    mentions: jsonb("mentions").default(sql`'[]'::jsonb`).notNull(),
+    mentions: jsonb("mentions")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     ...timestamps(),
   },
   (table) => [
@@ -1140,7 +1222,10 @@ export const candidateFiles = pgTable(
     fileSize: integer("file_size"),
     contentHash: text("content_hash"),
     parsedSummary: text("parsed_summary"),
-    parsedSkills: jsonb("parsed_skills").$type<string[]>().default(sql`'[]'::jsonb`).notNull(),
+    parsedSkills: jsonb("parsed_skills")
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     parsedEducation: text("parsed_education"),
     parsedExperienceYears: integer("parsed_experience_years"),
     parsedExperience: jsonb("parsed_experience")
@@ -1164,7 +1249,10 @@ export const candidateFiles = pgTable(
       table.createdAt,
     ),
     index("candidate_files_uploaded_by_idx").on(table.uploadedById),
-    index("candidate_files_candidate_hash_idx").on(table.candidateId, table.contentHash),
+    index("candidate_files_candidate_hash_idx").on(
+      table.candidateId,
+      table.contentHash,
+    ),
   ],
 );
 
@@ -1221,7 +1309,9 @@ export const scorecards = pgTable(
     rating: scorecardRatingEnum("rating").notNull(),
     comment: text("comment"),
     // Future per-criterion scores: [{ label, score }].
-    criteria: jsonb("criteria").default(sql`'[]'::jsonb`).notNull(),
+    criteria: jsonb("criteria")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     ...timestamps(),
   },
   (table) => [
@@ -1330,7 +1420,9 @@ export const cronRuns = pgTable(
     runId: uuid("run_id").notNull(),
     status: text("status").notNull(),
     durationMs: integer("duration_ms").notNull(),
-    counters: jsonb("counters").default(sql`'{}'::jsonb`).notNull(),
+    counters: jsonb("counters")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -1354,7 +1446,14 @@ export const emailTemplates = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     type: text("type", {
-      enum: ["general", "interview_invite", "rejection", "offer", "screening", "stage_change"],
+      enum: [
+        "general",
+        "interview_invite",
+        "rejection",
+        "offer",
+        "screening",
+        "stage_change",
+      ],
     })
       .notNull()
       .default("general"),
@@ -1456,11 +1555,17 @@ export const aiEvaluations = pgTable(
     recommendation: aiRecommendationEnum("recommendation").notNull(),
     summary: text("summary").notNull(),
     // string[]
-    strengths: jsonb("strengths").default(sql`'[]'::jsonb`).notNull(),
+    strengths: jsonb("strengths")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     // string[]
-    gaps: jsonb("gaps").default(sql`'[]'::jsonb`).notNull(),
+    gaps: jsonb("gaps")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     // [{ label, score (0-100), evidence }]
-    criteria: jsonb("criteria").default(sql`'[]'::jsonb`).notNull(),
+    criteria: jsonb("criteria")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     // True when the evaluation had resume text available (not just profile fields).
     usedResume: boolean("used_resume").default(false).notNull(),
     generatedById: text("generated_by_id").references(() => user.id, {
@@ -1527,7 +1632,10 @@ export const jobEmbeddings = pgTable(
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex("job_embeddings_workspace_job_idx").on(table.workspaceId, table.jobId),
+    uniqueIndex("job_embeddings_workspace_job_idx").on(
+      table.workspaceId,
+      table.jobId,
+    ),
     index("job_embeddings_workspace_idx").on(table.workspaceId),
   ],
 );
@@ -1754,6 +1862,8 @@ export const interviews = pgTable(
     meetLink: text("meet_link"),
     teamsMeetingId: text("teams_meeting_id"),
     zoomMeetingId: text("zoom_meeting_id"),
+    // Jitsi room slug (e.g. "hsy-qiab-ksn"). Non-null ⟹ Jitsi built the link.
+    jitsiRoom: text("jitsi_room"),
     briefContent: jsonb("brief_content"),
     ...timestamps(),
   },
@@ -1818,8 +1928,10 @@ export type MailMessage = typeof mailMessages.$inferSelect;
 export type NewMailMessage = typeof mailMessages.$inferInsert;
 export type MailAttachment = typeof mailAttachments.$inferSelect;
 export type NewMailAttachment = typeof mailAttachments.$inferInsert;
-export type MailUnificationMigration = typeof mailUnificationMigrations.$inferSelect;
-export type NewMailUnificationMigration = typeof mailUnificationMigrations.$inferInsert;
+export type MailUnificationMigration =
+  typeof mailUnificationMigrations.$inferSelect;
+export type NewMailUnificationMigration =
+  typeof mailUnificationMigrations.$inferInsert;
 export type Interview = typeof interviews.$inferSelect;
 export type NewInterview = typeof interviews.$inferInsert;
 
@@ -1939,7 +2051,9 @@ export const apiKeys = pgTable(
     // SHA-256 hex digest of the full raw key. Lookups query this directly.
     hashedKey: text("hashed_key").notNull(),
     // Array of granted scope strings (see packages/api scopes).
-    scopes: jsonb("scopes").default(sql`'[]'::jsonb`).notNull(),
+    scopes: jsonb("scopes")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     // Non-null = revoked, key no longer authenticates.
@@ -1975,16 +2089,16 @@ export const webhookEndpoints = pgTable(
     secretIv: text("secret_iv").notNull(),
     secretTag: text("secret_tag").notNull(),
     // Array of subscribed event types (see server/webhooks/events).
-    events: jsonb("events").default(sql`'[]'::jsonb`).notNull(),
+    events: jsonb("events")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     enabled: boolean("enabled").default(true).notNull(),
     createdById: text("created_by_id").references(() => user.id, {
       onDelete: "set null",
     }),
     ...timestamps(),
   },
-  (table) => [
-    index("webhook_endpoints_workspace_idx").on(table.workspaceId),
-  ],
+  (table) => [index("webhook_endpoints_workspace_idx").on(table.workspaceId)],
 );
 
 /**
@@ -2003,7 +2117,9 @@ export const webhookDeliveries = pgTable(
       .notNull()
       .references(() => webhookEndpoints.id, { onDelete: "cascade" }),
     event: text("event").notNull(),
-    payload: jsonb("payload").default(sql`'{}'::jsonb`).notNull(),
+    payload: jsonb("payload")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     // "pending" | "success" | "failed" | "exhausted"
     status: text("status").default("pending").notNull(),
     attempts: integer("attempts").default(0).notNull(),
@@ -2242,10 +2358,7 @@ export const dsarStatusEnum = pgEnum("dsar_status", [
   "denied",
 ]);
 
-export const dsarTypeEnum = pgEnum("dsar_type", [
-  "export",
-  "erasure",
-]);
+export const dsarTypeEnum = pgEnum("dsar_type", ["export", "erasure"]);
 
 export const dsarRequests = pgTable(
   "dsar_requests",
@@ -2282,9 +2395,12 @@ export type NewConsentRecord = typeof consentRecords.$inferInsert;
 export type DsarRequest = typeof dsarRequests.$inferSelect;
 export type NewDsarRequest = typeof dsarRequests.$inferInsert;
 
-export type CandidatePortalSession = typeof candidatePortalSessions.$inferSelect;
-export type NewCandidatePortalSession = typeof candidatePortalSessions.$inferInsert;
-export type CandidatePortalMagicLink = typeof candidatePortalMagicLinks.$inferSelect;
+export type CandidatePortalSession =
+  typeof candidatePortalSessions.$inferSelect;
+export type NewCandidatePortalSession =
+  typeof candidatePortalSessions.$inferInsert;
+export type CandidatePortalMagicLink =
+  typeof candidatePortalMagicLinks.$inferSelect;
 
 // OAuth provider credentials stored per workspace.
 // Mirrors the migration in 0041_oauth_providers.sql.
@@ -2368,7 +2484,9 @@ export const aiMessages = pgTable(
     // "user" | "assistant" | "system"
     role: text("role").notNull(),
     // AI SDK UIMessage.parts[] stored verbatim (text, tool calls, tool outputs).
-    parts: jsonb("parts").default(sql`'[]'::jsonb`).notNull(),
+    parts: jsonb("parts")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),

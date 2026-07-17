@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { CalConnectPanel } from "@/features/workspaces/CalConnectPanel";
 import { DiscordConnectPanel } from "@/features/workspaces/DiscordConnectPanel";
 import { GCalConnectPanel } from "@/features/workspaces/GCalConnectPanel";
+import { JitsiConnectPanel } from "@/features/workspaces/JitsiConnectPanel";
 import { OutlookConnectPanel } from "@/features/workspaces/OutlookConnectPanel";
 import { SlackConnectPanel } from "@/features/workspaces/SlackConnectPanel";
 import { TelegramConnectPanel } from "@/features/workspaces/TelegramConnectPanel";
@@ -22,6 +23,7 @@ import {
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
 import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
+import { getWorkspaceJitsiStatus } from "@/lib/jitsi/config";
 import { getWorkspaceChatStatus } from "@/lib/notify/config";
 import { getWorkspaceOutlookStatus } from "@/lib/outlook/config";
 import { getWorkspaceSlackStatus } from "@/lib/slack/config";
@@ -49,6 +51,7 @@ const DETAIL_LOGOS: Record<IntegrationSlug, Logo> = {
   "google-calendar": svgBrand("google-calendar", "Google Calendar"),
   "outlook-calendar": svgBrand("microsoft-outlook", "Microsoft Outlook"),
   zoom: svgBrand("zoom", "Zoom"),
+  jitsi: svgBrand("jitsi", "Jitsi"),
   slack: svgBrand("slack", "Slack"),
   outlook: svgBrand("microsoft-outlook", "Microsoft Outlook"),
   discord: svgBrand("discord", "Discord"),
@@ -180,6 +183,17 @@ async function renderPanel(
           status={status}
           canEdit={ctx.canEdit}
           workspaceId={ctx.organizationId}
+          tileClassName={integration.tileClassName}
+          description={integration.detail}
+        />
+      );
+    }
+    case "jitsi": {
+      const status = await getWorkspaceJitsiStatus(ctx.organizationId);
+      return (
+        <JitsiConnectPanel
+          status={status}
+          canEdit={ctx.canEdit}
           tileClassName={integration.tileClassName}
           description={integration.detail}
         />

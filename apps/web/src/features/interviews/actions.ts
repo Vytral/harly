@@ -36,6 +36,8 @@ import { getWorkspaceGCalConfig } from "@/lib/gcal/config";
 import { syncInterviewToTeams, cancelInterviewTeamsMeeting } from "@/lib/outlook/teams-sync";
 import { getWorkspaceOutlookConfig } from "@/lib/outlook/config";
 import { syncInterviewToZoom, cancelInterviewZoomMeeting } from "@/lib/zoom/sync";
+import { syncInterviewToJitsi, cancelInterviewJitsiMeeting } from "@/lib/jitsi/sync";
+import { getWorkspaceJitsiConfig } from "@/lib/jitsi/config";
 import { getZoomToken } from "@/lib/zoom/config";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { requirePermission } from "@/features/workspaces/permissions-server";
@@ -294,12 +296,14 @@ export async function scheduleInterview(
       let deliveryLocation = data.location ?? undefined;
       if (data.mode === "video") {
         // A video interview gets exactly one provider. Priority is explicit and
-        // stable: Zoom, then Teams, then Google Meet. Await its persistence so
-        // the candidate receives the same link Harly stores on the interview.
-        const [zoomToken, outlookConfig, gcalConfig] = await Promise.all([
+        // stable: Zoom, then Teams, then Google Meet, then Jitsi. Await its
+        // persistence so the candidate receives the same link Harly stores on
+        // the interview.
+        const [zoomToken, outlookConfig, gcalConfig, jitsiConfig] = await Promise.all([
           getZoomToken(workspace.id),
           getWorkspaceOutlookConfig(workspace.id),
           getWorkspaceGCalConfig(workspace.id),
+          getWorkspaceJitsiConfig(workspace.id),
         ]);
         if (zoomToken) {
           await syncInterviewToZoom({ workspaceId: workspace.id, interviewId: result.interviewId, summary, start: when, durationMins: data.durationMins });
@@ -307,6 +311,8 @@ export async function scheduleInterview(
           await syncInterviewToTeams({ workspaceId: workspace.id, interviewId: result.interviewId, summary, start: when, durationMins: data.durationMins });
         } else if (gcalConfig) {
           await syncInterviewToGCal({ workspaceId: workspace.id, interviewId: result.interviewId, summary, description: data.notes ?? undefined, start: when, durationMins: data.durationMins, attendees: attendees.length > 0 ? attendees : undefined, location: data.location ?? undefined, mode: data.mode });
+        } else if (jitsiConfig) {
+          await syncInterviewToJitsi({ workspaceId: workspace.id, interviewId: result.interviewId });
         }
         const [synced] = await db.select({ meetLink: interviews.meetLink }).from(interviews).where(and(eq(interviews.id, result.interviewId), eq(interviews.workspaceId, workspace.id))).limit(1);
         deliveryLocation = synced?.meetLink ?? deliveryLocation;
@@ -434,6 +440,7 @@ export async function setInterviewStatus(input: {
         gcalEventId: interviews.gcalEventId,
         teamsMeetingId: interviews.teamsMeetingId,
         zoomMeetingId: interviews.zoomMeetingId,
+        jitsiRoom: interviews.jitsiRoom,
       });
 
     if (updated.length === 0) {
@@ -461,6 +468,13 @@ export async function setInterviewStatus(input: {
         workspaceId: workspace.id,
         interviewId: parsed.data.interviewId,
         zoomMeetingId: updated[0].zoomMeetingId,
+      });
+    }
+
+    if (parsed.data.status === "canceled" && updated[0]?.jitsiRoom) {
+      void cancelInterviewJitsiMeeting({
+        workspaceId: workspace.id,
+        interviewId: parsed.data.interviewId,
       });
     }
 

@@ -3,6 +3,7 @@ import "server-only";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
 import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
+import { getWorkspaceJitsiStatus } from "@/lib/jitsi/config";
 import { getWorkspaceChatStatus } from "@/lib/notify/config";
 import { getWorkspaceOutlookStatus } from "@/lib/outlook/config";
 import { getWorkspaceSlackStatus } from "@/lib/slack/config";
@@ -28,6 +29,7 @@ export type IntegrationSlug =
   | "google-calendar"
   | "outlook-calendar"
   | "zoom"
+  | "jitsi"
   | "slack"
   | "outlook"
   | "discord"
@@ -75,7 +77,8 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Let candidates book time with your team.",
     detail:
       "Connect Cal.com so candidates can self-schedule interviews and bookings flow straight into your pipeline.",
-    tileClassName: "bg-slate-900 text-white",
+    tileClassName:
+      "bg-gradient-to-br from-slate-700 via-slate-900 to-black text-white",
   },
   {
     slug: "google-calendar",
@@ -84,7 +87,8 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Sync events and interviewer availability.",
     detail:
       "Keep interviews and interviewer availability in sync with Google Calendar across your whole team.",
-    tileClassName: "bg-gradient-to-br from-sky-500 via-cyan-400 to-emerald-400",
+    // Multicolor Google mark , light neutral so every fill reads.
+    tileClassName: "bg-gradient-to-br from-white via-sky-50 to-sky-200",
   },
   {
     slug: "zoom",
@@ -93,8 +97,8 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Add video links to scheduled interviews.",
     detail:
       "Automatically create and manage Zoom meetings for every scheduled video interview.",
-    tileClassName:
-      "bg-gradient-to-br from-sky-500 via-blue-500 to-cyan-400 text-white",
+    // Zoom mark is saturated blue , light bg so it pops instead of drowning.
+    tileClassName: "bg-gradient-to-br from-white via-sky-100 to-blue-200",
   },
   {
     slug: "outlook-calendar",
@@ -103,8 +107,20 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Coordinate interviews with Microsoft 365.",
     detail:
       "Coordinate interviews and availability with Microsoft 365 and Outlook Calendar.",
+    // Multicolor Outlook mark , light blue-tinted surface.
+    tileClassName: "bg-gradient-to-br from-white via-sky-50 to-blue-200",
+  },
+  {
+    slug: "jitsi",
+    name: "Jitsi Meet",
+    category: "calendar",
+    description: "Self-hosted video links for interviews.",
+    detail:
+      "Generate a unique Jitsi Meet room link for every video interview. Point it at your self-hosted instance or the public meet.jit.si , no account or API key required.",
+    // Light-grey Jitsi mark , needs a dark surface to stand out.
     tileClassName:
-      "bg-gradient-to-br from-blue-700 via-blue-500 to-cyan-300 text-white",
+      "bg-gradient-to-br from-slate-600 via-slate-800 to-slate-950",
+    logoClassName: "size-7",
   },
   {
     slug: "slack",
@@ -113,8 +129,8 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Share hiring updates with your team.",
     detail:
       "Route hiring events to a Slack channel so your team sees new applicants and stage changes in real time.",
-    tileClassName:
-      "bg-gradient-to-br from-violet-600 via-blue-500 to-cyan-400 text-white",
+    // Multicolor Slack mark , light neutral.
+    tileClassName: "bg-gradient-to-br from-white via-slate-50 to-slate-200",
   },
   {
     slug: "outlook",
@@ -123,8 +139,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Route candidate replies to your inbox.",
     detail:
       "Send and log candidate emails through Microsoft Outlook and keep replies attached to the candidate.",
-    tileClassName:
-      "bg-gradient-to-br from-blue-700 via-blue-500 to-cyan-300 text-white",
+    tileClassName: "bg-gradient-to-br from-white via-sky-50 to-blue-200",
   },
   {
     slug: "discord",
@@ -133,8 +148,9 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Post hiring updates to a Discord channel.",
     detail:
       "Send new applications, stage moves, hires and more to a Discord channel via an incoming webhook. No OAuth needed.",
+    // Blurple Discord mark , dark Discord-grey surface so blurple pops.
     tileClassName:
-      "bg-gradient-to-br from-indigo-600 via-indigo-500 to-blue-400 text-white",
+      "bg-gradient-to-br from-[#404249] via-[#2b2d31] to-[#1e1f22]",
   },
   {
     slug: "telegram",
@@ -143,8 +159,8 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Get hiring notifications in a Telegram chat.",
     detail:
       "Send hiring events to a Telegram group or channel through your own bot. Create one with @BotFather in a minute.",
-    tileClassName:
-      "bg-gradient-to-br from-sky-500 via-sky-400 to-cyan-300 text-white",
+    // Saturated sky Telegram mark , light bg for contrast.
+    tileClassName: "bg-gradient-to-br from-white via-sky-50 to-sky-200",
   },
   {
     slug: "gmail",
@@ -153,8 +169,8 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Send and log candidate emails from Gmail.",
     detail:
       "Send and log candidate emails directly from Gmail. This integration is on the way.",
-    tileClassName:
-      "bg-gradient-to-br from-orange-400 via-amber-300 to-sky-400",
+    // Multicolor Gmail mark , light neutral.
+    tileClassName: "bg-gradient-to-br from-white via-rose-50 to-slate-200",
     comingSoon: true,
   },
   {
@@ -164,8 +180,8 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Publish jobs and receive applications.",
     detail:
       "Publish jobs to LinkedIn and receive applications straight into Harly. This integration is on the way.",
-    tileClassName:
-      "bg-gradient-to-br from-sky-500 via-blue-600 to-cyan-400 text-white",
+    // Solid-blue LinkedIn mark , light bg so the blue reads.
+    tileClassName: "bg-gradient-to-br from-white via-sky-50 to-sky-200",
     comingSoon: true,
   },
   {
@@ -175,8 +191,8 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Send Harly events to the rest of your stack.",
     detail:
       "Trigger workflows in Zapier or Make from hiring events and connect Harly to thousands of apps.",
-    tileClassName:
-      "bg-gradient-to-br from-orange-600 via-orange-400 to-amber-300 text-white",
+    // Orange Zapier mark , cream surface (Zapier's own pairing).
+    tileClassName: "bg-gradient-to-br from-white via-orange-50 to-orange-200",
     externalHref: "/settings/developers",
   },
   {
@@ -186,8 +202,9 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     description: "Send structured events to your own services.",
     detail:
       "Send structured hiring events to your own services with signed webhooks.",
+    // House feature (no brand) , Harly evergreen.
     tileClassName:
-      "bg-gradient-to-br from-emerald-700 via-teal-500 to-cyan-400 text-white",
+      "bg-gradient-to-br from-emerald-500 via-pine to-emerald-900 text-white",
     externalHref: "/settings/developers",
   },
 ];
@@ -206,22 +223,25 @@ export type IntegrationStatuses = {
   zoom: Awaited<ReturnType<typeof getZoomConfig>>;
   chat: Awaited<ReturnType<typeof getWorkspaceChatStatus>>;
   telegram: Awaited<ReturnType<typeof getWorkspaceTelegramStatus>>;
+  jitsi: Awaited<ReturnType<typeof getWorkspaceJitsiStatus>>;
 };
 
 /** Fetch every connectable integration's status for a workspace in parallel. */
 export async function getIntegrationStatuses(
   workspaceId: string,
 ): Promise<IntegrationStatuses> {
-  const [cal, gcal, slack, outlook, zoom, chat, telegram] = await Promise.all([
-    getWorkspaceCalStatus(workspaceId),
-    getWorkspaceGCalStatus(workspaceId),
-    getWorkspaceSlackStatus(workspaceId),
-    getWorkspaceOutlookStatus(workspaceId),
-    getZoomConfig(workspaceId),
-    getWorkspaceChatStatus(workspaceId),
-    getWorkspaceTelegramStatus(workspaceId),
-  ]);
-  return { cal, gcal, slack, outlook, zoom, chat, telegram };
+  const [cal, gcal, slack, outlook, zoom, chat, telegram, jitsi] =
+    await Promise.all([
+      getWorkspaceCalStatus(workspaceId),
+      getWorkspaceGCalStatus(workspaceId),
+      getWorkspaceSlackStatus(workspaceId),
+      getWorkspaceOutlookStatus(workspaceId),
+      getZoomConfig(workspaceId),
+      getWorkspaceChatStatus(workspaceId),
+      getWorkspaceTelegramStatus(workspaceId),
+      getWorkspaceJitsiStatus(workspaceId),
+    ]);
+  return { cal, gcal, slack, outlook, zoom, chat, telegram, jitsi };
 }
 
 /** Resolve whether a given integration slug is currently connected. */
@@ -247,6 +267,8 @@ export function isConnected(
       );
     case "telegram":
       return statuses.telegram.hasToken;
+    case "jitsi":
+      return statuses.jitsi.enabled && Boolean(statuses.jitsi.baseUrl);
     default:
       return false;
   }
