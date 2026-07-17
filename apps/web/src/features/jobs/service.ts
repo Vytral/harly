@@ -3,7 +3,7 @@ import "server-only";
 import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
-import { db, jobs, jobStages, type Job } from "@harly/db";
+import { db, jobHiringTeam, jobs, jobStages, type Job } from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 
@@ -198,6 +198,15 @@ export async function createJobForApi(input: {
         order: index + 1,
       })),
     );
+
+    // API-created jobs should behave exactly like dashboard-created jobs:
+    // the caller is the initial, accountable recruiter for the role.
+    await tx.insert(jobHiringTeam).values({
+      workspaceId,
+      jobId: created.id,
+      userId: actorUserId,
+      role: "recruiter",
+    });
 
     return created;
   });

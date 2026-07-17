@@ -9,14 +9,14 @@ import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
-/** GET /api/v1/webhooks — list webhook endpoints. */
+/** GET /api/v1/webhooks , list webhook endpoints. */
 export const GET = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "webhooks:manage");
   const endpoints = await listWebhookEndpoints(ctx.workspaceId);
   return apiOk(endpoints.map(serializeWebhookEndpoint));
 });
 
-/** POST /api/v1/webhooks — create an endpoint. Secret is returned once. */
+/** POST /api/v1/webhooks , create an endpoint. Secret is returned once. */
 export const POST = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "webhooks:manage");
   const values = webhookCreateSchema.parse(

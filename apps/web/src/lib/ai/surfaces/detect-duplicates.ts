@@ -34,7 +34,7 @@ const SYSTEM_PROMPT =
   "Return only matches with confidence 'high' (near-certain same person) or 'medium' (probable same person). " +
   "Omit suspects that are clearly different people. " +
   "`reason` should be a short phrase explaining the match signal (e.g. 'Same name and email domain', 'Identical skills and headline'). " +
-  "Never guess — only return matches with real evidence." + "\n\n" + UNTRUSTED_DATA_GUARDRAIL;
+  "Never guess , only return matches with real evidence." + "\n\n" + UNTRUSTED_DATA_GUARDRAIL;
 
 export async function detectDuplicatesWithAI(
   config: AiModelConfig,

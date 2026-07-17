@@ -1,7 +1,5 @@
-# Harly
-
 <p align="center">
-  <img src="public/harly-logo.png" alt="Harly" width="620" />
+  <img src="public/banner-harly.webp" alt="Harly, an open-source applicant tracking system" width="1200" />
 </p>
 
 <p align="center">

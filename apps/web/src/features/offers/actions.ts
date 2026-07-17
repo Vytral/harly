@@ -303,7 +303,7 @@ export async function sendOffer(input: { offerId: string }): Promise<ActionResul
 
 /**
  * sent → accepted | declined. Accepting also moves the application to the
- * job's Hired stage (when present) and marks it hired — in one transaction.
+ * job's Hired stage (when present) and marks it hired , in one transaction.
  */
 export async function decideOffer(input: {
   offerId: string;
@@ -428,7 +428,7 @@ export async function decideOffer(input: {
     candidateId: offer.candidateId,
     candidateName: decisionRecipient?.firstName ?? "Candidate",
     type: decision === "accepted" ? "offer.accepted" : "offer.declined",
-    title: `Offer ${decision} — ${offer.title}`,
+    title: `Offer ${decision}, ${offer.title}`,
   });
 
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);

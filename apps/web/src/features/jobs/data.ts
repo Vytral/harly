@@ -7,6 +7,7 @@ import { db } from "@harly/db";
 import {
   applicationQuestions,
   applications,
+  jobHiringTeam,
   jobStages,
   jobs,
   organization,
@@ -157,7 +158,7 @@ export async function listJobOptions() {
 /** Jobs list enriched with per-role applicant counts for the dashboard table. */
 export async function listJobsWithStats() {
   const { organization: workspace } = await getWorkspaceContext();
-  // Bind as ISO string — the raw sql template can't parametrize a JS Date here.
+  // Bind as ISO string , the raw sql template can't parametrize a JS Date here.
   const weekAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 
   return db
@@ -188,7 +189,7 @@ export async function listJobsWithStats() {
     .orderBy(desc(jobs.createdAt));
 }
 
-/** Distinct department names across the workspace's jobs — for the combobox. */
+/** Distinct department names across the workspace's jobs , for the combobox. */
 export async function listWorkspaceDepartments() {
   const { organization: workspace } = await getWorkspaceContext();
 
@@ -217,7 +218,7 @@ export async function listTrashedJobs() {
     .orderBy(desc(jobs.deletedAt));
 }
 
-/** Move a job to the trash (soft delete) — reversible. */
+/** Move a job to the trash (soft delete) , reversible. */
 export async function trashJob(jobId: string) {
   const { organization: workspace } = await getWorkspaceContext();
   const [job] = await db
@@ -424,6 +425,15 @@ export async function createJob(values: JobFormValues) {
         order: index + 1,
       })),
     );
+
+    // Every job starts with an accountable collaborator. This also means that
+    // job-scoped candidate notifications have a useful recipient from day one.
+    await tx.insert(jobHiringTeam).values({
+      workspaceId: workspace.id,
+      jobId: createdJob.id,
+      userId: user.id,
+      role: "recruiter",
+    });
 
     await syncJobApplicationQuestions(tx, {
       workspaceId: workspace.id,

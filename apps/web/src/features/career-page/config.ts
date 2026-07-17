@@ -23,13 +23,13 @@ export type CareerTestimonial = { quote: string; name: string; role: string; ava
 /**
  * Folio-only editorial chrome. Re-presented sections (overview.values,
  * testimonials, faq, cta) keep using the shared fields above; these knobs
- * shape the magazine voice — masthead, byline, drop cap, numbered sections,
+ * shape the magazine voice , masthead, byline, drop cap, numbered sections,
  * and a standalone pull quote that floats between the brief and the roles.
  */
 export type CareerEditorial = {
-  /** Masthead kicker, e.g. "CAREERS — vol. IV". Sits top-left in mono. */
+  /** Masthead kicker, e.g. "CAREERS , vol. IV". Sits top-left in mono. */
   mastKicker: string;
-  /** Issue line shown top-right of the masthead, e.g. "Issue 04 — Jul 2026". */
+  /** Issue line shown top-right of the masthead, e.g. "Issue 04 , Jul 2026". */
   issueLabel: string;
   /** Byline shown under the lede, e.g. "By the Acme team". */
   byline: string;
@@ -78,7 +78,7 @@ export type CareerPageConfig = {
     bannerEnabled: boolean;
     /** Minimal banner: dark overlay opacity 0–100. */
     overlayOpacity: number;
-    /** Which logo asset to show — square mark or full wordmark. */
+    /** Which logo asset to show , square mark or full wordmark. */
     logoType: "logo" | "fullLogo";
     /** Banner-only: full logo variants uploaded for the hero banner. The banner
      *  background has an adjustable dark overlay, so the dark variant (white
@@ -155,7 +155,7 @@ const EMPTY: CareerPageConfig = {
   theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
 };
 
-/** Preset seeds — what the builder loads when a template is first chosen. */
+/** Preset seeds , what the builder loads when a template is first chosen. */
 export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
   minimal: () => ({
     ...structuredClone(EMPTY),
@@ -193,8 +193,8 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
       title: "Overview",
       stats: [
         { label: "Founded", value: "2024", icon: "calendar" },
-        { label: "Team", value: "—", icon: "users" },
-        { label: "Locations", value: "—", icon: "map-pin" },
+        { label: "Team", value: "Not set", icon: "users" },
+        { label: "Locations", value: "Not set", icon: "map-pin" },
       ],
     },
     gallery: { enabled: true, images: [], autoplay: true, speed: "slow" },
@@ -237,11 +237,11 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
       ctaButtonText: "Read the roles",
     },
     intro: {
-      body: "Harly is a small, opinionated team that thinks hiring software should feel like the people it serves. We write in plain language, ship in small slices, and care about the seams — the tiny transitions, the empty states, the half-second a candidate waits before a form opens. This is a brief about how we work and what we're looking for.",
+      body: "Harly is a small, opinionated team that thinks hiring software should feel like the people it serves. We write in plain language, ship in small slices, and care about the seams, the tiny transitions, the empty states, the half-second a candidate waits before a form opens. This is a brief about how we work and what we're looking for.",
       chips: [],
     },
     editorial: {
-      mastKicker: "CAREERS — vol. I",
+      mastKicker: "CAREERS, vol. I",
       issueLabel: "Issue 01",
       byline: "By the Harly team",
       dropCap: true,
@@ -253,7 +253,7 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
       title: "At a glance",
       stats: [
         { label: "Founded", value: "2024", icon: "calendar" },
-        { label: "Team", value: "—", icon: "users" },
+        { label: "Team", value: "Not set", icon: "users" },
         { label: "Remote", value: "100%", icon: "globe" },
       ],
     },

@@ -7,7 +7,7 @@ export default function SetupLayout({
 }) {
   return (
     <div className="relative min-h-[100dvh] bg-paper text-foreground antialiased md:grid md:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-      {/* Brand panel — evergreen, hidden on mobile (its logo re-appears in the
+      {/* Brand panel , evergreen, hidden on mobile (its logo re-appears in the
           right panel below md). */}
       <SetupBrandPanel />
 

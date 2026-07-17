@@ -17,7 +17,7 @@ const COLLAPSE_KEY = "harly:setup-checklist-collapsed";
 /**
  * A localStorage-backed boolean shared with React via useSyncExternalStore.
  * SSR snapshot is always `false`, so the server renders "expanded / not
- * dismissed" and the client reconciles on hydration — no setState-in-effect.
+ * dismissed" and the client reconciles on hydration , no setState-in-effect.
  */
 function makePersistedFlag(key: string) {
   const listeners = new Set<() => void>();
@@ -38,7 +38,7 @@ function makePersistedFlag(key: string) {
       try {
         window.localStorage.setItem(key, value ? "1" : "0");
       } catch {
-        // Private mode / storage disabled — falls back to session-only state.
+        // Private mode / storage disabled , falls back to session-only state.
       }
       listeners.forEach((l) => l());
     },
@@ -50,7 +50,7 @@ const collapseStore = makePersistedFlag(COLLAPSE_KEY);
 const serverFalse = () => false;
 
 /**
- * "Get your workspace ready" — a progressive, benefit-led launch checklist.
+ * "Get your workspace ready" , a progressive, benefit-led launch checklist.
  * Reads state from getSetupChecklist and links to existing pages. Completed
  * rows keep an Edit link (users come back); collapsible to a single header row;
  * at 100% it shows a one-time celebration that, once dismissed, stays hidden.
@@ -69,6 +69,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
   // Play a soft collapse before unmounting so the dashboard below glides up
   // into place instead of snapping.
   const [leaving, setLeaving] = useState(false);
+  const pendingItems = checklist.items.filter((item) => !item.done);
 
   if (dismissed) return null;
 
@@ -80,7 +81,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
           leaving ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100",
         )}
         onTransitionEnd={(e) => {
-          // Only the wrapper's own opacity fade ends the card — ignore
+          // Only the wrapper's own opacity fade ends the card , ignore
           // transitions bubbling up from children (progress bar, chevron).
           if (
             leaving &&
@@ -116,7 +117,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
               </span>
               <div className="space-y-1">
                 <h2 className="font-display text-lg font-semibold tracking-tight">
-                  Your workspace is ready 🎉
+                  Your workspace is ready
                 </h2>
                 <p className="max-w-prose text-sm text-muted-foreground">
                   You&apos;ve completed every recommended step. Time to focus on
@@ -140,7 +141,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
         "overflow-hidden duration-500 animate-in fade-in slide-in-from-bottom-2",
       )}
     >
-      {/* Header — click to collapse/expand */}
+      {/* Header , click to collapse/expand */}
       <button
         type="button"
         onClick={() => collapseStore.set(!collapsed)}
@@ -156,7 +157,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
           </span>
           <div>
             <h2 className="font-display text-[15px] font-semibold tracking-tight">
-              Get your workspace ready
+              Recommended next steps
             </h2>
             <p className="text-xs text-muted-foreground">
               {checklist.completed} of {checklist.total} done
@@ -191,7 +192,7 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
       {/* Rows */}
       {!collapsed ? (
         <ul className="divide-y divide-border/50">
-          {checklist.items.map((item, i) => (
+          {pendingItems.map((item, i) => (
             <li
               key={item.key}
               className="duration-500 animate-in fade-in slide-in-from-bottom-1"

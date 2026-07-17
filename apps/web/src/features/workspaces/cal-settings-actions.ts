@@ -14,7 +14,7 @@ import {
   getWorkspaceCalConfig,
   getWorkspaceCalStatus,
 } from "@/lib/cal/config";
-import { registerCalWebhook } from "@/lib/cal/client";
+import { registerCalWebhook, verifyCalConnection } from "@/lib/cal/client";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 
@@ -126,6 +126,47 @@ export async function disableCalAction(): Promise<CalSettingsActionResult> {
 }
 
 /**
+ * Validate an API key against Cal.com without persisting it. Lets the connect
+ * form show a live pass/fail before the user commits credentials.
+ */
+export async function testCalConnectionAction(input: {
+  apiKey?: string;
+  baseUrl?: string;
+}): Promise<CalSettingsActionResult> {
+  const context = await requirePermission("integrations:manage");
+
+  const baseUrl =
+    input.baseUrl && URL.canParse(input.baseUrl)
+      ? input.baseUrl
+      : DEFAULT_CAL_BASE_URL;
+
+  let apiKey = input.apiKey?.trim() || null;
+  // Fall back to the stored key when the field is left blank (managing an
+  // existing connection).
+  if (!apiKey) {
+    const stored = await getWorkspaceCalConfig(context.organization.id);
+    apiKey = stored?.apiKey ?? null;
+  }
+  if (!apiKey) {
+    return { ok: false, error: "Enter an API key to test." };
+  }
+
+  try {
+    await verifyCalConnection({ apiKey, baseUrl });
+    return { ok: true };
+  } catch (error) {
+    log.error(error, "testCalConnectionAction failed");
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not reach Cal.com with that key.",
+    };
+  }
+}
+
+/**
  * Register Harly's webhook endpoint with Cal.com so bookings sync back. Uses
  * the stored signing secret and the app's public URL.
  */
@@ -137,7 +178,7 @@ export async function registerCalWebhookAction(): Promise<CalSettingsActionResul
     return { ok: false, error: "Connect Cal.com (API key + enable) first." };
   }
   if (!config.webhookSecret) {
-    return { ok: false, error: "Missing webhook secret — save settings again." };
+    return { ok: false, error: "Missing webhook secret. Save settings again." };
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL;

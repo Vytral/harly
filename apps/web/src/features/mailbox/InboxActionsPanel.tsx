@@ -92,7 +92,7 @@ export function InboxActionsPanel({
           </span>
         </TooltipTrigger>
         <TooltipContent id={`${idPrefix}-create-application-hint`}>
-          Coming soon — link this thread to a job application.
+          Coming soon. Link this thread to a job application.
         </TooltipContent>
       </Tooltip>
 
@@ -118,7 +118,7 @@ export function InboxActionsPanel({
               </span>
             </TooltipTrigger>
             <TooltipContent id={`${idPrefix}-ai-tool-hint-${label}`}>
-              Coming soon — will always ask before acting on a thread.
+              Coming soon. Harly will always ask before acting on a thread.
             </TooltipContent>
           </Tooltip>
         ))}

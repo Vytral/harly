@@ -238,7 +238,7 @@ export function LoginForm({ redirect }: { redirect?: string }) {
         return;
       }
 
-      // Success — redirect to dashboard.
+      // Success , redirect to dashboard.
       window.location.href = callbackURL;
     } catch (err) {
       if (err instanceof Error && err.name === "NotAllowedError") {

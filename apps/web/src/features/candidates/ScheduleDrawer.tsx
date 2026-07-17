@@ -7,7 +7,6 @@ import { toast } from "sonner";
 
 import { scheduleInterview } from "@/features/interviews/actions";
 import { checkAvailability } from "@/lib/gcal/availability";
-import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { buildCalBookingLink } from "@/lib/cal/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/ui/side-panel";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 
@@ -26,12 +25,13 @@ export type ScheduleApplicationOption = {
   applicationId: string;
   jobTitle: string;
   currentStageName: string | null;
-  status: string | null;
+  status?: string | null;
 };
 
 export type ScheduleMemberOption = {
   userId: string;
   name: string;
+  image?: string | null;
 };
 
 const TYPES = [
@@ -138,7 +138,7 @@ export function ScheduleDrawer({
           : null,
       );
     } catch {
-      // Silently fail — don't block scheduling on availability check.
+      // Silently fail , don't block scheduling on availability check.
     } finally {
       setCheckingAvailability(false);
     }
@@ -157,7 +157,7 @@ export function ScheduleDrawer({
       metadata: { applicationId, candidateId, workspaceId },
     });
     void navigator.clipboard.writeText(link);
-    toast.success("Booking link copied — send it to the candidate");
+    toast.success("Booking link copied. Send it to the candidate");
   }
 
   function reset() {
@@ -210,18 +210,17 @@ export function ScheduleDrawer({
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <DrawerLayout
+    <SidePanel
+      open={open}
+      onOpenChange={setOpen}
+      trigger={trigger}
         title="Schedule interview"
         description="Set the date, time, and interviewers for this meeting."
         footer={
           <>
-            <SheetClose asChild>
-              <Button variant="outline" disabled={isPending}>
-                Cancel
-              </Button>
-            </SheetClose>
+            <Button variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
             <Button onClick={submit} disabled={isPending || !hasApplication}>
               {isPending ? "Scheduling…" : "Schedule"}
             </Button>
@@ -428,8 +427,7 @@ export function ScheduleDrawer({
             </Field>
           </div>
         )}
-      </DrawerLayout>
-    </Sheet>
+    </SidePanel>
   );
 }
 

@@ -26,7 +26,7 @@ setInterval(() => {
   }
 }, 60_000);
 
-// GET — generate authentication options for passkey login (no session required).
+// GET , generate authentication options for passkey login (no session required).
 export async function GET() {
   // Get all passkeys to allow the browser to check if any are available.
   const allPasskeys = await db
@@ -55,7 +55,7 @@ export async function GET() {
   return NextResponse.json({ ...options, challengeId });
 }
 
-// POST — verify authentication response and create session for passkey login.
+// POST , verify authentication response and create session for passkey login.
 export async function POST(req: NextRequest) {
   const body = await req.json();
 

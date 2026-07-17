@@ -8,7 +8,7 @@ import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
-/** GET /api/public/v1/jobs — list a workspace's open jobs (CORS-open). */
+/** GET /api/public/v1/jobs , list a workspace's open jobs (CORS-open). */
 export const GET = withApi(async (request) => {
   enforceRateLimit(`public:jobs:${clientIp(request)}`, {
     limit: 120,

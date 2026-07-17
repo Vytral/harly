@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 
 type Country = { code: string; name: string; dial: string };
 
-// Curated set — majors + full LATAM + Europe + common. `dial` has no "+".
+// Curated set , majors + full LATAM + Europe + common. `dial` has no "+".
 const COUNTRIES: Country[] = [
   { code: "CL", name: "Chile", dial: "56" },
   { code: "AR", name: "Argentina", dial: "54" },
@@ -103,7 +103,7 @@ export function PhoneInput({
   inputClassName?: string;
 }) {
   // `country` is the user's explicit pick; the *active* country is derived from
-  // the value when it carries a dial code (e.g. resume autofill) — derived at
+  // the value when it carries a dial code (e.g. resume autofill) , derived at
   // render, so no effect/setState sync is needed.
   const [country, setCountry] = useState<Country>(
     () => detectCountry(value) ?? DEFAULT,

@@ -9,6 +9,7 @@ import {
   generateJobMatchesAction,
   indexCandidatesForMatchingAction,
 } from "@/features/matching/actions";
+import { SEMANTIC_MATCH_LIMIT } from "@/features/matching/constants";
 import type { JobMatch } from "@/features/matching/data";
 import { assignFromPoolToJobAction } from "@/features/pool/actions";
 import { Button } from "@/components/ui/button";
@@ -31,9 +32,11 @@ function matchTone(pct: number) {
 export function SemanticMatchPanel({
   jobId,
   aiConfigured,
+  candidatePoolCount,
 }: {
   jobId: string;
   aiConfigured: boolean;
+  candidatePoolCount: number;
 }) {
   const shouldReduceMotion = useReducedMotion();
   const [matches, setMatches] = useState<JobMatch[] | null>(null);
@@ -64,7 +67,7 @@ export function SemanticMatchPanel({
         toast.error(result.error);
         return;
       }
-      setMatches(result.matches);
+      setMatches(result.matches.slice(0, SEMANTIC_MATCH_LIMIT));
       if (result.matches.length === 0) {
         toast.info("No candidates in your pool yet.");
       }
@@ -96,14 +99,19 @@ export function SemanticMatchPanel({
             Semantic match
           </h3>
           <p className="mt-1 text-sm text-muted-foreground">
-            Rank your entire candidate pool against this role by embedding
-            similarity.
+            See the {SEMANTIC_MATCH_LIMIT} strongest matches from your candidate pool by embedding similarity.
           </p>
         </div>
         {aiConfigured ? (
-          <Button size="sm" onClick={findMatches} disabled={loading}>
+          <Button size="sm" onClick={findMatches} disabled={loading || candidatePoolCount === 0}>
             <TargetIcon className={cn("size-4", loading && "animate-pulse")} />
-            {loading ? "Matching…" : matches ? "Refresh matches" : "Find matches"}
+            {loading
+              ? "Matching…"
+              : candidatePoolCount === 0
+                ? "No candidates in pool"
+                : matches
+                  ? "Refresh matches"
+                  : "Find matches"}
           </Button>
         ) : (
           <Button asChild size="sm" variant="outline">
@@ -112,7 +120,15 @@ export function SemanticMatchPanel({
         )}
       </div>
 
-      {matches && matches.length > 0 ? (
+      {candidatePoolCount === 0 ? (
+        <CardContent className="mt-3 flex flex-col items-center gap-2 rounded-xl border border-dashed py-8 text-center">
+          <TargetIcon className="size-6 text-muted-foreground" />
+          <p className="text-sm font-medium">Your candidate pool is empty</p>
+          <p className="max-w-sm text-sm text-muted-foreground">
+            Add candidates to the pool to generate a ranked shortlist for this role.
+          </p>
+        </CardContent>
+      ) : matches && matches.length > 0 ? (
         <ul className="mt-4 space-y-1.5">
           {matches.map((m, i) => (
             <motion.li
@@ -160,7 +176,7 @@ export function SemanticMatchPanel({
         <CardContent className="mt-3 flex flex-col items-center gap-2 rounded-xl border border-dashed py-8 text-center">
           <TargetIcon className="size-6 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            No indexed candidates yet — add candidates to your pool first.
+            No indexed candidates yet. Add candidates to your pool first.
           </p>
         </CardContent>
       ) : null}

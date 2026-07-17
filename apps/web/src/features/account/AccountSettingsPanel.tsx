@@ -60,7 +60,7 @@ type AccountUser = {
 };
 
 function formatDate(date: Date | undefined) {
-  if (!date) return "—";
+  if (!date) return "Not set";
   return new Intl.DateTimeFormat("en-US", {
     month: "long",
     year: "numeric",
@@ -265,7 +265,7 @@ export function AccountSettingsPanel({
   const userAgent = useSyncExternalStore(
     () => () => {},
     () => navigator.userAgent.slice(0, 60),
-    () => "—",
+    () => "Unknown browser",
   );
 
   const [newEmail, setNewEmail] = useState("");

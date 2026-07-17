@@ -20,7 +20,7 @@ export default async function NoWorkspacePage() {
   if (context) redirect("/dashboard");
   if (!(await organizationExists())) redirect("/onboarding");
 
-  // Check if user has a pending invitation — if so, redirect to accept it.
+  // Check if user has a pending invitation , if so, redirect to accept it.
   const pendingInvitation = await getPendingInvitationForEmail(
     session.user.email,
   );
@@ -51,7 +51,7 @@ export default async function NoWorkspacePage() {
             <span className="font-medium text-foreground">
               {session.user.email}
             </span>{" "}
-            — your invite link drops you straight into the right role.
+            , your invite link drops you straight into the right role.
           </p>
 
           <div className="mt-10 rounded-lg bg-muted px-4 py-3">

@@ -3,7 +3,7 @@ import { z } from "zod";
 /**
  * Structured-output schemas for AI surfaces. Fields use `.nullable()` (not
  * `.optional()`) because OpenAI structured output requires every property to be
- * present — nullable is the supported way to express "unknown".
+ * present , nullable is the supported way to express "unknown".
  */
 
 export const resumeExtractionSchema = z.object({
@@ -23,7 +23,7 @@ export const resumeExtractionSchema = z.object({
 export type ResumeExtraction = z.infer<typeof resumeExtractionSchema>;
 
 /**
- * Rich, structured résumé extraction for the candidate profile — summary, skills,
+ * Rich, structured résumé extraction for the candidate profile , summary, skills,
  * total years, plus a work-experience timeline and education list. One AI call
  * fills every parsed field on `candidateFiles`.
  */
@@ -57,7 +57,7 @@ export const resumeStructuredSchema = z.object({
 export type ResumeStructured = z.infer<typeof resumeStructuredSchema>;
 
 export const jobDraftSchema = z.object({
-  // Short plain-text intro (no HTML) — formatted to safe HTML downstream.
+  // Short plain-text intro (no HTML) , formatted to safe HTML downstream.
   summary: z.string(),
   sections: z.array(
     z.object({
@@ -109,7 +109,7 @@ export type InterviewNotesSummary = z.infer<typeof interviewNotesSummarySchema>;
 
 export const scorecardRefinementSchema = z.object({
   // The interviewer's comment with grammar fixed, formatting standardized, and
-  // clarity improved — same meaning, same first-person voice, no new claims.
+  // clarity improved , same meaning, same first-person voice, no new claims.
   refined: z.string(),
 });
 

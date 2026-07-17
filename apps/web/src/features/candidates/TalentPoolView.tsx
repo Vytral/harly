@@ -63,7 +63,7 @@ export function TalentPoolView({
 
   /**
    * Score every unscored applicant for the selected job. The server caps each
-   * call at 25, so loop until `remaining` hits 0 — resumable and idempotent.
+   * call at 25, so loop until `remaining` hits 0 , resumable and idempotent.
    */
   async function rankUnscored() {
     if (!selectedJobId) return;
@@ -234,7 +234,7 @@ export function TalentPoolView({
                         title={
                           evaluation.usedResume
                             ? "Based on resume + profile"
-                            : "Profile only — no readable resume"
+                            : "Profile only. No readable resume"
                         }
                       >
                         {evaluation.score}

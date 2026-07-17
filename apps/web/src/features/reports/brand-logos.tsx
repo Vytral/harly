@@ -4,7 +4,7 @@
  * Brand marks for application sources (LinkedIn, Indeed, …).
  *
  * Inlined SVGs (via theSVG) so we ship no runtime icon dependency, mirroring
- * `icons/phosphor.tsx`. Marks keep their official brand colour — they read as
+ * `icons/phosphor.tsx`. Marks keep their official brand colour , they read as
  * small colour chips beside each source row. Unknown sources fall back to a
  * neutral globe drawn in `currentColor`.
  *

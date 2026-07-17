@@ -33,7 +33,7 @@ export async function POST(
     return NextResponse.json({ error: "Unknown provider." }, { status: 400 });
   }
 
-  // Raw body is required for signature verification — read it as text first.
+  // Raw body is required for signature verification , read it as text first.
   const rawBody = await request.text();
 
   const config = await getWorkspaceInboundEmailConfig(workspaceId);

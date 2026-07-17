@@ -12,7 +12,7 @@ import { CareerFooter } from "@/features/career-page/CareerFooter";
 
 
 /**
- * GreenhouseTemplate — classic corporate board. Wide hero banner, centered
+ * GreenhouseTemplate , classic corporate board. Wide hero banner, centered
  * "About" block, then open roles grouped into department sections with simple
  * rows. Serious, dense, no sidebar. Light/dark native.
  */
@@ -138,7 +138,7 @@ export function GreenhouseTemplate({
                           </span>
                           <span className="flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
                             <MapPin className="size-3.5" strokeWidth={1.8} />
-                            {job.location ?? formatWorkplaceType(job.workplaceType) ?? "—"}
+                            {job.location ?? formatWorkplaceType(job.workplaceType) ?? "Not specified"}
                             <span className="text-zinc-300 dark:text-zinc-600">·</span>
                             {formatEmploymentType(job.employmentType)}
                           </span>

@@ -121,7 +121,7 @@ export function StatCell({
   );
 }
 
-/** A small brand/feature tile — square, bordered, holds a logo or duotone icon. */
+/** A small brand/feature tile , square, bordered, holds a logo or duotone icon. */
 export function BrandTile({
   children,
   className,

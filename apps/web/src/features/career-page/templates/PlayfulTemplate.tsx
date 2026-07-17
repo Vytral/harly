@@ -11,7 +11,7 @@ import { careerIcon } from "@/features/career-page/icons";
 import type { CareerPageConfig } from "@/features/career-page/config";
 import type { Job } from "@/features/career-page/types";
 
-// Playful value-tile palettes — bold, Memory-style abstract colour blocks.
+// Playful value-tile palettes , bold, Memory-style abstract colour blocks.
 const VALUE_ART = [
   { bg: "#FDE68A", blob: "#F472B6" },
   { bg: "#BFDBFE", blob: "#2563EB" },

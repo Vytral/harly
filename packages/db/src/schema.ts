@@ -565,6 +565,17 @@ export const workspaceSettings = pgTable("workspace_settings", {
   zoomRefreshTokenIv: text("zoom_refresh_token_iv"),
   zoomRefreshTokenTag: text("zoom_refresh_token_tag"),
   zoomEvents: jsonb("zoom_events").default(sql`'[]'::jsonb`),
+
+  // Telegram notifications. Bot token is the only secret (AES-GCM triple);
+  // chat id is a plain destination identifier. Rides the same event emission
+  // points as chat/webhooks.
+  telegramEnabled: boolean("telegram_enabled").default(false).notNull(),
+  telegramBotTokenCiphertext: text("telegram_bot_token_ciphertext"),
+  telegramBotTokenIv: text("telegram_bot_token_iv"),
+  telegramBotTokenTag: text("telegram_bot_token_tag"),
+  telegramChatId: text("telegram_chat_id"),
+  telegramBotUsername: text("telegram_bot_username"),
+  telegramEvents: jsonb("telegram_events").default(sql`'[]'::jsonb`),
   ...timestamps(),
 });
 
@@ -1351,8 +1362,8 @@ export const emailTemplates = pgTable(
     body: text("body").notNull(),
     // When true, this template replaces the hardcoded system email for its
     // `type` (reject/stage-change/offer/interview). At most one active
-    // template per (workspaceId, type) — enforced in the action layer, not
-    // a DB constraint, since Drizzle partial unique indexes are awkward here.
+    // template per (workspaceId, type), enforced by the partial unique index
+    // below as well as the action transaction.
     isActive: boolean("is_active").default(false).notNull(),
     createdById: text("created_by_id").references(() => user.id, {
       onDelete: "set null",
@@ -1373,6 +1384,9 @@ export const emailTemplates = pgTable(
       table.type,
       table.isActive,
     ),
+    uniqueIndex("email_templates_one_active_type_idx")
+      .on(table.workspaceId, table.type)
+      .where(sql`${table.isActive} = true`),
   ],
 );
 

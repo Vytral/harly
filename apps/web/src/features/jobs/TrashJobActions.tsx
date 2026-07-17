@@ -80,7 +80,7 @@ export function TrashJobActions({
             <DialogTitle>Delete permanently?</DialogTitle>
             <DialogDescription>
               “{jobTitle}” will be removed for good. This can&apos;t be undone.
-              Jobs with applications can&apos;t be deleted — close them instead.
+              Jobs with applications can&apos;t be deleted. Close them instead.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

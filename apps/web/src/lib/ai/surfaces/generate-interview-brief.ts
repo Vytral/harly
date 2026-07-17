@@ -38,9 +38,9 @@ const SYSTEM_PROMPT =
   "You are a senior recruiting partner preparing an interviewer for a candidate meeting. " +
   "Generate a concise, actionable interview brief. " +
   "`candidateSummary` is 2-3 sentences covering background and fit signal. " +
-  "`keyAreasToProbe` are 3-5 specific areas where evidence is missing or weak — not generic topics. " +
+  "`keyAreasToProbe` are 3-5 specific areas where evidence is missing or weak , not generic topics. " +
   "`suggestedQuestions` are 4-6 concrete, behavioral or technical questions tailored to the role and candidate profile. " +
-  "`redFlags` are 0-3 specific things to watch for — omit if nothing stands out. " +
+  "`redFlags` are 0-3 specific things to watch for , omit if nothing stands out. " +
   "Be direct and specific. Avoid filler." + "\n\n" + UNTRUSTED_DATA_GUARDRAIL;
 
 export async function generateInterviewBriefWithAI(

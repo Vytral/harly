@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 
 type Context = { params: Promise<{ slug: string }> };
 
-/** GET /api/public/v1/jobs/{slug} — job detail + application config (CORS-open). */
+/** GET /api/public/v1/jobs/{slug} , job detail + application config (CORS-open). */
 export const GET = withApi(async (request, context) => {
   enforceRateLimit(`public:job:${clientIp(request)}`, {
     limit: 120,

@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 
 /**
- * GET /embed/widget.js — self-contained, dependency-free careers widget.
+ * GET /embed/widget.js , self-contained, dependency-free careers widget.
  *
  * A company drops this on their existing careers page:
  *
@@ -135,7 +135,7 @@ const WIDGET = String.raw`(function () {
     var back = el("button", "oh-back", "← Back to all jobs");
     back.onclick = function () { render(container, jobs); };
     root.appendChild(back);
-    root.appendChild(el("h3", null, "Apply — " + job.title));
+    root.appendChild(el("h3", null, "Apply , " + job.title));
 
     var form = el("form");
     var first = el("input", "oh-input"); first.required = true;

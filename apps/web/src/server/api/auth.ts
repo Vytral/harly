@@ -50,7 +50,7 @@ function extractKey(request: Request): { raw: string; fromQuery: boolean } | nul
 /**
  * Authenticate an API key and (optionally) assert a required scope.
  *
- * Secret keys (sk_) must be sent in a header — never accepted from the query
+ * Secret keys (sk_) must be sent in a header , never accepted from the query
  * string to avoid leaking them into logs / referrers. Publishable keys (pk_)
  * are accepted from either.
  */

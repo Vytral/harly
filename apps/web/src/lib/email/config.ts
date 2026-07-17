@@ -27,7 +27,7 @@ export type WorkspaceEmailStatus = {
   smtpPort: number | null;
   smtpSecure: boolean;
   smtpUser: string | null;
-  /** False when AI_ENCRYPTION_KEY is missing/invalid — secrets can't be stored. */
+  /** False when AI_ENCRYPTION_KEY is missing/invalid , secrets can't be stored. */
   encryptionReady: boolean;
   /** True when this workspace has no config but the platform RESEND_API_KEY is set. */
   usingPlatformDefault: boolean;
@@ -162,7 +162,7 @@ export type WorkspaceInboundEmailStatus = {
   replyDomain: string | null;
   /** True only when a webhook secret is stored (never the secret itself). */
   hasWebhookSecret: boolean;
-  /** Resend only — true when an inbound-specific API key is stored. */
+  /** Resend only , true when an inbound-specific API key is stored. */
   hasResendApiKey: boolean;
   encryptionReady: boolean;
 };

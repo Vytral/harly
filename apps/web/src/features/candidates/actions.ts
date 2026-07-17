@@ -361,7 +361,7 @@ export async function createCandidateNote(input: {
         },
       });
 
-      // One "mentioned you" event per teammate — skips self-mentions.
+      // One "mentioned you" event per teammate , skips self-mentions.
       const notifiable = mentions.filter((m) => m.userId !== user.id);
       if (notifiable.length > 0) {
         await tx.insert(activityEvents).values(
@@ -380,7 +380,7 @@ export async function createCandidateNote(input: {
           })),
         );
 
-        // Inbox delivery — one notification per mentioned teammate.
+        // Inbox delivery , one notification per mentioned teammate.
         await tx.insert(notifications).values(
           notifiable.map((m) => ({
             workspaceId: input.workspaceId,
@@ -900,7 +900,7 @@ const bulkEmailSchema = z.object({
 /**
  * Send a (template-interpolated) email to up to 50 candidates. Subject/body
  * may contain {{variables}}; they are filled per candidate server-side.
- * Sequential sends — Resend rate limits — each recorded in candidate_messages.
+ * Sequential sends , Resend rate limits , each recorded in candidate_messages.
  */
 export async function sendBulkCandidateEmail(input: {
   candidateIds: string[];
@@ -924,7 +924,7 @@ export async function sendBulkCandidateEmail(input: {
   );
   const { organization: workspace, user } = await getWorkspaceContext();
 
-  // Workspace-scoped fetch — ids from the client are never trusted directly.
+  // Workspace-scoped fetch , ids from the client are never trusted directly.
   const rows = await db
     .select({
       id: candidates.id,
@@ -944,7 +944,7 @@ export async function sendBulkCandidateEmail(input: {
     return { success: false, error: "No matching candidates.", sent: 0, failed: 0 };
   }
 
-  // Latest application per candidate — job title for {{job_title}}, and the
+  // Latest application per candidate , job title for {{job_title}}, and the
   // application id for inbound reply routing.
   const jobTitleRows = await db
     .select({
@@ -1169,7 +1169,7 @@ export async function sendCandidateMessage(input: {
       return { success: false, error: "Candidate not found." };
     }
 
-    // Latest application for this candidate — used to route inbound replies
+    // Latest application for this candidate , used to route inbound replies
     // back to the right thread via a Reply-To token, when inbound is on.
     const [latestApplication] = await db
       .select({ id: applications.id })
@@ -1246,7 +1246,7 @@ export async function sendCandidateMessage(input: {
 
 const candidateIdsSchema = z.array(z.string().min(1)).min(1).max(200);
 
-/** Move a candidate to the trash — reversible. */
+/** Move a candidate to the trash , reversible. */
 export async function trashCandidateAction(
   candidateId: string,
 ): Promise<CandidateActionState> {
@@ -1275,7 +1275,7 @@ export async function trashCandidateAction(
   return { success: true };
 }
 
-/** Move multiple candidates to the trash — reversible. */
+/** Move multiple candidates to the trash , reversible. */
 export async function bulkTrashCandidatesAction(
   candidateIds: string[],
 ): Promise<CandidateActionState & { count?: number }> {

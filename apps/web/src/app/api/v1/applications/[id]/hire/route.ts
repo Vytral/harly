@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 type Context = { params: Promise<{ id: string }> };
 
-/** POST /api/v1/applications/{id}/hire — mark hired (fires application.hired). */
+/** POST /api/v1/applications/{id}/hire , mark hired (fires application.hired). */
 export const POST = withApi(async (request, context) => {
   const ctx = await authenticateApiKey(request, "applications:write");
   const { id } = await (context as Context).params;

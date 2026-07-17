@@ -29,13 +29,13 @@ export type NavItem = {
   requiredPermission?: Permission;
 };
 
-/** Primary sections — the recruiter's daily surfaces. */
+/** Primary sections , the recruiter's daily surfaces. */
 export const primaryNav: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: Home, exact: true },
   { label: "Inbox", href: "/dashboard/inbox", icon: Inbox, badge: "inbox" },
 ];
 
-/** Workspace tools — where the hiring work actually happens. */
+/** Workspace tools , where the hiring work actually happens. */
 export const workspaceNav: NavItem[] = [
   { label: "Jobs", href: "/dashboard/jobs", icon: Briefcase },
   { label: "Candidates", href: "/dashboard/candidates", icon: Users },
@@ -43,7 +43,12 @@ export const workspaceNav: NavItem[] = [
   { label: "Reports", href: "/dashboard/reports", icon: BarChart3 },
   { label: "Tasks", href: "/dashboard/tasks", icon: ListTodo, badge: "tasks" },
   { label: "Calendars", href: "/dashboard/calendars", icon: CalendarDays },
-  { label: "Templates", href: "/dashboard/templates", icon: FileText },
+  {
+    label: "Templates",
+    href: "/dashboard/templates",
+    icon: FileText,
+    requiredPermission: "templates:manage",
+  },
   { label: "Talent Pool", href: "/dashboard/talent-pool", icon: Bookmark },
   { label: "Career Page", href: "/dashboard/career-page", icon: Globe },
   {

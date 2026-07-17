@@ -28,7 +28,7 @@ import {
   CheckIcon,
 } from "@/components/ui/icons/phosphor";
 
-// Inline SVG logos — no external deps
+// Inline SVG logos , no external deps
 function GoogleLogo({ className }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none">
@@ -143,7 +143,7 @@ function OAuthProviderSection({
           <span className="text-xs text-muted-foreground">Not configured</span>
         )}
         {canEdit ? (
-          <Sheet open={open} onOpenChange={handleOpenChange}>
+          <Sheet open={open} onOpenChange={handleOpenChange} mobilePresentation="bottom-on-mobile">
             <SheetTrigger asChild>
               <Button
                 variant={configured ? "ghost" : "outline"}
@@ -375,7 +375,7 @@ export function CandidatePortalCard({
           Sign-in providers
         </h2>
         <div className="space-y-3">
-          {/* Magic link — always available */}
+          {/* Magic link , always available */}
           <div className="flex items-center justify-between rounded-xl border bg-card px-4 py-3.5">
             <div className="flex items-center gap-3">
               <span className="flex size-8 items-center justify-center rounded-lg border bg-muted/50">
@@ -396,7 +396,7 @@ export function CandidatePortalCard({
               <div>
                 <p className="text-sm font-medium">Magic link (email)</p>
                 <p className="text-xs text-muted-foreground">
-                  Passwordless — candidates enter their email and receive a
+                  Passwordless. Candidates enter their email and receive a
                   sign-in link.
                 </p>
               </div>

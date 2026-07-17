@@ -33,8 +33,8 @@ export type EmailDraft = {
 const TYPE_INSTRUCTIONS: Record<EmailDraftType, string> = {
   screening: `Write a brief screening outreach to schedule an initial call. Tone: warm, professional, concise. 3-4 sentences. Ask for their availability this week or next.`,
   interview_invite: `Write an interview invitation. Tone: enthusiastic, professional. Mention the role, confirm next steps, and ask them to confirm a time. 4-5 sentences.`,
-  rejection: `Write a respectful rejection. Tone: warm, empathetic, appreciative of their time. Do NOT use phrases like "we've decided to move forward with other candidates" verbatim — vary the language. 3-4 sentences. No false promises about future roles unless it genuinely fits.`,
-  offer: `Write an offer congratulations email. Tone: excited, warm. Mention the role, express genuine enthusiasm about them joining. 4-5 sentences. Do NOT include salary figures — those belong in the formal offer letter.`,
+  rejection: `Write a respectful rejection. Tone: warm, empathetic, appreciative of their time. Do NOT use phrases like "we've decided to move forward with other candidates" verbatim , vary the language. 3-4 sentences. No false promises about future roles unless it genuinely fits.`,
+  offer: `Write an offer congratulations email. Tone: excited, warm. Mention the role, express genuine enthusiasm about them joining. 4-5 sentences. Do NOT include salary figures , those belong in the formal offer letter.`,
   followup: `Write a friendly follow-up checking in on a previous conversation or pending next step. Tone: light, professional, no pressure. 3 sentences max.`,
 };
 

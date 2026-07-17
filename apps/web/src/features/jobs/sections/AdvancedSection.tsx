@@ -142,7 +142,7 @@ export function AdvancedSection({
             />
             <p className="text-xs text-muted-foreground">
               <MapPin className="mr-1 inline size-3" />
-              We&apos;ll show an interactive map — no API key needed.
+              We&apos;ll show an interactive map. No API key needed.
             </p>
           </div>
           {mapSrc ? (

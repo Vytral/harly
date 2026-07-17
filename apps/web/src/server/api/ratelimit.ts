@@ -8,7 +8,7 @@ import { db, rateLimitBuckets } from "@harly/db";
 /**
  * Rate limiting. Fixed-window counters, pluggable store:
  *
- * - `MemoryStore` (default): correct for a single instance — the default
+ * - `MemoryStore` (default): correct for a single instance , the default
  *   self-host topology. Zero dependencies.
  * - `DatabaseStore`: shared across instances (horizontal scaling / multiple
  *   server processes) using the existing Postgres, with row-level locking so
@@ -115,7 +115,7 @@ export function enforceRateLimit(
  * Best-effort client IP from proxy headers (works behind Vercel / nginx).
  *
  * The LEFTmost `x-forwarded-for` value is attacker-controllable, so by default
- * we use the RIGHTmost address — the hop closest to our edge, which a fronting
+ * we use the RIGHTmost address , the hop closest to our edge, which a fronting
  * proxy controls. Self-hosters who terminate TLS at a trusted proxy may set
  * TRUSTED_PROXY_IPS (comma-separated) to opt into using the leftmost (original
  * client) address instead; requests not from a trusted proxy still fall back to

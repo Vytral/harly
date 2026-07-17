@@ -301,7 +301,7 @@ export function NoteForm({
         <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center">
           <MessageSquare className="size-5 text-muted-foreground" strokeWidth={1.5} />
           <p className="text-sm text-muted-foreground">
-            No notes yet — add the first one above.
+            No notes yet. Add the first one above.
           </p>
         </div>
       ) : (

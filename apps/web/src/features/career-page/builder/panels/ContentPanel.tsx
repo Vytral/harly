@@ -60,7 +60,7 @@ export function ContentPanel({ config, update, workspace }: ContentPanelProps) {
                     onChange={(url) => update((d) => (d.hero.imageUrl = url))}
                   />
                 </Field>
-                <Field label={`Overlay opacity — ${config.hero.overlayOpacity}%`}>
+                <Field label={`Overlay opacity, ${config.hero.overlayOpacity}%`}>
                   <input
                     type="range"
                     min={0}
@@ -83,14 +83,14 @@ export function ContentPanel({ config, update, workspace }: ContentPanelProps) {
                     ]}
                   />
                 </Field>
-                <Field label="Full logo — white letters (for dark banners)">
+                <Field label="Full logo, white letters for dark banners">
                   <FileDropzone
                     aspect="banner"
                     value={config.hero.bannerLogoDark}
                     onChange={(url) => update((d) => (d.hero.bannerLogoDark = url))}
                   />
                 </Field>
-                <Field label="Full logo — dark letters (for light banners)">
+                <Field label="Full logo, dark letters for light banners">
                   <FileDropzone
                     aspect="banner"
                     value={config.hero.bannerLogoLight}
@@ -119,7 +119,7 @@ export function ContentPanel({ config, update, workspace }: ContentPanelProps) {
           </>
         )}
 
-        {/* Banner image + overlay — Playful, Ashby & Folio */}
+        {/* Banner image + overlay , Playful, Ashby & Folio */}
         {config.template !== "minimal" && (
           <>
             <Field label="Banner image">
@@ -212,21 +212,21 @@ export function ContentPanel({ config, update, workspace }: ContentPanelProps) {
         )}
       </Section>
 
-      {/* Folio — editorial chrome (masthead, byline) */}
+      {/* Folio , editorial chrome (masthead, byline) */}
       {config.template === "folio" && (
         <Section title="Editorial chrome">
           <Field label="Masthead kicker">
             <Input
               value={config.editorial.mastKicker}
               onChange={(e) => update((d) => (d.editorial.mastKicker = e.target.value))}
-              placeholder="CAREERS — vol. I"
+              placeholder="CAREERS, vol. I"
             />
           </Field>
           <Field label="Issue label">
             <Input
               value={config.editorial.issueLabel}
               onChange={(e) => update((d) => (d.editorial.issueLabel = e.target.value))}
-              placeholder="Issue 01 — Jul 2026"
+              placeholder="Issue 01, Jul 2026"
             />
           </Field>
           <Field label="Byline">

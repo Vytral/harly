@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 /**
  * Invite-scoped account setup. A new teammate accepting an invitation only sets
  * a name + password (their email is fixed to the invite), then lands straight
- * in the workspace with the role the admin chose — no org creation, no generic
+ * in the workspace with the role the admin chose , no org creation, no generic
  * onboarding wizard.
  */
 export function InviteOnboard({

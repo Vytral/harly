@@ -7,7 +7,7 @@ import { db, webhookEndpoints, webhookDeliveries } from "@harly/db";
 import { dispatchDueWebhooks } from "./dispatch";
 import type { WebhookEvent } from "./events";
 import { notifySlackEvent } from "@/server/notify/slack";
-import { notifyChatEvent } from "@/server/notify/dispatch";
+import { notifyChatEvent, notifyTelegramEvent } from "@/server/notify/dispatch";
 import { notifyInboxEvent } from "@/server/notify/inbox";
 import { notifyOutlookEvent } from "@/server/notify/outlook";
 import { notifyZoomEvent } from "@/server/notify/zoom";
@@ -20,7 +20,7 @@ const log = createLogger("webhooks");
  *
  * Durability contract: the delivery rows are inserted synchronously (awaited),
  * so even if the immediate best-effort send is interrupted, the cron dispatcher
- * will retry. Failures here never propagate to the caller — a broken webhook
+ * will retry. Failures here never propagate to the caller , a broken webhook
  * must not break the hiring flow that triggered it.
  */
 export async function emitWebhookEvent(
@@ -69,6 +69,7 @@ export async function emitWebhookEvent(
 
   // Fire-and-forget: chat webhook (Slack/Discord incoming-webhook) + Slack OAuth API
   void notifyChatEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyChatEvent failed"));
+  void notifyTelegramEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyTelegramEvent failed"));
   void notifySlackEvent(workspaceId, event, data).catch((err) => log.error(err, "notifySlackEvent failed"));
   void notifyInboxEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyInboxEvent failed"));
   void notifyOutlookEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyOutlookEvent failed"));

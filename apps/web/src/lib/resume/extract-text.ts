@@ -5,7 +5,7 @@ import "server-only";
  *
  * Replaces the old client-side `file.text()` path (which returned binary
  * garbage for PDF/DOCX). Runs only on the server, where the heavy parsers live.
- * Best-effort: never throws for a recognized format — returns "" if a file
+ * Best-effort: never throws for a recognized format , returns "" if a file
  * yields nothing usable, so callers can fall back gracefully.
  */
 

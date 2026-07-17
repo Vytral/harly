@@ -11,7 +11,7 @@ import { CookiePanel } from "@/components/CookieConsentBanner";
 import "./globals.css";
 
 // Inter carries both body and display roles (bold + tight tracking for
-// headings) — single-family system per the off-white/lime design language.
+// headings) , single-family system per the off-white/lime design language.
 // Self-hosted (F5-04) so the build never reaches fonts.googleapis.com.
 const inter = localFont({
   src: "./fonts/inter.woff2",
@@ -19,7 +19,7 @@ const inter = localFont({
   display: "swap",
 });
 
-// Fraunces is the editorial display face for the Folio career template only —
+// Fraunces is the editorial display face for the Folio career template only ,
 // a variable serif with optical sizing and a "soft" axis. Self-hosted (F5-04)
 // so the CSS variable is always available without a build-time network fetch;
 // templates opt in via `.font-fraunces`.
@@ -55,7 +55,7 @@ export default function RootLayout({
       <body className="min-h-full">
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >

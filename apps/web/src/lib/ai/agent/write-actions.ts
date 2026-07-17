@@ -8,7 +8,11 @@ import {
   moveApplicationStage,
   updateApplicationStatus,
 } from "@/features/pipeline/actions";
-import { createTask } from "@/features/tasks/actions";
+import {
+  completeMyOpenTasks,
+  createTask,
+  updateTask,
+} from "@/features/tasks/actions";
 import {
   createCandidateNote,
   addCandidateTag,
@@ -52,13 +56,35 @@ const rejectSchema = z.object({
 
 const createTaskSchema = z.object({
   title: z.string().trim().min(1).max(200),
-  description: z.string().trim().max(2000).optional(),
+  description: z.string().trim().max(2000).nullable().optional().transform((value) => value ?? undefined),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
-  dueDate: z.string().optional(),
+  dueDate: z.string().nullable().optional().transform((value) => value ?? undefined),
   candidateId: z.uuid().optional().nullable(),
   applicationId: z.uuid().optional().nullable(),
   jobId: z.uuid().optional().nullable(),
 });
+
+const updateTaskSchema = z.object({
+  // The strict AI tool sends every update field, using null for fields the user
+  // did not ask to change. Convert those nulls to undefined before forwarding
+  // the update to the task action, where undefined means "leave unchanged".
+  taskId: z.string().min(1).nullable().optional().transform((value) => value ?? undefined),
+  // Older model turns used taskIds for a best-effort loop. Reject that shape so
+  // no confirmation can silently turn into a partial batch operation.
+  taskIds: z.undefined().optional(),
+  status: z
+    .enum(["pending", "in_progress", "completed", "canceled"])
+    .nullable()
+    .optional()
+    .transform((value) => value ?? undefined),
+  title: z.string().trim().min(1).max(200).nullable().optional().transform((value) => value ?? undefined),
+  priority: z.enum(["low", "medium", "high", "urgent"]).nullable().optional().transform((value) => value ?? undefined),
+  dueDate: z.string().nullable().optional().transform((value) => value ?? undefined),
+  clearDueDate: z.boolean().optional().default(false),
+  ownerId: z.string().min(1).nullable().optional().transform((value) => value ?? undefined),
+});
+
+const completeMyOpenTasksSchema = z.object({});
 
 const createJobSchema = z.object({
   title: z.string().trim().min(3).max(200),
@@ -140,8 +166,8 @@ const scheduleInterviewSchema = z.object({
 
 const addToPoolSchema = z.object({
   candidateId: z.string().min(1),
-  source: z.enum(["applied", "imported", "sourced", "referred"]).optional(),
-  reason: z.string().max(500).optional(),
+  source: z.enum(["applied", "imported", "sourced", "referred"]).nullable().optional().transform((value) => value ?? undefined),
+  reason: z.string().max(500).nullable().optional().transform((value) => value ?? undefined),
 });
 
 const assignFromPoolSchema = z.object({
@@ -152,7 +178,7 @@ const assignFromPoolSchema = z.object({
 const scorecardSchema = z.object({
   candidateId: z.string().min(1),
   rating: z.enum(["strong", "mixed", "weak"]),
-  comment: z.string().max(2000).optional(),
+  comment: z.string().max(2000).nullable().optional().transform((value) => value ?? undefined),
   stageName: z.string().max(100).optional().nullable(),
 });
 
@@ -229,6 +255,60 @@ const HANDLERS = {
         success: res.success,
         error: res.error,
         message: "Task created.",
+      };
+    },
+  },
+
+  updateTask: {
+    schema: updateTaskSchema,
+    run: async (
+      input: z.infer<typeof updateTaskSchema>,
+      ctx: { workspaceId: string; userId: string },
+    ): Promise<WriteResult> => {
+      void ctx;
+      if (!input.taskId) {
+        return { success: false, error: "No task specified." };
+      }
+      const hasField =
+        input.status !== undefined ||
+        input.title !== undefined ||
+        input.priority !== undefined ||
+        input.dueDate !== undefined ||
+        input.ownerId !== undefined ||
+        input.clearDueDate;
+      if (!hasField) {
+        return { success: false, error: "Nothing to change." };
+      }
+
+      const res = await updateTask({
+        taskId: input.taskId,
+        status: input.status,
+        title: input.title,
+        priority: input.priority,
+        dueDate: input.clearDueDate ? "" : input.dueDate,
+        ownerId: input.ownerId,
+      });
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Task updated.",
+      };
+    },
+  },
+
+  completeMyOpenTasks: {
+    schema: completeMyOpenTasksSchema,
+    run: async (): Promise<WriteResult> => {
+      const res = await completeMyOpenTasks();
+      if (!res.success) {
+        return { success: false, error: res.error };
+      }
+      return {
+        success: true,
+        message:
+          res.updatedCount === 1
+            ? "Completed 1 open task assigned to you."
+            : `Completed ${res.updatedCount ?? 0} open tasks assigned to you.`,
       };
     },
   },

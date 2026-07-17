@@ -27,7 +27,6 @@ export default async function EmailSettingsPage() {
         mailboxStatus={mailboxStatus}
         inboundStatus={inboundStatus}
         canEdit={canEdit}
-        workspaceId={organization.id}
       />
     </div>
   );

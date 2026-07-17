@@ -1,6 +1,6 @@
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
 
-/** The job fields the public template chrome reads. Loose by design — the row
+/** The job fields the public template chrome reads. Loose by design , the row
  *  from `getPublicJobDetail` is a superset. */
 export type JobLike = {
   slug: string;

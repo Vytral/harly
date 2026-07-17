@@ -5,7 +5,6 @@ import { HarlyAIWidget } from "@/components/dashboard/HarlyAIWidget";
 import { PageTitleProvider } from "@/components/dashboard/PageTitleContext";
 import { StickyBarProvider } from "@/components/dashboard/StickyBarContext";
 import { TopBar } from "@/components/dashboard/TopBar";
-import { VerifyEmailBanner } from "@/components/VerifyEmailBanner";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { listNotifications } from "@/features/notifications/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
@@ -24,8 +23,8 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const cookieStore = await cookies();
-  // Manual toggle persists via the sidebar_state cookie; default expanded.
-  const sidebarOpen = cookieStore.get("sidebar_state")?.value !== "false";
+  // Manual toggle persists via the sidebar_state cookie; first visit is compact.
+  const sidebarOpen = cookieStore.get("sidebar_state")?.value === "true";
 
   const { organization, user, role } = await getWorkspaceContext();
   const [workspaceOptions, notifications, sidebarLogo, roles, userPermissions, aiStatus, taskDueCount] =
@@ -67,7 +66,6 @@ export default async function DashboardLayout({
             notifications={notifications}
             userPermissions={userPermissions}
           />
-          {!user.emailVerified ? <VerifyEmailBanner email={user.email} /> : null}
           <PageTitleProvider>
             <main className="w-full flex-1 px-4 pb-6 pt-2 md:px-6 lg:px-8 lg:pb-8 lg:pt-3">
               {children}

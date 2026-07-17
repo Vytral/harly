@@ -407,7 +407,7 @@ export async function createPublicApplication(
       },
     });
 
-    // Persist consent record (GDPR Art. 7 — proof of consent).
+    // Persist consent record (GDPR Art. 7 , proof of consent).
     if (options?.consent) {
       await tx.insert(consentRecords).values({
         workspaceId,

@@ -5,7 +5,9 @@ import { z } from "zod";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { supportsEmbeddings } from "@/lib/ai/embeddings";
+import { SEMANTIC_MATCH_LIMIT } from "@/features/matching/constants";
 import {
+  countCandidatePool,
   countCandidatesNeedingIndex,
   indexCandidateBatch,
   matchCandidatesForJob,
@@ -72,14 +74,24 @@ export async function generateJobMatchesAction(
   const resolved = await resolveEmbeddingConfig(workspace.id);
   if (!resolved.ok) return { success: false, error: resolved.error, reason: resolved.reason };
 
+  const candidatePoolCount = await countCandidatePool(workspace.id);
+  if (candidatePoolCount === 0) {
+    return { success: false, error: "Add candidates to your pool before matching." };
+  }
+
   const unindexed = await countCandidatesNeedingIndex(workspace.id);
   if (unindexed > 0) {
     return {
       success: false,
-      error: `${unindexed} candidate${unindexed === 1 ? "" : "s"} not indexed yet — index the pool first.`,
+      error: `${unindexed} candidate${unindexed === 1 ? "" : "s"} not indexed yet. Index the pool first.`,
     };
   }
 
-  const matches = await matchCandidatesForJob(resolved.config, workspace.id, parsed.data.jobId, 20);
+  const matches = await matchCandidatesForJob(
+    resolved.config,
+    workspace.id,
+    parsed.data.jobId,
+    SEMANTIC_MATCH_LIMIT,
+  );
   return { success: true, matches };
 }

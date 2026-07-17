@@ -34,7 +34,7 @@ function facet(jobs: Job[], pick: (j: Job) => string | null): string[] {
 }
 
 /**
- * AshbyTemplate — structured, application-like layout. Sticky left sidebar with
+ * AshbyTemplate , structured, application-like layout. Sticky left sidebar with
  * search + facet filters (department / location / type), dense job rows grouped
  * by department on the right. Neutral, no decoration. Light/dark native.
  */

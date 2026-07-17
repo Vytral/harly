@@ -61,8 +61,10 @@ export function FileDropzone({
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [failedUrl, setFailedUrl] = useState<string | null>(null);
 
   const ratio = aspect === "banner" ? "aspect-[16/6] max-h-48" : "aspect-[4/3] max-h-64";
+  const hasPreview = Boolean(value && value !== failedUrl);
 
   async function handleFile(file: File | null) {
     if (!file) return;
@@ -74,6 +76,7 @@ export function FileDropzone({
     setUploading(true);
     try {
       const url = await uploadImage(file);
+      setFailedUrl(null);
       onChange(url);
     } catch {
       toast.error("Upload failed.");
@@ -101,9 +104,14 @@ export function FileDropzone({
     return (
       <div className={cn("relative inline-block size-20 shrink-0", className)}>
         <div className="size-full overflow-hidden rounded-xl border bg-muted/30">
-          {value ? (
+          {hasPreview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={value} alt="Uploaded preview" className="size-full object-cover" />
+            <img
+              src={value ?? undefined}
+              alt="Uploaded logo preview"
+              onError={() => value && setFailedUrl(value)}
+              className="size-full object-contain p-2"
+            />
           ) : (
             <div className="flex size-full items-center justify-center text-muted-foreground">
               <ImageUp className="size-5" strokeWidth={1.8} />
@@ -128,7 +136,10 @@ export function FileDropzone({
             {value && (
               <button
                 type="button"
-                onClick={() => onChange(null)}
+                onClick={() => {
+                  setFailedUrl(null);
+                  onChange(null);
+                }}
                 aria-label="Remove image"
                 className="absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm transition-colors hover:bg-rust/10 hover:text-rust"
               >
@@ -144,7 +155,7 @@ export function FileDropzone({
 
 
   // ---- Filled: image preview + floating toolbar ----------------------------
-  if (value) {
+  if (hasPreview) {
     return (
       <div className={cn("space-y-1.5", className)}>
         <div
@@ -155,8 +166,9 @@ export function FileDropzone({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={value}
-            alt="Uploaded preview"
+            src={value ?? undefined}
+            alt="Uploaded image preview"
+            onError={() => value && setFailedUrl(value)}
             className={cn(
               "size-full",
               aspect === "banner" ? "object-contain p-2" : "object-cover",
@@ -179,7 +191,10 @@ export function FileDropzone({
               </button>
               <button
                 type="button"
-                onClick={() => onChange(null)}
+                onClick={() => {
+                  setFailedUrl(null);
+                  onChange(null);
+                }}
                 aria-label="Remove image"
                 className="inline-flex size-7 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-rust/10 hover:text-rust active:scale-[0.97] motion-reduce:transition-none"
               >

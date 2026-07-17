@@ -26,7 +26,7 @@ export function ForgotPasswordForm() {
         email: trimmedEmail,
         redirectTo: "/reset-password",
       });
-      // Always report success — never reveal whether the account exists.
+      // Always report success , never reveal whether the account exists.
       setSent(true);
     } catch {
       setSent(true);

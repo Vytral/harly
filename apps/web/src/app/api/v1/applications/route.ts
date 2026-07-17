@@ -16,7 +16,7 @@ import { scheduleAutoDuplicateCheck } from "@/features/applications/auto-duplica
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-/** GET /api/v1/applications — list applications (filters: jobId, status). */
+/** GET /api/v1/applications , list applications (filters: jobId, status). */
 export const GET = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "applications:read");
   const url = new URL(request.url);
@@ -40,7 +40,7 @@ export const GET = withApi(async (request) => {
   return apiOk(items.map(serializeApplication), { pagination: meta });
 });
 
-/** POST /api/v1/applications — manually create an application. */
+/** POST /api/v1/applications , manually create an application. */
 export const POST = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "applications:write");
   const values = applicationCreateSchema.parse(

@@ -29,10 +29,10 @@ We are the data controller for the personal data you submit through our careers 
 
 When you apply for a position, we collect:
 
-- **Contact details** — name, email address, phone number, location
-- **Professional background** — resume/CV, LinkedIn, GitHub, portfolio
-- **Application responses** — answers to screening questions, cover letter
-- **Technical metadata** — IP address, browser type, device info (collected automatically)
+- **Contact details**, name, email address, phone number, location
+- **Professional background**, resume/CV, LinkedIn, GitHub, portfolio
+- **Application responses**, answers to screening questions, cover letter
+- **Technical metadata**, IP address, browser type, device info (collected automatically)
 
 We only collect what we need to evaluate your application. We don't ask for sensitive data unless legally required or directly relevant to the role.
 
@@ -42,10 +42,10 @@ We only collect what we need to evaluate your application. We don't ask for sens
 
 | Purpose | Legal basis (GDPR) |
 |---|---|
-| Reviewing and evaluating your application | Art. 6(1)(b) — pre-contractual steps |
-| Communicating with you about your candidacy | Art. 6(1)(b) — pre-contractual steps |
-| Keeping your profile for future opportunities | Art. 6(1)(a) — your consent |
-| Improving our recruitment process | Art. 6(1)(f) — legitimate interest |
+| Reviewing and evaluating your application | Art. 6(1)(b), pre-contractual steps |
+| Communicating with you about your candidacy | Art. 6(1)(b), pre-contractual steps |
+| Keeping your profile for future opportunities | Art. 6(1)(a), your consent |
+| Improving our recruitment process | Art. 6(1)(f), legitimate interest |
 
 ---
 
@@ -93,7 +93,7 @@ Your data is processed within the European Economic Area. If we ever transfer da
 
 ## Complaints
 
-If you believe we've mishandled your data, you have the right to lodge a complaint with your local data protection authority. We'd always prefer to resolve concerns directly first — reach out at [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
+If you believe we've mishandled your data, you have the right to lodge a complaint with your local data protection authority. We'd always prefer to resolve concerns directly first. Reach out at [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 
 ---
 
@@ -131,7 +131,7 @@ When using this service, you agree to:
 - Not attempt to access parts of the system you're not authorised to use
 - Not use the service for anything other than legitimate job applications
 
-Misrepresentation in an application is grounds for disqualification — or termination if discovered after hiring.
+Misrepresentation in an application is grounds for disqualification, or termination if discovered after hiring.
 
 ---
 
@@ -149,7 +149,7 @@ We make this service available as-is. To the extent permitted by law, {{ENTITY_N
 
 ## Privacy
 
-How we handle your personal data is covered in our [Privacy Policy](/legal/privacy-policy). It's short — worth reading.
+How we handle your personal data is covered in our [Privacy Policy](/legal/privacy-policy). It's short and worth reading.
 
 ---
 
@@ -186,7 +186,7 @@ These cookies are required for the site to work. They cannot be turned off.
 
 ### Analytics (optional)
 
-If you accept analytics cookies, we collect anonymised data about how visitors use the site — page views, time on page, referral source. No personal data is attached to these events.
+If you accept analytics cookies, we collect anonymised data about how visitors use the site, including page views, time on page, and referral source. No personal data is attached to these events.
 
 | Cookie | What it does | Duration |
 |---|---|---|
@@ -204,7 +204,7 @@ You can change your preferences at any time using the cookie banner, or by clear
 
 ## Third-party services
 
-We use Cloudflare for security and performance. Cloudflare may set its own cookies — see [Cloudflare's cookie policy](https://www.cloudflare.com/cookie-policy/) for details.
+We use Cloudflare for security and performance. Cloudflare may set its own cookies , see [Cloudflare's cookie policy](https://www.cloudflare.com/cookie-policy/) for details.
 
 ---
 
@@ -242,7 +242,7 @@ This notice is for people applying to roles at **{{ENTITY_NAME}}**. It explains 
 - IP address, browser type, device info
 - Pages visited and time spent on the careers site
 
-We use all of this to evaluate your application, communicate with you, and — where you've opted in — consider you for future roles.
+We use all of this to evaluate your application, communicate with you, and, where you've opted in, consider you for future roles.
 
 ---
 
@@ -271,7 +271,7 @@ Email [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}) and we'll respond within 30 da
 
 ## AI in our process
 
-We use AI tools to help parse resumes and organise application data. AI is a tool — it helps our team work faster, but it does not make hiring decisions. Every decision involving your candidacy is made by a human.
+We use AI tools to help parse resumes and organise application data. AI is a tool that helps our team work faster, but it does not make hiring decisions. Every decision involving your candidacy is made by a human.
 
 If you have questions about how AI was used in evaluating your application, just ask.
 
@@ -294,7 +294,7 @@ You have the right to complain to your local data protection authority. We'd muc
 
 ### Resume parsing
 
-When you upload a resume, AI extracts structured information — work history, education, skills, contact details — to pre-fill application fields and help our team quickly understand your background. No data beyond what you submitted is used.
+When you upload a resume, AI extracts structured information, including work history, education, skills, and contact details, to pre-fill application fields and help our team quickly understand your background. No data beyond what you submitted is used.
 
 ### Job description drafting
 
@@ -307,7 +307,7 @@ AI may assist our team in drafting job descriptions and candidate communications
 We want to be explicit about this:
 
 - **AI does not score or rank candidates.** There is no automated scoring system that determines whether you advance.
-- **AI does not make hiring decisions.** Every decision — screen, interview, offer, rejection — is made by a human.
+- **AI does not make hiring decisions.** Every decision, including screening, interviews, offers, and rejections, is made by a human.
 - **AI does not assess protected characteristics.** We do not use AI to infer or evaluate race, gender, age, religion, disability, or any other protected attribute.
 
 ---
@@ -359,11 +359,11 @@ const US_TEMPLATE: LegalTemplate = {
 
 When you apply for a role, we collect:
 
-- **Contact information** — name, email address, phone number, location
-- **Professional information** — resume/CV, work history, education, skills
-- **Application data** — cover letter, answers to screening questions
-- **Profile links** — LinkedIn, GitHub, portfolio website (if you provide them)
-- **Technical information** — IP address, browser type, device info (collected automatically)
+- **Contact information**, name, email address, phone number, location
+- **Professional information**, resume/CV, work history, education, skills
+- **Application data**, cover letter, answers to screening questions
+- **Profile links**, LinkedIn, GitHub, portfolio website (if you provide them)
+- **Technical information**, IP address, browser type, device info (collected automatically)
 
 ---
 
@@ -537,7 +537,7 @@ This notice explains how **{{ENTITY_NAME}}** handles personal information collec
 - Name, email, phone number, current location
 - Resume/CV, cover letter, application answers
 - Professional profile links (LinkedIn, GitHub, portfolio)
-- Technical info (IP address, browser, device) — collected automatically
+- Technical info (IP address, browser, device), collected automatically
 
 ---
 
@@ -564,21 +564,21 @@ You can request access to, correction of, or deletion of your personal informati
 
 ## AI usage
 
-We use AI tools to help parse resumes. AI does not make hiring decisions — those are made by our team.
+We use AI tools to help parse resumes. AI does not make hiring decisions. Those are made by our team.
 `,
 
   aiTransparencyNotice: `# AI Transparency Notice
 
 **Last updated:** {{DATE}}
 
-Here's how **{{ENTITY_NAME}}** uses AI in recruitment — and where we don't.
+Here's how **{{ENTITY_NAME}}** uses AI in recruitment, and where we don't.
 
 ---
 
 ## What AI does
 
-- **Resume parsing** — extracts structured data (experience, education, skills) from uploaded resumes to pre-fill application fields and help our team review applications faster
-- **Drafting assistance** — AI may help draft job descriptions or messages, reviewed and edited by humans before use
+- **Resume parsing**, extracts structured data (experience, education, skills) from uploaded resumes to pre-fill application fields and help our team review applications faster
+- **Drafting assistance**, AI may help draft job descriptions or messages, reviewed and edited by humans before use
 
 ---
 
@@ -624,7 +624,7 @@ When you apply for a role, we collect: name, email, phone number, location, resu
 
 ## Why we collect it
 
-To process your job application, communicate with you about your candidacy, and — with your consent — consider you for future roles.
+To process your job application, communicate with you about your candidacy, and, with your consent, consider you for future roles.
 
 ---
 
@@ -716,7 +716,7 @@ Questions? [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
 
 **Last updated:** {{DATE}}
 
-**{{ENTITY_NAME}}** collects your application data — name, email, resume, application answers — to evaluate your candidacy and communicate with you during the hiring process.
+**{{ENTITY_NAME}}** collects your application data , name, email, resume, application answers , to evaluate your candidacy and communicate with you during the hiring process.
 
 Data is retained for **{{RETENTION_APPLICANTS}} months** after the final hiring decision. If you opt into our talent pool, we keep it for **{{RETENTION_TALENT_POOL}} months**.
 
@@ -749,7 +749,7 @@ export function renderTemplate(
 ): string {
   let result = template;
 
-  // Conditional blocks: {{#KEY}}...{{/KEY}} — render only if KEY has a value.
+  // Conditional blocks: {{#KEY}}...{{/KEY}} , render only if KEY has a value.
   result = result.replace(
     /\{\{#(\w+)\}\}([\s\S]*?)\{\{\/\1\}\}/g,
     (_, key: string, content: string) =>

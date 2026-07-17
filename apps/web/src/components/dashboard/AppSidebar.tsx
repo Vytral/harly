@@ -174,9 +174,14 @@ function SidebarBrand({
   sidebarLogo: SidebarBranding;
 }) {
   const { open, toggleSidebar } = useSidebar();
+  const [failedWordmarkUrl, setFailedWordmarkUrl] = useState<string | null>(null);
 
   const showWordmark =
-    open && sidebarLogo.style === "full" && !!sidebarLogo.lightUrl;
+    open &&
+    sidebarLogo.style === "full" &&
+    !!sidebarLogo.lightUrl &&
+    sidebarLogo.lightUrl !== failedWordmarkUrl &&
+    sidebarLogo.darkUrl !== failedWordmarkUrl;
 
   const toggleButtonClass =
     "flex size-9 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-sidebar-border bg-sidebar-accent/40 text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring";
@@ -186,13 +191,14 @@ function SidebarBrand({
       <div className="flex h-10 items-center gap-2 px-1">
         <Link
           href="/dashboard"
-          aria-label={`${workspace.name} — go to dashboard`}
+          aria-label={`${workspace.name}, go to dashboard`}
           className="flex min-w-0 flex-1 items-center rounded-md px-1.5 py-1 transition-colors hover:bg-sidebar-accent"
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={sidebarLogo.lightUrl ?? undefined}
             alt={workspace.name}
+            onError={() => setFailedWordmarkUrl(sidebarLogo.lightUrl)}
             className={cn(
               "h-8 max-w-[155px] object-contain object-left",
               sidebarLogo.darkUrl && "dark:hidden",
@@ -203,6 +209,7 @@ function SidebarBrand({
             <img
               src={sidebarLogo.darkUrl}
               alt={workspace.name}
+              onError={() => setFailedWordmarkUrl(sidebarLogo.darkUrl)}
               className="hidden h-8 max-w-[155px] object-contain object-left dark:block"
             />
           ) : null}

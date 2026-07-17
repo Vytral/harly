@@ -72,7 +72,7 @@ export function CareerPageBuilder({
     startSave(async () => {
       const result = await saveCareerPageConfigAction(config);
       if (result.success) {
-        toast.success("Career page saved — it's live.");
+        toast.success("Career page saved. It&apos;s live.");
         setDirty(false);
       } else {
         toast.error(result.error ?? "Could not save.");
@@ -183,7 +183,7 @@ export function CareerPageBuilder({
   );
 }
 
-/** Fixed design width per device — the preview renders at this width and is
+/** Fixed design width per device , the preview renders at this width and is
  *  scaled down to fit the available column, so it's always WYSIWYG and never
  *  overflows (Tailwind breakpoints resolve against the design width, not the
  *  cramped column). */

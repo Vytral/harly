@@ -191,7 +191,7 @@ function ToolStatus({
       </div>
     );
   }
-  // Collapsed once finished — a quiet one-liner.
+  // Collapsed once finished , a quiet one-liner.
   return (
     <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
       {state === "error" ? (
@@ -586,7 +586,7 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
           <Row key={iv.id} i={i}>
             <span className="w-14 shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">{fmt(iv.scheduledAt)}</span>
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[12px] font-medium text-foreground">{iv.candidate ?? "—"}</span>
+              <span className="truncate text-[12px] font-medium text-foreground">{iv.candidate ?? "Unknown candidate"}</span>
               <span className="truncate text-[11px] text-muted-foreground">{iv.label ?? iv.type ?? ""}{iv.job ? ` · ${iv.job}` : ""}</span>
             </div>
           </Row>
@@ -874,18 +874,176 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
 
 // ─── Generic confirm card for ANY write tool ──────────────────────────────────
 
+type WriteActionDetail = {
+  label: string;
+  value: string;
+};
+
+function optionalText(value: unknown): string | null {
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function formatDateTime(value: unknown): string | null {
+  const text = optionalText(value);
+  if (!text) return null;
+
+  // Date-only values are task due dates. Parse them as local calendar dates so
+  // they do not shift back one day in time zones west of UTC.
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text}T00:00:00` : text);
+  if (Number.isNaN(date.getTime())) return text;
+
+  return date.toLocaleString(undefined, {
+    dateStyle: "medium",
+    timeStyle: text.includes("T") ? "short" : undefined,
+  });
+}
+
+function formatMoney(input: Record<string, unknown>): string | null {
+  const amount = input.salaryAmount;
+  if (typeof amount !== "number") return null;
+
+  const currency = optionalText(input.currency) ?? "";
+  const period = input.salaryPeriod === "annual" ? "/ year" : input.salaryPeriod === "monthly" ? "/ month" : "";
+  return `${currency ? `${currency} ` : ""}${amount.toLocaleString()}${period}`;
+}
+
+function getWriteActionPreview(
+  toolName: string,
+  input: Record<string, unknown>,
+): { title: string; details: WriteActionDetail[] } {
+  const detail = (label: string, value: string | null): WriteActionDetail[] =>
+    value ? [{ label, value }] : [];
+  const taskIds = Array.isArray(input.taskIds)
+    ? input.taskIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    : [];
+
+  switch (toolName) {
+    case "moveCandidateStage":
+      return {
+        title: "Move candidate",
+        details: [
+          ...detail("Candidate", optionalText(input.candidateName)),
+          ...detail("From", optionalText(input.fromStageName)),
+          ...detail("To", optionalText(input.toStageName)),
+        ],
+      };
+    case "rejectCandidate":
+      return { title: "Reject candidate", details: [] };
+    case "createTask":
+      return {
+        title: "Create task",
+        details: [
+          ...detail("Task", optionalText(input.title)),
+          ...detail("Priority", optionalText(input.priority)),
+          ...detail("Due", formatDateTime(input.dueDate)),
+        ],
+      };
+    case "updateTask": {
+      const count = taskIds.length || (optionalText(input.taskId) ? 1 : 0);
+      const changes = [
+        input.status ? `Status: ${String(input.status).replace(/_/g, " ")}` : null,
+        optionalText(input.title) ? `Title: ${optionalText(input.title)}` : null,
+        input.priority ? `Priority: ${String(input.priority)}` : null,
+        input.clearDueDate === true ? "Due date: remove" : formatDateTime(input.dueDate) ? `Due date: ${formatDateTime(input.dueDate)}` : null,
+        optionalText(input.ownerId) ? "Owner: change" : null,
+      ].filter((change): change is string => Boolean(change));
+      return {
+        title: count > 1 ? `Update ${count} tasks` : "Update task",
+        details: [
+          ...detail("Affected", count ? `${count} task${count === 1 ? "" : "s"}` : null),
+          ...detail("Changes", changes.join(", ") || null),
+        ],
+      };
+    }
+    case "createJob":
+      return {
+        title: "Create draft job",
+        details: [
+          ...detail("Role", optionalText(input.title)),
+          ...detail("Workplace", optionalText(input.workplaceType)),
+          ...detail("Employment", optionalText(input.employmentType)?.replace(/_/g, " ") ?? null),
+          ...detail("Location", optionalText(input.location)),
+        ],
+      };
+    case "addCandidateNote":
+      return {
+        title: "Add candidate note",
+        details: detail("Note", optionalText(input.body)?.slice(0, 180) ?? null),
+      };
+    case "addCandidateTag":
+      return { title: "Add candidate tag", details: detail("Tag", optionalText(input.label)) };
+    case "createOffer":
+      return {
+        title: "Create draft offer",
+        details: [
+          ...detail("Role", optionalText(input.title)),
+          ...detail("Compensation", formatMoney(input)),
+          ...detail("Start date", formatDateTime(input.startDate)),
+          ...detail("Expires", formatDateTime(input.expiresAt)),
+        ],
+      };
+    case "sendOffer":
+      return { title: "Send offer", details: [] };
+    case "decideOffer":
+      return { title: "Record offer decision", details: detail("Decision", optionalText(input.decision)) };
+    case "scheduleInterview":
+      return {
+        title: "Schedule interview",
+        details: [
+          ...detail("Type", optionalText(input.type)?.replace(/_/g, " ") ?? null),
+          ...detail("When", formatDateTime(input.scheduledAt)),
+          ...detail("Duration", typeof input.durationMins === "number" ? `${input.durationMins} minutes` : null),
+          ...detail("Mode", optionalText(input.mode)),
+        ],
+      };
+    case "addToTalentPool":
+      return {
+        title: "Add candidate to talent pool",
+        details: [
+          ...detail("Source", optionalText(input.source)),
+          ...detail("Reason", optionalText(input.reason)),
+        ],
+      };
+    case "assignFromPoolToJob":
+      return { title: "Assign candidate to job", details: [] };
+    case "createScorecard":
+      return {
+        title: "Create scorecard",
+        details: [
+          ...detail("Rating", optionalText(input.rating)),
+          ...detail("Stage", optionalText(input.stageName)),
+          ...detail("Comment", optionalText(input.comment)?.slice(0, 180) ?? null),
+        ],
+      };
+    case "sendCandidateEmail":
+      return {
+        title: "Send candidate email",
+        details: [
+          ...detail("To", optionalText(input.toEmail)),
+          ...detail("Subject", optionalText(input.subject)),
+        ],
+      };
+    default:
+      return { title: "Confirm action", details: [] };
+  }
+}
+
 function WriteConfirmCard({
+  toolCallId,
   toolName,
   summary,
   input,
   done,
+  pending,
   onConfirm,
   onCancel,
 }: {
+  toolCallId: string;
   toolName: string;
   summary: string;
   input: Record<string, unknown>;
   done: { confirmed: boolean; error?: string; message?: string } | null;
+  pending: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -893,10 +1051,16 @@ function WriteConfirmCard({
   const from = String(input.fromStageName ?? "");
   const to = String(input.toStageName ?? "");
   const who = String(input.candidateName ?? "");
+  const preview = getWriteActionPreview(toolName, input);
+  const titleId = `write-action-${toolCallId}`;
 
   if (done) {
     return (
-      <div className="overflow-hidden rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5 text-[12px] duration-200 animate-in fade-in slide-in-from-bottom-1">
+      <div
+        className="overflow-hidden rounded-xl border border-border/70 bg-muted/30 px-3 py-2.5 text-[12px] duration-200 animate-in fade-in slide-in-from-bottom-1"
+        role={done.error ? "alert" : "status"}
+        aria-live={done.error ? "assertive" : "polite"}
+      >
         {done.confirmed && !done.error ? (
           <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
             <Check className="size-3.5 shrink-0" />
@@ -918,29 +1082,63 @@ function WriteConfirmCard({
   }
 
   return (
-    <div className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm duration-200 animate-in fade-in slide-in-from-bottom-1">
-      <div className="px-3 py-2.5">
-        <p className="text-[13px] leading-snug">{summary}</p>
+    <section
+      className="overflow-hidden rounded-xl border border-border/70 bg-card shadow-sm duration-200 animate-in fade-in slide-in-from-bottom-1"
+      aria-labelledby={titleId}
+      aria-busy={pending}
+    >
+      <div className="space-y-2.5 px-3 py-2.5">
+        <div className="space-y-0.5">
+          <h3 id={titleId} className="text-[13px] font-semibold leading-snug text-foreground">
+            {preview.title}
+          </h3>
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            Review the exact changes below before confirming.
+          </p>
+        </div>
+        {preview.details.length > 0 && (
+          <dl className="space-y-1.5 rounded-lg bg-muted/45 px-2.5 py-2 text-[11px] leading-snug">
+            {preview.details.map((item) => (
+              <div key={item.label} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
+                <dt className="text-muted-foreground">{item.label}</dt>
+                <dd className="min-w-0 break-words font-medium text-foreground">{item.value}</dd>
+              </div>
+            ))}
+          </dl>
+        )}
+        {summary && (
+          <p className="text-[11px] leading-snug text-muted-foreground">
+            <span className="font-medium text-foreground/80">Agent summary:</span> {summary}
+          </p>
+        )}
         {isMove && who && from && to && (
-          <div className="mt-2.5">
+          <div>
             <StagePath from={from} to={to} />
           </div>
         )}
       </div>
       <div className="flex gap-2 border-t border-border/50 bg-muted/30 px-3 py-2">
-        <Button size="sm" className="h-7 flex-1 px-3 text-xs" onClick={onConfirm}>
-          Confirm
+        <Button
+          size="sm"
+          className="h-7 flex-1 px-3 text-xs"
+          onClick={onConfirm}
+          disabled={pending}
+          aria-label={`Confirm: ${preview.title}`}
+        >
+          {pending ? "Working…" : "Confirm"}
         </Button>
         <Button
           size="sm"
           variant="ghost"
           className="h-7 px-3 text-xs"
           onClick={onCancel}
+          disabled={pending}
+          aria-label={`Cancel: ${preview.title}`}
         >
           Cancel
         </Button>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -1042,7 +1240,7 @@ function NotConfiguredState() {
 
 // ─── Chat body (one conversation) ─────────────────────────────────────────────
 // Keyed by conversationId in the parent so switching threads remounts it with
-// fresh initial messages — the cleanest way to reseed useChat.
+// fresh initial messages , the cleanest way to reseed useChat.
 
 type HarlyChatProps = {
   conversationId: string;
@@ -1064,6 +1262,8 @@ function HarlyChat({
   const [writeResults, setWriteResults] = useState<
     Record<string, { confirmed: boolean; error?: string; message?: string }>
   >({});
+  const [pendingWriteIds, setPendingWriteIds] = useState<Set<string>>(() => new Set());
+  const pendingWriteIdsRef = useRef(new Set<string>());
   const firstName = userName.split(" ")[0] ?? userName;
   const notifiedRef = useRef(false);
 
@@ -1101,6 +1301,7 @@ function HarlyChat({
     confirmed: boolean,
   ) {
     if (!confirmed) {
+      if (pendingWriteIdsRef.current.has(toolCallId)) return;
       setWriteResults((p) => ({ ...p, [toolCallId]: { confirmed: false } }));
       void addToolOutput({
         tool: toolName,
@@ -1109,22 +1310,35 @@ function HarlyChat({
       });
       return;
     }
-    const res = await confirmAgentWriteAction(toolName, rawInput);
-    setWriteResults((p) => ({
-      ...p,
-      [toolCallId]: {
-        confirmed: true,
-        error: res.success ? undefined : res.error,
-        message: res.message,
-      },
-    }));
-    void addToolOutput({
-      tool: toolName,
-      toolCallId,
-      output: res.success
-        ? { confirmed: true, result: res.message ?? "Done." }
-        : { confirmed: true, error: res.error ?? "Action failed." },
-    });
+    if (pendingWriteIdsRef.current.has(toolCallId)) return;
+
+    pendingWriteIdsRef.current.add(toolCallId);
+    setPendingWriteIds((previous) => new Set(previous).add(toolCallId));
+    try {
+      const res = await confirmAgentWriteAction(toolName, rawInput);
+      setWriteResults((p) => ({
+        ...p,
+        [toolCallId]: {
+          confirmed: true,
+          error: res.success ? undefined : res.error,
+          message: res.message,
+        },
+      }));
+      void addToolOutput({
+        tool: toolName,
+        toolCallId,
+        output: res.success
+          ? { confirmed: true, result: res.message ?? "Done." }
+          : { confirmed: true, error: res.error ?? "Action failed." },
+      });
+    } finally {
+      pendingWriteIdsRef.current.delete(toolCallId);
+      setPendingWriteIds((previous) => {
+        const next = new Set(previous);
+        next.delete(toolCallId);
+        return next;
+      });
+    }
   }
 
   const hasMessages = messages.length > 0;
@@ -1154,7 +1368,7 @@ function HarlyChat({
                     );
                   }
 
-                  // Assistant message — render in a clean order regardless of
+                  // Assistant message , render in a clean order regardless of
                   // the part sequence: tool-status lines first (collapsed once
                   // done), then the streamed text, then any rich result cards.
                   const parts = message.parts as Array<{
@@ -1168,9 +1382,16 @@ function HarlyChat({
                   const statusEls: React.ReactNode[] = [];
                   const textEls: React.ReactNode[] = [];
                   const writeEls: React.ReactNode[] = [];
+                  // Collect pending updateTask confirmations so we can offer a
+                  // single "Confirm all" when the agent batches several.
+                  const pendingUpdateTasks: {
+                    toolName: string;
+                    callId: string;
+                    input: Record<string, unknown>;
+                  }[] = [];
                   // Read tools chain (search → list → profile), each emitting a
                   // card. Rendering one per call floods the message, so we keep
-                  // only the LAST completed read card — the one that actually
+                  // only the LAST completed read card , the one that actually
                   // answers the turn. Status lines still show every step.
                   let lastReadCard: React.ReactNode = null;
 
@@ -1199,14 +1420,27 @@ function HarlyChat({
                       writeEls.push(
                         <WriteConfirmCard
                           key={callId}
+                          toolCallId={callId}
                           toolName={toolName}
                           summary={inputData.summary ?? "Confirm this action?"}
                           input={inputData}
                           done={writeResults[callId] ?? null}
+                          pending={pendingWriteIds.has(callId)}
                           onConfirm={() => handleWriteConfirm(toolName, callId, inputData, true)}
                           onCancel={() => handleWriteConfirm(toolName, callId, inputData, false)}
                         />,
                       );
+                      if (
+                        toolName === "updateTask" &&
+                        !writeResults[callId] &&
+                        inputData.taskId
+                      ) {
+                        pendingUpdateTasks.push({
+                          toolName,
+                          callId,
+                          input: inputData,
+                        });
+                      }
                       return;
                     }
 
@@ -1259,6 +1493,35 @@ function HarlyChat({
                         {lastReadCard}
                         {textEls}
                         {writeEls}
+                        {pendingUpdateTasks.length > 1 && (
+                          <div
+                            className="self-start rounded-lg border border-border/60 bg-muted/30 p-2"
+                            role="group"
+                            aria-label={`Batch confirmation for ${pendingUpdateTasks.length} task updates`}
+                          >
+                            <p className="mb-1.5 text-[11px] leading-snug text-muted-foreground">
+                              Review each task card, then confirm all {pendingUpdateTasks.length} updates together.
+                            </p>
+                            <Button
+                              size="sm"
+                              className="h-7 px-3 text-xs"
+                              disabled={isBusy || pendingUpdateTasks.some((task) => pendingWriteIds.has(task.callId))}
+                              aria-label={`Confirm all ${pendingUpdateTasks.length} task updates`}
+                              onClick={() => {
+                                for (const t of pendingUpdateTasks) {
+                                  void handleWriteConfirm(
+                                    t.toolName,
+                                    t.callId,
+                                    t.input,
+                                    true,
+                                  );
+                                }
+                              }}
+                            >
+                              Confirm all {pendingUpdateTasks.length} updates
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -1496,13 +1759,17 @@ export function HarlyAIPanel({
   return (
     <div
       className={cn(
-        "fixed bottom-20 right-6 z-50 w-[440px] text-sm leading-6 transition-all duration-200 ease-out",
+        "fixed bottom-20 left-3 right-3 z-50 w-auto text-sm leading-6 transition-all duration-200 ease-out sm:left-auto sm:right-6 sm:w-[440px]",
         open
           ? "translate-y-0 opacity-100 pointer-events-auto"
-          : "translate-y-3 opacity-0 pointer-events-none",
+          : "invisible translate-y-3 opacity-0 pointer-events-none",
       )}
+      aria-hidden={!open}
     >
-      <Card className="relative flex h-[560px] flex-col overflow-hidden border border-border/50 p-0 shadow-[0_1px_2px_rgba(23,23,23,0.04),0_4px_16px_rgba(23,23,23,0.03)]">
+      <Card
+        className="relative flex h-[min(560px,calc(100dvh-7.5rem))] flex-col overflow-hidden border border-border/50 p-0 shadow-[0_1px_2px_rgba(23,23,23,0.04),0_4px_16px_rgba(23,23,23,0.03)] sm:h-[560px]"
+        aria-label="Harly AI assistant"
+      >
         {/* Header */}
         <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-3">
           <div className="flex items-center gap-1.5">

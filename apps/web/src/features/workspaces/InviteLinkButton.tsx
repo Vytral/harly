@@ -102,7 +102,7 @@ export function InviteLinkButton({
     start(async () => {
       const result = await rotateInviteLinkAction();
       if (result.success) {
-        toast.success("New link generated — old one disabled");
+        toast.success("New link generated. Old one disabled");
         router.refresh();
       } else {
         toast.error(result.error ?? "Unable to rotate link.");

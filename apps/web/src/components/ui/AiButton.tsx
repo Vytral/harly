@@ -8,6 +8,7 @@ interface AiButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   loadingText?: string;
   size?: "sm" | "default";
   variant?: "default" | "ghost" | "outline";
+  logoClassName?: string;
 }
 
 export function AiButton({
@@ -16,6 +17,7 @@ export function AiButton({
   loadingText,
   size = "default",
   variant = "default",
+  logoClassName,
   className,
   disabled,
   ...props
@@ -49,7 +51,7 @@ export function AiButton({
         className,
       )}
     >
-      <HarlyAILogoMark className="size-3.5 shrink-0" />
+      <HarlyAILogoMark className={cn("size-3.5 shrink-0", logoClassName)} />
       {loading ? (
         <span className="flex items-center gap-0.5">
           {loadingText ?? "Generating"}

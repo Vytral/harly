@@ -5,7 +5,7 @@
  */
 
 /**
- * Roles exempt from 2FA enforcement. Owner is exempt (temporary — for testing):
+ * Roles exempt from 2FA enforcement. Owner is exempt (temporary , for testing):
  * the keyholder can always reach the workspace without a second factor.
  */
 export function isExemptFrom2fa(roleKey: string | null | undefined): boolean {

@@ -36,6 +36,9 @@ pnpm-debug.log*
 
 # uploads
 uploads
+!apps/web/src/app/uploads/
+!apps/web/src/app/uploads/**/
+!apps/web/src/app/uploads/**/route.ts
 tmp
 *.zip
 

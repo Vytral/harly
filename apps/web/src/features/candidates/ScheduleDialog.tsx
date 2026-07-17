@@ -145,7 +145,7 @@ export function ScheduleDialog({
           : null,
       );
     } catch {
-      // Silently fail — don't block scheduling on availability check.
+      // Silently fail , don't block scheduling on availability check.
     } finally {
       setCheckingAvailability(false);
     }
@@ -164,7 +164,7 @@ export function ScheduleDialog({
       metadata: { applicationId, candidateId, workspaceId },
     });
     void navigator.clipboard.writeText(link);
-    toast.success("Booking link copied — send it to the candidate");
+    toast.success("Booking link copied. Send it to the candidate");
   }
 
   function reset() {

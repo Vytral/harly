@@ -18,7 +18,7 @@ import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
-/** GET /api/v1/jobs — list jobs (cursor-paginated). */
+/** GET /api/v1/jobs , list jobs (cursor-paginated). */
 export const GET = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "jobs:read");
   const url = new URL(request.url);
@@ -40,7 +40,7 @@ export const GET = withApi(async (request) => {
   return apiOk(items.map(serializeJob), { pagination: meta });
 });
 
-/** POST /api/v1/jobs — create a job. */
+/** POST /api/v1/jobs , create a job. */
 export const POST = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "jobs:write");
   const body = await request.json().catch(() => null);

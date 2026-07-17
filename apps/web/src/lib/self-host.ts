@@ -4,7 +4,7 @@ import { db, organization } from "@harly/db";
 
 /**
  * Self-host model: one organization per deployment. These helpers let pages
- * reason about bootstrap state without an env flag — the rule is simply
+ * reason about bootstrap state without an env flag , the rule is simply
  * "does an org already exist?". Mirrors the auth-core gate in
  * packages/auth/src/auth.ts.
  */

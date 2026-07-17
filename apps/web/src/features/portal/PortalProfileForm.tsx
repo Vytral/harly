@@ -57,7 +57,7 @@ const readonlyClass = cn(
   "cursor-not-allowed select-none",
 );
 
-// Inline Phosphor SVG icons — no CDN dependency
+// Inline Phosphor SVG icons , no CDN dependency
 function LinkedInIcon({ className }: { className?: string }) {
   return (
     <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" className={className} fill="currentColor" aria-hidden>

@@ -13,6 +13,7 @@ import type { WorkspaceCalConfig } from "@/lib/cal/config";
  */
 const BOOKINGS_API_VERSION = "2024-08-13";
 const WEBHOOKS_API_VERSION = "2024-08-13";
+const ME_API_VERSION = "2024-06-14";
 
 export const CAL_WEBHOOK_TRIGGERS = [
   "BOOKING_CREATED",
@@ -67,6 +68,20 @@ export type CalBookingResult = {
   end: string;
   status: string;
 };
+
+/**
+ * Validate credentials by hitting the authenticated `/me` endpoint. Throws with
+ * a Cal.com-provided message on failure so the caller can surface it verbatim.
+ */
+export async function verifyCalConnection(
+  config: Pick<WorkspaceCalConfig, "apiKey" | "baseUrl">,
+): Promise<void> {
+  await calFetch<unknown>({
+    config: config as WorkspaceCalConfig,
+    path: "/me",
+    apiVersion: ME_API_VERSION,
+  });
+}
 
 /** Create a booking programmatically (used when a slot is chosen in-app). */
 export async function createCalBooking(

@@ -58,7 +58,7 @@ export type WorkspaceMemberItem = {
   id: string;
   userId: string;
   name: string;
-  // Raw role key — built-in ("owner"…) or a custom-role slug.
+  // Raw role key , built-in ("owner"…) or a custom-role slug.
   role: string;
   email: string;
   image?: string | null;

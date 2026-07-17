@@ -429,7 +429,7 @@ export function CandidateActionBar({
   // ── Full (header card) ──
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-      {/* Primary — advance the pipeline */}
+      {/* Primary , advance the pipeline */}
       <MoveStageButton target={moveTarget} />
 
       {/* Communication */}
@@ -445,7 +445,7 @@ export function CandidateActionBar({
         <CandidatePoolButton candidateId={candidate.id} inPool={inPool} />
       </div>
 
-      {/* Utilities — compact icons */}
+      {/* Utilities , compact icons */}
       <div className="flex items-center gap-1 sm:border-l sm:border-border/70 sm:pl-2">
         <EditCandidateDrawer
           candidate={candidate}
@@ -498,14 +498,14 @@ export function CandidateActionBar({
         ) : null}
       </div>
 
-      {/* Reject — prominent, isolated */}
+      {/* Reject , prominent, isolated */}
       {reject && (
         <div className="flex items-center sm:border-l sm:border-border/70 sm:pl-2">
           {reject}
         </div>
       )}
 
-      {/* Destructive — far right so it can't be hit by accident */}
+      {/* Destructive , far right so it can't be hit by accident */}
       {!isHired && (
         <div className="ml-auto flex items-center sm:ml-1 sm:border-l sm:border-border/70 sm:pl-2">
           <DeleteCandidateButton

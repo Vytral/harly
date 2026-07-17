@@ -74,11 +74,11 @@ export function TurnstileSettingsCard({
           icon={CloudflareLogo}
           title="Cloudflare Turnstile"
           badge={badge}
-          description="Bot protection on your public application form — a privacy-friendly CAPTCHA alternative. Bring your own Turnstile keys, no env vars needed."
+          description="Bot protection on your public application form. A privacy-friendly CAPTCHA alternative. Bring your own Turnstile keys, no env vars needed."
           action={
             canEdit ? (
               <>
-                <Sheet open={open} onOpenChange={setOpen}>
+                <Sheet open={open} onOpenChange={setOpen} mobilePresentation="bottom-on-mobile">
                   <SheetTrigger asChild>
                     <Button
                       variant={configured ? "outline" : "default"}
@@ -212,7 +212,7 @@ function TurnstileSettingsForm({
             onChange={(event) => setSecretKey(event.target.value)}
             placeholder={
               status.hasSecretKey
-                ? "•••••••• (stored — leave blank to keep)"
+                ? "•••••••• (stored, leave blank to keep)"
                 : "0x4AAAAAAA…"
             }
             autoComplete="off"

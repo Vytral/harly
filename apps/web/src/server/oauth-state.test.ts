@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// (a) OAuth hardening — F1-04 / F2-01 / F2-02.
+// (a) OAuth hardening , F1-04 / F2-01 / F2-02.
 // Exercises the real oauth-state helpers against an in-memory nonce store to
 // prove: reuse fails, expiry fails, and a valid nonce redeems for the same
 // actor even across a different browser session.

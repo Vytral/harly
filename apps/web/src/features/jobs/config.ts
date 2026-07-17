@@ -65,7 +65,7 @@ export type JobApplicationSections = {
 
 export type JobApplicationConfig = {
   resumeRequired: boolean;
-  /** Per-link visibility — each is independently optional for candidates. */
+  /** Per-link visibility , each is independently optional for candidates. */
   profileLinks: JobProfileLinks;
   sections: JobApplicationSections;
   questions: JobApplicationQuestion[];
@@ -365,7 +365,7 @@ const applicationConfigSchema = z
       .default(defaultJobApplicationConfig.resumeRequired),
     // New granular shape.
     profileLinks: profileLinksSchema.optional(),
-    // Legacy single toggle — mapped to all three when present.
+    // Legacy single toggle , mapped to all three when present.
     profileLinksEnabled: z.boolean().optional(),
     sections: sectionsSchema.optional(),
     questions: z.array(questionSchema).max(10).default([]),

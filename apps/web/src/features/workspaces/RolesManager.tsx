@@ -92,6 +92,7 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
                 <Sheet
                   open={editing?.key === role.key}
                   onOpenChange={(o) => setEditing(o ? role : null)}
+                  mobilePresentation="bottom-on-mobile"
                 >
                   <SheetTrigger asChild>
                     <Button variant="outline" size="sm">
@@ -216,7 +217,7 @@ export function RoleEditor({
         toast.error(result.error ?? "Could not delete role.");
         return;
       }
-      toast.success("Role deleted — members moved to Recruiter");
+      toast.success("Role deleted. Members moved to Recruiter");
       onDone();
       router.refresh();
     });
@@ -232,11 +233,12 @@ export function RoleEditor({
   return (
     <DrawerLayout
       title={title}
+      className="sm:max-w-2xl"
       description={
         readOnly
           ? "The Owner role always has full access and can't be changed."
           : role?.isBuiltin
-            ? "Built-in role — tune its permissions. The name is fixed."
+            ? "Built-in role. Tune its permissions. The name is fixed."
             : "Pick a name and the permissions this role grants."
       }
       footer={

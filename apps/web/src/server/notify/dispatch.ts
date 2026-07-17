@@ -1,6 +1,8 @@
 import "server-only";
 
 import { getWorkspaceChatConfig, type ChatConfig } from "@/lib/notify/config";
+import { getWorkspaceTelegramConfig } from "@/lib/telegram/config";
+import { sendTelegramMessage } from "@/lib/telegram/client";
 import { WEBHOOK_EVENT_LABELS, type WebhookEvent } from "@/server/webhooks/events";
 
 /**
@@ -62,9 +64,9 @@ function normalize(
 }
 
 function slackPayload(n: Normalized): unknown {
-  const line = n.detail ? `${n.emoji} *${n.title}* — ${n.detail}` : `${n.emoji} *${n.title}*`;
+  const line = n.detail ? `${n.emoji} *${n.title}* , ${n.detail}` : `${n.emoji} *${n.title}*`;
   return {
-    text: `${n.title}${n.detail ? ` — ${n.detail}` : ""}`,
+    text: `${n.title}${n.detail ? ` , ${n.detail}` : ""}`,
     blocks: [
       { type: "section", text: { type: "mrkdwn", text: line } },
       {
@@ -117,7 +119,7 @@ export async function sendChatMessage(
 
 /**
  * Notify a workspace's chat channel of a domain event, if it's enabled and
- * subscribed to that event. Never throws — failures are logged, not propagated.
+ * subscribed to that event. Never throws , failures are logged, not propagated.
  */
 export async function notifyChatEvent(
   workspaceId: string,
@@ -139,5 +141,45 @@ export async function notifyChatEvent(
     }
   } catch (error) {
     console.error("[notify] chat notify failed", { workspaceId, event, error });
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+/** Telegram uses HTML parse mode; keep the same emoji/title/detail shape. */
+export function telegramText(event: WebhookEvent, data: Record<string, unknown>): string {
+  const n = normalize(event, data);
+  const detail = n.detail ? ` , ${escapeHtml(n.detail)}` : "";
+  return `${n.emoji} <b>${escapeHtml(n.title)}</b>${detail}\n<a href="${APP_URL}/dashboard">Open Harly</a>`;
+}
+
+/**
+ * Notify a workspace's Telegram chat of a domain event, if it's enabled and
+ * subscribed to that event. Never throws , failures are logged, not propagated.
+ */
+export async function notifyTelegramEvent(
+  workspaceId: string,
+  event: WebhookEvent,
+  data: Record<string, unknown>,
+): Promise<void> {
+  try {
+    const config = await getWorkspaceTelegramConfig(workspaceId);
+    if (!config || !config.events.includes(event)) return;
+    await sendTelegramMessage({
+      botToken: config.botToken,
+      chatId: config.chatId,
+      text: telegramText(event, data),
+    });
+  } catch (error) {
+    console.error("[notify] telegram notify failed", {
+      workspaceId,
+      event,
+      error,
+    });
   }
 }

@@ -13,7 +13,7 @@ import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
 export const runtime = "nodejs";
 
 /**
- * POST /api/public/v1/image/presign — public presigned upload URL for profile
+ * POST /api/public/v1/image/presign , public presigned upload URL for profile
  * images in the public application flow.
  */
 export const POST = withApi(async (request) => {

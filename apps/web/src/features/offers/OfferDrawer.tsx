@@ -59,7 +59,7 @@ export function OfferDrawer({
   const [notes, setNotes] = useState("");
 
   // Hydrate fields when switching into edit mode (or reset for create). Done as
-  // a render-time sync keyed on the drawer target — the React-recommended
+  // a render-time sync keyed on the drawer target , the React-recommended
   // "adjust state when a prop changes" pattern, no effect/cascading render.
   const syncKey = open ? (offer?.id ?? "__new__") : "__closed__";
   const [syncedKey, setSyncedKey] = useState<string | null>(null);
@@ -116,13 +116,13 @@ export function OfferDrawer({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} mobilePresentation="bottom-on-mobile">
       <DrawerLayout
         title={offer ? "Edit offer" : "New offer"}
         description={
           offer
             ? "Update the terms of this draft offer."
-            : "Draft the offer terms — you can review before sending."
+            : "Draft the offer terms. You can review before sending."
         }
         footer={
           <>

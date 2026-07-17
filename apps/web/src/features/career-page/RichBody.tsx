@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 /**
  * Renders user-authored rich HTML safely. DOMPurify runs client-side so the
  * raw HTML never hits dangerouslySetInnerHTML unsanitized on the server.
- * Allows iframes, images, videos, and all standard HTML — the admin is trusted
+ * Allows iframes, images, videos, and all standard HTML , the admin is trusted
  * to embed what they want on their own career page.
  */
 export function RichBody({ html }: { html: string }) {

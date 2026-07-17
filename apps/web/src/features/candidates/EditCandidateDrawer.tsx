@@ -8,12 +8,11 @@ import { toast } from "sonner";
 import { GithubIcon } from "@/components/ui/icons/GithubIcon";
 import { LinkedinLogo } from "@/components/ui/icons/brands";
 import { updateCandidateProfile } from "@/features/candidates/actions";
-import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SidePanel } from "@/components/ui/side-panel";
 import { Textarea } from "@/components/ui/textarea";
-import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 
 export type EditableCandidate = {
   id: string;
@@ -43,25 +42,24 @@ export function EditCandidateDrawer({
   const [isPending, startTransition] = useTransition();
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <DrawerLayout
-        title="Edit candidate"
-        description="Name, email, phone, and social links."
-        footer={
-          <>
-            <SheetClose asChild>
-              <Button variant="outline" disabled={isPending}>
-                Cancel
-              </Button>
-            </SheetClose>
-            <Button type="submit" form="edit-candidate-form" disabled={isPending}>
-              {isPending ? "Saving…" : "Save"}
-            </Button>
-          </>
-        }
+    <SidePanel
+      open={open}
+      onOpenChange={setOpen}
+      trigger={trigger}
+      title="Edit candidate"
+      description="Name, email, phone, and social links."
+      footer={
+        <>
+          <Button variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button type="submit" form="edit-candidate-form" disabled={isPending}>
+            {isPending ? "Saving…" : "Save"}
+          </Button>
+        </>
+      }
       >
-        <form
+      <form
           id="edit-candidate-form"
           className="space-y-4"
           action={(formData) => {
@@ -89,7 +87,7 @@ export function EditCandidateDrawer({
               router.refresh();
             });
           }}
-        >
+      >
           <div className="grid grid-cols-2 gap-3">
             <Field name="firstName" label="First name" defaultValue={candidate.firstName} />
             <Field name="lastName" label="Last name" defaultValue={candidate.lastName} />
@@ -112,9 +110,8 @@ export function EditCandidateDrawer({
           <Field name="linkedinUrl" label="LinkedIn" type="url" defaultValue={candidate.linkedinUrl ?? ""} placeholder="https://linkedin.com/in/…" icon={<LinkedinLogo className="size-3.5" />} />
           <Field name="githubUrl" label="GitHub" type="url" defaultValue={candidate.githubUrl ?? ""} placeholder="https://github.com/…" icon={<GithubIcon className="size-3.5" />} />
           <Field name="websiteUrl" label="Website" type="url" defaultValue={candidate.websiteUrl ?? ""} placeholder="https://…" icon={<Globe className="size-3.5" />} />
-        </form>
-      </DrawerLayout>
-    </Sheet>
+      </form>
+    </SidePanel>
   );
 }
 

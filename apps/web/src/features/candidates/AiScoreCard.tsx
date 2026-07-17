@@ -144,7 +144,7 @@ export function AiScoreCard({
   /** "condensed" = score + verdict + top bullets, no scroll (Profile tab).
    * "full" = criteria bars + evidence + strengths/gaps (Evaluation tab). */
   variant?: "full" | "condensed";
-  /** Condensed only — jumps the caller to the full breakdown (Evaluation tab). */
+  /** Condensed only , jumps the caller to the full breakdown (Evaluation tab). */
   onViewDetailsAction?: () => void;
 }) {
   if (applications.length === 0) return null;
@@ -379,7 +379,7 @@ export function AiScoreCard({
                   <FileText className="size-3.5" />
                   {evaluation.usedResume
                     ? "Based on resume + profile"
-                    : "Profile only — no readable resume"}
+                    : "Profile only. No readable resume"}
                 </span>
                 <span>
                   Updated <RelativeTime value={evaluation.updatedAt} />

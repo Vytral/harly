@@ -102,6 +102,7 @@ export function CompanyBrandingSection({
 
   const [name, setName] = useState(workspace.name);
   const [logoUrl, setLogoUrl] = useState(workspace.logoUrl ?? "");
+  const [tagline, setTagline] = useState(workspace.tagline ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(workspace.websiteUrl ?? "");
   const [heroImageUrl, setHeroImageUrl] = useState(workspace.heroImageUrl ?? "");
   const [primaryColor, setPrimaryColor] = useState(
@@ -148,7 +149,7 @@ export function CompanyBrandingSection({
               onChange={(url) => setLogoUrl(url ?? "")}
               variant="avatar"
               disabled={!canEdit}
-              hint="Square · PNG or SVG"
+              hint="Square logo · PNG, JPG, SVG or WEBP"
             />
             <div className="flex-1 space-y-2">
               <Label htmlFor="ws-name">Company name</Label>
@@ -246,7 +247,6 @@ export function CompanyBrandingSection({
 
         <form action={brandingAction} className="space-y-6">
           <input type="hidden" name="heroImageUrl" value={heroImageUrl} />
-          <input type="hidden" name="tagline" value={workspace.tagline ?? ""} />
           <input
             type="hidden"
             name="description"
@@ -295,6 +295,22 @@ export function CompanyBrandingSection({
                 />
               </div>
             </div>
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="ws-tagline">Careers page tagline</Label>
+            <Input
+              id="ws-tagline"
+              name="tagline"
+              value={tagline}
+              onChange={(event) => setTagline(event.target.value)}
+              placeholder="A short line about your company"
+              maxLength={120}
+              disabled={!canEdit || savingBranding}
+            />
+            <p className="text-xs text-muted-foreground">
+              Optional. Shown on your public careers page.
+            </p>
           </div>
 
           <div className="space-y-2">

@@ -31,6 +31,7 @@ type JobFormProps = {
   hiringTeam?: HiringTeamMember[];
   workspaceMembers?: WorkspaceMemberOption[];
   aiConfigured?: boolean;
+  candidatePoolCount?: number;
 };
 
 const GENERIC_SECTIONS: JobContentSection[] = [
@@ -68,7 +69,7 @@ const TIPS: Record<StepKey, { heading: string; items: string[] }> = {
   essentials: {
     heading: "Writing a strong posting",
     items: [
-      'Use a common job title — "Backend Engineer", not "Code Ninja". It lifts search visibility.',
+      'Use a common job title, such as "Backend Engineer", not "Code Ninja". It lifts search visibility.',
       "One role per posting. Hiring two? Create two jobs.",
       "Listing a salary range measurably increases applications.",
     ],
@@ -78,14 +79,14 @@ const TIPS: Record<StepKey, { heading: string; items: string[] }> = {
     items: [
       "Lead with impact and team, not a wall of requirements.",
       "Use sections and templates so it stays scannable.",
-      "Keep must-haves short — long lists scare off good candidates.",
+      "Keep must-haves short. Long lists scare off good candidates.",
     ],
   },
   compensation: {
     heading: "Pay transparency",
     items: [
       "Jobs with salary ranges get up to 30% more applicants.",
-      "Many jurisdictions now require pay disclosure — adding it keeps you compliant.",
+      "Many jurisdictions now require pay disclosure. Adding it keeps you compliant.",
     ],
   },
   application: {
@@ -93,7 +94,7 @@ const TIPS: Record<StepKey, { heading: string; items: string[] }> = {
     items: [
       "Ask only what you’ll actually use to decide.",
       "Every extra required field lowers completion rate.",
-      "Make profile links optional — not everyone has a GitHub.",
+      "Make profile links optional. Not everyone has a GitHub.",
     ],
   },
   advanced: {
@@ -159,6 +160,7 @@ export function JobForm({
   hiringTeam,
   workspaceMembers,
   aiConfigured,
+  candidatePoolCount,
 }: JobFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
   const applicationConfig = normalizeJobApplicationConfig(job?.applicationConfig);
@@ -176,22 +178,22 @@ export function JobForm({
   const [descriptionVersion, setDescriptionVersion] = useState(0);
   const [aiPending, startAi] = useTransition();
 
-  // A published job already has every section filled in — land on Review
+  // A published job already has every section filled in , land on Review
   // instead of Details, and treat the earlier steps as done regardless of
   // where the user is currently browsing (see `StepBar` below).
   const isPublished = job?.status === "open";
 
-  // Step wizard state — all step content stays mounted (visibility toggled via
+  // Step wizard state , all step content stays mounted (visibility toggled via
   // `hidden`) so uncontrolled native inputs (slug, salaryMin/Max, etc.) never
   // lose their value when the user navigates away and back.
   const [step, setStep] = useState(isPublished ? LAST_STEP : 0);
 
   // Step 6's PublicJobPreview (live iframe) and SemanticMatchPanel (AI cost
-  // surface) should not mount until the user actually reaches Review — but
+  // surface) should not mount until the user actually reaches Review , but
   // once they have, keep them mounted (same always-mounted rule as every
   // other step) so their internal state survives navigating away and back.
   // Set inside the one shared navigation handler below (an event handler,
-  // not render or an effect) — every step change goes through `goToStep`.
+  // not render or an effect) , every step change goes through `goToStep`.
   const [reviewVisited, setReviewVisited] = useState(step === LAST_STEP);
 
   function goToStep(index: number) {
@@ -322,8 +324,8 @@ export function JobForm({
         {/* Main column */}
         <div className="min-w-0 space-y-5">
           {/*
-            Every step below stays mounted for the lifetime of the form —
-            only `hidden`/`block` toggles, never a conditional render — so
+            Every step below stays mounted for the lifetime of the form.
+            Only `hidden`/`block` toggles, never a conditional render, so
             uncontrolled native inputs (slug, salaryMin/Max, etc.) never lose
             their value when the user navigates away and back. The `fadeUp`
             animation still replays on each step change for free: browsers
@@ -418,6 +420,7 @@ export function JobForm({
                 hiringTeam={hiringTeam}
                 workspaceMembers={workspaceMembers}
                 aiConfigured={aiConfigured}
+                candidatePoolCount={candidatePoolCount}
               />
             </div>
           </div>
@@ -483,7 +486,7 @@ function StepBar({
   steps: typeof STEPS;
   current: number;
   onSelect: (index: number) => void;
-  /** Published jobs already have every section filled in — show every step
+  /** Published jobs already have every section filled in , show every step
    * (besides Review itself) as done regardless of where the user is
    * currently browsing, instead of the usual "done = already passed". */
   allDone?: boolean;

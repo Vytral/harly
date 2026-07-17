@@ -142,13 +142,13 @@ export function CareerPositions({
                 />
               </span>
               <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                {job.department ?? "—"}
+                {job.department ?? "Not specified"}
               </span>
               <span className="text-sm text-zinc-500 dark:text-zinc-400">
                 {formatEmploymentType(job.employmentType)}
               </span>
               <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                {job.location ?? formatWorkplaceType(job.workplaceType) ?? "—"}
+                {job.location ?? formatWorkplaceType(job.workplaceType) ?? "Not specified"}
               </span>
             </Link>
           ))}

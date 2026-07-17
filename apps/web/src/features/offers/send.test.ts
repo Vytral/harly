@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // F1-13: an offer is only marked `sent` after the email provider accepts it.
 // The sendOffer action inserts a durable email_outbox row, delegates delivery
 // to the idempotent worker (processEmailOutbox), and flips the offer to `sent`
-// only once the outbox row reports success — so a crash can never leave a
+// only once the outbox row reports success , so a crash can never leave a
 // `sent` offer without a delivered email, or resend it.
 
 const mocks = vi.hoisted(() => {

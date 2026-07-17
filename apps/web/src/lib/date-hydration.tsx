@@ -8,7 +8,7 @@ import { formatShort, formatRelative, daysSince } from "./date";
  * so the server value and the client value can legitimately differ. We use
  * `useSyncExternalStore` with distinct server/client snapshots: React renders
  * the server snapshot during SSR + the first hydration pass (so markup matches)
- * and then swaps in the live client value — no `setState`-in-effect needed.
+ * and then swaps in the live client value , no `setState`-in-effect needed.
  */
 const noopSubscribe = () => () => {};
 

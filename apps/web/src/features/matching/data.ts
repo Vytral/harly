@@ -21,6 +21,15 @@ function hashText(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
+/** Number of active candidate records available to rank in a workspace. */
+export async function countCandidatePool(workspaceId: string): Promise<number> {
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(candidates)
+    .where(and(eq(candidates.workspaceId, workspaceId), isNull(candidates.deletedAt)));
+  return row?.n ?? 0;
+}
+
 /** Strip HTML tags from rich-text fields so the embedding input stays compact. */
 function plain(html: string | null): string {
   if (!html) return "";
@@ -182,7 +191,7 @@ export async function ensureCandidateEmbedding(
   return { skipped: false };
 }
 
-/** Candidates never embedded, or edited since their last embedding — a cheap SQL-only check. */
+/** Candidates never embedded, or edited since their last embedding , a cheap SQL-only check. */
 export async function countCandidatesNeedingIndex(workspaceId: string): Promise<number> {
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -230,7 +239,7 @@ async function nextCandidatesToIndex(workspaceId: string, limit: number): Promis
 
 export type IndexBatchResult = { succeeded: number; failed: number; remaining: number };
 
-/** Index up to `limit` stale/never-embedded candidates. Resumable — call again until `remaining` is 0. */
+/** Index up to `limit` stale/never-embedded candidates. Resumable , call again until `remaining` is 0. */
 export async function indexCandidateBatch(
   config: AiModelConfig,
   workspaceId: string,

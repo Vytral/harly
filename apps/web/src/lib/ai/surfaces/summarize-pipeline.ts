@@ -20,7 +20,7 @@ export type PipelineSummaryInput = {
 
 /**
  * Generate a one-sentence pipeline headline for the recruiter.
- * Returns null on failure — callers should degrade gracefully.
+ * Returns null on failure , callers should degrade gracefully.
  */
 export async function generatePipelineHeadlineWithAI(
   config: AiModelConfig,

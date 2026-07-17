@@ -237,10 +237,10 @@ export function AuditLogsCard({ logs }: { logs: AuditLogRow[] }) {
                         ) : null}
                       </td>
                       <td className="py-2.5 pr-4 align-top text-xs text-muted-foreground">
-                        {log.actorEmail ?? "—"}
+                        {log.actorEmail ?? "Unknown actor"}
                       </td>
                       <td className="py-2.5 pr-4 align-top font-mono text-xs tabular-nums text-muted-foreground">
-                        {log.ipAddress ?? "—"}
+                        {log.ipAddress ?? "Not recorded"}
                       </td>
                       <td className="py-2.5 pr-4 align-top">
                         <SeverityBadge severity={log.severity} />
@@ -263,7 +263,7 @@ export function AuditLogsCard({ logs }: { logs: AuditLogRow[] }) {
                                 Resource
                               </p>
                               <p className="flex items-center gap-1.5 font-mono text-xs">
-                                {log.resourceType ?? "—"}
+                                {log.resourceType ?? "Not recorded"}
                                 {log.resourceId ? (
                                   <>
                                     <span className="text-muted-foreground">/</span>
@@ -278,7 +278,7 @@ export function AuditLogsCard({ logs }: { logs: AuditLogRow[] }) {
                                 User agent
                               </p>
                               <p className="truncate font-mono text-xs text-muted-foreground">
-                                {log.userAgent ?? "—"}
+                                {log.userAgent ?? "Unknown browser"}
                               </p>
                             </div>
                             {log.metadata ? (

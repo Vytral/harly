@@ -4,8 +4,8 @@ import { cn } from "@/lib/utils";
 
 /**
  * Contextual top bar for focus-mode editors. Deliberately visually quieter than
- * the global dashboard TopBar — slimmer (h-12), translucent paper with a blur,
- * a single hairline underline, and NO logo — so the two never read as one
+ * the global dashboard TopBar , slimmer (h-12), translucent paper with a blur,
+ * a single hairline underline, and NO logo , so the two never read as one
  * duplicated bar. Three slots: left (exit), center (context), right (actions).
  *
  * Builder-agnostic: fill the slots with whatever a given editor needs.

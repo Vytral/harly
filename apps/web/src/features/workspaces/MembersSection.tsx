@@ -123,7 +123,7 @@ export function MembersAndRoles({
         </TabsList>
 
         {canManageRoles && tab === "roles" ? (
-          <Sheet open={creatingRole} onOpenChange={setCreatingRole}>
+          <Sheet open={creatingRole} onOpenChange={setCreatingRole} mobilePresentation="bottom-on-mobile">
             <SheetTrigger asChild>
               <Button>
                 <PlusIcon className="size-4" />
@@ -157,7 +157,7 @@ export function MembersAndRoles({
   );
 }
 
-// Back-compat alias — the page may import either name.
+// Back-compat alias , the page may import either name.
 export const MembersSection = MembersAndRoles;
 
 function CountChip({

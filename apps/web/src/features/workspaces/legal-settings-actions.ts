@@ -71,7 +71,7 @@ export async function saveLegalSettingsAction(
     updatedAt: new Date(),
   };
 
-  // Merge legal pages — only update provided keys, keep existing ones.
+  // Merge legal pages , only update provided keys, keep existing ones.
   if (d.legalPages) {
     const [existing] = await db
       .select({ legalPages: workspaceSettings.legalPages })

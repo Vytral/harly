@@ -94,7 +94,7 @@ function Toolbar({ editor }: { editor: EditorInstance | null }) {
   const [embedOpen, setEmbedOpen] = useState(false);
   const [embedCode, setEmbedCode] = useState("");
 
-  if (!editor) return <div className="h-9 border-b border-stone-200 bg-stone-50" />;
+  if (!editor) return <div className="h-9 border-b border-border bg-muted/50" />;
 
   function applyLink() {
     if (!editor) return;
@@ -126,7 +126,7 @@ function Toolbar({ editor }: { editor: EditorInstance | null }) {
   }
 
   return (
-    <div className="border-b border-stone-200 bg-stone-50">
+    <div className="border-b border-border bg-muted/50">
       <div className="flex flex-wrap items-center gap-0.5 px-2 py-1.5">
         <Btn onClick={() => editor.chain().focus().toggleBold().run()} active={editor.isActive("bold")} title="Bold">
           <BoldIcon />
@@ -192,27 +192,27 @@ function Toolbar({ editor }: { editor: EditorInstance | null }) {
 
       {/* Link input */}
       {linkOpen && (
-        <div className="flex items-center gap-1.5 border-t border-stone-200 bg-white px-2 py-1.5">
+        <div className="flex items-center gap-1.5 border-t border-border bg-card px-2 py-1.5">
           <input
             autoFocus
             value={linkUrl}
             onChange={(e) => setLinkUrl(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter") applyLink(); if (e.key === "Escape") setLinkOpen(false); }}
             placeholder="https://example.com"
-            className="flex-1 rounded border border-stone-200 px-2 py-1 text-xs outline-none focus:border-stone-400"
+            className="flex-1 rounded border border-input bg-background px-2 py-1 text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
           />
-          <button type="button" onClick={applyLink} className="rounded bg-zinc-900 px-2 py-1 text-[11px] font-medium text-white">Apply</button>
+          <button type="button" onClick={applyLink} className="rounded bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground">Apply</button>
           {editor.isActive("link") && (
-            <button type="button" onClick={() => { editor.chain().focus().unsetLink().run(); setLinkOpen(false); }} className="rounded border border-stone-200 px-2 py-1 text-[11px] text-stone-500 hover:bg-stone-100">Remove</button>
+            <button type="button" onClick={() => { editor.chain().focus().unsetLink().run(); setLinkOpen(false); }} className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">Remove</button>
           )}
-          <button type="button" onClick={() => setLinkOpen(false)} className="rounded border border-stone-200 px-2 py-1 text-[11px] text-stone-500 hover:bg-stone-100">Cancel</button>
+          <button type="button" onClick={() => setLinkOpen(false)} className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">Cancel</button>
         </div>
       )}
 
       {/* Embed/HTML input */}
       {embedOpen && (
-        <div className="flex flex-col gap-1.5 border-t border-stone-200 bg-white px-2 py-2">
-          <p className="text-[10px] text-stone-400">Paste raw HTML — iframe, image, video, or any markup. Inserted at cursor.</p>
+        <div className="flex flex-col gap-1.5 border-t border-border bg-card px-2 py-2">
+          <p className="text-[10px] text-muted-foreground">Paste raw HTML, iframe, image, video, or any markup. Inserted at cursor.</p>
           <textarea
             autoFocus
             value={embedCode}
@@ -220,11 +220,11 @@ function Toolbar({ editor }: { editor: EditorInstance | null }) {
             onKeyDown={(e) => { if (e.key === "Escape") setEmbedOpen(false); }}
             rows={3}
             placeholder={'<iframe src="https://www.youtube.com/embed/..." ...></iframe>'}
-            className="w-full rounded border border-stone-200 px-2 py-1.5 font-mono text-xs outline-none focus:border-stone-400"
+            className="w-full rounded border border-input bg-background px-2 py-1.5 font-mono text-xs text-foreground outline-none placeholder:text-muted-foreground focus:border-ring focus:ring-2 focus:ring-ring/20"
           />
           <div className="flex gap-1.5">
-            <button type="button" onClick={insertEmbed} className="rounded bg-zinc-900 px-2 py-1 text-[11px] font-medium text-white">Insert</button>
-            <button type="button" onClick={() => setEmbedOpen(false)} className="rounded border border-stone-200 px-2 py-1 text-[11px] text-stone-500 hover:bg-stone-100">Cancel</button>
+            <button type="button" onClick={insertEmbed} className="rounded bg-primary px-2 py-1 text-[11px] font-medium text-primary-foreground">Insert</button>
+            <button type="button" onClick={() => setEmbedOpen(false)} className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-muted">Cancel</button>
           </div>
         </div>
       )}
@@ -250,8 +250,8 @@ function Btn({
       title={title}
       className={
         active
-          ? "flex h-6 w-6 items-center justify-center rounded bg-zinc-900 text-white"
-          : "flex h-6 w-6 items-center justify-center rounded text-stone-500 transition hover:bg-stone-200 hover:text-stone-800"
+          ? "flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground"
+          : "flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition hover:bg-muted hover:text-foreground"
       }
     >
       {children}
@@ -260,7 +260,7 @@ function Btn({
 }
 
 function Sep() {
-  return <div className="mx-0.5 h-4 w-px bg-stone-200" />;
+  return <div className="mx-0.5 h-4 w-px bg-border" />;
 }
 
 function BoldIcon() {

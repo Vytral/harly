@@ -38,7 +38,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
-/** Human-readable labels for API scopes — raw scope strings surface in a tooltip. */
+/** Human-readable labels for API scopes , raw scope strings surface in a tooltip. */
 const SCOPE_LABELS: Record<string, string> = {
   "jobs:read": "Read jobs",
   "jobs:write": "Manage jobs",
@@ -55,7 +55,7 @@ function scopeLabel(scope: string): string {
 
 const MAX_VISIBLE_EVENTS = 2;
 
-/** Mask an API key identifier for display — never the full raw secret. */
+/** Mask an API key identifier for display , never the full raw secret. */
 function maskKey(prefix: string, last4: string): string {
   return `${prefix}${"•".repeat(12)}${last4}`;
 }
@@ -203,7 +203,7 @@ function SecretBanner({
     <div className="animate-in fade-in zoom-in-95 duration-200 rounded-2xl border border-pine/30 bg-sage/40 p-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.12)]">
       <p className="font-medium text-sage-ink">{label}</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Copy it now — you won&apos;t be able to see it again.
+        Copy it now. You won&apos;t be able to see it again.
       </p>
       <div className="mt-2 flex items-center gap-2">
         <code className="flex-1 overflow-x-auto rounded-lg bg-background px-2 py-1.5 font-mono text-xs">
@@ -820,7 +820,7 @@ function EmbedSection({
       ) : (
         <p className="text-xs text-muted-foreground">
           Create a publishable key above for per-embed analytics and revocation
-          (optional — the widget also works with just the workspace slug).
+          (optional. The widget also works with just the workspace slug).
         </p>
       )}
     </Card>

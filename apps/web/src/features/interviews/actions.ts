@@ -814,7 +814,7 @@ export async function updateInterview(input: {
 
     await requirePermission("collab:write");
 
-    // Build the update payload — only set fields that were explicitly provided.
+    // Build the update payload , only set fields that were explicitly provided.
     const set: Record<string, unknown> = { updatedAt: new Date() };
     if (data.type !== undefined) set.type = data.type;
     if (data.mode !== undefined) set.mode = data.mode;
@@ -1080,7 +1080,7 @@ export async function generateInterviewBriefAction(input: {
           resumeText = text.trim() || null;
         }
       } catch {
-        // Resume unavailable — proceed without it.
+        // Resume unavailable , proceed without it.
       }
     }
   }
@@ -1132,7 +1132,7 @@ export async function generateInterviewBriefAction(input: {
         "You are an expert recruiter coach. Generate a focused pre-interview brief for " +
         "the interviewer. Be specific and practical. `candidateSummary` is 2-4 sentences. " +
         "`keyAreasToProbe` is 3-6 concise themes. `suggestedQuestions` is 4-8 concrete, " +
-        "open-ended questions. `redFlags` lists concerns worth watching — leave empty when " +
+        "open-ended questions. `redFlags` lists concerns worth watching, leave empty when " +
         "there are none. Use plain text only, no markdown.",
       prompt:
         `Prepare an interview brief.\n\n## Candidate\n${candidateBlock}\n\n` +

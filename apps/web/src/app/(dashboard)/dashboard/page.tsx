@@ -66,7 +66,7 @@ export default async function DashboardPage({
   } else if (interviewsToday > 0) {
     insight = `${interviewsToday} interview${interviewsToday > 1 ? "s" : ""} scheduled today. Let's go!`;
   } else if (openJobs > 0) {
-    insight = `${openJobs} open ${openJobs === 1 ? "position" : "positions"} — keep the pipeline moving.`;
+    insight = `${openJobs} open ${openJobs === 1 ? "position" : "positions"}, keep the pipeline moving.`;
   }
 
   return (

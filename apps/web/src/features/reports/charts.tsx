@@ -1,7 +1,7 @@
 "use client";
 
 /**
- * Reports chart primitives — hand-built, dependency-free SVG.
+ * Reports chart primitives , hand-built, dependency-free SVG.
  *
  * The app ships no charting library, and the rest of the dashboard draws its
  * own SVG, so these match the house style: responsive viewBox, colours from
@@ -49,7 +49,7 @@ function niceMax(value: number): number {
 
 const fmt = new Intl.NumberFormat("en");
 
-// ── Trend chart — multi-series area + line with inspector ────────────────────
+// ── Trend chart , multi-series area + line with inspector ────────────────────
 
 export type TrendPoint = { label: string; sub?: string; value: number };
 export type TrendSeries = {
@@ -199,7 +199,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
             );
           })}
 
-          {/* hit columns — keyboard + hover */}
+          {/* hit columns , keyboard + hover */}
           {labels.map((label, i) => (
             <rect
               key={`${label}-${i}`}
@@ -252,7 +252,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
   );
 }
 
-// ── Funnel chart — vertical, with stage-to-stage conversion ──────────────────
+// ── Funnel chart , vertical, with stage-to-stage conversion ──────────────────
 
 export type FunnelDatum = { name: string; count: number; pct: number };
 
@@ -325,7 +325,7 @@ export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
       </div>
 
       <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border/60 bg-muted/20 p-3">
-        <Stat label="Stage" value={sel?.name ?? "—"} />
+        <Stat label="Stage" value={sel?.name ?? "No stage selected"} />
         <Stat label="Reached" value={`${sel?.pct ?? 0}%`} />
         <Stat label="Step conversion" value={stepConv != null ? `${stepConv}%` : "Top"} />
       </div>
@@ -342,7 +342,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-// ── Source bars — volume with hire share + conversion ────────────────────────
+// ── Source bars , volume with hire share + conversion ────────────────────────
 
 export type SourceDatum = {
   source: string;
@@ -419,7 +419,7 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
   );
 }
 
-// ── Histogram — vertical columns (time-to-hire) ──────────────────────────────
+// ── Histogram , vertical columns (time-to-hire) ──────────────────────────────
 
 export function Histogram({ data, color = "var(--chart-2)" }: { data: { bucket: string; count: number }[]; color?: string }) {
   const max = niceMax(Math.max(0, ...data.map((d) => d.count)));

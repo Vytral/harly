@@ -5,7 +5,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { ChevronDownIcon } from "../builder-icons";
 
-/** Panel heading — CalSans title + muted subtitle. English-only copy. */
+/** Panel heading , CalSans title + muted subtitle. English-only copy. */
 export function PanelHeader({
   title,
   subtitle,
@@ -62,7 +62,7 @@ export function Section({
   );
 }
 
-/** Segmented control — larger tap targets than the old tiny px-3 py-1.5. */
+/** Segmented control , larger tap targets than the old tiny px-3 py-1.5. */
 export function Segmented<T extends string>({
   value,
   options,

@@ -3,35 +3,86 @@
 import * as React from "react"
 import { XIcon } from "lucide-react"
 import { Dialog as SheetPrimitive } from "radix-ui"
+import { Drawer as DrawerPrimitive } from "vaul"
 
 import { cn } from "@/lib/utils"
 
-function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+type SheetPresentation = "side" | "bottom-on-mobile"
+
+const SheetContext = React.createContext({ useMobileDrawer: false })
+
+function Sheet({
+  mobilePresentation = "side",
+  ...props
+}: React.ComponentProps<typeof SheetPrimitive.Root> & {
+  mobilePresentation?: SheetPresentation
+}) {
+  const isMobile = useMediaQuery("(max-width: 767px)")
+  const useMobileDrawer = mobilePresentation === "bottom-on-mobile" && isMobile
+
+  return (
+    <SheetContext.Provider value={{ useMobileDrawer }}>
+      {useMobileDrawer ? (
+        <DrawerPrimitive.Root data-slot="sheet" direction="bottom" handleOnly fixed {...props} />
+      ) : (
+        <SheetPrimitive.Root data-slot="sheet" {...props} />
+      )}
+    </SheetContext.Provider>
+  )
 }
 
 function SheetTrigger({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Trigger>) {
-  return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
+  const { useMobileDrawer } = React.useContext(SheetContext)
+
+  return useMobileDrawer ? (
+    <DrawerPrimitive.Trigger data-slot="sheet-trigger" {...props} />
+  ) : (
+    <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />
+  )
 }
 
 function SheetClose({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Close>) {
-  return <SheetPrimitive.Close data-slot="sheet-close" {...props} />
+  const { useMobileDrawer } = React.useContext(SheetContext)
+
+  return useMobileDrawer ? (
+    <DrawerPrimitive.Close data-slot="sheet-close" {...props} />
+  ) : (
+    <SheetPrimitive.Close data-slot="sheet-close" {...props} />
+  )
 }
 
 function SheetPortal({
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Portal>) {
-  return <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
+  const { useMobileDrawer } = React.useContext(SheetContext)
+
+  return useMobileDrawer ? (
+    <DrawerPrimitive.Portal data-slot="sheet-portal" {...props} />
+  ) : (
+    <SheetPrimitive.Portal data-slot="sheet-portal" {...props} />
+  )
 }
 
 function SheetOverlay({
   className,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Overlay>) {
+  const { useMobileDrawer } = React.useContext(SheetContext)
+
+  if (useMobileDrawer) {
+    return (
+      <DrawerPrimitive.Overlay
+        data-slot="sheet-overlay"
+        className={cn("fixed inset-0 z-50 bg-black/50", className)}
+        {...props}
+      />
+    )
+  }
+
   return (
     <SheetPrimitive.Overlay
       data-slot="sheet-overlay"
@@ -54,6 +105,33 @@ function SheetContent({
   side?: "top" | "right" | "bottom" | "left"
   showCloseButton?: boolean
 }) {
+  const { useMobileDrawer } = React.useContext(SheetContext)
+
+  if (useMobileDrawer) {
+    return (
+      <DrawerPrimitive.Portal>
+        <SheetOverlay />
+        <DrawerPrimitive.Content
+          data-slot="sheet-content"
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-50 flex max-h-[calc(100dvh-0.75rem)] flex-col rounded-t-xl border bg-background shadow-lg outline-none",
+            className,
+          )}
+          {...props}
+        >
+          <DrawerPrimitive.Handle className="mx-auto mt-3 h-1.5 w-10 rounded-full bg-muted-foreground/30" />
+          {children}
+          {showCloseButton && (
+            <DrawerPrimitive.Close className="absolute top-3 right-3 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none">
+              <XIcon className="size-4" />
+              <span className="sr-only">Close</span>
+            </DrawerPrimitive.Close>
+          )}
+        </DrawerPrimitive.Content>
+      </DrawerPrimitive.Portal>
+    )
+  }
+
   return (
     <SheetPortal>
       <SheetOverlay />
@@ -109,6 +187,12 @@ function SheetTitle({
   className,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Title>) {
+  const { useMobileDrawer } = React.useContext(SheetContext)
+
+  if (useMobileDrawer) {
+    return <DrawerPrimitive.Title data-slot="sheet-title" className={cn("font-semibold text-foreground", className)} {...props} />
+  }
+
   return (
     <SheetPrimitive.Title
       data-slot="sheet-title"
@@ -122,6 +206,12 @@ function SheetDescription({
   className,
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Description>) {
+  const { useMobileDrawer } = React.useContext(SheetContext)
+
+  if (useMobileDrawer) {
+    return <DrawerPrimitive.Description data-slot="sheet-description" className={cn("text-sm text-muted-foreground", className)} {...props} />
+  }
+
   return (
     <SheetPrimitive.Description
       data-slot="sheet-description"
@@ -129,6 +219,21 @@ function SheetDescription({
       {...props}
     />
   )
+}
+
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = React.useState(false)
+
+  React.useEffect(() => {
+    const media = window.matchMedia(query)
+    const update = () => setMatches(media.matches)
+
+    update()
+    media.addEventListener("change", update)
+    return () => media.removeEventListener("change", update)
+  }, [query])
+
+  return matches
 }
 
 export {

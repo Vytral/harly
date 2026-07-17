@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 import type { CareerTestimonial } from "./config";
 import { safeImageUrl } from "./config";
 
-// Stable initial-circle palette (no lucide "egg" avatars — coloured monograms).
+// Stable initial-circle palette (no lucide "egg" avatars , coloured monograms).
 const AVATAR_TINT = [
   { bg: "#FDE68A", fg: "#92400E" },
   { bg: "#BFDBFE", fg: "#1E3A8A" },

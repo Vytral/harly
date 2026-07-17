@@ -19,7 +19,7 @@ const SAMPLE_JOBS = [
 ];
 
 /**
- * A faithful, scaled-down preview of the public careers board — updates live as
+ * A faithful, scaled-down preview of the public careers board , updates live as
  * branding changes so recruiters see exactly what candidates will. The settings
  * signature element (replaces the old gray-box style mockups).
  */

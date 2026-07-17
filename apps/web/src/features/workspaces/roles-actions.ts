@@ -91,7 +91,7 @@ export async function updateCustomRole(input: {
 }): Promise<RoleActionResult> {
   const context = await requirePermission("roles:manage");
 
-  // Owner is the locked keyholder — never editable.
+  // Owner is the locked keyholder , never editable.
   if (input.key === "owner") {
     return { ok: false, error: "The Owner role can't be edited." };
   }

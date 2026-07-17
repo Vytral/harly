@@ -45,7 +45,7 @@ function dbRow(key: string, id: string) {
   };
 }
 
-describe("authenticateApiKey — per-key rate limit (F2-07)", () => {
+describe("authenticateApiKey , per-key rate limit (F2-07)", () => {
   it("enforces a budget keyed to the API key id", async () => {
     const key = makeKey();
     mocks.selectRows = [dbRow(key.raw, "key-1")];

@@ -71,7 +71,7 @@ export default async function PortalLoginPage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-background lg:flex-row">
-      {/* Left panel — branding hero */}
+      {/* Left panel , branding hero */}
       <div className="relative flex min-h-[220px] flex-col items-center justify-center overflow-hidden px-10 py-16 lg:min-h-screen lg:w-[46%] lg:items-start">
         {/* Background: hero image or gradient */}
         {org.heroImageUrl ? (
@@ -142,7 +142,7 @@ export default async function PortalLoginPage() {
         </div>
       </div>
 
-      {/* Right panel — login form */}
+      {/* Right panel , login form */}
       <div className="flex flex-1 items-center justify-center px-6 py-12 lg:px-16">
         <div className="w-full max-w-sm space-y-8">
           <div>

@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 
 type Context = { params: Promise<{ id: string }> };
 
-/** POST /api/v1/applications/{id}/move — move to a pipeline stage. */
+/** POST /api/v1/applications/{id}/move , move to a pipeline stage. */
 export const POST = withApi(async (request, context) => {
   const ctx = await authenticateApiKey(request, "applications:write");
   const { id } = await (context as Context).params;

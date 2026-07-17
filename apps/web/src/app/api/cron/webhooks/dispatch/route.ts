@@ -4,7 +4,7 @@ import { dispatchDueWebhooks } from "@/server/webhooks/dispatch";
 import { authorizeCron } from "@/server/cron-auth";
 
 export const runtime = "nodejs";
-// Never cache — this mutates delivery state.
+// Never cache , this mutates delivery state.
 export const dynamic = "force-dynamic";
 
 /**

@@ -48,7 +48,7 @@ type ActionResult = {
   organizationId?: string;
 };
 
-// Role may be a built-in key OR a workspace custom-role key — validated at
+// Role may be a built-in key OR a workspace custom-role key , validated at
 // runtime against the workspace via isAssignableRole().
 const inviteMemberSchema = z.object({
   email: z.string().trim().email().transform((value) => value.toLowerCase()),
@@ -336,7 +336,7 @@ type InviteOneResult =
 
 /**
  * Core invite logic for a single (email, role). Caller must have already
- * authorized the actor. Does NOT revalidate — callers revalidate once.
+ * authorized the actor. Does NOT revalidate , callers revalidate once.
  * Existing user → added to the org immediately. New user → pending invitation
  * + email. Role is assumed already validated as assignable.
  */
@@ -633,7 +633,7 @@ export async function updateWorkspaceMemberRoleAction(
       return { success: false, error: "Member not found." };
     }
 
-    // Only an owner may modify another owner's role — stops a non-owner from
+    // Only an owner may modify another owner's role , stops a non-owner from
     // demoting or hijacking the workspace's keyholders.
     if (
       isOwnerRole(targetMember.role) &&

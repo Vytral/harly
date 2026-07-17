@@ -6,8 +6,8 @@ import { toast } from "sonner";
 
 import { sendBulkCandidateEmail } from "@/features/candidates/actions";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
-import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { TEMPLATE_VARIABLES } from "@/features/email-templates/interpolate";
+import { templateHtmlToPlainText } from "@/features/email-templates/plain-text";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,11 +17,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetClose } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/ui/side-panel";
 import { Textarea } from "@/components/ui/textarea";
 
 /**
- * Bulk email to the selected candidates. Variables stay literal here — the
+ * Bulk email to the selected candidates. Variables stay literal here , the
  * server interpolates them per candidate at send time.
  */
 export function BulkEmailDrawer({
@@ -40,13 +40,15 @@ export function BulkEmailDrawer({
   const router = useRouter();
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [isPending, startTransition] = useTransition();
 
   function applyTemplate(templateId: string) {
     const template = templates.find((t) => t.id === templateId);
     if (!template) return;
+    setSelectedTemplateId(templateId);
     setSubject(template.subject);
-    setBody(template.body);
+    setBody(templateHtmlToPlainText(template.body));
   }
 
   function send() {
@@ -68,23 +70,23 @@ export function BulkEmailDrawer({
       onOpenChange(false);
       setSubject("");
       setBody("");
+      setSelectedTemplateId("");
       onSent();
       router.refresh();
     });
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <DrawerLayout
+    <SidePanel
+        open={open}
+        onOpenChange={onOpenChange}
         title={`Email ${candidateIds.length} candidate${candidateIds.length === 1 ? "" : "s"}`}
         description="Variables like {{candidate_first_name}} are filled in per candidate when sending."
         footer={
           <>
-            <SheetClose asChild>
-              <Button variant="outline" disabled={isPending}>
-                Cancel
-              </Button>
-            </SheetClose>
+            <Button variant="outline" disabled={isPending} onClick={() => onOpenChange(false)}>
+              Cancel
+            </Button>
             <Button
               onClick={send}
               disabled={isPending || !subject.trim() || !body.trim()}
@@ -97,12 +99,17 @@ export function BulkEmailDrawer({
         <div className="space-y-4">
           {templates.length > 0 ? (
             <div className="space-y-2">
-              <p className="text-[13px] font-medium tracking-tight text-foreground/90">
-                Template
-              </p>
-              <Select onValueChange={applyTemplate}>
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="text-[13px] font-medium tracking-tight text-foreground/90">
+                  Start from a template
+                </p>
+                {selectedTemplateId ? (
+                  <span className="text-xs text-muted-foreground">Loaded into this email</span>
+                ) : null}
+              </div>
+              <Select value={selectedTemplateId || undefined} onValueChange={applyTemplate}>
                 <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Start from a template (optional)" />
+                  <SelectValue placeholder="Choose a template (optional)" />
                 </SelectTrigger>
                 <SelectContent>
                   {templates.map((template) => (
@@ -163,7 +170,6 @@ export function BulkEmailDrawer({
             </div>
           </div>
         </div>
-      </DrawerLayout>
-    </Sheet>
+      </SidePanel>
   );
 }

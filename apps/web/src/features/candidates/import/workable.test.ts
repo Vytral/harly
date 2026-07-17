@@ -16,4 +16,22 @@ describe("Workable import", () => {
     await expect(fetchWorkableCandidateImportRows({ subdomain: "demo", apiToken: "a".repeat(32) }, fetcher)).resolves.toMatchObject({ skipped: 0, rows: [{ values: { email: "ada@example.com" } }, { values: { email: "grace@example.com" } }] });
     expect(fetcher).toHaveBeenCalledTimes(4);
   });
+
+  it("backs off and retries a rate-limited request", async () => {
+    const fetcher = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 429, headers: { "retry-after": "0.001" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ candidates: [{ id: "a" }], paging: {} })))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: "a", firstname: "Ada", lastname: "Lovelace", email: "ada@example.com" })));
+    const sleep = vi.fn(async () => {});
+
+    await expect(
+      fetchWorkableCandidateImportRows(
+        { subdomain: "demo", apiToken: "a".repeat(32) },
+        fetcher,
+        sleep,
+      ),
+    ).resolves.toMatchObject({ skipped: 0, rows: [{ values: { email: "ada@example.com" } }] });
+    expect(sleep).toHaveBeenCalledWith(1);
+    expect(fetcher).toHaveBeenCalledTimes(3);
+  });
 });

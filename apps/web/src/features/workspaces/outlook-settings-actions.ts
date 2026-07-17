@@ -8,8 +8,11 @@ import { db, workspaceSettings } from "@harly/db";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
-import { getWorkspaceOutlookConfig } from "@/lib/outlook/config";
-import { listCalendars, sendMail } from "@/lib/outlook/client";
+import {
+  getWorkspaceOutlookConfig,
+  getWorkspaceOutlookCredentials,
+} from "@/lib/outlook/config";
+import { listCalendars, refreshOutlookToken, sendMail } from "@/lib/outlook/client";
 import { isWebhookEvent } from "@/server/webhooks/events";
 
 const log = createLogger("workspace-outlook-settings");
@@ -17,6 +20,54 @@ const log = createLogger("workspace-outlook-settings");
 export type OutlookActionResult = { ok: boolean; error?: string };
 
 const SETTINGS_PATH = "/settings/integrations";
+
+const RECONNECT_MESSAGE =
+  "Microsoft revoked this connection. Disconnect and reconnect Outlook.";
+
+/** True when Microsoft rejected the stored refresh token (revoked/expired). */
+function isInvalidGrant(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("invalid_grant");
+}
+
+/** Wipe the dead tokens so status flips back to "not connected". */
+async function clearOutlookToken(organizationId: string): Promise<void> {
+  await db
+    .update(workspaceSettings)
+    .set({
+      outlookEnabled: false,
+      outlookAccessTokenCiphertext: null,
+      outlookAccessTokenIv: null,
+      outlookAccessTokenTag: null,
+      outlookRefreshTokenCiphertext: null,
+      outlookRefreshTokenIv: null,
+      outlookRefreshTokenTag: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(workspaceSettings.organizationId, organizationId));
+  revalidatePath(SETTINGS_PATH);
+}
+
+/**
+ * Microsoft access tokens live ~1h. Exchange the stored refresh token for a
+ * fresh access token (refreshOutlookToken persists the rotated pair). Throws
+ * on a dead refresh token so callers can clear + prompt a reconnect.
+ */
+async function freshOutlookAccessToken(
+  workspaceId: string,
+): Promise<string | null> {
+  const config = await getWorkspaceOutlookConfig(workspaceId);
+  if (!config) return null;
+  const credentials = await getWorkspaceOutlookCredentials(workspaceId);
+  if (!credentials) return null;
+
+  return refreshOutlookToken({
+    workspaceId,
+    clientId: credentials.clientId,
+    clientSecret: credentials.clientSecret,
+    refreshToken: config.refreshToken,
+  });
+}
 
 export type OutlookCalendarItem = { id: string; name: string };
 
@@ -69,13 +120,19 @@ export async function listOutlookCalendarsAction(): Promise<
   if (!config) return { ok: false, error: "Outlook not connected." };
 
   try {
-    const calendars = await listCalendars(config.accessToken);
+    const accessToken = await freshOutlookAccessToken(context.organization.id);
+    if (!accessToken) return { ok: false, error: "Outlook not connected." };
+    const calendars = await listCalendars(accessToken);
     return {
       ok: true,
       calendars: calendars.map((c) => ({ id: c.id, name: c.name })),
     };
   } catch (error) {
     log.error(error, "listOutlookCalendarsAction failed");
+    if (isInvalidGrant(error)) {
+      await clearOutlookToken(context.organization.id);
+      return { ok: false, error: RECONNECT_MESSAGE };
+    }
     return { ok: false, error: "Failed to fetch calendars from Outlook." };
   }
 }
@@ -136,7 +193,9 @@ export async function testOutlookAction(): Promise<OutlookActionResult> {
   if (!config) return { ok: false, error: "Outlook not connected." };
 
   try {
-    await sendMail(config.accessToken, {
+    const accessToken = await freshOutlookAccessToken(context.organization.id);
+    if (!accessToken) return { ok: false, error: "Outlook not connected." };
+    await sendMail(accessToken, {
       to: [context.user.email ?? ""],
       subject: "Test from Harly",
       body: "<p>Your Microsoft Outlook integration is working!</p>",
@@ -144,6 +203,10 @@ export async function testOutlookAction(): Promise<OutlookActionResult> {
     return { ok: true };
   } catch (err) {
     log.error(err, "testOutlookAction failed");
+    if (isInvalidGrant(err)) {
+      await clearOutlookToken(context.organization.id);
+      return { ok: false, error: RECONNECT_MESSAGE };
+    }
     const msg = err instanceof Error ? err.message : "Send failed";
     return { ok: false, error: msg };
   }

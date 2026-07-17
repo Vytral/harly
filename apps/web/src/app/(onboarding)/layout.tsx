@@ -16,7 +16,7 @@ export default async function OnboardingLayout({
 
   return (
     <div className="relative flex min-h-screen flex-col bg-paper">
-      {/* Soft on-brand wash — warm paper, single evergreen tint. No rainbow. */}
+      {/* Soft on-brand wash, warm paper with a single evergreen tint. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"

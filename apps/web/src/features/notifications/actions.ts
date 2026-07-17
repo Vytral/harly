@@ -11,7 +11,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 const idSchema = z.object({ notificationId: z.uuid() });
 const idsSchema = z.object({ notificationIds: z.array(z.uuid()).min(1).max(100) });
 
-function revalidateInbox() {
+function revalidateNotifications() {
   revalidatePath("/dashboard/inbox");
   revalidatePath("/dashboard", "layout");
 }
@@ -36,7 +36,7 @@ export async function markNotificationRead(input: {
       ),
     );
 
-  revalidateInbox();
+  revalidateNotifications();
   return { success: true };
 }
 
@@ -60,7 +60,7 @@ export async function markNotificationUnread(input: {
       ),
     );
 
-  revalidateInbox();
+  revalidateNotifications();
   return { success: true };
 }
 
@@ -79,7 +79,7 @@ export async function markAllNotificationsRead(): Promise<{ success: boolean }> 
       ),
     );
 
-  revalidateInbox();
+  revalidateNotifications();
   return { success: true };
 }
 
@@ -102,7 +102,7 @@ export async function deleteNotification(input: {
       ),
     );
 
-  revalidateInbox();
+  revalidateNotifications();
   return { success: true };
 }
 
@@ -125,6 +125,6 @@ export async function deleteNotifications(input: {
       ),
     );
 
-  revalidateInbox();
+  revalidateNotifications();
   return { success: true };
 }

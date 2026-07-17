@@ -12,7 +12,7 @@ import {
 
 /**
  * Select shape for the interviews a candidate sees in their portal application
- * detail. Deliberately excludes `interviews.notes` — those are internal
+ * detail. Deliberately excludes `interviews.notes` , those are internal
  * evaluator notes and must never be exposed to the candidate (F1-20).
  */
 export const portalInterviewSelect = {

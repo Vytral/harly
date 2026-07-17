@@ -36,7 +36,7 @@ export async function logAuditEvent(params: LogAuditEventParams) {
       severity: params.severity ?? "info",
     });
   } catch (err) {
-    // Audit log failures are non-fatal — log but don't surface to caller.
+    // Audit log failures are non-fatal , log but don't surface to caller.
     log.error(err, "[audit] Failed to write audit log");
   }
 }

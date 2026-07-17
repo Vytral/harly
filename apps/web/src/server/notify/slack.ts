@@ -46,7 +46,7 @@ function describe(event: WebhookEvent, data: Record<string, unknown>): string | 
 /**
  * Send a rich Block Kit notification to the workspace's configured Slack channel.
  * Uses the OAuth bot token (chat.postMessage) instead of incoming webhooks.
- * Never throws — failures are logged, not propagated.
+ * Never throws , failures are logged, not propagated.
  */
 export async function notifySlackEvent(
   workspaceId: string,
@@ -61,9 +61,9 @@ export async function notifySlackEvent(
     const title = WEBHOOK_EVENT_LABELS[event] ?? event;
     const detail = describe(event, data);
 
-    const text = detail ? `${title} — ${detail}` : title;
+    const text = detail ? `${title} , ${detail}` : title;
     const mrkdwn = detail
-      ? `${emoji} *${title}* — ${detail}`
+      ? `${emoji} *${title}* , ${detail}`
       : `${emoji} *${title}*`;
 
     const client = new WebClient(config.botToken);

@@ -23,7 +23,7 @@ export const maxDuration = 60;
 type Context = { params: Promise<{ slug: string }> };
 
 /**
- * POST /api/public/v1/jobs/{slug}/applications — submit an application from a
+ * POST /api/public/v1/jobs/{slug}/applications , submit an application from a
  * custom form or the embed widget. CORS-open; rate-limited + honeypot-guarded.
  */
 export const POST = withApi(

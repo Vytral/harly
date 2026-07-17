@@ -17,14 +17,14 @@ describe("interpolateTemplate", () => {
   it("replaces repeated and multiple variables", () => {
     expect(
       interpolateTemplate(
-        "{{candidate_first_name}} — the {{job_title}} role at {{company_name}}. Thanks {{candidate_first_name}}!",
+        "{{candidate_first_name}}, the {{job_title}} role at {{company_name}}. Thanks {{candidate_first_name}}!",
         {
           candidate_first_name: "Ava",
           job_title: "Engineer",
           company_name: "Acme",
         },
       ),
-    ).toBe("Ava — the Engineer role at Acme. Thanks Ava!");
+    ).toBe("Ava, the Engineer role at Acme. Thanks Ava!");
   });
 
   it("tolerates whitespace inside braces", () => {

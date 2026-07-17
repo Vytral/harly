@@ -64,7 +64,7 @@ export function JobHiringTeam({
   return (
     <FormSection
       title="Hiring team"
-      description="People collaborating on this role."
+      description="Assigned teammates receive candidate updates for this role. Roles clarify who owns recruiting, the decision, and interviews."
       contentClassName="space-y-1.5"
       action={
         available.length > 0 ? (

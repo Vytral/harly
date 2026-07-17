@@ -153,7 +153,7 @@ export async function listUpcomingInterviews(): Promise<UpcomingInterviewItem[]>
   }));
 }
 
-/** All interviews scheduled within [start, end], any status — powers the calendar grid. */
+/** All interviews scheduled within [start, end], any status , powers the calendar grid. */
 export async function listInterviewsForRange(
   start: Date,
   end: Date,

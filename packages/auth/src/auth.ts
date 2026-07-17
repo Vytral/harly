@@ -10,8 +10,6 @@ import {
   createEmailSender,
   ResetPasswordEmail,
   resetPasswordSubject,
-  VerifyEmail,
-  verifyEmailSubject,
   type SendEmailOptions,
 } from "@harly/emails";
 import { decryptSecret, isEncryptionConfigured } from "./crypto-adapter";
@@ -307,21 +305,6 @@ export const auth = betterAuth({
     cookieCache: {
       enabled: true,
       maxAge: 60 * 5,
-    },
-  },
-  emailVerification: {
-    sendOnSignUp: true,
-    autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      await sendAuthEmail({
-        to: user.email,
-        subject: verifyEmailSubject,
-        react: VerifyEmail({
-          userName: user.name || user.email,
-          verifyUrl: url,
-        }),
-        fallbackLog: `Verification email for ${user.email}: ${url}`,
-      });
     },
   },
   trustedOrigins: [appUrl],

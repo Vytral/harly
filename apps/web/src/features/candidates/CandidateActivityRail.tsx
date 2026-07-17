@@ -33,7 +33,7 @@ const DOT_STYLES: Record<string, string> = {
 
 /**
  * Persistent, collapsible activity feed shown to the right of the candidate
- * profile. Mirrors Workable's "Resumen del candidato" rail — a live timeline of
+ * profile. Mirrors Workable's "Resumen del candidato" rail , a live timeline of
  * stage moves, notes, messages and AI events with a friendly empty state.
  */
 export function CandidateActivityRail({ activity }: { activity: ActivityItem[] }) {

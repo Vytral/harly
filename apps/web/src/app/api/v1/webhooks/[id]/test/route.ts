@@ -9,7 +9,7 @@ export const runtime = "nodejs";
 
 type Context = { params: Promise<{ id: string }> };
 
-/** POST /api/v1/webhooks/{id}/test — send a sample ping to the endpoint. */
+/** POST /api/v1/webhooks/{id}/test , send a sample ping to the endpoint. */
 export const POST = withApi(async (request, context) => {
   const ctx = await authenticateApiKey(request, "webhooks:manage");
   const { id } = await (context as Context).params;

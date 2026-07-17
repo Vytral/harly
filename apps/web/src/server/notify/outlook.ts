@@ -63,7 +63,7 @@ export async function notifyOutlookEvent(
     const title = WEBHOOK_EVENT_LABELS[event] ?? event;
     const detail = describe(event, data);
 
-    const subject = detail ? `${title} — ${detail}` : title;
+    const subject = detail ? `${title} , ${detail}` : title;
     const body = `
       <div style="font-family: -apple-system, sans-serif; padding: 16px;">
         <p style="font-size: 16px;">${emoji} <strong>${title}</strong></p>

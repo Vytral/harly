@@ -15,7 +15,7 @@ export type WorkspaceTurnstileStatus = {
   siteKey: string | null;
   /** True only when a secret key is stored (never the secret itself). */
   hasSecretKey: boolean;
-  /** False when AI_ENCRYPTION_KEY is missing/invalid — secret can't be stored. */
+  /** False when AI_ENCRYPTION_KEY is missing/invalid , secret can't be stored. */
   encryptionReady: boolean;
 };
 
@@ -44,7 +44,7 @@ export async function getWorkspaceTurnstileStatus(
 /**
  * Resolve the site key to render on the public application form. Prefers the
  * workspace's own key (when Turnstile is enabled), falling back to the global
- * NEXT_PUBLIC_TURNSTILE_SITE_KEY env var. Returns null when neither is set —
+ * NEXT_PUBLIC_TURNSTILE_SITE_KEY env var. Returns null when neither is set ,
  * the widget then renders nothing and verification is skipped.
  */
 export async function resolveTurnstileSiteKey(
@@ -105,7 +105,7 @@ async function resolveTurnstileSecret(
  * (returns true) so self-hosters without Turnstile aren't blocked.
  *
  * When `enforced` (default true) and a global TURNSTILE_SECRET_KEY is set,
- * verification is REQUIRED regardless of the per-workspace toggle — the global
+ * verification is REQUIRED regardless of the per-workspace toggle , the global
  * secret is a platform-wide anti-abuse control, so the public apply API cannot
  * skip it by leaving the workspace toggle off.
  *

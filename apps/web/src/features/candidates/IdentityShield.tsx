@@ -17,11 +17,11 @@ import { cn } from "@/lib/utils";
  * Bias-reduced review shell. When anonymization is on, identity signals wrapped
  * in <Redact> are visually masked (blur + non-selectable) until the reviewer
  * explicitly reveals this one candidate. The reveal is per-candidate and never
- * persisted — reload returns to the masked state.
+ * persisted , reload returns to the masked state.
  *
  * Blur (not deletion) keeps the layout intact and makes the redaction honest:
  * the reviewer chooses to look, rather than the data being hidden from the
- * record. Deterministic and explainable — no model call.
+ * record. Deterministic and explainable , no model call.
  */
 
 // Default `true` (revealed) so that when anonymization is OFF and no provider is
@@ -102,7 +102,7 @@ export function Redact({
 /**
  * A link whose identifying href (mailto:/tel:/profile URL) is withheld until
  * the reviewer reveals this candidate. While masked the anchor carries no href
- * at all — so the raw value never appears in the DOM, on hover, or via copy —
+ * at all , so the raw value never appears in the DOM, on hover, or via copy ,
  * and its label is blurred like <Redact>. This closes the gap where blurred
  * text still leaked PII through the underlying href.
  */

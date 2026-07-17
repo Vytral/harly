@@ -7,9 +7,9 @@ import { db, emailTemplates } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
   interpolateTemplate,
-  sanitizeTemplateHtml,
   type TemplateValues,
 } from "@/features/email-templates/interpolate";
+import { sanitizeTemplateHtml } from "@/features/email-templates/template-html.server";
 
 import type { EmailTemplateItem, TemplateType } from "./shared";
 import { SYSTEM_TEMPLATE_TYPES } from "./shared";

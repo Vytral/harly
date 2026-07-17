@@ -18,6 +18,30 @@ const SETTINGS_PATH = "/settings/integrations";
 
 export type GCalCalendar = { id: string; name: string; primary: boolean };
 
+const RECONNECT_MESSAGE =
+  "Google revoked this connection. Disconnect and reconnect Google Calendar.";
+
+/** True when Google rejected the stored refresh token (revoked/expired). */
+function isInvalidGrant(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("invalid_grant");
+}
+
+/** Wipe the dead token so status flips back to "not connected". */
+async function clearGCalToken(organizationId: string): Promise<void> {
+  await db
+    .update(workspaceSettings)
+    .set({
+      gcalEnabled: false,
+      gcalRefreshTokenCiphertext: null,
+      gcalRefreshTokenIv: null,
+      gcalRefreshTokenTag: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(workspaceSettings.organizationId, organizationId));
+  revalidatePath(SETTINGS_PATH);
+}
+
 /** List writable calendars for the connected Google account. */
 export async function listGCalCalendarsAction(): Promise<
   { ok: true; calendars: GCalCalendar[] } | { ok: false; error: string }
@@ -40,6 +64,10 @@ export async function listGCalCalendarsAction(): Promise<
     };
   } catch (err) {
     log.error(err, "listGCalCalendarsAction failed");
+    if (isInvalidGrant(err)) {
+      await clearGCalToken(context.organization.id);
+      return { ok: false, error: RECONNECT_MESSAGE };
+    }
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Failed to list calendars.",
@@ -67,7 +95,7 @@ export async function saveGCalSettingsAction(input: {
   return { ok: true };
 }
 
-/** Disconnect Google Calendar — clear all gcal columns. */
+/** Disconnect Google Calendar , clear all gcal columns. */
 export async function disconnectGCalAction(): Promise<GCalActionResult> {
   const context = await requirePermission("integrations:manage");
 
@@ -98,7 +126,7 @@ export async function disconnectGCalAction(): Promise<GCalActionResult> {
   return { ok: true };
 }
 
-/** Quick connectivity check — tries to list calendars. */
+/** Quick connectivity check , tries to list calendars. */
 export async function testGCalConnectionAction(): Promise<GCalActionResult> {
   const context = await requirePermission("integrations:manage");
   const config = await getWorkspaceGCalConfig(context.organization.id);
@@ -111,6 +139,10 @@ export async function testGCalConnectionAction(): Promise<GCalActionResult> {
     return { ok: true };
   } catch (err) {
     log.error(err, "testGCalConnectionAction failed");
+    if (isInvalidGrant(err)) {
+      await clearGCalToken(context.organization.id);
+      return { ok: false, error: RECONNECT_MESSAGE };
+    }
     return {
       ok: false,
       error: err instanceof Error ? err.message : "Connection test failed.",

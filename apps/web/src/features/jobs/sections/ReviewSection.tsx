@@ -21,6 +21,7 @@ export function ReviewSection({
   hiringTeam,
   workspaceMembers,
   aiConfigured,
+  candidatePoolCount,
 }: {
   job?: Job;
   title: string;
@@ -30,6 +31,7 @@ export function ReviewSection({
   hiringTeam?: HiringTeamMember[];
   workspaceMembers?: WorkspaceMemberOption[];
   aiConfigured?: boolean;
+  candidatePoolCount?: number;
 }) {
   return (
     <div data-section="review" className="space-y-5">
@@ -55,7 +57,11 @@ export function ReviewSection({
           <JobHiringTeam jobId={job.id} team={hiringTeam ?? []} members={workspaceMembers ?? []} />
           {reviewVisited ? (
             <>
-              <SemanticMatchPanel jobId={job.id} aiConfigured={Boolean(aiConfigured)} />
+              <SemanticMatchPanel
+                jobId={job.id}
+                aiConfigured={Boolean(aiConfigured)}
+                candidatePoolCount={candidatePoolCount ?? 0}
+              />
               <PublicJobPreview slug={job.slug} />
             </>
           ) : null}
@@ -67,7 +73,7 @@ export function ReviewSection({
           </span>
           <p className="text-sm font-medium">Hiring team, AI matching, and live preview unlock after you publish</p>
           <p className="max-w-sm text-sm text-muted-foreground">
-            Save this job first — you&apos;ll be able to assign a hiring team, rank your candidate pool, and preview
+            Save this job first. You&apos;ll be able to assign a hiring team, rank your candidate pool, and preview
             the public listing right after.
           </p>
         </div>

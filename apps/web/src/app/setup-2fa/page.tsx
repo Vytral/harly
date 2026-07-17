@@ -23,7 +23,7 @@ export default async function Setup2FAPage() {
       ? session.user.twoFactorEnabled
       : false;
 
-  // Already has 2FA — send to dashboard.
+  // Already has 2FA , send to dashboard.
   if (twoFactorEnabled) {
     redirect("/dashboard");
   }

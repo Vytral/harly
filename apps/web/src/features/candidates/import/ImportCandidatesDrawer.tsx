@@ -40,6 +40,15 @@ import {
 } from "@/components/ui/table";
 
 export type ImportJobOption = { id: string; title: string };
+export type ImportSource = "csv" | "greenhouse" | "workable" | "ashby" | "lever";
+
+const IMPORT_SOURCE_OPTIONS: { value: ImportSource; label: string }[] = [
+  { value: "csv", label: "CSV file" },
+  { value: "greenhouse", label: "Greenhouse" },
+  { value: "workable", label: "Workable" },
+  { value: "ashby", label: "Ashby" },
+  { value: "lever", label: "Lever" },
+];
 
 const UNMAPPED = "__unmapped__";
 const PREVIEW_ROWS = 5;
@@ -59,10 +68,17 @@ type ImportSummary = {
   errors: { row: number; email: string; reason: string }[];
 };
 
-export function ImportCandidatesDrawer({ jobs }: { jobs: ImportJobOption[] }) {
+export function ImportCandidatesDrawer({
+  jobs,
+  initialSource,
+}: {
+  jobs: ImportJobOption[];
+  initialSource?: ImportSource;
+}) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(Boolean(initialSource));
   const [jobId, setJobId] = useState<string>(jobs[0]?.id ?? "");
+  const [source, setSource] = useState<ImportSource>(initialSource ?? "csv");
   const [file, setFile] = useState<ParsedFile | null>(null);
   const [summary, setSummary] = useState<ImportSummary | null>(null);
   const [greenhouseApiKey, setGreenhouseApiKey] = useState("");
@@ -73,6 +89,7 @@ export function ImportCandidatesDrawer({ jobs }: { jobs: ImportJobOption[] }) {
   const [isPending, startTransition] = useTransition();
 
   function reset() {
+    setSource(initialSource ?? "csv");
     setFile(null);
     setSummary(null);
     setGreenhouseApiKey("");
@@ -210,20 +227,21 @@ export function ImportCandidatesDrawer({ jobs }: { jobs: ImportJobOption[] }) {
   return (
     <Sheet
       open={open}
+      mobilePresentation="bottom-on-mobile"
       onOpenChange={(next) => {
         setOpen(next);
         if (!next) reset();
       }}
     >
       <SheetTrigger asChild>
-        <Button variant="outline" size="sm">
+        <Button variant="outline" size="sm" className="h-11 rounded-lg">
           <Upload className="size-4" />
-          Import CSV
+          Import candidates
         </Button>
       </SheetTrigger>
       <DrawerLayout
         title="Import candidates"
-        description="Upload a CSV and add every row to a job's pipeline as a new application."
+        description="Bring candidates into a job from a CSV file or another ATS."
         className="sm:max-w-2xl"
         footer={
           <>
@@ -232,7 +250,7 @@ export function ImportCandidatesDrawer({ jobs }: { jobs: ImportJobOption[] }) {
                 {summary ? "Close" : "Cancel"}
               </Button>
             </SheetClose>
-            {!summary ? (
+            {!summary && source === "csv" ? (
               <Button
                 onClick={importRows}
                 disabled={!file || !jobId || validRowCount === 0 || Boolean(mappingError) || isPending}
@@ -247,7 +265,7 @@ export function ImportCandidatesDrawer({ jobs }: { jobs: ImportJobOption[] }) {
       >
         {jobs.length === 0 ? (
           <p className="text-sm text-muted-foreground">
-            Create a job before importing candidates — every imported row is added to
+            Create a job before importing candidates. Every imported row is added to
             a job&apos;s pipeline.
           </p>
         ) : (
@@ -268,62 +286,94 @@ export function ImportCandidatesDrawer({ jobs }: { jobs: ImportJobOption[] }) {
               </Select>
             </div>
 
-            {!file ? (
-              <div className="space-y-3">
-                <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
-                  <Label htmlFor="greenhouse-api-key">Import from Greenhouse</Label>
-                  <Input id="greenhouse-api-key" type="password" autoComplete="off" value={greenhouseApiKey} onChange={(event) => setGreenhouseApiKey(event.target.value)} placeholder="Harvest API key" />
-                  <p className="text-xs text-muted-foreground">Imports all eligible candidates into the selected job. The key is used once, never saved, and needs the Harvest Candidates permission.</p>
-                  <Button type="button" variant="outline" onClick={importGreenhouse} disabled={!jobId || !greenhouseApiKey.trim() || isPending}>{isPending ? "Importing…" : "Import Greenhouse candidates"}</Button>
-                </div>
-                <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
-                  <Label htmlFor="workable-subdomain">Import from Workable</Label>
-                  <Input id="workable-subdomain" autoComplete="off" value={workableSubdomain} onChange={(event) => setWorkableSubdomain(event.target.value)} placeholder="Subdomain, e.g. acme" />
-                  <Input id="workable-api-token" type="password" autoComplete="off" value={workableApiToken} onChange={(event) => setWorkableApiToken(event.target.value)} placeholder="API access token" />
-                  <p className="text-xs text-muted-foreground">Use an Admin-generated token with only the <code>r_candidates</code> scope. Harly paginates candidates and reads each complete profile; the token is never saved.</p>
-                  <Button type="button" variant="outline" onClick={importWorkable} disabled={!jobId || !workableSubdomain.trim() || !workableApiToken.trim() || isPending}>{isPending ? "Importing…" : "Import Workable candidates"}</Button>
-                </div>
-                <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
-                  <Label htmlFor="ashby-api-key">Import from Ashby</Label>
-                  <Input id="ashby-api-key" type="password" autoComplete="off" value={ashbyApiKey} onChange={(event) => setAshbyApiKey(event.target.value)} placeholder="Ashby API key" />
-                  <p className="text-xs text-muted-foreground">Use an Admin-generated API key with only <code>candidatesRead</code>. Harly reads complete profiles through Ashby&apos;s cursor API; the key is never saved.</p>
-                  <Button type="button" variant="outline" onClick={importAshby} disabled={!jobId || !ashbyApiKey.trim() || isPending}>{isPending ? "Importing…" : "Import Ashby candidates"}</Button>
-                </div>
-                <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
-                  <Label htmlFor="lever-api-key">Import from Lever</Label>
-                  <Input id="lever-api-key" type="password" autoComplete="off" value={leverApiKey} onChange={(event) => setLeverApiKey(event.target.value)} placeholder="Lever API key" />
-                  <p className="text-xs text-muted-foreground">Use a read-only API key with access to Opportunities. Harly imports Lever&apos;s candidate-centric opportunities and never saves the key.</p>
-                  <Button type="button" variant="outline" onClick={importLever} disabled={!jobId || !leverApiKey.trim() || isPending}>{isPending ? "Importing…" : "Import Lever candidates"}</Button>
-                </div>
+            <div className="space-y-2">
+              <Label htmlFor="import-source">Source</Label>
+              <Select
+                value={source}
+                onValueChange={(value) => {
+                  setSource(value as ImportSource);
+                  setFile(null);
+                  setSummary(null);
+                }}
+              >
+                <SelectTrigger id="import-source" className="w-full">
+                  <SelectValue placeholder="Select a source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {IMPORT_SOURCE_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {source === "csv" ? (
+              <div className="space-y-2">
+                <Label htmlFor="import-file">CSV file</Label>
+                <Input
+                  id="import-file"
+                  type="file"
+                  accept=".csv,.tsv,text/csv,text/tab-separated-values"
+                  onChange={(e) => {
+                    const selected = e.target.files?.[0];
+                    if (selected) void handleFile(selected);
+                    e.target.value = "";
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  The first row should contain column headers. Use Full name or First name +
+                  Last name, plus Email. CSV, semicolon-separated CSV and TSV are supported.
+                </p>
+                <Button type="button" variant="link" size="sm" className="h-auto px-0" onClick={downloadTemplate}>
+                  <Download className="size-3.5" />
+                  Download template
+                </Button>
+                {file?.truncated ? (
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Only the first 500 rows of {file.fileName} will be imported.
+                  </p>
+                ) : null}
               </div>
             ) : null}
 
-            <div className="space-y-2">
-              <Label htmlFor="import-file">CSV file</Label>
-              <Input
-                id="import-file"
-                type="file"
-                accept=".csv,.tsv,text/csv,text/tab-separated-values"
-                onChange={(e) => {
-                  const selected = e.target.files?.[0];
-                  if (selected) void handleFile(selected);
-                  e.target.value = "";
-                }}
-              />
-              <p className="text-xs text-muted-foreground">
-                The first row should contain column headers. Use Full name or First name +
-                Last name, plus Email. CSV, semicolon-separated CSV and TSV are supported.
-              </p>
-              <Button type="button" variant="link" size="sm" className="h-auto px-0" onClick={downloadTemplate}>
-                <Download className="size-3.5" />
-                Download template
-              </Button>
-              {file?.truncated ? (
-                <p className="text-xs text-amber-600 dark:text-amber-400">
-                  Only the first 500 rows of {file.fileName} will be imported.
-                </p>
-              ) : null}
-            </div>
+            {!summary && source === "greenhouse" ? (
+              <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+                <Label htmlFor="greenhouse-api-key">Greenhouse API key</Label>
+                <Input id="greenhouse-api-key" type="password" autoComplete="off" value={greenhouseApiKey} onChange={(event) => setGreenhouseApiKey(event.target.value)} placeholder="Harvest API key" />
+                <p className="text-xs text-muted-foreground">Imports eligible candidates into the selected job. The key is used once, never saved, and needs the Harvest Candidates permission.</p>
+                <Button type="button" variant="outline" onClick={importGreenhouse} disabled={!jobId || !greenhouseApiKey.trim() || isPending}>{isPending ? "Importing…" : "Import Greenhouse candidates"}</Button>
+              </div>
+            ) : null}
+
+            {!summary && source === "workable" ? (
+              <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+                <Label htmlFor="workable-subdomain">Workable credentials</Label>
+                <Input id="workable-subdomain" autoComplete="off" value={workableSubdomain} onChange={(event) => setWorkableSubdomain(event.target.value)} placeholder="Subdomain, e.g. acme" />
+                <Input id="workable-api-token" type="password" autoComplete="off" value={workableApiToken} onChange={(event) => setWorkableApiToken(event.target.value)} placeholder="API access token" />
+                <p className="text-xs text-muted-foreground">Use an Admin-generated token with only the <code>r_candidates</code> scope. Harly reads complete profiles and never saves the token.</p>
+                <Button type="button" variant="outline" onClick={importWorkable} disabled={!jobId || !workableSubdomain.trim() || !workableApiToken.trim() || isPending}>{isPending ? "Importing…" : "Import Workable candidates"}</Button>
+              </div>
+            ) : null}
+
+            {!summary && source === "ashby" ? (
+              <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+                <Label htmlFor="ashby-api-key">Ashby API key</Label>
+                <Input id="ashby-api-key" type="password" autoComplete="off" value={ashbyApiKey} onChange={(event) => setAshbyApiKey(event.target.value)} placeholder="Ashby API key" />
+                <p className="text-xs text-muted-foreground">Use an Admin-generated key with the <code>candidatesRead</code> scope. Harly reads complete profiles and never saves the key.</p>
+                <Button type="button" variant="outline" onClick={importAshby} disabled={!jobId || !ashbyApiKey.trim() || isPending}>{isPending ? "Importing…" : "Import Ashby candidates"}</Button>
+              </div>
+            ) : null}
+
+            {!summary && source === "lever" ? (
+              <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
+                <Label htmlFor="lever-api-key">Lever API key</Label>
+                <Input id="lever-api-key" type="password" autoComplete="off" value={leverApiKey} onChange={(event) => setLeverApiKey(event.target.value)} placeholder="Lever API key" />
+                <p className="text-xs text-muted-foreground">Use a read-only key with access to Opportunities. Harly imports candidate details and never saves the key.</p>
+                <Button type="button" variant="outline" onClick={importLever} disabled={!jobId || !leverApiKey.trim() || isPending}>{isPending ? "Importing…" : "Import Lever candidates"}</Button>
+              </div>
+            ) : null}
 
             {file && !summary ? (
               <>
@@ -376,7 +426,7 @@ export function ImportCandidatesDrawer({ jobs }: { jobs: ImportJobOption[] }) {
                           <TableRow key={index}>
                             {IMPORT_FIELDS.filter((field) => field.key !== "fullName").map((field) => (
                               <TableCell key={field.key} className="text-muted-foreground">
-                                {row.values[field.key as Exclude<ImportFieldKey, "fullName">] || "—"}
+                                {row.values[field.key as Exclude<ImportFieldKey, "fullName">] || "Not provided"}
                               </TableCell>
                             ))}
                           </TableRow>
@@ -388,7 +438,7 @@ export function ImportCandidatesDrawer({ jobs }: { jobs: ImportJobOption[] }) {
                     {rowsToImport.length} row{rowsToImport.length === 1 ? "" : "s"} found,{" "}
                     {validRowCount} ready to import
                     {rowsToImport.length > PREVIEW_ROWS
-                      ? ` — showing the first ${PREVIEW_ROWS}`
+                      ? `, showing the first ${PREVIEW_ROWS}`
                       : ""}
                     .
                   </p>

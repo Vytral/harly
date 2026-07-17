@@ -43,7 +43,7 @@ export const STATUS_ACCENT: Record<TaskStatus, string> = {
   canceled: "var(--ink-soft)",
 };
 
-/** Priority carries urgency through colour — muted → slate → clay → rust. */
+/** Priority carries urgency through colour , muted → slate → clay → rust. */
 export const PRIORITY: Record<
   TaskPriority,
   { dot: string; text: string; spine: string }
@@ -77,7 +77,7 @@ export function startOfToday(): number {
   return d.getTime();
 }
 
-/** Bucket an open task by how soon it is due — the recruiter's triage order. */
+/** Bucket an open task by how soon it is due , the recruiter's triage order. */
 export function urgencyOf(iso: string | null, todayStart: number): UrgencyKey {
   if (!iso) return "none";
   const due = new Date(iso).getTime();

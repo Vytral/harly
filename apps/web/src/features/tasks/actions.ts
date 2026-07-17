@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@harly/db";
@@ -173,6 +173,42 @@ export async function updateTask(
   } catch (error) {
     log.error(error, "updateTask failed");
     return { success: false, error: "Unable to update task." };
+  }
+}
+
+/**
+ * Complete every open task owned by the signed-in user in one SQL statement.
+ *
+ * This deliberately does not accept task ids: callers cannot accidentally
+ * complete a teammate's task, and the update cannot be partially applied when
+ * a task list is paginated or changes between the AI preview and confirmation.
+ */
+export async function completeMyOpenTasks(): Promise<{
+  success: boolean;
+  error?: string;
+  updatedCount?: number;
+}> {
+  try {
+    const { organization: workspace, user } = await requirePermission("collab:write");
+
+    const updated = await db
+      .update(tasks)
+      .set({ status: "completed", completedAt: new Date() })
+      .where(
+        and(
+          eq(tasks.workspaceId, workspace.id),
+          eq(tasks.ownerId, user.id),
+          or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
+        ),
+      )
+      .returning({ id: tasks.id });
+
+    revalidatePath("/dashboard/tasks");
+    revalidatePath("/dashboard");
+    return { success: true, updatedCount: updated.length };
+  } catch (error) {
+    log.error(error, "completeMyOpenTasks failed");
+    return { success: false, error: "Unable to complete your tasks." };
   }
 }
 

@@ -11,7 +11,7 @@ import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
-/** GET /api/v1/candidates — list candidates (cursor-paginated). */
+/** GET /api/v1/candidates , list candidates (cursor-paginated). */
 export const GET = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "candidates:read");
   const url = new URL(request.url);
@@ -31,7 +31,7 @@ export const GET = withApi(async (request) => {
   return apiOk(items.map(serializeCandidate), { pagination: meta });
 });
 
-/** POST /api/v1/candidates — create a candidate. */
+/** POST /api/v1/candidates , create a candidate. */
 export const POST = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "candidates:write");
   const values = candidateCreateSchema.parse(

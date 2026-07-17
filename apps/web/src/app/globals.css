@@ -4,7 +4,7 @@
 @custom-variant dark (&:is(.dark *):not(:is(.light *)));
 
 /*
- * Harly admin theme — "off-white + lime" (Remote.com-inspired soft UI).
+ * Harly admin theme , "off-white + lime" (Remote.com-inspired soft UI).
  * Near-white warm canvas, pure-white surfaces lifted by shadow (not borders),
  * ink-black as the action color, and a single chartreuse accent used with an
  * eyedropper. Domain var names are kept from the previous theme so every
@@ -18,18 +18,18 @@
   /* ── Domain base ── */
   --paper: #f5f5f4;        /* warm off-white canvas */
   --paper-raised: #ffffff; /* pure white surfaces */
-  --kraft: #efefed;        /* muted surface — soft grey */
+  --kraft: #efefed;        /* muted surface , soft grey */
   --ink: #171717;          /* near-black */
-  --ink-soft: #6a6a67;     /* mid grey text — tuned for ≥4.5:1 AA on --paper/--card */
-  --pine: #3f6212;         /* action color — dark olive, same tonal family as lime */
+  --ink-soft: #6a6a67;     /* mid grey text , tuned for ≥4.5:1 AA on --paper/--card */
+  --pine: #3f6212;         /* action color , dark olive, same tonal family as lime */
   --pine-strong: #365314;  /* pressed/hover */
-  --sage: #eaf6c8;         /* lime wash — soft active/highlight tint */
+  --sage: #eaf6c8;         /* lime wash , soft active/highlight tint */
   --sage-ink: #44520f;     /* text on lime wash */
-  --lime: #c8f560;         /* chartreuse accent — use sparingly */
+  --lime: #c8f560;         /* chartreuse accent , use sparingly */
   --lime-ink: #2a330d;     /* text on lime */
-  --clay: #b45309;         /* warning — amber */
-  --slate-info: #64748b;   /* info — neutral slate */
-  --rust: #d6453a;         /* destructive — warm red */
+  --clay: #b45309;         /* warning , amber */
+  --slate-info: #64748b;   /* info , neutral slate */
+  --rust: #d6453a;         /* destructive , warm red */
   --hairline: #ececea;     /* borders disappear until looked for */
 
   /* ── shadcn semantics → domain base (primitives untouched) ── */
@@ -91,7 +91,7 @@
   --board-surface: #ffffff;
   --board-surface-muted: #fafafa;
 
-  /* Folio template defaults — overridden inline by FolioTemplate / JobShell. */
+  /* Folio template defaults , overridden inline by FolioTemplate / JobShell. */
   --folio-ink: #1a1715;
   --folio-paper: #F7F4EE;
 }
@@ -157,7 +157,7 @@
   --color-board-surface: var(--board-surface);
   --color-board-surface-muted: var(--board-surface-muted);
 
-  /* Folio template — ink + paper. Set via inline style on the template root
+  /* Folio template , ink + paper. Set via inline style on the template root
      (--folio-ink: #1a1715; --folio-paper: <theme background>), so every
      text-folio-ink / border-folio-ink/15 / bg-folio-paper utility resolves to
      the live value and respects the user's background override. */
@@ -210,7 +210,7 @@
     color: inherit;
     text-decoration: none;
   }
-  /* Tailwind v4 ships buttons as cursor:default — give every interactive
+  /* Tailwind v4 ships buttons as cursor:default , give every interactive
      control the pointer so hovers never feel dead. Disabled stays default.
      Elements that opt into their own cursor-* utility keep it (utilities layer
      outranks base). */
@@ -226,12 +226,12 @@
   select:not(:disabled) {
     cursor: pointer;
   }
-  /* Display text: same family, heavier + tighter — the "Good morning" look. */
+  /* Display text: same family, heavier + tighter , the "Good morning" look. */
   .font-display {
     font-weight: 700;
     letter-spacing: -0.02em;
   }
-  /* Cal Sans — distinctive display face for focus-mode builder chrome only.
+  /* Cal Sans , distinctive display face for focus-mode builder chrome only.
      Falls back to sans until the local font (app/(fullscreen)/layout.tsx)
      loads. Deliberately NOT applied to public/live pages. */
   .font-cal {
@@ -268,7 +268,7 @@
   animation: text-shimmer var(--shimmer-duration, 2s) linear infinite;
 }
 
-/* Aurora drift — slow, breathing mesh for the setup/auth brand panel.
+/* Aurora drift , slow, breathing mesh for the setup/auth brand panel.
    transform + opacity only (GPU); paused under reduced-motion. */
 @keyframes aurora-a {
   0%,
@@ -399,7 +399,7 @@
 .prose-job code { background: var(--kraft); border-radius: 3px; padding: 0.1em 0.35em; font-size: 0.85em; font-family: var(--font-mono); }
 
 /*
- * Dark mode — soft near-black, white-ink actions, lime unchanged (it glows).
+ * Dark mode , soft near-black, white-ink actions, lime unchanged (it glows).
  * Complete-enough for the shell + overview; per-screen QA lands in a later pass.
  */
 .dark {
@@ -455,7 +455,7 @@
   --sidebar-ring: var(--pine);
 }
 
-/* ── Sidebar fluid collapse — premium bezier + text animation ── */
+/* ── Sidebar fluid collapse , premium bezier + text animation ── */
 
 /* Sidebar container + gap: smooth width transition */
 [data-slot="sidebar-gap"],
@@ -574,12 +574,12 @@ html[data-tab-switch="true"] .animate-in {
   }
 }
 
-/* ── Folio template — editorial chrome ────────────────────────────── */
+/* ── Folio template , editorial chrome ────────────────────────────── */
 /*
  * Fraunces utility. Optical sizing driven by `font-variation-settings` so a
  * 4xl headline gets the display cut (high contrast, tighter joints) while body
  * text keeps the text cut (sturdier, more open). The "SOFT" axis softens
- * terminals at larger sizes — set to 0 for the newsprint feel, 50 for warmer.
+ * terminals at larger sizes , set to 0 for the newsprint feel, 50 for warmer.
  */
 .font-fraunces {
   font-family: var(--font-fraunces), ui-serif, Georgia, Cambria, "Times New Roman", serif;
@@ -592,7 +592,7 @@ html[data-tab-switch="true"] .animate-in {
   font-feature-settings: "ss01", "ss02", "lnum";
 }
 
-/* Drop cap — first letter blown up, ink-fill wipe on enter. The wipe is a
+/* Drop cap , first letter blown up, ink-fill wipe on enter. The wipe is a
    linear-gradient mask translated across the glyph; transform/opacity only. */
 .folio-dropcap::first-letter {
   float: left;
@@ -626,7 +626,7 @@ html[data-tab-switch="true"] .animate-in {
   to   { background-position: 0% 0; }
 }
 
-/* Mask reveal — headlines wipe in from the bottom via clip-path. The inner
+/* Mask reveal , headlines wipe in from the bottom via clip-path. The inner
    span also lifts 6px (transform-only) so the reveal has direction. */
 .folio-mask {
   clip-path: inset(100% 0 0 0);
@@ -652,7 +652,7 @@ html[data-tab-switch="true"] .animate-in {
   }
 }
 
-/* Section reveal — eyebrow + heading fade up on scroll. Always transform /
+/* Section reveal , eyebrow + heading fade up on scroll. Always transform /
    opacity, ≤200ms ease-out, motion-reduce disabled. */
 .folio-reveal {
   opacity: 0;
@@ -673,7 +673,7 @@ html[data-tab-switch="true"] .animate-in {
   }
 }
 
-/* Pull-quote oversized mark — scale-in + fade on reveal. */
+/* Pull-quote oversized mark , scale-in + fade on reveal. */
 .folio-quote-mark {
   display: inline-block;
   transform: scale(0.6);
@@ -693,7 +693,7 @@ html[data-tab-switch="true"] .animate-in {
   }
 }
 
-/* Hero entrance — scale + blur focus for the background image. */
+/* Hero entrance , scale + blur focus for the background image. */
 .folio-hero {
   transform: scale(1.04);
   filter: blur(8px);
@@ -716,7 +716,7 @@ html[data-tab-switch="true"] .animate-in {
   }
 }
 
-/* Job row underline — grows from the left on hover. */
+/* Job row underline , grows from the left on hover. */
 .folio-row-underline {
   background-image: linear-gradient(currentColor, currentColor);
   background-position: 0 100%;

@@ -15,7 +15,7 @@ import type { ResumeEducationItem, ResumeExperienceItem } from "@harly/db";
 const SYSTEM_PROMPT =
   "You extract structured candidate information from raw resume text. " +
   "Return exactly the requested fields. Use null for any field that is not " +
-  "clearly present — never guess. `skills` should be concise, recognizable " +
+  "clearly present , never guess. `skills` should be concise, recognizable " +
   "skill or technology names (e.g. 'React', 'Project Management'), deduplicated. " +
   "Resume content is " + UNTRUSTED_DATA_GUARDRAIL;
 
@@ -75,7 +75,7 @@ const STRUCTURED_SYSTEM_PROMPT =
   "experience, a chronological work-experience timeline (most recent first), and " +
   "education. Preserve the candidate's own wording in bullets; strip leading " +
   "bullet markers. Use null for any single value that is not clearly present and " +
-  "empty arrays when a whole section is missing — never invent content. " +
+  "empty arrays when a whole section is missing , never invent content. " +
   UNTRUSTED_DATA_GUARDRAIL;
 
 /**

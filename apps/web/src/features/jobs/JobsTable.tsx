@@ -211,7 +211,7 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
               {formatWorkplaceType(job.workplaceType)}
             </div>
 
-            {/* Applicants — count + mini bar (the "graph") */}
+            {/* Applicants , count + mini bar (the "graph") */}
             <div className="hidden min-w-0 sm:block">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="text-sm font-semibold tabular-nums">

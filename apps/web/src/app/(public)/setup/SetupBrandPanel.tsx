@@ -49,7 +49,7 @@ export function SetupBrandPanel() {
 
   return (
     <aside className="relative hidden overflow-hidden bg-pine text-white md:flex md:flex-col md:justify-between md:p-12 lg:p-16">
-      {/* Aurora mesh — slow-breathing lime/sage blobs over the flat evergreen.
+      {/* Aurora mesh , slow-breathing lime/sage blobs over the flat evergreen.
           CSS-driven (off main thread), transform/opacity only, paused under
           reduced-motion. */}
       <div aria-hidden className="pointer-events-none absolute inset-0">
@@ -58,7 +58,7 @@ export function SetupBrandPanel() {
         <div className="animate-aurora-a absolute -bottom-40 left-1/4 h-[500px] w-[500px] rounded-full bg-lime/10 blur-3xl [animation-delay:-8s]" />
       </div>
 
-      {/* Film grain — masks the gradient banding, adds tactile texture. */}
+      {/* Film grain , masks the gradient banding, adds tactile texture. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 opacity-[0.06] mix-blend-soft-light"
@@ -68,7 +68,7 @@ export function SetupBrandPanel() {
         }}
       />
 
-      {/* Logo — real wordmark, links to the landing page, gently floating. */}
+      {/* Logo , real wordmark, links to the landing page, gently floating. */}
       <motion.div
         initial={reduce ? false : { opacity: 0, y: -8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -78,7 +78,7 @@ export function SetupBrandPanel() {
         <a
           href={LANDING_URL}
           className="inline-flex rounded-sm outline-none ring-lime/60 transition focus-visible:ring-2"
-          aria-label="Harly — visit harly.dev"
+          aria-label="Harly , visit harly.dev"
         >
           <motion.img
             src="/harly-full-white.svg"
@@ -127,7 +127,7 @@ export function SetupBrandPanel() {
         </ul>
       </motion.div>
 
-      {/* Footer — tagline + GitHub link to the repo. */}
+      {/* Footer , tagline + GitHub link to the repo. */}
       <motion.div
         initial={reduce ? false : { opacity: 0 }}
         animate={{ opacity: 1 }}

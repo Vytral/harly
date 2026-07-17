@@ -8,7 +8,7 @@ import { applications, db, workspaceSettings } from "@harly/db";
 
 /**
  * Lazily generate and persist the opaque inbound-reply routing token for an
- * application. Idempotent — returns the existing token if one is already
+ * application. Idempotent , returns the existing token if one is already
  * set. Used to build the `reply+{token}@{domain}` Reply-To address on
  * candidate-facing sends.
  */
@@ -38,7 +38,7 @@ export async function ensureApplicationInboundToken(
 /**
  * Build the `reply+{token}@{domain}` Reply-To address for a candidate-facing
  * send tied to an application, or `undefined` when the workspace hasn't
- * turned inbound email on (in which case sends behave exactly as before —
+ * turned inbound email on (in which case sends behave exactly as before ,
  * no Reply-To override).
  */
 export async function getInboundReplyTo(

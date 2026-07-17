@@ -19,7 +19,7 @@ export async function generateMetadata({ params }: LegalPageProps): Promise<Meta
   const data = await getLegalPageData(slug, page);
   if (!data) return {};
   return {
-    title: `${data.pageTitle} — ${data.workspaceName}`,
+    title: `${data.pageTitle} , ${data.workspaceName}`,
     robots: { index: false },
   };
 }

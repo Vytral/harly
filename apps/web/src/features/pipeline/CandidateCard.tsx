@@ -83,7 +83,7 @@ function ScorePill({
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        AI fit {score}/100 — {tone.label}
+        AI fit {score}/100, {tone.label}
       </TooltipContent>
     </Tooltip>
   );

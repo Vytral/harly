@@ -17,7 +17,7 @@ export type WorkspaceCalStatus = {
   hasApiKey: boolean;
   /** True when a webhook signing secret exists. */
   hasWebhookSecret: boolean;
-  /** False when AI_ENCRYPTION_KEY is missing/invalid — Cal.com can't be used. */
+  /** False when AI_ENCRYPTION_KEY is missing/invalid , Cal.com can't be used. */
   encryptionReady: boolean;
 };
 

@@ -7,7 +7,6 @@ import { toast } from "sonner";
 
 import { rescheduleInterview } from "@/features/interviews/actions";
 import { checkAvailability } from "@/lib/gcal/availability";
-import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -17,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/ui/side-panel";
 
 const DURATIONS = [30, 45, 60, 90] as const;
 
@@ -69,7 +68,7 @@ export function RescheduleDrawer({
         setAvailabilityWarning(null);
       }
     } catch {
-      // Silently fail — don't block rescheduling on availability check.
+      // Silently fail , don't block rescheduling on availability check.
     } finally {
       setCheckingAvailability(false);
     }
@@ -99,18 +98,17 @@ export function RescheduleDrawer({
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <DrawerLayout
+    <SidePanel
+      open={open}
+      onOpenChange={setOpen}
+      trigger={trigger}
         title="Reschedule interview"
         description="Update the date, time, or duration. Google Calendar will be updated automatically."
         footer={
           <>
-            <SheetClose asChild>
-              <Button variant="outline" disabled={isPending}>
-                Cancel
-              </Button>
-            </SheetClose>
+            <Button variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
             <Button onClick={submit} disabled={isPending}>
               {isPending ? "Saving…" : "Save changes"}
             </Button>
@@ -204,7 +202,6 @@ export function RescheduleDrawer({
             />
           </div>
         </div>
-      </DrawerLayout>
-    </Sheet>
+    </SidePanel>
   );
 }

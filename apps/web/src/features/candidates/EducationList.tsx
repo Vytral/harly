@@ -22,15 +22,15 @@ function formatDateRange(item: CandidateEducationEntry) {
   const start = formatMonth(item.startDate);
   const end = formatMonth(item.endDate);
   if (start && end) return `${start} - ${end}`;
-  if (start) return `${start} - —`;
+  if (start) return `${start} - Not set`;
   if (end) return end;
-  return "—";
+  return "Not set";
 }
 
 /**
  * Education rows. Returns `null` when there's no data so the parent panel
  * can hide the whole section. The outer border/padding is provided by the
- * unified details panel — keep this borderless.
+ * unified details panel , keep this borderless.
  */
 export function EducationList({
   education,
@@ -50,7 +50,7 @@ export function EducationList({
             className="grid gap-2 sm:grid-cols-[8rem_minmax(0,1fr)]"
           >
             <div className="text-sm text-muted-foreground">
-              {isStructuredEntry(item) ? formatDateRange(item) : item.dateRange ?? "—"}
+              {isStructuredEntry(item) ? formatDateRange(item) : item.dateRange ?? "Not set"}
             </div>
             <div>
               <p className="font-medium">

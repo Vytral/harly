@@ -160,7 +160,7 @@ function ComingSoonButton({
           </Button>
         </span>
       </TooltipTrigger>
-      <TooltipContent>Coming soon — recent pipeline moves will show up here.</TooltipContent>
+      <TooltipContent>Coming soon. Recent pipeline moves will show up here.</TooltipContent>
     </Tooltip>
   );
 }

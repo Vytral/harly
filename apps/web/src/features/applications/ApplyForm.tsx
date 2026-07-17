@@ -421,7 +421,7 @@ function entryErrorFor(
 }
 
 // ---------------------------------------------------------------------------
-// Form state reducer — unifies fields + answers + client-side validation
+// Form state reducer , unifies fields + answers + client-side validation
 // errors so a single dispatch replaces three separate setState calls and
 // prevents cascading re-renders on every keystroke.
 // ---------------------------------------------------------------------------
@@ -1260,7 +1260,7 @@ export function ApplyForm({
     );
   }
 
-  // Resume status tail (messages + detected badges + errors) — identical across
+  // Resume status tail (messages + detected badges + errors) , identical across
   // variants, so it's built once and dropped into either resume block.
   const resumeStatus = (
     <>
@@ -1638,7 +1638,7 @@ export function ApplyForm({
       {isFolio ? (
         /* ─────────────────────────── Folio variant ─────────────────────────── */
         <>
-          {/* ── Resume — hairline, no card ── */}
+          {/* ── Resume , hairline, no card ── */}
           {showResume ? (
           <section className={cn("space-y-4", reveal)} style={{ animationDelay: "0ms" }}>
             <div className="flex flex-col gap-4 border-b border-folio-ink/15 pb-3 sm:flex-row sm:items-start sm:justify-between">
@@ -1648,7 +1648,7 @@ export function ApplyForm({
                 </p>
                 <h2 className="mt-1 font-fraunces text-xl tracking-tight text-folio-ink">Resume</h2>
                 <p className="mt-1 max-w-sm font-fraunces text-sm leading-relaxed text-folio-ink/70">
-                  Upload once — we&apos;ll attach it to your application and use it to pre-fill the form below.
+                  Upload once. We&apos;ll attach it to your application and use it to pre-fill the form below.
                 </p>
               </div>
               {resumeFile ? (
@@ -1828,7 +1828,7 @@ export function ApplyForm({
                 />
               </div>
               <p className="mt-1.5 font-mono text-[10px] uppercase tracking-[0.16em] text-folio-ink/55">
-                City, region, country — helps the team evaluate your application.
+                City, region, country. This helps the team evaluate your application.
               </p>
               <FieldError errors={fieldErrorsFor(state, "address")} />
             </label>
@@ -2793,7 +2793,7 @@ export function ApplyForm({
                   Resume
                 </p>
                 <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  Upload once — we&apos;ll attach it to your application and use it
+                  Upload once. We&apos;ll attach it to your application and use it
                   to pre-fill the form below.
                 </p>
               </div>

@@ -1,5 +1,5 @@
 /**
- * AI provider catalog — pure data + types, safe to import on the client (the
+ * AI provider catalog , pure data + types, safe to import on the client (the
  * settings UI renders these). Server-only behaviour (building models, fetching
  * live catalogs) lives in `./registry`.
  */

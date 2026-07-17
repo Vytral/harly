@@ -32,11 +32,11 @@ import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { EnvelopeSimpleDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { EditInterviewDialog } from "@/features/candidates/EditInterviewDialog";
 import { EvaluationDrawer } from "@/features/candidates/EvaluationDrawer";
-import {
-  ScheduleDialog,
-  type ScheduleApplicationOption,
-  type ScheduleCalConfig,
-  type ScheduleMemberOption,
+import { ScheduleDrawer } from "@/features/candidates/ScheduleDrawer";
+import type {
+  ScheduleApplicationOption,
+  ScheduleCalConfig,
+  ScheduleMemberOption,
 } from "@/features/candidates/ScheduleDialog";
 import { OffersPanel } from "@/features/offers/OffersPanel";
 import type { CandidateOfferItem } from "@/features/offers/shared";
@@ -298,7 +298,7 @@ export function CandidateProfileTabs({
         </TabsTrigger>
       </TabsList>
 
-      {/* ── Profile — AI match leads, single "Details" panel follows ── */}
+      {/* ── Profile , AI match leads, single "Details" panel follows ── */}
       <TabsContent value="profile" className="mt-5 space-y-4">
         <AiScoreCard
           applications={applications.map((application) => ({
@@ -331,7 +331,7 @@ export function CandidateProfileTabs({
       {/* ── Interviews ── */}
       <TabsContent value="interviews" className="mt-4 space-y-3">
         <div className="flex justify-end">
-          <ScheduleDialog
+          <ScheduleDrawer
             candidateId={candidateId}
             workspaceId={workspaceId}
             candidateName={candidateName}
@@ -339,7 +339,6 @@ export function CandidateProfileTabs({
             applications={scheduleApplications}
             members={scheduleMembers}
             cal={scheduleCal}
-            currentUserId={currentUserId}
             trigger={
               <Button size="sm">
                 <Plus className="size-4" />
@@ -880,7 +879,7 @@ function InterviewBriefSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={setOpen} mobilePresentation="bottom-on-mobile">
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
         title="Interview Brief"
@@ -1007,7 +1006,7 @@ function SummarizeNotesSheet({
     if (!summary) return;
     const decision = DECISION_META[summary.suggestedDecision];
     const body = [
-      `Interview summary — ${interview.title ?? interviewTypeLabel(interview.type)}`,
+      `Interview summary, ${interview.title ?? interviewTypeLabel(interview.type)}`,
       "",
       summary.executiveSummary,
       "",
@@ -1037,7 +1036,7 @@ function SummarizeNotesSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={setOpen} mobilePresentation="bottom-on-mobile">
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
         title="Summarize interview notes"

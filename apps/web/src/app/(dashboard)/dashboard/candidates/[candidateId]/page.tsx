@@ -235,7 +235,7 @@ export default async function CandidateDetailPage({
               />
             }
           >
-            {/* Identity header — one cohesive block, no decorative banner */}
+            {/* Identity header , one cohesive block, no decorative banner */}
             <IdentityShield anonymize={aiStatus.resumeAnonymization}>
             <div className="rounded-2xl border border-border/70 bg-card p-5">
             <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-start lg:justify-between">
@@ -271,7 +271,7 @@ export default async function CandidateDetailPage({
                     ) : null}
                   </div>
 
-                  {/* Contact + social — one compact inline row */}
+                  {/* Contact + social , one compact inline row */}
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-muted-foreground">
                     <RedactLink
                       href={`mailto:${candidate.email}`}
@@ -345,7 +345,7 @@ export default async function CandidateDetailPage({
                     ) : null}
                   </div>
 
-                  {/* Pipeline spine — the single, canonical stage indicator */}
+                  {/* Pipeline spine , the single, canonical stage indicator */}
                   {latestApplication?.currentStageName ? (
                     <PipelineSpine
                       current={latestApplication.currentStageName}
@@ -362,7 +362,7 @@ export default async function CandidateDetailPage({
                 </div>
               </div>
 
-              {/* Actions — grouped with clear hierarchy, delete isolated */}
+              {/* Actions , grouped with clear hierarchy, delete isolated */}
               <div
                 className={`w-full min-w-0 lg:pl-2${isHired ? " lg:mx-auto lg:-translate-x-[82px]" : ""}`}
               >

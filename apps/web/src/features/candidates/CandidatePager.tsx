@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 
 /**
  * Always-visible prev/next candidate navigation, next to "Back to
- * candidates" in the page header — not gated on scroll like the sticky bar.
+ * candidates" in the page header , not gated on scroll like the sticky bar.
  */
 export function CandidatePager({
   prevId,

@@ -20,6 +20,47 @@ const SETTINGS_PATH = "/settings/integrations";
 
 export type SlackChannel = { id: string; name: string };
 
+const RECONNECT_MESSAGE =
+  "Slack revoked this connection. Disconnect and add Harly to Slack again.";
+
+/** Slack error codes that mean the stored bot token is permanently dead. */
+const DEAD_TOKEN_ERRORS = new Set([
+  "invalid_auth",
+  "token_revoked",
+  "account_inactive",
+  "token_expired",
+  "not_authed",
+]);
+
+/** Slack's WebClient throws errors carrying `data.error` with the API code. */
+function slackErrorCode(err: unknown): string | null {
+  if (err && typeof err === "object" && "data" in err) {
+    const data = (err as { data?: { error?: unknown } }).data;
+    if (data && typeof data.error === "string") return data.error;
+  }
+  return null;
+}
+
+function isDeadSlackToken(err: unknown): boolean {
+  const code = slackErrorCode(err);
+  return code !== null && DEAD_TOKEN_ERRORS.has(code);
+}
+
+/** Wipe the dead bot token so status flips back to "not connected". */
+async function clearSlackToken(organizationId: string): Promise<void> {
+  await db
+    .update(workspaceSettings)
+    .set({
+      slackEnabled: false,
+      slackBotTokenCiphertext: null,
+      slackBotTokenIv: null,
+      slackBotTokenTag: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(workspaceSettings.organizationId, organizationId));
+  revalidatePath(SETTINGS_PATH);
+}
+
 /** Save Slack App credentials (Client ID + Secret) for this workspace. */
 export async function saveSlackCredentialsAction(input: {
   clientId: string;
@@ -80,6 +121,10 @@ export async function listSlackChannelsAction(): Promise<
     return { ok: true, channels };
   } catch (error) {
     log.error(error, "listSlackChannelsAction failed");
+    if (isDeadSlackToken(error)) {
+      await clearSlackToken(context.organization.id);
+      return { ok: false, error: RECONNECT_MESSAGE };
+    }
     return { ok: false, error: "Failed to fetch channels from Slack." };
   }
 }
@@ -161,7 +206,7 @@ export async function testSlackAction(): Promise<SlackActionResult> {
           type: "section",
           text: {
             type: "mrkdwn",
-            text: "👋 *Test from Harly* — Your Slack integration is working!",
+            text: "👋 *Test from Harly*. Your Slack integration is working!",
           },
         },
         {
@@ -175,6 +220,10 @@ export async function testSlackAction(): Promise<SlackActionResult> {
     return { ok: true };
   } catch (err) {
     log.error(err, "testSlackAction failed");
+    if (isDeadSlackToken(err)) {
+      await clearSlackToken(context.organization.id);
+      return { ok: false, error: RECONNECT_MESSAGE };
+    }
     const msg = err instanceof Error ? err.message : "Send failed";
     return { ok: false, error: msg };
   }

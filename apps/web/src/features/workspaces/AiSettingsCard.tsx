@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { Route } from "next";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -60,7 +62,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
@@ -87,7 +88,6 @@ export function AiSettingsCard({
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [togglePending, startToggle] = useTransition();
 
   const ActiveLogo = status.provider
@@ -139,24 +139,19 @@ export function AiSettingsCard({
             action={
               canEdit ? (
                 <>
-                  <Sheet open={open} onOpenChange={setOpen}>
-                    <SheetTrigger asChild>
-                      <Button
-                        variant={status.hasApiKey ? "outline" : "default"}
-                        disabled={!status.encryptionReady}
-                      >
+                  {status.encryptionReady ? (
+                    <Button asChild variant={status.hasApiKey ? "outline" : "default"}>
+                      <Link href={"/settings/ai/configure" as Route}>
                         <KeyDuotoneIcon className="size-4" />
                         {status.hasApiKey ? "Manage" : "Configure AI"}
-                      </Button>
-                    </SheetTrigger>
-                    <AiSettingsForm
-                      status={status}
-                      onSaved={() => {
-                        setOpen(false);
-                        router.refresh();
-                      }}
-                    />
-                  </Sheet>
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button variant="default" disabled>
+                      <KeyDuotoneIcon className="size-4" />
+                      Configure AI
+                    </Button>
+                  )}
                   {status.hasApiKey ? (
                     <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
                       <Switch
@@ -183,7 +178,7 @@ export function AiSettingsCard({
               </StatCell>
               <StatCell label="Model">
                 <span className="truncate font-mono text-[13px]">
-                  {status.modelId ? formatModelLabel(status.modelId) : "—"}
+                  {status.modelId ? formatModelLabel(status.modelId) : "Not configured"}
                 </span>
               </StatCell>
               <StatCell label="Endpoint">
@@ -211,7 +206,7 @@ export function AiSettingsCard({
           <FeatureCard
             icon={MagicWandDuotoneIcon}
             title="Job-description drafting"
-            description="Generate first-draft postings from a short brief in the job wizard — title, keywords, and workplace type are enough to get a full draft."
+            description="Generate first-draft postings from a short brief in the job wizard. Title, keywords, and workplace type are enough to get a full draft."
             alwaysOn
           />
           <AutoScoreFeatureCard
@@ -236,7 +231,7 @@ export function AiSettingsCard({
             Works with your provider
           </h3>
           <p className="mt-1 max-w-prose text-sm text-muted-foreground">
-            Bring a key from any major provider — or route through OpenRouter for
+            Bring a key from any major provider, or route through OpenRouter for
             hundreds of models, including free ones. Keys are encrypted at rest.
           </p>
         </div>
@@ -370,7 +365,7 @@ function AutoScoreFeatureCard({
         Auto-score applications
       </h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Score each new application automatically as it arrives — no manual
+        Score each new application automatically as it arrives. No manual
         trigger needed. Requires AI to be enabled.
       </p>
       {disabled && status.hasApiKey && !status.enabled ? (
@@ -428,7 +423,7 @@ function DuplicateCheckFeatureCard({
       </div>
       <h3 className="mt-3.5 text-sm font-semibold tracking-tight">Duplicate detection</h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Automatically flag potential duplicate candidates when a new application arrives — and let
+        Automatically flag potential duplicate candidates when a new application arrives, and let
         you verify with AI from any candidate profile.
       </p>
       {disabled && status.hasApiKey && !status.enabled ? (
@@ -452,7 +447,7 @@ function ResumeAnonymizationFeatureCard({
   const [pending, startToggle] = useTransition();
   const [optimistic, setOptimistic] = useState(status.resumeAnonymization);
 
-  // Redaction is deterministic (no model call), so it only needs edit rights —
+  // Redaction is deterministic (no model call), so it only needs edit rights ,
   // not an enabled provider like the model-backed features above.
   const disabled = !canEdit;
 
@@ -491,20 +486,17 @@ function ResumeAnonymizationFeatureCard({
       </h3>
       <p className="mt-1 text-sm text-muted-foreground">
         Hide names, contacts, and links on candidate profiles during review, so
-        early screening leans on skills and experience — not identity. Reviewers
+        early screening leans on skills and experience, not identity. Reviewers
         can reveal per candidate.
       </p>
     </Card>
   );
 }
 
-function AiSettingsForm({
-  status,
-  onSaved,
-}: {
+export function AiSettingsForm({ status }: {
   status: WorkspaceAiStatus;
-  onSaved: () => void;
 }) {
+  const router = useRouter();
   const initialProvider = (status.provider as AiProviderId) ?? "openai";
   const [provider, setProvider] = useState<AiProviderId>(initialProvider);
   const [modelId, setModelId] = useState<string>(status.modelId ?? "");
@@ -579,7 +571,7 @@ function AiSettingsForm({
         return;
       }
       toast.success("AI settings saved");
-      onSaved();
+      router.refresh();
     });
   }
 
@@ -587,18 +579,12 @@ function AiSettingsForm({
     <DrawerLayout
       title="Configure AI"
       description="Your API key is encrypted at rest and never shown again."
+      surface="page"
       footer={
-        <>
-          <SheetClose asChild>
-            <Button variant="outline" disabled={saving}>
-              Cancel
-            </Button>
-          </SheetClose>
-          <Button onClick={save} disabled={saving || !modelId.trim()}>
-            {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save
-          </Button>
-        </>
+        <Button onClick={save} disabled={saving || !modelId.trim()}>
+          {saving ? <SpinnerIcon className="size-4" /> : null}
+          Save changes
+        </Button>
       }
     >
       <div className="space-y-5">
@@ -728,7 +714,7 @@ function AiSettingsForm({
             onChange={(event) => setApiKey(event.target.value)}
             placeholder={
               status.hasApiKey
-                ? "•••••••• (stored — leave blank to keep)"
+                ? "•••••••• (stored, leave blank to keep)"
                 : "Paste your API key"
             }
             autoComplete="off"

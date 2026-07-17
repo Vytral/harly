@@ -124,7 +124,7 @@ export function OffersPanel({
                             run(
                               () =>
                                 decideOffer({ offerId: offer.id, decision: "accepted" }),
-                              "Offer accepted — candidate marked as hired",
+                              "Offer accepted. Candidate marked as hired",
                             )
                           }
                         >

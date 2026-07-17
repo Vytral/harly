@@ -101,7 +101,7 @@ export async function convertLogoForEmail(
 /**
  * Fetch a logo URL (SSRF-safe), convert it to an email-friendly format, upload
  * it, and persist the resulting URL on the organization row. The organization
- * is resolved server-side from the session — callers must NOT pass a
+ * is resolved server-side from the session , callers must NOT pass a
  * client-supplied workspace id, which would let one org overwrite another's
  * email logo.
  */

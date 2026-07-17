@@ -706,7 +706,7 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: `${interviewLabels[event.type] ?? event.type}${suffix ? ` — ${suffix}` : ""}`,
+        label: `${interviewLabels[event.type] ?? event.type}${suffix ? `, ${suffix}` : ""}`,
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -724,7 +724,7 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: `${offerLabels[event.type] ?? event.type}${title ? ` — ${title}` : ""}`,
+        label: `${offerLabels[event.type] ?? event.type}${title ? `, ${title}` : ""}`,
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -856,7 +856,7 @@ export async function listTrashedCandidates(): Promise<TrashedCandidateItem[]> {
   }));
 }
 
-/** Move a candidate to the trash (soft delete) — reversible. */
+/** Move a candidate to the trash (soft delete) , reversible. */
 export async function trashCandidate(candidateId: string) {
   const { organization: workspace } = await getWorkspaceContext();
 
@@ -877,7 +877,7 @@ export async function trashCandidate(candidateId: string) {
     : ({ ok: false, error: "Candidate not found." } as const);
 }
 
-/** Move multiple candidates to the trash (soft delete) — reversible. */
+/** Move multiple candidates to the trash (soft delete) , reversible. */
 export async function trashCandidates(candidateIds: string[]) {
   const { organization: workspace } = await getWorkspaceContext();
 
@@ -967,7 +967,7 @@ export type SuspectCandidate = {
   email: string;
 };
 
-/** Fuzzy name match — heuristic only, no AI. Used for the profile banner. */
+/** Fuzzy name match , heuristic only, no AI. Used for the profile banner. */
 export async function findSuspectDuplicates(
   candidateId: string,
   firstName: string,

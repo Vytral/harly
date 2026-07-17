@@ -14,13 +14,14 @@ import {
 } from "@/features/workspaces/slack-settings-actions";
 import type { WorkspaceSlackStatus } from "@/lib/slack/config";
 import {
-  SectionHeader,
-  StatCell,
-  StatusPill,
-} from "@/features/workspaces/settings-ui";
-import { DrawerLayout } from "@/features/candidates/DrawerLayout";
+  IntegrationHeader,
+  InlineReveal,
+} from "@/features/workspaces/IntegrationDetailShell";
+import { StatCell } from "@/features/workspaces/settings-ui";
 import { SlackLogo } from "@/components/ui/icons/brands";
 import {
+  ArrowUpRightIcon,
+  GearSixIcon,
   PaperPlaneDuotoneIcon,
   SpinnerIcon,
   WarningCircleIcon,
@@ -30,29 +31,39 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 
 type EventOption = { value: string; label: string };
 
-export function SlackSettingsCard({
+export function SlackConnectPanel({
   status,
   events,
   canEdit,
   workspaceId,
+  tileClassName,
+  description,
 }: {
   status: WorkspaceSlackStatus;
   events: EventOption[];
   canEdit: boolean;
   workspaceId: string;
+  tileClassName: string;
+  description: string;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const [credentialsOpen, setCredentialsOpen] = useState(false);
+  const isConnected = status.hasToken;
+  const [open, setOpen] = useState(isConnected || !status.hasCredentials);
   const [togglePending, startToggle] = useTransition();
   const [disconnecting, startDisconnect] = useTransition();
 
-  const isConnected = status.hasToken;
+  const statusTone = isConnected ? (status.enabled ? "on" : "off") : "neutral";
+  const statusLabel = isConnected
+    ? status.enabled
+      ? "Connected"
+      : "Disabled"
+    : "Not connected";
+
+  const installUrl = `/api/integrations/slack/install?ws=${workspaceId}`;
 
   function toggleEnabled(next: boolean) {
     if (!isConnected) return;
@@ -88,135 +99,110 @@ export function SlackSettingsCard({
     });
   }
 
-  const badge = isConnected ? (
-    <StatusPill tone={status.enabled ? "on" : "off"}>
-      {status.enabled ? "Connected" : "Disabled"}
-    </StatusPill>
-  ) : (
-    <StatusPill tone="neutral">Not connected</StatusPill>
-  );
-
-  const installUrl = `/api/integrations/slack/install?ws=${workspaceId}`;
-
   return (
-    <Card className="gap-0 overflow-hidden p-0">
-      <div className="p-6">
-        <SectionHeader
-          icon={(props) => <SlackLogo {...props} />}
-          title="Slack"
-          badge={badge}
-          description={
-            isConnected
-              ? "Notifications are posted to your Slack workspace via the Harly bot."
-              : "Connect your Slack workspace to receive hiring notifications in a channel."
-          }
-          action={
-            canEdit ? (
+    <div className="space-y-6">
+      <IntegrationHeader
+        logo={SlackLogo}
+        tileClassName={tileClassName}
+        name="Slack"
+        description={description}
+        statusLabel={statusLabel}
+        statusTone={statusTone}
+        action={
+          canEdit ? (
+            isConnected ? (
               <>
-                {isConnected ? (
-                  <>
-                    <Sheet open={open} onOpenChange={setOpen}>
-                      <SheetTrigger asChild>
-                        <Button variant="outline">Configure</Button>
-                      </SheetTrigger>
-                      <SlackConfigForm
-                        status={status}
-                        events={events}
-                        onSaved={() => {
-                          setOpen(false);
-                          router.refresh();
-                        }}
-                      />
-                    </Sheet>
-                    <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
-                      <Switch
-                        checked={status.enabled}
-                        disabled={togglePending}
-                        onCheckedChange={toggleEnabled}
-                        aria-label="Enable Slack notifications"
-                      />
-                      <span className="text-muted-foreground">
-                        {status.enabled ? "On" : "Off"}
-                      </span>
-                    </label>
-                  </>
-                ) : status.hasCredentials ? (
-                  <Button asChild>
-                    <a href={installUrl}>
-                      <SlackLogo className="size-4" />
-                      Add to Slack
-                    </a>
-                  </Button>
-                ) : (
-                  <Sheet open={credentialsOpen} onOpenChange={setCredentialsOpen}>
-                    <SheetTrigger asChild>
-                      <Button disabled={!status.encryptionReady}>
-                        <SlackLogo className="size-4" />
-                        Set up Slack
-                      </Button>
-                    </SheetTrigger>
-                    <SlackCredentialsForm
-                      onSaved={() => {
-                        setCredentialsOpen(false);
-                        router.refresh();
-                      }}
-                    />
-                  </Sheet>
-                )}
+                <Button
+                  variant="outline"
+                  onClick={() => setOpen((v) => !v)}
+                  aria-expanded={open}
+                >
+                  <GearSixIcon className="size-4" />
+                  {open ? "Hide settings" : "Manage"}
+                </Button>
+                <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
+                  <Switch
+                    checked={status.enabled}
+                    disabled={togglePending}
+                    onCheckedChange={toggleEnabled}
+                    aria-label="Enable Slack notifications"
+                  />
+                  <span className="text-muted-foreground">
+                    {status.enabled ? "On" : "Off"}
+                  </span>
+                </label>
               </>
-            ) : null
-          }
-        />
+            ) : status.hasCredentials ? (
+              <Button asChild>
+                <a href={installUrl}>
+                  <SlackLogo className="size-4" />
+                  Add to Slack
+                </a>
+              </Button>
+            ) : (
+              <Button
+                onClick={() => setOpen((v) => !v)}
+                disabled={!status.encryptionReady}
+                aria-expanded={open}
+              >
+                <SlackLogo className="size-4" />
+                Set up Slack
+              </Button>
+            )
+          ) : null
+        }
+      />
 
-        {!status.encryptionReady && !isConnected ? (
-          <div className="mt-4 flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
-            <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
-            <p>
-              Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
-              the server to enable encrypted credential storage.
-            </p>
-          </div>
-        ) : null}
-      </div>
+      {!status.encryptionReady && !isConnected ? (
+        <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
+          <WarningCircleIcon className="mt-0.5 size-4 shrink-0" />
+          <p>
+            Set <code className="font-mono text-xs">AI_ENCRYPTION_KEY</code> on
+            the server to enable encrypted credential storage.
+          </p>
+        </div>
+      ) : null}
 
       {isConnected ? (
-        <div className="grid grid-cols-1 divide-y border-t bg-muted/20 sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-          <StatCell label="Workspace">
-            <SlackLogo className="size-4" />
-            {status.teamName ?? "—"}
-          </StatCell>
-          <StatCell label="Channel">
-            {status.channelName ? `#${status.channelName}` : "Not selected"}
-          </StatCell>
-          <StatCell label="Events">
-            <span className="text-muted-foreground">
-              {status.events.length === 0
-                ? "None selected"
-                : `${status.events.length} subscribed`}
-            </span>
-          </StatCell>
-        </div>
+        <Card className="overflow-hidden p-0">
+          <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+            <StatCell label="Workspace">
+              <SlackLogo className="size-4" />
+              {status.teamName ?? "Not connected"}
+            </StatCell>
+            <StatCell label="Channel">
+              {status.channelName ? `#${status.channelName}` : "Not selected"}
+            </StatCell>
+            <StatCell label="Events">
+              <span className="text-muted-foreground">
+                {status.events.length === 0
+                  ? "None selected"
+                  : `${status.events.length} subscribed`}
+              </span>
+            </StatCell>
+          </div>
+        </Card>
       ) : null}
 
-      {isConnected && canEdit ? (
-        <div className="border-t px-6 py-3">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="text-destructive hover:text-destructive"
-            onClick={disconnect}
-            disabled={disconnecting}
-          >
-            {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
-            Disconnect Slack
-          </Button>
-        </div>
+      {canEdit ? (
+        <InlineReveal open={open}>
+          {isConnected ? (
+            <SlackConfigForm
+              status={status}
+              events={events}
+              onSaved={() => router.refresh()}
+              onDisconnect={disconnect}
+              disconnecting={disconnecting}
+            />
+          ) : !status.hasCredentials ? (
+            <SlackCredentialsForm onSaved={() => router.refresh()} />
+          ) : null}
+        </InlineReveal>
       ) : null}
-    </Card>
+    </div>
   );
 }
 
-/** Form to enter Slack App credentials (Client ID + Secret) */
 function SlackCredentialsForm({ onSaved }: { onSaved: () => void }) {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
@@ -234,31 +220,38 @@ function SlackCredentialsForm({ onSaved }: { onSaved: () => void }) {
     });
   }
 
+  const redirectUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/api/integrations/slack/callback`
+      : "";
+
   return (
-    <DrawerLayout
-      title="Set up Slack integration"
-      description="Create a Slack App at api.slack.com/apps, then paste the credentials here. Your Client Secret is encrypted at rest."
-      footer={
-        <>
-          <SheetClose asChild>
-            <Button variant="outline" disabled={saving}>
-              Cancel
-            </Button>
-          </SheetClose>
-          <Button
-            onClick={save}
-            disabled={saving || !clientId.trim() || !clientSecret.trim()}
-          >
-            {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save credentials
-          </Button>
-        </>
-      }
-    >
+    <Card className="p-6">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div className="space-y-0.5">
+          <h2 className="font-display text-base font-semibold tracking-tight">
+            Set up Slack integration
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Create a Slack App, then paste the credentials. Your Client Secret is
+            encrypted at rest.
+          </p>
+        </div>
+        <a
+          href="https://api.slack.com/apps"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-pine transition-colors hover:text-pine-strong"
+        >
+          Slack apps
+          <ArrowUpRightIcon className="size-3.5" />
+        </a>
+      </div>
+
       <div className="space-y-4">
         <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1.5">
           <p className="font-medium text-foreground">How to get credentials:</p>
-          <ol className="list-decimal pl-4 space-y-1">
+          <ol className="list-decimal space-y-1 pl-4">
             <li>
               Go to{" "}
               <a
@@ -271,8 +264,13 @@ function SlackCredentialsForm({ onSaved }: { onSaved: () => void }) {
               </a>{" "}
               and create a new app
             </li>
-            <li>Under OAuth &amp; Permissions, add scopes: <code>chat:write</code>, <code>channels:read</code>, <code>groups:read</code></li>
-            <li>Set the Redirect URL to: <code>{typeof window !== "undefined" ? window.location.origin : ""}/api/integrations/slack/callback</code></li>
+            <li>
+              Under OAuth &amp; Permissions, add scopes: <code>chat:write</code>,{" "}
+              <code>channels:read</code>, <code>groups:read</code>
+            </li>
+            <li>
+              Set the Redirect URL to: <code>{redirectUrl}</code>
+            </li>
             <li>Copy Client ID and Client Secret from Basic Information</li>
           </ol>
         </div>
@@ -301,23 +299,36 @@ function SlackCredentialsForm({ onSaved }: { onSaved: () => void }) {
             className="font-mono text-xs"
           />
           <p className="text-xs text-muted-foreground">
-            Encrypted at rest — never visible again after saving.
+            Encrypted at rest. Never visible again after saving.
           </p>
         </div>
       </div>
-    </DrawerLayout>
+
+      <div className="mt-6 flex justify-end">
+        <Button
+          onClick={save}
+          disabled={saving || !clientId.trim() || !clientSecret.trim()}
+        >
+          {saving ? <SpinnerIcon className="size-4" /> : null}
+          Save credentials
+        </Button>
+      </div>
+    </Card>
   );
 }
 
-/** Form to configure channel + events after OAuth connection */
 function SlackConfigForm({
   status,
   events,
   onSaved,
+  onDisconnect,
+  disconnecting,
 }: {
   status: WorkspaceSlackStatus;
   events: EventOption[];
   onSaved: () => void;
+  onDisconnect: () => void;
+  disconnecting: boolean;
 }) {
   const [channels, setChannels] = useState<SlackChannel[]>([]);
   const [loadingChannels, startLoadChannels] = useTransition();
@@ -388,23 +399,16 @@ function SlackConfigForm({
   }
 
   return (
-    <DrawerLayout
-      title="Configure Slack"
-      description={`Connected to ${status.teamName ?? "Slack"}. Choose a channel and events.`}
-      footer={
-        <>
-          <SheetClose asChild>
-            <Button variant="outline" disabled={saving}>
-              Cancel
-            </Button>
-          </SheetClose>
-          <Button onClick={save} disabled={saving || !channelId}>
-            {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save
-          </Button>
-        </>
-      }
-    >
+    <Card className="p-6">
+      <div className="mb-5 space-y-0.5">
+        <h2 className="font-display text-base font-semibold tracking-tight">
+          Configure Slack
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Connected to {status.teamName ?? "Slack"}. Choose a channel and events.
+        </p>
+      </div>
+
       <div className="space-y-5">
         <div className="space-y-2">
           <Label>Channel</Label>
@@ -433,7 +437,7 @@ function SlackConfigForm({
                     className={cn(
                       "flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-sm transition-colors",
                       channelId === ch.id
-                        ? "bg-sage text-sage-ink font-medium"
+                        ? "bg-sage font-medium text-sage-ink"
                         : "hover:bg-muted",
                     )}
                   >
@@ -481,22 +485,40 @@ function SlackConfigForm({
           </div>
           <Switch checked={enabled} onCheckedChange={setEnabled} />
         </div>
+      </div>
 
+      <div className="mt-6 flex items-center justify-between gap-3 border-t pt-4">
         <Button
           type="button"
-          variant="outline"
-          className="w-full"
-          onClick={runTest}
-          disabled={testing || !status.channelId}
+          variant="ghost"
+          size="sm"
+          className="text-destructive hover:text-destructive"
+          onClick={onDisconnect}
+          disabled={disconnecting}
         >
-          {testing ? (
-            <SpinnerIcon className="size-4" />
-          ) : (
-            <PaperPlaneDuotoneIcon className="size-4" />
-          )}
-          Send test message
+          {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
+          Disconnect
         </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={runTest}
+            disabled={testing || !status.channelId}
+          >
+            {testing ? (
+              <SpinnerIcon className="size-4" />
+            ) : (
+              <PaperPlaneDuotoneIcon className="size-4" />
+            )}
+            Send test
+          </Button>
+          <Button onClick={save} disabled={saving || !channelId}>
+            {saving ? <SpinnerIcon className="size-4" /> : null}
+            Save
+          </Button>
+        </div>
       </div>
-    </DrawerLayout>
+    </Card>
   );
 }

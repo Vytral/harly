@@ -5,6 +5,8 @@ import type { GreenhouseCandidateImportRow } from "./greenhouse";
 const MAX_CANDIDATES = 5_000;
 const MAX_RETRIES = 3;
 const DETAIL_CONCURRENCY = 4;
+const REQUEST_WINDOW_MS = 10_000;
+const REQUESTS_PER_WINDOW = 9;
 
 export class WorkableImportError extends Error {}
 
@@ -89,13 +91,58 @@ function baseUrl(subdomain: string): string {
   return `https://${subdomain}.workable.com/spi/v3`;
 }
 
-async function request(url: string, token: string, fetchImpl: typeof fetch): Promise<Response> {
+type Sleep = (delayMs: number) => Promise<void>;
+
+function sleep(delayMs: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, delayMs));
+}
+
+function createRequestLimiter(sleepImpl: Sleep) {
+  const requestTimes: number[] = [];
+
+  return async function acquire() {
+    while (true) {
+      const now = Date.now();
+      while (requestTimes[0] !== undefined && requestTimes[0] <= now - REQUEST_WINDOW_MS) {
+        requestTimes.shift();
+      }
+
+      if (requestTimes.length < REQUESTS_PER_WINDOW) {
+        requestTimes.push(now);
+        return;
+      }
+
+      const oldest = requestTimes[0] ?? now;
+      await sleepImpl(Math.max(50, oldest + REQUEST_WINDOW_MS - now + 50));
+    }
+  };
+}
+
+function retryAfterMs(response: Response): number | null {
+  const value = response.headers.get("retry-after")?.trim();
+  if (!value) return null;
+
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
+
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? Math.max(0, timestamp - Date.now()) : null;
+}
+
+async function request(
+  url: string,
+  token: string,
+  fetchImpl: typeof fetch,
+  acquire: () => Promise<void>,
+  sleepImpl: Sleep,
+): Promise<Response> {
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt += 1) {
+    await acquire();
     const response = await fetchImpl(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, cache: "no-store" });
     if (response.ok) return response;
     if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
-      const retryAfter = Number(response.headers.get("retry-after"));
-      await new Promise((resolve) => setTimeout(resolve, Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1_000 : 250 * 2 ** attempt));
+      const retryDelay = retryAfterMs(response) ?? REQUEST_WINDOW_MS;
+      await sleepImpl(retryDelay + Math.min(250, attempt * 100));
       continue;
     }
     if (response.status === 401 || response.status === 403) throw new WorkableImportError("Workable rejected the token or its r_candidates scope is missing.");
@@ -112,15 +159,22 @@ function safeNext(next: unknown, origin: string): string | null {
 }
 
 /** Lists all candidates then reads each full profile, so sparse index responses never lose profile data. */
-export async function fetchWorkableCandidateImportRows(input: { subdomain: string; apiToken: string }, fetchImpl: typeof fetch = fetch): Promise<{ rows: GreenhouseCandidateImportRow[]; skipped: number }> {
+export async function fetchWorkableCandidateImportRows(
+  input: { subdomain: string; apiToken: string },
+  fetchImpl: typeof fetch = fetch,
+  sleepImpl: Sleep = sleep,
+): Promise<{ rows: GreenhouseCandidateImportRow[]; skipped: number }> {
   const token = input.apiToken.trim();
   if (token.length < 16 || token.length > 1_024) throw new WorkableImportError("Enter a valid Workable API token.");
   const root = baseUrl(input.subdomain.trim());
   const origin = new URL(root).origin;
+  const acquire = createRequestLimiter(sleepImpl);
+  const requestWorkable = (url: string) =>
+    request(url, token, fetchImpl, acquire, sleepImpl);
   let url: string | null = `${root}/candidates?limit=100`;
   const candidateIds: string[] = [];
   while (url && candidateIds.length < MAX_CANDIDATES) {
-    const response = await request(url, token, fetchImpl);
+    const response = await requestWorkable(url);
     const body: unknown = await response.json();
     if (typeof body !== "object" || body === null || !Array.isArray((body as { candidates?: unknown }).candidates)) throw new WorkableImportError("Workable returned an invalid candidate response.");
     candidateIds.push(...((body as { candidates: WorkableCandidateListItem[] }).candidates).map((candidate) => text(candidate.id)).filter(Boolean));
@@ -131,7 +185,7 @@ export async function fetchWorkableCandidateImportRows(input: { subdomain: strin
   for (let start = 0; start < candidateIds.length; start += DETAIL_CONCURRENCY) {
     const group = candidateIds.slice(start, start + DETAIL_CONCURRENCY);
     const records = await Promise.all(group.map(async (id) => {
-      const response = await request(`${root}/candidates/${encodeURIComponent(id)}`, token, fetchImpl);
+      const response = await requestWorkable(`${root}/candidates/${encodeURIComponent(id)}`);
       return await response.json() as WorkableCandidate;
     }));
     details.push(...records);

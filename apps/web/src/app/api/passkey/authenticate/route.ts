@@ -11,7 +11,7 @@ import { RP_ID, ORIGIN, storeChallenge, consumeChallenge } from "@/lib/passkey";
 
 const log = createLogger("api-passkey-authenticate");
 
-// GET — generate authentication options for the authenticated user (for re-auth flows).
+// GET , generate authentication options for the authenticated user (for re-auth flows).
 export async function GET(req: NextRequest) {
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(options);
 }
 
-// POST — verify authentication response (used for passkey-as-2FA or re-auth).
+// POST , verify authentication response (used for passkey-as-2FA or re-auth).
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {

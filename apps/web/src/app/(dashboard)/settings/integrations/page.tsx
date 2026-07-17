@@ -1,185 +1,215 @@
-import Link from "next/link";
+import { FileSpreadsheet } from "lucide-react";
+import type { ComponentType } from "react";
 
-import { CalSettingsCard } from "@/features/workspaces/CalSettingsCard";
-import { GCalSettingsCard } from "@/features/workspaces/GCalSettingsCard";
-import { SlackSettingsCard } from "@/features/workspaces/SlackSettingsCard";
-import { OutlookSettingsCard } from "@/features/workspaces/OutlookSettingsCard";
-import { ZoomSettingsCard } from "@/features/workspaces/ZoomSettingsCard";
-import { getWorkspaceContext } from "@/features/workspaces/context";
-import { requirePagePermission } from "@/features/workspaces/permissions-server";
-import { getWorkspaceCalStatus } from "@/lib/cal/config";
-import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
-import { getWorkspaceSlackStatus } from "@/lib/slack/config";
-import { getWorkspaceOutlookStatus } from "@/lib/outlook/config";
-import { getZoomConfig } from "@/lib/zoom/config";
 import {
-  WEBHOOK_EVENTS,
-  WEBHOOK_EVENT_LABELS,
-} from "@/server/webhooks/events";
-import { BrandTile, StatusPill } from "@/features/workspaces/settings-ui";
-import {
-  GmailLogo,
-  GreenhouseLogo,
-  LinkedinLogo,
-  ZapierLogo,
+  AshbyLogo,
+  LeverLogo,
+  TheSvgLogo,
+  WorkableLogo,
 } from "@/components/ui/icons/brands";
-import { ArrowUpRightIcon } from "@/components/ui/icons/phosphor";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { OAuthFeedback } from "@/components/OAuthFeedback";
+import { PlugIcon } from "@/components/ui/icons/settings";
+import {
+  IntegrationMarketplace,
+  type MarketplaceGroup,
+  type MarketplaceIntegration,
+} from "@/features/workspaces/IntegrationMarketplace";
+import {
+  CATEGORY_LABELS,
+  CATEGORY_ORDER,
+  INTEGRATIONS,
+  getIntegrationStatuses,
+  getWorkspaceContext,
+  isConnected,
+  type IntegrationSlug,
+} from "@/features/workspaces/integrations-registry";
+import { requirePagePermission } from "@/features/workspaces/permissions-server";
+import {
+  SectionHeader,
+  StatusPill,
+} from "@/features/workspaces/settings-ui";
 
 export const dynamic = "force-dynamic";
 
-const UPCOMING: Array<{
+type Logo = ComponentType<{ className?: string }>;
+
+function svgBrand(slug: string, alt: string, variant = "default"): Logo {
+  return function SvgBrand({ className }: { className?: string }) {
+    return (
+      <TheSvgLogo
+        slug={slug}
+        alt={alt}
+        variant={variant}
+        className={className}
+      />
+    );
+  };
+}
+
+const INTEGRATION_LOGOS: Record<IntegrationSlug, Logo> = {
+  cal: svgBrand("caldotcom", "Cal.com", "dark"),
+  "google-calendar": svgBrand("google-calendar", "Google Calendar"),
+  "outlook-calendar": svgBrand("microsoft-outlook", "Microsoft Outlook"),
+  zoom: svgBrand("zoom", "Zoom"),
+  slack: svgBrand("slack", "Slack"),
+  outlook: svgBrand("microsoft-outlook", "Microsoft Outlook"),
+  discord: svgBrand("discord", "Discord"),
+  telegram: svgBrand("telegram", "Telegram"),
+  gmail: svgBrand("gmail", "Gmail"),
+  linkedin: svgBrand("linkedin", "LinkedIn"),
+  zapier: svgBrand("zapier", "Zapier"),
+  webhooks: svgBrand("zapier", "Webhooks"),
+};
+
+const GreenhouseImportLogo = svgBrand("greenhouse", "Greenhouse");
+
+type Importer = {
+  id: string;
   name: string;
   description: string;
-  logo: React.ComponentType<{ className?: string }>;
-  tone?: string;
-}> = [
+  logo: Logo;
+  logoClassName?: string;
+  tileClassName: string;
+  href: string;
+};
+
+const IMPORTERS: Importer[] = [
   {
-    name: "Gmail",
-    description: "Send and log candidate emails from your own inbox.",
-    logo: GmailLogo,
+    id: "csv",
+    name: "CSV import",
+    description: "Bring in a spreadsheet of candidates.",
+    logo: FileSpreadsheet,
+    tileClassName:
+      "bg-gradient-to-br from-lime-500 via-lime-300 to-emerald-300 text-white",
+    href: "/dashboard/candidates?import=csv",
   },
   {
+    id: "greenhouse",
     name: "Greenhouse",
-    description: "Import jobs and candidates from an existing Greenhouse account.",
-    logo: GreenhouseLogo,
+    description: "Move eligible candidates into a Harly pipeline.",
+    logo: GreenhouseImportLogo,
+    tileClassName:
+      "bg-gradient-to-br from-lime-300 via-yellow-300 to-emerald-200",
+    href: "/dashboard/candidates?import=greenhouse",
   },
   {
-    name: "LinkedIn",
-    description: "Publish jobs and receive applications from LinkedIn.",
-    logo: LinkedinLogo,
+    id: "workable",
+    name: "Workable",
+    description: "Migrate candidate profiles with a read-only token.",
+    logo: WorkableLogo,
+    logoClassName: "size-6",
+    tileClassName:
+      "bg-gradient-to-br from-emerald-100 via-teal-200 to-cyan-300",
+    href: "/dashboard/candidates?import=workable",
+  },
+  {
+    id: "ashby",
+    name: "Ashby",
+    description: "Import complete candidate profiles securely.",
+    logo: AshbyLogo,
+    logoClassName: "size-6",
+    tileClassName:
+      "bg-gradient-to-br from-violet-100 via-indigo-200 to-fuchsia-200",
+    href: "/dashboard/candidates?import=ashby",
+  },
+  {
+    id: "lever",
+    name: "Lever",
+    description: "Bring opportunities and candidate details across.",
+    logo: LeverLogo,
+    logoClassName: "size-6",
+    tileClassName:
+      "bg-gradient-to-br from-slate-950 via-slate-800 to-slate-600",
+    href: "/dashboard/candidates?import=lever",
   },
 ];
 
 export default async function IntegrationsSettingsPage() {
   await requirePagePermission("integrations:manage");
-  const { organization, role } = await getWorkspaceContext();
-  const [calStatus, gcalStatus, slackStatus, outlookStatus, zoomConfig] = await Promise.all([
-    getWorkspaceCalStatus(organization.id),
-    getWorkspaceGCalStatus(organization.id),
-    getWorkspaceSlackStatus(organization.id),
-    getWorkspaceOutlookStatus(organization.id),
-    getZoomConfig(organization.id),
-  ]);
-  const canEdit = role === "owner" || role === "admin";
+  const { organization } = await getWorkspaceContext();
+  const statuses = await getIntegrationStatuses(organization.id);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? null;
-  const webhookUrl = appUrl
-    ? `${appUrl}/api/webhooks/cal?ws=${organization.id}`
-    : null;
+  const integrationsConfigured = INTEGRATIONS.some(
+    (i) => !i.comingSoon && isConnected(i.slug, statuses),
+  );
 
-  const eventOptions = WEBHOOK_EVENTS.map((event) => ({
-    value: event,
-    label: WEBHOOK_EVENT_LABELS[event],
-  }));
+  const marketplaceGroups: MarketplaceGroup[] = CATEGORY_ORDER.map(
+    (category) => ({
+      label: CATEGORY_LABELS[category],
+      integrations: INTEGRATIONS.filter(
+        (i) => i.category === category,
+      ).map<MarketplaceIntegration>((i) => {
+        const connected = isConnected(i.slug, statuses);
+        return {
+          id: i.slug,
+          name: i.name,
+          description: i.description,
+          logo: INTEGRATION_LOGOS[i.slug],
+          logoClassName: i.logoClassName,
+          tileClassName: i.tileClassName,
+          href: i.externalHref ?? `/settings/integrations/${i.slug}`,
+          status: i.comingSoon
+            ? "coming-soon"
+            : connected
+              ? "connected"
+              : "available",
+        };
+      }),
+    }),
+  ).filter((g) => g.integrations.length > 0);
+
+  const importerGroups: MarketplaceGroup[] = [
+    {
+      label: "Sources",
+      integrations: IMPORTERS.map<MarketplaceIntegration>((i) => ({
+        id: i.id,
+        name: i.name,
+        description: i.description,
+        logo: i.logo,
+        logoClassName: i.logoClassName,
+        tileClassName: i.tileClassName,
+        href: i.href,
+        actionLabel: "Import",
+        status: "available",
+      })),
+    },
+  ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-10">
       <OAuthFeedback />
 
-      <CalSettingsCard
-        status={calStatus}
-        canEdit={canEdit}
-        webhookUrl={webhookUrl}
-      />
-
-      <GCalSettingsCard
-        status={gcalStatus}
-        canEdit={canEdit}
-        workspaceId={organization.id}
-      />
-
-        <SlackSettingsCard
-          status={slackStatus}
-          events={eventOptions}
-          canEdit={canEdit}
-          workspaceId={organization.id}
+      <div className="border-b border-border/70 pb-5">
+        <SectionHeader
+          icon={PlugIcon}
+          title="Integrations"
+          badge={
+            <StatusPill tone={integrationsConfigured ? "on" : "neutral"}>
+              {integrationsConfigured ? "Configured" : "Not configured"}
+            </StatusPill>
+          }
+          description="Connect calendars, communication tools, and automation to your workspace. Select an integration to set it up."
         />
+      </div>
 
-        <OutlookSettingsCard
-          status={outlookStatus}
-          events={eventOptions}
-          canEdit={canEdit}
-          workspaceId={organization.id}
-        />
+      <IntegrationMarketplace groups={marketplaceGroups} />
 
-        <ZoomSettingsCard
-          config={zoomConfig}
-          canEdit={canEdit}
-          workspaceId={organization.id}
-        />
-
-        <Card className="gap-0 p-5">
-          <div className="flex items-start gap-3">
-            <BrandTile className="size-11 rounded-2xl">
-              <ZapierLogo />
-            </BrandTile>
-            <div className="min-w-0 flex-1 space-y-1">
-              <div className="flex items-center gap-2">
-                <h4 className="font-semibold tracking-tight">Zapier &amp; Make</h4>
-                <StatusPill tone="on">Available</StatusPill>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                Trigger a Zap or Make scenario on Harly events — e.g. new
-                applicant → Slack message, candidate hired → add a row to
-                your payroll sheet. Point it at your Zap&apos;s webhook URL
-                and pick which of the 11 event types to send; no plugin to
-                install, it&apos;s the same event feed the public API uses.
-              </p>
-            </div>
-            <Button asChild variant="outline" size="sm" className="shrink-0">
-              <Link href="/settings/developers">
-                Set up webhook
-                <ArrowUpRightIcon className="size-4" />
-              </Link>
-            </Button>
-          </div>
-        </Card>
-
-        <div className="space-y-3">
-        <div className="flex items-baseline justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            On the roadmap
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            Want one sooner? Tell us in Developers &amp; API.
+      <section className="space-y-4 border-t border-border/70 pt-8">
+        <div className="space-y-1">
+          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+            Data migration
+          </p>
+          <h2 className="font-display text-xl font-semibold tracking-tight">
+            Import candidates
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            One-time migrations from a spreadsheet or another ATS. These run an
+            import, not a live connection.
           </p>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {UPCOMING.map((integration) => {
-            const Logo = integration.logo;
-            return (
-              <Card
-                key={integration.name}
-                className="gap-0 p-5 transition-colors hover:border-foreground/15"
-              >
-                <div className="flex items-start gap-3">
-                  <BrandTile className="size-11 rounded-2xl">
-                    <Logo className={integration.tone ?? undefined} />
-                  </BrandTile>
-                  <div className="min-w-0 flex-1 space-y-1">
-                    <div className="flex items-center gap-2">
-                      <h4 className="font-semibold tracking-tight">
-                        {integration.name}
-                      </h4>
-                      <span className="rounded-full border border-dashed px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
-                        Coming soon
-                      </span>
-                    </div>
-                    <p className="text-sm text-muted-foreground">
-                      {integration.description}
-                    </p>
-                  </div>
-                  
-                </div>
-              </Card>
-            );
-          })}
-        </div>
-      </div>
+        <IntegrationMarketplace groups={importerGroups} />
+      </section>
     </div>
   );
 }

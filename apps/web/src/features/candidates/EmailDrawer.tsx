@@ -11,6 +11,7 @@ import {
   interpolateTemplate,
   type TemplateValues,
 } from "@/features/email-templates/interpolate";
+import { templateHtmlToPlainText } from "@/features/email-templates/plain-text";
 import { AiButton } from "@/components/ui/AiButton";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -67,14 +68,16 @@ export function EmailDrawer({
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState(`Hi ${firstName},\n\n`);
   const [selectedDraftType, setSelectedDraftType] = useState<DraftType>("screening");
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [isPending, startTransition] = useTransition();
   const [isDrafting, startDraft] = useTransition();
 
   function applyTemplate(templateId: string) {
     const template = templates.find((t) => t.id === templateId);
     if (!template) return;
+    setSelectedTemplateId(templateId);
     setSubject(interpolateTemplate(template.subject, templateValues));
-    setBody(interpolateTemplate(template.body, templateValues));
+    setBody(templateHtmlToPlainText(interpolateTemplate(template.body, templateValues)));
   }
 
   function draftWithAI() {
@@ -115,17 +118,18 @@ export function EmailDrawer({
       toast.success(
         result.delivered
           ? "Email sent"
-          : "Saved to thread — connect Resend (RESEND_API_KEY) to deliver.",
+          : "Saved to thread. Connect Resend (RESEND_API_KEY) to deliver.",
       );
       setOpen(false);
       setSubject("");
       setBody(`Hi ${firstName},\n\n`);
+      setSelectedTemplateId("");
       router.refresh();
     });
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
+    <Sheet open={open} onOpenChange={setOpen} mobilePresentation="bottom-on-mobile">
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
         title={`Email ${name}`}
@@ -149,6 +153,32 @@ export function EmailDrawer({
             <p className="text-[13px] font-medium tracking-tight text-foreground/90">To</p>
             <Input value={email} readOnly className="bg-muted/50" />
           </div>
+
+          {/* Template picker */}
+          {templates.length > 0 ? (
+            <div className="space-y-2 rounded-xl border bg-muted/30 p-3.5">
+              <div>
+                <p className="text-[13px] font-semibold tracking-tight text-foreground/90">
+                  Start from a template
+                </p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  It fills the subject and message. You can edit both before sending.
+                </p>
+              </div>
+              <Select value={selectedTemplateId} onValueChange={applyTemplate}>
+                <SelectTrigger className="w-full bg-background">
+                  <SelectValue placeholder="Choose a template" />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((template) => (
+                    <SelectItem key={template.id} value={template.id}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          ) : null}
 
           {/* AI draft */}
           {aiConfigured ? (
@@ -207,27 +237,6 @@ export function EmailDrawer({
               </Link>
             </div>
           )}
-
-          {/* Template picker */}
-          {templates.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-[13px] font-medium tracking-tight text-foreground/90">
-                Template
-              </p>
-              <Select onValueChange={applyTemplate}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Start from a template (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {templates.map((template) => (
-                    <SelectItem key={template.id} value={template.id}>
-                      {template.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          ) : null}
 
           {/* Subject */}
           <div className="space-y-2">

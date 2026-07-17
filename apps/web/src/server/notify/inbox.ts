@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
   db,
@@ -60,12 +60,18 @@ async function getWorkspaceMemberIds(
 }
 
 async function getJobTeamMemberIds(
+  workspaceId: string,
   jobId: string,
 ): Promise<string[]> {
   const rows = await db
     .select({ userId: jobHiringTeam.userId })
     .from(jobHiringTeam)
-    .where(eq(jobHiringTeam.jobId, jobId));
+    .where(
+      and(
+        eq(jobHiringTeam.workspaceId, workspaceId),
+        eq(jobHiringTeam.jobId, jobId),
+      ),
+    );
   return rows.map((r) => r.userId);
 }
 
@@ -82,7 +88,7 @@ export async function notifyInboundEmail(params: {
   subject: string;
 }): Promise<void> {
   try {
-    let recipientIds = await getJobTeamMemberIds(params.jobId);
+    let recipientIds = await getJobTeamMemberIds(params.workspaceId, params.jobId);
     if (recipientIds.length === 0) {
       recipientIds = await getWorkspaceMemberIds(params.workspaceId);
     }
@@ -158,7 +164,7 @@ function buildTitle(
     return `${candidateName} was rejected`;
   }
   if (event === "application.stage_changed" && candidateName && jobTitle) {
-    return `${candidateName} moved stage — ${jobTitle}`;
+    return `${candidateName} moved stage , ${jobTitle}`;
   }
   if (event === "application.stage_changed" && candidateName) {
     return `${candidateName} moved stage`;
@@ -211,7 +217,7 @@ async function resolveRecipients(
   let ids: string[];
 
   if (jobId && event !== "job.published") {
-    ids = await getJobTeamMemberIds(jobId);
+    ids = await getJobTeamMemberIds(workspaceId, jobId);
     if (ids.length === 0) {
       ids = await getWorkspaceMemberIds(workspaceId);
     }
@@ -229,7 +235,7 @@ async function resolveRecipients(
 
 /**
  * Create in-app notifications for a webhook event.
- * Fire-and-forget — never throws.
+ * Fire-and-forget , never throws.
  */
 export async function notifyInboxEvent(
   workspaceId: string,

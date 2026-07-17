@@ -18,7 +18,7 @@ type DocxState =
 /**
  * Renders a DOCX file as sanitized HTML in the browser using mammoth.
  * The file is fetched, converted client-side, and displayed in a styled container.
- * No server round-trip for the conversion — the DOCX never leaves the browser.
+ * No server round-trip for the conversion , the DOCX never leaves the browser.
  */
 export function DocxViewer({ fileUrl, className }: DocxViewerProps) {
   const [state, setState] = useState<DocxState>({ status: "idle" });

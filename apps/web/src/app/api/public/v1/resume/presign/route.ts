@@ -13,7 +13,7 @@ import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
 export const runtime = "nodejs";
 
 /**
- * POST /api/public/v1/resume/presign — cross-origin presigned upload URL for the
+ * POST /api/public/v1/resume/presign , cross-origin presigned upload URL for the
  * embed widget / custom forms. Mirrors the in-app presign route but CORS-open.
  */
 export const POST = withApi(async (request) => {

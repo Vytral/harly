@@ -4,7 +4,7 @@ import { LayoutGrid, List } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-/** Board ↔ List switch — board for small/medium, list for high volume. */
+/** Board ↔ List switch , board for small/medium, list for high volume. */
 export function PipelineViewToggle({
   jobId,
   view,

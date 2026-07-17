@@ -144,7 +144,7 @@ export function SsoProviderDrawer({
   }
 
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange} mobilePresentation="bottom-on-mobile">
       <SheetTrigger asChild>
         {isEditing ? (
           <Button variant="outline" size="sm">
@@ -160,6 +160,7 @@ export function SsoProviderDrawer({
       <DrawerLayout
         title={isEditing ? "Configure SSO Provider" : "Add Enterprise SSO Provider"}
         description="Set up SAML 2.0 or OpenID Connect (OIDC) for enterprise single sign-on."
+        className="sm:max-w-2xl"
         footer={
           isEditing ? (
             <>

@@ -66,7 +66,7 @@ function saveDraft(data: Record<string, string>) {
   try {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
   } catch {
-    // quota exceeded or private browsing — silently ignore
+    // quota exceeded or private browsing , silently ignore
   }
 }
 
@@ -198,7 +198,7 @@ export function LegalSettings({
   const [retentionTalentPool, setRetentionTalentPool] = useState(settings.dataRetentionTalentPoolMonths);
   const [consentText, setConsentText] = useState(settings.consentCheckboxText ?? "");
 
-  // Legal pages — initialize from saved or draft
+  // Legal pages , initialize from saved or draft
   const [pages, setPages] = useState<Record<string, string>>(() => {
     const draft = loadDraft();
     if (draft && Object.keys(draft).length > 0) return draft;

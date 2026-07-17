@@ -26,7 +26,7 @@ const listParams = [
   { name: "cursor", in: "query", schema: { type: "string" } },
 ] as const;
 
-/** GET /api/v1/openapi.json — OpenAPI 3.1 description of the REST API. */
+/** GET /api/v1/openapi.json , OpenAPI 3.1 description of the REST API. */
 export function GET() {
   const spec = {
     openapi: "3.1.0",

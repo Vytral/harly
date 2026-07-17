@@ -57,7 +57,7 @@ export type ParseResumeResult =
 
 /**
  * Parse an already-uploaded resume (by storage key) into autofill fields.
- * Public — runs during the unauthenticated apply flow — so it only ever reads
+ * Public , runs during the unauthenticated apply flow , so it only ever reads
  * a resume that is namespaced to the job's workspace.
  */
 export async function parseResumeAction(input: {
@@ -107,7 +107,7 @@ export async function parseResumeAction(input: {
     }
 
     // Resolve the job's workspace for keyword hints and (if enabled) its AI key.
-    // Note: this runs in the public apply flow — the employer opts into AI and
+    // Note: this runs in the public apply flow , the employer opts into AI and
     // bears the cost. Abuse hardening (rate-limit / Turnstile) is tracked separately.
     const jobKeywords = jobContext.keywords;
     let aiConfig: Awaited<ReturnType<typeof getWorkspaceAiConfig>> = null;
@@ -122,7 +122,7 @@ export async function parseResumeAction(input: {
         ok = true;
         return { ok: true, fields };
       } catch (error) {
-        // Fall back to the heuristic — AI failures must never break apply.
+        // Fall back to the heuristic , AI failures must never break apply.
         console.error("AI resume parse failed; using heuristic", error);
       } finally {
         // Attribution for the employer's public AI spend (IA-09): who consumed
@@ -238,7 +238,7 @@ export async function submitApplicationAction(
     };
   }
 
-  // Bot protection — verified against the workspace's Turnstile secret (or the
+  // Bot protection , verified against the workspace's Turnstile secret (or the
   // env fallback). A global TURNSTILE_SECRET_KEY makes verification mandatory
   // for every workspace (enforced), consistent with the public apply API.
   const turnstileToken = formData.get("cf-turnstile-response") as string | null;

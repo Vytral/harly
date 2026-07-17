@@ -24,14 +24,14 @@ import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
 
 /**
  * Fire-and-forget: score a new application if auto-score is enabled for the
- * workspace. Never throws — failures are logged only.
+ * workspace. Never throws , failures are logged only.
  */
 export async function scheduleAutoScore(
   applicationId: string,
   workspaceId: string,
 ): Promise<void> {
   try {
-    // Check auto-score setting first — cheap query, skip early if disabled.
+    // Check auto-score setting first , cheap query, skip early if disabled.
     const [settings] = await db
       .select({ aiAutoScore: workspaceSettings.aiAutoScore })
       .from(workspaceSettings)
@@ -108,7 +108,7 @@ export async function scheduleAutoScore(
             resumeText = text.trim() || null;
           }
         } catch {
-          // Resume unavailable — score from profile only.
+          // Resume unavailable , score from profile only.
         }
       }
     }

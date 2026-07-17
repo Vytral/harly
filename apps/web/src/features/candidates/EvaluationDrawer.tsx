@@ -11,9 +11,8 @@ import {
   suggestScorecardAttributesAction,
   type ScorecardAttribute,
 } from "@/features/candidates/actions";
-import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Button } from "@/components/ui/button";
-import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
+import { SidePanel } from "@/components/ui/side-panel";
 import { Textarea } from "@/components/ui/textarea";
 import {
   MagicWandDuotoneIcon,
@@ -126,18 +125,17 @@ export function EvaluationDrawer({
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen}>
-      <SheetTrigger asChild>{trigger}</SheetTrigger>
-      <DrawerLayout
+    <SidePanel
+      open={open}
+      onOpenChange={setOpen}
+      trigger={trigger}
         title={`Add evaluation${stageName ? ` · ${stageName}` : ""}`}
         description="Rate this candidate and leave feedback for the team."
         footer={
           <>
-            <SheetClose asChild>
-              <Button variant="outline" disabled={isPending}>
-                Cancel
-              </Button>
-            </SheetClose>
+            <Button variant="outline" disabled={isPending} onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
             <Button onClick={submit} disabled={isPending}>
               {isPending ? "Saving…" : "Save evaluation"}
             </Button>
@@ -255,7 +253,6 @@ export function EvaluationDrawer({
             </p>
           </div>
         </div>
-      </DrawerLayout>
-    </Sheet>
+    </SidePanel>
   );
 }

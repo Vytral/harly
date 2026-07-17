@@ -23,7 +23,7 @@ const SETTINGS_PATH = "/settings/integrations";
 /**
  * Allowed webhook hosts per provider. Locking the host prevents the encrypted
  * URL field from being abused as a server-side request forgery (SSRF) primitive
- * — Harly will only ever POST to the real Slack/Discord webhook endpoints.
+ * , Harly will only ever POST to the real Slack/Discord webhook endpoints.
  */
 const ALLOWED_HOSTS: Record<ChatProviderId, string[]> = {
   slack: ["hooks.slack.com"],

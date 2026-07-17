@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 type Context = { params: Promise<{ id: string }> };
 
-/** POST /api/v1/jobs/{id}/close — close the job. */
+/** POST /api/v1/jobs/{id}/close , close the job. */
 export const POST = withApi(async (request, context) => {
   const ctx = await authenticateApiKey(request, "jobs:write");
   const { id } = await (context as Context).params;

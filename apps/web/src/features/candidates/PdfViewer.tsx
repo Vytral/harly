@@ -22,7 +22,7 @@ type LoadState =
 let workerConfigured = false;
 
 /**
- * In-app PDF viewer — renders résumés to <canvas> with pdfjs so the toolbar and
+ * In-app PDF viewer , renders résumés to <canvas> with pdfjs so the toolbar and
  * chrome are ours, not the browser's native PDF plugin. Pages fit the container
  * width (no dead side-gutters) and stay crisp on hi-dpi screens.
  *
@@ -37,7 +37,7 @@ export function PdfViewer({
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pagesRef = useRef<HTMLDivElement>(null);
-  // PDFDocumentProxy — kept untyped to avoid importing pdfjs types at module load.
+  // PDFDocumentProxy , kept untyped to avoid importing pdfjs types at module load.
   const pdfRef = useRef<{
     numPages: number;
     getPage: (n: number) => Promise<unknown>;
@@ -137,7 +137,7 @@ export function PdfViewer({
               : undefined,
         }).promise;
       } catch {
-        // render canceled (newer run) or failed — leave the blank canvas
+        // render canceled (newer run) or failed , leave the blank canvas
       }
     }
   }, [pageMaxWidth, zoom]);
@@ -173,7 +173,7 @@ export function PdfViewer({
         className,
       )}
     >
-      {/* Toolbar — our iconography, not the browser's */}
+      {/* Toolbar , our iconography, not the browser's */}
       <div className="flex items-center gap-1 border-b bg-muted/35 px-2 py-1.5">
         <Button
           size="sm"

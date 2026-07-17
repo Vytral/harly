@@ -76,7 +76,7 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
         />
       </Section>
 
-      {/* Overview — Playful & Folio (marginalia) */}
+      {/* Overview , Playful & Folio (marginalia) */}
       {(config.template === "playful" || config.template === "folio") && (
         <Section title="Overview card">
           <ToggleRow
@@ -124,7 +124,7 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
         </Section>
       )}
 
-      {/* Gallery — Playful only */}
+      {/* Gallery , Playful only */}
       {config.template === "playful" && (
         <Section title="Photo gallery">
           <ToggleRow
@@ -162,7 +162,7 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
         </Section>
       )}
 
-      {/* Values — Playful & Folio */}
+      {/* Values , Playful & Folio */}
       {(config.template === "playful" || config.template === "folio") && (
         <Section title="Values">
           <ToggleRow
@@ -207,7 +207,7 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
         </Section>
       )}
 
-      {/* Folio — editorial options */}
+      {/* Folio , editorial options */}
       {config.template === "folio" && (
         <Section title="Editorial options" defaultOpen>
           <ToggleRow

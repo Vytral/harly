@@ -361,7 +361,7 @@ export function PoolView({ candidates, openJobs = [] }: PoolViewProps) {
                       )}
                     </div>
                   ) : (
-                    <span className="text-muted-foreground">—</span>
+                    <span className="text-muted-foreground">Not scored</span>
                   )}
                 </td>
                 <td className="px-3 py-3">

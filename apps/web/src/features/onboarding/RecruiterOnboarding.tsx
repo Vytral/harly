@@ -68,7 +68,7 @@ export function RecruiterOnboarding({
   }
 
   // Completion enforces the workspace 2FA policy server-side, so a stale client
-  // can't bypass it — if 2FA is required and not yet enabled, the action errors.
+  // cannot bypass it. If 2FA is required and not yet enabled, the action errors.
   function finish() {
     startTransition(async () => {
       const res = await completeRecruiterOnboardingAction();
@@ -129,7 +129,7 @@ export function RecruiterOnboarding({
             <StepHeading
               eyebrow={`Hi ${userName}`}
               title={`Welcome to ${workspaceName}`}
-              subtitle="A couple of quick things and you're hiring. First — what should teammates know you as?"
+              subtitle="A couple of quick things and you're hiring. First, what should teammates know you as?"
             />
           </StepField>
           <StepField className="mt-7 max-w-md space-y-2">

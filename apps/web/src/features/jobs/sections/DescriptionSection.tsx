@@ -163,6 +163,7 @@ export function DescriptionSection({
               onClick={generateWithAI}
               loading={aiPending}
               loadingText="Generating"
+              logoClassName="size-4"
             >
               Generate with AI
             </AiButton>

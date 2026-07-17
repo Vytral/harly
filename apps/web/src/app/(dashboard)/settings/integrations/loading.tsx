@@ -1,40 +1,31 @@
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
-function IntegrationCardSkeleton() {
+function IntegrationRowSkeleton() {
   return (
-    <Card>
-      <CardContent className="flex items-start gap-3 p-5">
-        <Skeleton className="size-11 shrink-0 rounded-2xl" />
-        <div className="min-w-0 flex-1 space-y-1.5">
-          <div className="flex items-center gap-2">
-            <Skeleton className="h-4 w-24" />
-            <Skeleton className="h-4 w-16 rounded-full" />
-          </div>
-          <Skeleton className="h-3 w-full max-w-md" />
-          <Skeleton className="h-3 w-48" />
-        </div>
-        <Skeleton className="hidden h-8 w-28 shrink-0 rounded-lg sm:block" />
-      </CardContent>
-    </Card>
+    <div className="flex items-center gap-3 border-t border-border/60 py-3.5 sm:px-2">
+      <Skeleton className="size-10 shrink-0 rounded-lg" />
+      <div className="min-w-0 flex-1 space-y-1.5">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-3 w-52 max-w-full" />
+      </div>
+      <Skeleton className="size-8 rounded-lg" />
+    </div>
   );
 }
 
 export default function IntegrationsSettingsLoading() {
   return (
-    <div className="space-y-4">
-      <IntegrationCardSkeleton />
-      <IntegrationCardSkeleton />
-      <IntegrationCardSkeleton />
-      <IntegrationCardSkeleton />
-      <div className="space-y-3">
-        <Skeleton className="h-3 w-36" />
-        <div className="grid gap-4 sm:grid-cols-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <IntegrationCardSkeleton key={i} />
-          ))}
-        </div>
-      </div>
+    <div className="space-y-8">
+      {Array.from({ length: 4 }).map((_, groupIndex) => (
+        <section key={groupIndex} className="space-y-3">
+          <Skeleton className="h-4 w-40" />
+          <div className="grid gap-x-10 sm:grid-cols-2">
+            {Array.from({ length: groupIndex === 3 ? 2 : 4 }).map((_, rowIndex) => (
+              <IntegrationRowSkeleton key={rowIndex} />
+            ))}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }

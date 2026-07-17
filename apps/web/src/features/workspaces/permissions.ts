@@ -1,5 +1,5 @@
 /**
- * Permission catalog — the single source of truth for what actions exist and
+ * Permission catalog , the single source of truth for what actions exist and
  * which roles may perform them. Client-safe (no server imports) so both the
  * enforcement layer and the UI matrix read from the same list.
  *
@@ -93,7 +93,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = Object.fromEntries(
   PERMISSION_GROUPS.flatMap((g) => g.permissions.map((p) => [p.key, p.label])),
 ) as Record<Permission, string>;
 
-/** Built-in role keys (cannot be deleted; only `owner` is unconditionally all-powerful — `admin` gets the full explicit permission set). */
+/** Built-in role keys (cannot be deleted; only `owner` is unconditionally all-powerful , `admin` gets the full explicit permission set). */
 export const BUILTIN_ROLES = [
   "owner",
   "admin",
@@ -124,7 +124,7 @@ export function isBuiltinRole(role: string): role is BuiltinRole {
 }
 
 /**
- * Only the owner is unconditionally all-powerful and non-editable — the single
+ * Only the owner is unconditionally all-powerful and non-editable , the single
  * keyholder who can never be locked out. Every other role (admin included) runs
  * on its explicit permission set, so it can be tuned.
  */
@@ -141,7 +141,7 @@ export function hasPermission(
 
 /**
  * Privilege-ceiling check: true when `granted` contains any permission the
- * `actor` doesn't already hold — i.e. granting it would be an escalation.
+ * `actor` doesn't already hold , i.e. granting it would be an escalation.
  * The single source of truth used by every server guard that assigns a role
  * or edits a role's permission set. Client-safe and pure so it's unit-testable.
  */

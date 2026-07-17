@@ -131,7 +131,7 @@ export function SsoConfigDrawer({
   }
 
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
+    <Sheet open={open} onOpenChange={handleOpenChange} mobilePresentation="bottom-on-mobile">
       <SheetTrigger asChild>
         <Button variant="outline" size="sm">
           {isEditing ? "Configure" : "Set up"}

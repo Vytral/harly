@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { Route } from "next";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -41,7 +43,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 import { formatRelative } from "@/lib/date";
 
@@ -56,17 +57,12 @@ const INBOUND_PROVIDER_LABEL: Record<InboundProviderId, string> = {
 export function ReplyHandlingSettingsCard({
   mailboxStatus,
   inboundStatus,
-  workspaceId,
   canEdit,
 }: {
   mailboxStatus: MailboxStatus;
   inboundStatus: WorkspaceInboundEmailStatus;
-  workspaceId: string;
   canEdit: boolean;
 }) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
-
   const mailboxConfigured = mailboxStatus.configured;
   const inboundConfigured =
     inboundStatus.hasWebhookSecret && Boolean(inboundStatus.replyDomain);
@@ -102,27 +98,19 @@ export function ReplyHandlingSettingsCard({
           description="Choose how candidate replies return to your team: a shared mailbox or threaded replies via webhook."
           action={
             canEdit ? (
-              <Sheet open={open} onOpenChange={setOpen}>
-                <SheetTrigger asChild>
-                  <Button
-                    variant={configured ? "outline" : "default"}
-                    disabled={!mailboxStatus.encryptionReady}
-                  >
+              mailboxStatus.encryptionReady ? (
+                <Button asChild variant={configured ? "outline" : "default"}>
+                  <Link href={"/settings/email/replies" as Route}>
                     <KeyDuotoneIcon className="size-4" />
                     {configured ? "Manage" : "Connect"}
-                  </Button>
-                </SheetTrigger>
-                <ReplyHandlingSettingsForm
-                  mailboxStatus={mailboxStatus}
-                  inboundStatus={inboundStatus}
-                  workspaceId={workspaceId}
-                  initialMode={mode}
-                  onSaved={() => {
-                    setOpen(false);
-                    router.refresh();
-                  }}
-                />
-              </Sheet>
+                  </Link>
+                </Button>
+              ) : (
+                <Button variant="default" disabled>
+                  <KeyDuotoneIcon className="size-4" />
+                  Connect
+                </Button>
+              )
             ) : null
           }
         />
@@ -196,19 +184,18 @@ export function ReplyHandlingSettingsCard({
   );
 }
 
-function ReplyHandlingSettingsForm({
+export function ReplyHandlingSettingsForm({
   mailboxStatus,
   inboundStatus,
   workspaceId,
   initialMode,
-  onSaved,
 }: {
   mailboxStatus: MailboxStatus;
   inboundStatus: WorkspaceInboundEmailStatus;
   workspaceId: string;
   initialMode: ReplyMode;
-  onSaved: () => void;
 }) {
+  const router = useRouter();
   const [mode, setMode] = useState<ReplyMode>(initialMode);
   const [saving, startSave] = useTransition();
 
@@ -295,7 +282,7 @@ function ReplyHandlingSettingsForm({
       }
 
       toast.success("Reply handling settings saved");
-      onSaved();
+      router.refresh();
     });
   }
 
@@ -303,21 +290,15 @@ function ReplyHandlingSettingsForm({
     <DrawerLayout
       title="Configure reply handling"
       description="Choose one reply route. Secrets are encrypted at rest and never shown again."
+      surface="page"
       footer={
-        <>
-          <SheetClose asChild>
-            <Button variant="outline" disabled={saving}>
-              Cancel
-            </Button>
-          </SheetClose>
-          <Button
-            onClick={save}
-            disabled={saving || !mailboxStatus.encryptionReady}
-          >
-            {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save
-          </Button>
-        </>
+        <Button
+          onClick={save}
+          disabled={saving || !mailboxStatus.encryptionReady}
+        >
+          {saving ? <SpinnerIcon className="size-4" /> : null}
+          Save changes
+        </Button>
       }
     >
       <div className="space-y-5">
@@ -414,7 +395,7 @@ function SharedMailboxFields({
 
   const set = onFieldChange;
   const passwordPlaceholder = (hasSecret: boolean) =>
-    hasSecret ? "•••••••• (stored — leave blank to keep)" : undefined;
+    hasSecret ? "•••••••• (stored, leave blank to keep)" : undefined;
 
   return (
     <div className="space-y-5">
@@ -667,7 +648,7 @@ function ThreadedReplyFields({
           onChange={(event) => onWebhookSecretChange(event.target.value)}
           placeholder={
             status.hasWebhookSecret
-              ? "•••••••• (stored — leave blank to keep)"
+              ? "•••••••• (stored, leave blank to keep)"
               : provider === "postmark"
                 ? "Set this as the URL's Basic Auth password"
                 : "whsec_…"
@@ -676,7 +657,7 @@ function ThreadedReplyFields({
         />
         <p className="text-xs text-muted-foreground">
           {provider === "postmark"
-            ? "Postmark has no webhook signature scheme — secure the URL with Basic Auth."
+            ? "Postmark has no webhook signature scheme. Secure the URL with Basic Auth."
             : "From Resend → Webhooks, after selecting the email.received event."}
         </p>
       </Field>
@@ -690,7 +671,7 @@ function ThreadedReplyFields({
             onChange={(event) => onResendApiKeyChange(event.target.value)}
             placeholder={
               status.hasResendApiKey
-                ? "•••••••• (stored — leave blank to keep)"
+                ? "•••••••• (stored, leave blank to keep)"
                 : "re_…"
             }
             autoComplete="off"

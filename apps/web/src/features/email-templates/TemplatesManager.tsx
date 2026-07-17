@@ -39,6 +39,8 @@ import {
   Select,
   SelectContent,
   SelectItem,
+  SelectLabel,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -66,8 +68,19 @@ const TEMPLATE_TYPE_COLORS: Record<TemplateType, string> = {
   stage_change: "bg-violet-50 text-violet-700 dark:bg-violet-950 dark:text-violet-300",
 };
 
-/** Types with a matching system auto-email — these can be "activated" to override the default. */
+/** Types with a matching system auto-email , these can be "activated" to override the default. */
 const ACTIVATABLE_TYPES = new Set<TemplateType>(SYSTEM_TEMPLATE_TYPES);
+const MANUAL_TEMPLATE_TYPES: TemplateType[] = ["general", "screening"];
+
+function isAutomaticTemplateType(type: TemplateType) {
+  return ACTIVATABLE_TYPES.has(type);
+}
+
+function templateTypeDescription(type: TemplateType) {
+  return isAutomaticTemplateType(type)
+    ? "Automatic: review the preview, then activate it to replace Harly's default event email."
+    : "Manual only: use it when composing an email to a candidate.";
+}
 
 // Groups for the variable pill picker
 const VARIABLE_GROUPS = Array.from(
@@ -88,7 +101,7 @@ const STARTER_TEMPLATES: Array<{
   {
     name: "Interview invitation",
     type: "interview_invite",
-    subject: "Interview invitation — {{job_title}} at {{company_name}}",
+    subject: "Interview invitation, {{job_title}} at {{company_name}}",
     body: "<p>Hi {{candidate_first_name}},</p><p>We'd love to invite you to an interview for the <strong>{{job_title}}</strong> role at {{company_name}}.</p><p><strong>Date:</strong> {{interview_date}}<br><strong>Time:</strong> {{interview_time}}<br><strong>Location:</strong> {{interview_location}}</p><p>Please let us know if this works for you.</p><p>Best,<br>{{sender_name}}</p>",
   },
   {
@@ -100,20 +113,20 @@ const STARTER_TEMPLATES: Array<{
   {
     name: "Offer extended",
     type: "offer",
-    subject: "Offer letter — {{job_title}} at {{company_name}}",
+    subject: "Offer letter, {{job_title}} at {{company_name}}",
     body: "<p>Hi {{candidate_first_name}},</p><p>We're thrilled to offer you the <strong>{{job_title}}</strong> position at {{company_name}}.</p><p><strong>Compensation:</strong> {{offer_salary}}<br><strong>Offer expires:</strong> {{offer_expiry}}</p><p>Please review the attached offer letter and let us know if you have any questions.</p><p>We're excited to have you on board,<br>{{sender_name}}</p>",
   },
   {
     name: "Screening call",
     type: "screening",
-    subject: "Quick intro call — {{job_title}}",
+    subject: "Quick intro call, {{job_title}}",
     body: "<p>Hi {{candidate_first_name}},</p><p>We reviewed your application for <strong>{{job_title}}</strong> at {{company_name}} and we're impressed with your background.</p><p>We'd love to schedule a quick 30-minute call to learn more about you and share details about the role.</p><p>Looking forward to connecting,<br>{{sender_name}}</p>",
   },
   {
     name: "Stage update",
     type: "stage_change",
-    subject: "You're moving to {{stage_name}} — {{job_title}}",
-    body: "<p>Hi {{candidate_first_name}},</p><p>Good news — your application for <strong>{{job_title}}</strong> at {{company_name}} has moved to the <strong>{{stage_name}}</strong> stage.</p><p>Someone from the team will reach out shortly with next steps.</p><p>Best,<br>{{sender_name}}</p>",
+    subject: "You're moving to {{stage_name}}, {{job_title}}",
+    body: "<p>Hi {{candidate_first_name}},</p><p>Good news. Your application for <strong>{{job_title}}</strong> at {{company_name}} has moved to the <strong>{{stage_name}}</strong> stage.</p><p>Someone from the team will reach out shortly with next steps.</p><p>Best,<br>{{sender_name}}</p>",
   },
 ];
 
@@ -133,6 +146,15 @@ const PREVIEW_VALUES = {
   sender_name: "You",
 };
 
+const EMPTY_DRAFT = {
+  name: "",
+  type: "general" as TemplateType,
+  subject: "",
+  body: "",
+};
+
+type TemplateDraft = typeof EMPTY_DRAFT;
+
 // ─── TemplatesManager ─────────────────────────────────────────────────────────
 
 export function TemplatesManager({
@@ -150,33 +172,23 @@ export function TemplatesManager({
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState<TemplateType | "all">("all");
   const [tab, setTab] = useState<"edit" | "preview">("edit");
+  const [showStarters, setShowStarters] = useState(false);
+  const [editorKey, setEditorKey] = useState(0);
 
-  const [name, setName] = useState("");
-  const [type, setType] = useState<TemplateType>("general");
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
+  const [name, setName] = useState(EMPTY_DRAFT.name);
+  const [type, setType] = useState<TemplateType>(EMPTY_DRAFT.type);
+  const [subject, setSubject] = useState(EMPTY_DRAFT.subject);
+  const [body, setBody] = useState(EMPTY_DRAFT.body);
+  const [initialDraft, setInitialDraft] = useState<TemplateDraft>(EMPTY_DRAFT);
 
-  // Ref handle exposed by RichTextEditor — lets us insert at cursor
+  // Ref handle exposed by RichTextEditor , lets us insert at cursor
   const editorRef = useRef<{ insertText: (text: string) => void } | null>(null);
 
   const isDirty =
-    name.trim() !== (editing?.name ?? "") ||
-    subject.trim() !== (editing?.subject ?? "") ||
-    body !== (editing?.body ?? "");
-
-  // Adjust state when sheet opens/closes (no effect — avoids cascading render)
-  const syncKey = open ? (editing?.id ?? "__new__") : "__closed__";
-  const [syncedKey, setSyncedKey] = useState<string | null>(null);
-  if (syncKey !== syncedKey) {
-    setSyncedKey(syncKey);
-    if (open) {
-      setName(editing?.name ?? "");
-      setType(editing?.type ?? "general");
-      setSubject(editing?.subject ?? "");
-      setBody(editing?.body ?? "");
-      setTab("edit");
-    }
-  }
+    name.trim() !== initialDraft.name ||
+    type !== initialDraft.type ||
+    subject.trim() !== initialDraft.subject ||
+    body !== initialDraft.body;
 
   const filteredTemplates = templates.filter((t) => {
     const matchesSearch = t.name.toLowerCase().includes(search.toLowerCase());
@@ -186,18 +198,39 @@ export function TemplatesManager({
 
   const unknownVariables = findUnknownVariables(`${subject}\n${body}`);
 
-  function openNew(prefill?: typeof STARTER_TEMPLATES[number]) {
-    setEditing(null);
-    if (prefill) {
-      // Force sync by using a fake editing object approach: set state directly
-      setName(prefill.name);
-      setType(prefill.type);
-      setSubject(prefill.subject);
-      setBody(prefill.body);
-      setTab("edit");
-      setSyncedKey("__prefill__");
-    }
+  function openDraft(draft: TemplateDraft, template: EmailTemplateItem | null) {
+    setEditing(template);
+    setInitialDraft(draft);
+    setName(draft.name);
+    setType(draft.type);
+    setSubject(draft.subject);
+    setBody(draft.body);
+    setTab("edit");
+    setEditorKey((key) => key + 1);
     setOpen(true);
+  }
+
+  function openNew(prefill?: typeof STARTER_TEMPLATES[number]) {
+    const draft = prefill ?? EMPTY_DRAFT;
+    openDraft(draft, null);
+    setShowStarters(false);
+  }
+
+  function openEdit(template: EmailTemplateItem) {
+    openDraft(
+      {
+        name: template.name,
+        type: template.type,
+        subject: template.subject,
+        body: template.body,
+      },
+      template,
+    );
+  }
+
+  function closeEditor() {
+    setOpen(false);
+    setEditing(null);
   }
 
   function save() {
@@ -212,8 +245,7 @@ export function TemplatesManager({
         return;
       }
       toast.success(editing ? "Template updated" : "Template created");
-      setOpen(false);
-      setEditing(null);
+      closeEditor();
       router.refresh();
     });
   }
@@ -264,11 +296,22 @@ export function TemplatesManager({
             ? "No templates yet."
             : `${templates.length} template${templates.length === 1 ? "" : "s"}.`}
         </p>
-        <Button size="sm" onClick={() => openNew()}>
-          <PlusIcon className="size-4" />
-          New template
-        </Button>
+        <div className="flex items-center gap-2">
+          {templates.length > 0 ? (
+            <Button size="sm" variant="outline" onClick={() => setShowStarters((visible) => !visible)}>
+              {showStarters ? "Hide starters" : "Use a starter"}
+            </Button>
+          ) : null}
+          <Button size="sm" onClick={() => openNew()}>
+            <PlusIcon className="size-4" />
+            New template
+          </Button>
+        </div>
       </div>
+
+      <p className="text-xs text-muted-foreground">
+        Automatic templates can replace Harly&apos;s event emails when activated. Review the preview before activating; general and screening templates are for manual outreach.
+      </p>
 
       {/* Search + type filter */}
       {templates.length > 0 && (
@@ -296,6 +339,36 @@ export function TemplatesManager({
         </div>
       )}
 
+      {templates.length > 0 && showStarters ? (
+        <div className="rounded-xl border border-dashed p-4">
+          <div className="mb-3">
+            <p className="text-sm font-medium">Start from a template</p>
+            <p className="text-xs text-muted-foreground">Choose a starting point, then customize it for your workspace.</p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {STARTER_TEMPLATES.map((starter) => (
+              <button
+                key={starter.name}
+                type="button"
+                onClick={() => openNew(starter)}
+                className="group rounded-lg border border-dashed p-3 text-left transition hover:border-primary/40 hover:bg-accent/50"
+              >
+                <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                  <span className={cn("rounded-md px-2 py-0.5 text-[11px] font-semibold", TEMPLATE_TYPE_COLORS[starter.type])}>
+                    {TEMPLATE_TYPE_LABELS[starter.type]}
+                  </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {isAutomaticTemplateType(starter.type) ? "Automatic" : "Manual only"}
+                  </span>
+                </div>
+                <p className="text-sm font-medium group-hover:text-primary">{starter.name}</p>
+                <p className="mt-0.5 truncate text-xs text-muted-foreground">{starter.subject}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* Empty state */}
       {templates.length === 0 ? (
         <div className="space-y-4">
@@ -322,6 +395,9 @@ export function TemplatesManager({
                   <span className={cn("rounded-md px-2 py-0.5 text-[11px] font-semibold", TEMPLATE_TYPE_COLORS[t.type])}>
                     {TEMPLATE_TYPE_LABELS[t.type]}
                   </span>
+                  <span className="text-[11px] text-muted-foreground">
+                    {isAutomaticTemplateType(t.type) ? "Automatic" : "Manual only"}
+                  </span>
                 </div>
                 <p className="text-sm font-medium group-hover:text-primary">{t.name}</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">{t.subject}</p>
@@ -345,6 +421,9 @@ export function TemplatesManager({
                       <span className={cn("w-fit rounded-md px-2 py-0.5 text-[11px] font-semibold", TEMPLATE_TYPE_COLORS[template.type])}>
                         {TEMPLATE_TYPE_LABELS[template.type]}
                       </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {isAutomaticTemplateType(template.type) ? "Automatic" : "Manual only"}
+                      </span>
                       {template.isActive ? (
                         <span className="inline-flex w-fit items-center gap-1 rounded-md bg-success/10 px-2 py-0.5 text-[11px] font-semibold text-success">
                           <StarFillIcon className="size-2.5" />
@@ -366,7 +445,7 @@ export function TemplatesManager({
                         }
                         title={
                           template.isActive
-                            ? "Active — used for this workspace's auto-emails"
+                            ? "Active. Used for this workspace's auto-emails"
                             : "Use for this workspace's auto-emails"
                         }
                         disabled={isPending}
@@ -383,7 +462,7 @@ export function TemplatesManager({
                       size="sm"
                       variant="ghost"
                       disabled={isPending}
-                      onClick={() => { setEditing(template); setOpen(true); }}
+                      onClick={() => openEdit(template)}
                     >
                       Edit
                     </Button>
@@ -413,15 +492,17 @@ export function TemplatesManager({
       {/* Editor sheet */}
       <Sheet
         open={open}
+        mobilePresentation="bottom-on-mobile"
         onOpenChange={(next) => {
           if (!next && isDirty && !window.confirm("Discard unsaved changes?")) return;
-          setOpen(next);
-          if (!next) setEditing(null);
+          if (!next) closeEditor();
+          else setOpen(true);
         }}
       >
         <DrawerLayout
           title={editing ? "Edit template" : "New template"}
           description="Variables are replaced per candidate when the email is sent."
+          className="sm:max-w-3xl"
           footer={
             <>
               <SheetClose asChild>
@@ -455,11 +536,18 @@ export function TemplatesManager({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(Object.keys(TEMPLATE_TYPE_LABELS) as TemplateType[]).map((t) => (
+                    <SelectLabel>Automatic emails</SelectLabel>
+                    {SYSTEM_TEMPLATE_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</SelectItem>
+                    ))}
+                    <SelectSeparator />
+                    <SelectLabel>Manual outreach</SelectLabel>
+                    {MANUAL_TEMPLATE_TYPES.map((t) => (
                       <SelectItem key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs leading-4 text-muted-foreground">{templateTypeDescription(type)}</p>
               </div>
             </div>
 
@@ -474,7 +562,7 @@ export function TemplatesManager({
               />
             </div>
 
-            {/* Body — edit / preview tabs */}
+            {/* Body , edit / preview tabs */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label>Body</Label>
@@ -505,7 +593,7 @@ export function TemplatesManager({
               {tab === "edit" ? (
                 <>
                   <RichTextEditor
-                    key={syncedKey ?? undefined}
+                key={editorKey}
                     defaultValue={body}
                     onChange={setBody}
                     editorRef={editorRef}
@@ -538,7 +626,7 @@ export function TemplatesManager({
                   {unknownVariables.length > 0 && (
                     <p className="text-xs text-amber-600 dark:text-amber-400">
                       Unknown variable{unknownVariables.length > 1 ? "s" : ""}:{" "}
-                      {unknownVariables.map((v) => `{{${v}}}`).join(", ")} — will be sent as-is.
+                      {unknownVariables.map((v) => `{{${v}}}`).join(", ")}, will be sent as-is.
                     </p>
                   )}
                 </>

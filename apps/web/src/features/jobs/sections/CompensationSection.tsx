@@ -16,7 +16,7 @@ export function CompensationSection({ job }: { job?: Job }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">
-        Optional — listing a range measurably increases applications.
+        Optional. Listing a range measurably increases applications.
       </p>
       <div className="grid gap-4 sm:grid-cols-4">
         <div className="space-y-2">

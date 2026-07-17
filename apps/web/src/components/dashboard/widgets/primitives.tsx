@@ -4,7 +4,7 @@ import { ArrowRight, type LucideIcon } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
-/** Soft white tile — 24px radius, separation by shadow rather than border. */
+/** Soft white tile , 24px radius, separation by shadow rather than border. */
 export const tileClass =
   "rounded-3xl border border-border/50 bg-card shadow-[0_1px_2px_rgba(23,23,23,0.04),0_4px_16px_rgba(23,23,23,0.03)]";
 

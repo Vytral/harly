@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, asc, desc, eq } from "drizzle-orm";
 
-import { db, aiConversations, aiMessages } from "@harly/db";
+import { db, aiConversations, aiMessages, candidates } from "@harly/db";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
@@ -139,11 +139,25 @@ export async function persistConversation(input: PersistInput): Promise<void> {
       .limit(1);
 
     if (!existing) {
+      // The client controls candidateId. Only establish the GDPR-erasure link
+      // when that candidate belongs to this conversation's workspace.
+      const [candidate] = candidateId
+        ? await tx
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, candidateId),
+                eq(candidates.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1)
+        : [];
       await tx.insert(aiConversations).values({
         id: conversationId,
         workspaceId,
         userId,
-        candidateId: candidateId ?? null,
+        candidateId: candidate?.id ?? null,
         title,
         lastMessageAt: now,
       });

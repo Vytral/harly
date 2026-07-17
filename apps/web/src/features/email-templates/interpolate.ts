@@ -1,5 +1,5 @@
 /**
- * Template variable interpolation — pure and dependency-free so it is unit
+ * Template variable interpolation , pure and dependency-free so it is unit
  * testable and safe to use on both server and client (live preview).
  *
  * Variables use `{{variable_name}}` syntax. Only whitelisted variables are
@@ -40,7 +40,7 @@ export type TemplateValues = Partial<Record<TemplateVariableKey, string>>;
 
 const KNOWN_KEYS = new Set<string>(TEMPLATE_VARIABLES.map((v) => v.key));
 
-// Matches {{ variable-name_with.dots }} — letters, digits, underscores, hyphens, dots
+// Matches {{ variable-name_with.dots }} , letters, digits, underscores, hyphens, dots
 const VARIABLE_REGEX = /\{\{\s*([a-zA-Z0-9_.\-]+)\s*\}\}/g;
 
 /** Canonicalize a variable key for interpolation: lowercase and treat hyphens
@@ -76,28 +76,4 @@ export function findUnknownVariables(template: string): string[] {
     if (!KNOWN_KEYS.has(key)) unknown.add(key);
   }
   return [...unknown];
-}
-
-// The Tiptap editor that authors templates only ever emits this tag set (see
-// TemplatesManager's RichTextEditor config), so this is a safety net against
-// a compromised account rather than a defense against arbitrary user HTML —
-// no jsdom/isomorphic-dompurify dependency needed for server-side sending.
-const ALLOWED_TAGS = new Set([
-  "p", "br", "strong", "em", "s", "ul", "ol", "li", "h1", "h2", "blockquote", "a",
-]);
-
-/** Strip any tag outside the editor's allowlist and neutralize event handlers / unsafe hrefs. */
-export function sanitizeTemplateHtml(html: string): string {
-  return html
-    .replace(/<\/?([a-zA-Z0-9]+)([^>]*)>/g, (match, tagName: string, attrs: string) => {
-      const tag = tagName.toLowerCase();
-      if (!ALLOWED_TAGS.has(tag)) return "";
-      if (tag !== "a") return match.startsWith("</") ? `</${tag}>` : `<${tag}>`;
-
-      const hrefMatch = /href\s*=\s*["']([^"']*)["']/i.exec(attrs);
-      const href = hrefMatch?.[1] ?? "";
-      const safeHref = /^https?:\/\//i.test(href) ? href : "#";
-      return match.startsWith("</") ? "</a>" : `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">`;
-    })
-    .replace(/on\w+\s*=\s*(["']).*?\1/gi, "");
 }

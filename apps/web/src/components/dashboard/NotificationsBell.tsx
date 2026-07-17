@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { CheckCheck, Eye, EyeOff, Trash2 } from "lucide-react";
@@ -130,7 +129,7 @@ export function NotificationsBell({
 
         {notifications.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            You&apos;re all caught up — no notifications yet.
+            You&apos;re all caught up. No notifications yet.
           </p>
         ) : (
           <div className="max-h-96 overflow-y-auto">
@@ -238,17 +237,6 @@ export function NotificationsBell({
           </div>
         )}
 
-        <div className="border-t px-2 py-1.5">
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="w-full justify-center text-muted-foreground"
-            onClick={() => setOpen(false)}
-          >
-            <Link href="/dashboard/inbox">View all in Inbox</Link>
-          </Button>
-        </div>
       </PopoverContent>
     </Popover>
   );

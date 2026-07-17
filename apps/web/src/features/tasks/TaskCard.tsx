@@ -104,7 +104,7 @@ function Meta({ task }: { task: TaskItem }) {
   );
 }
 
-/** Presentational card — used by the draggable card and the drag overlay. */
+/** Presentational card , used by the draggable card and the drag overlay. */
 export function TaskCardView({
   task,
   handlers,

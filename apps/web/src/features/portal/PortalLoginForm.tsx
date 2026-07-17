@@ -178,7 +178,7 @@ export function PortalLoginForm({
       </form>
 
       <p className="text-center text-xs text-muted-foreground">
-        We&apos;ll send a magic link — no password needed.
+        We&apos;ll send a magic link. No password needed.
       </p>
     </div>
   );

@@ -52,8 +52,8 @@ export function TasksView({
   members: Member[];
   counts: Record<string, number>;
 }) {
-  // Optimistic edits are derived on top of the server's `initialTasks` — a
-  // status-override map plus a removed-set — so there is no prop→state mirror
+  // Optimistic edits are derived on top of the server's `initialTasks` , a
+  // status-override map plus a removed-set , so there is no prop→state mirror
   // (no setState-in-effect). After revalidation the server truth flows in and
   // each override becomes a no-op once it matches.
   const [statusOverride, setStatusOverride] = useState<Record<string, TaskStatus>>({});

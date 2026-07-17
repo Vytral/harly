@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { Route } from "next";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
@@ -35,7 +37,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
 
 const PROVIDER_LABEL: Record<EmailProviderId, string> = {
@@ -51,7 +52,6 @@ export function EmailSettingsCard({
   canEdit: boolean;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
   const [togglePending, startToggle] = useTransition();
 
   const isConfigured = Boolean(status.from);
@@ -101,24 +101,19 @@ export function EmailSettingsCard({
             action={
               canEdit ? (
                 <>
-                  <Sheet open={open} onOpenChange={setOpen}>
-                    <SheetTrigger asChild>
-                      <Button
-                        variant={isConfigured ? "outline" : "default"}
-                        disabled={!status.encryptionReady}
-                      >
+                  {status.encryptionReady ? (
+                    <Button asChild variant={isConfigured ? "outline" : "default"}>
+                      <Link href={"/settings/email/configure" as Route}>
                         <KeyDuotoneIcon className="size-4" />
                         {isConfigured ? "Manage" : "Connect"}
-                      </Button>
-                    </SheetTrigger>
-                    <EmailSettingsForm
-                      status={status}
-                      onSaved={() => {
-                        setOpen(false);
-                        router.refresh();
-                      }}
-                    />
-                  </Sheet>
+                      </Link>
+                    </Button>
+                  ) : (
+                    <Button variant="default" disabled>
+                      <KeyDuotoneIcon className="size-4" />
+                      Connect
+                    </Button>
+                  )}
                   {isConfigured ? (
                     <label className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-sm">
                       <Switch
@@ -170,13 +165,10 @@ function EncryptionWarning() {
   );
 }
 
-function EmailSettingsForm({
-  status,
-  onSaved,
-}: {
+export function EmailSettingsForm({ status }: {
   status: WorkspaceEmailStatus;
-  onSaved: () => void;
 }) {
+  const router = useRouter();
   const [provider, setProvider] = useState<EmailProviderId>(
     status.provider ?? "resend",
   );
@@ -216,7 +208,7 @@ function EmailSettingsForm({
       toast.success(
         provider === "smtp"
           ? "SMTP connection verified"
-          : "Test email sent — check your inbox",
+          : "Test email sent. Check your inbox",
       );
     });
   }
@@ -232,7 +224,7 @@ function EmailSettingsForm({
         return;
       }
       toast.success("Email settings saved");
-      onSaved();
+      router.refresh();
     });
   }
 
@@ -246,18 +238,12 @@ function EmailSettingsForm({
     <DrawerLayout
       title="Configure email"
       description="Secrets are encrypted at rest and never shown again."
+      surface="page"
       footer={
-        <>
-          <SheetClose asChild>
-            <Button variant="outline" disabled={saving}>
-              Cancel
-            </Button>
-          </SheetClose>
-          <Button onClick={save} disabled={saving || !from.trim()}>
-            {saving ? <SpinnerIcon className="size-4" /> : null}
-            Save
-          </Button>
-        </>
+        <Button onClick={save} disabled={saving || !from.trim()}>
+          {saving ? <SpinnerIcon className="size-4" /> : null}
+          Save changes
+        </Button>
       }
     >
       <div className="space-y-5">
@@ -300,7 +286,7 @@ function EmailSettingsForm({
               onChange={(event) => setApiKey(event.target.value)}
               placeholder={
                 status.hasSecret
-                  ? "•••••••• (stored — leave blank to keep)"
+                  ? "•••••••• (stored, leave blank to keep)"
                   : "re_xxxxxxxxxxxxxxxxxxxx"
               }
               autoComplete="off"
@@ -354,7 +340,7 @@ function EmailSettingsForm({
                 onChange={(event) => setApiKey(event.target.value)}
                 placeholder={
                   status.hasSecret
-                    ? "•••••••• (stored — leave blank to keep)"
+                    ? "•••••••• (stored, leave blank to keep)"
                     : "SMTP password"
                 }
                 autoComplete="off"

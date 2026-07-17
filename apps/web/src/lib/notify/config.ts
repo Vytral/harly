@@ -9,7 +9,7 @@ import { isWebhookEvent, type WebhookEvent } from "@/server/webhooks/events";
 
 /**
  * Chat-notification provider config. Slack and Discord both accept a single
- * incoming-webhook URL and a JSON POST — no OAuth, no env vars. The URL is the
+ * incoming-webhook URL and a JSON POST , no OAuth, no env vars. The URL is the
  * only secret; we store it encrypted at rest.
  */
 export type ChatProviderId = "slack" | "discord";
@@ -24,7 +24,7 @@ export type WorkspaceChatStatus = {
   /** True only when a webhook URL is stored (never the URL itself). */
   hasWebhook: boolean;
   events: WebhookEvent[];
-  /** False when AI_ENCRYPTION_KEY is missing/invalid — secrets can't be stored. */
+  /** False when AI_ENCRYPTION_KEY is missing/invalid , secrets can't be stored. */
   encryptionReady: boolean;
 };
 

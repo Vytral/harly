@@ -9,6 +9,10 @@ import {
   CandidatesTable,
   type CandidateRow,
 } from "@/features/candidates/CandidatesTable";
+import {
+  ImportCandidatesDrawer,
+  type ImportSource,
+} from "@/features/candidates/import/ImportCandidatesDrawer";
 import { listCandidates, listTrashedCandidates } from "@/features/candidates/data";
 import { TrashCandidateActions } from "@/features/candidates/TrashCandidateActions";
 import { listEmailTemplates } from "@/features/email-templates/data";
@@ -25,12 +29,20 @@ function appliedLabel(value: Date) {
 }
 
 type CandidatesPageProps = {
-  searchParams: Promise<{ view?: string }>;
+  searchParams: Promise<{ view?: string; import?: string }>;
 };
 
 export default async function CandidatesPage({ searchParams }: CandidatesPageProps) {
-  const { view } = await searchParams;
+  const { view, import: importSource } = await searchParams;
   const isTrash = view === "trash";
+  const initialImportSource: ImportSource | undefined =
+    importSource === "csv" ||
+    importSource === "greenhouse" ||
+    importSource === "workable" ||
+    importSource === "ashby" ||
+    importSource === "lever"
+      ? importSource
+      : undefined;
 
   const [candidates, trashed, emailTemplates, jobOptions] = await Promise.all([
     listCandidates(),
@@ -115,16 +127,25 @@ export default async function CandidatesPage({ searchParams }: CandidatesPagePro
           />
         )
       ) : rows.length === 0 ? (
-        <EmptyState
-          icon={Users}
-          title="No candidates yet"
-          description="Share your public job board to start receiving applications."
-        />
+        <div className="space-y-4">
+          <EmptyState
+            icon={Users}
+            title="No candidates yet"
+            description="Share your public job board or import candidates from another ATS."
+          />
+          <div className="flex justify-center">
+            <ImportCandidatesDrawer
+              jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
+              initialSource={initialImportSource}
+            />
+          </div>
+        </div>
       ) : (
         <CandidatesTable
           rows={rows}
           emailTemplates={emailTemplates}
           importJobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
+          initialImportSource={initialImportSource}
         />
       )}
     </div>

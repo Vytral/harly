@@ -17,7 +17,7 @@ export type AiUsageEvent = {
 };
 
 // Process-global ring buffer for in-process recent-usage queries (diagnostics /
-// a future live view) — the durable record lives in `ai_usage_events`.
+// a future live view) , the durable record lives in `ai_usage_events`.
 const MAX_EVENTS = 500;
 
 const store: { events: AiUsageEvent[] } =

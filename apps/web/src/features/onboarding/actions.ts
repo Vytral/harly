@@ -53,7 +53,7 @@ const brandingSchema = z.object({
     .optional(),
 });
 
-/** Owner step: careers-page branding — logo, accent color and tagline. The logo
+/** Owner step: careers-page branding, logo, accent color and tagline. The logo
  *  is saved onto the Better Auth `organization` (same field the Settings →
  *  Company flow writes), color + tagline onto the workspace_settings satellite. */
 export async function saveOnboardingBrandingAction(input: {
@@ -115,7 +115,7 @@ const aboutSchema = z.object({
 /**
  * Owner step "About you": persists the self-described role (structured enum,
  * on the user) + job title (on the user) + acquisition source (on the
- * workspace) in one call. Every field is optional — the step is skippable — but
+ * workspace) in one call. Every field is optional. The step is skippable, but
  * failures surface instead of being swallowed, so a save that silently drops
  * data can't happen.
  */
@@ -174,7 +174,7 @@ export async function setRequire2faAction(
 }
 
 /**
- * Recruiter/member completion — enforces the workspace 2FA policy server-side
+ * Recruiter/member completion, enforcing the workspace 2FA policy server-side
  * (don't trust the client): if the workspace requires 2FA, the user must have
  * it enabled before onboarding can complete.
  */
@@ -194,7 +194,7 @@ export async function completeRecruiterOnboardingAction(): Promise<OnboardingRes
         .from(userTable)
         .where(eq(userTable.id, user.id))
         .limit(1);
-      // Owner is exempt from 2FA enforcement — keep this consistent with the
+      // Owner is exempt from 2FA enforcement. Keep this consistent with the
       // middleware policy via the shared helper.
       if (
         mustSetUp2fa({
@@ -222,7 +222,7 @@ export async function completeRecruiterOnboardingAction(): Promise<OnboardingRes
   }
 }
 
-/** Mark the current user's onboarding finished — the per-user gate. */
+/** Mark the current user's onboarding finished, the per-user gate. */
 export async function completeOnboardingAction(): Promise<OnboardingResult> {
   try {
     const session = await requireSession();

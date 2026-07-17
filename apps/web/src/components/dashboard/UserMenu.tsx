@@ -101,7 +101,7 @@ export function UserMenu({
         <UserAvatar name={user.name} src={user.image} size="md" priority />
       </button>
 
-      {/* Backdrop + panel are portaled to <body> — the trigger lives inside
+      {/* Backdrop + panel are portaled to <body> , the trigger lives inside
           TopBar's header, which needs overflow-hidden for its sticky-hide
           collapse animation. A same-tree absolute panel gets clipped by
           that overflow; portaling escapes it, like the Radix-based menus

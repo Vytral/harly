@@ -23,7 +23,7 @@ export async function PipelineSummaryCard({ jobId }: { jobId: string }) {
       aiHeadline = await generatePipelineHeadlineWithAI(aiConfig, summary);
     }
   } catch {
-    // AI unavailable — show stats only
+    // AI unavailable , show stats only
   }
 
   const topFits = summary.byRecommendation.strong_yes + summary.byRecommendation.yes;

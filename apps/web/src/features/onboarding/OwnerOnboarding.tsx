@@ -7,7 +7,8 @@ import Link from "next/link";
 import { motion } from "motion/react";
 
 import { authClient } from "@harly/auth/client";
-import { inviteWorkspaceMemberAction } from "@/features/workspaces/actions";
+import { InviteTeammatesSheet } from "@/features/workspaces/InviteTeammatesSheet";
+import type { AssignableRole } from "@/features/workspaces/InviteTeammatesSheet";
 import {
   completeOnboardingAction,
   saveOnboardingAboutAction,
@@ -37,8 +38,8 @@ import {
   RobotDuotoneIcon,
   SealCheckDuotoneIcon,
   ShieldCheckDuotoneIcon,
+  UserPlusIcon,
   UsersThreeDuotoneIcon,
-  XIcon,
 } from "@/components/ui/icons/phosphor";
 import { cn, slugify } from "@/lib/utils";
 import {
@@ -63,12 +64,12 @@ const ACQUISITION = [
   "Search engine",
   "Social media",
   "Friend or colleague",
-  "GitHub / open source",
+  "GitHub / Open source",
   "Blog or article",
   "Other",
 ] as const;
 
-// Structured self-described role — persisted to user.onboardingRole (enum).
+// Structured self-described role, persisted to user.onboardingRole (enum).
 const SELF_ROLES = [
   { value: "founder", label: "Founder / CEO" },
   { value: "recruiter", label: "Recruiter" },
@@ -83,11 +84,24 @@ const INVITE_ROLES = [
   { value: "admin", label: "Admin" },
 ] as const;
 
-// On-brand accent palette — evergreen family + a few warm/cool neutrals. No
-// AI-purple, no electric blue (they fight the paper+evergreen identity).
-const SWATCHES = ["#3f6212", "#0f766e", "#166534", "#b45309", "#be123c", "#1f2937"];
+// Balanced accent palette with evergreen, cool, warm and neutral options.
+const SWATCHES = [
+  "#3f6212",
+  "#0f766e",
+  "#166534",
+  "#2563eb",
+  "#4f46e5",
+  "#7c3aed",
+  "#be123c",
+  "#c2410c",
+  "#a16207",
+  "#1f2937",
+];
 
-type Invite = { email: string; role: string };
+const INVITE_ROLE_OPTIONS: AssignableRole[] = INVITE_ROLES.map((role) => ({
+  key: role.value,
+  name: role.label,
+}));
 
 export function OwnerOnboarding({
   userName,
@@ -95,7 +109,14 @@ export function OwnerOnboarding({
 }: {
   userName: string;
   /** Set when resuming setup for an owner whose workspace already exists. */
-  initialOrg?: { id: string; name: string; slug: string };
+  initialOrg?: {
+    id: string;
+    name: string;
+    slug: string;
+    logo?: string | null;
+    tagline?: string | null;
+    primaryColor?: string | null;
+  };
 }) {
   const router = useRouter();
   // Resuming an existing workspace? Skip the create step.
@@ -104,28 +125,24 @@ export function OwnerOnboarding({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Step 1 — company
+  // Step 1, company
   const [name, setName] = useState(initialOrg?.name ?? "");
   const [orgId, setOrgId] = useState<string | null>(initialOrg?.id ?? null);
 
-  // Step 2 — branding
-  const [logoUrl, setLogoUrl] = useState("");
-  const [tagline, setTagline] = useState("");
-  const [color, setColor] = useState(PINE);
+  // Step 2, branding
+  const [logoUrl, setLogoUrl] = useState(initialOrg?.logo ?? "");
+  const [tagline, setTagline] = useState(initialOrg?.tagline ?? "");
+  const [color, setColor] = useState(initialOrg?.primaryColor ?? PINE);
 
-  // Step 3 — about
+  // Step 3, about
   const [selfRole, setSelfRole] = useState<string>("");
   const [source, setSource] = useState<string>("");
   const [jobTitle, setJobTitle] = useState("");
 
-  // Step 4 — security
+  // Step 4, security
   const [require2fa, setRequire2fa] = useState(false);
 
-  // Step 5 — invites
-  const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("recruiter");
-  const [invites, setInvites] = useState<Invite[]>([]);
-
+  // Step 5, invites
   const isLast = step === STEPS.length - 1;
 
   function goNext() {
@@ -137,9 +154,9 @@ export function OwnerOnboarding({
   }
 
   // Create the org as soon as the name is set, so later steps persist against
-  // it (and an abandoned setup is resumable — the owner already exists). The
-  // slug is derived silently from the company name: Harly is single-tenant, so
-  // there's no public /board/<slug> to choose — the board lives at the root.
+  // it (and an abandoned setup is resumable because the owner already exists).
+  // The slug is derived silently from the company name. Harly is single-tenant,
+  // so there is no public /board/<slug> to choose. The board lives at the root.
   function createWorkspace() {
     const trimmed = name.trim();
     if (!trimmed) return setError("Enter your company name.");
@@ -202,31 +219,15 @@ export function OwnerOnboarding({
 
   function finish() {
     startTransition(async () => {
-      // Security already persisted on nav; persist again defensively, then send
-      // invites + mark complete. A failure stops the flow and surfaces instead
-      // of completing onboarding with a half-sent invite batch.
+      // Security already persisted on navigation; persist again defensively,
+      // then mark onboarding complete.
       const sec = await setRequire2faAction(require2fa);
       if (!sec.ok) return setError(sec.error ?? "Couldn't save security settings.");
-
-      for (const inv of invites) {
-        const fd = new FormData();
-        fd.set("email", inv.email);
-        fd.set("role", inv.role);
-        const r = await inviteWorkspaceMemberAction({ success: true }, fd);
-        if (!r.success) return setError(r.error ?? `Couldn't invite ${inv.email}.`);
-      }
 
       const res = await completeOnboardingAction();
       if (!res.ok) return setError(res.error ?? "Couldn't finish setup.");
       setDone(true);
     });
-  }
-
-  function addInvite() {
-    const email = inviteEmail.trim().toLowerCase();
-    if (!email.includes("@") || invites.some((i) => i.email === email)) return;
-    setInvites((p) => [...p, { email, role: inviteRole }]);
-    setInviteEmail("");
   }
 
   if (done) {
@@ -279,15 +280,7 @@ export function OwnerOnboarding({
       )}
       {step === 3 && <StepSecurity require2fa={require2fa} onToggle={setRequire2fa} />}
       {step === 4 && (
-        <StepInvite
-          invites={invites}
-          email={inviteEmail}
-          role={inviteRole}
-          onEmail={setInviteEmail}
-          onRole={setInviteRole}
-          onAdd={addInvite}
-          onRemove={(i) => setInvites((p) => p.filter((_, idx) => idx !== i))}
-        />
+        <StepInvite assignableRoles={INVITE_ROLE_OPTIONS} />
       )}
     </OnboardingShell>
   );
@@ -312,11 +305,6 @@ function StepCompany({ userName, name, onName, locked }: { userName: string; nam
           className="h-11"
           disabled={locked}
         />
-        {locked && (
-          <p className="text-xs text-muted-foreground">
-            Workspace created — continue setting it up below.
-          </p>
-        )}
       </StepField>
     </StepStagger>
   );
@@ -328,7 +316,7 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
       <StepField>
         <StepHeading
           title="Make it yours"
-          subtitle="Add your logo, a tagline and an accent color. Everything's optional and editable later."
+          subtitle="Add your logo, a tagline and an accent color. Everything is optional and editable later."
         />
       </StepField>
       <StepField className="mt-7 flex items-center gap-5">
@@ -336,7 +324,7 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
           value={logoUrl || null}
           onChange={(url) => onLogo(url ?? "")}
           variant="avatar"
-          hint="Square · PNG or SVG"
+          hint="Square logo · PNG, JPG, SVG or WEBP"
         />
         <div className="flex-1 space-y-1">
           <Label>Company logo</Label>
@@ -351,7 +339,7 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
           id="ob-tagline"
           value={tagline}
           onChange={(e) => onTagline(e.target.value)}
-          placeholder="Join us — we're building something people love"
+          placeholder="A short line about your company"
           maxLength={120}
         />
       </StepField>
@@ -365,24 +353,25 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
               onClick={() => onColor(s)}
               aria-label={`Use ${s}`}
               className={cn(
-                "size-8 rounded-lg ring-2 ring-offset-2 ring-offset-card transition active:scale-95 motion-reduce:active:scale-100",
+                "size-8 rounded-full ring-2 ring-offset-2 ring-offset-card transition active:scale-95 motion-reduce:active:scale-100",
                 color.toLowerCase() === s.toLowerCase() ? "ring-pine" : "ring-transparent",
               )}
               style={{ backgroundColor: s }}
+              aria-pressed={color.toLowerCase() === s.toLowerCase()}
             />
           ))}
           <label
-            className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-lg border bg-card"
+            className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-full border bg-card"
             aria-label="Custom color"
           >
             <input
               type="color"
               value={color}
               onChange={(e) => onColor(e.target.value)}
-              className="absolute inset-0 cursor-pointer opacity-0"
+              className="absolute inset-0 z-10 cursor-pointer opacity-0"
             />
             <span
-              className="pointer-events-none absolute inset-1 rounded"
+              className="pointer-events-none absolute inset-0 rounded-full"
               style={{ backgroundColor: color }}
             />
           </label>
@@ -398,7 +387,7 @@ function StepAbout({ selfRole, onSelfRole, source, onSource, jobTitle, onJobTitl
       <StepField>
         <StepHeading
           title="Tell us about you"
-          subtitle="Helps us tailor Harly. Optional — skip anything you'd rather not share."
+          subtitle="Helps us tailor Harly. Optional. Skip anything you'd rather not share."
         />
       </StepField>
       <StepField className="mt-7 space-y-2">
@@ -459,40 +448,30 @@ function StepSecurity({ require2fa, onToggle }: { require2fa: boolean; onToggle:
   );
 }
 
-function StepInvite({ invites, email, role, onEmail, onRole, onAdd, onRemove }: { invites: Invite[]; email: string; role: string; onEmail: (v: string) => void; onRole: (v: string) => void; onAdd: () => void; onRemove: (i: number) => void }) {
+function StepInvite({ assignableRoles }: { assignableRoles: AssignableRole[] }) {
   return (
     <StepStagger>
       <StepField>
         <StepHeading
           title="Invite your team"
-          subtitle="They'll get an email to join with the role you pick. Optional."
+          subtitle="Invite one person or a whole team. You can also do this later from Settings."
         />
       </StepField>
-      <StepField className="mt-7 flex gap-2">
-        <Input type="email" value={email} onChange={(e) => onEmail(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); onAdd(); } }} placeholder="teammate@company.com" className="h-10 min-w-0 flex-1" />
-        <Select value={role} onValueChange={onRole}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {INVITE_ROLES.map((r) => <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button type="button" variant="secondary" onClick={onAdd} disabled={!email.includes("@")}>Add</Button>
+      <StepField className="mt-7 space-y-3">
+        <InviteTeammatesSheet
+          assignableRoles={assignableRoles}
+          refreshOnSuccess={false}
+          trigger={
+            <Button type="button" variant="secondary">
+              <UserPlusIcon className="size-4" />
+              Invite teammates
+            </Button>
+          }
+        />
+        <p className="text-xs text-muted-foreground">
+          Add emails one by one, paste a list, or import a CSV file.
+        </p>
       </StepField>
-      {invites.length > 0 && (
-        <ul className="mt-4 space-y-2">
-          {invites.map((inv, i) => (
-            <li key={inv.email} className="flex items-center justify-between rounded-xl bg-muted/50 px-4 py-2.5">
-              <div>
-                <p className="text-sm font-medium text-foreground">{inv.email}</p>
-                <p className="text-xs capitalize text-muted-foreground">{inv.role.replace("_", " ")}</p>
-              </div>
-              <button type="button" onClick={() => onRemove(i)} className="text-muted-foreground transition hover:text-destructive" aria-label="Remove">
-                <XIcon className="size-4" />
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
     </StepStagger>
   );
 }
@@ -528,7 +507,7 @@ function Launchpad({ workspaceName, require2fa, onEnter }: { workspaceName: stri
         {workspaceName || "Your workspace"} is ready
       </h2>
       <p className="mx-auto mt-2 max-w-sm text-sm text-muted-foreground">
-        You&apos;re all set to start hiring. Here&apos;s what you&apos;ve done — and a few things worth doing next.
+        You&apos;re all set to start hiring. Here&apos;s what you&apos;ve done and a few things worth doing next.
       </p>
 
       <div className="mt-7 space-y-2 text-left">

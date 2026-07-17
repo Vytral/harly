@@ -1,5 +1,5 @@
 /**
- * Shared types for the career page feature — templates, builder, and public
+ * Shared types for the career page feature , templates, builder, and public
  * render all import from here instead of redeclaring locally.
  */
 

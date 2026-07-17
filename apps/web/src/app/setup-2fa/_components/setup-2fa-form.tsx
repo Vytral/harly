@@ -52,7 +52,7 @@ export function Setup2FAForm() {
     startTransition(async () => {
       const res = await authClient.twoFactor.verifyTotp({ code: otp });
       if (res.error) {
-        toast.error(res.error.message ?? "Invalid code — try again");
+        toast.error(res.error.message ?? "Invalid code , try again");
         return;
       }
       setOtp("");
@@ -76,7 +76,7 @@ export function Setup2FAForm() {
           <div className="space-y-1">
             <p className="text-sm font-medium">2FA is now active</p>
             <p className="text-sm text-muted-foreground">
-              Store your backup codes in a safe place — each works once if you
+              Store your backup codes in a safe place , each works once if you
               lose access to your authenticator.
             </p>
           </div>

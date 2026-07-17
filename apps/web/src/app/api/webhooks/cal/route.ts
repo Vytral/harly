@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Missing workspace." }, { status: 400 });
   }
 
-  // Raw body is required for signature verification — read it as text first.
+  // Raw body is required for signature verification , read it as text first.
   const rawBody = await request.text();
 
   const [settings] = await db

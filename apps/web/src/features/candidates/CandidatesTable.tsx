@@ -30,6 +30,7 @@ import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
 import {
   ImportCandidatesDrawer,
   type ImportJobOption,
+  type ImportSource,
 } from "@/features/candidates/import/ImportCandidatesDrawer";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { PipelineSpine } from "@/components/ui/PipelineSpine";
@@ -126,10 +127,12 @@ export function CandidatesTable({
   rows,
   emailTemplates = [],
   importJobs = [],
+  initialImportSource,
 }: {
   rows: CandidateRow[];
   emailTemplates?: EmailTemplateOption[];
   importJobs?: ImportJobOption[];
+  initialImportSource?: ImportSource;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -177,7 +180,7 @@ export function CandidatesTable({
       if (sortKey === "name") return a.fullName.localeCompare(b.fullName);
       if (sortKey === "modified") return b.updatedAt - a.updatedAt;
       if (sortKey === "oldest") return (a.appliedAt ?? 0) - (b.appliedAt ?? 0);
-      // "recent" — whichever happened last wins: new application OR last modified
+      // "recent" , whichever happened last wins: new application OR last modified
       const aRecent = Math.max(a.appliedAt ?? 0, a.updatedAt);
       const bRecent = Math.max(b.appliedAt ?? 0, b.updatedAt);
       return bRecent - aRecent;
@@ -375,12 +378,15 @@ export function CandidatesTable({
             className="h-11 rounded-full pl-11"
           />
         </div>
-        <Button variant="outline" className="h-11 rounded-full" onClick={exportCsv}>
+        <Button variant="outline" className="h-11 rounded-lg" onClick={exportCsv}>
           <Download className="size-4" />
           <span className="hidden sm:inline">{selectedCount > 0 ? `Export selected (${selectedCount})` : "Export CSV"}</span>
           <span className="sm:hidden">{selectedCount > 0 ? `(${selectedCount})` : "CSV"}</span>
         </Button>
-        <ImportCandidatesDrawer jobs={importJobs} />
+        <ImportCandidatesDrawer
+          jobs={importJobs}
+          initialSource={initialImportSource}
+        />
       </div>
 
       {/* Filter pills */}
@@ -471,7 +477,7 @@ export function CandidatesTable({
       {/* List + AI rail */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
         <div className="min-w-0">
-          {/* Column headers — aligned to the row grid */}
+          {/* Column headers , aligned to the row grid */}
           <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 px-4 pb-2 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_2.25rem]">
             <Checkbox
               checked={allVisibleSelected}
@@ -647,7 +653,7 @@ export function CandidatesTable({
               Find candidates
             </Button>
             <p className="mt-2 text-center text-xs text-muted-foreground">
-              Coming soon — connect your own AI keys.
+              Coming soon. Connect your own AI keys.
             </p>
           </div>
         </aside>

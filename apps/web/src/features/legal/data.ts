@@ -31,7 +31,7 @@ export type LegalPageData = {
   pageTitle: string;
   pageSlug: string;
   content: string;
-  /** All published legal page slugs for this workspace — used for footer nav. */
+  /** All published legal page slugs for this workspace , used for footer nav. */
   publishedSlugs: string[];
 };
 

@@ -281,7 +281,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     jobDetail: tool({
       strict: true,
       description:
-        "Get one job's details plus its pipeline stages (with stage ids, in order). REQUIRED before proposing a stage move — read the destination stage id from here. Resolve jobId via searchCandidates or listJobs.",
+        "Get one job's details plus its pipeline stages (with stage ids, in order). REQUIRED before proposing a stage move , read the destination stage id from here. Resolve jobId via searchCandidates or listJobs.",
       inputSchema: z.object({
         jobId: z.string().describe("The job id."),
       }),
@@ -353,24 +353,66 @@ function buildReadTools(ctx: HarlyToolContext) {
     listTasks: tool({
       strict: true,
       description:
-        "List workspace tasks, optionally filtered by status. Returns title, status, priority, due date, owner, and any linked candidate/job. Use for 'what tasks are open', 'what's due', 'my to-dos'.",
+        "List workspace tasks, optionally filtered by status. This is a paginated workspace-wide view; it returns the exact total and whether more results remain. Use listMyTasks for the current user's to-dos.",
       inputSchema: z.object({
         status: z
           .enum(["pending", "in_progress", "completed", "canceled"])
           .nullable()
           .describe("Filter by status, or null for all."),
+        offset: z.number().int().min(0).describe("Zero-based result offset."),
+        limit: z.number().int().min(1).max(50).describe("Maximum tasks to return."),
       }),
-      execute: async ({ status }) => {
+      execute: async ({ status, offset, limit }) => {
         const rows = await listTasks(status ? { status } : undefined);
+        const page = rows.slice(offset, offset + limit);
         return {
-          count: rows.length,
-          tasks: rows.slice(0, 30).map((t) => ({
+          total: rows.length,
+          returned: page.length,
+          hasMore: offset + page.length < rows.length,
+          nextOffset: offset + page.length < rows.length ? offset + page.length : null,
+          tasks: page.map((t) => ({
             id: t.id,
             title: t.title,
             status: t.status,
             priority: t.priority,
             dueDate: t.dueDate,
             owner: t.ownerName,
+            candidate: t.candidateName,
+            job: t.jobTitle,
+          })),
+        };
+      },
+    }),
+
+    listMyTasks: tool({
+      strict: true,
+      description:
+        "List only tasks assigned to the signed-in user, optionally filtered by status. This filter is enforced on the server. The response is paginated and explicitly reports the total and whether more results remain. Use for 'my tasks', 'my to-dos', or tasks assigned to me.",
+      inputSchema: z.object({
+        status: z
+          .enum(["pending", "in_progress", "completed", "canceled"])
+          .nullable()
+          .describe("Filter by status, or null for all."),
+        offset: z.number().int().min(0).describe("Zero-based result offset."),
+        limit: z.number().int().min(1).max(50).describe("Maximum tasks to return."),
+      }),
+      execute: async ({ status, offset, limit }) => {
+        const rows = await listTasks({
+          ownerId: ctx.userId,
+          ...(status ? { status } : {}),
+        });
+        const page = rows.slice(offset, offset + limit);
+        return {
+          total: rows.length,
+          returned: page.length,
+          hasMore: offset + page.length < rows.length,
+          nextOffset: offset + page.length < rows.length ? offset + page.length : null,
+          tasks: page.map((t) => ({
+            id: t.id,
+            title: t.title,
+            status: t.status,
+            priority: t.priority,
+            dueDate: t.dueDate,
             candidate: t.candidateName,
             job: t.jobTitle,
           })),
@@ -445,7 +487,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     generateCandidateScore: tool({
       strict: true,
       description:
-        "Generate (or regenerate) the AI fit evaluation for one application, then return the result: score, recommendation, summary, strengths, gaps. This is how you 'review a CV' or 'evaluate' a candidate — it automatically reads the candidate's latest uploaded resume plus their application answers, scores the fit against the job, and gives the result in one step. Use this when getCandidateScore returns scored:false, or whenever the user asks you to review/assess/recommend on a candidate. Runs server-side immediately (no confirmation needed). Requires applicationId.",
+        "Generate (or regenerate) the AI fit evaluation for one application, then return the result: score, recommendation, summary, strengths, gaps. This is how you 'review a CV' or 'evaluate' a candidate , it automatically reads the candidate's latest uploaded resume plus their application answers, scores the fit against the job, and gives the result in one step. Use this when getCandidateScore returns scored:false, or whenever the user asks you to review/assess/recommend on a candidate. Runs server-side immediately (no confirmation needed). Requires applicationId.",
       inputSchema: z.object({
         applicationId: z.string().describe("The application to evaluate."),
       }),
@@ -634,7 +676,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     draftCandidateEmail: tool({
       strict: true,
       description:
-        "Draft an email to a candidate with AI (does NOT send) — returns a subject + body you then show the user and, if they want, send via sendCandidateEmail. Pick the type that matches intent. Resolve candidateId first.",
+        "Draft an email to a candidate with AI (does NOT send) , returns a subject + body you then show the user and, if they want, send via sendCandidateEmail. Pick the type that matches intent. Resolve candidateId first.",
       inputSchema: z.object({
         candidateId: z.string().describe("The candidate id."),
         type: z
@@ -659,7 +701,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     generateJobDraft: tool({
       strict: true,
       description:
-        "Generate an AI job description draft (summary + sections of bullets) for a role. Returns the draft for the user to review — does not create the job. Use for 'write a JD for X', 'draft a job post'.",
+        "Generate an AI job description draft (summary + sections of bullets) for a role. Returns the draft for the user to review , does not create the job. Use for 'write a JD for X', 'draft a job post'.",
       inputSchema: z.object({
         title: z.string().describe("Job title."),
         department: z.string().nullable().describe("Department, or null."),
@@ -686,7 +728,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     generateScreeningQuestions: tool({
       strict: true,
       description:
-        "Generate AI screening questions for a role (label + input type). Returns suggestions for the user to review — does not save them. Use for 'suggest screening questions for X'.",
+        "Generate AI screening questions for a role (label + input type). Returns suggestions for the user to review , does not save them. Use for 'suggest screening questions for X'.",
       inputSchema: z.object({
         title: z.string().describe("Job title."),
         description: z

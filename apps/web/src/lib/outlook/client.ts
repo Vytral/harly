@@ -85,7 +85,7 @@ export async function refreshOutlookToken(opts: {
 
   if (!data.access_token) {
     throw new Error(
-      `Token refresh failed: ${data.error ?? "unknown"} — ${data.error_description ?? ""}`,
+      `Token refresh failed: ${data.error ?? "unknown"} , ${data.error_description ?? ""}`,
     );
   }
 

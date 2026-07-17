@@ -10,7 +10,7 @@ import type { AiModelConfig } from "@/lib/ai/providers";
  * whole candidate/job corpus (mixing models would make vectors incomparable).
  * BYOK chat providers vary (Anthropic/Google/xAI don't expose embeddings via
  * the AI SDK the same way), so this only lights up when the workspace's
- * configured provider is OpenAI — same key, no separate credential to manage.
+ * configured provider is OpenAI , same key, no separate credential to manage.
  */
 export const EMBEDDING_MODEL_ID = "text-embedding-3-small";
 

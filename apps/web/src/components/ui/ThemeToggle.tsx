@@ -9,13 +9,14 @@ export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
 
   // Both icons render; the `.dark` class (set by next-themes before hydration)
-  // reveals the right one via CSS — no mount guard, no hydration mismatch.
+  // reveals the right one via CSS , no mount guard, no hydration mismatch.
   return (
     <Button
       variant="ghost"
       size="icon"
       className="text-muted-foreground"
       aria-label="Toggle theme"
+      title="Toggle theme"
       onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
     >
       <Sun className="size-[18px] dark:hidden" strokeWidth={1.5} />

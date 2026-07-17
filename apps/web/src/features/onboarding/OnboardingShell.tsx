@@ -26,7 +26,7 @@ export type OnboardingStepMeta = {
   icon: IconType;
 };
 
-/** Staggered container + item variants — shared so every step animates its
+/** Staggered container + item variants, shared so every step animates its
  *  fields in identically. Movement is dropped under reduced-motion. */
 export const stepContainer: Variants = {
   hidden: {},
@@ -113,7 +113,7 @@ export function OnboardingShell({
   return (
     <div className="w-full max-w-4xl overflow-hidden rounded-3xl border border-border/70 bg-card shadow-[0_1px_3px_rgba(31,41,38,0.04),0_18px_44px_-16px_rgba(31,41,38,0.16)]">
       <div className="grid lg:grid-cols-[256px_minmax(0,1fr)]">
-        {/* Left — vertical progress rail */}
+        {/* Left, vertical progress rail */}
         <aside className="hidden flex-col border-r border-border/70 bg-muted/30 p-7 lg:flex">
           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted-foreground">
             {railTitle}
@@ -124,7 +124,7 @@ export function OnboardingShell({
           </p>
         </aside>
 
-        {/* Right — focused step */}
+        {/* Right, focused step */}
         <div className={cn("flex flex-col p-8 lg:p-12", minHeight)}>
           {/* Mobile progress (rail hidden < lg) */}
           <div className="mb-7 flex items-center gap-1.5 lg:hidden">

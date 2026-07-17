@@ -192,7 +192,7 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
     {
       icon: ClockIcon,
       label: "Avg time to hire",
-      value: comparison.avgTimeToHireDays.current > 0 ? `${comparison.avgTimeToHireDays.current}d` : "—",
+      value: comparison.avgTimeToHireDays.current > 0 ? `${comparison.avgTimeToHireDays.current}d` : "No data",
       hint:
         comparison.avgTimeToHireDays.previous > 0
           ? `${comparison.avgTimeToHireDays.previous}d prior period`
@@ -203,7 +203,7 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
     {
       icon: TrendUpIcon,
       label: "Offer acceptance",
-      value: data.summary.offerAcceptRate != null ? `${data.summary.offerAcceptRate}%` : "—",
+      value: data.summary.offerAcceptRate != null ? `${data.summary.offerAcceptRate}%` : "No data",
       hint: topSource ? `${formatSource(topSource.source)} leads source volume` : "No source data yet",
       delta: null,
     },

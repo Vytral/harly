@@ -76,7 +76,7 @@ export function PasskeysCard({
         setPasskeyList((prev) => [...prev, newKey]);
       } catch (err: unknown) {
         if (err instanceof Error && err.name === "NotAllowedError") {
-          // User dismissed the browser dialog — not an error.
+          // User dismissed the browser dialog , not an error.
           return;
         }
         toast.error(
@@ -99,7 +99,7 @@ export function PasskeysCard({
       <SectionHeader
         icon={FingerPrintDuotoneIcon}
         title="Passkeys"
-        description="Sign in with biometrics or a hardware security key — no password required."
+        description="Sign in with biometrics or a hardware security key. No password required."
         badge={
           <StatusPill tone={passkeyList.length > 0 ? "on" : "neutral"}>
             {passkeyList.length === 0

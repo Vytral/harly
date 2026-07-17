@@ -3,7 +3,7 @@ import { createElement } from "react";
 import type { SocialPlatform } from "./config";
 
 /**
- * Real brand-mark SVGs for the footer social links — NOT lucide. Marks come
+ * Real brand-mark SVGs for the footer social links , NOT lucide. Marks come
  * from Simple Icons (brand glyphs) plus an mdi globe for the generic website
  * link. Each entry is a single `<path>` on a 24×24 canvas using
  * `fill="currentColor"`, so a parent `color`/`text-*` controls the tint.

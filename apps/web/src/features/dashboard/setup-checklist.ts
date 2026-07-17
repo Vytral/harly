@@ -17,7 +17,7 @@ export type SetupChecklistItem = {
   key: string;
   /** Benefit-led title shown as the row heading. */
   title: string;
-  /** One-line value proposition — answers "what do I get?". */
+  /** One-line value proposition , answers "what do I get?". */
   value: string;
   href: string;
   done: boolean;
@@ -27,20 +27,20 @@ export type SetupChecklistItem = {
 
 export type SetupChecklist = {
   items: SetupChecklistItem[];
-  /** First undone item — powers the "recommended next step" hint. */
+  /** First undone item , powers the "recommended next step" hint. */
   nextStep: SetupChecklistItem | null;
   completed: number;
   total: number;
   percent: number;
   allDone: boolean;
-  /** Owner/admin only — recruiters never see the checklist. */
+  /** Owner/admin only , recruiters never see the checklist. */
   visible: boolean;
 };
 
 /**
  * Progressive "get your workspace ready" checklist for the dashboard.
  *
- * Reads existing workspace state and links to existing pages — it never owns
+ * Reads existing workspace state and links to existing pages , it never owns
  * any setup itself. Kept deliberately cheap (four small aggregate queries), so
  * it can run on every dashboard render and in the sidebar layout without
  * pulling the heavy member/invite lists of getWorkspaceSettingsData.
@@ -49,7 +49,7 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
   const context = await getWorkspaceContext();
   const workspaceId = context.organization.id;
 
-  // Owner/admin gate — mirrors isOwnerRole in features/workspaces/actions.ts.
+  // Owner/admin gate , mirrors isOwnerRole in features/workspaces/actions.ts.
   const visible = context.role === "owner" || context.role === "admin";
 
   const [settingsRow, jobsAgg, membersRow, invitesRow] = await Promise.all([
@@ -115,7 +115,7 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
   const hasApplicants = applicantCount > 0;
 
   // A company "profile" is done when they've given candidates something to see
-  // beyond defaults — any of a tagline, an about description, a website, or a
+  // beyond defaults , any of a tagline, an about description, a website, or a
   // brand colour they actually chose (≠ the board default). Existing/mature
   // workspaces rarely fill every field, so we treat these as OR, not AND.
   const hasCustomColor = Boolean(
@@ -152,7 +152,7 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
       ctaLabel: item.ctaLabel ?? (item.done ? "Edit" : "Start"),
     });
 
-  // 1. Logo — trust first.
+  // 1. Logo , trust first.
   push({
     key: "logo",
     title: "Add your logo",
@@ -208,7 +208,7 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     done: memberCount > 1 || inviteCount > 0,
   });
 
-  // 6. Integrations — only surfaced while nothing's connected.
+  // 6. Integrations , only surfaced while nothing's connected.
   if (!hasIntegration) {
     push({
       key: "integrations",
@@ -219,7 +219,7 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     });
   }
 
-  // 7. Legal — last; important, but not what gets you hiring.
+  // 7. Legal , last; important, but not what gets you hiring.
   push({
     key: "legal",
     title: "Set up legal info",

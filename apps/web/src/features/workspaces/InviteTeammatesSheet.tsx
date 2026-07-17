@@ -75,6 +75,7 @@ export function InviteTeammatesSheet({
   open,
   onOpenChange,
   trigger,
+  refreshOnSuccess,
 }: {
   assignableRoles: AssignableRole[];
   pendingInvitations?: WorkspaceInvitationItem[];
@@ -82,8 +83,11 @@ export function InviteTeammatesSheet({
   onOpenChange?: (open: boolean) => void;
   /** Custom trigger. Omit when driving the sheet via open/onOpenChange. */
   trigger?: ReactNode;
+  /** Keep the current flow in place after a successful invite batch. */
+  refreshOnSuccess?: boolean;
 }) {
   const defaultRole = assignableRoles[0]?.key ?? "recruiter";
+  const shouldRefresh = refreshOnSuccess ?? true;
   const router = useRouter();
 
   const [rows, setRows] = useState<InviteRow[]>([newRow(defaultRole)]);
@@ -112,12 +116,12 @@ export function InviteTeammatesSheet({
       );
       queueMicrotask(() => {
         setRows([newRow(defaultRole)]);
-        router.refresh();
+        if (shouldRefresh) router.refresh();
       });
     } else if (state.error) {
       toast.error(state.error);
     }
-  }, [state, defaultRole, router]);
+  }, [state, defaultRole, router, shouldRefresh]);
 
   function updateRow(id: string, patch: Partial<InviteRow>) {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -226,7 +230,7 @@ export function InviteTeammatesSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
+    <Sheet open={open} onOpenChange={onOpenChange} mobilePresentation="bottom-on-mobile">
       {trigger ? <SheetTrigger asChild>{trigger}</SheetTrigger> : null}
       <SheetContent className="flex w-full flex-col gap-0 p-0 sm:max-w-lg">
         <SheetHeader className="border-b px-5 py-4 text-left">

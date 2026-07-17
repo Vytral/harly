@@ -22,9 +22,9 @@ function formatDateRange(item: CandidateExperienceEntry) {
   const start = formatMonth(item.startDate);
   const end = item.current ? "Present" : formatMonth(item.endDate);
   if (start && end) return `${start} - ${end}`;
-  if (start) return `${start} - ${item.current ? "Present" : "—"}`;
+  if (start) return `${start} - ${item.current ? "Present" : "Not set"}`;
   if (end) return end;
-  return "—";
+  return "Not set";
 }
 
 function descriptionBullets(value: string | null | undefined) {
@@ -38,7 +38,7 @@ function descriptionBullets(value: string | null | undefined) {
 /**
  * Work experience rows. Renders nothing when empty so the parent panel can
  * hide the whole section (no orphan header). The outer border/padding is
- * provided by the unified details panel — keep this borderless.
+ * provided by the unified details panel , keep this borderless.
  */
 export function ExperienceTimeline({
   experience,
@@ -55,7 +55,7 @@ export function ExperienceTimeline({
           className="grid gap-3 sm:grid-cols-[8rem_minmax(0,1fr)]"
         >
           <div className="text-sm text-muted-foreground">
-            {isStructuredEntry(item) ? formatDateRange(item) : item.dateRange ?? "—"}
+            {isStructuredEntry(item) ? formatDateRange(item) : item.dateRange ?? "Not set"}
           </div>
           <div className="min-w-0">
             <p className="font-medium leading-snug">

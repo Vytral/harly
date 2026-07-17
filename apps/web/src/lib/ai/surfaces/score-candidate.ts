@@ -10,7 +10,7 @@ import type { AiModelConfig } from "@/lib/ai/providers";
 
 const SYSTEM_PROMPT =
   "You are a rigorous recruiting analyst. Score how well a candidate fits a " +
-  "specific job using ONLY the evidence provided — never invent experience. " +
+  "specific job using ONLY the evidence provided , never invent experience. " +
   "Be calibrated and willing to score low: 80-100 exceptional fit, 60-79 solid, " +
   "40-59 partial, 0-39 weak. `criteria` must contain 3-6 job-derived dimensions " +
   "(e.g. core skills, seniority, domain experience), each scored 0-100 with a " +
@@ -91,7 +91,7 @@ export async function scoreCandidateWithAI(
     answersBlock ? `Application answers:\n${answersBlock}` : null,
     candidate.resumeText
       ? `Resume:\n"""\n${candidate.resumeText.slice(0, 12000)}\n"""`
-      : "Resume: not available — score from profile and answers only, and say so in the summary.",
+      : "Resume: not available , score from profile and answers only, and say so in the summary.",
   ]
     .filter(Boolean)
     .join("\n");

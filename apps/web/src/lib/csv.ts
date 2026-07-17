@@ -1,5 +1,5 @@
 /**
- * Minimal RFC 4180 CSV parser — handles quoted fields, embedded commas and
+ * Minimal RFC 4180 CSV parser , handles quoted fields, embedded commas and
  * newlines, escaped quotes (""), and CRLF/LF line endings. No dependency.
  */
 export function parseCsv(text: string, delimiter = ","): string[][] {
@@ -50,7 +50,7 @@ export function parseCsv(text: string, delimiter = ","): string[][] {
 }
 
 /**
- * Serializes rows to RFC 4180 CSV — quotes fields containing commas, quotes,
+ * Serializes rows to RFC 4180 CSV , quotes fields containing commas, quotes,
  * or newlines, doubling embedded quotes. Uses CRLF line endings for Excel
  * compatibility. Pairs with parseCsv.
  */

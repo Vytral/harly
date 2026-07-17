@@ -163,6 +163,17 @@ export function LinkIcon(props: IconProps) {
   );
 }
 
+export function GearSixIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path
+        fill="currentColor"
+        d="M216 130.16q.06-2.16 0-4.32l14.92-18.64a8 8 0 0 0 1.48-7.06a107.6 107.6 0 0 0-10.88-26.25a8 8 0 0 0-6-3.93l-23.72-2.64q-1.48-1.56-3-3L186 40.54a8 8 0 0 0-3.94-6a107.3 107.3 0 0 0-26.25-10.86a8 8 0 0 0-7.06 1.48L130.16 40h-4.32L107.2 25.11a8 8 0 0 0-7.06-1.48a107.6 107.6 0 0 0-26.25 10.88a8 8 0 0 0-3.93 6l-2.64 23.76q-1.56 1.48-3 3L40.54 70a8 8 0 0 0-6 3.94a107.7 107.7 0 0 0-10.87 26.25a8 8 0 0 0 1.49 7.06L40 125.84v4.32L25.11 148.8a8 8 0 0 0-1.48 7.06a107.6 107.6 0 0 0 10.88 26.25a8 8 0 0 0 6 3.93l23.72 2.64q1.49 1.56 3 3L70 215.46a8 8 0 0 0 3.94 6a107.7 107.7 0 0 0 26.25 10.87a8 8 0 0 0 7.06-1.49L125.84 216h4.32l18.64 14.92a8 8 0 0 0 7.06 1.48a107.5 107.5 0 0 0 26.25-10.88a8 8 0 0 0 3.93-6l2.64-23.72q1.56-1.48 3-3l23.75-2.7a8 8 0 0 0 6-3.94a107.6 107.6 0 0 0 10.87-26.25a8 8 0 0 0-1.49-7.06Zm-30.63-2.29a73 73 0 0 1 0 8.26a8 8 0 0 0 1.78 5.58l14.18 17.73a91.6 91.6 0 0 1-4.87 11.74l-22.52 2.5a8 8 0 0 0-5.09 2.72a73.5 73.5 0 0 1-5.85 5.85a8 8 0 0 0-2.72 5.09l-2.5 22.51a91 91 0 0 1-11.74 4.88l-17.73-14.18a8 8 0 0 0-5-1.78h-.58a73 73 0 0 1-8.26 0a8 8 0 0 0-5.58 1.78l-17.73 14.18a91.6 91.6 0 0 1-11.74-4.87l-2.5-22.52a8 8 0 0 0-2.72-5.09a73.5 73.5 0 0 1-5.85-5.85a8 8 0 0 0-5.09-2.72l-22.51-2.5a91 91 0 0 1-4.88-11.74l14.18-17.73a8 8 0 0 0 1.78-5.58a73 73 0 0 1 0-8.26a8 8 0 0 0-1.78-5.58L37.62 92.5a91.6 91.6 0 0 1 4.87-11.74l22.52-2.5a8 8 0 0 0 5.09-2.72a73.5 73.5 0 0 1 5.85-5.85a8 8 0 0 0 2.72-5.09l2.5-22.51a91 91 0 0 1 11.74-4.88l17.73 14.18a8 8 0 0 0 5.58 1.78a73 73 0 0 1 8.26 0a8 8 0 0 0 5.58-1.78l17.73-14.18a91.6 91.6 0 0 1 11.74 4.87l2.5 22.52a8 8 0 0 0 2.72 5.09a73.5 73.5 0 0 1 5.85 5.85a8 8 0 0 0 5.09 2.72l22.51 2.5a91 91 0 0 1 4.88 11.74l-14.18 17.73a8 8 0 0 0-1.78 5.58ZM128 88a40 40 0 1 0 40 40a40 40 0 0 0-40-40m0 64a24 24 0 1 1 24-24a24 24 0 0 1-24 24"
+      />
+    </Svg>
+  );
+}
+
 export function ArrowUpRightIcon(props: IconProps) {
   return (
     <Svg {...props}>
@@ -715,7 +726,7 @@ export function SparkleFillIcon(props: IconProps) {
   );
 }
 
-/** Activity feed heartbeat — sticky bar, activity rail. */
+/** Activity feed heartbeat , sticky bar, activity rail. */
 export function PulseIcon(props: IconProps) {
   return (
     <Svg {...props}>
@@ -769,7 +780,7 @@ export function TargetIcon(props: IconProps) {
   );
 }
 
-/** Stage email toggle — enabled state. */
+/** Stage email toggle , enabled state. */
 export function BellSlashIcon(props: IconProps) {
   return (
     <Svg {...props}>
@@ -868,7 +879,7 @@ export function TrayIcon(props: IconProps) {
   );
 }
 
-/** Delta badge — positive comparison. */
+/** Delta badge , positive comparison. */
 export function TrendUpIcon(props: IconProps) {
   return (
     <Svg {...props}>
@@ -877,7 +888,7 @@ export function TrendUpIcon(props: IconProps) {
   );
 }
 
-/** Delta badge — negative comparison. */
+/** Delta badge , negative comparison. */
 export function TrendDownIcon(props: IconProps) {
   return (
     <Svg {...props}>
@@ -886,7 +897,7 @@ export function TrendDownIcon(props: IconProps) {
   );
 }
 
-/** Delta badge arrow — compact positive variant. */
+/** Delta badge arrow , compact positive variant. */
 export function ArrowDownRightIcon(props: IconProps) {
   return (
     <Svg {...props}>
@@ -913,7 +924,7 @@ export function CalendarBlankIcon(props: IconProps) {
   );
 }
 
-/** Empty-state illustration — Communication tab. */
+/** Empty-state illustration , Communication tab. */
 export function EnvelopeSimpleDuotoneIcon(props: IconProps) {
   return (
     <Svg {...props}>

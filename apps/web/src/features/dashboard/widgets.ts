@@ -478,7 +478,7 @@ export const getHiringPerformance = cache(async () => {
   };
 });
 
-// ── Inbox (derived from real signals — no tasks table) ──────────────────────
+// ── Inbox (derived from real signals , no tasks table) ──────────────────────
 
 type DueState = "overdue" | "today" | "soon";
 type InboxIcon = "feedback" | "schedule" | "screen" | "approve";

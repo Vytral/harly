@@ -11,7 +11,7 @@ import { RP_ID, RP_NAME, ORIGIN, storeChallenge, consumeChallenge } from "@/lib/
 
 const log = createLogger("api-passkey-register");
 
-// GET — generate registration options for the authenticated user.
+// GET , generate registration options for the authenticated user.
 export async function GET(req: NextRequest) {
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(options);
 }
 
-// POST — verify and store the registration response.
+// POST , verify and store the registration response.
 export async function POST(req: NextRequest) {
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {

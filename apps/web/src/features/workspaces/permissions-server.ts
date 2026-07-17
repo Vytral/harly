@@ -27,7 +27,7 @@ import {
  * Resolve the permission set for a role key within a workspace.
  *
  * Owner is always all-powerful. For everyone else (built-in or custom), a row
- * in `custom_roles` keyed by the role wins — that's how built-in roles get
+ * in `custom_roles` keyed by the role wins , that's how built-in roles get
  * tuned. With no override, built-ins fall back to their code defaults.
  */
 export async function getRolePermissions(
@@ -88,7 +88,7 @@ export async function requirePermission(permission: Permission) {
   return context;
 }
 
-/** Soft check (no throw) — for conditional logic in actions. */
+/** Soft check (no throw) , for conditional logic in actions. */
 export async function can(permission: Permission): Promise<boolean> {
   const perms = await getCurrentPermissions();
   return perms.includes(permission);
@@ -97,7 +97,7 @@ export async function can(permission: Permission): Promise<boolean> {
 /**
  * Page-level guard: redirect to the dashboard unless the current user holds
  * `permission`. Use at the top of server components for settings/admin routes
- * so a recruiter can't reach them by typing the URL — defense in depth on top
+ * so a recruiter can't reach them by typing the URL , defense in depth on top
  * of the per-action `requirePermission` checks.
  */
 export async function requirePagePermission(permission: Permission) {
@@ -143,7 +143,7 @@ export async function assignRolePrivilegeError(
  * Privilege-ceiling guard for editing a role's permission set (create/update
  * custom or built-in override). Returns a user-facing error string, or `null`
  * when allowed. A non-owner can never grant a permission they don't hold
- * themselves — this closes self-escalation via `roles:manage`.
+ * themselves , this closes self-escalation via `roles:manage`.
  */
 export async function grantPermissionsPrivilegeError(
   context: WorkspaceContext,
@@ -171,7 +171,7 @@ export type WorkspaceRoleSummary = {
   name: string;
   permissions: Permission[];
   isBuiltin: boolean;
-  /** Owner is the locked keyholder — full access, never editable. */
+  /** Owner is the locked keyholder , full access, never editable. */
   isOwner: boolean;
   editable: boolean;
   memberCount: number;
@@ -219,7 +219,7 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
       (Array.isArray(raw) ? (raw as string[]) : []).includes(p),
     );
 
-  // Built-in roles — overridable except owner.
+  // Built-in roles , overridable except owner.
   const builtin: WorkspaceRoleSummary[] = BUILTIN_ROLES.map((key) => {
     const override = overrides.get(key);
     return {
@@ -239,7 +239,7 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
     };
   });
 
-  // Custom roles — rows whose key isn't a built-in.
+  // Custom roles , rows whose key isn't a built-in.
   const customSummaries: WorkspaceRoleSummary[] = rows
     .filter((row) => !isBuiltinRole(row.key))
     .map((row) => ({

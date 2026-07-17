@@ -54,7 +54,7 @@ export function JobShell({
   const isFolio = variant === "folio";
 
   const heroImage = config.hero.imageUrl ?? workspace.heroImageUrl;
-  // Gradient is an image wash only — never a stray fade over a plain accent.
+  // Gradient is an image wash only , never a stray fade over a plain accent.
   const showGradient = config.hero.overlay === "gradient" && Boolean(heroImage);
   const overlayFrom = config.hero.overlayFrom ?? `${accent}E6`;
   const overlayTo = config.hero.overlayTo ?? `${accent}00`;

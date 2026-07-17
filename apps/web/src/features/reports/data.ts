@@ -15,7 +15,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 
 /**
  * Hiring analytics for the Reports page. All queries are workspace-scoped and
- * read straight from the operational tables — no extra event log needed.
+ * read straight from the operational tables , no extra event log needed.
  */
 
 const DAY_SECONDS = 86_400;

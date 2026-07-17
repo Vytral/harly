@@ -12,10 +12,10 @@ import type { Job } from "@/features/career-page/types";
 import { CareerFooter } from "@/features/career-page/CareerFooter";
 
 /* ------------------------------------------------------------------ */
-/*  Ornamental SVGs — bespoke, not lucide                              */
+/*  Ornamental SVGs , bespoke, not lucide                              */
 /* ------------------------------------------------------------------ */
 
-/** Fleurón — classic editorial leaf flourish, used between sections. */
+/** Fleurón , classic editorial leaf flourish, used between sections. */
 function Fleuron({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 64 16" className={className} fill="none" aria-hidden>
@@ -29,7 +29,7 @@ function Fleuron({ className }: { className?: string }) {
   );
 }
 
-/** Asterismo — ⁂ three-asterisk mark, an editorial section break. */
+/** Asterismo , ⁂ three-asterisk mark, an editorial section break. */
 function Asterism({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 16" className={className} fill="none" aria-hidden>
@@ -48,7 +48,7 @@ function Asterism({ className }: { className?: string }) {
   );
 }
 
-/** Flecha editorial — serif terminal arrow for job rows (replaces lucide). */
+/** Flecha editorial , serif terminal arrow for job rows (replaces lucide). */
 function EditorialArrow({ className, style }: { className?: string; style?: CSSProperties }) {
   return (
     <svg viewBox="0 0 24 24" className={className} style={style} fill="none" aria-hidden>
@@ -73,7 +73,7 @@ function SectionMark({ n }: { n: number }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Hooks — reveal on scroll, reduced-motion aware                     */
+/*  Hooks , reveal on scroll, reduced-motion aware                     */
 /* ------------------------------------------------------------------ */
 
 function usePrefersReducedMotion(): boolean {
@@ -142,7 +142,7 @@ function FolioReveal({
   const { ref, visible } = useReveal<HTMLElement>();
   return (
     <Tag
-      // Polymorphic tag — ref type depends on Tag, cast broadly.
+      // Polymorphic tag , ref type depends on Tag, cast broadly.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ref={ref as React.Ref<any>}
       className={cn("folio-reveal", visible && "is-visible", className)}
@@ -154,7 +154,7 @@ function FolioReveal({
 }
 
 /* ------------------------------------------------------------------ */
-/*  CountUp — animate numeric marginalia from 0 → final                 */
+/*  CountUp , animate numeric marginalia from 0 → final                 */
 /* ------------------------------------------------------------------ */
 
 /** Parse "100%", "2024", "1,200", "3.5M" into {num, suffix, prefix}. */
@@ -167,7 +167,7 @@ function parseNumeric(value: string): { num: number; suffix: string; prefix: str
   const num = Number(raw);
   if (!Number.isFinite(num)) return null;
   // Skip huge/infinite-feeling values (years far in the future are fine but
-  // "—" or non-numeric strings already returned null).
+  // "," or non-numeric strings already returned null).
   if (Math.abs(num) > 1_000_000) return null;
   return { num, suffix, prefix, animatable: true };
 }
@@ -265,7 +265,7 @@ function PullQuote({ t, accent }: { t: CareerTestimonial; accent: string }) {
 }
 
 /* ------------------------------------------------------------------ */
-/*  Roles — filter pills + editorial rows                               */
+/*  Roles , filter pills + editorial rows                               */
 /* ------------------------------------------------------------------ */
 
 function RolesList({ jobs, boardRoot, accent }: { jobs: Job[]; boardRoot: string; accent: string }) {
@@ -329,7 +329,7 @@ function RolesList({ jobs, boardRoot, accent }: { jobs: Job[]; boardRoot: string
 
   return (
     <div>
-      {/* Filter pills — sharp, mono, editorial */}
+      {/* Filter pills , sharp, mono, editorial */}
       {facetGroups.map((g) => (
         <div key={g.key} className="mb-5 flex flex-wrap items-center gap-2">
           <span className="mr-1 font-mono text-[10px] uppercase tracking-[0.18em] text-folio-ink/45">
@@ -400,7 +400,7 @@ function RolesList({ jobs, boardRoot, accent }: { jobs: Job[]; boardRoot: string
 }
 
 /* ------------------------------------------------------------------ */
-/*  FAQ — dialogue Q./A.                                                */
+/*  FAQ , dialogue Q./A.                                                */
 /* ------------------------------------------------------------------ */
 
 function FolioFaq({ items, accent }: { items: CareerPageConfig["faq"]["items"]; accent: string }) {
@@ -578,7 +578,7 @@ export function FolioTemplate({
         </div>
       </section>
 
-      {/* ── 01 — The brief ───────────────────────────────────────────── */}
+      {/* ── 01 , The brief ───────────────────────────────────────────── */}
       {lede && (
         <section className="mx-auto max-w-6xl px-6 pt-20 sm:pt-28">
           <FolioReveal className="flex items-baseline gap-4 border-b border-folio-ink/15 pb-5">
@@ -605,7 +605,7 @@ export function FolioTemplate({
               )}
             </FolioReveal>
 
-            {/* Marginalia — re-present overview.stats */}
+            {/* Marginalia , re-present overview.stats */}
             {config.overview.enabled && config.overview.stats.length > 0 && (
               <FolioReveal as="aside" delay={80} className="border-l border-folio-ink/15 pl-5">
                 <p className="mb-5 font-mono text-[10px] uppercase tracking-[0.2em] text-folio-ink/45">
@@ -618,7 +618,7 @@ export function FolioTemplate({
                         {stat.label}
                       </dt>
                       <dd className="mt-1 font-fraunces-display text-3xl tracking-tight text-folio-ink">
-                        <CountUp value={stat.value || "—"} />
+                        <CountUp value={stat.value || "Not set"} />
                       </dd>
                     </div>
                   ))}
@@ -629,7 +629,7 @@ export function FolioTemplate({
         </section>
       )}
 
-      {/* ── 02 — What we believe ─────────────────────────────────────── */}
+      {/* ── 02 , What we believe ─────────────────────────────────────── */}
       {config.values.enabled && config.values.items.length > 0 && (
         <section className="mx-auto max-w-6xl px-6 pt-24 sm:pt-32">
           <FolioReveal className="flex items-baseline gap-4 border-b border-folio-ink/15 pb-5">
@@ -675,7 +675,7 @@ export function FolioTemplate({
         </section>
       )}
 
-      {/* ── More voices — secondary testimonials, editorial grid ─────── */}
+      {/* ── More voices , secondary testimonials, editorial grid ─────── */}
       {moreVoices.length > 0 && (
         <section className="mx-auto max-w-6xl px-6 pt-8 sm:pt-12">
           <div className="grid gap-10 sm:grid-cols-2 sm:gap-14">
@@ -703,7 +703,7 @@ export function FolioTemplate({
         </section>
       )}
 
-      {/* ── 03 — Open roles ──────────────────────────────────────────── */}
+      {/* ── 03 , Open roles ──────────────────────────────────────────── */}
       <section id="positions" className="mx-auto max-w-6xl scroll-mt-8 px-6 pt-24 sm:pt-32">
         <FolioReveal className="flex items-baseline gap-4 border-b border-folio-ink/15 pb-5">
           {sectionNum(rolesN)}
@@ -723,7 +723,7 @@ export function FolioTemplate({
         )}
       </section>
 
-      {/* ── 04 — Questions ───────────────────────────────────────────── */}
+      {/* ── 04 , Questions ───────────────────────────────────────────── */}
       {config.faq.enabled && config.faq.items.length > 0 && (
         <section className="mx-auto max-w-3xl px-6 pt-24 sm:pt-32">
           <FolioReveal className="flex items-baseline gap-4 border-b border-folio-ink/15 pb-5">

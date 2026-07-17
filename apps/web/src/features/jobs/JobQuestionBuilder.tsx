@@ -158,7 +158,7 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
         >
           <div className="flex items-center justify-between gap-2">
             <p className="text-[12px] font-semibold uppercase tracking-wide text-primary/70">
-              AI suggestions — click to add
+              AI suggestions, click to add
             </p>
             <button
               type="button"

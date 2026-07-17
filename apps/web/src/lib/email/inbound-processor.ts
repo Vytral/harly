@@ -99,7 +99,7 @@ async function storeAttachments(
  * Route a canonical inbound email to the application it's replying to (via
  * the reply+{token} plus-address Harly puts in Reply-To on outbound sends)
  * and record it on the candidate's timeline. Emails that don't match any
- * known token are logged and dropped — there's nowhere in the product to
+ * known token are logged and dropped , there's nowhere in the product to
  * show a message with no candidate/application context.
  */
 export async function processInboundEmail(

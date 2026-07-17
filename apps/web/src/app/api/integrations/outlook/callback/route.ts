@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
 
   if (!tokenData.access_token || !tokenData.refresh_token) {
     return redirectWithError(
-      `Token exchange failed: ${tokenData.error ?? "unknown"} — ${tokenData.error_description ?? ""}`,
+      `Token exchange failed: ${tokenData.error ?? "unknown"} , ${tokenData.error_description ?? ""}`,
     );
   }
 

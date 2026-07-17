@@ -31,7 +31,7 @@ import {
 /**
  * Single source of truth for career-page chip/stat icons. The builder picker,
  * the templates, and validation all reference this map so an icon name is
- * either renderable everywhere or nowhere — no silent runtime `undefined`.
+ * either renderable everywhere or nowhere , no silent runtime `undefined`.
  */
 export const CAREER_ICONS = {
   users: Users,
@@ -66,7 +66,7 @@ export type CareerIconName = keyof typeof CAREER_ICONS;
 /** Ordered names for the picker (kept stable for predictable UX). */
 export const CAREER_ICON_NAMES = Object.keys(CAREER_ICONS) as CareerIconName[];
 
-/** Safe lookup — returns the component or null for unknown/empty names. */
+/** Safe lookup , returns the component or null for unknown/empty names. */
 export function careerIcon(name: string | undefined | null): LucideIcon | null {
   if (!name) return null;
   return (CAREER_ICONS as Record<string, LucideIcon>)[name] ?? null;
@@ -91,6 +91,6 @@ export function CareerIcon({
   const Icon = careerIcon(name);
   if (!Icon) return null;
   // createElement (not <Icon/>) so the lint rule doesn't read this as deriving a
-  // component during render — Icon is a stable registry reference.
+  // component during render , Icon is a stable registry reference.
   return createElement(Icon, { className, strokeWidth, style });
 }

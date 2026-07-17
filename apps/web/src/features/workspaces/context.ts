@@ -36,7 +36,7 @@ export type WorkspaceContext = {
   };
   /** Normalized built-in role (custom keys collapse to "recruiter"). Legacy. */
   role: WorkspaceRole;
-  /** Raw membership role key — may be a custom-role slug. Drives permissions. */
+  /** Raw membership role key , may be a custom-role slug. Drives permissions. */
   roleKey: WorkspaceRoleKey;
 };
 

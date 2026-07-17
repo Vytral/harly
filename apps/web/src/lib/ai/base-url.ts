@@ -19,7 +19,7 @@ const PROVIDER_HOSTS: Record<string, string[]> = {
 /**
  * Validate a user-supplied AI `baseUrl`. Throws on any value that is not a
  * https URL on the provider's own host, points at a blocked (loopback /
- * private / link-local / metadata) host, or — unless local LLMs are enabled —
+ * private / link-local / metadata) host, or , unless local LLMs are enabled ,
  * resolves to localhost. `undefined` is allowed (use the provider default).
  */
 export function assertSafeAiBaseUrl(provider: string, baseUrl: string | undefined): void {

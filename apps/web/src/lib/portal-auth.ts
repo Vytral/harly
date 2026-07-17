@@ -606,7 +606,7 @@ export async function exchangeLinkedInCode(
       }
     }
   } catch {
-    // Profile API call failed — this is expected if the app doesn't have r_basicprofile permission
+    // Profile API call failed , this is expected if the app doesn't have r_basicprofile permission
     // We still have the basic OIDC data, so we continue
   }
 

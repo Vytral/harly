@@ -36,7 +36,7 @@ export function CareerFooter({
           className="group inline-flex items-center gap-2 text-zinc-400 transition-colors hover:text-zinc-700 dark:text-zinc-500 dark:hover:text-zinc-200"
         >
           <span className="text-xs font-medium">Powered by</span>
-          {/* Black wordmark on light, white on dark — swapped via the .dark class
+          {/* Black wordmark on light, white on dark , swapped via the .dark class
               set by ThemeWrapper. */}
           {/* eslint-disable @next/next/no-img-element */}
           <img

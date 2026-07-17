@@ -1,5 +1,5 @@
 /**
- * Spotlight command palette icons — Phosphor duotone (via better-icons / Iconify).
+ * Spotlight command palette icons , Phosphor duotone (via better-icons / Iconify).
  * Duotone: a low-opacity base layer + a solid currentColor layer. Sized via className.
  */
 

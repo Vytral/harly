@@ -1,5 +1,5 @@
 /**
- * Settings section icons — Phosphor duotone (via better-icons / Iconify).
+ * Settings section icons , Phosphor duotone (via better-icons / Iconify).
  * Duotone: a low-opacity base layer + a solid currentColor layer, so they read
  * as two-tone when colored (e.g. the active pine nav item). Sized via className.
  */

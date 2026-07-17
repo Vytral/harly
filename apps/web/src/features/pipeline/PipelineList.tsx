@@ -238,7 +238,7 @@ export function PipelineList({
           {filtered.map((a) => {
             const fullName = `${a.candidateFirstName} ${a.candidateLastName}`;
             const isSelected = selected.has(a.id);
-            const stageName = stageNameById.get(a.currentStageId) ?? "—";
+            const stageName = stageNameById.get(a.currentStageId) ?? "Unknown stage";
             return (
               <div
                 key={a.id}

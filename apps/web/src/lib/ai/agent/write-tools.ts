@@ -11,7 +11,7 @@ import { z } from "zod";
  * through `confirmAgentWriteAction` (write-actions.ts). Keep the keys in sync
  * with the HANDLERS map there.
  *
- * Every input includes a `summary` string the model must fill — a one-line,
+ * Every input includes a `summary` string the model must fill , a one-line,
  * human-readable description of the action for the confirmation card. This lets
  * the panel render any write tool generically without per-tool UI.
  */
@@ -27,7 +27,7 @@ export function buildWriteTools() {
     moveCandidateStage: tool({
       strict: true,
       description:
-        "Propose moving a candidate's application to a different pipeline stage. WRITE action — requires user confirmation; never assume success. Read the destination stage id from jobDetail first.",
+        "Propose moving a candidate's application to a different pipeline stage. WRITE action , requires user confirmation; never assume success. Read the destination stage id from jobDetail first.",
       inputSchema: z.object({
         summary,
         applicationId: z.string().describe("The application to move."),
@@ -49,7 +49,7 @@ export function buildWriteTools() {
     rejectCandidate: tool({
       strict: true,
       description:
-        "Propose rejecting a candidate's application. WRITE action — requires user confirmation. Only propose when the user clearly asks to reject someone. Resolve applicationId first.",
+        "Propose rejecting a candidate's application. WRITE action , requires user confirmation. Only propose when the user clearly asks to reject someone. Resolve applicationId first.",
       inputSchema: z.object({
         summary,
         applicationId: z.string().describe("The application to reject."),
@@ -59,7 +59,7 @@ export function buildWriteTools() {
     createTask: tool({
       strict: true,
       description:
-        "Propose creating a task/to-do. WRITE action — requires user confirmation. Defaults the owner to the current user. Optionally link it to a candidate, application, or job.",
+        "Propose creating a task/to-do. WRITE action , requires user confirmation. Defaults the owner to the current user. Optionally link it to a candidate, application, or job.",
       inputSchema: z.object({
         summary,
         title: z.string().describe("Task title."),
@@ -83,10 +83,59 @@ export function buildWriteTools() {
       }),
     }),
 
+    updateTask: tool({
+      strict: true,
+      description:
+        "Propose updating one existing task: change status (e.g. mark completed), title, priority, due date, or owner. WRITE action — requires user confirmation. Resolve the taskId via listTasks or listMyTasks first. For 'complete all my tasks', use completeMyOpenTasks instead; never pass a paginated list of ids here.",
+      inputSchema: z.object({
+        summary,
+        taskId: z
+          .string()
+          .nullable()
+          .describe("The single task id to update, or null when unavailable."),
+        status: z
+          .enum(["pending", "in_progress", "completed", "canceled"])
+          .nullable()
+          .describe("New status, or null to leave unchanged."),
+        title: z
+          .string()
+          .nullable()
+          .describe("New title, or null to leave unchanged."),
+        priority: z
+          .enum(["low", "medium", "high", "urgent"])
+          .nullable()
+          .describe("New priority, or null to leave unchanged."),
+        dueDate: z
+          .string()
+          .nullable()
+          .describe(
+            "New due date as an ISO date string (YYYY-MM-DD), or null to leave unchanged.",
+          ),
+        clearDueDate: z
+          .boolean()
+          .describe("True to remove the due date; otherwise false."),
+        ownerId: z
+          .string()
+          .nullable()
+          .describe("New owner id, or null to leave unchanged."),
+      }),
+    }),
+
+    completeMyOpenTasks: tool({
+      strict: true,
+      description:
+        "Propose completing EVERY currently open task owned by the signed-in user. WRITE action — requires user confirmation. Use this, and only this, for 'complete all my tasks' or 'mark all my to-dos done'. It is server-scoped to the current user and completes the full set atomically; do not call listTasks or pass task ids first.",
+      inputSchema: z.object({
+        summary: summary.describe(
+          "Clearly state that every currently open task assigned to the user will be completed.",
+        ),
+      }),
+    }),
+
     createJob: tool({
       strict: true,
       description:
-        "Propose creating a new job as a DRAFT. WRITE action — requires user confirmation. First call generateJobDraft so the copy reflects the workspace's company identity and values, then pass that structured draft here. Never publish automatically.",
+        "Propose creating a new job as a DRAFT. WRITE action , requires user confirmation. First call generateJobDraft so the copy reflects the workspace's company identity and values, then pass that structured draft here. Never publish automatically.",
       inputSchema: z.object({
         summary,
         title: z.string().describe("Job title."),
@@ -120,7 +169,7 @@ export function buildWriteTools() {
     addCandidateNote: tool({
       strict: true,
       description:
-        "Propose adding a note to a candidate's profile. WRITE action — requires user confirmation. Resolve candidateId first.",
+        "Propose adding a note to a candidate's profile. WRITE action , requires user confirmation. Resolve candidateId first.",
       inputSchema: z.object({
         summary,
         candidateId: z.string().describe("The candidate id."),
@@ -131,7 +180,7 @@ export function buildWriteTools() {
     addCandidateTag: tool({
       strict: true,
       description:
-        "Propose adding a tag/label to a candidate. WRITE action — requires user confirmation. Resolve candidateId first.",
+        "Propose adding a tag/label to a candidate. WRITE action , requires user confirmation. Resolve candidateId first.",
       inputSchema: z.object({
         summary,
         candidateId: z.string().describe("The candidate id."),
@@ -142,7 +191,7 @@ export function buildWriteTools() {
     createOffer: tool({
       strict: true,
       description:
-        "Propose drafting an offer for a candidate's application. WRITE action — requires user confirmation. Creates a DRAFT (does not send). Resolve applicationId first; read salary context from the job if helpful.",
+        "Propose drafting an offer for a candidate's application. WRITE action , requires user confirmation. Creates a DRAFT (does not send). Resolve applicationId first; read salary context from the job if helpful.",
       inputSchema: z.object({
         summary,
         applicationId: z
@@ -177,7 +226,7 @@ export function buildWriteTools() {
     sendOffer: tool({
       strict: true,
       description:
-        "Propose sending a drafted offer to the candidate. WRITE action — requires user confirmation. The offer must already exist (createOffer first). Resolve offerId via listCandidateOffers.",
+        "Propose sending a drafted offer to the candidate. WRITE action , requires user confirmation. The offer must already exist (createOffer first). Resolve offerId via listCandidateOffers.",
       inputSchema: z.object({
         summary,
         offerId: z.string().describe("The draft offer to send."),
@@ -187,7 +236,7 @@ export function buildWriteTools() {
     decideOffer: tool({
       strict: true,
       description:
-        "Propose recording a candidate's decision on a sent offer (accepted or declined). WRITE action — requires user confirmation. Resolve offerId via listCandidateOffers.",
+        "Propose recording a candidate's decision on a sent offer (accepted or declined). WRITE action , requires user confirmation. Resolve offerId via listCandidateOffers.",
       inputSchema: z.object({
         summary,
         offerId: z.string().describe("The offer."),
@@ -200,7 +249,7 @@ export function buildWriteTools() {
     scheduleInterview: tool({
       strict: true,
       description:
-        "Propose scheduling an interview. WRITE action — requires user confirmation. Resolve candidateId + applicationId first. interviewerId is optional (null = unassigned).",
+        "Propose scheduling an interview. WRITE action , requires user confirmation. Resolve candidateId + applicationId first. interviewerId is optional (null = unassigned).",
       inputSchema: z.object({
         summary,
         candidateId: z.string().describe("The candidate id."),
@@ -227,7 +276,7 @@ export function buildWriteTools() {
     addToTalentPool: tool({
       strict: true,
       description:
-        "Propose adding a candidate to the talent pool (kept warm for future roles). WRITE action — requires user confirmation. Resolve candidateId first.",
+        "Propose adding a candidate to the talent pool (kept warm for future roles). WRITE action , requires user confirmation. Resolve candidateId first.",
       inputSchema: z.object({
         summary,
         candidateId: z.string().describe("The candidate id."),
@@ -245,7 +294,7 @@ export function buildWriteTools() {
     assignFromPoolToJob: tool({
       strict: true,
       description:
-        "Propose assigning a talent-pool candidate to a specific job (creates an application). WRITE action — requires user confirmation. Resolve candidateId + jobId first.",
+        "Propose assigning a talent-pool candidate to a specific job (creates an application). WRITE action , requires user confirmation. Resolve candidateId + jobId first.",
       inputSchema: z.object({
         summary,
         candidateId: z.string().describe("The pooled candidate id."),
@@ -256,7 +305,7 @@ export function buildWriteTools() {
     createScorecard: tool({
       strict: true,
       description:
-        "Propose adding a scorecard (team evaluation) for a candidate. WRITE action — requires user confirmation. Resolve candidateId first.",
+        "Propose adding a scorecard (team evaluation) for a candidate. WRITE action , requires user confirmation. Resolve candidateId first.",
       inputSchema: z.object({
         summary,
         candidateId: z.string().describe("The candidate id."),
@@ -272,7 +321,7 @@ export function buildWriteTools() {
     sendCandidateEmail: tool({
       strict: true,
       description:
-        "Propose sending an email to a candidate. WRITE action — requires user confirmation. Resolve candidateId + the candidate's email first (candidateProfile). Optionally base it on a template (listEmailTemplates/emailTemplate).",
+        "Propose sending an email to a candidate. WRITE action , requires user confirmation. Resolve candidateId + the candidate's email first (candidateProfile). Optionally base it on a template (listEmailTemplates/emailTemplate).",
       inputSchema: z.object({
         summary,
         candidateId: z.string().describe("The candidate id."),

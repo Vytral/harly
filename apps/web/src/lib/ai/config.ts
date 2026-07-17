@@ -15,7 +15,7 @@ export type WorkspaceAiStatus = {
   baseUrl: string | null;
   /** True only when a key is stored (never the key itself). */
   hasApiKey: boolean;
-  /** False when AI_ENCRYPTION_KEY is missing/invalid — AI can't be used. */
+  /** False when AI_ENCRYPTION_KEY is missing/invalid , AI can't be used. */
   encryptionReady: boolean;
   /** Automatically score new applications when AI is configured. */
   autoScore: boolean;

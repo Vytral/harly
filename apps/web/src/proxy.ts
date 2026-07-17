@@ -28,7 +28,7 @@ const PUBLIC_PATHS = [
   "/apply",
   "/board",
   "/invite",
-  // Portal public routes — pages enforce isPortalEnabled themselves
+  // Portal public routes , pages enforce isPortalEnabled themselves
   "/portal",
   "/api/portal",
   "/setup-2fa",
@@ -37,7 +37,7 @@ const PUBLIC_PATHS = [
 const PROTECTED_PATH_PREFIXES = ["/dashboard", "/settings"];
 const SECURITY_EXEMPT_PREFIXES = ["/settings/security", "/account", "/api"];
 
-// Portal protected paths — require portal session cookie (no DB needed)
+// Portal protected paths , require portal session cookie (no DB needed)
 const PORTAL_PROTECTED = ["/portal/dashboard", "/portal/jobs", "/portal/profile", "/portal/notifications"];
 
 function isProtected(pathname: string): boolean {
@@ -145,7 +145,7 @@ export async function proxy(request: NextRequest) {
         }
       }
     } catch {
-      // DB query failure — allow through, server-side enforces as fallback.
+      // DB query failure , allow through, server-side enforces as fallback.
     }
   }
 
