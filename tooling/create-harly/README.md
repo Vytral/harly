@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="https://cdn.molret.dev/banner-harly.webp" alt="Harly — self-hosted applicant tracking system" width="1200" />
+</p>
+
 # @harly/create
 
 Guided, auditable Node 20.12+ bootstrap CLI for immutable Harly Docker Compose
@@ -13,6 +17,19 @@ cd harly
 npx @harly/create launch . --yes
 npx @harly/create doctor .
 ```
+
+After the short-name package is published, the same CLI is available as
+`npx harly`. A normal update is simply:
+
+```bash
+cd harly
+npx harly upgrade
+```
+
+Use `--to edge` for preview builds or `--to 0.1.0-beta.2` for a fixed release.
+The command backs up first, pulls the target, pins its immutable digest, runs
+migrations once, recreates the services, and waits for readiness. Configure
+`AGE_RECIPIENT` for encrypted backups, or explicitly pass `--allow-plaintext`.
 
 The generated resource profiles are:
 

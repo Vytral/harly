@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import test from "node:test";
 
@@ -114,6 +114,62 @@ test("launch requires --yes when stdin is not interactive", async () => {
     assert.equal(result.status, 2, result.stderr || result.stdout);
     assert.match(result.stderr, /--yes is required in non-interactive mode/i);
   } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("upgrade preserves data, pins the pulled digest, migrates, and waits for health", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harly-upgrade-e2e-"));
+  const bin = path.join(directory, "bin");
+  const calls = path.join(directory, "docker.calls");
+  const port = await availablePort();
+  await mkdir(bin);
+  await writeFile(path.join(directory, "harly.config.json"), JSON.stringify({
+    version: 1,
+    proxyMode: "local",
+    publicUrl: `http://127.0.0.1:${port}`,
+    image: "ghcr.io/vytral/harly:edge",
+    organizationName: "Harly E2E",
+    initialAdminEmail: "owner@example.com",
+    storage: "local",
+    resourceProfile: "compact",
+  }));
+  await writeFile(path.join(directory, ".env"), "HARLY_IMAGE=\"ghcr.io/vytral/harly:edge\"\nHARLY_VERSION=\"edge\"\n", { mode: 0o600 });
+  await writeFile(path.join(bin, "docker"), `#!/bin/sh
+echo "$*" >> "${calls}"
+if [ "$1 $2" = "version --format" ]; then echo 29.0.0; exit 0; fi
+if [ "$1 $2 $3" = "compose version --short" ]; then echo 2.40.0; exit 0; fi
+if [ "$1 $2 $3" = "compose exec -T" ]; then printf 'fake-pg-dump'; exit 0; fi
+if [ "$1 $2" = "image inspect" ]; then echo 'ghcr.io/vytral/harly@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; exit 0; fi
+if [ "$1 $2 $3 $4" = "compose ps --status running" ]; then printf 'postgres\\napp\\nscheduler\\n'; exit 0; fi
+exit 0
+`);
+  await chmod(path.join(bin, "docker"), 0o755);
+  const server = spawn(process.execPath, ["-e", `require('http').createServer((_,r)=>{r.writeHead(200,{'content-type':'application/json'});r.end('{"status":"ok"}')}).listen(${port},'127.0.0.1')`], { stdio: "ignore" });
+  await new Promise((resolve) => setTimeout(resolve, 150));
+
+  try {
+    const result = spawnSync(process.execPath, [cli, "upgrade", directory, "--to", "edge", "--yes"], {
+      cwd: packageRoot,
+      encoding: "utf8",
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+    });
+    assert.equal(result.status, 0, result.stderr || result.stdout);
+    const env = await readFile(path.join(directory, ".env"), "utf8");
+    assert.match(env, /HARLY_IMAGE="ghcr\.io\/vytral\/harly@sha256:a{64}"/);
+    const config = JSON.parse(await readFile(path.join(directory, "harly.config.json"), "utf8"));
+    assert.equal(config.requestedImage, "ghcr.io/vytral/harly:edge");
+    assert.equal(config.image, `ghcr.io/vytral/harly@sha256:${"a".repeat(64)}`);
+    const dockerCalls = await readFile(calls, "utf8");
+    assert.match(dockerCalls, /compose pull app migrate scheduler/);
+    assert.match(dockerCalls, /compose run --rm migrate/);
+    assert.match(dockerCalls, /compose up -d --wait --wait-timeout 180/);
+    const backupFiles = await import("node:fs/promises").then(({ readdir }) => readdir(path.join(directory, "backups")));
+    assert.equal(backupFiles.length, 1);
+    const backupStat = await stat(path.join(directory, "backups", backupFiles[0]));
+    assert.equal(backupStat.mode & 0o777, 0o600);
+  } finally {
+    server.kill();
     await rm(directory, { recursive: true, force: true });
   }
 });

@@ -63,7 +63,7 @@ var force = flags.has("--force");
 var yes = flags.has("--yes");
 var json = flags.has("--json");
 var interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-var cliVersion = "0.1.0";
+var cliVersion = "0.1.1";
 var logo = `
 \u2588\u2588\u2557  \u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557     \u2588\u2588\u2557   \u2588\u2588\u2557
 \u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551     \u255A\u2588\u2588\u2557 \u2588\u2588\u2554\u255D
@@ -80,7 +80,7 @@ Commands:
   create-harly doctor [directory] [--json]
   create-harly backup [directory] [--allow-plaintext]
   create-harly restore <archive> [directory] --force
-  create-harly upgrade [directory] [--to version] [--yes]
+  create-harly upgrade [directory] [--to version|edge] [--yes] [--allow-plaintext]
 `);
 }
 function showBrand() {
@@ -612,13 +612,13 @@ async function doctor(explicitDirectory, print = true) {
   if (print) process.stdout.write(json ? `${JSON.stringify(result)}
 ` : `${checks.map((check) => `${check.ok ? "\u2713" : "\u2717"} ${check.name}${check.detail ? ` \u2014 ${check.detail}` : ""}`).join("\n")}
 `);
-  if (!result.ok) process.exitCode = 1;
+  if (!result.ok && print) process.exitCode = 1;
   return result;
 }
 function sha256(buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
-async function backup(explicitDirectory) {
+async function backup(explicitDirectory, automaticPlaintext = false) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
   const temp = await mkdtemp(path.join(os.tmpdir(), "harly-backup-"));
@@ -637,7 +637,9 @@ async function backup(explicitDirectory) {
 `);
     const archive = path.join(outputDirectory, `harly-${(/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-")}.tar.gz`);
     run("tar", ["-czf", archive, "-C", temp, "."]);
-    if (flags.has("--allow-plaintext")) {
+    await chmod(archive, 384);
+    if (flags.has("--allow-plaintext") || automaticPlaintext && !process.env.AGE_RECIPIENT) {
+      if (automaticPlaintext && !flags.has("--allow-plaintext")) process.stderr.write("No AGE_RECIPIENT configured; created a local backup protected with mode 0600.\n");
       process.stdout.write(`${archive}
 `);
       return archive;
@@ -646,12 +648,14 @@ async function backup(explicitDirectory) {
     if (!recipient) throw new CliError("AGE_RECIPIENT is required unless --allow-plaintext is explicitly set.");
     const encrypted = `${archive}.age`;
     run("age", ["-r", recipient, "-o", encrypted, archive]);
+    await chmod(encrypted, 384);
     await rm(archive, { force: true });
     process.stdout.write(`${encrypted}
 `);
     return encrypted;
   } finally {
     compose(directory, ["up", "-d", "app", "scheduler"], { allowFailure: true });
+    await rm(temp, { recursive: true, force: true });
   }
 }
 async function restore() {
@@ -687,23 +691,54 @@ async function upgrade() {
   const directory = path.resolve(positionals[0] ?? ".");
   const config = await readConfig(directory);
   await preflight(config.proxyMode, false);
-  if (!yes && !await confirm2(`Back up and upgrade ${config.image}${toVersion ? ` to ${toVersion}` : ""}?`)) throw new CliError("Upgrade cancelled.", 2);
-  await backup(directory);
-  if (toVersion) {
-    if (toVersion === "latest") throw new CliError("latest is not an allowed upgrade target.", 2);
-    const envPath = path.join(directory, ".env");
-    const current = await readFile(envPath, "utf8");
-    const nextImage = `ghcr.io/vytral/harly:${toVersion}`;
-    const updated = current.replace(/^HARLY_IMAGE=.*$/m, `HARLY_IMAGE=${envLine(nextImage)}`).replace(/^HARLY_VERSION=.*$/m, `HARLY_VERSION=${envLine(toVersion)}`);
-    await atomicWrite(envPath, updated, 384);
-    config.image = nextImage;
-    await atomicWrite(path.join(directory, "harly.config.json"), `${JSON.stringify(config, null, 2)}
-`);
+  if (toVersion === "latest") throw new CliError("latest is not allowed. Use edge for previews or a fixed version.", 2);
+  const requestedImage = toVersion ? toVersion.startsWith("ghcr.io/") ? toVersion : `ghcr.io/vytral/harly:${toVersion}` : config.requestedImage ?? config.image;
+  if (!yes && !await confirm2(`Back up and upgrade ${config.image} to ${requestedImage}?`)) {
+    if (!interactive) throw new CliError("--yes is required in non-interactive mode.", 2);
+    throw new CliError("Upgrade cancelled.", 2);
   }
-  compose(directory, ["pull"]);
-  compose(directory, ["run", "--rm", "migrate"]);
-  compose(directory, ["up", "-d", "app", "scheduler"]);
-  await doctor(directory);
+  if (interactive) {
+    showBrand();
+    p.intro(pc.bgCyan(pc.black(" Upgrade Harly ")));
+    p.note(`Current  ${config.image}
+Target   ${requestedImage}
+Data     preserved`, "Upgrade plan");
+  }
+  await backup(directory, true);
+  const envPath = path.join(directory, ".env");
+  const configPath = path.join(directory, "harly.config.json");
+  const originalEnv = await readFile(envPath, "utf8");
+  const setImage = (contents, image, version) => contents.replace(/^HARLY_IMAGE=.*$/m, `HARLY_IMAGE=${envLine(image)}`).replace(/^HARLY_VERSION=.*$/m, `HARLY_VERSION=${envLine(version)}`);
+  await atomicWrite(envPath, setImage(originalEnv, requestedImage, toVersion ?? "current"), 384);
+  try {
+    progressStep("Pulling the requested image", "Image downloaded", () => compose(directory, ["pull", "app", "migrate", "scheduler"]));
+  } catch (error) {
+    await atomicWrite(envPath, originalEnv, 384);
+    throw error;
+  }
+  const inspected = run("docker", ["image", "inspect", requestedImage, "--format", '{{join .RepoDigests "\\n"}}'], { allowFailure: true });
+  const repository = requestedImage.split("@")[0].replace(/:[^/:]+$/, "");
+  const digest = String(inspected.stdout ?? "").split(/\s+/).find((value) => value.startsWith(`${repository}@sha256:`));
+  const deployedImage = digest ?? requestedImage;
+  const deployedVersion = deployedImage.includes("@sha256:") ? deployedImage.split("@sha256:")[1].slice(0, 12) : toVersion ?? "current";
+  await atomicWrite(envPath, setImage(await readFile(envPath, "utf8"), deployedImage, deployedVersion), 384);
+  config.requestedImage = requestedImage;
+  config.image = deployedImage;
+  config.deployedAt = (/* @__PURE__ */ new Date()).toISOString();
+  await atomicWrite(configPath, `${JSON.stringify(config, null, 2)}
+`);
+  progressStep("Applying database migrations", "Migrations applied", () => compose(directory, ["run", "--rm", "migrate"]));
+  progressStep("Recreating services and waiting for healthchecks", "Services are healthy", () => {
+    compose(directory, ["up", "-d", "--wait", "--wait-timeout", "180"]);
+  });
+  let result = await doctor(directory, false);
+  for (let attempt = 0; !result.ok && attempt < 15; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 2e3));
+    result = await doctor(directory, false);
+  }
+  if (result.ok) await doctor(directory);
+  if (!result.ok) throw new CliError("Upgrade completed but health checks failed. Run `npx harly doctor .` for details.");
+  if (interactive) p.outro(`Harly is running ${pc.cyan(deployedImage)} at ${pc.cyan(config.publicUrl)}`);
 }
 async function main() {
   switch (command) {

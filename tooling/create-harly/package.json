@@ -1,8 +1,14 @@
 {
   "name": "@harly/create",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "type": "module",
+  "description": "Guided installer and operations CLI for self-hosted Harly.",
+  "license": "AGPL-3.0-only",
+  "keywords": ["harly", "ats", "recruiting", "self-hosted", "docker"],
+  "homepage": "https://github.com/Vytral/harly#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/Vytral/harly.git", "directory": "tooling/create-harly" },
+  "bugs": { "url": "https://github.com/Vytral/harly/issues" },
   "engines": {
     "node": ">=20.12.0"
   },
