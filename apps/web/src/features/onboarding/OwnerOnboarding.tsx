@@ -34,6 +34,7 @@ import {
   DownloadDuotoneIcon,
   MagicWandDuotoneIcon,
   MegaphoneDuotoneIcon,
+  PaletteDuotoneIcon,
   PlugsConnectedIcon,
   RobotDuotoneIcon,
   SealCheckDuotoneIcon,
@@ -311,6 +312,8 @@ function StepCompany({ userName, name, onName, locked }: { userName: string; nam
 }
 
 function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: { logoUrl: string; onLogo: (v: string) => void; tagline: string; onTagline: (v: string) => void; color: string; onColor: (v: string) => void }) {
+  const isCustomColor = !SWATCHES.some((swatch) => swatch.toLowerCase() === color.toLowerCase());
+
   return (
     <StepStagger>
       <StepField>
@@ -345,7 +348,7 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
       </StepField>
       <StepField className="mt-6 space-y-2">
         <Label>Accent color</Label>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {SWATCHES.map((s) => (
             <button
               key={s}
@@ -361,7 +364,10 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
             />
           ))}
           <label
-            className="relative size-8 shrink-0 cursor-pointer overflow-hidden rounded-full border bg-card"
+            className={cn(
+              "relative flex h-8 shrink-0 cursor-pointer items-center gap-2 overflow-hidden rounded-full border bg-card px-2.5 text-xs font-medium text-foreground transition hover:border-ring/40 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/30",
+              isCustomColor && "border-ring ring-2 ring-ring/20",
+            )}
             aria-label="Custom color"
           >
             <input
@@ -371,9 +377,11 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
               className="absolute inset-0 z-10 cursor-pointer opacity-0"
             />
             <span
-              className="pointer-events-none absolute inset-0 rounded-full"
+              className="pointer-events-none size-4 rounded-full border border-black/10"
               style={{ backgroundColor: color }}
             />
+            <PaletteDuotoneIcon className="pointer-events-none size-3.5 text-muted-foreground" />
+            <span className="pointer-events-none">Custom</span>
           </label>
         </div>
       </StepField>

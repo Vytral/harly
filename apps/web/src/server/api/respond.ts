@@ -17,7 +17,7 @@ import {
 
 export const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Api-Key",
   "Access-Control-Max-Age": "86400",
 };
@@ -31,6 +31,10 @@ function withHeaders(response: NextResponse, cors?: boolean): NextResponse {
     }
   }
   return response;
+}
+
+export function withCors(response: NextResponse): NextResponse {
+  return withHeaders(response, true);
 }
 
 export function apiOk<T>(

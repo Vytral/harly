@@ -39,7 +39,7 @@ export const POST = withApi(async (request) => {
   });
 
   const intent = createStorageUploadIntent({ workspaceId: workspace.workspaceId, key, contentType: parsed.data.contentType, contentLength: parsed.data.contentLength, expiresAt: Date.now() + 10 * 60_000 });
-  return apiOk({ ...result, uploadUrl: storageProvider === "local" ? appendStorageUploadIntent(result.uploadUrl, intent) : result.uploadUrl, key }, { cors: true });
+  return apiOk({ ...result, uploadUrl: storageProvider === "local" ? new URL(appendStorageUploadIntent(result.uploadUrl, intent), request.url).toString() : result.uploadUrl, key }, { cors: true });
 }, { cors: true });
 
 export function OPTIONS() {

@@ -30,6 +30,11 @@ const fraunces = localFont({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL(
+    process.env.HARLY_URL ??
+      process.env.NEXT_PUBLIC_APP_URL ??
+      "http://localhost:3000",
+  ),
   title: "Harly",
   description: "Open-source applicant tracking system for modern teams.",
 };
@@ -55,7 +60,7 @@ export default function RootLayout({
       <body className="min-h-full">
         <ThemeProvider
           attribute="class"
-          defaultTheme="light"
+          defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >

@@ -1,7 +1,8 @@
 import { mkdir, writeFile } from "node:fs/promises";
-import path from "node:path";
+import { dirname } from "node:path";
 
 import { NextResponse, type NextRequest } from "next/server";
+import { getLocalUploadPath } from "@harly/storage";
 
 import {
   allowedImageContentTypes,
@@ -10,23 +11,9 @@ import {
   maxResumeFileSize,
 } from "@/lib/storage-validation";
 import { verifyStorageUploadIntent } from "@/lib/storage-upload-intent";
+import { corsPreflight, withCors } from "@/server/api/respond";
 
 export const runtime = "nodejs";
-
-function getUploadsRoot() {
-  return process.env.UPLOADS_DIR || path.resolve(process.cwd(), "uploads");
-}
-
-function getUploadPath(key: string) {
-  const uploadsRoot = getUploadsRoot();
-  const resolvedPath = path.resolve(uploadsRoot, key);
-
-  if (!resolvedPath.startsWith(`${uploadsRoot}${path.sep}`)) {
-    throw new Error("Invalid storage key.");
-  }
-
-  return resolvedPath;
-}
 
 async function handleUpload(request: NextRequest) {
   if (process.env.STORAGE_PROVIDER === "s3") {
@@ -91,17 +78,21 @@ async function handleUpload(request: NextRequest) {
     return NextResponse.json({ error: "File too large." }, { status: 400 });
   }
 
-  const uploadPath = getUploadPath(key);
-  await mkdir(path.dirname(uploadPath), { recursive: true });
+  const uploadPath = getLocalUploadPath(key);
+  await mkdir(dirname(uploadPath), { recursive: true });
   await writeFile(uploadPath, fileBuffer);
 
   return NextResponse.json({ ok: true });
 }
 
 export async function PUT(request: NextRequest) {
-  return handleUpload(request);
+  return withCors(await handleUpload(request));
 }
 
 export async function POST(request: NextRequest) {
-  return handleUpload(request);
+  return withCors(await handleUpload(request));
+}
+
+export function OPTIONS() {
+  return corsPreflight();
 }

@@ -36,6 +36,10 @@ import {
   getImageFileValidationError,
   getResumeFileValidationError,
 } from "@/lib/storage-validation";
+import {
+  parseStoragePresignResponse,
+  type StoragePresignResponse,
+} from "@/lib/storage-presign-response";
 import { PhoneInput } from "@/components/ui/PhoneInput";
 import { Button } from "@/components/ui/button";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
@@ -88,19 +92,13 @@ const initialFields: Record<TextField, string> = {
   websiteUrl: "",
 };
 
-type PresignResponse = {
-  uploadUrl: string;
-  fileUrl: string;
-  key: string;
-};
-
-type UploadedResume = PresignResponse & {
+type UploadedResume = StoragePresignResponse & {
   fileName: string;
   fileType: string;
   fileSize: number;
 };
 
-type UploadedImage = PresignResponse & {
+type UploadedImage = StoragePresignResponse & {
   fileName: string;
   fileType: string;
   fileSize: number;
@@ -139,19 +137,6 @@ function createExperienceEntry(): ExperienceEntry {
     location: undefined,
     description: undefined,
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function isPresignResponse(value: unknown): value is PresignResponse {
-  return (
-    isRecord(value) &&
-    typeof value.uploadUrl === "string" &&
-    typeof value.fileUrl === "string" &&
-    typeof value.key === "string"
-  );
 }
 
 function FieldError({ errors }: { errors: string[] | undefined }) {
@@ -1017,9 +1002,9 @@ export function ApplyForm({
       }),
     });
 
-    const presignPayload: unknown = await presignResponse.json();
+    const presignPayload = parseStoragePresignResponse(await presignResponse.json());
 
-    if (!presignResponse.ok || !isPresignResponse(presignPayload)) {
+    if (!presignResponse.ok || !presignPayload) {
       throw new Error("Unable to prepare resume upload.");
     }
 
@@ -1055,9 +1040,9 @@ export function ApplyForm({
       }),
     });
 
-    const presignPayload: unknown = await presignResponse.json();
+    const presignPayload = parseStoragePresignResponse(await presignResponse.json());
 
-    if (!presignResponse.ok || !isPresignResponse(presignPayload)) {
+    if (!presignResponse.ok || !presignPayload) {
       throw new Error("Unable to prepare photo upload.");
     }
 
