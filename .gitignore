@@ -79,3 +79,4 @@ graphify-out/
 # figma debug dumps
 logs/
 public/images/figma-preview/
+.temptoken
