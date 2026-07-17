@@ -23,7 +23,9 @@ export async function deletePasskeyAction(passkeyId: string) {
 
   await db
     .delete(passkeys)
-    .where(and(eq(passkeys.id, passkeyId), eq(passkeys.userId, session.user.id)));
+    .where(
+      and(eq(passkeys.id, passkeyId), eq(passkeys.userId, session.user.id)),
+    );
 
   await logAuditEvent({
     actorId: session.user.id,
@@ -39,8 +41,10 @@ export async function toggleForce2FAAction(
   require2fa: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
-    const { organization, roleKey, user } = await requirePermission("security:manage");
-    if (roleKey !== "owner") throw new Error("Only owners can change this setting.");
+    const { organization, roleKey, user } =
+      await requirePermission("security:manage");
+    if (roleKey !== "owner")
+      throw new Error("Only owners can change this setting.");
 
     await db
       .insert(workspaceSettings)
@@ -62,7 +66,10 @@ export async function toggleForce2FAAction(
     return { ok: true };
   } catch (error) {
     log.error(error, "toggleForce2FAAction failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed.",
+    };
   }
 }
 
@@ -84,7 +91,9 @@ export type OAuthProviderConfig = {
 };
 
 /** List all OAuth providers configured for this workspace. */
-export async function listOAuthProvidersAction(): Promise<OAuthProviderConfig[]> {
+export async function listOAuthProvidersAction(): Promise<
+  OAuthProviderConfig[]
+> {
   const { organization } = await getWorkspaceContext();
 
   const rows = await db
@@ -108,26 +117,45 @@ export async function listOAuthProvidersAction(): Promise<OAuthProviderConfig[]>
 export async function saveOAuthProviderAction(input: {
   provider: OAuthProvider;
   clientId: string;
-  clientSecret: string;
+  clientSecret?: string;
+  enabled?: boolean;
 }): Promise<OAuthActionResult> {
   try {
-    const { organization, roleKey, user } = await requirePermission("security:manage");
+    const { organization, roleKey, user } =
+      await requirePermission("security:manage");
     if (roleKey !== "owner") {
       return { ok: false, error: "Only owners can configure OAuth providers." };
     }
 
     if (!isEncryptionConfigured()) {
-      return { ok: false, error: "Server encryption key not configured. Set AI_ENCRYPTION_KEY." };
+      return {
+        ok: false,
+        error: "Server encryption key not configured. Set AI_ENCRYPTION_KEY.",
+      };
     }
 
     const clientId = input.clientId.trim();
-    const clientSecret = input.clientSecret.trim();
+    const clientSecret = input.clientSecret?.trim();
 
-    if (!clientId || !clientSecret) {
-      return { ok: false, error: "Both Client ID and Client Secret are required." };
+    if (!clientId) {
+      return { ok: false, error: "Client ID is required." };
     }
 
-    const encrypted = encryptSecret(clientSecret);
+    const existing = await db.query.oauthProviders.findFirst({
+      where: and(
+        eq(oauthProviders.workspaceId, organization.id),
+        eq(oauthProviders.provider, input.provider),
+      ),
+    });
+
+    if (!clientSecret && !existing?.clientSecretCiphertext) {
+      return {
+        ok: false,
+        error: "Client Secret is required for new configurations.",
+      };
+    }
+
+    const encrypted = clientSecret ? encryptSecret(clientSecret) : null;
 
     await db
       .insert(oauthProviders)
@@ -135,18 +163,23 @@ export async function saveOAuthProviderAction(input: {
         workspaceId: organization.id,
         provider: input.provider,
         clientId,
-        clientSecretCiphertext: encrypted.ciphertext,
-        clientSecretIv: encrypted.iv,
-        clientSecretTag: encrypted.tag,
-        enabled: true,
+        clientSecretCiphertext: encrypted?.ciphertext ?? null,
+        clientSecretIv: encrypted?.iv ?? null,
+        clientSecretTag: encrypted?.tag ?? null,
+        enabled: input.enabled ?? true,
       })
       .onConflictDoUpdate({
         target: [oauthProviders.workspaceId, oauthProviders.provider],
         set: {
           clientId,
-          clientSecretCiphertext: encrypted.ciphertext,
-          clientSecretIv: encrypted.iv,
-          clientSecretTag: encrypted.tag,
+          ...(encrypted
+            ? {
+                clientSecretCiphertext: encrypted.ciphertext,
+                clientSecretIv: encrypted.iv,
+                clientSecretTag: encrypted.tag,
+              }
+            : {}),
+          enabled: input.enabled ?? existing?.enabled ?? true,
           updatedAt: new Date(),
         },
       });
@@ -163,7 +196,10 @@ export async function saveOAuthProviderAction(input: {
     return { ok: true };
   } catch (error) {
     log.error(error, "saveOAuthProviderAction failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed.",
+    };
   }
 }
 
@@ -173,7 +209,8 @@ export async function toggleOAuthProviderAction(
   enabled: boolean,
 ): Promise<OAuthActionResult> {
   try {
-    const { organization, roleKey, user } = await requirePermission("security:manage");
+    const { organization, roleKey, user } =
+      await requirePermission("security:manage");
     if (roleKey !== "owner") {
       return { ok: false, error: "Only owners can change this setting." };
     }
@@ -200,7 +237,10 @@ export async function toggleOAuthProviderAction(
     return { ok: true };
   } catch (error) {
     log.error(error, "toggleOAuthProviderAction failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed.",
+    };
   }
 }
 
@@ -209,9 +249,13 @@ export async function deleteOAuthProviderAction(
   providerId: string,
 ): Promise<OAuthActionResult> {
   try {
-    const { organization, roleKey, user } = await requirePermission("security:manage");
+    const { organization, roleKey, user } =
+      await requirePermission("security:manage");
     if (roleKey !== "owner") {
-      return { ok: false, error: "Only owners can delete OAuth configurations." };
+      return {
+        ok: false,
+        error: "Only owners can delete OAuth configurations.",
+      };
     }
 
     const [row] = await db
@@ -250,7 +294,10 @@ export async function deleteOAuthProviderAction(
     return { ok: true };
   } catch (error) {
     log.error(error, "deleteOAuthProviderAction failed");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed.",
+    };
   }
 }
 
@@ -267,8 +314,16 @@ export async function getOAuthProviderStatus(): Promise<
 
   const dbProviders = new Map(rows.map((r) => [r.provider, r]));
 
-  const providers: OAuthProvider[] = ["google", "microsoft", "github", "linkedin"];
-  const result: Record<OAuthProvider, { configured: boolean; source: "db" | "env" | null }> = {
+  const providers: OAuthProvider[] = [
+    "google",
+    "microsoft",
+    "github",
+    "linkedin",
+  ];
+  const result: Record<
+    OAuthProvider,
+    { configured: boolean; source: "db" | "env" | null }
+  > = {
     google: { configured: false, source: null },
     microsoft: { configured: false, source: null },
     github: { configured: false, source: null },

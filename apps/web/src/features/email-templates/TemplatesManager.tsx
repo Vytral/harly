@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import { toast } from "sonner";
 import DOMPurify from "dompurify";
 
@@ -38,6 +39,7 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectLabel,
   SelectSeparator,
@@ -173,13 +175,13 @@ export function TemplatesManager({
   const [filterType, setFilterType] = useState<TemplateType | "all">("all");
   const [tab, setTab] = useState<"edit" | "preview">("edit");
   const [showStarters, setShowStarters] = useState(false);
-  const [editorKey, setEditorKey] = useState(0);
+  const [editorKey] = useState(0);
 
   const [name, setName] = useState(EMPTY_DRAFT.name);
   const [type, setType] = useState<TemplateType>(EMPTY_DRAFT.type);
   const [subject, setSubject] = useState(EMPTY_DRAFT.subject);
   const [body, setBody] = useState(EMPTY_DRAFT.body);
-  const [initialDraft, setInitialDraft] = useState<TemplateDraft>(EMPTY_DRAFT);
+  const [initialDraft] = useState<TemplateDraft>(EMPTY_DRAFT);
 
   // Ref handle exposed by RichTextEditor , lets us insert at cursor
   const editorRef = useRef<{ insertText: (text: string) => void } | null>(null);
@@ -198,34 +200,14 @@ export function TemplatesManager({
 
   const unknownVariables = findUnknownVariables(`${subject}\n${body}`);
 
-  function openDraft(draft: TemplateDraft, template: EmailTemplateItem | null) {
-    setEditing(template);
-    setInitialDraft(draft);
-    setName(draft.name);
-    setType(draft.type);
-    setSubject(draft.subject);
-    setBody(draft.body);
-    setTab("edit");
-    setEditorKey((key) => key + 1);
-    setOpen(true);
-  }
-
   function openNew(prefill?: typeof STARTER_TEMPLATES[number]) {
-    const draft = prefill ?? EMPTY_DRAFT;
-    openDraft(draft, null);
+    void prefill;
+    router.push("/dashboard/templates/new" as Route);
     setShowStarters(false);
   }
 
   function openEdit(template: EmailTemplateItem) {
-    openDraft(
-      {
-        name: template.name,
-        type: template.type,
-        subject: template.subject,
-        body: template.body,
-      },
-      template,
-    );
+    router.push(`/dashboard/templates/${template.id}` as Route);
   }
 
   function closeEditor() {
@@ -492,7 +474,7 @@ export function TemplatesManager({
       {/* Editor sheet */}
       <Sheet
         open={open}
-        mobilePresentation="bottom-on-mobile"
+        mobilePresentation="side"
         onOpenChange={(next) => {
           if (!next && isDirty && !window.confirm("Discard unsaved changes?")) return;
           if (!next) closeEditor();
@@ -502,7 +484,7 @@ export function TemplatesManager({
         <DrawerLayout
           title={editing ? "Edit template" : "New template"}
           description="Variables are replaced per candidate when the email is sent."
-          className="sm:max-w-3xl"
+          className="inset-0 h-dvh max-h-none w-screen max-w-none rounded-none border-0 sm:max-w-none"
           footer={
             <>
               <SheetClose asChild>
@@ -519,7 +501,7 @@ export function TemplatesManager({
         >
           <div className="space-y-5">
             {/* Name + type row */}
-            <div className="flex gap-3">
+            <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_14rem]">
               <div className="flex-1 space-y-2">
                 <Label htmlFor="template-name">Name</Label>
                 <Input
@@ -529,22 +511,26 @@ export function TemplatesManager({
                   placeholder="Interview invitation"
                 />
               </div>
-              <div className="w-36 space-y-2">
+              <div className="space-y-2">
                 <Label>Type</Label>
                 <Select value={type} onValueChange={(v) => setType(v as TemplateType)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectLabel>Automatic emails</SelectLabel>
-                    {SYSTEM_TEMPLATE_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</SelectItem>
-                    ))}
+                    <SelectGroup>
+                      <SelectLabel>Automatic emails</SelectLabel>
+                      {SYSTEM_TEMPLATE_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</SelectItem>
+                      ))}
+                    </SelectGroup>
                     <SelectSeparator />
-                    <SelectLabel>Manual outreach</SelectLabel>
-                    {MANUAL_TEMPLATE_TYPES.map((t) => (
-                      <SelectItem key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</SelectItem>
-                    ))}
+                    <SelectGroup>
+                      <SelectLabel>Manual outreach</SelectLabel>
+                      {MANUAL_TEMPLATE_TYPES.map((t) => (
+                        <SelectItem key={t} value={t}>{TEMPLATE_TYPE_LABELS[t]}</SelectItem>
+                      ))}
+                    </SelectGroup>
                   </SelectContent>
                 </Select>
                 <p className="text-xs leading-4 text-muted-foreground">{templateTypeDescription(type)}</p>
@@ -598,7 +584,7 @@ export function TemplatesManager({
                     onChange={setBody}
                     editorRef={editorRef}
                     placeholder={"Hi {{candidate_first_name}},\n\nWrite your message here…"}
-                    minHeight="10rem"
+                    minHeight="min(56vh,42rem)"
                   />
 
                   {/* Variable pills grouped */}

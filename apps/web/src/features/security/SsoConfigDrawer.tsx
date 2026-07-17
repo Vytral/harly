@@ -25,6 +25,8 @@ type ProviderInfo = {
   description: string;
   docsUrl: string;
   docsLabel: string;
+  clientIdPlaceholder: string;
+  environmentVariables: string;
 };
 
 const PROVIDERS: ProviderInfo[] = [
@@ -34,13 +36,18 @@ const PROVIDERS: ProviderInfo[] = [
     description: "Allow team members to sign in with their Google account.",
     docsUrl: "https://console.cloud.google.com/apis/credentials",
     docsLabel: "Google Cloud Console",
+    clientIdPlaceholder: "123456789.apps.googleusercontent.com",
+    environmentVariables: "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET",
   },
   {
     id: "microsoft",
     name: "Microsoft / Entra ID",
     description: "Allow team members to sign in with their Microsoft account.",
-    docsUrl: "https://portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/RegisteredApps",
+    docsUrl:
+      "https://portal.azure.com/#blade/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/RegisteredApps",
     docsLabel: "Azure Portal",
+    clientIdPlaceholder: "Application (client) ID, e.g. a UUID",
+    environmentVariables: "MICROSOFT_CLIENT_ID / MICROSOFT_CLIENT_SECRET",
   },
   {
     id: "github",
@@ -48,6 +55,8 @@ const PROVIDERS: ProviderInfo[] = [
     description: "Allow team members to sign in with their GitHub account.",
     docsUrl: "https://github.com/settings/developers",
     docsLabel: "GitHub Developer Settings",
+    clientIdPlaceholder: "OAuth App Client ID, e.g. Ov23li...",
+    environmentVariables: "GITHUB_CLIENT_ID / GITHUB_CLIENT_SECRET",
   },
 ];
 
@@ -102,7 +111,8 @@ export function SsoConfigDrawer({
       const result = await saveOAuthProviderAction({
         provider,
         clientId: clientId.trim(),
-        clientSecret: clientSecret.trim() || "KEEP_EXISTING",
+        clientSecret: clientSecret.trim() || undefined,
+        enabled,
       });
 
       if (!result.ok) {
@@ -131,7 +141,11 @@ export function SsoConfigDrawer({
   }
 
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange} mobilePresentation="bottom-on-mobile">
+    <Sheet
+      open={open}
+      onOpenChange={handleOpenChange}
+      mobilePresentation="bottom-on-mobile"
+    >
       <SheetTrigger asChild>
         <Button variant="outline" size="sm">
           {isEditing ? "Configure" : "Set up"}
@@ -149,10 +163,18 @@ export function SsoConfigDrawer({
                 disabled={saving || deleting}
                 onClick={remove}
               >
-                {deleting ? <SpinnerIcon className="size-4" /> : <Trash2 className="size-4" />}
+                {deleting ? (
+                  <SpinnerIcon className="size-4" />
+                ) : (
+                  <Trash2 className="size-4" />
+                )}
                 Remove
               </Button>
-              <Button variant="outline" disabled={saving} onClick={() => handleOpenChange(false)}>
+              <Button
+                variant="outline"
+                disabled={saving}
+                onClick={() => handleOpenChange(false)}
+              >
                 Cancel
               </Button>
               <Button onClick={save} disabled={saving || !clientId.trim()}>
@@ -162,10 +184,17 @@ export function SsoConfigDrawer({
             </>
           ) : (
             <>
-              <Button variant="outline" disabled={saving} onClick={() => handleOpenChange(false)}>
+              <Button
+                variant="outline"
+                disabled={saving}
+                onClick={() => handleOpenChange(false)}
+              >
                 Cancel
               </Button>
-              <Button onClick={save} disabled={saving || !clientId.trim() || !clientSecret.trim()}>
+              <Button
+                onClick={save}
+                disabled={saving || !clientId.trim() || !clientSecret.trim()}
+              >
                 {saving ? <SpinnerIcon className="size-4" /> : null}
                 Save
               </Button>
@@ -192,9 +221,12 @@ export function SsoConfigDrawer({
               id={`client-id-${provider}`}
               value={clientId}
               onChange={(e) => setClientId(e.target.value)}
-              placeholder="e.g. 123456789.apps.googleusercontent.com"
+              placeholder={info.clientIdPlaceholder}
               autoComplete="off"
             />
+            <p className="text-xs text-muted-foreground">
+              Server fallback: <code>{info.environmentVariables}</code>
+            </p>
           </div>
 
           {/* Client Secret */}
@@ -202,7 +234,9 @@ export function SsoConfigDrawer({
             <Label htmlFor={`client-secret-${provider}`}>
               Client Secret
               {isEditing && !clientSecret && (
-                <span className="ml-2 text-xs text-muted-foreground">(leave empty to keep current)</span>
+                <span className="ml-2 text-xs text-muted-foreground">
+                  (leave empty to keep current)
+                </span>
               )}
             </Label>
             <div className="relative">
@@ -219,7 +253,11 @@ export function SsoConfigDrawer({
                 onClick={() => setShowSecret(!showSecret)}
                 className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               >
-                {showSecret ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                {showSecret ? (
+                  <EyeOff className="size-4" />
+                ) : (
+                  <Eye className="size-4" />
+                )}
               </button>
             </div>
           </div>
@@ -246,7 +284,8 @@ export function SsoConfigDrawer({
               Callback URL (set this in {info.docsLabel}):
             </p>
             <code className="mt-1 block break-all text-xs font-mono text-foreground">
-              {typeof window !== "undefined" ? window.location.origin : ""}/api/auth/callback/{provider}
+              {typeof window !== "undefined" ? window.location.origin : ""}
+              /api/auth/callback/{provider}
             </code>
           </div>
         </div>

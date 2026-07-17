@@ -120,6 +120,15 @@ first-owner setup, proxy modes, storage, backups, restore, and upgrades.
 4. Create the first owner at `/setup`, then keep registration invite-only.
 5. Read the [production launch checklist](docs/launch-checklist.md).
 
+### Career-page discovery
+
+Each workspace publishes a canonical board at `/board/<workspace-slug>`. In the
+Career Page Builder, **Discovery** controls search indexing, the search title,
+description, favicon, and share image. Harly exposes `/robots.txt` and
+`/sitemap.xml`; submit that sitemap to Search Console after setting an HTTPS
+`HARLY_URL`. Open jobs include `JobPosting` structured data and disappear from
+the sitemap when closed or moved to trash.
+
 ## Repository layout
 
 ```txt
