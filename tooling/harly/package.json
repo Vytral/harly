@@ -1,0 +1,23 @@
+{
+  "name": "@harly/cli",
+  "version": "0.1.1",
+  "private": false,
+  "type": "module",
+  "description": "Official operations CLI for self-hosted Harly.",
+  "license": "AGPL-3.0-only",
+  "keywords": ["harly", "ats", "recruiting", "self-hosted", "docker"],
+  "homepage": "https://github.com/Vytral/harly#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/Vytral/harly.git", "directory": "tooling/harly" },
+  "bugs": { "url": "https://github.com/Vytral/harly/issues" },
+  "engines": { "node": ">=20.12.0" },
+  "publishConfig": { "access": "public" },
+  "files": ["dist", "README.md"],
+  "bin": { "harly": "dist/index.js" },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "node --check dist/index.js",
+    "test": "node --test test/*.test.mjs",
+    "pack:check": "npm pack --dry-run"
+  },
+  "dependencies": { "@harly/create": "0.1.1" }
+}
