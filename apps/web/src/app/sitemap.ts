@@ -6,6 +6,10 @@ import { normalizeCareerPageConfig } from "@/features/career-page/config";
 
 const origin = (process.env.HARLY_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
+// Queries the DB at request time; must never be prerendered at build (no DB in
+// the image) — otherwise `next build` fails with ECONNREFUSED on :5432.
+export const dynamic = "force-dynamic";
+
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const workspaces = await db.select({ id: organization.id, slug: organization.slug, updatedAt: workspaceSettings.updatedAt, config: workspaceSettings.careerPageConfig }).from(organization).leftJoin(workspaceSettings, eq(workspaceSettings.organizationId, organization.id));
   const entries: MetadataRoute.Sitemap = [];
