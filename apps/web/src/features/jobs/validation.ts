@@ -37,6 +37,11 @@ const optionalSlug = z.preprocess(
     .transform((value) => (value.length > 0 ? slugify(value) : undefined)),
 );
 
+const optionalDate = z.preprocess(
+  (value) => (value === "" || value == null ? undefined : value),
+  z.coerce.date().optional(),
+);
+
 const fieldVisibility = (defaultValue: ApplicationFieldVisibility) =>
   z.preprocess(
     (value) =>
@@ -73,6 +78,10 @@ export const jobFormSchema = z
       z.enum(["annual", "monthly"]).optional(),
     ),
     officeAddress: optionalText,
+    jobLocationCountry: optionalText,
+    jobLocationRegion: optionalText,
+    remoteEligibleCountries: optionalText,
+    validThrough: optionalDate,
     officePhotosJson: z.string().optional(),
     applicationPhoneVisibility: fieldVisibility(
       defaultJobApplicationConfig.sections.personal.phone.visibility,
@@ -187,6 +196,10 @@ export const jobFormSchema = z
       currency: values.currency,
       salaryPeriod: values.salaryPeriod,
       officeAddress: values.officeAddress,
+      jobLocationCountry: values.jobLocationCountry?.toUpperCase(),
+      jobLocationRegion: values.jobLocationRegion,
+      remoteEligibleCountries: (values.remoteEligibleCountries ?? "").split(",").map((value) => value.trim().toUpperCase()).filter((value) => /^[A-Z]{2}$/.test(value)),
+      validThrough: values.validThrough,
       officePhotos: parseOfficePhotos(values.officePhotosJson),
       applicationConfig,
       boardConfig,

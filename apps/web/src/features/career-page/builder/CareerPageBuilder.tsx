@@ -21,6 +21,7 @@ import {
   JobsPanel,
   DesignPanel,
   FooterPanel,
+  DiscoveryPanel,
 } from "./panels";
 import { MonitorIcon, SmartphoneIcon } from "./builder-icons";
 
@@ -117,6 +118,7 @@ export function CareerPageBuilder({
                 availableLegalPages={availableLegalPages}
               />
             )}
+            {activeSection === "discovery" && <DiscoveryPanel {...panelProps} />}
           </div>
         </div>
       ) : (

@@ -16,7 +16,8 @@ export const GET = withApi(async (request) => {
   });
 
   const workspace = await resolvePublicWorkspace(request, "jobs:read");
-  const { jobs } = await listOpenJobsForWorkspaceSlug(workspace.slug);
+  const { workspace: branding, jobs } =
+    await listOpenJobsForWorkspaceSlug(workspace.slug);
 
   // Light client-side filters so an embed can render facets without extra calls.
   const url = new URL(request.url);
@@ -37,6 +38,12 @@ export const GET = withApi(async (request) => {
   return apiOk(
     {
       workspace: { slug: workspace.slug },
+      // Branding defaults so an embed can theme itself to the host's brand
+      // without hardcoding. The host page's CSS vars still override these.
+      board: {
+        brandName: branding?.name ?? null,
+        accentColor: branding?.primaryColor ?? null,
+      },
       jobs: filtered.map((job) => serializePublicJob(job, workspace.slug)),
     },
     { cors: true },

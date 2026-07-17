@@ -40,6 +40,10 @@ function parseJobFormData(formData: FormData) {
     currency: formData.get("currency"),
     salaryPeriod: formData.get("salaryPeriod"),
     officeAddress: formData.get("officeAddress"),
+    jobLocationCountry: formData.get("jobLocationCountry"),
+    jobLocationRegion: formData.get("jobLocationRegion"),
+    remoteEligibleCountries: formData.get("remoteEligibleCountries"),
+    validThrough: formData.get("validThrough"),
     officePhotosJson: formData.get("officePhotosJson"),
     applicationPhoneVisibility: formData.get("applicationPhoneVisibility"),
     applicationAddressVisibility: formData.get("applicationAddressVisibility"),
@@ -111,6 +115,7 @@ export async function updateJobAction(formData: FormData) {
   revalidatePath(`/dashboard/jobs/${job.id}`);
   revalidatePath(boardBase);
   revalidatePath(`${boardBase}/jobs/${job.slug}`);
+  revalidatePath("/sitemap.xml");
   redirect(`/dashboard/jobs/${job.id}`);
 }
 
@@ -140,6 +145,7 @@ export async function updateJobStatusAction(formData: FormData) {
   revalidatePath(`/dashboard/jobs/${job.id}`);
   revalidatePath(boardBase);
   revalidatePath(`${boardBase}/jobs/${job.slug}`);
+  revalidatePath("/sitemap.xml");
 }
 
 export async function trashJobAction(jobId: string): Promise<JobActionState> {
@@ -162,6 +168,7 @@ export async function trashJobAction(jobId: string): Promise<JobActionState> {
 
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard");
+  revalidatePath("/sitemap.xml");
   return { success: true };
 }
 
@@ -175,6 +182,7 @@ export async function restoreJobAction(jobId: string): Promise<JobActionState> {
 
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard");
+  revalidatePath("/sitemap.xml");
   return { success: true };
 }
 

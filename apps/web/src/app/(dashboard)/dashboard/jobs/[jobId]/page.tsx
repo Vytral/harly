@@ -58,6 +58,7 @@ export default async function DashboardJobPage({
         title={job.title}
         titleBadge={<JobStatusBadge status={job.status} className="px-2.5 py-1 text-sm" />}
         description={`/${job.slug}`}
+        className="lg:items-center"
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild variant="outline" size="sm">
@@ -66,7 +67,12 @@ export default async function DashboardJobPage({
                 View job
               </a>
             </Button>
-            <JobShareButton url={publicUrl} />
+            <JobShareButton
+              url={publicUrl}
+              title={job.title}
+              workspaceSlug={workspace.slug}
+              slug={job.slug}
+            />
             <JobStatusActions job={job} />
             <JobActionsMenu jobId={job.id} slug={job.slug} redirectAfterTrash />
           </div>

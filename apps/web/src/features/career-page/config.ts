@@ -55,6 +55,16 @@ export type SocialPlatform = (typeof socialPlatforms)[number];
 
 export type CareerSocialLink = { platform: SocialPlatform; url: string };
 
+export type CareerSeo = {
+  /** Public pages are discoverable unless the workspace explicitly opts out. */
+  indexable: boolean;
+  /** Optional overrides. Empty values fall back to the workspace branding. */
+  title: string;
+  description: string;
+  faviconUrl: string | null;
+  socialImageUrl: string | null;
+};
+
 export type CareerPageConfig = {
   /** Empty string = not configured yet → public board falls back to legacy. */
   template: CareerTemplate | "";
@@ -106,6 +116,7 @@ export type CareerPageConfig = {
     /** Legal page slugs to show as links in the footer (e.g. ["privacy-policy", "terms-of-service"]). */
     legalLinks: string[];
   };
+  seo: CareerSeo;
   theme: {
     mode: ColorMode;
     background: string;
@@ -152,6 +163,7 @@ const EMPTY: CareerPageConfig = {
   positions: { title: "Our open positions", filters: ["department", "location"] },
   cta: { enabled: false, title: "", body: "", color: null, buttonText: "Get in touch" },
   footer: { socials: [], legalLinks: [] },
+  seo: { indexable: true, title: "", description: "", faviconUrl: null, socialImageUrl: null },
   theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
 };
 
@@ -390,6 +402,13 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
       socials: asArray<CareerSocialLink>(r.footer?.socials),
       legalLinks: asArray<string>(r.footer?.legalLinks),
     },
+    seo: {
+      indexable: typeof r.seo?.indexable === "boolean" ? r.seo.indexable : base.seo.indexable,
+      title: typeof r.seo?.title === "string" ? r.seo.title.trim().slice(0, 70) : base.seo.title,
+      description: typeof r.seo?.description === "string" ? r.seo.description.trim().slice(0, 180) : base.seo.description,
+      faviconUrl: safeImageUrl(r.seo?.faviconUrl),
+      socialImageUrl: safeImageUrl(r.seo?.socialImageUrl),
+    },
     theme: {
       mode: colorModes.includes(r.theme?.mode as ColorMode) ? (r.theme!.mode as ColorMode) : base.theme.mode,
       background: typeof r.theme?.background === "string" ? r.theme.background : base.theme.background,
@@ -510,6 +529,13 @@ export const careerPageConfigSchema = z.object({
   footer: z.object({
     socials: z.array(z.object({ platform: z.enum(socialPlatforms), url: s(600).refine((value) => !value || /^https?:\/\//i.test(value), "Social links must use http(s).") })).max(8),
     legalLinks: z.array(s(80)).max(10),
+  }),
+  seo: z.object({
+    indexable: z.boolean().default(true),
+    title: s(70),
+    description: s(180),
+    faviconUrl: s(600).nullable(),
+    socialImageUrl: s(600).nullable(),
   }),
   theme: z.object({
     mode: z.enum(["light", "dark"]),

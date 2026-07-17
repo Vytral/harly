@@ -57,6 +57,7 @@ export async function saveCareerPageConfigAction(
   }
 
   revalidatePath(`/board/${context.organization.slug}`);
+  revalidatePath("/sitemap.xml");
   revalidatePath("/dashboard/career-page");
   return { success: true };
 }

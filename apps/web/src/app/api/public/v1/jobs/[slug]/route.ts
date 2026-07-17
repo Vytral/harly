@@ -5,6 +5,7 @@ import { ApiError } from "@harly/api";
 import { resolvePublicWorkspace } from "@/server/api/public";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
+import { resolveTurnstileSiteKey } from "@/lib/turnstile";
 
 export const runtime = "nodejs";
 
@@ -31,10 +32,16 @@ export const GET = withApi(async (request, context) => {
     workspaceSlug: workspace.slug,
   });
 
+  // The embed widget renders the apply form on the host's own page, so the
+  // Turnstile challenge (when configured) must render there too. The site key
+  // is public by design; the secret never leaves the server.
+  const turnstileSiteKey = await resolveTurnstileSiteKey(workspace.workspaceId);
+
   return apiOk(
     {
       job: serializePublicJob(detail.job, workspace.slug),
       applicationConfig: applicationContext?.applicationConfig ?? null,
+      turnstileSiteKey,
     },
     { cors: true },
   );

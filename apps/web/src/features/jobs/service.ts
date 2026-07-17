@@ -69,7 +69,7 @@ export function serializeJob(job: Job) {
 }
 
 function appBaseUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
+  return (process.env.HARLY_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
     /\/$/,
     "",
   );
@@ -96,7 +96,7 @@ export function serializePublicJob(job: Job, workspaceSlug: string) {
     salaryPeriod: job.salaryPeriod,
     publishedAt: job.publishedAt?.toISOString() ?? null,
     // Where the company's careers page can deep-link for the hosted apply flow.
-    hostedApplyUrl: `${base}/apply/${job.slug}?workspace=${workspaceSlug}`,
+    hostedApplyUrl: `${base}/board/${workspaceSlug}/apply/${job.slug}`,
     boardUrl: `${base}/board/${workspaceSlug}`,
   };
 }

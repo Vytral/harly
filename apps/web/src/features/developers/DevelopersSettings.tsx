@@ -754,30 +754,125 @@ function EmbedSection({
   publishableKey?: ApiKeyView;
 }) {
   const [copied, setCopied] = useState(false);
+  const [variant, setVariant] = useState<
+    "board" | "job" | "html" | "react"
+  >("board");
 
   const pkAttr = publishableKey
     ? `\n  data-pk="${publishableKey.prefix}…"`
     : "";
-  const snippet = `<div id="harly-jobs-container"></div>
+
+  const snippets: Record<
+    "board" | "job" | "html" | "react",
+    { label: string; lang: string; code: string; note: string }
+  > = {
+    board: {
+      label: "Job board",
+      lang: "HTML",
+      note: "Renders your open roles with inline apply. Drop it anywhere.",
+      code: `<div id="harly-jobs-container"></div>
 <script
   src="${appUrl}/embed/widget.js"
   data-workspace="${workspaceSlug}"${pkAttr}
+  data-theme="auto"
   defer
-></script>`;
+></script>`,
+    },
+    job: {
+      label: "Single job",
+      lang: "HTML",
+      note: "Embed only one role's apply form on its own page. Set data-job to the job slug.",
+      code: `<div id="harly-jobs-container"></div>
+<script
+  src="${appUrl}/embed/widget.js"
+  data-workspace="${workspaceSlug}"${pkAttr}
+  data-job="your-job-slug"
+  data-theme="auto"
+  defer
+></script>`,
+    },
+    html: {
+      label: "Custom form",
+      lang: "HTML",
+      note: "Build your own markup and POST to the public API. You own every pixel.",
+      code: `<form id="apply">
+  <input name="firstName" required />
+  <input name="lastName" required />
+  <input name="email" type="email" required />
+  <button type="submit">Apply</button>
+</form>
+<script>
+  document.getElementById("apply").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const f = new FormData(e.target);
+    const res = await fetch(
+      "${appUrl}/api/public/v1/jobs/your-job-slug/applications?workspace=${workspaceSlug}",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(Object.fromEntries(f)),
+      }
+    );
+    alert(res.ok ? "Applied!" : "Something went wrong.");
+  });
+</script>`,
+    },
+    react: {
+      label: "React",
+      lang: "TSX",
+      note: "A typed handler you can wire into your own component.",
+      code: `async function submitApplication(values: {
+  firstName: string;
+  lastName: string;
+  email: string;
+}) {
+  const res = await fetch(
+    "${appUrl}/api/public/v1/jobs/your-job-slug/applications?workspace=${workspaceSlug}",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(values),
+    }
+  );
+  if (!res.ok) throw new Error("Application failed");
+  return res.json();
+}`,
+    },
+  };
+
+  const active = snippets[variant];
 
   function handleCopy() {
-    copy(snippet);
+    copy(active.code);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1500);
   }
 
   return (
-     <Card className="gap-5 p-6">
+    <Card className="gap-5 p-6">
       <SectionHeader
         icon={CodeDuotoneIcon}
         title="Embed widget"
-        description="Drop this into any careers page to render your open roles with inline apply."
+        description="Drop your open roles into any careers page. The widget inherits your site's fonts and colors, and you can theme it further with CSS variables."
       />
+
+      <div className="flex flex-wrap gap-1.5">
+        {(
+          Object.entries(snippets) as Array<
+            [typeof variant, (typeof snippets)[typeof variant]]
+          >
+        ).map(([key, s]) => (
+          <Chip
+            key={key}
+            active={variant === key}
+            onClick={() => setVariant(key)}
+          >
+            {s.label}
+          </Chip>
+        ))}
+      </div>
+
+      <p className="text-xs text-muted-foreground">{active.note}</p>
 
       <div className="overflow-hidden rounded-2xl border bg-muted/30">
         <div className="flex items-center justify-between border-b bg-muted/60 px-4 py-2.5">
@@ -788,7 +883,7 @@ function EmbedSection({
               <span className="size-2.5 rounded-full bg-pine/40" />
             </span>
             <span className="font-mono text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              HTML
+              {active.lang}
             </span>
           </div>
           <button
@@ -808,8 +903,27 @@ function EmbedSection({
           </button>
         </div>
         <pre className="overflow-x-auto p-4 text-xs leading-relaxed">
-          <code>{snippet}</code>
+          <code>{active.code}</code>
         </pre>
+      </div>
+
+      <div className="rounded-xl border bg-muted/20 p-4 text-xs text-muted-foreground">
+        <p className="mb-1.5 font-medium text-foreground">Theming</p>
+        <p>
+          The widget seeds its accent from your board brand color, then defers to
+          the host page. Override any token from your own stylesheet:
+        </p>
+        <pre className="mt-2 overflow-x-auto rounded-lg bg-background p-3 font-mono">
+          <code>{`.oh-root {
+  --oh-accent: #5b5bd6;
+  --oh-radius: 10px;
+  --oh-border: #2a2a2a;
+}`}</code>
+        </pre>
+        <p className="mt-2">
+          Or pin a scheme with{" "}
+          <code className="font-mono">data-theme=&quot;light|dark&quot;</code>.
+        </p>
       </div>
 
       {publishableKey ? (

@@ -79,6 +79,16 @@ export function EssentialsSection({
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor="jobLocationCountry">Country code for search</Label>
+          <Input id="jobLocationCountry" name="jobLocationCountry" defaultValue={job?.jobLocationCountry ?? ""} placeholder="US" maxLength={2} className="uppercase" />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="jobLocationRegion">State or region</Label>
+          <Input id="jobLocationRegion" name="jobLocationRegion" defaultValue={job?.jobLocationRegion ?? ""} placeholder="California" />
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="location">Location</Label>
           <Input
             id="location"
@@ -126,6 +136,16 @@ export function EssentialsSection({
             </SelectContent>
           </Select>
         </div>
+      </div>
+      {workplace === "remote" ? (
+        <div className="space-y-2">
+          <Label htmlFor="remoteEligibleCountries">Eligible remote countries</Label>
+          <Input id="remoteEligibleCountries" name="remoteEligibleCountries" defaultValue={(job?.remoteEligibleCountries as string[] | undefined)?.join(", ") ?? ""} placeholder="US, CA, CL (leave empty for worldwide)" />
+        </div>
+      ) : null}
+      <div className="space-y-2">
+        <Label htmlFor="validThrough">Posting expires</Label>
+        <Input id="validThrough" name="validThrough" type="date" defaultValue={job?.validThrough ? job.validThrough.toISOString().slice(0, 10) : ""} />
       </div>
     </section>
   );

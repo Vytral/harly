@@ -9,6 +9,7 @@ import {
   JobsIcon,
   DesignIcon,
   FooterIcon,
+  EyeIcon,
 } from "./builder-icons";
 
 type IconComponent = ComponentType<SVGProps<SVGSVGElement>>;
@@ -18,7 +19,8 @@ export type BuilderSection =
   | "content"
   | "jobs"
   | "design"
-  | "footer";
+  | "footer"
+  | "discovery";
 
 interface NavItem {
   id: BuilderSection;
@@ -32,6 +34,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "jobs", label: "Jobs", icon: JobsIcon },
   { id: "design", label: "Design", icon: DesignIcon },
   { id: "footer", label: "Footer", icon: FooterIcon },
+  { id: "discovery", label: "Discover", icon: EyeIcon },
 ];
 
 export function BuilderSidebar({
