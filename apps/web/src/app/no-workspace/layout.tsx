@@ -4,7 +4,7 @@ export default function NoWorkspaceLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="relative min-h-screen overflow-hidden bg-paper text-foreground antialiased">
+    <div className="light relative min-h-screen overflow-hidden bg-paper text-foreground antialiased">
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 overflow-hidden"
