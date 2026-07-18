@@ -99,6 +99,12 @@ export function ContentPanel({ config, update, workspace }: ContentPanelProps) {
                 </Field>
               </>
             )}
+          </>
+        )}
+
+        {/* Logo type + CTA text , Minimal and Bento (topbar-based heroes) */}
+        {(config.template === "minimal" || config.template === "bento") && (
+          <>
             <Field label="Logo to display">
               <Segmented
                 value={config.hero.logoType}
@@ -120,7 +126,7 @@ export function ContentPanel({ config, update, workspace }: ContentPanelProps) {
         )}
 
         {/* Banner image + overlay , Playful & Ashby */}
-        {config.template !== "minimal" && (
+        {(config.template === "playful" || config.template === "ashby") && (
           <>
             <Field label="Banner image">
               <FileDropzone

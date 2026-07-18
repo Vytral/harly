@@ -1,18 +1,20 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { redirect, getPublicWorkspaceSlug, getCareerPageData } = vi.hoisted(
+const { redirect, getPublicWorkspaceSlug, getCareerPageData, isPortalEnabled } = vi.hoisted(
   () => ({
     redirect: vi.fn((href: string) => {
       throw new Error(`redirect:${href}`);
     }),
     getPublicWorkspaceSlug: vi.fn(),
     getCareerPageData: vi.fn(),
+    isPortalEnabled: vi.fn(),
   }),
 );
 
 vi.mock("next/navigation", () => ({ redirect }));
 vi.mock("@/lib/public-workspace", () => ({ getPublicWorkspaceSlug }));
 vi.mock("@/features/career-page/data", () => ({ getCareerPageData }));
+vi.mock("@/lib/portal-auth", () => ({ isPortalEnabled }));
 vi.mock("@/features/career-page/PublicCareerPage", () => ({
   PublicCareerPage: () => null,
 }));
@@ -26,6 +28,7 @@ describe("public home page", () => {
 
   it("renders the first workspace board at / with root-relative job links", async () => {
     getPublicWorkspaceSlug.mockResolvedValue("acme");
+    isPortalEnabled.mockResolvedValue(false);
     getCareerPageData.mockResolvedValue({
       workspace: { id: "workspace-1", slug: "acme", name: "Acme" },
       jobs: [
