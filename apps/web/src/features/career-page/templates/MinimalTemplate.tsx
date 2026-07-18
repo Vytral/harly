@@ -18,11 +18,13 @@ export function MinimalTemplate({
   jobs,
   config,
   boardRoot,
+  portalEnabled = false,
 }: {
   workspace: WorkspaceBoardBranding & { id: string };
   jobs: Job[];
   config: CareerPageConfig;
   boardRoot: string;
+  portalEnabled?: boolean;
 }) {
   const accent = config.theme.accent ?? workspace.primaryColor;
   const headline = config.hero.headline || `Careers at ${workspace.name}`;
@@ -286,6 +288,7 @@ export function MinimalTemplate({
             workspaceName={workspace.name}
             maxWidth="max-w-3xl"
             iconRounded="rounded-md"
+            portalEnabled={portalEnabled}
           />
         </div>
       </footer>

@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { getCareerPageData } from "@/features/career-page/data";
 import { PublicCareerPage } from "@/features/career-page/PublicCareerPage";
 import { getPublicWorkspaceSlug } from "@/lib/public-workspace";
+import { isPortalEnabled } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +14,10 @@ export default async function HomePage() {
     redirect("/setup" as Route);
   }
 
-  const data = await getCareerPageData(slug);
+  const [data, portalEnabled] = await Promise.all([
+    getCareerPageData(slug),
+    isPortalEnabled(),
+  ]);
   if (!data) {
     redirect("/setup" as Route);
   }
@@ -35,6 +39,7 @@ export default async function HomePage() {
       }))}
       config={data.config}
       boardRoot=""
+      portalEnabled={portalEnabled}
     />
   );
 }

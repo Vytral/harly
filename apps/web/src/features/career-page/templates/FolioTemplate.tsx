@@ -466,11 +466,13 @@ export function FolioTemplate({
   jobs,
   config,
   boardRoot,
+  portalEnabled = false,
 }: {
   workspace: WorkspaceBoardBranding & { id: string };
   jobs: Job[];
   config: CareerPageConfig;
   boardRoot: string;
+  portalEnabled?: boolean;
 }) {
   const accent = config.theme.accent ?? workspace.primaryColor;
   const ctaColor = config.cta.color ?? accent;
@@ -777,6 +779,7 @@ export function FolioTemplate({
             workspaceName={workspace.name}
             maxWidth="max-w-6xl"
             iconRounded="rounded-none"
+            portalEnabled={portalEnabled}
           />
         </div>
       </footer>

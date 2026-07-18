@@ -28,11 +28,13 @@ export function PlayfulTemplate({
   jobs,
   config,
   boardRoot,
+  portalEnabled = false,
 }: {
   workspace: WorkspaceBoardBranding & { id: string };
   jobs: Job[];
   config: CareerPageConfig;
   boardRoot: string;
+  portalEnabled?: boolean;
 }) {
   const accent = config.theme.accent ?? workspace.primaryColor;
   const ctaColor = config.cta.color ?? accent;
@@ -281,7 +283,7 @@ export function PlayfulTemplate({
 
       <footer className="mx-auto mt-20 max-w-5xl px-6 pb-12">
         <div className="border-t border-zinc-100 pt-6 dark:border-zinc-800">
-          <CareerFooter config={config} workspaceName={workspace.name} maxWidth="max-w-5xl" />
+          <CareerFooter config={config} workspaceName={workspace.name} maxWidth="max-w-5xl" portalEnabled={portalEnabled} />
         </div>
       </footer>
     </div>

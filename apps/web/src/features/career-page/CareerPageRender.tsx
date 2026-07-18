@@ -21,11 +21,13 @@ export function CareerPageRender({
   workspace,
   jobs,
   boardRoot,
+  portalEnabled = false,
 }: {
   config: CareerPageConfig;
   workspace: WorkspaceBoardBranding & { id: string };
   jobs: Job[];
   boardRoot: string;
+  portalEnabled?: boolean;
 }) {
   const templateMap = {
     minimal: MinimalTemplate,
@@ -46,6 +48,7 @@ export function CareerPageRender({
         workspace={workspace}
         jobs={jobs}
         boardRoot={boardRoot}
+        portalEnabled={portalEnabled}
       />
     </ThemeWrapper>
   );

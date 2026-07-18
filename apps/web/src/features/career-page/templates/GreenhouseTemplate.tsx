@@ -21,11 +21,13 @@ export function GreenhouseTemplate({
   jobs,
   config,
   boardRoot,
+  portalEnabled = false,
 }: {
   workspace: WorkspaceBoardBranding & { id: string };
   jobs: Job[];
   config: CareerPageConfig;
   boardRoot: string;
+  portalEnabled?: boolean;
 }) {
   const accent = config.theme.accent ?? workspace.primaryColor;
   const headline = config.hero.headline || "Join our team";
@@ -204,7 +206,7 @@ export function GreenhouseTemplate({
 
       <footer className="border-t border-zinc-200 dark:border-zinc-800">
         <div className="py-8">
-          <CareerFooter config={config} workspaceName={workspace.name} maxWidth="max-w-3xl" iconRounded="rounded-md" />
+          <CareerFooter config={config} workspaceName={workspace.name} maxWidth="max-w-3xl" iconRounded="rounded-md" portalEnabled={portalEnabled} />
         </div>
       </footer>
     </div>

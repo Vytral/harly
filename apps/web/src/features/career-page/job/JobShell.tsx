@@ -34,6 +34,7 @@ export function JobShell({
   boardRoot,
   activeTab,
   variant,
+  portalEnabled = false,
   children,
 }: {
   config: CareerPageConfig;
@@ -42,6 +43,7 @@ export function JobShell({
   boardRoot: string;
   activeTab: "overview" | "application";
   variant: JobShellVariant;
+  portalEnabled?: boolean;
   children: React.ReactNode;
 }) {
   const accent = config.theme.accent ?? workspace.primaryColor;
@@ -332,6 +334,7 @@ export function JobShell({
             workspaceName={workspace.name}
             maxWidth="max-w-5xl"
             iconRounded={isFolio ? "rounded-none" : undefined}
+            portalEnabled={portalEnabled}
           />
         </div>
       </footer>

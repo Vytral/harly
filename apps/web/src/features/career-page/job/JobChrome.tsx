@@ -27,6 +27,7 @@ export function JobChrome({
   job,
   boardRoot,
   activeTab,
+  portalEnabled = false,
   children,
 }: {
   config: CareerPageConfig;
@@ -34,6 +35,7 @@ export function JobChrome({
   job: JobLike;
   boardRoot: string;
   activeTab: "overview" | "application";
+  portalEnabled?: boolean;
   children: React.ReactNode;
 }) {
   const accent = config.theme.accent ?? workspace.primaryColor;
@@ -53,6 +55,7 @@ export function JobChrome({
           boardRoot={boardRoot}
           activeTab={activeTab}
           variant={templateToVariant(config.template)}
+          portalEnabled={portalEnabled}
         >
           {children}
         </JobShell>

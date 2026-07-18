@@ -14,11 +14,13 @@ export function CareerFooter({
   workspaceName,
   maxWidth = "max-w-5xl",
   iconRounded = "rounded-full",
+  portalEnabled = false,
 }: {
   config: CareerPageConfig;
   workspaceName: string;
   maxWidth?: string;
   iconRounded?: string;
+  portalEnabled?: boolean;
 }) {
   const socials = config.footer.socials.filter((s) => s.url.trim());
   const legalLinks = config.footer.legalLinks ?? [];
@@ -77,8 +79,16 @@ export function CareerFooter({
         <p>
           © {year} {workspaceName}
         </p>
-        {legalLinks.length > 0 && (
+        {portalEnabled || legalLinks.length > 0 ? (
           <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+            {portalEnabled ? (
+              <a
+                href="/portal"
+                className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
+              >
+                Candidate portal
+              </a>
+            ) : null}
             {legalLinks.map((slug) => (
               <a
                 key={slug}
@@ -89,7 +99,7 @@ export function CareerFooter({
               </a>
             ))}
           </nav>
-        )}
+        ) : null}
       </div>
     </div>
   );
