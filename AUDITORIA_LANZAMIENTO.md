@@ -79,18 +79,18 @@ Subfases de diseño completadas:
 
 ## Fase 4 — Self-hosting y operación
 
-Estado: `en revisión` — recorrido de código y documentación completado; no se puede validar end-to-end hasta que exista el runtime self-hosted.
+Estado: `en revisión` — runtime Docker Compose validado en instalación temporal aislada; falta RC limpio final y smoke autenticado/cloud.
 
-- [ ] Docker Compose desde cero: base de datos, storage, migraciones y app.
-- [ ] CLI/wizard: variables, generación de secretos, admin inicial, dominio y health checks.
+- [x] Docker Compose desde cero: base de datos, storage, migraciones y app. Validado en instalación temporal aislada el 2026-07-18.
+- [x] CLI/wizard: variables, generación de secretos, admin inicial, dominio y health checks. `npx @harly/cli` detecta instalaciones hijas y evita ofrecer una instalación nueva.
 - [ ] Scheduler instalable: mailbox sync cada 2 min, webhook retries y mecanismo Docker/systemd/Kubernetes.
-- [ ] Documentación: requisitos, upgrade, backup, SMTP/IMAP, troubleshooting y seguridad.
+- [x] Documentación: requisitos, upgrade, backup, restore, plataformas cloud y seguridad. Requiere mantenimiento por release.
 - [ ] Observabilidad: logs estructurados, estado de integraciones, alertas y diagnóstico.
 - [ ] CI: typecheck, tests, build, migraciones y smoke/E2E del flujo crítico.
 
 ## Fase 5 — Go/no-go
 
-Estado: `bloqueado` — no es posible ejecutar los escenarios E2E exigidos en una instalación self-hosted limpia hasta resolver F4-01, F4-02 y F4-03.
+Estado: `en revisión` — ya existe runtime reproducible; falta completar RC limpio de backup/restore/update y el escenario ATS autenticado.
 
 - [ ] Ejecutar escenario E2E: publicar puesto → aplicar → revisar → mover pipeline → entrevista → evaluación → oferta → cierre.
 - [ ] Ejecutar escenario de fallo: storage/email/integración/cron caídos y recuperación.
@@ -163,17 +163,17 @@ Estado: `bloqueado` — no es posible ejecutar los escenarios E2E exigidos en un
 | F3-25 | Calendario/candidatos en pantallas pequeñas o grandes | P1 | Calendario siempre conserva siete columnas y celdas `min-h-24`; Candidates carga/filtra localmente sin paginación y muestra rail IA incompleta (`CalendarBoard.tsx:238-314`, `CandidatesTable.tsx:130-199,370-477,634-653`). | Agenda/lista móvil con zona horaria; búsqueda/filtros server-side y paginación; ocultar rail no operativa. | pendiente |
 | F3-26 | Perfil y settings navegables a medias | P2 | Perfil de candidato concentra seis tabs no persistidas en URL; Settings muestra nueve secciones como cinta horizontal en móvil (`CandidateProfileTabs.tsx:269-298`, `SettingsNav.tsx:88-149`). | Tabs con deep-link/recuentos y selector/accordion/búsqueda para settings en móvil. | pendiente |
 | F3-27 | Estados públicos de carga/error | P1 | Job y apply públicos son dinámicos pero carecen de boundaries de carga/error; portal login/upload no anuncia estado de forma accesible. | Añadir loading/error/retry contextual y live regions a upload/login/submit. | pendiente |
-| F4-01 | Docker deployable | P0 | La auditoría original quedó obsoleta: existen Dockerfile multi-stage y Compose productivo con migrator/app/scheduler/Caddy, pero todavía no existe una imagen GHCR públicamente pullable ni smoke de VPS limpia. | Imagen multi-stage y Compose productivo con app, migrator, storage persistente, healthchecks y smoke limpio. | en progreso; SELFHOST-IMAGE-01 |
-| F4-02 | CLI/wizard | P0 | La auditoría original quedó obsoleta: el CLI ya implementa `init`, `launch`, `doctor`, `backup`, `restore` y `upgrade`, pero sigue en beta funcional y carece de la experiencia guiada final. | CLI publicable e idempotente: preflight, env/secrets, admin, storage, dominio y modo no interactivo; completar los siete items SELFHOST. | en progreso |
-| F4-03 | Scheduler | P0 | Existe scheduler instalable con cron privado, locks/claims y registro de runs; falta probar solapamiento, recuperación y fallo en la imagen distribuida. | Scheduler instalable, lock distribuido, métricas/reintentos y prueba de solapamiento/fallo. | en progreso; SELFHOST-RC-01 |
-| F4-04 | Storage local | P1 | Sin volumen de app en Compose; escritura respeta `UPLOADS_DIR` pero LocalAdapter lee/elimina en ruta distinta. | Contrato único de path, volumen persistente y pruebas de reinicio/lectura/borrado. | pendiente |
-| F4-05 | Health y seguridad DB | P1 | Health no está integrado a orquestador y expone error DB; Compose publica Postgres y defaults dev. | Liveness/readiness seguros, probes/timeout y red privada/credenciales obligatorias en producción. | pendiente |
-| F4-06 | Upgrade/rollback | P1 | `upgrade` existe, pero aún no tiene prueba N-1 → actual, rollback de configuración ante fallo ni validación de compatibilidad. | Runbook/script versionado con backup previo, upgrade probado y política de rollback. | en progreso; bloqueado por SELFHOST-DATA-01 |
-| F4-07 | Backup/restore | P1 | `backup` y `restore` existen como prototipos de alto riesgo; faltan prueba destructiva, credenciales DB configurables, checksums completos y cobertura S3. | Backup cifrado, retención, restore reproducible y prueba periódica. | en progreso; SELFHOST-DATA-01 |
-| F4-08 | CI operativo | P1 | CI ya incluye PostgreSQL 16 y migraciones, E2E de `init`, smoke del tarball y build/inspección de imagen; faltan Compose smoke ejecutado en los tres modos, escaneo de dependencias/imagen y RC limpio. | Pipeline de artefacto y DB real: build/run/health, migraciones, Compose, E2E y seguridad. | en progreso; SELFHOST-RC-01 |
-| F4-09 | Configuración producción | P1 | No existe schema/preflight fail-fast; `.env.example` tiene defaults dev y variables incompletas. | Validación de env obligatoria, matriz por proveedor y error seguro antes de servir tráfico. | pendiente |
-| F4-10 | Observabilidad/runbooks | P1 | Logs sin redacción/correlación y docs sin troubleshooting de OAuth, storage, SMTP/IMAP, cron o migración. | Métricas/alertas, dashboards de estado y runbooks accionables. | pendiente |
-| F4-11 | Documentación obsoleta | P2 | Guías refieren Dockerfile/contadores de migración que no coinciden con el repositorio. | Corregir documentos y validarlos como parte de CI. | pendiente |
+| F4-01 | Docker deployable | P0 | Compose generado define Postgres 16 privado, migrator, app, scheduler, volúmenes y healthchecks; `ghcr.io/vytral/harly:0.1.0-beta.1` fue pullable y arrancó en instalación temporal local. Falta evidencia VPS/HTTPS real y publicar el siguiente artefacto. | RC en VPS con digest publicado, Caddy/DNS y reinicio. | parcial — SELFHOST-RC-01 |
+| F4-02 | CLI/wizard | P0 | `init`, `launch`, `doctor`, `backup`, `restore`, `update` y `uninstall` existen; el menú detecta sólo instalaciones ancestras y CI desactiva prompts. Falta publicar estos fixes como 0.1.3 y validar el flujo TTY completo. | Publicar y ejecutar RC de CLI distribuido. | parcial |
+| F4-03 | Scheduler | P0 | Scheduler es un servicio Compose con dependencia de app healthy, reinicio y límites; arrancó en la prueba local. Aún no hay prueba de solapamiento, caída y recuperación. | Pruebas de locks, reintentos y recuperación. | parcial — SELFHOST-RC-01 |
+| F4-04 | Storage local | P1 | Compose monta `uploads:/data/uploads`; `UPLOADS_DIR=/data/uploads` es el contrato runtime y hay prueba de `LocalAdapter`/path traversal. | Mantener prueba de reinicio en RC. | resuelto ✅ |
+| F4-05 | Health y seguridad DB | P1 | Postgres no publica puerto, app/scheduler esperan healthchecks y readiness no expone detalle de BD. | Verificar Caddy/HTTPS y alertado externo en VPS. | resuelto en Compose ✅ |
+| F4-06 | Upgrade/rollback | P1 | Update crea backup previo, fija digest, ejecuta migraciones y espera health; una migración no se revierte automáticamente y se documenta restore como recuperación. RC temporal 2026-07-18 validó update al digest de beta, reinicio y `doctor` verde. Falta N-1 → actual entre versiones distintas. | RC N-1 → actual y runbook de compatibilidad. | parcial |
+| F4-07 | Backup/restore | P1 | Backup exige age o consentimiento explícito plaintext, incluye checksums recursivos y usa credenciales configuradas. Restore crea safety backup, excluye migrator durante restore y valida health. El drill limpio 2026-07-18 destruyó y recuperó 500 filas, checksum, usuario y upload byte a byte. Falta estrategia S3/retención. | Drill periódico cifrado + backup/versionado S3. | parcial — SELFHOST-DATA-01 local completado ✅ |
+| F4-08 | CI operativo | P1 | Hay typecheck, tests del CLI e init E2E; falta smoke Compose por modo, escaneo y RC de artefacto distribuido. | CI Compose + escaneo + RC. | parcial |
+| F4-09 | Configuración producción | P1 | CLI valida Docker, Compose, puertos, disco, DNS, URL, storage e imagen fija antes de generar `.env`; el runtime aún no posee schema único exhaustivo de variables. | Schema runtime y matriz por proveedor. | parcial |
+| F4-10 | Observabilidad/runbooks | P1 | Hay health/readiness, `doctor`, logs rotados y guía operacional. Faltan alertas, métricas y runbooks de fallos de integraciones. | Alertado externo y runbooks por dependencia. | parcial |
+| F4-11 | Documentación obsoleta | P2 | `self-hosting`, cloud deployments y launch checklist fueron reconciliados con el CLI/Compose actual. La suite del CLI valida enlaces cloud locales, roles/healthcheck de DigitalOcean y que el wizard capture `DATABASE_URL` como secreto app-level. | Mantener smoke autenticado por proveedor y validar enlaces externos en releases. | parcial — validación estática añadida |
 | F5-01 | Escenario E2E ATS | P0 | No existe runner E2E/Playwright/Cypress, fixtures ni smoke; F1 contiene bloqueos en el flujo candidato → oferta. | Implementar escenario automatizado de publicar → aplicar → pipeline → entrevista → evaluación → oferta → cierre. | bloqueado por F1/F4 |
 | F5-02 | Escenario de fallos | P0 | No hay harness para caída de storage/email/integración/cron ni mecanismos recuperables en varios flujos. | Tests de fallo y recuperación/idempotencia por proveedor antes de RC. | bloqueado por F1/F4 |
 | F5-03 | Suite de pruebas | P1 | `pnpm test` (12 jul 2026): 162 pasan, 1 falla y 1 se omite; `ssrf.test.ts` intenta DNS real a `example.com`. | Convertir la prueba en un unit test con fetch/DNS mockeado; exigir suite verde sin red. | Completado ✅ |

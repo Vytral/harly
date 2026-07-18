@@ -11,19 +11,19 @@ The interactive wizard checks Docker, ports, DNS and free disk, detects the
 host's CPU/RAM, recommends a resource profile, masks provider secrets and shows
 the complete installation plan before writing anything.
 
+Use the official user-facing entrypoint:
+
 ```bash
-npx @harly/create init harly
-cd harly
-npx @harly/create launch . --yes
-npx @harly/create doctor .
+npx @harly/cli
 ```
 
-After the short-name package is published, the same CLI is available as
-`npx harly`. A normal update is simply:
+Npm's name-similarity protections prevent an unscoped `harly` package. The
+scoped package still exposes the `harly` executable for global installs; with
+`npx`, use the concise official scope. A normal update is simply:
 
 ```bash
 cd harly
-npx harly upgrade
+npx @harly/cli update
 ```
 
 Use `--to edge` for preview builds or `--to 0.1.0-beta.2` for a fixed release.

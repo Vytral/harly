@@ -10,16 +10,14 @@ import type { JobLike } from "./jobMeta";
 /** Map a career template to its job-page chrome variant. */
 function templateToVariant(t: CareerTemplate | ""): JobShellVariant {
   if (t === "playful") return "playful";
-  if (t === "folio") return "folio";
   return "structured";
 }
 
 /**
  * Per-template public job chrome. Wraps the active tab's content in the
  * workspace's career template look: ThemeWrapper (mode/bg/font) + a shell picked
- * by `config.template` (playful → hero band, folio → masthead bar, else
- * structured header). Exposes the accent as `--board-primary` so shared
- * form/buttons pick it up.
+ * by `config.template` (playful → hero band, else structured header). Exposes the
+ * accent as `--board-primary` so shared form/buttons pick it up.
  */
 export function JobChrome({
   config,

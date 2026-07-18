@@ -96,7 +96,7 @@ info "uploads wiped"
 # --- 4. RESTORE --------------------------------------------------------------
 step "Restore"
 # restore requires --force after you verify the destination (mirrors the CLI).
-node "$CLI" restore "$ARCHIVE" "$INSTALL_DIR" --force
+node "$CLI" restore "$ARCHIVE" "$INSTALL_DIR" --force $BACKUP_FLAG
 
 # --- 5. VERIFY ---------------------------------------------------------------
 step "Verify recovery"

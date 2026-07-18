@@ -84,6 +84,27 @@ const jobs: Job[] = [
   { name: "mailbox-sync", path: "/api/cron/mailbox-sync", intervalMs: 120_000 },
 ];
 
+const schedulerStaleAfterMs = Math.max(
+  60_000,
+  Number.parseInt(process.env.HARLY_SCHEDULER_STALE_AFTER_SECONDS ?? "300", 10) * 1_000 || 300_000,
+);
+
+function describeSchedulerRuns(runs: Record<string, string | null> | null | undefined) {
+  const cutoff = Date.now() - schedulerStaleAfterMs;
+  const details = jobs.map((job) => {
+    const value = runs?.[job.name];
+    const timestamp = value ? new Date(value).getTime() : Number.NaN;
+    if (!value || Number.isNaN(timestamp)) return `${job.name}=never`;
+    return `${job.name}=${new Date(timestamp).toISOString()}${timestamp < cutoff ? " (stale)" : ""}`;
+  });
+  const ok = jobs.every((job) => {
+    const value = runs?.[job.name];
+    const timestamp = value ? new Date(value).getTime() : Number.NaN;
+    return !Number.isNaN(timestamp) && timestamp >= cutoff;
+  });
+  return { ok, detail: details.join(" ") };
+}
+
 async function scheduler() {
   const config = await runtimeConfig({ validateFilesystem: false });
   const appOrigin = process.env.HARLY_INTERNAL_URL ?? "http://app:3000";
@@ -156,7 +177,9 @@ async function scheduler() {
 }
 
 async function doctor() {
-  const config = await runtimeConfig();
+  // Doctor runs inside the read-only scheduler container as its healthcheck;
+  // it must not attempt to create the local upload directory there.
+  const config = await runtimeConfig({ validateFilesystem: false });
   const appOrigin = process.env.HARLY_INTERNAL_URL ?? config.HARLY_URL;
   const database = postgres(config.DATABASE_URL!, { max: 1, prepare: false });
   const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];
@@ -170,12 +193,21 @@ async function doctor() {
     const [row] = await database`
       select
         to_regclass('public.deployment_bootstrap') is not null as migrated,
-        (select max(created_at) from cron_runs) as last_cron,
+        (
+          select coalesce(json_object_agg(job, last_run), '{}'::json)
+          from (
+            select job, max(created_at) filter (where status in ('success', 'skipped')) as last_run
+            from cron_runs
+            where job in ('email-outbox', 'webhooks-dispatch', 'mailbox-sync')
+            group by job
+          ) scheduler_runs
+        ) as scheduler_runs,
         (select count(*)::int from email_outbox where status in ('pending', 'processing')) as email_pending,
         (select count(*)::int from webhook_deliveries where status in ('pending', 'failed', 'processing')) as webhook_pending
     `;
     checks.push({ name: "migrations", ok: row?.migrated === true });
-    checks.push({ name: "scheduler", ok: Boolean(row?.last_cron), detail: row?.last_cron ? new Date(row.last_cron).toISOString() : "no runs recorded" });
+    const scheduler = describeSchedulerRuns(row?.scheduler_runs as Record<string, string | null> | null | undefined);
+    checks.push({ name: "scheduler", ...scheduler });
     checks.push({ name: "queues", ok: true, detail: `email=${row?.email_pending ?? 0} webhooks=${row?.webhook_pending ?? 0}` });
   } catch {
     checks.push({ name: "database", ok: false, detail: "query failed" });

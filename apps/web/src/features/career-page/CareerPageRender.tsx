@@ -8,7 +8,7 @@ import { ThemeWrapper } from "./ThemeWrapper";
 import { PlayfulTemplate } from "./templates/PlayfulTemplate";
 import { MinimalTemplate } from "./templates/MinimalTemplate";
 import { AshbyTemplate } from "./templates/AshbyTemplate";
-import { FolioTemplate } from "./templates/FolioTemplate";
+import { BentoTemplate } from "./templates/BentoTemplate";
 
 /**
  * Renders the public career page from live config. Switch picks the template
@@ -33,7 +33,7 @@ export function CareerPageRender({
     minimal: MinimalTemplate,
     playful: PlayfulTemplate,
     ashby: AshbyTemplate,
-    folio: FolioTemplate,
+    bento: BentoTemplate,
   } as const;
 
   const TemplateComponent =

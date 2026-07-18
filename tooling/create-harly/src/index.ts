@@ -2,7 +2,7 @@
 
 import { createHash, randomBytes } from "node:crypto";
 import { promises as dns } from "node:dns";
-import { chmod, cp, mkdir, mkdtemp, readFile, rename, rm, stat, statfs, writeFile } from "node:fs/promises";
+import { chmod, cp, mkdir, mkdtemp, readFile, readdir, rename, rm, stat, statfs, writeFile } from "node:fs/promises";
 import { createServer } from "node:net";
 import os from "node:os";
 import path from "node:path";
@@ -79,7 +79,7 @@ class CliError extends Error {
 }
 
 const args = process.argv.slice(2);
-const command = args.shift() ?? "help";
+const command = args.shift() ?? "menu";
 const flags = new Set(args.filter((arg) => arg.startsWith("--") && !["--to"].includes(arg)));
 const positionals = args.filter((arg, index) => !arg.startsWith("--") && args[index - 1] !== "--to");
 const toIndex = args.indexOf("--to");
@@ -87,8 +87,10 @@ const toVersion = toIndex >= 0 ? args[toIndex + 1] : undefined;
 const force = flags.has("--force");
 const yes = flags.has("--yes");
 const json = flags.has("--json");
-const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY);
-const cliVersion = "0.1.1";
+// CI and automated recovery checks must never wait for a terminal prompt,
+// even when their runner allocates a pseudo-TTY.
+const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY && !process.env.CI);
+const cliVersion = "0.1.3";
 
 const logo = `
 ██╗  ██╗ █████╗ ██████╗ ██╗     ██╗   ██╗
@@ -99,7 +101,7 @@ const logo = `
 ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝`;
 
 function usage() {
-  process.stdout.write(`create-harly — reproducible Harly self-hosting\n\nCommands:\n  create-harly init [directory] [--force]\n  create-harly launch [directory] [--yes]\n  create-harly doctor [directory] [--json]\n  create-harly backup [directory] [--allow-plaintext]\n  create-harly restore <archive> [directory] --force\n  create-harly upgrade [directory] [--to version|edge] [--yes] [--allow-plaintext]\n`);
+  process.stdout.write(`Harly — self-hosted ATS\n\nRun without arguments for the guided experience.\n\nAdvanced commands:\n  harly init [directory] [--force]\n  harly launch [directory] [--yes]\n  harly doctor [directory] [--json]\n  harly backup [directory] [--allow-plaintext]\n  harly restore <archive> [directory] --force [--allow-plaintext]\n  harly update [directory] [--to version|edge] [--yes] [--allow-plaintext]\n  harly uninstall [directory] [--remove-data] [--yes]\n`);
 }
 
 function showBrand() {
@@ -112,12 +114,14 @@ function unwrapPrompt<T>(value: T | symbol): T {
   throw new CliError("", 2);
 }
 
-function run(program: string, commandArgs: string[], options: { cwd?: string; input?: Buffer; allowFailure?: boolean } = {}) {
+function run(program: string, commandArgs: string[], options: { cwd?: string; input?: Buffer; binary?: boolean; allowFailure?: boolean } = {}) {
   const result = spawnSync(program, commandArgs, {
     cwd: options.cwd,
     input: options.input,
-    encoding: options.input ? undefined : "utf8",
-    stdio: options.input ? ["pipe", "pipe", "pipe"] : "pipe",
+    // Database dumps are binary. Never decode them as UTF-8 on the way out
+    // of Docker, otherwise pg_restore receives a silently corrupted archive.
+    encoding: options.input || options.binary ? undefined : "utf8",
+    stdio: options.input || options.binary ? ["pipe", "pipe", "pipe"] : "pipe",
     maxBuffer: 1024 * 1024 * 512,
   });
   if (result.status !== 0 && !options.allowFailure) {
@@ -127,7 +131,7 @@ function run(program: string, commandArgs: string[], options: { cwd?: string; in
   return result;
 }
 
-function compose(cwd: string, composeArgs: string[], options: { input?: Buffer; allowFailure?: boolean } = {}) {
+function compose(cwd: string, composeArgs: string[], options: { input?: Buffer; binary?: boolean; allowFailure?: boolean } = {}) {
   return run("docker", ["compose", ...composeArgs], { cwd, ...options });
 }
 
@@ -212,6 +216,19 @@ function normalizeUrl(value: string, mode: ProxyMode): URL {
   return url;
 }
 
+function validateDatabaseUrl(value?: string): string | undefined {
+  if (!value?.trim()) return "A DigitalOcean Managed PostgreSQL connection URL is required.";
+  try {
+    const url = new URL(value.trim());
+    if (!["postgres:", "postgresql:"].includes(url.protocol) || !url.hostname || !url.pathname || url.pathname === "/") {
+      return "Enter a postgresql:// connection URL that includes a database name.";
+    }
+  } catch {
+    return "Enter a valid postgresql:// connection URL.";
+  }
+  return undefined;
+}
+
 function secret() {
   return randomBytes(32).toString("base64url");
 }
@@ -285,7 +302,7 @@ async function collectNonInteractiveAnswers(directory: string): Promise<InitAnsw
     endpoint: process.env.S3_ENDPOINT?.trim() || "",
     publicUrl: process.env.S3_PUBLIC_URL?.trim() || "",
   } : null;
-  const image = process.env.HARLY_IMAGE_REF ?? "ghcr.io/vytral/harly:0.1.0-beta.1";
+  const image = process.env.HARLY_IMAGE_REF ?? "ghcr.io/vytral/harly:0.1.0-beta.2";
   if (image.endsWith(":latest")) throw new CliError("Installations must pin a version or digest, never latest.", 2);
   return { mode, url, email, organization, storage, s3, resourceProfile, image };
 }
@@ -366,7 +383,7 @@ async function collectInteractiveAnswers(directory: string): Promise<InitAnswers
     ],
   }));
 
-  const image = process.env.HARLY_IMAGE_REF ?? "ghcr.io/vytral/harly:0.1.0-beta.1";
+  const image = process.env.HARLY_IMAGE_REF ?? "ghcr.io/vytral/harly:0.1.0-beta.2";
   if (image.endsWith(":latest")) throw new CliError("Installations must pin a version or digest, never latest.", 2);
   const services = `PostgreSQL, migrator, app, scheduler${mode === "caddy" ? ", Caddy" : ""}`;
   const localPort = process.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : "3000");
@@ -479,6 +496,7 @@ services:
     tmpfs: [/tmp]
     environment: { <<: *env, HARLY_INTERNAL_URL: http://app:3000, NODE_OPTIONS: "\${HARLY_SCHEDULER_NODE_OPTIONS:---max-old-space-size=160}" }
     depends_on: { app: { condition: service_healthy } }
+    healthcheck: { test: [CMD, node, /app/runtime.mjs, doctor], interval: 30s, timeout: 10s, start_period: 45s, retries: 3 }
   caddy:
     image: caddy:2.10-alpine
     profiles: [proxy]
@@ -493,7 +511,7 @@ services:
 volumes: { postgres-data: {}, uploads: {}, next-cache: {}, caddy-data: {}, caddy-config: {} }
 `;
 
-const envExample = `HARLY_IMAGE=ghcr.io/vytral/harly:<version-or-digest>\nHARLY_VERSION=<version>\nHARLY_URL=https://harly.example.com\nHARLY_PORT=3000\nHARLY_DOMAIN=harly.example.com\nCOMPOSE_PROFILES=proxy\nPOSTGRES_USER=harly\nPOSTGRES_PASSWORD=<secret>\nPOSTGRES_DB=harly\nBETTER_AUTH_SECRET=<secret>\nAI_ENCRYPTION_KEY=<secret>\nSTORAGE_UPLOAD_SECRET=<secret>\nCRON_SECRET=<secret>\nHARLY_SETUP_SECRET=<secret>\nHARLY_INITIAL_ADMIN_EMAIL=owner@example.com\nSTORAGE_PROVIDER=local\nRESEND_API_KEY=\nEMAIL_FROM=\n# Optional resource tuning (defaults target a 4 GB VPS)\nHARLY_APP_MEMORY=1536m\nHARLY_POSTGRES_MEMORY=768m\nHARLY_SCHEDULER_MEMORY=256m\nHARLY_CADDY_MEMORY=256m\nHARLY_CACHE_MAX_MB=512\nHARLY_CACHE_MAX_AGE_DAYS=7\nHARLY_LOG_MAX_SIZE=10m\nHARLY_LOG_MAX_FILES=3\n`;
+const envExample = `HARLY_IMAGE=ghcr.io/vytral/harly:<version-or-digest>\nHARLY_VERSION=<version>\nHARLY_URL=https://harly.example.com\nHARLY_PORT=3000\nHARLY_DOMAIN=harly.example.com\nCOMPOSE_PROFILES=proxy\nPOSTGRES_USER=harly\nPOSTGRES_PASSWORD=<secret>\nPOSTGRES_DB=harly\nBETTER_AUTH_SECRET=<secret>\nAI_ENCRYPTION_KEY=<secret>\nSTORAGE_UPLOAD_SECRET=<secret>\nCRON_SECRET=<secret>\nHARLY_SETUP_SECRET=<secret>\nHARLY_INITIAL_ADMIN_EMAIL=owner@example.com\nSTORAGE_PROVIDER=local\nRESEND_API_KEY=\nEMAIL_FROM=\n# Optional resource tuning (defaults target a 4 GB VPS)\nHARLY_APP_MEMORY=1536m\nHARLY_POSTGRES_MEMORY=768m\nHARLY_SCHEDULER_MEMORY=256m\nHARLY_SCHEDULER_STALE_AFTER_SECONDS=300\nHARLY_CADDY_MEMORY=256m\nHARLY_CACHE_MAX_MB=512\nHARLY_CACHE_MAX_AGE_DAYS=7\nHARLY_LOG_MAX_SIZE=10m\nHARLY_LOG_MAX_FILES=3\n`;
 
 async function init() {
   const directory = path.resolve(positionals[0] ?? "harly");
@@ -541,6 +559,7 @@ async function init() {
         `HARLY_POSTGRES_MEMORY=${resources.postgres}`,
         `HARLY_MIGRATE_MEMORY=${resources.migrate}`,
         `HARLY_SCHEDULER_MEMORY=${resources.scheduler}`,
+        "HARLY_SCHEDULER_STALE_AFTER_SECONDS=300",
         `HARLY_CADDY_MEMORY=${resources.caddy}`,
         `HARLY_CACHE_MAX_MB=${resources.cacheMb}`,
         "HARLY_CACHE_MAX_AGE_DAYS=7",
@@ -558,7 +577,7 @@ async function init() {
       [".env.example", envExample],
       [".gitignore", ".env\nbackups/\n"],
       ["harly.config.json", `${JSON.stringify(config, null, 2)}\n`],
-      ["README.md", `# Harly self-host\n\n- Start: \`docker compose up -d\`\n- Diagnose: \`npx @harly/create doctor .\`\n- Backup before every upgrade.\n- Complete the first owner at ${url.origin}/setup using HARLY_SETUP_SECRET from .env.\n`],
+      ["README.md", `# Harly self-host\n\n- Open management: \`npx @harly/cli\`\n- Diagnose: \`npx @harly/cli doctor\`\n- Backup before every update.\n- Complete the first owner at ${url.origin}/setup using HARLY_SETUP_SECRET from .env.\n`],
     ];
     for (const [name, contents, modeBits] of templates) {
       const target = path.join(directory, name);
@@ -574,13 +593,13 @@ async function init() {
     p.log.success(`${pc.bold(directory)} is ready`);
     const launchNow = unwrapPrompt(await p.confirm({
       message: "Pull the image and launch Harly now?",
-      initialValue: false,
+      initialValue: true,
     }));
     if (launchNow) {
       await launch(directory, true);
-      p.outro(`Harly is ready at ${pc.cyan(url.origin)} · run ${pc.cyan("npx @harly/create doctor .")}`);
+      p.outro(`Harly is ready at ${pc.cyan(url.origin)} · run ${pc.cyan("npx @harly/cli")}`);
     } else {
-      p.outro(`Next: ${pc.cyan(`cd ${shellQuote(directory)} && npx @harly/create launch . --yes`)}`);
+      p.outro(`Next: ${pc.cyan(`cd ${shellQuote(directory)} && npx @harly/cli`)}`);
     }
   } else {
     process.stdout.write(`\nGenerated ${directory}\nImage: ${image}\nMode: ${mode}\nResource profile: ${resourceProfile}\nServices: postgres, migrate, app, scheduler${mode === "caddy" ? ", caddy" : ""}\nVolumes: postgres-data, uploads, next-cache${mode === "caddy" ? ", caddy-data, caddy-config" : ""}\n\n`);
@@ -592,6 +611,28 @@ async function readConfig(directory: string): Promise<HarlyFileConfig> {
     return JSON.parse(await readFile(path.join(directory, "harly.config.json"), "utf8")) as HarlyFileConfig;
   } catch {
     throw new CliError("harly.config.json is missing or invalid. Run init first.");
+  }
+}
+
+type Installation = { directory: string; config: HarlyFileConfig };
+
+/** Finds only the installation that contains the caller. We intentionally never
+ * scan siblings or the home directory: choosing the wrong deployment is worse
+ * than asking the operator to cd into it. */
+async function findInstallation(start = process.cwd()): Promise<Installation | null> {
+  let directory = path.resolve(start);
+  while (true) {
+    const configPath = path.join(directory, "harly.config.json");
+    if (await exists(configPath)) {
+      try {
+        return { directory, config: await readConfig(directory) };
+      } catch {
+        throw new CliError(`Found an invalid Harly configuration at ${configPath}. Fix or remove it before starting a new installation.`, 2);
+      }
+    }
+    const parent = path.dirname(directory);
+    if (parent === directory) return null;
+    directory = parent;
   }
 }
 
@@ -647,34 +688,65 @@ function sha256(buffer: Buffer) {
   return createHash("sha256").update(buffer).digest("hex");
 }
 
-async function backup(explicitDirectory?: string, automaticPlaintext = false): Promise<string> {
+async function checksums(directory: string, prefix = ""): Promise<Record<string, string>> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const result: Record<string, string> = {};
+  for (const entry of entries) {
+    const relative = path.join(prefix, entry.name);
+    const absolute = path.join(directory, entry.name);
+    if (entry.isDirectory()) Object.assign(result, await checksums(absolute, relative));
+    else if (entry.isFile()) result[relative] = sha256(await readFile(absolute));
+  }
+  return result;
+}
+
+async function deploymentDatabase(directory: string) {
+  const contents = await readFile(path.join(directory, ".env"), "utf8");
+  const values = new Map<string, string>();
+  for (const line of contents.split("\n")) {
+    const match = line.match(/^([A-Z0-9_]+)=(.*)$/);
+    if (!match) continue;
+    try { values.set(match[1]!, JSON.parse(match[2]!)); } catch { values.set(match[1]!, match[2]!); }
+  }
+  return { user: values.get("POSTGRES_USER") || "harly", database: values.get("POSTGRES_DB") || "harly" };
+}
+
+async function backup(explicitDirectory?: string): Promise<string> {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
+  const database = await deploymentDatabase(directory);
+  const recipient = process.env.AGE_RECIPIENT;
+  if (!flags.has("--allow-plaintext") && !recipient) {
+    throw new CliError("AGE_RECIPIENT is required unless --allow-plaintext is explicitly set.");
+  }
   const temp = await mkdtemp(path.join(os.tmpdir(), "harly-backup-"));
   const outputDirectory = path.join(directory, "backups");
   await mkdir(outputDirectory, { recursive: true });
   compose(directory, ["stop", "app", "scheduler"], { allowFailure: true });
   try {
-    const dump = compose(directory, ["exec", "-T", "postgres", "pg_dump", "-U", "harly", "-d", "harly", "-Fc"]);
+    const dump = compose(directory, ["exec", "-T", "postgres", "pg_dump", "-U", database.user, "-d", database.database, "-Fc"], { binary: true });
     const bytes = Buffer.isBuffer(dump.stdout) ? dump.stdout : Buffer.from(dump.stdout);
     await writeFile(path.join(temp, "database.dump"), bytes);
     await cp(path.join(directory, ".env"), path.join(temp, ".env"));
     await cp(path.join(directory, "harly.config.json"), path.join(temp, "harly.config.json"));
-    compose(directory, ["cp", "app:/data/uploads/.", path.join(temp, "uploads")], { allowFailure: true });
-    const manifest = { version: config.image, createdAt: new Date().toISOString(), files: { "database.dump": sha256(bytes) } };
+    if (config.storage === "local") compose(directory, ["cp", "app:/data/uploads/.", path.join(temp, "uploads")]);
+    const manifest = {
+      version: config.image,
+      createdAt: new Date().toISOString(),
+      storage: config.storage,
+      uploads: config.storage === "local" ? "included" : "external-s3-not-included",
+      files: await checksums(temp),
+    };
     await writeFile(path.join(temp, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`);
     const archive = path.join(outputDirectory, `harly-${new Date().toISOString().replace(/[:.]/g, "-")}.tar.gz`);
     run("tar", ["-czf", archive, "-C", temp, "."]);
     await chmod(archive, 0o600);
-    if (flags.has("--allow-plaintext") || (automaticPlaintext && !process.env.AGE_RECIPIENT)) {
-      if (automaticPlaintext && !flags.has("--allow-plaintext")) process.stderr.write("No AGE_RECIPIENT configured; created a local backup protected with mode 0600.\n");
+    if (flags.has("--allow-plaintext")) {
       process.stdout.write(`${archive}\n`);
       return archive;
     }
-    const recipient = process.env.AGE_RECIPIENT;
-    if (!recipient) throw new CliError("AGE_RECIPIENT is required unless --allow-plaintext is explicitly set.");
     const encrypted = `${archive}.age`;
-    run("age", ["-r", recipient, "-o", encrypted, archive]);
+    run("age", ["-r", recipient!, "-o", encrypted, archive]);
     await chmod(encrypted, 0o600);
     await rm(archive, { force: true });
     process.stdout.write(`${encrypted}\n`);
@@ -691,7 +763,8 @@ async function restore() {
   if (!force) throw new CliError("restore requires --force after you verify the destination and backup.", 2);
   const archive = path.resolve(archiveArg);
   const directory = path.resolve(positionals[1] ?? ".");
-  await readConfig(directory);
+  const config = await readConfig(directory);
+  const database = await deploymentDatabase(directory);
   const temp = await mkdtemp(path.join(os.tmpdir(), "harly-restore-"));
   let plaintext = archive;
   if (archive.endsWith(".age")) {
@@ -701,22 +774,48 @@ async function restore() {
     run("age", ["-d", "-i", identity, "-o", plaintext, archive]);
   }
   run("tar", ["-xzf", plaintext, "-C", temp]);
-  const manifest = JSON.parse(await readFile(path.join(temp, "manifest.json"), "utf8")) as { files: Record<string, string> };
-  const dump = await readFile(path.join(temp, "database.dump"));
-  if (sha256(dump) !== manifest.files["database.dump"]) throw new CliError("Backup checksum verification failed.");
-  compose(directory, ["stop", "app", "scheduler"]);
+  const manifest = JSON.parse(await readFile(path.join(temp, "manifest.json"), "utf8")) as { files: Record<string, string>; storage?: "local" | "s3" };
+  const actual = await checksums(temp);
+  for (const [file, checksum] of Object.entries(manifest.files)) {
+    if (actual[file] !== checksum) throw new CliError(`Backup checksum verification failed for ${file}.`);
+  }
+  if (manifest.storage === "s3" || config.storage === "s3") {
+    process.stderr.write("This backup does not include S3 objects. Verify the bucket backup/version history before restoring.\n");
+  }
+  // Never destroy a deployment without first proving that its present state is
+  // recoverable. This also makes an accidental restore reversible.
+  process.stdout.write("Creating a safety backup of the current deployment…\n");
+  await backup(directory);
+  process.stdout.write("Safety backup saved. Preparing restore…\n");
+  // The safety backup restarts dependencies. Stop the one-shot migration
+  // service too: otherwise it can race pg_restore and recreate tables while
+  // the database is being restored.
+  compose(directory, ["stop", "app", "scheduler", "migrate"], { allowFailure: true });
   try {
-    compose(directory, ["exec", "-T", "postgres", "pg_restore", "-U", "harly", "-d", "harly", "--clean", "--if-exists"], { input: dump });
-    if (await exists(path.join(temp, "uploads"))) compose(directory, ["cp", `${path.join(temp, "uploads")}/.`, "app:/data/uploads"]);
+    // `docker compose exec` does not reliably preserve a binary stdin stream
+    // across every supported Docker Desktop/Compose combination. Copy the
+    // verified dump into Postgres instead, then restore it by filename.
+    process.stdout.write("Restoring database…\n");
+    compose(directory, ["cp", path.join(temp, "database.dump"), "postgres:/tmp/harly-restore.dump"]);
+    compose(directory, ["exec", "-T", "postgres", "pg_restore", "-U", database.user, "-d", database.database, "--clean", "--if-exists", "/tmp/harly-restore.dump"]);
+    compose(directory, ["exec", "-T", "postgres", "rm", "-f", "/tmp/harly-restore.dump"], { allowFailure: true });
+    if (await exists(path.join(temp, "uploads"))) {
+      process.stdout.write("Restoring local uploads…\n");
+      compose(directory, ["run", "--rm", "--entrypoint", "sh", "app", "-c", "rm -rf /data/uploads/* /data/uploads/.[!.]* /data/uploads/..?*" ]);
+      compose(directory, ["cp", `${path.join(temp, "uploads")}/.`, "app:/data/uploads"]);
+    }
+    process.stdout.write("Applying migrations…\n");
     compose(directory, ["run", "--rm", "migrate"]);
   } finally {
     compose(directory, ["up", "-d", "app", "scheduler"], { allowFailure: true });
   }
-  await doctor(directory);
+  const result = await doctor(directory, false);
+  if (!result.ok) throw new CliError("Restore completed but Harly did not become healthy. Your safety backup was preserved; run `harly doctor` and inspect `docker compose logs` before retrying.");
+  process.stdout.write("Restore complete. Harly is healthy.\n");
 }
 
-async function upgrade() {
-  const directory = path.resolve(positionals[0] ?? ".");
+async function upgrade(explicitDirectory?: string) {
+  const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
   await preflight(config.proxyMode, false);
   if (toVersion === "latest") throw new CliError("latest is not allowed. Use edge for previews or a fixed version.", 2);
@@ -735,7 +834,7 @@ async function upgrade() {
     p.note(`Current  ${config.image}\nTarget   ${requestedImage}\nData     preserved`, "Upgrade plan");
   }
 
-  await backup(directory, true);
+  await backup(directory);
   const envPath = path.join(directory, ".env");
   const configPath = path.join(directory, "harly.config.json");
   const originalEnv = await readFile(envPath, "utf8");
@@ -743,6 +842,7 @@ async function upgrade() {
     .replace(/^HARLY_IMAGE=.*$/m, `HARLY_IMAGE=${envLine(image)}`)
     .replace(/^HARLY_VERSION=.*$/m, `HARLY_VERSION=${envLine(version)}`);
 
+  let migrationsAttempted = false;
   await atomicWrite(envPath, setImage(originalEnv, requestedImage, toVersion ?? "current"), 0o600);
   try {
     progressStep("Pulling the requested image", "Image downloaded", () => compose(directory, ["pull", "app", "migrate", "scheduler"]));
@@ -757,33 +857,256 @@ async function upgrade() {
   const deployedImage = digest ?? requestedImage;
   const deployedVersion = deployedImage.includes("@sha256:") ? deployedImage.split("@sha256:")[1]!.slice(0, 12) : toVersion ?? "current";
   await atomicWrite(envPath, setImage(await readFile(envPath, "utf8"), deployedImage, deployedVersion), 0o600);
-  config.requestedImage = requestedImage;
-  config.image = deployedImage;
-  config.deployedAt = new Date().toISOString();
-  await atomicWrite(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  const markTargetConfigured = async () => {
+    config.requestedImage = requestedImage;
+    config.image = deployedImage;
+    config.deployedAt = new Date().toISOString();
+    await atomicWrite(configPath, `${JSON.stringify(config, null, 2)}\n`);
+  };
 
-  progressStep("Applying database migrations", "Migrations applied", () => compose(directory, ["run", "--rm", "migrate"]));
-  progressStep("Recreating services and waiting for healthchecks", "Services are healthy", () => {
-    compose(directory, ["up", "-d", "--wait", "--wait-timeout", "180"]);
-  });
+  try {
+    migrationsAttempted = true;
+    progressStep("Applying database migrations", "Migrations applied", () => compose(directory, ["run", "--rm", "migrate"]));
+    progressStep("Recreating services and waiting for healthchecks", "Services are healthy", () => {
+      compose(directory, ["up", "-d", "--wait", "--wait-timeout", "180"]);
+    });
+  } catch (error) {
+    // A migration command may have committed before failing. Keep the target
+    // image recorded in that case; rollback is a restore, not an image flip.
+    if (migrationsAttempted) await markTargetConfigured();
+    else await atomicWrite(envPath, originalEnv, 0o600);
+    throw error;
+  }
+  await markTargetConfigured();
   let result = await doctor(directory, false);
   for (let attempt = 0; !result.ok && attempt < 15; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 2_000));
     result = await doctor(directory, false);
   }
   if (result.ok) await doctor(directory);
-  if (!result.ok) throw new CliError("Upgrade completed but health checks failed. Run `npx harly doctor .` for details.");
+  if (!result.ok) throw new CliError("Upgrade completed but health checks failed. The new image remains selected because migrations are forward-only; restore the pre-upgrade backup if recovery is required.");
   if (interactive) p.outro(`Harly is running ${pc.cyan(deployedImage)} at ${pc.cyan(config.publicUrl)}`);
+}
+
+async function uninstall(explicitDirectory?: string) {
+  const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
+  await readConfig(directory);
+  if (!yes && !(await confirm("Stop Harly and remove its containers? Data volumes will be kept."))) {
+    throw new CliError("Uninstall cancelled.", 2);
+  }
+  if (flags.has("--remove-data")) {
+    if (!yes && !(await confirm("Permanently delete PostgreSQL, uploads, cache, and proxy volumes?"))) {
+      compose(directory, ["down"]);
+      process.stdout.write("Containers removed; data volumes kept.\n");
+      return;
+    }
+    process.stdout.write("Creating a final backup before deleting data volumes.\n");
+    await backup(directory);
+    compose(directory, ["down", "--volumes"]);
+    process.stdout.write("Harly containers and data volumes were removed. Local backup archives were kept.\n");
+  } else {
+    compose(directory, ["down"]);
+    process.stdout.write("Harly containers were removed. PostgreSQL, uploads, and backups were kept.\n");
+  }
+}
+
+async function cloudGuideLegacy(provider: "railway" | "fly" | "digitalocean") {
+  showBrand();
+  const providerName = provider === "railway" ? "Railway" : provider === "fly" ? "Fly.io" : "DigitalOcean";
+  p.intro(pc.bgCyan(pc.black(` Deploy Harly on ${providerName} `)));
+  const url = normalizeUrl(unwrapPrompt(await p.text({
+    message: "Public URL",
+    placeholder: "https://hiring.example.com",
+    validate: validatePublicOrigin,
+  })), "external");
+  const email = unwrapPrompt(await p.text({ message: "Initial owner email", validate: validateEmail })).toLowerCase();
+  const bucket = unwrapPrompt(await p.text({ message: "S3-compatible bucket (required for cloud uploads)", validate: (value) => value?.trim() ? undefined : "S3 storage is required on cloud platforms." }));
+  const region = unwrapPrompt(await p.text({ message: "S3 region", initialValue: "auto" }));
+  const accessKey = unwrapPrompt(await p.password({ message: "S3 access key", validate: (value) => value ? undefined : "Required." }));
+  const secretKey = unwrapPrompt(await p.password({ message: "S3 secret key", validate: (value) => value ? undefined : "Required." }));
+  // App Platform does not provision a database inside the app spec. Ask for
+  // this first so the generated spec is deployable and every component shares
+  // one encrypted app-level connection string.
+  const databaseUrl = provider === "digitalocean"
+    ? unwrapPrompt(await p.password({
+      message: "DigitalOcean Managed PostgreSQL connection URL",
+      validate: validateDatabaseUrl,
+    }))
+    : undefined;
+  const directory = path.resolve(`harly-${provider}`);
+  await mkdir(directory, { recursive: true });
+  const secrets = [
+    `HARLY_URL=${envLine(url.origin)}`, `HARLY_INITIAL_ADMIN_EMAIL=${envLine(email)}`,
+    `BETTER_AUTH_SECRET=${envLine(secret())}`, `AI_ENCRYPTION_KEY=${envLine(secret())}`,
+    `STORAGE_UPLOAD_SECRET=${envLine(secret())}`, `CRON_SECRET=${envLine(secret())}`,
+    `HARLY_SETUP_SECRET=${envLine(secret())}`, "STORAGE_PROVIDER=\"s3\"",
+    `S3_BUCKET=${envLine(bucket)}`, `S3_REGION=${envLine(region)}`,
+    `S3_ACCESS_KEY_ID=${envLine(accessKey)}`, `S3_SECRET_ACCESS_KEY=${envLine(secretKey)}`,
+    ...(databaseUrl ? [`DATABASE_URL=${envLine(databaseUrl)}`] : []),
+  ].join("\n") + "\n";
+  await atomicWrite(path.join(directory, ".env"), secrets, 0o600);
+  if (provider === "fly") {
+    await atomicWrite(path.join(directory, "fly.toml"), `app = "replace-with-your-harly-app-name"\nprimary_region = "iad"\n\n[build]\n  image = "ghcr.io/vytral/harly:0.1.0-beta.1"\n\n[processes]\n  web = "serve"\n  scheduler = "scheduler"\n\n[deploy]\n  release_command = "migrate"\n\n[http_service]\n  processes = ["web"]\n  internal_port = 3000\n  force_https = true\n  auto_stop_machines = "off"\n  auto_start_machines = true\n  min_machines_running = 1\n\n[[http_service.checks]]\n  grace_period = "20s"\n  interval = "30s"\n  timeout = "5s"\n  method = "GET"\n  path = "/api/health/ready"\n`);
+  }
+  if (provider === "digitalocean") {
+    const yaml = (value: string) => JSON.stringify(value);
+    await atomicWrite(path.join(directory, "app.yaml"), `# Attach DigitalOcean Managed PostgreSQL as DATABASE_URL after creation.\n# This file contains secrets: keep it outside Git.\nname: harly\nregion: nyc\nenvs:\n  - { key: HARLY_URL, scope: RUN_TIME, type: GENERAL, value: ${yaml(url.origin)} }\n  - { key: HARLY_INITIAL_ADMIN_EMAIL, scope: RUN_TIME, type: GENERAL, value: ${yaml(email)} }\n  - { key: STORAGE_PROVIDER, scope: RUN_TIME, type: GENERAL, value: s3 }\n  - { key: S3_BUCKET, scope: RUN_TIME, type: GENERAL, value: ${yaml(bucket)} }\n  - { key: S3_REGION, scope: RUN_TIME, type: GENERAL, value: ${yaml(region)} }\n  - { key: S3_ACCESS_KEY_ID, scope: RUN_TIME, type: SECRET, value: ${yaml(accessKey)} }\n  - { key: S3_SECRET_ACCESS_KEY, scope: RUN_TIME, type: SECRET, value: ${yaml(secretKey)} }\n  - { key: BETTER_AUTH_SECRET, scope: RUN_TIME, type: SECRET, value: ${yaml(secret())} }\n  - { key: AI_ENCRYPTION_KEY, scope: RUN_TIME, type: SECRET, value: ${yaml(secret())} }\n  - { key: STORAGE_UPLOAD_SECRET, scope: RUN_TIME, type: SECRET, value: ${yaml(secret())} }\n  - { key: CRON_SECRET, scope: RUN_TIME, type: SECRET, value: ${yaml(secret())} }\n  - { key: HARLY_SETUP_SECRET, scope: RUN_TIME, type: SECRET, value: ${yaml(secret())} }\nservices:\n  - name: web\n    image: { registry_type: GHCR, registry: vytral, repository: harly, tag: 0.1.0-beta.1 }\n    run_command: node /app/runtime.mjs serve\n    http_port: 3000\n    instance_count: 1\n    instance_size_slug: apps-s-1vcpu-1gb\n    health_check: { http_path: /api/health/ready, port: 3000, initial_delay_seconds: 20, period_seconds: 30, timeout_seconds: 5, failure_threshold: 5 }\nworkers:\n  - name: scheduler\n    image: { registry_type: GHCR, registry: vytral, repository: harly, tag: 0.1.0-beta.1 }\n    run_command: node /app/runtime.mjs scheduler\n    instance_count: 1\n    instance_size_slug: apps-s-1vcpu-0.5gb\njobs:\n  - name: migrate\n    kind: PRE_DEPLOY\n    image: { registry_type: GHCR, registry: vytral, repository: harly, tag: 0.1.0-beta.1 }\n    run_command: node /app/runtime.mjs migrate\n    instance_size_slug: apps-s-1vcpu-0.5gb\n`, 0o600);
+  }
+  const next = provider === "railway"
+    ? "Create the app, scheduler, and managed PostgreSQL services in Railway; enter the values saved in .env and use the cloud deployment guide for their commands."
+    : provider === "fly"
+      ? `Run \`fly launch --no-deploy\` in ${shellQuote(directory)}, attach Managed Postgres, import .env as Fly secrets, then run \`fly deploy\`.`
+      : `Add DATABASE_URL from DigitalOcean Managed PostgreSQL to ${shellQuote(path.join(directory, "app.yaml"))}, then deploy it with \`doctl apps create --spec app.yaml\`.`;
+  p.note(`Image     ghcr.io/vytral/harly:0.1.0-beta.1\nSecrets   ${path.join(directory, ".env")} (mode 0600)\nStorage   S3 required\n\n${next}`, "Cloud deployment prepared");
+  p.outro("Your configuration is ready. Never commit the generated .env file.");
+}
+
+async function cloudGuide(provider: "railway" | "fly" | "digitalocean") {
+  showBrand();
+  const providerName = provider === "railway" ? "Railway" : provider === "fly" ? "Fly.io" : "DigitalOcean";
+  p.intro(pc.bgCyan(pc.black(` Deploy Harly on ${providerName} `)));
+  const url = normalizeUrl(unwrapPrompt(await p.text({
+    message: "Public URL", placeholder: "https://hiring.example.com", validate: validatePublicOrigin,
+  })), "external");
+  const email = unwrapPrompt(await p.text({ message: "Initial owner email", validate: validateEmail })).toLowerCase();
+  const bucket = unwrapPrompt(await p.text({
+    message: "S3-compatible bucket (required for cloud uploads)",
+    validate: (value) => value?.trim() ? undefined : "S3 storage is required on cloud platforms.",
+  }));
+  const region = unwrapPrompt(await p.text({ message: "S3 region", initialValue: "auto" }));
+  const accessKey = unwrapPrompt(await p.password({ message: "S3 access key", validate: (value) => value ? undefined : "Required." }));
+  const secretKey = unwrapPrompt(await p.password({ message: "S3 secret key", validate: (value) => value ? undefined : "Required." }));
+  const databaseUrl = provider === "digitalocean"
+    ? unwrapPrompt(await p.password({ message: "DigitalOcean Managed PostgreSQL connection URL", validate: validateDatabaseUrl }))
+    : undefined;
+  const directory = path.resolve(`harly-${provider}`);
+  await mkdir(directory, { recursive: true });
+  // Keep .env and any generated provider spec consistent. This also gives an
+  // operator one recoverable local record of the exact runtime secrets.
+  const runtimeSecrets = {
+    betterAuth: secret(), aiEncryption: secret(), storageUpload: secret(), cron: secret(), setup: secret(),
+  };
+  const env = [
+    `HARLY_URL=${envLine(url.origin)}`, `HARLY_INITIAL_ADMIN_EMAIL=${envLine(email)}`,
+    `BETTER_AUTH_SECRET=${envLine(runtimeSecrets.betterAuth)}`, `AI_ENCRYPTION_KEY=${envLine(runtimeSecrets.aiEncryption)}`,
+    `STORAGE_UPLOAD_SECRET=${envLine(runtimeSecrets.storageUpload)}`, `CRON_SECRET=${envLine(runtimeSecrets.cron)}`,
+    `HARLY_SETUP_SECRET=${envLine(runtimeSecrets.setup)}`, "STORAGE_PROVIDER=\"s3\"",
+    `S3_BUCKET=${envLine(bucket)}`, `S3_REGION=${envLine(region)}`,
+    `S3_ACCESS_KEY_ID=${envLine(accessKey)}`, `S3_SECRET_ACCESS_KEY=${envLine(secretKey)}`,
+    ...(databaseUrl ? [`DATABASE_URL=${envLine(databaseUrl)}`] : []),
+  ].join("\n") + "\n";
+  await atomicWrite(path.join(directory, ".env"), env, 0o600);
+
+  const image = "ghcr.io/vytral/harly:0.1.0-beta.2";
+  if (provider === "fly") {
+    await atomicWrite(path.join(directory, "fly.toml"), `app = "replace-with-your-harly-app-name"
+primary_region = "iad"
+
+[build]
+  image = "${image}"
+
+[processes]
+  web = "serve"
+  scheduler = "scheduler"
+
+[deploy]
+  release_command = "migrate"
+
+[http_service]
+  processes = ["web"]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  grace_period = "20s"
+  interval = "30s"
+  timeout = "5s"
+  method = "GET"
+  path = "/api/health/ready"
+`);
+  }
+  if (provider === "digitalocean") {
+    const yaml = (value: string) => JSON.stringify(value);
+    const secretEnv = (key: string, value: string) => `  - { key: ${key}, scope: RUN_TIME, type: SECRET, value: ${yaml(value)} }`;
+    const publicEnv = (key: string, value: string) => `  - { key: ${key}, scope: RUN_TIME, type: GENERAL, value: ${yaml(value)} }`;
+    const appSpec = [
+      "# Generated by the Harly CLI. This file contains secrets: keep it outside Git.", "name: harly", "region: nyc", "", "envs:",
+      secretEnv("DATABASE_URL", databaseUrl!), publicEnv("HARLY_URL", url.origin), publicEnv("HARLY_INITIAL_ADMIN_EMAIL", email),
+      publicEnv("STORAGE_PROVIDER", "s3"), publicEnv("S3_BUCKET", bucket), publicEnv("S3_REGION", region),
+      secretEnv("S3_ACCESS_KEY_ID", accessKey), secretEnv("S3_SECRET_ACCESS_KEY", secretKey),
+      secretEnv("BETTER_AUTH_SECRET", runtimeSecrets.betterAuth), secretEnv("AI_ENCRYPTION_KEY", runtimeSecrets.aiEncryption),
+      secretEnv("STORAGE_UPLOAD_SECRET", runtimeSecrets.storageUpload), secretEnv("CRON_SECRET", runtimeSecrets.cron), secretEnv("HARLY_SETUP_SECRET", runtimeSecrets.setup),
+      "services:", "  - name: web", "    image: { registry_type: GHCR, registry: vytral, repository: harly, tag: 0.1.0-beta.1 }",
+      "    run_command: node /app/runtime.mjs serve", "    http_port: 3000", "    instance_count: 1", "    instance_size_slug: apps-s-1vcpu-1gb",
+      "    health_check: { http_path: /api/health/ready, port: 3000, initial_delay_seconds: 20, period_seconds: 30, timeout_seconds: 5, failure_threshold: 5 }",
+      "workers:", "  - name: scheduler", "    image: { registry_type: GHCR, registry: vytral, repository: harly, tag: 0.1.0-beta.1 }",
+      "    run_command: node /app/runtime.mjs scheduler", "    instance_count: 1", "    instance_size_slug: apps-s-1vcpu-0.5gb",
+      "jobs:", "  - name: migrate", "    kind: PRE_DEPLOY", "    image: { registry_type: GHCR, registry: vytral, repository: harly, tag: 0.1.0-beta.1 }",
+      "    run_command: node /app/runtime.mjs migrate", "    instance_size_slug: apps-s-1vcpu-0.5gb", "",
+    ].join("\n");
+    await atomicWrite(path.join(directory, "app.yaml"), appSpec, 0o600);
+  }
+  const next = provider === "railway"
+    ? "Create the app, scheduler, and managed PostgreSQL services in Railway; enter the values saved in .env and use the cloud deployment guide for their commands."
+    : provider === "fly"
+      ? `Run \`fly launch --no-deploy\` in ${shellQuote(directory)}, attach Managed Postgres, import .env as Fly secrets, then run \`fly deploy\`.`
+      : `The generated app spec already includes your Managed PostgreSQL URL as an encrypted app-level secret. Deploy with \`doctl apps create --spec ${shellQuote(path.join(directory, "app.yaml"))}\`.`;
+  p.note(`Image     ${image}\nSecrets   ${path.join(directory, ".env")} (mode 0600)${provider === "digitalocean" ? `\nApp spec  ${path.join(directory, "app.yaml")} (mode 0600)` : ""}\nStorage   S3 required\n\n${next}`, "Cloud deployment prepared");
+  p.outro("Your configuration is ready. Never commit generated secret files.");
+}
+
+async function menu() {
+  const installation = await findInstallation();
+  if (!interactive) {
+    if (installation) return doctor(installation.directory);
+    usage();
+    return;
+  }
+  showBrand();
+  if (!installation) {
+    p.intro(pc.bgCyan(pc.black(" Welcome to Harly ")));
+    const choice = unwrapPrompt(await p.select({ message: "What would you like to do?", options: [
+      { value: "install", label: "Install Harly on this server", hint: "Docker + automatic HTTPS" },
+      { value: "railway", label: "Deploy on Railway", hint: "managed Postgres + S3" },
+      { value: "fly", label: "Deploy on Fly.io", hint: "managed Postgres + S3" },
+      { value: "digitalocean", label: "Deploy on DigitalOcean", hint: "App Platform + managed Postgres + S3" },
+      { value: "help", label: "Show advanced commands" },
+    ] }));
+    if (choice === "install") return init();
+    if (choice === "railway" || choice === "fly" || choice === "digitalocean") return cloudGuide(choice);
+    usage();
+    return;
+  }
+  p.intro(pc.bgCyan(pc.black(" Harly management ")));
+  p.note(`${installation.config.publicUrl}\n${installation.config.image}\n${installation.directory}`, "Detected installation");
+  const choice = unwrapPrompt(await p.select({ message: "Choose an action", options: [
+    { value: "status", label: "Status" }, { value: "update", label: "Update Harly" },
+    { value: "backup", label: "Create backup" }, { value: "restore", label: "Restore backup" },
+    { value: "uninstall", label: "Stop or uninstall Harly" },
+  ] }));
+  if (choice === "status") return doctor(installation.directory);
+  if (choice === "update") return upgrade(installation.directory);
+  if (choice === "backup") return backup(installation.directory).then(() => undefined);
+  if (choice === "restore") {
+    p.log.info("Use `harly restore <archive> --force` for restore. Add `--allow-plaintext` only when both the archive and the safety backup are intentionally plaintext.");
+    return;
+  }
+  return uninstall(installation.directory);
 }
 
 async function main() {
   switch (command) {
+    case "menu": return menu();
     case "init": return init();
     case "launch": return launch();
     case "doctor": return doctor();
     case "backup": return backup();
     case "restore": return restore();
-    case "upgrade": return upgrade();
+    case "upgrade": case "update": return upgrade();
+    case "uninstall": return uninstall();
     case "help": case "--help": case "-h": usage(); return;
     default: usage(); throw new CliError(`Unknown command: ${command}`, 2);
   }

@@ -246,3 +246,34 @@ jobs:
       - name: Reject runtime toolchain and TypeScript sources
         run: |
           docker run --rm --entrypoint sh harly:ci -c '! command -v pnpm && ! find /app -name "*.ts" -o -name "drizzle-kit" -o -name "tsx" | grep -q .'
+      - name: Run self-hosted Compose smoke test
+        env:
+          COMPOSE_PROJECT_NAME: harly-ci
+          HARLY_IMAGE: harly:ci
+          HARLY_VERSION: ci
+          HARLY_URL: http://127.0.0.1:3099
+          HARLY_PORT: 3099
+          POSTGRES_USER: harly
+          POSTGRES_PASSWORD: harly-ci-postgres-password
+          POSTGRES_DB: harly
+          BETTER_AUTH_SECRET: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+          AI_ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+          STORAGE_UPLOAD_SECRET: cccccccccccccccccccccccccccccccc
+          CRON_SECRET: ddddddddddddddddddddddddddddddddd
+          HARLY_SETUP_SECRET: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+          HARLY_INITIAL_ADMIN_EMAIL: owner@example.com
+          STORAGE_PROVIDER: local
+        run: |
+          docker compose up -d --wait --wait-timeout 240
+          curl --fail --retry 12 --retry-connrefused --retry-delay 2 http://127.0.0.1:3099/api/health/ready
+          docker compose ps
+      - name: Collect self-hosted smoke logs
+        if: failure()
+        env:
+          COMPOSE_PROJECT_NAME: harly-ci
+        run: docker compose logs --no-color
+      - name: Remove self-hosted smoke resources
+        if: always()
+        env:
+          COMPOSE_PROJECT_NAME: harly-ci
+        run: docker compose down --volumes --remove-orphans

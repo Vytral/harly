@@ -118,6 +118,59 @@ test("launch requires --yes when stdin is not interactive", async () => {
   }
 });
 
+test("no-argument CLI detects an installation from a child directory", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harly-menu-e2e-"));
+  const child = path.join(directory, "nested", "work");
+  const bin = path.join(directory, "bin");
+  await mkdir(child, { recursive: true });
+  await mkdir(bin);
+  await writeFile(path.join(directory, "harly.config.json"), JSON.stringify({
+    version: 1, proxyMode: "local", publicUrl: "http://127.0.0.1:1",
+    image: "ghcr.io/vytral/harly:0.1.0-test", organizationName: "Harly E2E",
+    initialAdminEmail: "owner@example.com", storage: "local", resourceProfile: "compact",
+  }));
+  await writeFile(path.join(bin, "docker"), `#!/bin/sh
+if [ "$1 $2 $3 $4" = "compose ps --status running" ]; then printf 'postgres\\napp\\nscheduler\\n'; fi
+exit 0
+`);
+  await chmod(path.join(bin, "docker"), 0o755);
+  try {
+    const result = spawnSync(process.execPath, [cli], {
+      cwd: child, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+    });
+    assert.match(result.stdout, /service:postgres/);
+    assert.doesNotMatch(result.stdout, /Advanced commands/);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("backup requires an explicit plaintext choice when age is not configured", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "harly-backup-e2e-"));
+  const bin = path.join(directory, "bin");
+  await mkdir(bin);
+  await writeFile(path.join(directory, "harly.config.json"), JSON.stringify({
+    version: 1, proxyMode: "local", publicUrl: "http://localhost:3000",
+    image: "ghcr.io/vytral/harly:0.1.0-test", organizationName: "Harly E2E",
+    initialAdminEmail: "owner@example.com", storage: "s3", resourceProfile: "compact",
+  }));
+  await writeFile(path.join(directory, ".env"), "POSTGRES_USER=\"harly\"\nPOSTGRES_DB=\"harly\"\n", { mode: 0o600 });
+  await writeFile(path.join(bin, "docker"), `#!/bin/sh
+if [ "$1 $2 $3 $4" = "compose exec -T" ]; then printf 'fake-pg-dump'; fi
+exit 0
+`);
+  await chmod(path.join(bin, "docker"), 0o755);
+  try {
+    const result = spawnSync(process.execPath, [cli, "backup", directory], {
+      cwd: packageRoot, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, AGE_RECIPIENT: "" },
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /AGE_RECIPIENT is required/i);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("upgrade preserves data, pins the pulled digest, migrates, and waits for health", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harly-upgrade-e2e-"));
   const bin = path.join(directory, "bin");
@@ -149,7 +202,7 @@ exit 0
   await new Promise((resolve) => setTimeout(resolve, 150));
 
   try {
-    const result = spawnSync(process.execPath, [cli, "upgrade", directory, "--to", "edge", "--yes"], {
+    const result = spawnSync(process.execPath, [cli, "update", directory, "--to", "edge", "--yes", "--allow-plaintext"], {
       cwd: packageRoot,
       encoding: "utf8",
       env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },

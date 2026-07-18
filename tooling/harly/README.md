@@ -9,13 +9,10 @@
 # @harly/cli
 
 Official operations command for Harly self-hosting. It delegates to the
-versioned `@harly/create` package:
+versioned installer package while keeping the user-facing command simple:
 
 ```bash
-npx @harly/cli init harly
-cd harly
-npx @harly/cli upgrade
-npx @harly/cli doctor
+npx @harly/cli
 ```
 
 Upgrades preserve configuration and Docker volumes, create a backup first,
@@ -31,9 +28,7 @@ run migrations once, wait for health checks, and pin the pulled image digest.
 ## Install Harly
 
 ```bash
-npx @harly/cli init harly
-cd harly
-npx @harly/cli launch . --yes
+npx @harly/cli
 ```
 
 The wizard configures PostgreSQL, the Harly app, scheduler, persistent uploads,
@@ -43,7 +38,7 @@ and optional automatic HTTPS through Caddy.
 
 ```bash
 cd harly
-npx @harly/cli upgrade
+npx @harly/cli update
 ```
 
 Use `--to edge` for preview builds or `--to <version>` for a fixed release.
@@ -58,7 +53,8 @@ harly launch [directory] [--yes]
 harly doctor [directory] [--json]
 harly backup [directory]
 harly restore <archive> [directory] --force
-harly upgrade [directory] [--to version|edge]
+harly update [directory] [--to version|edge]
+harly uninstall [directory] [--remove-data]
 ```
 
 Harly is open source under AGPL-3.0. Source, documentation, and issue tracking

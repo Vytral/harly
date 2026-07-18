@@ -15,7 +15,7 @@ Use this checklist before inviting real recruiting teams or importing candidate 
 - [ ] Use a HTTPS `HARLY_URL` with the correct public domain; never use a path suffix.
 - [ ] Generate unique `BETTER_AUTH_SECRET`, `AI_ENCRYPTION_KEY`, `STORAGE_UPLOAD_SECRET`, `CRON_SECRET`, and `HARLY_SETUP_SECRET` values.
 - [ ] Keep `.env` readable only by the deployment owner and never commit it.
-- [ ] Run `npx @harly/create doctor .` after the first deployment and after upgrades.
+- [ ] Run `npx @harly/cli doctor` after the first deployment and after upgrades.
 - [ ] Confirm `/api/health/ready` returns HTTP 200 after migrations finish.
 - [ ] Complete `/setup` with the expected initial owner email, then confirm registration is invite-only.
 

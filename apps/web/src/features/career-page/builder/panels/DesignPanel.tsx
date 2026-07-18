@@ -76,8 +76,8 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
         />
       </Section>
 
-      {/* Overview , Playful & Folio (marginalia) */}
-      {(config.template === "playful" || config.template === "folio") && (
+      {/* Overview , Playful (marginalia) + Bento (stat tiles) */}
+      {(config.template === "playful" || config.template === "bento") && (
         <Section title="Overview card">
           <ToggleRow
             label="Show overview card"
@@ -124,8 +124,8 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
         </Section>
       )}
 
-      {/* Gallery , Playful only */}
-      {config.template === "playful" && (
+      {/* Gallery , Playful + Bento (photo tile) */}
+      {(config.template === "playful" || config.template === "bento") && (
         <Section title="Photo gallery">
           <ToggleRow
             label="Show gallery"
@@ -162,8 +162,8 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
         </Section>
       )}
 
-      {/* Values , Playful & Folio */}
-      {(config.template === "playful" || config.template === "folio") && (
+      {/* Values , Playful + Bento */}
+      {(config.template === "playful" || config.template === "bento") && (
         <Section title="Values">
           <ToggleRow
             label="Show values"
@@ -203,27 +203,6 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
                 />
               </div>
             )}
-          />
-        </Section>
-      )}
-
-      {/* Folio , editorial options */}
-      {config.template === "folio" && (
-        <Section title="Editorial options" defaultOpen>
-          <ToggleRow
-            label="Drop cap on intro"
-            checked={config.editorial.dropCap}
-            onCheckedChange={(v) => update((d) => (d.editorial.dropCap = v))}
-          />
-          <ToggleRow
-            label="Numbered sections (01 / 02 / 03)"
-            checked={config.editorial.numberedSections}
-            onCheckedChange={(v) => update((d) => (d.editorial.numberedSections = v))}
-          />
-          <ToggleRow
-            label="Pull quote (uses first testimonial)"
-            checked={config.editorial.pullQuoteEnabled}
-            onCheckedChange={(v) => update((d) => (d.editorial.pullQuoteEnabled = v))}
           />
         </Section>
       )}

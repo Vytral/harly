@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 
-export const careerTemplates = ["minimal", "playful", "ashby", "folio"] as const;
+export const careerTemplates = ["minimal", "playful", "ashby", "bento"] as const;
 export type CareerTemplate = (typeof careerTemplates)[number];
 
 export const fontFamilies = ["sans", "serif", "display", "mono"] as const;
@@ -19,27 +19,6 @@ export type CareerStat = { label: string; value: string; icon?: string };
 export type CareerValue = { title: string; body: string; art?: string };
 export type CareerFaqItem = { q: string; a: string };
 export type CareerTestimonial = { quote: string; name: string; role: string; avatar: string };
-
-/**
- * Folio-only editorial chrome. Re-presented sections (overview.values,
- * testimonials, faq, cta) keep using the shared fields above; these knobs
- * shape the magazine voice , masthead, byline, drop cap, numbered sections,
- * and a standalone pull quote that floats between the brief and the roles.
- */
-export type CareerEditorial = {
-  /** Masthead kicker, e.g. "CAREERS , vol. IV". Sits top-left in mono. */
-  mastKicker: string;
-  /** Issue line shown top-right of the masthead, e.g. "Issue 04 , Jul 2026". */
-  issueLabel: string;
-  /** Byline shown under the lede, e.g. "By the Acme team". */
-  byline: string;
-  /** Render the intro's first letter as an oversized drop cap. */
-  dropCap: boolean;
-  /** Prefix each section heading with an ordinal "01 / 02 / 03". */
-  numberedSections: boolean;
-  /** Render the oversized pull-quote section (uses testimonials[0]). */
-  pullQuoteEnabled: boolean;
-};
 
 export const socialPlatforms = [
   "x",
@@ -101,8 +80,6 @@ export type CareerPageConfig = {
     ctaButtonText: string;
   };
   intro: { body: string; chips: CareerChip[] };
-  /** Folio-only editorial chrome. Ignored by other templates. */
-  editorial: CareerEditorial;
   overview: { enabled: boolean; title: string; stats: CareerStat[] };
   gallery: { enabled: boolean; images: string[]; autoplay: boolean; speed: "slow" | "normal" };
   values: { enabled: boolean; title: string; items: CareerValue[] };
@@ -147,14 +124,6 @@ const EMPTY: CareerPageConfig = {
     ctaButtonText: "View jobs",
   },
   intro: { body: "", chips: [] },
-  editorial: {
-    mastKicker: "CAREERS",
-    issueLabel: "",
-    byline: "",
-    dropCap: true,
-    numberedSections: true,
-    pullQuoteEnabled: true,
-  },
   overview: { enabled: false, title: "Overview", stats: [] },
   gallery: { enabled: false, images: [], autoplay: false, speed: "slow" },
   values: { enabled: false, title: "Our values", items: [] },
@@ -238,61 +207,23 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
     positions: { title: "Open positions", filters: ["department", "location", "type"] },
     cta: { ...EMPTY.cta, buttonText: "Get in touch" },
   }),
-  folio: () => ({
+  bento: () => ({
     ...structuredClone(EMPTY),
-    template: "folio",
+    template: "bento",
     hero: {
       ...EMPTY.hero,
-      headline: "We're building the place people actually want to work.",
-      overlay: "gradient",
+      headline: "Come build with us",
+      subhead: "We're a small team shipping big things. Find your seat.",
       logoPosition: "left",
-      ctaButtonText: "Read the roles",
+      ctaButtonText: "See open roles",
     },
-    intro: {
-      body: "Harly is a small, opinionated team that thinks hiring software should feel like the people it serves. We write in plain language, ship in small slices, and care about the seams, the tiny transitions, the empty states, the half-second a candidate waits before a form opens. This is a brief about how we work and what we're looking for.",
-      chips: [],
-    },
-    editorial: {
-      mastKicker: "CAREERS, vol. I",
-      issueLabel: "Issue 01",
-      byline: "By the Harly team",
-      dropCap: true,
-      numberedSections: true,
-      pullQuoteEnabled: true,
-    },
-    overview: {
-      enabled: true,
-      title: "At a glance",
-      stats: [
-        { label: "Founded", value: "2024", icon: "calendar" },
-        { label: "Team", value: "Not set", icon: "users" },
-        { label: "Remote", value: "100%", icon: "globe" },
-      ],
-    },
-    values: {
-      enabled: true,
-      title: "What we believe",
-      items: [
-        { title: "Inventive", body: "We invest heavily in figuring things out." },
-        { title: "Present", body: "We are proactive and we listen." },
-        { title: "Open", body: "Our methods are transparent and co-constructed." },
-      ],
-    },
+    // Optional tiles start OFF — the grid intentionally shows hero + jobs only
+    // until the admin turns sections on (no demo content ever ships to prod).
+    overview: { enabled: false, title: "By the numbers", stats: [] },
+    values: { enabled: false, title: "What we value", items: [] },
     positions: { title: "Open roles", filters: ["department", "location", "type"] },
-    cta: {
-      ...EMPTY.cta,
-      enabled: true,
-      title: "Coda",
-      body: "Don't see a role that fits? We are always opening new opportunities for great people. Reach out.",
-      buttonText: "Get in touch",
-    },
-    theme: {
-      mode: "light",
-      background: "#F7F4EE",
-      font: "serif",
-      accent: "#7A1E1E",
-      rounded: "sharp",
-    },
+    cta: { ...EMPTY.cta, buttonText: "Get in touch" },
+    theme: { mode: "light", background: "#fafaf9", font: "sans", accent: "#4f46e5", rounded: "soft" },
   }),
 };
 
@@ -344,22 +275,6 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
     intro: {
       body: r.intro?.body ?? base.intro.body,
       chips: asArray<CareerChip>(r.intro?.chips),
-    },
-    editorial: {
-      mastKicker: typeof r.editorial?.mastKicker === "string" && r.editorial.mastKicker.trim()
-        ? r.editorial.mastKicker.trim()
-        : base.editorial.mastKicker,
-      issueLabel: typeof r.editorial?.issueLabel === "string" ? r.editorial.issueLabel.trim() : base.editorial.issueLabel,
-      byline: typeof r.editorial?.byline === "string" ? r.editorial.byline.trim() : base.editorial.byline,
-      dropCap: typeof r.editorial?.dropCap === "boolean" ? r.editorial.dropCap : base.editorial.dropCap,
-      numberedSections:
-        typeof r.editorial?.numberedSections === "boolean"
-          ? r.editorial.numberedSections
-          : base.editorial.numberedSections,
-      pullQuoteEnabled:
-        typeof r.editorial?.pullQuoteEnabled === "boolean"
-          ? r.editorial.pullQuoteEnabled
-          : base.editorial.pullQuoteEnabled,
     },
     overview: {
       enabled: Boolean(r.overview?.enabled),
@@ -461,7 +376,7 @@ const stat = z.object({ label: s(40), value: s(60), icon: s(40).optional() });
 const value = z.object({ title: s(60), body: s(400), art: s(200).optional() });
 
 export const careerPageConfigSchema = z.object({
-  template: z.enum([...careerTemplates, ""] as ["minimal", "playful", "ashby", "folio", ""]),
+  template: z.enum([...careerTemplates, ""] as ["minimal", "playful", "ashby", "bento", ""]),
   hero: z.object({
     headline: s(120),
     subhead: s(200),
@@ -481,14 +396,6 @@ export const careerPageConfigSchema = z.object({
     ctaButtonText: s(60),
   }),
   intro: z.object({ body: s(20000), chips: z.array(chip).max(12) }),
-  editorial: z.object({
-    mastKicker: s(60),
-    issueLabel: s(60),
-    byline: s(80),
-    dropCap: z.boolean(),
-    numberedSections: z.boolean(),
-    pullQuoteEnabled: z.boolean(),
-  }),
   overview: z.object({
     enabled: z.boolean(),
     title: s(60),

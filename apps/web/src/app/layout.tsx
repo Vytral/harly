@@ -19,16 +19,6 @@ const inter = localFont({
   display: "swap",
 });
 
-// Fraunces is the editorial display face for the Folio career template only ,
-// a variable serif with optical sizing and a "soft" axis. Self-hosted (F5-04)
-// so the CSS variable is always available without a build-time network fetch;
-// templates opt in via `.font-fraunces`.
-const fraunces = localFont({
-  src: "./fonts/fraunces.woff2",
-  variable: "--font-fraunces",
-  display: "swap",
-});
-
 export const metadata: Metadata = {
   metadataBase: new URL(
     process.env.HARLY_URL ??
@@ -48,7 +38,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${fraunces.variable} ${GeistMono.variable} ${GeistSans.variable} h-full antialiased`}
+      className={`${inter.variable} ${GeistMono.variable} ${GeistSans.variable} h-full antialiased`}
       data-scroll-behavior="smooth"
     >
       <head>

@@ -27,11 +27,11 @@ const TEMPLATE_META: Record<
     ready: true,
     swatch: { bg: "#f7f7f5", accent: "#3f6212", ink: "#e2e2dd" },
   },
-  folio: {
-    label: "Folio",
-    blurb: "Editorial, magazine-grade serif",
+  bento: {
+    label: "Bento",
+    blurb: "Modular tile grid, modern",
     ready: true,
-    swatch: { bg: "#F7F4EE", accent: "#7A1E1E", ink: "#d8d2c4" },
+    swatch: { bg: "#fafaf9", accent: "#4f46e5", ink: "#e4e4e7" },
   },
 };
 
@@ -78,7 +78,7 @@ export function TemplatePanel({
       <PanelHeader title="Template" subtitle="Choose a base layout for your career page." />
 
       <div className="grid grid-cols-1 gap-3">
-        {(["minimal", "playful", "ashby", "folio"] as const).map((t) => {
+        {(["minimal", "playful", "ashby", "bento"] as const).map((t) => {
           const meta = TEMPLATE_META[t];
           const active = config.template === t;
           return (

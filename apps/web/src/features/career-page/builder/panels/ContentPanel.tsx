@@ -119,7 +119,7 @@ export function ContentPanel({ config, update, workspace }: ContentPanelProps) {
           </>
         )}
 
-        {/* Banner image + overlay , Playful, Ashby & Folio */}
+        {/* Banner image + overlay , Playful & Ashby */}
         {config.template !== "minimal" && (
           <>
             <Field label="Banner image">
@@ -211,33 +211,6 @@ export function ContentPanel({ config, update, workspace }: ContentPanelProps) {
           />
         )}
       </Section>
-
-      {/* Folio , editorial chrome (masthead, byline) */}
-      {config.template === "folio" && (
-        <Section title="Editorial chrome">
-          <Field label="Masthead kicker">
-            <Input
-              value={config.editorial.mastKicker}
-              onChange={(e) => update((d) => (d.editorial.mastKicker = e.target.value))}
-              placeholder="CAREERS, vol. I"
-            />
-          </Field>
-          <Field label="Issue label">
-            <Input
-              value={config.editorial.issueLabel}
-              onChange={(e) => update((d) => (d.editorial.issueLabel = e.target.value))}
-              placeholder="Issue 01, Jul 2026"
-            />
-          </Field>
-          <Field label="Byline">
-            <Input
-              value={config.editorial.byline}
-              onChange={(e) => update((d) => (d.editorial.byline = e.target.value))}
-              placeholder="By the Acme team"
-            />
-          </Field>
-        </Section>
-      )}
     </div>
   );
 }

@@ -96,26 +96,36 @@ Use the button above to clone the repository into a Vercel project. Add a manage
 
 ### Railway
 
-Create a project from the repository using the Railway button above, add a PostgreSQL service, reference its `DATABASE_URL`, and set `pnpm db:migrate` as the pre-deploy command. Use `pnpm build` as the build command and `pnpm --filter web start` as the start command.
+Run `npx @harly/cli` and choose **Deploy on Railway**. Harly uses its
+version-pinned GHCR image, Railway managed PostgreSQL, a dedicated scheduler,
+and S3-compatible uploads; it does not require cloning or building this repo.
+
+### DigitalOcean App Platform
+
+Run `npx @harly/cli` and choose **Deploy on DigitalOcean** after creating a
+DigitalOcean Managed PostgreSQL database. The wizard emits a private App Spec
+with its encrypted `DATABASE_URL`, S3-compatible uploads, web, scheduler, and
+migrations from the same pinned GHCR image. A manual
+[`app.template.yaml`](deploy/digitalocean/app.template.yaml) is also available.
 
 ### Docker / self-hosting
 
 Install without cloning the repository:
 
 ```bash
-npx @harly/create init harly
-cd harly
-npx @harly/create launch . --yes
+npx @harly/cli
 ```
 
-This creates the PostgreSQL, migrator, app, scheduler, and optional Caddy
-topology with a version-pinned image. See the self-hosting guide for secure
-first-owner setup, proxy modes, storage, backups, restore, and upgrades.
+This opens a guided installer that creates the PostgreSQL, migrator, app,
+scheduler, and optional Caddy topology with a version-pinned image. Run the
+same command later from the installation directory to manage it. See the
+self-hosting guide for secure first-owner setup, proxy modes, storage, backups,
+restore, upgrades, Railway, and Fly.io.
 
 ### Before inviting your team
 
 1. Use an HTTPS `HARLY_URL` and set independent production secrets.
-2. Run `npx @harly/create doctor .` after deployment.
+2. Run `npx @harly/cli doctor` after deployment.
 3. Configure off-host encrypted backups and prove a restore once.
 4. Create the first owner at `/setup`, then keep registration invite-only.
 5. Read the [production launch checklist](docs/launch-checklist.md).
