@@ -1,12 +1,17 @@
 import "server-only";
 
 import type { GreenhouseCandidateImportRow } from "./greenhouse";
+import {
+  capExceededMessage,
+  createRequestLimiter,
+  IMPORT_MAX_CANDIDATES,
+  retryAfterMs,
+  type Sleep,
+  sleep,
+} from "./shared";
 
-const MAX_CANDIDATES = 5_000;
 const MAX_RETRIES = 3;
 const DETAIL_CONCURRENCY = 4;
-const REQUEST_WINDOW_MS = 10_000;
-const REQUESTS_PER_WINDOW = 9;
 
 export class WorkableImportError extends Error {}
 
@@ -91,44 +96,6 @@ function baseUrl(subdomain: string): string {
   return `https://${subdomain}.workable.com/spi/v3`;
 }
 
-type Sleep = (delayMs: number) => Promise<void>;
-
-function sleep(delayMs: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, delayMs));
-}
-
-function createRequestLimiter(sleepImpl: Sleep) {
-  const requestTimes: number[] = [];
-
-  return async function acquire() {
-    while (true) {
-      const now = Date.now();
-      while (requestTimes[0] !== undefined && requestTimes[0] <= now - REQUEST_WINDOW_MS) {
-        requestTimes.shift();
-      }
-
-      if (requestTimes.length < REQUESTS_PER_WINDOW) {
-        requestTimes.push(now);
-        return;
-      }
-
-      const oldest = requestTimes[0] ?? now;
-      await sleepImpl(Math.max(50, oldest + REQUEST_WINDOW_MS - now + 50));
-    }
-  };
-}
-
-function retryAfterMs(response: Response): number | null {
-  const value = response.headers.get("retry-after")?.trim();
-  if (!value) return null;
-
-  const seconds = Number(value);
-  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1_000;
-
-  const timestamp = Date.parse(value);
-  return Number.isFinite(timestamp) ? Math.max(0, timestamp - Date.now()) : null;
-}
-
 async function request(
   url: string,
   token: string,
@@ -141,7 +108,7 @@ async function request(
     const response = await fetchImpl(url, { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, cache: "no-store" });
     if (response.ok) return response;
     if ((response.status === 429 || response.status >= 500) && attempt < MAX_RETRIES) {
-      const retryDelay = retryAfterMs(response) ?? REQUEST_WINDOW_MS;
+      const retryDelay = retryAfterMs(response) ?? 10_000;
       await sleepImpl(retryDelay + Math.min(250, attempt * 100));
       continue;
     }
@@ -173,14 +140,14 @@ export async function fetchWorkableCandidateImportRows(
     request(url, token, fetchImpl, acquire, sleepImpl);
   let url: string | null = `${root}/candidates?limit=100`;
   const candidateIds: string[] = [];
-  while (url && candidateIds.length < MAX_CANDIDATES) {
+  while (url && candidateIds.length < IMPORT_MAX_CANDIDATES) {
     const response = await requestWorkable(url);
     const body: unknown = await response.json();
     if (typeof body !== "object" || body === null || !Array.isArray((body as { candidates?: unknown }).candidates)) throw new WorkableImportError("Workable returned an invalid candidate response.");
     candidateIds.push(...((body as { candidates: WorkableCandidateListItem[] }).candidates).map((candidate) => text(candidate.id)).filter(Boolean));
     url = safeNext((body as { paging?: { next?: unknown } }).paging?.next, origin);
   }
-  if (url || candidateIds.length > MAX_CANDIDATES) throw new WorkableImportError(`This import exceeds ${MAX_CANDIDATES.toLocaleString()} candidates. Contact support to run a staged migration.`);
+  if (url || candidateIds.length > IMPORT_MAX_CANDIDATES) throw new WorkableImportError(capExceededMessage());
   const details: WorkableCandidate[] = [];
   for (let start = 0; start < candidateIds.length; start += DETAIL_CONCURRENCY) {
     const group = candidateIds.slice(start, start + DETAIL_CONCURRENCY);

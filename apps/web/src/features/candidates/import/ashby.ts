@@ -1,9 +1,9 @@
 import "server-only";
 
 import type { GreenhouseCandidateImportRow } from "./greenhouse";
+import { capExceededMessage, IMPORT_MAX_CANDIDATES } from "./shared";
 
 const API_URL = "https://api.ashbyhq.com";
-const MAX_CANDIDATES = 5_000;
 const MAX_RETRIES = 3;
 const DETAIL_CONCURRENCY = 4;
 
@@ -80,7 +80,7 @@ export async function fetchAshbyCandidateImportRows(apiKeyInput: string, fetchIm
     if (typeof body !== "object" || body === null || !Array.isArray((body as { results?: unknown }).results)) throw new AshbyImportError("Ashby returned an invalid candidate response.");
     const page = body as { results: AshbyCandidate[]; moreDataAvailable?: boolean; nextCursor?: string; syncToken?: string };
     ids.push(...page.results.map((candidate) => text(candidate.id)).filter(Boolean));
-    if (ids.length > MAX_CANDIDATES) throw new AshbyImportError(`This import exceeds ${MAX_CANDIDATES.toLocaleString()} candidates. Contact support to run a staged migration.`);
+    if (ids.length > IMPORT_MAX_CANDIDATES) throw new AshbyImportError(capExceededMessage());
     syncToken = text(page.syncToken) || syncToken;
     if (!page.moreDataAvailable) break;
     cursor = text(page.nextCursor);

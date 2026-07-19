@@ -1,5 +1,7 @@
 import "server-only";
 
+import { capExceededMessage, IMPORT_MAX_CANDIDATES } from "./shared";
+
 export type GreenhouseCandidateImportRow = {
   rowNumber: number;
   values: Record<string, string>;
@@ -22,7 +24,6 @@ type GreenhouseCandidate = {
 };
 
 const GREENHOUSE_ORIGIN = "https://harvest.greenhouse.io";
-const MAX_CANDIDATES = 5_000;
 const MAX_RETRIES = 3;
 
 export class GreenhouseImportError extends Error {}
@@ -121,17 +122,17 @@ export async function fetchGreenhouseCandidateImportRows(token: string, fetchImp
   let rowNumber = 2;
   let skipped = 0;
   const rows: GreenhouseCandidateImportRow[] = [];
-  while (url && rows.length < MAX_CANDIDATES) {
+  while (url && rows.length < IMPORT_MAX_CANDIDATES) {
     const response = await request(url, token, fetchImpl);
     const body: unknown = await response.json();
     if (!Array.isArray(body)) throw new GreenhouseImportError("Greenhouse returned an invalid candidate response.");
     for (const candidate of body as GreenhouseCandidate[]) {
       const row = greenhouseCandidateToImportRow(candidate, rowNumber++);
       if (row) rows.push(row); else skipped += 1;
-      if (rows.length === MAX_CANDIDATES) break;
+      if (rows.length === IMPORT_MAX_CANDIDATES) break;
     }
     url = nextPage(response.headers.get("link"));
   }
-  if (url) throw new GreenhouseImportError(`This import exceeds ${MAX_CANDIDATES.toLocaleString()} eligible candidates. Contact support to run a staged migration.`);
+  if (url) throw new GreenhouseImportError(capExceededMessage());
   return { rows, skipped };
 }

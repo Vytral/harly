@@ -34,4 +34,16 @@ describe("Workable import", () => {
     expect(sleep).toHaveBeenCalledWith(1);
     expect(fetcher).toHaveBeenCalledTimes(3);
   });
+
+  it("rejects when the import exceeds the candidate cap", async () => {
+    // A paging.next URL is present but we've already collected over the cap, so
+    // the post-loop guard trips before any detail fetch.
+    const over = Array.from({ length: 5001 }, (_, i) => ({ id: `c${i}` }));
+    const fetcher = vi.fn().mockResolvedValueOnce(
+      new Response(JSON.stringify({ candidates: over, paging: { next: "https://demo.workable.com/spi/v3/candidates?limit=100&page=2" } })),
+    );
+    await expect(
+      fetchWorkableCandidateImportRows({ subdomain: "demo", apiToken: "a".repeat(32) }, fetcher),
+    ).rejects.toThrow(/exceeds 5,000 candidates/i);
+  });
 });

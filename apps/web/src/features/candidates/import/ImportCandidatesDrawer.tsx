@@ -1,8 +1,9 @@
 "use client";
 
+import type { ComponentType } from "react";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Upload } from "lucide-react";
+import { Download, FileSpreadsheet, Upload } from "lucide-react";
 import { toast } from "sonner";
 
 import { importAshbyCandidatesAction, importCandidatesAction, importGreenhouseCandidatesAction, importLeverCandidatesAction, importWorkableCandidatesAction } from "@/features/candidates/import/actions";
@@ -18,6 +19,12 @@ import {
   prepareCandidateImport,
   validateCandidateImportMapping,
 } from "@/features/candidates/import/candidate-import";
+import {
+  AshbyLogo,
+  GreenhouseLogo,
+  LeverLogo,
+  WorkableLogo,
+} from "@/components/ui/icons/brands";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,16 +45,26 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { cn } from "@/lib/utils";
 
 export type ImportJobOption = { id: string; title: string };
 export type ImportSource = "csv" | "greenhouse" | "workable" | "ashby" | "lever";
 
-const IMPORT_SOURCE_OPTIONS: { value: ImportSource; label: string }[] = [
-  { value: "csv", label: "CSV file" },
-  { value: "greenhouse", label: "Greenhouse" },
-  { value: "workable", label: "Workable" },
-  { value: "ashby", label: "Ashby" },
-  { value: "lever", label: "Lever" },
+type SourceOption = {
+  value: ImportSource;
+  label: string;
+  /** Small mark shown in the source picker and next to the credentials heading. */
+  logo: ComponentType<{ className?: string }>;
+  /** Hint shown under the label in the picker grid. */
+  hint: string;
+};
+
+const IMPORT_SOURCE_OPTIONS: SourceOption[] = [
+  { value: "csv", label: "CSV file", logo: FileSpreadsheet, hint: "Upload a spreadsheet" },
+  { value: "greenhouse", label: "Greenhouse", logo: GreenhouseLogo, hint: "Harvest API key" },
+  { value: "workable", label: "Workable", logo: WorkableLogo, hint: "Subdomain + token" },
+  { value: "ashby", label: "Ashby", logo: AshbyLogo, hint: "Read-only API key" },
+  { value: "lever", label: "Lever", logo: LeverLogo, hint: "Opportunities key" },
 ];
 
 const UNMAPPED = "__unmapped__";
@@ -143,6 +160,16 @@ export function ImportCandidatesDrawer({
   const validRowCount = rowsToImport.filter(
     (row) => row.values.firstName && row.values.lastName && row.values.email,
   ).length;
+
+  // The active source option drives both the header logo and the skipped
+  // summary wording. `source` is cleared alongside `summary` when the source
+  // changes, so this always matches the import that produced the current view.
+  const activeSourceOption = IMPORT_SOURCE_OPTIONS.find((option) => option.value === source);
+  const ActiveSourceLogo = activeSourceOption?.logo;
+  // ATS imports report `skipped` when a profile is too sparse to import; CSV
+  // never sets it, so fall back to a generic "candidate" wording there.
+  const skippedSourceLabel =
+    source === "csv" ? "candidate" : activeSourceOption?.label ?? "source";
 
   function importRows() {
     if (!file || !jobId) return;
@@ -240,7 +267,12 @@ export function ImportCandidatesDrawer({
         </Button>
       </SheetTrigger>
       <DrawerLayout
-        title="Import candidates"
+        title={
+          <span className="flex items-center gap-2">
+            {ActiveSourceLogo ? <ActiveSourceLogo className="size-5 shrink-0" /> : null}
+            Import candidates
+          </span>
+        }
         description="Bring candidates into a job from a CSV file or another ATS."
         className="sm:max-w-2xl"
         footer={
@@ -287,26 +319,48 @@ export function ImportCandidatesDrawer({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="import-source">Source</Label>
-              <Select
-                value={source}
-                onValueChange={(value) => {
-                  setSource(value as ImportSource);
-                  setFile(null);
-                  setSummary(null);
-                }}
+              <Label>Source</Label>
+              <div
+                role="radiogroup"
+                aria-label="Import source"
+                className="grid grid-cols-2 gap-2 sm:grid-cols-3"
               >
-                <SelectTrigger id="import-source" className="w-full">
-                  <SelectValue placeholder="Select a source" />
-                </SelectTrigger>
-                <SelectContent>
-                  {IMPORT_SOURCE_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                {IMPORT_SOURCE_OPTIONS.map((option) => {
+                  const active = source === option.value;
+                  const Logo = option.logo;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={active}
+                      onClick={() => {
+                        setSource(option.value);
+                        setFile(null);
+                        setSummary(null);
+                      }}
+                      className={cn(
+                        "group flex flex-col items-start gap-2 rounded-lg border p-3 text-left transition-colors",
+                        active
+                          ? "border-primary bg-primary/5 ring-1 ring-primary"
+                          : "border-border hover:border-primary/40 hover:bg-muted/40",
+                      )}
+                    >
+                      <span className="flex size-9 items-center justify-center rounded-md bg-muted/60">
+                        <Logo className="size-5" />
+                      </span>
+                      <span className="space-y-0.5">
+                        <span className="block text-sm font-medium leading-tight">
+                          {option.label}
+                        </span>
+                        <span className="block text-xs text-muted-foreground">
+                          {option.hint}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {source === "csv" ? (
@@ -339,8 +393,11 @@ export function ImportCandidatesDrawer({
             ) : null}
 
             {!summary && source === "greenhouse" ? (
-              <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
-                <Label htmlFor="greenhouse-api-key">Greenhouse API key</Label>
+              <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                <div className="flex items-center gap-2">
+                  <GreenhouseLogo className="size-5" />
+                  <Label htmlFor="greenhouse-api-key" className="text-sm font-medium">Greenhouse API key</Label>
+                </div>
                 <Input id="greenhouse-api-key" type="password" autoComplete="off" value={greenhouseApiKey} onChange={(event) => setGreenhouseApiKey(event.target.value)} placeholder="Harvest API key" />
                 <p className="text-xs text-muted-foreground">Imports eligible candidates into the selected job. The key is used once, never saved, and needs the Harvest Candidates permission.</p>
                 <Button type="button" variant="outline" onClick={importGreenhouse} disabled={!jobId || !greenhouseApiKey.trim() || isPending}>{isPending ? "Importing…" : "Import Greenhouse candidates"}</Button>
@@ -348,18 +405,30 @@ export function ImportCandidatesDrawer({
             ) : null}
 
             {!summary && source === "workable" ? (
-              <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
-                <Label htmlFor="workable-subdomain">Workable credentials</Label>
-                <Input id="workable-subdomain" autoComplete="off" value={workableSubdomain} onChange={(event) => setWorkableSubdomain(event.target.value)} placeholder="Subdomain, e.g. acme" />
-                <Input id="workable-api-token" type="password" autoComplete="off" value={workableApiToken} onChange={(event) => setWorkableApiToken(event.target.value)} placeholder="API access token" />
+              <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                <div className="flex items-center gap-2">
+                  <WorkableLogo className="size-5" />
+                  <span className="text-sm font-medium">Workable credentials</span>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="workable-subdomain" className="text-xs text-muted-foreground">Subdomain</Label>
+                  <Input id="workable-subdomain" autoComplete="off" value={workableSubdomain} onChange={(event) => setWorkableSubdomain(event.target.value)} placeholder="e.g. acme" />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="workable-api-token" className="text-xs text-muted-foreground">API access token</Label>
+                  <Input id="workable-api-token" type="password" autoComplete="off" value={workableApiToken} onChange={(event) => setWorkableApiToken(event.target.value)} placeholder="Admin-generated token" />
+                </div>
                 <p className="text-xs text-muted-foreground">Use an Admin-generated token with only the <code>r_candidates</code> scope. Harly reads complete profiles and never saves the token.</p>
                 <Button type="button" variant="outline" onClick={importWorkable} disabled={!jobId || !workableSubdomain.trim() || !workableApiToken.trim() || isPending}>{isPending ? "Importing…" : "Import Workable candidates"}</Button>
               </div>
             ) : null}
 
             {!summary && source === "ashby" ? (
-              <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
-                <Label htmlFor="ashby-api-key">Ashby API key</Label>
+              <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                <div className="flex items-center gap-2">
+                  <AshbyLogo className="size-5" />
+                  <Label htmlFor="ashby-api-key" className="text-sm font-medium">Ashby API key</Label>
+                </div>
                 <Input id="ashby-api-key" type="password" autoComplete="off" value={ashbyApiKey} onChange={(event) => setAshbyApiKey(event.target.value)} placeholder="Ashby API key" />
                 <p className="text-xs text-muted-foreground">Use an Admin-generated key with the <code>candidatesRead</code> scope. Harly reads complete profiles and never saves the key.</p>
                 <Button type="button" variant="outline" onClick={importAshby} disabled={!jobId || !ashbyApiKey.trim() || isPending}>{isPending ? "Importing…" : "Import Ashby candidates"}</Button>
@@ -367,8 +436,11 @@ export function ImportCandidatesDrawer({
             ) : null}
 
             {!summary && source === "lever" ? (
-              <div className="space-y-2 rounded-lg border bg-muted/20 p-4">
-                <Label htmlFor="lever-api-key">Lever API key</Label>
+              <div className="space-y-3 rounded-lg border bg-muted/20 p-4">
+                <div className="flex items-center gap-2">
+                  <LeverLogo className="size-5" />
+                  <Label htmlFor="lever-api-key" className="text-sm font-medium">Lever API key</Label>
+                </div>
                 <Input id="lever-api-key" type="password" autoComplete="off" value={leverApiKey} onChange={(event) => setLeverApiKey(event.target.value)} placeholder="Lever API key" />
                 <p className="text-xs text-muted-foreground">Use a read-only key with access to Opportunities. Harly imports candidate details and never saves the key.</p>
                 <Button type="button" variant="outline" onClick={importLever} disabled={!jobId || !leverApiKey.trim() || isPending}>{isPending ? "Importing…" : "Import Lever candidates"}</Button>
@@ -455,7 +527,7 @@ export function ImportCandidatesDrawer({
                     ? ` ${summary.alreadyInPipeline} already in this job's pipeline.`
                     : ""}
                   {summary.skipped
-                    ? ` ${summary.skipped} incomplete Greenhouse profile${summary.skipped === 1 ? " was" : "s were"} skipped.`
+                    ? ` ${summary.skipped} incomplete ${skippedSourceLabel} profile${summary.skipped === 1 ? " was" : "s were"} skipped.`
                     : ""}
                 </p>
                 {summary.errors.length > 0 ? (
