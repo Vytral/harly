@@ -1,6 +1,4 @@
-import { Img, Text } from "@react-email/components";
-
-import { INK, PINE, SAGE, SAGE_INK } from "./styles";
+import { Img, Link, Text } from "@react-email/components";
 
 // Harly full wordmark served from the product CDN (raster PNG — Gmail and
 // Outlook won't render an inline SVG <img>, so the brand logo must be PNG).
@@ -52,16 +50,16 @@ export function EmailLogo({ logoUrl, name, variant = "workspace" }: EmailLogoPro
     );
   }
 
-  // Workspace lockup: evergreen monogram tile (first letter) + company name
+  // Workspace lockup: evergreen monogram tile (first letter) + company name.
   const monogram = name.trim().charAt(0).toUpperCase() || "•";
 
   return (
-    <Text style={{ margin: "0" }}>
+    <Text className="m-0 text-fg" style={{ margin: "0" }}>
       <span
         style={{
-          backgroundColor: PINE,
+          backgroundColor: "#3f6212",
           borderRadius: "7px",
-          color: SAGE,
+          color: "#eaf6c8",
           display: "inline-block",
           fontSize: "14px",
           fontWeight: 700,
@@ -76,7 +74,7 @@ export function EmailLogo({ logoUrl, name, variant = "workspace" }: EmailLogoPro
       </span>
       <span
         style={{
-          color: INK,
+          color: "#171717",
           fontSize: "16px",
           fontWeight: 700,
           letterSpacing: "-0.02em",
@@ -90,17 +88,25 @@ export function EmailLogo({ logoUrl, name, variant = "workspace" }: EmailLogoPro
   );
 }
 
-/** Inline "Powered by Harly" wordmark — render inside a <Text> footer, not standalone. */
+/**
+ * Inline "Powered by Harly" wordmark — render inside a <Text> footer, not
+ * standalone. Uses an inline-styled link so it composes inside any footer
+ * <Text> regardless of the surrounding Tailwind className.
+ */
 export function poweredByHarlyInline() {
   return (
     <>
       Powered by{" "}
-      <a
+      <Link
         href="https://harly.dev"
-        style={{ color: SAGE_INK, fontWeight: 600, textDecoration: "underline" }}
+        style={{
+          color: "#44520f",
+          fontWeight: 600,
+          textDecoration: "underline",
+        }}
       >
         Harly
-      </a>
+      </Link>
     </>
   );
 }

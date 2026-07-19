@@ -1,6 +1,5 @@
 import { Text } from "@react-email/components";
 
-import { heading, strong, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
@@ -40,16 +39,18 @@ export function CandidateStageUpdate({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text style={heading}>You&apos;re moving forward</Text>
-      <Text style={text}>Hi {candidateName},</Text>
-      <Text style={text}>
-        Your application for <strong style={strong}>{jobTitle}</strong> at {companyName} has
-        moved to the <strong style={strong}>{stageName}</strong> stage.
+      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+        You&apos;re moving forward
+      </Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        Your application for <span className="text-fg font-semibold">{jobTitle}</span> at {companyName} has
+        moved to the <span className="text-fg font-semibold">{stageName}</span> stage.
       </Text>
       {nextStepMessage ? (
-        <Text style={text}>{nextStepMessage}</Text>
+        <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">{nextStepMessage}</Text>
       ) : (
-        <Text style={text}>
+        <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
           Someone from the team will reach out shortly with next steps.
         </Text>
       )}

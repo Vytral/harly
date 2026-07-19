@@ -1,6 +1,5 @@
 import { Text } from "@react-email/components";
 
-import { heading, strong, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
@@ -42,20 +41,26 @@ export function InterviewCanceled({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text style={heading}>Interview canceled</Text>
-      <Text style={text}>Hi {candidateName},</Text>
-      <Text style={text}>
-        Your <strong style={strong}>{interviewType.toLowerCase()}</strong> for{" "}
-        <strong style={strong}>{jobTitle}</strong>
+      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+        Interview canceled
+      </Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        Your <span className="text-fg font-semibold">{interviewType.toLowerCase()}</span> for{" "}
+        <span className="text-fg font-semibold">{jobTitle}</span>
         {when ? (
           <>
-            {" "}scheduled for <strong style={strong}>{when}</strong>
+            {" "}scheduled for <span className="text-fg font-semibold">{when}</span>
           </>
         ) : null}{" "}
         has been canceled. We&apos;re sorry for the inconvenience.
       </Text>
-      {reason ? <Text style={text}>{reason}</Text> : null}
-      <Text style={text}>Reply to this email and we&apos;ll find a new time that works.</Text>
+      {reason ? (
+        <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">{reason}</Text>
+      ) : null}
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        Reply to this email and we&apos;ll find a new time that works.
+      </Text>
     </WorkspaceLayout>
   );
 }

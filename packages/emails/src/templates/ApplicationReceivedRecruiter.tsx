@@ -1,6 +1,5 @@
-import { Button, Section, Text } from "@react-email/components";
+import { Button, Link, Section, Text } from "@react-email/components";
 
-import { buttonStyle, heading, muted, strong, text } from "./styles";
 import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
 
 export type ApplicationReceivedRecruiterProps = {
@@ -30,18 +29,23 @@ export function ApplicationReceivedRecruiter({
       preview={`${candidateName} just applied for ${jobTitle}.`}
       branding={branding}
     >
-      <Text style={heading}>New application</Text>
-      <Text style={text}>
-        <strong style={strong}>{candidateName}</strong> applied for{" "}
-        <strong style={strong}>{jobTitle}</strong>.
+      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+        New application
       </Text>
-      <Text style={muted}>
-        <a href={`mailto:${candidateEmail}`} style={{ color: muted.color }}>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        <span className="text-fg font-semibold">{candidateName}</span> applied for{" "}
+        <span className="text-fg font-semibold">{jobTitle}</span>.
+      </Text>
+      <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0 mb-4">
+        <Link href={`mailto:${candidateEmail}`} className="text-fg-3 no-underline">
           {candidateEmail}
-        </a>
+        </Link>
       </Text>
-      <Section style={{ marginTop: "12px" }}>
-        <Button href={dashboardUrl} style={buttonStyle(branding?.primaryColor ?? undefined)}>
+      <Section className="mt-3">
+        <Button
+          href={dashboardUrl}
+          className="bg-brand text-[15px] leading-[1.5] tracking-[-0.075px] font-inter text-fg-inverted inline-block border-none px-6 py-3.5 text-center box-border no-underline"
+        >
           Review application  →
         </Button>
       </Section>

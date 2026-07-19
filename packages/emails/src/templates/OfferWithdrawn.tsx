@@ -1,6 +1,5 @@
 import { Text } from "@react-email/components";
 
-import { heading, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
@@ -38,13 +37,15 @@ export function OfferWithdrawn({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text style={heading}>Offer update</Text>
-      <Text style={text}>Hi {candidateName},</Text>
-      <Text style={text}>
+      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+        Offer update
+      </Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
         {reason ??
           `The offer for ${jobTitle} at ${companyName} has been withdrawn.`}
       </Text>
-      <Text style={text}>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
         Questions? Reply to this email and we&apos;ll walk you through what happened.
       </Text>
     </WorkspaceLayout>

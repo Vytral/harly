@@ -1,6 +1,5 @@
 import { Hr, Text } from "@react-email/components";
 
-import { divider, heading, muted, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
@@ -38,14 +37,16 @@ export function CandidateRejected({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text style={heading}>Update on your application</Text>
-      <Text style={text}>Hi {candidateName},</Text>
-      <Text style={text}>
+      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+        Update on your application
+      </Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
         {customMessage ??
           `Thank you for applying to ${jobTitle} at ${companyName}. After careful consideration, we've decided to move forward with other candidates.`}
       </Text>
-      <Hr style={divider} />
-      <Text style={muted}>
+      <Hr className="border-stroke border-t my-7" />
+      <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">
         Thanks,
         <br />
         {companyName}

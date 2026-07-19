@@ -1,6 +1,5 @@
 import { Button, Section, Text } from "@react-email/components";
 
-import { buttonStyle, heading, strong, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
@@ -38,16 +37,24 @@ export function ApplicationReceivedCandidate({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text style={heading}>Application received</Text>
-      <Text style={text}>Hi {candidateName},</Text>
-      <Text style={text}>
-        We got your application for <strong style={strong}>{jobTitle}</strong>. The team will
+      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+        Application received
+      </Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        We got your application for{" "}
+        <span className="text-fg font-semibold">{jobTitle}</span>. The team will
         review it carefully and reach out if there&apos;s a fit.
       </Text>
-      <Text style={text}>Thanks for taking the time — we appreciate it.</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        Thanks for taking the time — we appreciate it.
+      </Text>
       {jobBoardUrl ? (
-        <Section style={{ marginTop: "8px" }}>
-          <Button href={jobBoardUrl} style={buttonStyle(accentColor)}>
+        <Section className="mt-2">
+          <Button
+            href={jobBoardUrl}
+            className="bg-brand text-[15px] leading-[1.5] tracking-[-0.075px] font-inter text-fg-inverted inline-block border-none px-6 py-3.5 text-center box-border no-underline"
+          >
             See other open roles  →
           </Button>
         </Section>

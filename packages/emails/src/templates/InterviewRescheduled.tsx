@@ -1,14 +1,5 @@
-import { Button, Hr, Section, Text } from "@react-email/components";
+import { Hr, Section, Text } from "@react-email/components";
 
-import {
-  buttonStyle,
-  divider,
-  heading,
-  muted,
-  secondaryButtonStyle,
-  strong,
-  text,
-} from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
 import { buildCalendarLinks } from "./calendarLinks";
@@ -80,34 +71,39 @@ export function InterviewRescheduled({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text style={heading}>Interview rescheduled</Text>
-      <Text style={text}>
-        Hi {candidateName}, your <strong style={strong}>{interviewType.toLowerCase()}</strong> for{" "}
-        <strong style={strong}>{jobTitle}</strong> at {companyName} has a new time:
+      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+        Interview rescheduled
+      </Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        Hi {candidateName}, your{" "}
+        <span className="text-fg font-semibold">{interviewType.toLowerCase()}</span> for{" "}
+        <span className="text-fg font-semibold">{jobTitle}</span> at {companyName} has a new time:
       </Text>
       <DetailTable rows={rows} />
 
       {calendarLinks ? (
-        <Section style={{ margin: "0 0 20px" }}>
-          <Text style={{ ...muted, margin: "0 0 10px" }}>Update your calendar</Text>
+        <Section className="mb-5">
+          <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0 mb-2.5">
+            Update your calendar
+          </Text>
           <table>
             <tbody>
               <tr>
-                <td style={{ paddingRight: 8, paddingBottom: 8 }}>
+                <td className="pr-2 pb-2" style={{ paddingRight: 8, paddingBottom: 8 }}>
                   <a
                     href={calendarLinks.googleCalendarUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    style={buttonStyle(accentColor)}
+                    className="bg-brand text-[15px] leading-[1.5] tracking-[-0.075px] font-inter text-fg-inverted inline-block border-none px-6 py-3.5 text-center box-border no-underline"
                   >
                     Google Calendar  →
                   </a>
                 </td>
-                <td style={{ paddingBottom: 8 }}>
+                <td className="pb-2" style={{ paddingBottom: 8 }}>
                   <a
                     href={calendarLinks.icsDataUri}
                     download={`${interviewType}-${jobTitle}.ics`}
-                    style={secondaryButtonStyle()}
+                    className="border-stroke text-[15px] leading-[1.5] tracking-[-0.075px] font-inter text-fg inline-block rounded-[10px] border bg-bg px-6 py-3.5 text-center box-border no-underline"
                   >
                     Download .ics
                   </a>
@@ -120,12 +116,14 @@ export function InterviewRescheduled({
 
       {notes ? (
         <>
-          <Hr style={divider} />
-          <Text style={{ ...text, color: muted.color }}>{notes}</Text>
+          <Hr className="border-stroke border-t my-7" />
+          <Text className="text-[14px] leading-[1.5] font-inter text-fg-3 m-0 mb-4">{notes}</Text>
         </>
       ) : null}
 
-      <Text style={text}>Need to adjust again? Just reply to this email.</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        Need to adjust again? Just reply to this email.
+      </Text>
     </WorkspaceLayout>
   );
 }

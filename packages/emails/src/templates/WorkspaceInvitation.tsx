@@ -1,6 +1,5 @@
 import { Button, Hr, Section, Text } from "@react-email/components";
 
-import { buttonStyle, divider, heading, muted, strong, text } from "./styles";
 import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
 
 export type WorkspaceInvitationProps = {
@@ -41,20 +40,25 @@ export function WorkspaceInvitation({
       preview={`${inviterName} added you to ${workspaceName} on Harly.`}
       branding={branding}
     >
-      <Text style={heading}>You&apos;re invited to {workspaceName}</Text>
-      <Text style={text}>Hi {inviteeName},</Text>
-      <Text style={text}>
-        <strong style={strong}>{inviterName}</strong> has added you to{" "}
-        <strong style={strong}>{workspaceName}</strong> as a{" "}
-        <strong style={strong}>{roleLabel}</strong>. Click below to accept and set up your account.
+      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+        You&apos;re invited to {workspaceName}
       </Text>
-      <Section style={{ marginTop: "12px" }}>
-        <Button href={acceptUrl} style={buttonStyle(branding?.primaryColor ?? undefined)}>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {inviteeName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        <span className="text-fg font-semibold">{inviterName}</span> has added you to{" "}
+        <span className="text-fg font-semibold">{workspaceName}</span> as a{" "}
+        <span className="text-fg font-semibold">{roleLabel}</span>. Click below to accept and set up your account.
+      </Text>
+      <Section className="mt-3">
+        <Button
+          href={acceptUrl}
+          className="bg-brand text-[15px] leading-[1.5] tracking-[-0.075px] font-inter text-fg-inverted inline-block border-none px-6 py-3.5 text-center box-border no-underline"
+        >
           Accept invitation  →
         </Button>
       </Section>
-      <Hr style={divider} />
-      <Text style={muted}>
+      <Hr className="border-stroke border-t my-7" />
+      <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">
         This invitation expires in 7 days. Not expecting this? You can safely ignore it.
       </Text>
     </HarlyLayout>
