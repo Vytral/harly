@@ -1,6 +1,6 @@
 import { Text } from "@react-email/components";
 
-import { heading, text } from "./styles";
+import { heading, strong, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
@@ -43,8 +43,8 @@ export function CandidateStageUpdate({
       <Text style={heading}>You&apos;re moving forward</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        Your application for <strong>{jobTitle}</strong> at {companyName} has
-        moved to the <strong>{stageName}</strong> stage.
+        Your application for <strong style={strong}>{jobTitle}</strong> at {companyName} has
+        moved to the <strong style={strong}>{stageName}</strong> stage.
       </Text>
       {nextStepMessage ? (
         <Text style={text}>{nextStepMessage}</Text>

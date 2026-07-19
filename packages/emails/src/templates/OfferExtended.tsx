@@ -1,6 +1,6 @@
 import { Text } from "@react-email/components";
 
-import { heading, text } from "./styles";
+import { heading, strong, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
 import type { SocialLink } from "./HarlyLayout";
@@ -56,11 +56,13 @@ export function OfferExtended({
       <Text style={heading}>You have an offer</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        We&apos;d love to have you join {companyName} as <strong>{jobTitle}</strong>.
-        Here&apos;s what we&apos;re offering:
+        We&apos;d love to have you join {companyName} as{" "}
+        <strong style={strong}>{jobTitle}</strong>. Here&apos;s what we&apos;re offering:
       </Text>
       <DetailTable rows={rows} />
-      <Text style={text}>Reply to this email to accept or ask any questions.</Text>
+      <Text style={text}>
+        Reply to this email to accept or ask any questions. We&apos;re excited to hear from you.
+      </Text>
     </WorkspaceLayout>
   );
 }

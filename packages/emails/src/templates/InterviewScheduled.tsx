@@ -1,6 +1,14 @@
-import { Text } from "@react-email/components";
+import { Button, Hr, Section, Text } from "@react-email/components";
 
-import { heading, text, buttonStyle, secondaryButtonStyle } from "./styles";
+import {
+  buttonStyle,
+  divider,
+  heading,
+  muted,
+  secondaryButtonStyle,
+  strong,
+  text,
+} from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
 import { buildCalendarLinks } from "./calendarLinks";
@@ -73,40 +81,50 @@ export function InterviewScheduled({
       socialLinks={socialLinks}
     >
       <Text style={heading}>Interview confirmed</Text>
-      <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        Your <strong>{interviewType.toLowerCase()}</strong> for <strong>{jobTitle}</strong> at{" "}
-        {companyName} is set:
+        Hi {candidateName}, your <strong style={strong}>{interviewType.toLowerCase()}</strong> for{" "}
+        <strong style={strong}>{jobTitle}</strong> at {companyName} is on the calendar.
       </Text>
       <DetailTable rows={rows} />
+
       {calendarLinks ? (
-        <table style={{ margin: "0 0 20px" }}>
-          <tbody>
-            <tr>
-              <td style={{ paddingRight: 8 }}>
-                <a
-                  href={calendarLinks.googleCalendarUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={buttonStyle(accentColor)}
-                >
-                  Add to Google Calendar
-                </a>
-              </td>
-              <td>
-                <a
-                  href={calendarLinks.icsDataUri}
-                  download={`${interviewType}-${jobTitle}.ics`}
-                  style={secondaryButtonStyle()}
-                >
-                  Download .ics
-                </a>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <Section style={{ margin: "0 0 20px" }}>
+          <Text style={{ ...muted, margin: "0 0 10px" }}>Add it to your calendar</Text>
+          <table>
+            <tbody>
+              <tr>
+                <td style={{ paddingRight: 8, paddingBottom: 8 }}>
+                  <a
+                    href={calendarLinks.googleCalendarUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={buttonStyle(accentColor)}
+                  >
+                    Google Calendar  →
+                  </a>
+                </td>
+                <td style={{ paddingBottom: 8 }}>
+                  <a
+                    href={calendarLinks.icsDataUri}
+                    download={`${interviewType}-${jobTitle}.ics`}
+                    style={secondaryButtonStyle()}
+                  >
+                    Download .ics
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </Section>
       ) : null}
-      {notes ? <Text style={{ ...text, color: "#78716c" }}>{notes}</Text> : null}
+
+      {notes ? (
+        <>
+          <Hr style={divider} />
+          <Text style={{ ...text, color: muted.color }}>{notes}</Text>
+        </>
+      ) : null}
+
       <Text style={text}>Need to reschedule? Just reply to this email.</Text>
     </WorkspaceLayout>
   );

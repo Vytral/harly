@@ -1,6 +1,6 @@
-import { Button, Section, Text } from "@react-email/components";
+import { Button, Hr, Section, Text } from "@react-email/components";
 
-import { buttonStyle, heading, text } from "./styles";
+import { buttonStyle, divider, heading, muted, text } from "./styles";
 import { HarlyLayout } from "./HarlyLayout";
 import { HARLY_ACCENT } from "./styles";
 
@@ -17,20 +17,17 @@ export function PortalMagicLinkEmail({ candidateName, loginUrl }: PortalMagicLin
   return (
     <HarlyLayout preview="Your sign-in link is ready — expires in 15 minutes.">
       <Text style={heading}>Sign in to your portal</Text>
-      {candidateName ? (
-        <Text style={text}>Hi {candidateName},</Text>
-      ) : null}
+      {candidateName ? <Text style={text}>Hi {candidateName},</Text> : null}
       <Text style={text}>
         Click below to sign in. This link works once and expires in 15 minutes.
       </Text>
-      <Section style={{ marginTop: "24px" }}>
+      <Section style={{ marginTop: "12px" }}>
         <Button href={loginUrl} style={buttonStyle(HARLY_ACCENT)}>
-          Sign in
+          Sign in  →
         </Button>
       </Section>
-      <Text style={{ ...text, fontSize: "13px", color: "#78716c", marginTop: "24px" }}>
-        Didn&apos;t request this? You can safely ignore it.
-      </Text>
+      <Hr style={divider} />
+      <Text style={muted}>Didn&apos;t request this? You can safely ignore it.</Text>
     </HarlyLayout>
   );
 }

@@ -1,6 +1,6 @@
-import { Button, Section, Text } from "@react-email/components";
+import { Button, Hr, Section, Text } from "@react-email/components";
 
-import { buttonStyle, heading, text } from "./styles";
+import { buttonStyle, divider, heading, muted, strong, text } from "./styles";
 import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
 
 export type WorkspaceInvitationProps = {
@@ -44,18 +44,18 @@ export function WorkspaceInvitation({
       <Text style={heading}>You&apos;re invited to {workspaceName}</Text>
       <Text style={text}>Hi {inviteeName},</Text>
       <Text style={text}>
-        <strong>{inviterName}</strong> has added you to{" "}
-        <strong>{workspaceName}</strong> as a <strong>{roleLabel}</strong>.
-        Click below to accept and set up your account.
+        <strong style={strong}>{inviterName}</strong> has added you to{" "}
+        <strong style={strong}>{workspaceName}</strong> as a{" "}
+        <strong style={strong}>{roleLabel}</strong>. Click below to accept and set up your account.
       </Text>
-      <Section style={{ marginTop: "24px" }}>
+      <Section style={{ marginTop: "12px" }}>
         <Button href={acceptUrl} style={buttonStyle(branding?.primaryColor ?? undefined)}>
-          Accept invitation
+          Accept invitation  →
         </Button>
       </Section>
-      <Text style={{ ...text, fontSize: "13px", color: "#78716c", marginTop: "24px" }}>
-        This invitation expires in 7 days. Not expecting this? You can safely
-        ignore it.
+      <Hr style={divider} />
+      <Text style={muted}>
+        This invitation expires in 7 days. Not expecting this? You can safely ignore it.
       </Text>
     </HarlyLayout>
   );

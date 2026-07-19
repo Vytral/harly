@@ -1,0 +1,106 @@
+import { Img, Text } from "@react-email/components";
+
+import { INK, PINE, SAGE, SAGE_INK } from "./styles";
+
+// Harly full wordmark served from the product CDN (raster PNG — Gmail and
+// Outlook won't render an inline SVG <img>, so the brand logo must be PNG).
+// Source asset is 1672×941; rendered at height 30 → width ≈ 53.
+const HARLY_LOGO_URL = "https://cdn.harly.dev/harly-full-logo-transparent-black.png";
+const HARLY_LOGO_WIDTH = 53;
+const HARLY_LOGO_HEIGHT = 30;
+
+type EmailLogoProps = {
+  /** Absolute URL to a raster (PNG/JPG/WebP) logo. SVG won't render in Gmail. */
+  logoUrl?: string | null;
+  /** Display name shown as the typographic lockup when no logo image exists. */
+  name: string;
+  /** When true, render the fixed Harly product logo regardless of name. */
+  variant?: "workspace" | "harly";
+};
+
+/**
+ * Email header mark. Renders the workspace/company logo image when available
+ * (email-optimized PNG from /api/logo/convert), otherwise a typographic
+ * lockup: a small evergreen monogram tile + the name in ink. The Harly
+ * variant renders the fixed Harly wordmark PNG for product-originated emails.
+ *
+ * Logo images must be raster — SVG is not supported by Gmail and many
+ * Outlook clients, so we never render an inline SVG <img> here.
+ */
+export function EmailLogo({ logoUrl, name, variant = "workspace" }: EmailLogoProps) {
+  if (logoUrl) {
+    return (
+      <Img
+        src={logoUrl}
+        alt={`${name} logo`}
+        width={140}
+        height={40}
+        style={{ display: "block", maxHeight: "40px", objectFit: "contain" }}
+      />
+    );
+  }
+
+  if (variant === "harly") {
+    return (
+      <Img
+        src={HARLY_LOGO_URL}
+        alt="Harly"
+        width={HARLY_LOGO_WIDTH}
+        height={HARLY_LOGO_HEIGHT}
+        style={{ display: "block" }}
+      />
+    );
+  }
+
+  // Workspace lockup: evergreen monogram tile (first letter) + company name
+  const monogram = name.trim().charAt(0).toUpperCase() || "•";
+
+  return (
+    <Text style={{ margin: "0" }}>
+      <span
+        style={{
+          backgroundColor: PINE,
+          borderRadius: "7px",
+          color: SAGE,
+          display: "inline-block",
+          fontSize: "14px",
+          fontWeight: 700,
+          height: "26px",
+          lineHeight: "26px",
+          textAlign: "center" as const,
+          verticalAlign: "middle",
+          width: "26px",
+        }}
+      >
+        {monogram}
+      </span>
+      <span
+        style={{
+          color: INK,
+          fontSize: "16px",
+          fontWeight: 700,
+          letterSpacing: "-0.02em",
+          marginLeft: "9px",
+          verticalAlign: "middle",
+        }}
+      >
+        {name}
+      </span>
+    </Text>
+  );
+}
+
+/** Inline "Powered by Harly" wordmark — render inside a <Text> footer, not standalone. */
+export function poweredByHarlyInline() {
+  return (
+    <>
+      Powered by{" "}
+      <a
+        href="https://harly.dev"
+        style={{ color: SAGE_INK, fontWeight: 600, textDecoration: "underline" }}
+      >
+        Harly
+      </a>
+    </>
+  );
+}

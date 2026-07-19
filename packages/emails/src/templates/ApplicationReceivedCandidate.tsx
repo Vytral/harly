@@ -1,6 +1,6 @@
 import { Button, Section, Text } from "@react-email/components";
 
-import { buttonStyle, heading, text } from "./styles";
+import { buttonStyle, heading, strong, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
@@ -41,14 +41,14 @@ export function ApplicationReceivedCandidate({
       <Text style={heading}>Application received</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        We got your application for <strong>{jobTitle}</strong>. The team will
-        review it and reach out if there&apos;s a fit.
+        We got your application for <strong style={strong}>{jobTitle}</strong>. The team will
+        review it carefully and reach out if there&apos;s a fit.
       </Text>
       <Text style={text}>Thanks for taking the time — we appreciate it.</Text>
       {jobBoardUrl ? (
-        <Section style={{ marginTop: "24px" }}>
+        <Section style={{ marginTop: "8px" }}>
           <Button href={jobBoardUrl} style={buttonStyle(accentColor)}>
-            See other open roles
+            See other open roles  →
           </Button>
         </Section>
       ) : null}

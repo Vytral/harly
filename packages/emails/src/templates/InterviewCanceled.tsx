@@ -1,6 +1,6 @@
 import { Text } from "@react-email/components";
 
-import { heading, text } from "./styles";
+import { heading, strong, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
@@ -45,19 +45,17 @@ export function InterviewCanceled({
       <Text style={heading}>Interview canceled</Text>
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
-        Your <strong>{interviewType.toLowerCase()}</strong> for{" "}
-        <strong>{jobTitle}</strong>
+        Your <strong style={strong}>{interviewType.toLowerCase()}</strong> for{" "}
+        <strong style={strong}>{jobTitle}</strong>
         {when ? (
           <>
-            {" "}scheduled for <strong>{when}</strong>
+            {" "}scheduled for <strong style={strong}>{when}</strong>
           </>
         ) : null}{" "}
-        has been canceled.
+        has been canceled. We&apos;re sorry for the inconvenience.
       </Text>
-      {reason ? (
-        <Text style={text}>{reason}</Text>
-      ) : null}
-      <Text style={text}>Reply to this email and we&apos;ll find a new time.</Text>
+      {reason ? <Text style={text}>{reason}</Text> : null}
+      <Text style={text}>Reply to this email and we&apos;ll find a new time that works.</Text>
     </WorkspaceLayout>
   );
 }

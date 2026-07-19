@@ -44,7 +44,9 @@ export function OfferWithdrawn({
         {reason ??
           `The offer for ${jobTitle} at ${companyName} has been withdrawn.`}
       </Text>
-      <Text style={text}>Questions? Reply to this email and we&apos;ll explain.</Text>
+      <Text style={text}>
+        Questions? Reply to this email and we&apos;ll walk you through what happened.
+      </Text>
     </WorkspaceLayout>
   );
 }

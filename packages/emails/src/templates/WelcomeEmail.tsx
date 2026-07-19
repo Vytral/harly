@@ -30,9 +30,9 @@ export function WelcomeEmail({
         Your {displayName} workspace is ready. Post your first job, publish it
         to your career page, and start tracking candidates — all in one place.
       </Text>
-      <Section style={{ marginTop: "24px" }}>
+      <Section style={{ marginTop: "12px" }}>
         <Button href={dashboardUrl} style={buttonStyle(branding?.primaryColor ?? undefined)}>
-          Open dashboard
+          Open dashboard  →
         </Button>
       </Section>
     </HarlyLayout>

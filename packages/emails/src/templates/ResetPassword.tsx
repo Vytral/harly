@@ -1,6 +1,6 @@
-import { Button, Section, Text } from "@react-email/components";
+import { Button, Hr, Section, Text } from "@react-email/components";
 
-import { buttonStyle, heading, text } from "./styles";
+import { buttonStyle, divider, heading, muted, text } from "./styles";
 import { HarlyLayout } from "./HarlyLayout";
 import { HARLY_ACCENT } from "./styles";
 
@@ -17,16 +17,17 @@ export function ResetPasswordEmail({ userName, resetUrl }: ResetPasswordEmailPro
       <Text style={heading}>Reset your password</Text>
       <Text style={text}>Hi {userName},</Text>
       <Text style={text}>
-        Someone requested a password reset for your Harly account. Click below
-        to set a new one. The link expires in 1 hour.
+        Someone requested a password reset for your Harly account. Click below to
+        set a new one. The link expires in 1 hour.
       </Text>
-      <Section style={{ marginTop: "24px" }}>
+      <Section style={{ marginTop: "12px" }}>
         <Button href={resetUrl} style={buttonStyle(HARLY_ACCENT)}>
-          Reset password
+          Reset password  →
         </Button>
       </Section>
-      <Text style={{ ...text, fontSize: "13px", color: "#78716c", marginTop: "24px" }}>
-        Didn&apos;t request this? Your password won&apos;t change — you can ignore this email.
+      <Hr style={divider} />
+      <Text style={muted}>
+        Didn&apos;t request this? Your password won&apos;t change — you can safely ignore this email.
       </Text>
     </HarlyLayout>
   );

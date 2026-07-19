@@ -1,6 +1,7 @@
-import { Body, Container, Head, Html, Preview, Section, Text } from "@react-email/components";
+import { Body, Container, Head, Hr, Html, Preview, Section, Text } from "@react-email/components";
 
-import { body, container, footer, main, muted } from "./styles";
+import { body, card, container, footer, footerRule, header, main, muted } from "./styles";
+import { EmailLogo, poweredByHarlyInline } from "./EmailLogo";
 
 export type SocialLink = {
   platform: string;
@@ -21,8 +22,15 @@ type HarlyLayoutProps = {
   branding?: WorkspaceEmailBranding;
 };
 
+/**
+ * Layout for product-originated emails (welcome, verify, reset, magic link,
+ * workspace invitation, recruiter notifications). Header shows the workspace
+ * logo when branded, otherwise the Harly product lockup. Footer is always
+ * "Powered by Harly" because these originate from the product itself.
+ */
 export function HarlyLayout({ preview, children, branding }: HarlyLayoutProps) {
-  const workspaceName = branding?.name || "Harly";
+  const workspaceName = branding?.name && branding.name !== "Harly" ? branding.name : "Harly";
+  const hasBrandedLogo = Boolean(branding?.logoUrl);
 
   return (
     <Html lang="en">
@@ -33,24 +41,27 @@ export function HarlyLayout({ preview, children, branding }: HarlyLayoutProps) {
       <Preview>{preview}</Preview>
       <Body style={main}>
         <Container style={container}>
-          <Section style={body}>{children}</Section>
+          <Section style={header}>
+            {hasBrandedLogo ? (
+              <EmailLogo logoUrl={branding?.logoUrl} name={workspaceName} variant="workspace" />
+            ) : (
+              <EmailLogo name="Harly" variant="harly" />
+            )}
+          </Section>
+
+          <Section style={card}>
+            <Section style={body}>{children}</Section>
+          </Section>
 
           <Section style={footer}>
+            <Hr style={footerRule} />
             <Text style={muted}>
               {workspaceName !== "Harly" ? (
                 <>
-                  Sent by {workspaceName} via{" "}
-                  <a href="https://harly.dev" style={{ color: "#78716c", textDecoration: "underline" }}>
-                    Harly
-                  </a>
+                  Sent by {workspaceName} · {poweredByHarlyInline()}
                 </>
               ) : (
-                <>
-                  Powered by{" "}
-                  <a href="https://harly.dev" style={{ color: "#78716c", textDecoration: "underline" }}>
-                    Harly
-                  </a>
-                </>
+                poweredByHarlyInline()
               )}
             </Text>
           </Section>

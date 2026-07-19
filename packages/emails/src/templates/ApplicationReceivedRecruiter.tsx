@@ -1,6 +1,6 @@
 import { Button, Section, Text } from "@react-email/components";
 
-import { buttonStyle, heading, text } from "./styles";
+import { buttonStyle, heading, muted, strong, text } from "./styles";
 import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
 
 export type ApplicationReceivedRecruiterProps = {
@@ -32,16 +32,17 @@ export function ApplicationReceivedRecruiter({
     >
       <Text style={heading}>New application</Text>
       <Text style={text}>
-        <strong>{candidateName}</strong> applied for <strong>{jobTitle}</strong>.
+        <strong style={strong}>{candidateName}</strong> applied for{" "}
+        <strong style={strong}>{jobTitle}</strong>.
       </Text>
-      <Text style={{ ...text, color: "#78716c" }}>
-        <a href={`mailto:${candidateEmail}`} style={{ color: "#78716c" }}>
+      <Text style={muted}>
+        <a href={`mailto:${candidateEmail}`} style={{ color: muted.color }}>
           {candidateEmail}
         </a>
       </Text>
-      <Section style={{ marginTop: "24px" }}>
+      <Section style={{ marginTop: "12px" }}>
         <Button href={dashboardUrl} style={buttonStyle(branding?.primaryColor ?? undefined)}>
-          Review application
+          Review application  →
         </Button>
       </Section>
     </HarlyLayout>

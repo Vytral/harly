@@ -1,6 +1,6 @@
-import { Text } from "@react-email/components";
+import { Hr, Text } from "@react-email/components";
 
-import { heading, text } from "./styles";
+import { divider, heading, muted, text } from "./styles";
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
 
@@ -42,9 +42,10 @@ export function CandidateRejected({
       <Text style={text}>Hi {candidateName},</Text>
       <Text style={text}>
         {customMessage ??
-          `Thank you for applying to ${jobTitle} at ${companyName}. We've decided to move forward with other candidates.`}
+          `Thank you for applying to ${jobTitle} at ${companyName}. After careful consideration, we've decided to move forward with other candidates.`}
       </Text>
-      <Text style={{ ...text, color: "#78716c" }}>
+      <Hr style={divider} />
+      <Text style={muted}>
         Thanks,
         <br />
         {companyName}
