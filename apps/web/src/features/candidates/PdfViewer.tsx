@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { Download, Loader2, Maximize2, Minus, Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -48,8 +54,11 @@ export function PdfViewer({
   const [zoom, setZoom] = useState(1);
   // pdfjs is browser-only (canvas, worker, import.meta.url); render nothing on
   // the server so the client-only toolbar/canvas never hydrates against SSR markup.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false,
+  );
 
   // ── Load the document ──────────────────────────────────────────────────────
   useEffect(() => {

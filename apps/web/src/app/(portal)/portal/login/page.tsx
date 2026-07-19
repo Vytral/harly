@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db, jobs, organization, workspaceSettings } from "@harly/db";
 import { PortalLoginForm } from "@/features/portal/PortalLoginForm";

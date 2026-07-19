@@ -234,8 +234,8 @@ jobs:
           npx harly --help
       - name: Validate Compose profiles
         run: |
-          export HARLY_IMAGE="$(node -p \"const r=require('./release-manifest.json'); r.image + '@' + r.digest\")"
-          export HARLY_VERSION="$(node -p \"require('./release-manifest.json').version\")" HARLY_URL=http://localhost:3000
+          export HARLY_IMAGE="$(node -p 'const r=require("./release-manifest.json"); r.image + "@" + r.digest')"
+          export HARLY_VERSION="$(node -p 'require("./release-manifest.json").version')" HARLY_URL=http://localhost:3000
           export POSTGRES_USER=harly POSTGRES_PASSWORD=harly POSTGRES_DB=harly
           export BETTER_AUTH_SECRET=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa AI_ENCRYPTION_KEY=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           export STORAGE_UPLOAD_SECRET=cccccccccccccccccccccccccccccccc CRON_SECRET=dddddddddddddddddddddddddddddddd

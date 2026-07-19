@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { type NextRequest, NextResponse } from "next/server";
+import { type NextRequest } from "next/server";
 import type { Route } from "next";
 
 import {
