@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import { db, jobs, organization, workspaceSettings } from "@harly/db";
 import { PortalLoginForm } from "@/features/portal/PortalLoginForm";
@@ -7,11 +7,13 @@ import {
   getPortalGitHubCredentials,
   getPortalGoogleCredentials,
   getPortalLinkedInCredentials,
+  getPortalWorkspaceBySlug,
+  getSinglePortalWorkspace,
 } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
 
-async function getOrgBranding() {
+async function getOrgBranding(workspaceId: string) {
   const [row] = await db
     .select({
       name: organization.name,
@@ -25,13 +27,13 @@ async function getOrgBranding() {
       workspaceSettings,
       eq(workspaceSettings.organizationId, organization.id),
     )
-    .orderBy(asc(organization.createdAt))
+    .where(eq(organization.id, workspaceId))
     .limit(1);
 
   const deptRows = await db
     .selectDistinct({ department: jobs.department })
     .from(jobs)
-    .where(eq(jobs.status, "open"))
+    .where(and(eq(jobs.workspaceId, workspaceId), eq(jobs.status, "open")))
     .orderBy(sql`${jobs.department} asc nulls last`)
     .limit(6);
 
@@ -51,13 +53,33 @@ async function getOrgBranding() {
   };
 }
 
-export default async function PortalLoginPage() {
-  const org = await getOrgBranding();
+type Props = { searchParams: Promise<{ workspace?: string }> };
+
+export default async function PortalLoginPage({ searchParams }: Props) {
+  const { workspace: requestedWorkspace } = await searchParams;
+  const workspace = requestedWorkspace
+    ? await getPortalWorkspaceBySlug(requestedWorkspace)
+    : await getSinglePortalWorkspace();
+
+  if (!workspace) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-background px-6 text-center">
+        <div className="max-w-sm space-y-2">
+          <h1 className="text-xl font-semibold">Candidate portal unavailable</h1>
+          <p className="text-sm text-muted-foreground">
+            Use the careers page for the company you applied to, then open its candidate portal.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
+  const org = await getOrgBranding(workspace.id);
   const [googleCredentials, githubCredentials, linkedinCredentials] =
     await Promise.all([
-      getPortalGoogleCredentials(),
-      getPortalGitHubCredentials(),
-      getPortalLinkedInCredentials(),
+      getPortalGoogleCredentials(workspace.id),
+      getPortalGitHubCredentials(workspace.id),
+      getPortalLinkedInCredentials(workspace.id),
     ]);
   const hasGoogle = Boolean(googleCredentials);
   const hasGitHub = Boolean(githubCredentials);
@@ -159,6 +181,7 @@ export default async function PortalLoginPage() {
               hasGoogle={hasGoogle}
               hasGitHub={hasGitHub}
               hasLinkedIn={hasLinkedIn}
+              workspaceSlug={workspace.slug}
             />
           </Suspense>
 

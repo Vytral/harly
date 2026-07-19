@@ -10,7 +10,6 @@ import { CareerTestimonials } from "@/features/career-page/CareerTestimonials";
 import { CareerFaq } from "@/features/career-page/CareerFaq";
 import { CareerFooter } from "@/features/career-page/CareerFooter";
 
-
 /**
  * GreenhouseTemplate , classic corporate board. Wide hero banner, centered
  * "About" block, then open roles grouped into department sections with simple
@@ -52,15 +51,24 @@ export function GreenhouseTemplate({
         className="relative flex h-64 items-center justify-center overflow-hidden sm:h-80"
         style={
           heroImage
-            ? { backgroundImage: `url(${heroImage})`, backgroundSize: "cover", backgroundPosition: "center" }
+            ? {
+                backgroundImage: `url(${heroImage})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+              }
             : { backgroundColor: accent }
         }
       >
         <div className="absolute inset-0 bg-zinc-900/45" />
-        <div className={`relative px-6 flex flex-col ${
-          config.hero.logoPosition === "center" ? "items-center text-center" :
-          config.hero.logoPosition === "right" ? "items-end text-right" : "items-start text-left"
-        }`}>
+        <div
+          className={`relative px-6 flex flex-col ${
+            config.hero.logoPosition === "center"
+              ? "items-center text-center"
+              : config.hero.logoPosition === "right"
+                ? "items-end text-right"
+                : "items-start text-left"
+          }`}
+        >
           {logo && (
             // eslint-disable-next-line @next/next/no-img-element
             <img
@@ -70,7 +78,9 @@ export function GreenhouseTemplate({
             />
           )}
           {config.hero.showName && !logo ? (
-            <p className="mb-3 text-sm font-medium text-white/70">{workspace.name}</p>
+            <p className="mb-3 text-sm font-medium text-white/70">
+              {workspace.name}
+            </p>
           ) : null}
           <h1 className="text-4xl font-semibold tracking-tight text-white sm:text-5xl">
             {headline}
@@ -140,8 +150,12 @@ export function GreenhouseTemplate({
                           </span>
                           <span className="flex items-center gap-1.5 text-sm text-zinc-500 dark:text-zinc-400">
                             <MapPin className="size-3.5" strokeWidth={1.8} />
-                            {job.location ?? formatWorkplaceType(job.workplaceType) ?? "Not specified"}
-                            <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                            {job.location ??
+                              formatWorkplaceType(job.workplaceType) ??
+                              "Not specified"}
+                            <span className="text-zinc-300 dark:text-zinc-600">
+                              ·
+                            </span>
                             {formatEmploymentType(job.employmentType)}
                           </span>
                         </Link>
@@ -163,7 +177,9 @@ export function GreenhouseTemplate({
               {config.cta.title}
             </h2>
             {config.cta.body && (
-              <p className="mt-3 text-zinc-600 dark:text-zinc-400">{config.cta.body}</p>
+              <p className="mt-3 text-zinc-600 dark:text-zinc-400">
+                {config.cta.body}
+              </p>
             )}
             {workspace.websiteUrl && (
               <a
@@ -187,7 +203,10 @@ export function GreenhouseTemplate({
             <h2 className="mb-8 text-2xl font-semibold tracking-tight">
               {config.testimonials.title}
             </h2>
-            <CareerTestimonials items={config.testimonials.items} accent={accent} />
+            <CareerTestimonials
+              items={config.testimonials.items}
+              accent={accent}
+            />
           </div>
         </section>
       )}
@@ -206,7 +225,15 @@ export function GreenhouseTemplate({
 
       <footer className="border-t border-zinc-200 dark:border-zinc-800">
         <div className="py-8">
-          <CareerFooter config={config} workspaceName={workspace.name} maxWidth="max-w-3xl" iconRounded="rounded-md" portalEnabled={portalEnabled} />
+          <CareerFooter
+            config={config}
+            workspaceName={workspace.name}
+            portalWorkspaceSlug={workspace.slug}
+            maxWidth="max-w-3xl"
+            iconRounded="rounded-md"
+            portalEnabled={portalEnabled}
+            legalBasePath={boardRoot === "/" ? "/legal" : `${boardRoot}/legal`}
+          />
         </div>
       </footer>
     </div>

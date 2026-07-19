@@ -1,0 +1,9 @@
+[Unit]
+Description=Harly deployment monitor
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/harly-monitor.env
+ExecStart=/usr/local/lib/harly/harly-monitor.sh

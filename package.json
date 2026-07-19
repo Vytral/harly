@@ -37,7 +37,6 @@
   "packageManager": "pnpm@9.15.0",
   "pnpm": {
     "overrides": {
-      "@harly/create": "link:tooling/create-harly",
       "@babel/core": "7.29.6",
       "drizzle-orm": "0.45.2",
       "esbuild": "0.28.1",

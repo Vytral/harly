@@ -69,7 +69,6 @@ export function MinimalTemplate({
 
   return (
     <div className="text-zinc-900 dark:text-zinc-100">
-
       {config.hero.bannerEnabled ? (
         /* ── Full banner hero ─────────────────────────────────────── */
         <header
@@ -118,7 +117,9 @@ export function MinimalTemplate({
               href="#positions"
               onClick={(e) => {
                 e.preventDefault();
-                document.getElementById("positions")?.scrollIntoView({ behavior: "smooth" });
+                document
+                  .getElementById("positions")
+                  ?.scrollIntoView({ behavior: "smooth" });
               }}
               className="mt-2 inline-flex h-10 items-center rounded-md px-6 text-sm font-semibold text-white shadow transition-transform duration-150 hover:scale-[1.02] active:scale-[0.98]"
               style={{ backgroundColor: accent }}
@@ -131,7 +132,9 @@ export function MinimalTemplate({
         /* ── Clean topbar + hero text ────────────────────────────── */
         <>
           <header className="border-b border-zinc-200 dark:border-zinc-800">
-            <div className={`mx-auto flex max-w-3xl items-center px-6 py-5 ${logoAlign}`}>
+            <div
+              className={`mx-auto flex max-w-3xl items-center px-6 py-5 ${logoAlign}`}
+            >
               {displayLogo ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
@@ -162,7 +165,9 @@ export function MinimalTemplate({
               href="#positions"
               onClick={(e) => {
                 e.preventDefault();
-                document.getElementById("positions")?.scrollIntoView({ behavior: "smooth" });
+                document
+                  .getElementById("positions")
+                  ?.scrollIntoView({ behavior: "smooth" });
               }}
               className="mt-7 inline-flex h-10 items-center rounded-md px-6 text-sm font-semibold text-white transition-transform duration-150 hover:scale-[1.02] active:scale-[0.98]"
               style={{ backgroundColor: accent }}
@@ -212,7 +217,10 @@ export function MinimalTemplate({
                           href={`${boardRoot}/jobs/${job.slug}` as Route}
                           className="group flex items-center justify-between gap-6 py-4 transition-colors"
                         >
-                          <span className="flex items-center gap-1.5 font-medium transition-opacity group-hover:opacity-70" style={{ color: accent }}>
+                          <span
+                            className="flex items-center gap-1.5 font-medium transition-opacity group-hover:opacity-70"
+                            style={{ color: accent }}
+                          >
                             {job.title}
                             <ArrowUpRight
                               className="size-3.5 -translate-x-1 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:opacity-100"
@@ -220,9 +228,16 @@ export function MinimalTemplate({
                             />
                           </span>
                           <span className="flex shrink-0 items-center gap-3 text-sm text-zinc-500 dark:text-zinc-400">
-                            <span>{job.location ?? formatWorkplaceType(job.workplaceType)}</span>
-                            <span className="text-zinc-300 dark:text-zinc-600">·</span>
-                            <span>{formatEmploymentType(job.employmentType)}</span>
+                            <span>
+                              {job.location ??
+                                formatWorkplaceType(job.workplaceType)}
+                            </span>
+                            <span className="text-zinc-300 dark:text-zinc-600">
+                              ·
+                            </span>
+                            <span>
+                              {formatEmploymentType(job.employmentType)}
+                            </span>
                           </span>
                         </Link>
                       </li>
@@ -239,7 +254,9 @@ export function MinimalTemplate({
       {config.cta.enabled && config.cta.title && (
         <section className="border-t border-zinc-100 dark:border-zinc-800">
           <div className="mx-auto max-w-3xl px-6 py-12 text-center">
-            <h2 className="text-xl font-semibold tracking-tight">{config.cta.title}</h2>
+            <h2 className="text-xl font-semibold tracking-tight">
+              {config.cta.title}
+            </h2>
             {config.cta.body && (
               <p className="mx-auto mt-2 max-w-xl text-zinc-600 dark:text-zinc-400">
                 {config.cta.body}
@@ -264,8 +281,13 @@ export function MinimalTemplate({
       {config.testimonials.enabled && config.testimonials.items.length > 0 && (
         <section className="border-t border-zinc-100 dark:border-zinc-800">
           <div className="mx-auto max-w-3xl px-6 py-12">
-            <h2 className="mb-8 text-xl font-semibold tracking-tight">{config.testimonials.title}</h2>
-            <CareerTestimonials items={config.testimonials.items} accent={accent} />
+            <h2 className="mb-8 text-xl font-semibold tracking-tight">
+              {config.testimonials.title}
+            </h2>
+            <CareerTestimonials
+              items={config.testimonials.items}
+              accent={accent}
+            />
           </div>
         </section>
       )}
@@ -274,7 +296,9 @@ export function MinimalTemplate({
       {config.faq.enabled && config.faq.items.length > 0 && (
         <section className="border-t border-zinc-100 dark:border-zinc-800">
           <div className="mx-auto max-w-3xl px-6 py-12">
-            <h2 className="mb-8 text-xl font-semibold tracking-tight">{config.faq.title}</h2>
+            <h2 className="mb-8 text-xl font-semibold tracking-tight">
+              {config.faq.title}
+            </h2>
             <CareerFaq items={config.faq.items} accent={accent} />
           </div>
         </section>
@@ -286,9 +310,11 @@ export function MinimalTemplate({
           <CareerFooter
             config={config}
             workspaceName={workspace.name}
+            portalWorkspaceSlug={workspace.slug}
             maxWidth="max-w-3xl"
             iconRounded="rounded-md"
             portalEnabled={portalEnabled}
+            legalBasePath={boardRoot === "/" ? "/legal" : `${boardRoot}/legal`}
           />
         </div>
       </footer>

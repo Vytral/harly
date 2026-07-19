@@ -1,0 +1,31 @@
+# Generated from release-manifest.json. Replace `app` before the first deploy.
+#
+# Setup: fly launch --no-deploy, attach Managed Postgres, set the required
+# secrets from .env, then run `fly deploy` from this repository root.
+app = "replace-with-your-harly-app-name"
+primary_region = "iad"
+
+[build]
+  image = "ghcr.io/vytral/harly@sha256:f0b999a76fa170887f625d12835379ef57772903c792fb0b66faea9270776a16"
+
+[processes]
+  web = "serve"
+  scheduler = "scheduler"
+
+[deploy]
+  release_command = "migrate"
+
+[http_service]
+  processes = ["web"]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[http_service.checks]]
+  grace_period = "20s"
+  interval = "30s"
+  timeout = "5s"
+  method = "GET"
+  path = "/api/health/ready"

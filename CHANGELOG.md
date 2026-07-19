@@ -12,5 +12,5 @@ passing release candidate digest.
   Caddy profile.
 - Added durable queue leases, PostgreSQL advisory locks, and opaque health
   probes.
-- Added `@harly/create` init, launch, doctor, backup, restore, and upgrade
+- Added `@harly/cli` init, launch, doctor, backup, restore, and upgrade
   commands.

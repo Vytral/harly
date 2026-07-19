@@ -163,12 +163,12 @@ Estado: `en revisión` — ya existe runtime reproducible; falta completar RC li
 | F3-25 | Calendario/candidatos en pantallas pequeñas o grandes | P1 | Calendario siempre conserva siete columnas y celdas `min-h-24`; Candidates carga/filtra localmente sin paginación y muestra rail IA incompleta (`CalendarBoard.tsx:238-314`, `CandidatesTable.tsx:130-199,370-477,634-653`). | Agenda/lista móvil con zona horaria; búsqueda/filtros server-side y paginación; ocultar rail no operativa. | pendiente |
 | F3-26 | Perfil y settings navegables a medias | P2 | Perfil de candidato concentra seis tabs no persistidas en URL; Settings muestra nueve secciones como cinta horizontal en móvil (`CandidateProfileTabs.tsx:269-298`, `SettingsNav.tsx:88-149`). | Tabs con deep-link/recuentos y selector/accordion/búsqueda para settings en móvil. | pendiente |
 | F3-27 | Estados públicos de carga/error | P1 | Job y apply públicos son dinámicos pero carecen de boundaries de carga/error; portal login/upload no anuncia estado de forma accesible. | Añadir loading/error/retry contextual y live regions a upload/login/submit. | pendiente |
-| F4-01 | Docker deployable | P0 | Compose generado define Postgres 16 privado, migrator, app, scheduler, volúmenes y healthchecks; `ghcr.io/vytral/harly:0.1.0-beta.1` fue pullable y arrancó en instalación temporal local. Falta evidencia VPS/HTTPS real y publicar el siguiente artefacto. | RC en VPS con digest publicado, Caddy/DNS y reinicio. | parcial — SELFHOST-RC-01 |
+| F4-01 | Docker deployable | P0 | Compose generado define Postgres 16 privado, migrator, app, scheduler, volúmenes y healthchecks. RC VPS 2026-07-19 ejecutó instalación local y upgrade Caddy/DNS/HTTPS público a `ghcr.io/vytral/harly:0.1.0-beta.2` digest `sha256:f0b999…0776a16`; migración, certificados, app, scheduler y readiness públicos verdes. | Mantener smoke por release. | resuelto para beta.2 ✅ |
 | F4-02 | CLI/wizard | P0 | `init`, `launch`, `doctor`, `backup`, `restore`, `update` y `uninstall` existen; el menú detecta sólo instalaciones ancestras y CI desactiva prompts. Falta publicar estos fixes como 0.1.3 y validar el flujo TTY completo. | Publicar y ejecutar RC de CLI distribuido. | parcial |
 | F4-03 | Scheduler | P0 | Scheduler es un servicio Compose con dependencia de app healthy, reinicio y límites; arrancó en la prueba local. Aún no hay prueba de solapamiento, caída y recuperación. | Pruebas de locks, reintentos y recuperación. | parcial — SELFHOST-RC-01 |
 | F4-04 | Storage local | P1 | Compose monta `uploads:/data/uploads`; `UPLOADS_DIR=/data/uploads` es el contrato runtime y hay prueba de `LocalAdapter`/path traversal. | Mantener prueba de reinicio en RC. | resuelto ✅ |
 | F4-05 | Health y seguridad DB | P1 | Postgres no publica puerto, app/scheduler esperan healthchecks y readiness no expone detalle de BD. | Verificar Caddy/HTTPS y alertado externo en VPS. | resuelto en Compose ✅ |
-| F4-06 | Upgrade/rollback | P1 | Update crea backup previo, fija digest, ejecuta migraciones y espera health; una migración no se revierte automáticamente y se documenta restore como recuperación. RC temporal 2026-07-18 validó update al digest de beta, reinicio y `doctor` verde. Falta N-1 → actual entre versiones distintas. | RC N-1 → actual y runbook de compatibilidad. | parcial |
+| F4-06 | Upgrade/rollback | P1 | Update crea backup previo, fija digest, ejecuta migraciones y espera health; una migración no se revierte automáticamente y se documenta restore como recuperación. RC VPS 2026-07-19 validó beta.1 → beta.2 y confirmó el digest objetivo con `doctor` verde. | Mantener RC por cada migración incompatible y documentar compatibilidad. | resuelto para la línea beta actual ✅ |
 | F4-07 | Backup/restore | P1 | Backup exige age o consentimiento explícito plaintext, incluye checksums recursivos y usa credenciales configuradas. Restore crea safety backup, excluye migrator durante restore y valida health. El drill limpio 2026-07-18 destruyó y recuperó 500 filas, checksum, usuario y upload byte a byte. Falta estrategia S3/retención. | Drill periódico cifrado + backup/versionado S3. | parcial — SELFHOST-DATA-01 local completado ✅ |
 | F4-08 | CI operativo | P1 | Hay typecheck, tests del CLI e init E2E; falta smoke Compose por modo, escaneo y RC de artefacto distribuido. | CI Compose + escaneo + RC. | parcial |
 | F4-09 | Configuración producción | P1 | CLI valida Docker, Compose, puertos, disco, DNS, URL, storage e imagen fija antes de generar `.env`; el runtime aún no posee schema único exhaustivo de variables. | Schema runtime y matriz por proveedor. | parcial |
@@ -322,8 +322,8 @@ Estado de los siete pasos acordados. La UI guiada se adelantó por decisión
 explícita del owner; esto no convierte la beta en lanzamiento ni desbloquea RC.
 
 - [x] **SELFHOST-CLI-01 — Corregir y verificar los ejecutables npm.**
-  `tooling/create-harly/package.json:16-23` usa `dist/index.js` sin `./` para
-  `create-harly` y `harly`. `npm publish --dry-run --json` finalizó sin
+  `tooling/harly/package.json` usa `dist/index.js` para el único binario
+  `harly`. `npm publish --dry-run --json` finalizó sin
   autocorrecciones, empaquetó 3 archivos (7.7 kB) e incluyó `dist/index.js`
   ejecutable con modo decimal `493`.
 - [ ] **SELFHOST-IMAGE-01 — Publicar la imagen canónica y hacerla pullable.**
@@ -333,13 +333,13 @@ explícita del owner; esto no convierte la beta en lanzamiento ni desbloquea RC.
   La inspección autenticada pasa, pero el token/pull anónimo aún devuelve
   401/403: el paquete GHCR sigue privado. No se promueve `latest`.
 - [x] **SELFHOST-CLI-02 — E2E mínimo de `init` en un directorio vacío.**
-  `tooling/create-harly/test/init.e2e.test.mjs:23-119` ejecuta el bin compilado
+  `tooling/harly/test/init.e2e.test.mjs` ejecuta el bin compilado
   y valida siete artefactos, `.env` `0600`, secretos independientes, config y
-  Compose. `tooling/create-harly/package.json:23` lo expone como `test` y
+  Compose. `tooling/harly/package.json` lo expone como `test` y
   `.github/workflows/ci.yml:225-234` lo ejecuta antes del smoke del tarball.
   Resultado local: 2/2 verdes, incluyendo el contrato no interactivo.
 - [ ] **SELFHOST-DATA-01 — Endurecer backup, restore y upgrade.**
-  Prototipos en `tooling/create-harly/src/index.ts:648-733`; no se promocionan
+  Implementación en `tooling/harly/src/index.ts`; no se promociona
   hasta cerrar el tracking destructivo independiente descrito abajo.
 - [ ] **SELFHOST-RC-01 — Instalación limpia y upgrade en una VPS.**
   Requiere SELFHOST-IMAGE-01 y SELFHOST-DATA-01. Debe validar los tres modos de

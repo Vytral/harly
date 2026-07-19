@@ -10,6 +10,7 @@ import { db } from "@harly/db";
 import {
   activityEvents,
   applications,
+  candidatePortalNotifications,
   candidateFiles,
   candidates,
   interviews,
@@ -249,6 +250,16 @@ export async function scheduleInterview(
           mode: data.mode,
           scheduledAt: when.toISOString(),
         },
+      });
+
+      await tx.insert(candidatePortalNotifications).values({
+        workspaceId: workspace.id,
+        candidateId: data.candidateId,
+        type: "interview_scheduled",
+        title: "Interview scheduled",
+        body: `Your interview is scheduled for ${interviewWhenFormatter.format(when)}.`,
+        href: `/portal/applications/${application.id}`,
+        metadata: { interviewId: interview.id, applicationId: application.id },
       });
 
       return { success: true as const, interviewId: interview.id };
@@ -705,6 +716,16 @@ export async function rescheduleInterview(input: {
           eq(interviews.workspaceId, workspace.id),
         ),
       );
+
+    await db.insert(candidatePortalNotifications).values({
+      workspaceId: workspace.id,
+      candidateId: data.candidateId,
+      type: "interview_rescheduled",
+      title: "Interview rescheduled",
+      body: `Your interview is now scheduled for ${interviewWhenFormatter.format(when)}.`,
+      href: info?.applicationId ? `/portal/applications/${info.applicationId}` : null,
+      metadata: { interviewId: data.interviewId, applicationId: info?.applicationId },
+    });
 
     const [synced] = await db.select({ meetLink: interviews.meetLink }).from(interviews).where(and(eq(interviews.id, row!.id), eq(interviews.workspaceId, workspace.id))).limit(1);
     const deliveryLocation = synced?.meetLink ?? data.location ?? undefined;

@@ -1,7 +1,15 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Cookie, Shield, Info, X, ChevronDown, ChevronUp, Check } from "lucide-react";
+import {
+  Cookie,
+  Shield,
+  Info,
+  X,
+  ChevronDown,
+  ChevronUp,
+  Check,
+} from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Prefs = {
@@ -10,6 +18,16 @@ type Prefs = {
   analytics: boolean;
   marketing: boolean;
 };
+
+const CONSENT_COOKIE = "harly_cookie_consent";
+
+function persistConsent(prefs: Prefs) {
+  const value = encodeURIComponent(
+    JSON.stringify({ ...prefs, necessary: true }),
+  );
+  const secure = window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `${CONSENT_COOKIE}=${value}; Path=/; Max-Age=31536000; SameSite=Lax${secure}`;
+}
 
 interface CookiePanelProps {
   title?: string;
@@ -49,7 +67,7 @@ function PrefRow({
             ? "border-[var(--board-primary,#6366f1)]/30 bg-[var(--board-primary,#6366f1)]/10 text-[var(--board-primary,#6366f1)]"
             : checked
               ? "border-[var(--board-primary,#6366f1)] bg-[var(--board-primary,#6366f1)] text-white"
-              : "border-zinc-300 bg-white hover:border-zinc-400 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:border-zinc-500"
+              : "border-zinc-300 bg-white hover:border-zinc-400 dark:border-zinc-600 dark:bg-zinc-800 dark:hover:border-zinc-500",
         )}
         aria-pressed={checked}
         aria-label={`${label} cookie preference`}
@@ -132,7 +150,19 @@ const CookiePanel = (props: CookiePanelProps) => {
   }, [showPrefs, prefs]);
 
   const closeWithExit = (val?: "true" | "false") => {
-    if (val) localStorage.setItem("cookie-consent", val);
+    if (val) {
+      localStorage.setItem("cookie-consent", val);
+      persistConsent(
+        val === "true"
+          ? {
+              necessary: true,
+              functional: true,
+              analytics: true,
+              marketing: true,
+            }
+          : prefs,
+      );
+    }
     setVisible(false);
     setTimeout(() => setRender(false), 300);
   };
@@ -140,6 +170,7 @@ const CookiePanel = (props: CookiePanelProps) => {
   const savePreferences = () => {
     localStorage.setItem("cookie-preferences", JSON.stringify(prefs));
     localStorage.setItem("cookie-consent", "true");
+    persistConsent(prefs);
     setShowPrefs(false);
 
     setVisible(false);
@@ -148,8 +179,7 @@ const CookiePanel = (props: CookiePanelProps) => {
 
   if (!render) return null;
 
-  const IconEl =
-    icon === "shield" ? Shield : icon === "info" ? Info : Cookie;
+  const IconEl = icon === "shield" ? Shield : icon === "info" ? Info : Cookie;
 
   return (
     <div
@@ -158,7 +188,7 @@ const CookiePanel = (props: CookiePanelProps) => {
       aria-label="Cookie consent"
       className={cn(
         "fixed right-4 bottom-4 md:right-6 md:bottom-6",
-        "z-50 w-[340px] max-w-[calc(100vw-2rem)]"
+        "z-50 w-[340px] max-w-[calc(100vw-2rem)]",
       )}
     >
       <div
@@ -168,7 +198,7 @@ const CookiePanel = (props: CookiePanelProps) => {
           visible
             ? "animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out"
             : "animate-out fade-out slide-out-to-bottom-4 duration-200 ease-in",
-          className
+          className,
         )}
       >
         {/* Header */}
@@ -176,7 +206,8 @@ const CookiePanel = (props: CookiePanelProps) => {
           <span
             className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg"
             style={{
-              backgroundColor: "color-mix(in srgb, var(--board-primary, #6366f1) 10%, transparent)",
+              backgroundColor:
+                "color-mix(in srgb, var(--board-primary, #6366f1) 10%, transparent)",
               color: "var(--board-primary, #6366f1)",
             }}
           >
@@ -224,7 +255,7 @@ const CookiePanel = (props: CookiePanelProps) => {
             type="button"
             onClick={() => setShowPrefs((p) => !p)}
             className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-[13px] font-medium text-zinc-600 transition-all hover:border-zinc-300 hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-700"
+              "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3 py-1.5 text-[13px] font-medium text-zinc-600 transition-all hover:border-zinc-300 hover:bg-zinc-50 active:scale-[0.98] dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-700",
             )}
             aria-expanded={showPrefs}
             aria-controls="cookie-preferences-inline"

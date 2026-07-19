@@ -571,6 +571,10 @@ export const workspaceSettings = pgTable("workspace_settings", {
   portalShowApplicationStatus: boolean("portal_show_application_status")
     .default(true)
     .notNull(),
+  // Keep the hiring team private unless a workspace explicitly opts in.
+  portalShowHiringTeam: boolean("portal_show_hiring_team")
+    .default(false)
+    .notNull(),
   // Shareable invite link — anyone with the token can join with inviteLinkRole.
   inviteLinkToken: text("invite_link_token"),
   inviteLinkRole: text("invite_link_role").default("recruiter").notNull(),
@@ -2306,6 +2310,43 @@ export const candidatePortalMagicLinks = pgTable(
   ],
 );
 
+// Candidate-facing, durable portal events. These are intentionally separate
+// from recruiter in-app notifications, whose recipient is an internal user.
+export const candidatePortalNotifications = pgTable(
+  "candidate_portal_notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    type: text("type").notNull(),
+    title: text("title").notNull(),
+    body: text("body"),
+    href: text("href"),
+    metadata: jsonb("metadata").default(sql`'{}'::jsonb`).notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }),
+    emailedAt: timestamp("emailed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("candidate_portal_notifications_candidate_read_created_idx").on(
+      table.candidateId,
+      table.readAt,
+      table.createdAt,
+    ),
+    index("candidate_portal_notifications_workspace_candidate_created_idx").on(
+      table.workspaceId,
+      table.candidateId,
+      table.createdAt,
+    ),
+  ],
+);
+
 // ---------------------------------------------------------------------------
 // GDPR / Consent records — proves consent was obtained (Art. 7 GDPR).
 // ---------------------------------------------------------------------------
@@ -2367,9 +2408,11 @@ export const dsarRequests = pgTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    candidateId: uuid("candidate_id")
-      .notNull()
-      .references(() => candidates.id, { onDelete: "cascade" }),
+    // Preserve the request evidence after an erasure. The completed record
+    // retains its workspace, requester, processor and timestamps.
+    candidateId: uuid("candidate_id").references(() => candidates.id, {
+      onDelete: "set null",
+    }),
     type: dsarTypeEnum("type").notNull(),
     status: dsarStatusEnum("status").default("pending").notNull(),
     requestedBy: text("requested_by"),

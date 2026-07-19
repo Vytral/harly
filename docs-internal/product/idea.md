@@ -43,7 +43,7 @@ The ATS market is broken for small orgs:
 1. **Modern and beautiful by default.** Not a dashboard from 2015. Designed to feel
    like Linear or Vercel — clean, fast, opinionated.
 
-2. **Self-hosteable in one command.** `npx @harly/create` → answer 5 questions →
+2. **Self-hosteable in one command.** `npx @harly/cli` → answer 5 questions →
    your ATS is running. No DevOps PhD required.
 
 3. **Open-source with real maintenance.** MIT license. Active development. Public
@@ -67,7 +67,7 @@ The ATS market is broken for small orgs:
 
 ### Short term (August 2025 — NACE submission)
 - [ ] Working self-hosted ATS deployable in under 10 minutes
-- [ ] `npx @harly/create` wizard functional
+- [ ] `npx @harly/cli` wizard functional
 - [ ] At least one real company or person using it
 - [ ] Public GitHub repo with a compelling README
 - [ ] Landing page live at harly.dev

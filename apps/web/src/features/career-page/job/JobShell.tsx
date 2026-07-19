@@ -56,7 +56,8 @@ export function JobShell({
   const showGradient = config.hero.overlay === "gradient" && Boolean(heroImage);
   const overlayFrom = config.hero.overlayFrom ?? `${accent}E6`;
   const overlayTo = config.hero.overlayTo ?? `${accent}00`;
-  const radius = config.theme.rounded === "sharp" ? "rounded-none" : "rounded-lg";
+  const radius =
+    config.theme.rounded === "sharp" ? "rounded-none" : "rounded-lg";
 
   // ── Animated tab indicator ──
   const navRef = useRef<HTMLElement>(null);
@@ -66,7 +67,7 @@ export function JobShell({
   useEffect(() => {
     const prevJob = sessionStorage.getItem("harly_prev_tab_job");
     const prevTab = sessionStorage.getItem("harly_prev_tab");
-    
+
     sessionStorage.setItem("harly_prev_tab_job", job.slug);
     sessionStorage.setItem("harly_prev_tab", activeTab);
 
@@ -144,21 +145,29 @@ export function JobShell({
             className="relative h-40 w-full overflow-hidden sm:h-44"
             style={
               heroImage
-                ? { backgroundImage: `url(${heroImage})`, backgroundSize: "cover", backgroundPosition: "center" }
+                ? {
+                    backgroundImage: `url(${heroImage})`,
+                    backgroundSize: "cover",
+                    backgroundPosition: "center",
+                  }
                 : { backgroundColor: accent }
             }
           >
             {showGradient && (
               <div
                 className="absolute inset-0"
-                style={{ background: `linear-gradient(90deg, ${overlayFrom} 0%, ${overlayTo} 100%)` }}
+                style={{
+                  background: `linear-gradient(90deg, ${overlayFrom} 0%, ${overlayTo} 100%)`,
+                }}
               />
             )}
             <div className="absolute inset-x-0 top-0 mx-auto max-w-5xl px-6 pt-5">
               <Link
                 href={(boardRoot || "/") as Route}
                 className="inline-flex items-center gap-1.5 text-sm font-medium transition-opacity hover:opacity-80"
-                style={{ color: heroImage || showGradient ? "#ffffff" : onAccent }}
+                style={{
+                  color: heroImage || showGradient ? "#ffffff" : onAccent,
+                }}
               >
                 <ArrowLeft className="size-4" strokeWidth={2} />
                 {workspace.name}
@@ -169,9 +178,16 @@ export function JobShell({
             <div className="relative -mt-9 flex size-[72px] items-center justify-center overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-lg dark:border-zinc-700 dark:bg-zinc-900">
               {logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logo} alt={workspace.name} className="size-full object-cover" />
+                <img
+                  src={logo}
+                  alt={workspace.name}
+                  className="size-full object-cover"
+                />
               ) : (
-                <span className="text-2xl font-semibold" style={{ color: accent }}>
+                <span
+                  className="text-2xl font-semibold"
+                  style={{ color: accent }}
+                >
                   {workspace.name.charAt(0).toUpperCase()}
                 </span>
               )}
@@ -188,7 +204,11 @@ export function JobShell({
               <ArrowLeft className="size-4" strokeWidth={1.8} />
               {logo ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={logo} alt={workspace.name} className="size-6 rounded object-contain" />
+                <img
+                  src={logo}
+                  alt={workspace.name}
+                  className="size-6 rounded object-contain"
+                />
               ) : null}
               {workspace.name}
             </Link>
@@ -196,7 +216,12 @@ export function JobShell({
         </header>
       )}
 
-      <div className={cn("mx-auto w-full max-w-5xl flex-1 px-6 pb-20", variant === "playful" ? "pt-6" : "pt-10")}>
+      <div
+        className={cn(
+          "mx-auto w-full max-w-5xl flex-1 px-6 pb-20",
+          variant === "playful" ? "pt-6" : "pt-10",
+        )}
+      >
         <h1
           className={cn(
             "text-2xl font-semibold tracking-tight sm:text-3xl",
@@ -219,7 +244,9 @@ export function JobShell({
                   <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
                     {m.label}
                   </dt>
-                  <dd className="mt-1 text-sm font-medium leading-snug">{m.value}</dd>
+                  <dd className="mt-1 text-sm font-medium leading-snug">
+                    {m.value}
+                  </dd>
                 </div>
               ))}
             </dl>
@@ -250,14 +277,22 @@ export function JobShell({
           </aside>
 
           {/* Content column */}
-          <main className={cn("min-w-0", reveal)} style={{ animationDelay: "120ms" }}>
-            <nav ref={navRef} className="relative flex gap-8 border-b border-zinc-200 text-sm font-medium dark:border-zinc-800">
+          <main
+            className={cn("min-w-0", reveal)}
+            style={{ animationDelay: "120ms" }}
+          >
+            <nav
+              ref={navRef}
+              className="relative flex gap-8 border-b border-zinc-200 text-sm font-medium dark:border-zinc-800"
+            >
               {tabs.map((t) => {
                 const on = activeTab === t.tab;
                 return (
                   <Link
                     key={t.tab}
-                    ref={(el) => { tabRefs.current[t.tab] = el; }}
+                    ref={(el) => {
+                      tabRefs.current[t.tab] = el;
+                    }}
                     href={t.href}
                     className={cn(
                       "pb-3 transition-colors",
@@ -293,8 +328,10 @@ export function JobShell({
           <CareerFooter
             config={config}
             workspaceName={workspace.name}
+            portalWorkspaceSlug={workspace.slug}
             maxWidth="max-w-5xl"
             portalEnabled={portalEnabled}
+            legalBasePath={boardRoot === "/" ? "/legal" : `${boardRoot}/legal`}
           />
         </div>
       </footer>

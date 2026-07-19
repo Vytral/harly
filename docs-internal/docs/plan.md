@@ -12,7 +12,7 @@ A Mintlify (or Docusaurus) site at docs.harly.dev with:
 Structure:
   Getting Started
     - Introduction
-    - Quick start (npx @harly/create)
+    - Quick start (npx @harly/cli)
     - Environment variables reference
     - First login and workspace setup
 

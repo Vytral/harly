@@ -519,6 +519,20 @@
       "when": 1784297900000,
       "tag": "0073_seo_job_posting",
       "breakpoints": true
+    },
+    {
+      "idx": 74,
+      "version": "7",
+      "when": 1784424092715,
+      "tag": "0074_safe_jubilee",
+      "breakpoints": true
+    },
+    {
+      "idx": 75,
+      "version": "7",
+      "when": 1784426012865,
+      "tag": "0075_tense_rockslide",
+      "breakpoints": true
     }
   ]
 }

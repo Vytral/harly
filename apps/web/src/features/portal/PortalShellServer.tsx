@@ -7,6 +7,7 @@ import { db, organization, candidates, workspaceSettings } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { signOutPortalAction } from "@/features/portal/actions";
 import { PortalShellClient } from "@/features/portal/PortalShell";
+import { getCandidatePortalUnreadNotificationCount } from "@/features/portal/notification-data";
 import { SignOutIcon } from "@/components/ui/icons/phosphor";
 
 function getInitials(first: string, last: string): string {
@@ -34,11 +35,17 @@ export async function PortalShell({ children }: { children: React.ReactNode }) {
     .where(eq(organization.id, session.workspaceId))
     .limit(1);
 
-  const [candidate] = await db
-    .select({ avatarUrl: candidates.avatarUrl })
-    .from(candidates)
-    .where(eq(candidates.id, session.candidateId))
-    .limit(1);
+  const [[candidate], unreadNotificationCount] = await Promise.all([
+    db
+      .select({ avatarUrl: candidates.avatarUrl })
+      .from(candidates)
+      .where(eq(candidates.id, session.candidateId))
+      .limit(1),
+    getCandidatePortalUnreadNotificationCount({
+      workspaceId: session.workspaceId,
+      candidateId: session.candidateId,
+    }),
+  ]);
 
   return (
     <PortalShellClient
@@ -50,6 +57,7 @@ export async function PortalShell({ children }: { children: React.ReactNode }) {
       candidateName={`${session.firstName} ${session.lastName}`.trim()}
       candidateInitials={getInitials(session.firstName, session.lastName)}
       candidateAvatarUrl={candidate?.avatarUrl ?? null}
+      unreadNotificationCount={unreadNotificationCount}
       signOutForm={
         <form action={signOutPortalAction} className="w-full">
           <button

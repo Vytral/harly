@@ -21,7 +21,8 @@ const VALUE_ART = [
   { bg: "#DDD6FE", blob: "#7C3AED" },
 ];
 
-const reveal = "duration-700 animate-in fade-in slide-in-from-bottom-3 fill-mode-backwards motion-reduce:animate-none";
+const reveal =
+  "duration-700 animate-in fade-in slide-in-from-bottom-3 fill-mode-backwards motion-reduce:animate-none";
 
 export function PlayfulTemplate({
   workspace,
@@ -52,7 +53,11 @@ export function PlayfulTemplate({
           className="relative h-56 w-full overflow-hidden sm:h-72"
           style={
             heroImage
-              ? { backgroundImage: `url(${heroImage})`, backgroundSize: "cover", backgroundPosition: "center" }
+              ? {
+                  backgroundImage: `url(${heroImage})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }
               : { backgroundColor: accent }
           }
         >
@@ -72,10 +77,17 @@ export function PlayfulTemplate({
             {logo ? (
               <div
                 className="size-full"
-                style={{ backgroundImage: `url(${logo})`, backgroundSize: "cover", backgroundPosition: "center" }}
+                style={{
+                  backgroundImage: `url(${logo})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
               />
             ) : (
-              <span className="text-3xl font-semibold" style={{ color: accent }}>
+              <span
+                className="text-3xl font-semibold"
+                style={{ color: accent }}
+              >
                 {workspace.name.charAt(0).toUpperCase()}
               </span>
             )}
@@ -111,7 +123,11 @@ export function PlayfulTemplate({
                       className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-3.5 py-1.5 text-sm text-zinc-700 transition-colors hover:border-zinc-300 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600"
                     >
                       {Icon && (
-                        <Icon className="size-3.5" style={{ color: accent }} strokeWidth={1.8} />
+                        <Icon
+                          className="size-3.5"
+                          style={{ color: accent }}
+                          strokeWidth={1.8}
+                        />
                       )}
                       {chip.label}
                     </span>
@@ -133,7 +149,9 @@ export function PlayfulTemplate({
                 >
                   <Briefcase className="size-4" strokeWidth={1.8} />
                 </span>
-                <h2 className="text-lg font-semibold">{config.overview.title}</h2>
+                <h2 className="text-lg font-semibold">
+                  {config.overview.title}
+                </h2>
               </div>
               <dl className="mt-5 space-y-3.5">
                 {config.overview.stats.map((stat) => {
@@ -143,9 +161,16 @@ export function PlayfulTemplate({
                       key={stat.label}
                       className="flex items-center justify-between text-sm"
                     >
-                      <dt className="text-zinc-500 dark:text-zinc-400">{stat.label}</dt>
+                      <dt className="text-zinc-500 dark:text-zinc-400">
+                        {stat.label}
+                      </dt>
                       <dd className="flex items-center gap-1.5 font-medium text-zinc-900 dark:text-zinc-100">
-                        {Icon && <Icon className="size-3.5 text-zinc-400 dark:text-zinc-500" strokeWidth={1.8} />}
+                        {Icon && (
+                          <Icon
+                            className="size-3.5 text-zinc-400 dark:text-zinc-500"
+                            strokeWidth={1.8}
+                          />
+                        )}
                         {stat.value}
                       </dd>
                     </div>
@@ -198,7 +223,9 @@ export function PlayfulTemplate({
                       style={{ backgroundColor: art.blob, opacity: 0.55 }}
                     />
                   </div>
-                  <h3 className="mt-3 font-semibold tracking-tight">{value.title}</h3>
+                  <h3 className="mt-3 font-semibold tracking-tight">
+                    {value.title}
+                  </h3>
                   {value.body && (
                     <p className="mt-1 text-sm leading-relaxed text-zinc-500 dark:text-zinc-400">
                       {value.body}
@@ -212,7 +239,10 @@ export function PlayfulTemplate({
       )}
 
       {/* Open positions */}
-      <section id="positions" className="mx-auto mt-16 max-w-5xl scroll-mt-8 px-6">
+      <section
+        id="positions"
+        className="mx-auto mt-16 max-w-5xl scroll-mt-8 px-6"
+      >
         <h2 className="text-3xl font-semibold tracking-tight">
           {config.positions.title}
         </h2>
@@ -228,7 +258,10 @@ export function PlayfulTemplate({
             {config.testimonials.title}
           </h2>
           <div className="mt-8">
-            <CareerTestimonials items={config.testimonials.items} accent={accent} />
+            <CareerTestimonials
+              items={config.testimonials.items}
+              accent={accent}
+            />
           </div>
         </section>
       )}
@@ -262,7 +295,9 @@ export function PlayfulTemplate({
                   {config.cta.title}
                 </h3>
                 {config.cta.body && (
-                  <p className="mt-1 max-w-xl text-zinc-600 dark:text-zinc-300">{config.cta.body}</p>
+                  <p className="mt-1 max-w-xl text-zinc-600 dark:text-zinc-300">
+                    {config.cta.body}
+                  </p>
                 )}
               </div>
               {workspace.websiteUrl && (
@@ -283,7 +318,14 @@ export function PlayfulTemplate({
 
       <footer className="mx-auto mt-20 max-w-5xl px-6 pb-12">
         <div className="border-t border-zinc-100 pt-6 dark:border-zinc-800">
-          <CareerFooter config={config} workspaceName={workspace.name} maxWidth="max-w-5xl" portalEnabled={portalEnabled} />
+          <CareerFooter
+            config={config}
+            workspaceName={workspace.name}
+            portalWorkspaceSlug={workspace.slug}
+            maxWidth="max-w-5xl"
+            portalEnabled={portalEnabled}
+            legalBasePath={boardRoot === "/" ? "/legal" : `${boardRoot}/legal`}
+          />
         </div>
       </footer>
     </div>

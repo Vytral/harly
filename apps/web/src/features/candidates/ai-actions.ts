@@ -17,6 +17,7 @@ import {
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
+import { logAiCandidateDecision } from "@/lib/ai/governance";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
 import { loadResumeText } from "@/lib/resume/load-resume-text";
 import { enforceRateLimit } from "@/server/api/ratelimit";
@@ -128,7 +129,7 @@ export async function generateAiEvaluationAction(input: {
   ]);
 
   try {
-    const result = await scoreCandidateWithAI(aiConfig, {
+    const scoreInput = {
       job: {
         title: row.jobTitle,
         description: row.jobDescription,
@@ -147,7 +148,8 @@ export async function generateAiEvaluationAction(input: {
         resumeText: resume.text,
         answers: answerRows,
       },
-    });
+    };
+    const result = await scoreCandidateWithAI(aiConfig, scoreInput);
 
     const values = {
       workspaceId,
@@ -184,6 +186,28 @@ export async function generateAiEvaluationAction(input: {
         score: result.score,
         recommendation: result.recommendation,
         jobTitle: row.jobTitle,
+      },
+    });
+
+    await logAiCandidateDecision({
+      workspaceId,
+      candidateId: row.candidateId,
+      applicationId: row.applicationId,
+      jobId: row.jobId,
+      provider: aiConfig.provider,
+      modelId: aiConfig.modelId,
+      actor: { id: context.user.id, email: context.user.email },
+      inputFingerprintSource: scoreInput,
+      outputFingerprintSource: result,
+      inputSummary: {
+        usedResume: resume.text !== null,
+        answerCount: answerRows.length,
+        skillsCount: 0,
+      },
+      outputSummary: {
+        score: result.score,
+        recommendation: result.recommendation,
+        criteriaCount: result.criteria.length,
       },
     });
 

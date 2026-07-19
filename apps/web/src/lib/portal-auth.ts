@@ -27,6 +27,11 @@ export type PortalOAuthCredentials = {
   clientSecret: string;
 };
 
+export type PortalWorkspace = {
+  id: string;
+  slug: string;
+};
+
 export const PORTAL_SESSION_COOKIE = "harly_portal_session";
 const SESSION_TTL_DAYS = 30;
 const MAGIC_LINK_TTL_MINUTES = 15;
@@ -38,17 +43,58 @@ function generateToken(): string {
   return randomBytes(32).toString("hex");
 }
 
-export async function getPortalWorkspaceId(): Promise<string | null> {
+/**
+ * Resolves an enabled candidate portal from its public workspace slug. This is
+ * intentionally the only slug → workspace lookup used by unauthenticated
+ * portal entrypoints; never select an arbitrary organization for a candidate.
+ */
+export async function getPortalWorkspaceBySlug(
+  workspaceSlug: string,
+): Promise<PortalWorkspace | null> {
   const [row] = await db
-    .select({ id: organization.id })
+    .select({ id: organization.id, slug: organization.slug })
     .from(organization)
+    .innerJoin(
+      workspaceSettings,
+      eq(workspaceSettings.organizationId, organization.id),
+    )
+    .where(
+      and(
+        eq(organization.slug, workspaceSlug.trim().toLowerCase()),
+        eq(workspaceSettings.candidatePortalEnabled, true),
+      ),
+    )
     .limit(1);
-  return row?.id ?? null;
+  return row ?? null;
 }
 
-export async function isPortalEnabled(): Promise<boolean> {
-  const workspaceId = await getPortalWorkspaceId();
-  if (!workspaceId) return false;
+/**
+ * Legacy `/portal` URLs remain usable for a single enabled portal. Once more
+ * than one portal is enabled, callers must provide a workspace slug instead
+ * of silently routing candidates to whichever organization was created first.
+ */
+export async function getSinglePortalWorkspace(): Promise<PortalWorkspace | null> {
+  const rows = await db
+    .select({ id: organization.id, slug: organization.slug })
+    .from(organization)
+    .innerJoin(
+      workspaceSettings,
+      eq(workspaceSettings.organizationId, organization.id),
+    )
+    .where(eq(workspaceSettings.candidatePortalEnabled, true))
+    .limit(2);
+  return rows.length === 1 ? rows[0] : null;
+}
+
+export async function isPortalEnabled(workspaceId?: string): Promise<boolean> {
+  if (!workspaceId) {
+    const [row] = await db
+      .select({ id: workspaceSettings.organizationId })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.candidatePortalEnabled, true))
+      .limit(1);
+    return Boolean(row);
+  }
   const [row] = await db
     .select({ enabled: workspaceSettings.candidatePortalEnabled })
     .from(workspaceSettings)
@@ -57,9 +103,8 @@ export async function isPortalEnabled(): Promise<boolean> {
   return Boolean(row?.enabled);
 }
 
-export async function getPortalGoogleCredentials(): Promise<PortalOAuthCredentials | null> {
-  const workspaceId = await getPortalWorkspaceId();
-  if (workspaceId && isEncryptionConfigured()) {
+export async function getPortalGoogleCredentials(workspaceId: string): Promise<PortalOAuthCredentials | null> {
+  if (isEncryptionConfigured()) {
     const [row] = await db
       .select({
         clientId: workspaceSettings.portalGoogleClientId,
@@ -89,9 +134,8 @@ export async function getPortalGoogleCredentials(): Promise<PortalOAuthCredentia
   return null;
 }
 
-export async function getPortalGitHubCredentials(): Promise<PortalOAuthCredentials | null> {
-  const workspaceId = await getPortalWorkspaceId();
-  if (workspaceId && isEncryptionConfigured()) {
+export async function getPortalGitHubCredentials(workspaceId: string): Promise<PortalOAuthCredentials | null> {
+  if (isEncryptionConfigured()) {
     const [row] = await db
       .select({
         clientId: workspaceSettings.portalGithubClientId,
@@ -121,9 +165,8 @@ export async function getPortalGitHubCredentials(): Promise<PortalOAuthCredentia
   return null;
 }
 
-export async function getPortalLinkedInCredentials(): Promise<PortalOAuthCredentials | null> {
-  const workspaceId = await getPortalWorkspaceId();
-  if (workspaceId && isEncryptionConfigured()) {
+export async function getPortalLinkedInCredentials(workspaceId: string): Promise<PortalOAuthCredentials | null> {
+  if (isEncryptionConfigured()) {
     const [row] = await db
       .select({
         clientId: workspaceSettings.portalLinkedinClientId,
@@ -203,6 +246,7 @@ export async function resolvePortalSession(
       and(
         eq(candidatePortalSessions.tokenHash, tokenHash),
         gt(candidatePortalSessions.expiresAt, new Date()),
+        eq(candidates.workspaceId, candidatePortalSessions.workspaceId),
       ),
     )
     .limit(1);
@@ -334,13 +378,14 @@ export async function consumeMagicLinkToken(
 export async function exchangeGoogleCode(
   code: string,
   redirectUri: string,
+  workspaceId: string,
 ): Promise<{
   email: string;
   firstName: string;
   lastName: string;
   avatarUrl?: string;
 }> {
-  const creds = await getPortalGoogleCredentials();
+  const creds = await getPortalGoogleCredentials(workspaceId);
   if (!creds) throw new Error("Google OAuth not configured.");
   const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -376,6 +421,7 @@ export async function exchangeGoogleCode(
 export async function exchangeGitHubCode(
   code: string,
   redirectUri: string,
+  workspaceId: string,
 ): Promise<{
   email: string;
   firstName: string;
@@ -383,7 +429,7 @@ export async function exchangeGitHubCode(
   avatarUrl?: string;
   githubUrl?: string;
 }> {
-  const creds = await getPortalGitHubCredentials();
+  const creds = await getPortalGitHubCredentials(workspaceId);
   if (!creds) throw new Error("GitHub OAuth not configured.");
   const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
     method: "POST",
@@ -445,8 +491,9 @@ export async function exchangeGitHubCode(
 export async function buildGoogleAuthUrl(
   redirectUri: string,
   state: string,
+  workspaceId: string,
 ): Promise<string> {
-  const creds = await getPortalGoogleCredentials();
+  const creds = await getPortalGoogleCredentials(workspaceId);
   if (!creds) throw new Error("Google OAuth not configured.");
   const params = new URLSearchParams({
     client_id: creds.clientId,
@@ -463,8 +510,9 @@ export async function buildGoogleAuthUrl(
 export async function buildGitHubAuthUrl(
   redirectUri: string,
   state: string,
+  workspaceId: string,
 ): Promise<string> {
-  const creds = await getPortalGitHubCredentials();
+  const creds = await getPortalGitHubCredentials(workspaceId);
   if (!creds) throw new Error("GitHub OAuth not configured.");
   const params = new URLSearchParams({
     client_id: creds.clientId,
@@ -478,6 +526,7 @@ export async function buildGitHubAuthUrl(
 export async function exchangeLinkedInCode(
   code: string,
   redirectUri: string,
+  workspaceId: string,
 ): Promise<{
   email: string;
   firstName: string;
@@ -486,7 +535,7 @@ export async function exchangeLinkedInCode(
   headline?: string;
   linkedinUrl?: string;
 }> {
-  const creds = await getPortalLinkedInCredentials();
+  const creds = await getPortalLinkedInCredentials(workspaceId);
   if (!creds) throw new Error("LinkedIn OAuth not configured.");
 
   // Exchange code for access token
@@ -616,8 +665,9 @@ export async function exchangeLinkedInCode(
 export async function buildLinkedInAuthUrl(
   redirectUri: string,
   state: string,
+  workspaceId: string,
 ): Promise<string> {
-  const creds = await getPortalLinkedInCredentials();
+  const creds = await getPortalLinkedInCredentials(workspaceId);
   if (!creds) throw new Error("LinkedIn OAuth not configured.");
   const params = new URLSearchParams({
     client_id: creds.clientId,

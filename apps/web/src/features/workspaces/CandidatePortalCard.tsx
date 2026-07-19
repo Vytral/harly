@@ -254,6 +254,7 @@ export function CandidatePortalCard({
   linkedinClientId,
   appUrl,
   showApplicationStatus,
+  showHiringTeam,
 }: {
   enabled: boolean;
   canEdit: boolean;
@@ -265,11 +266,15 @@ export function CandidatePortalCard({
   linkedinClientId: string;
   appUrl: string;
   showApplicationStatus: boolean;
+  showHiringTeam: boolean;
 }) {
   const router = useRouter();
   const [optimisticEnabled, setOptimisticEnabled] = useState(enabled);
   const [optimisticStatus, setOptimisticStatus] = useState(
     showApplicationStatus,
+  );
+  const [optimisticHiringTeam, setOptimisticHiringTeam] = useState(
+    showHiringTeam,
   );
   const [toggling, startToggle] = useTransition();
   const [savingUi, startSaveUi] = useTransition();
@@ -294,18 +299,35 @@ export function CandidatePortalCard({
     });
   }
 
-  function toggleStatus(next: boolean) {
-    setOptimisticStatus(next);
+  function saveUiOptions(next: {
+    showApplicationStatus: boolean;
+    showHiringTeam: boolean;
+  }) {
     startSaveUi(async () => {
-      const result = await savePortalUiOptionsAction({
-        showApplicationStatus: next,
-      });
+      const result = await savePortalUiOptionsAction(next);
       if (!result.ok) {
-        setOptimisticStatus(!next);
+        setOptimisticStatus(showApplicationStatus);
+        setOptimisticHiringTeam(showHiringTeam);
         toast.error(result.error ?? "Could not update.");
         return;
       }
       router.refresh();
+    });
+  }
+
+  function toggleStatus(next: boolean) {
+    setOptimisticStatus(next);
+    saveUiOptions({
+      showApplicationStatus: next,
+      showHiringTeam: optimisticHiringTeam,
+    });
+  }
+
+  function toggleHiringTeam(next: boolean) {
+    setOptimisticHiringTeam(next);
+    saveUiOptions({
+      showApplicationStatus: optimisticStatus,
+      showHiringTeam: next,
     });
   }
 
@@ -463,6 +485,21 @@ export function CandidatePortalCard({
               onCheckedChange={toggleStatus}
               disabled={!canEdit || savingUi}
               aria-label="Show application status"
+            />
+          </div>
+          <div className="flex items-center justify-between px-5 py-4">
+            <div>
+              <p className="text-sm font-medium">Show hiring team</p>
+              <p className="text-xs text-muted-foreground">
+                Show candidate-facing names, roles, and profile photos of your
+                workspace members. Off by default for privacy.
+              </p>
+            </div>
+            <Switch
+              checked={optimisticHiringTeam}
+              onCheckedChange={toggleHiringTeam}
+              disabled={!canEdit || savingUi}
+              aria-label="Show hiring team"
             />
           </div>
         </Card>

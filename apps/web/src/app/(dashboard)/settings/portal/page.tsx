@@ -23,6 +23,7 @@ export default async function PortalSettingsPage() {
       hasLinkedinSecret: workspaceSettings.portalLinkedinClientSecretCiphertext,
       portalShowApplicationStatus:
         workspaceSettings.portalShowApplicationStatus,
+      portalShowHiringTeam: workspaceSettings.portalShowHiringTeam,
     })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, organization.id))
@@ -42,6 +43,7 @@ export default async function PortalSettingsPage() {
       linkedinClientId={row?.hasLinkedinClientId ?? ""}
       appUrl={process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}
       showApplicationStatus={row?.portalShowApplicationStatus ?? true}
+      showHiringTeam={row?.portalShowHiringTeam ?? false}
     />
   );
 }

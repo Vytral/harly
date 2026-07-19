@@ -36,7 +36,7 @@ Estado de Harly frente a un ATS open-source self-hostable de referencia (modelo 
 ### P0 — Bloqueante para lanzar OSS
 
 1. **Self-hosting serio**
-   - `create-harly` CLI — hoy solo README placeholder en `tooling/create-harly/src`.
+   - `harly` CLI — implementación en `tooling/harly/src`.
    - Dockerfile de la app + docker-compose completo (app + Postgres).
    - Healthcheck endpoint, validación de env (zod) al boot, seed limpio.
    - One-click deploy buttons (Vercel + Railway) en README.

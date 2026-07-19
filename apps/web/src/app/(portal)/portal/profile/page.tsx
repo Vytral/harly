@@ -1,13 +1,14 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import type { Route } from "next";
 
-import { candidates, db } from "@harly/db";
+import { candidates, db, dsarRequests } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { PortalShell } from "@/features/portal/PortalShellServer";
 import { PortalProfileForm } from "@/features/portal/PortalProfileForm";
 import { PortalAvatarEdit } from "@/features/portal/PortalAvatarEdit";
+import { PortalPrivacyControls } from "@/features/portal/PortalPrivacyControls";
 
 export const dynamic = "force-dynamic";
 
@@ -33,10 +34,21 @@ export default async function PortalProfilePage() {
       avatarUrl: candidates.avatarUrl,
     })
     .from(candidates)
-    .where(eq(candidates.id, session.candidateId))
+    .where(and(eq(candidates.id, session.candidateId), eq(candidates.workspaceId, session.workspaceId)))
     .limit(1);
 
   if (!candidate) redirect("/portal/login" as Route);
+
+  const [erasureRequest] = await db
+    .select({ status: dsarRequests.status, createdAt: dsarRequests.createdAt })
+    .from(dsarRequests)
+    .where(and(
+      eq(dsarRequests.workspaceId, session.workspaceId),
+      eq(dsarRequests.candidateId, session.candidateId),
+      eq(dsarRequests.type, "erasure"),
+    ))
+    .orderBy(desc(dsarRequests.createdAt))
+    .limit(1);
 
   const fullName = `${candidate.firstName ?? ""} ${candidate.lastName ?? ""}`.trim();
 
@@ -64,6 +76,7 @@ export default async function PortalProfilePage() {
           <h2 className="mb-5 text-sm font-semibold text-foreground">Edit profile</h2>
           <PortalProfileForm profile={candidate} />
         </div>
+        <PortalPrivacyControls erasureRequest={erasureRequest ?? null} />
       </div>
     </PortalShell>
   );

@@ -48,6 +48,7 @@ type PortalShellClientProps = {
   candidateName: string;
   candidateInitials: string;
   candidateAvatarUrl?: string | null;
+  unreadNotificationCount: number;
   signOutForm: ReactNode;
 };
 
@@ -61,6 +62,7 @@ export function PortalShellClient({
   candidateName,
   candidateInitials,
   candidateAvatarUrl,
+  unreadNotificationCount,
   signOutForm,
 }: PortalShellClientProps) {
   const pathname = usePathname();
@@ -138,6 +140,14 @@ export function PortalShellClient({
                 >
                   <item.icon className="size-4" />
                   {item.label}
+                  {item.href === "/portal/notifications" && unreadNotificationCount > 0 ? (
+                    <span
+                      className="flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold leading-4 text-primary-foreground"
+                      aria-label={`${unreadNotificationCount} unread notifications`}
+                    >
+                      {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                    </span>
+                  ) : null}
                   {active && (
                     <span className="absolute -bottom-[9px] left-3 right-3 h-0.5 rounded-full bg-foreground" />
                   )}
@@ -190,6 +200,9 @@ export function PortalShellClient({
               type="button"
               onClick={() => setMobileOpen(!mobileOpen)}
               className="flex size-8 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted sm:hidden"
+              aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+              aria-expanded={mobileOpen}
+              aria-controls="portal-mobile-navigation"
             >
               {mobileOpen ? <XIcon className="size-5" /> : <HamburgerIcon className="size-5" />}
             </button>
@@ -201,7 +214,7 @@ export function PortalShellClient({
           "border-t border-border bg-background overflow-hidden transition-all duration-200 ease-in-out sm:hidden",
           mobileOpen ? "max-h-40 opacity-100" : "max-h-0 opacity-0 border-t-0",
         )}>
-          <nav className="px-4 pb-3 pt-2">
+          <nav id="portal-mobile-navigation" aria-label="Portal navigation" className="px-4 pb-3 pt-2">
             {NAV_ITEMS.map((item) => {
               const active = pathname === item.match || pathname.startsWith(item.match + "/");
               return (
@@ -218,6 +231,11 @@ export function PortalShellClient({
                 >
                   <item.icon className="size-4" />
                   {item.label}
+                  {item.href === "/portal/notifications" && unreadNotificationCount > 0 ? (
+                    <span className="ml-auto text-xs font-semibold text-primary">
+                      {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                    </span>
+                  ) : null}
                 </Link>
               );
             })}

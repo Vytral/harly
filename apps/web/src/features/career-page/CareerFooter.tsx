@@ -15,12 +15,16 @@ export function CareerFooter({
   maxWidth = "max-w-5xl",
   iconRounded = "rounded-full",
   portalEnabled = false,
+  portalWorkspaceSlug,
+  legalBasePath = "/legal",
 }: {
   config: CareerPageConfig;
   workspaceName: string;
   maxWidth?: string;
   iconRounded?: string;
   portalEnabled?: boolean;
+  portalWorkspaceSlug?: string;
+  legalBasePath?: string;
 }) {
   const socials = config.footer.socials.filter((s) => s.url.trim());
   const legalLinks = config.footer.legalLinks ?? [];
@@ -83,7 +87,7 @@ export function CareerFooter({
           <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
             {portalEnabled ? (
               <a
-                href="/portal"
+                href={portalWorkspaceSlug ? `/portal/login?workspace=${encodeURIComponent(portalWorkspaceSlug)}` : "/portal"}
                 className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
               >
                 Candidate portal
@@ -92,7 +96,7 @@ export function CareerFooter({
             {legalLinks.map((slug) => (
               <a
                 key={slug}
-                href={`/legal/${slug}`}
+                href={`${legalBasePath}/${slug}`}
                 className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
               >
                 {LEGAL_LINK_LABELS[slug] ?? slug}

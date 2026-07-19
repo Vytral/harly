@@ -6,6 +6,6 @@ Developer and distribution tooling for Harly.
 
 | Directory | Description | Status |
 |-----------|-------------|--------|
-| `create-harly` | `npx @harly/create` bootstrap CLI for self-hosting. | Placeholder |
+| `harly` | `npx @harly/cli` installer and operations CLI for self-hosting. | Active |
 | `docker` | Docker and deployment helpers. | In progress |
 | `scripts` | Release, setup, and maintenance scripts. | Active |

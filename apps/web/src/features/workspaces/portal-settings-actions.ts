@@ -165,6 +165,7 @@ export async function disconnectPortalOAuthAction(
 
 export async function savePortalUiOptionsAction(input: {
   showApplicationStatus: boolean;
+  showHiringTeam: boolean;
 }): Promise<PortalSettingsResult> {
   const context = await requirePermission("settings:edit");
 
@@ -173,11 +174,13 @@ export async function savePortalUiOptionsAction(input: {
     .values({
       organizationId: context.organization.id,
       portalShowApplicationStatus: input.showApplicationStatus,
+      portalShowHiringTeam: input.showHiringTeam,
     })
     .onConflictDoUpdate({
       target: workspaceSettings.organizationId,
       set: {
         portalShowApplicationStatus: input.showApplicationStatus,
+        portalShowHiringTeam: input.showHiringTeam,
         updatedAt: new Date(),
       },
     });

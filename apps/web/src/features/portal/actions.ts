@@ -26,8 +26,7 @@ import {
   PORTAL_SESSION_COOKIE,
   createMagicLinkToken,
   deletePortalSession,
-  getPortalWorkspaceId,
-  isPortalEnabled,
+  getPortalWorkspaceBySlug,
   resolvePortalSession,
 } from "@/lib/portal-auth";
 import { createLogger } from "@/lib/logger";
@@ -38,26 +37,22 @@ const log = createLogger("portal-actions");
 
 const emailSchema = z.string().email().max(254).toLowerCase().trim();
 
-export type SendMagicLinkResult =
-  | { ok: true }
-  | { ok: false; error: string };
+export type SendMagicLinkResult = { ok: true } | { ok: false; error: string };
 
 export async function sendPortalMagicLinkAction(
   email: string,
+  workspaceSlug: string,
 ): Promise<SendMagicLinkResult> {
-  if (!(await isPortalEnabled())) {
-    return { ok: false, error: "Candidate portal is not enabled." };
-  }
-
   const parsed = emailSchema.safeParse(email);
   if (!parsed.success) {
     return { ok: false, error: "Enter a valid email address." };
   }
 
-  const workspaceId = await getPortalWorkspaceId();
-  if (!workspaceId) {
-    return { ok: false, error: "Workspace not found." };
+  const workspace = await getPortalWorkspaceBySlug(workspaceSlug);
+  if (!workspace) {
+    return { ok: false, error: "This candidate portal is unavailable." };
   }
+  const workspaceId = workspace.id;
 
   // Limit delivery per recipient as well as token creation. Replacing an
   // unconsumed token alone does not stop an unauthenticated caller from
@@ -65,11 +60,16 @@ export async function sendPortalMagicLinkAction(
   const [recent] = await db
     .select({ count: count() })
     .from(candidatePortalMagicLinks)
-    .where(and(
-      eq(candidatePortalMagicLinks.workspaceId, workspaceId),
-      eq(candidatePortalMagicLinks.email, parsed.data),
-      gt(candidatePortalMagicLinks.createdAt, new Date(Date.now() - 15 * 60_000)),
-    ));
+    .where(
+      and(
+        eq(candidatePortalMagicLinks.workspaceId, workspaceId),
+        eq(candidatePortalMagicLinks.email, parsed.data),
+        gt(
+          candidatePortalMagicLinks.createdAt,
+          new Date(Date.now() - 15 * 60_000),
+        ),
+      ),
+    );
   if ((recent?.count ?? 0) >= 3) {
     return { ok: true };
   }
@@ -125,7 +125,11 @@ export async function applyToJobAction(
     if (!session) return { ok: false, error: "Unauthorized." };
 
     const [job] = await db
-      .select({ id: jobs.id, status: jobs.status, applicationConfig: jobs.applicationConfig })
+      .select({
+        id: jobs.id,
+        status: jobs.status,
+        applicationConfig: jobs.applicationConfig,
+      })
       .from(jobs)
       .where(
         and(
@@ -155,10 +159,13 @@ export async function applyToJobAction(
           eq(applicationQuestions.jobId, input.jobId),
         ),
       );
-    const applicationConfig = normalizeJobApplicationConfig(job.applicationConfig);
+    const applicationConfig = normalizeJobApplicationConfig(
+      job.applicationConfig,
+    );
     const validation = validatePortalApplication({
       workspaceId: session.workspaceId,
-      resumeRequired: applicationConfig.sections.profile.resume.visibility === "required",
+      resumeRequired:
+        applicationConfig.sections.profile.resume.visibility === "required",
       resumeKey: input.resumeKey,
       answers: input.answers,
       questions,
@@ -166,12 +173,19 @@ export async function applyToJobAction(
     if (!validation.ok) return validation;
 
     const [settings] = await db
-      .select({ consentCheckboxText: workspaceSettings.consentCheckboxText })
+      .select({
+        consentCheckboxText: workspaceSettings.consentCheckboxText,
+        legalConfigured: workspaceSettings.legalConfigured,
+        legalPages: workspaceSettings.legalPages,
+      })
       .from(workspaceSettings)
       .where(eq(workspaceSettings.organizationId, session.workspaceId))
       .limit(1);
-    if (settings?.consentCheckboxText && !input.consentGiven) {
-      return { ok: false, error: "You must consent to data processing to apply." };
+    if (settings?.legalConfigured && !input.consentGiven) {
+      return {
+        ok: false,
+        error: "You must consent to data processing to apply.",
+      };
     }
 
     const [existing] = await db
@@ -244,14 +258,15 @@ export async function applyToJobAction(
     }
 
     if (input.consentGiven) {
+      const consentText =
+        settings?.consentCheckboxText ??
+        "I agree to the privacy policy and consent to the processing of my personal data.";
       await db.insert(consentRecords).values({
         workspaceId: session.workspaceId,
         candidateId: session.candidateId,
         applicationId: application.id,
         consentType: "data_processing",
-        consentText:
-          settings?.consentCheckboxText ??
-          "I agree to the privacy policy and consent to the processing of my personal data.",
+        consentText,
         granted: true,
       });
     }

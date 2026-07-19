@@ -93,7 +93,9 @@ export async function getPublicJobApplicationContext(input: {
         eq(jobs.slug, input.jobSlug),
         eq(jobs.status, "open"),
         isNull(jobs.deletedAt),
-        input.workspaceSlug ? eq(organization.slug, input.workspaceSlug) : undefined,
+        input.workspaceSlug
+          ? eq(organization.slug, input.workspaceSlug)
+          : undefined,
       ),
     )
     .orderBy(desc(jobs.publishedAt), desc(jobs.createdAt))
@@ -139,325 +141,332 @@ export async function createPublicApplication(
 
   const result = await db.transaction(
     async (tx): Promise<PublicApplicationResult> => {
-    const [job] = await tx
-      .select({
-        id: jobs.id,
-        title: jobs.title,
-        workspaceId: jobs.workspaceId,
-      })
-      .from(jobs)
-      .innerJoin(organization, eq(organization.id, jobs.workspaceId))
-      .where(
-        and(
-          eq(jobs.slug, input.jobSlug),
-          eq(jobs.status, "open"),
-          input.workspaceSlug ? eq(organization.slug, input.workspaceSlug) : undefined,
-        ),
-      )
-      .orderBy(desc(jobs.publishedAt), desc(jobs.createdAt))
-      .limit(1);
-
-    if (!job) {
-      return { ok: false, message: "Job not available." };
-    }
-
-    const workspaceId = job.workspaceId;
-    if (
-      values.resumeKey &&
-      !isWorkspaceStorageKey(workspaceId, values.resumeKey, "resumes")
-    ) {
-      return { ok: false, message: "Resume upload is invalid." };
-    }
-    const [workspace] = await tx
-      .select({
-        name: organization.name,
-        slug: organization.slug,
-      })
-      .from(organization)
-      .where(eq(organization.id, workspaceId))
-      .limit(1);
-
-    if (!workspace) {
-      throw new Error("Workspace could not be resolved.");
-    }
-
-    const submittedAddress = values.address ?? values.location ?? null;
-    const educationEntries = normalizeEducationEntries(values.educationEntries);
-    const experienceEntries = normalizeExperienceEntries(values.experienceEntries);
-
-    const [existingCandidate] = await tx
-      .select()
-      .from(candidates)
-      .where(
-        and(
-          eq(candidates.workspaceId, workspaceId),
-          sql`lower(${candidates.email}) = ${values.email}`,
-        ),
-      )
-      .limit(1);
-
-    // A duplicate application must be rejected before updating an existing
-    // candidate. A retry should never overwrite contact/profile fields just
-    // because the application itself is not accepted.
-    if (existingCandidate) {
-      const [duplicateApplication] = await tx
-        .select({ id: applications.id })
-        .from(applications)
+      const [job] = await tx
+        .select({
+          id: jobs.id,
+          title: jobs.title,
+          workspaceId: jobs.workspaceId,
+        })
+        .from(jobs)
+        .innerJoin(organization, eq(organization.id, jobs.workspaceId))
         .where(
           and(
-            eq(applications.workspaceId, workspaceId),
-            eq(applications.candidateId, existingCandidate.id),
-            eq(applications.jobId, job.id),
+            eq(jobs.slug, input.jobSlug),
+            eq(jobs.status, "open"),
+            input.workspaceSlug
+              ? eq(organization.slug, input.workspaceSlug)
+              : undefined,
+          ),
+        )
+        .orderBy(desc(jobs.publishedAt), desc(jobs.createdAt))
+        .limit(1);
+
+      if (!job) {
+        return { ok: false, message: "Job not available." };
+      }
+
+      const workspaceId = job.workspaceId;
+      if (
+        values.resumeKey &&
+        !isWorkspaceStorageKey(workspaceId, values.resumeKey, "resumes")
+      ) {
+        return { ok: false, message: "Resume upload is invalid." };
+      }
+      const [workspace] = await tx
+        .select({
+          name: organization.name,
+          slug: organization.slug,
+        })
+        .from(organization)
+        .where(eq(organization.id, workspaceId))
+        .limit(1);
+
+      if (!workspace) {
+        throw new Error("Workspace could not be resolved.");
+      }
+
+      const submittedAddress = values.address ?? values.location ?? null;
+      const educationEntries = normalizeEducationEntries(
+        values.educationEntries,
+      );
+      const experienceEntries = normalizeExperienceEntries(
+        values.experienceEntries,
+      );
+
+      const [existingCandidate] = await tx
+        .select()
+        .from(candidates)
+        .where(
+          and(
+            eq(candidates.workspaceId, workspaceId),
+            sql`lower(${candidates.email}) = ${values.email}`,
           ),
         )
         .limit(1);
 
-      if (duplicateApplication) {
+      // A duplicate application must be rejected before updating an existing
+      // candidate. A retry should never overwrite contact/profile fields just
+      // because the application itself is not accepted.
+      if (existingCandidate) {
+        const [duplicateApplication] = await tx
+          .select({ id: applications.id })
+          .from(applications)
+          .where(
+            and(
+              eq(applications.workspaceId, workspaceId),
+              eq(applications.candidateId, existingCandidate.id),
+              eq(applications.jobId, job.id),
+            ),
+          )
+          .limit(1);
+
+        if (duplicateApplication) {
+          return {
+            ok: false,
+            message: "You've already applied to this job",
+          };
+        }
+      }
+
+      const candidate = existingCandidate
+        ? (
+            await tx
+              .update(candidates)
+              .set({
+                firstName: values.firstName,
+                lastName: values.lastName,
+                phone: values.phone,
+                address: submittedAddress,
+                linkedinUrl: values.linkedinUrl,
+                githubUrl: values.githubUrl,
+                websiteUrl: values.websiteUrl,
+                avatarUrl: values.photoUrl,
+                headline: values.headline,
+                educationEntries,
+                experienceEntries,
+                ...(values.skills && values.skills.length > 0
+                  ? { skills: values.skills }
+                  : {}),
+                ...(values.experienceYears != null
+                  ? { experienceYears: values.experienceYears }
+                  : {}),
+                updatedAt: new Date(),
+              })
+              .where(eq(candidates.id, existingCandidate.id))
+              .returning()
+          )[0]
+        : (
+            await tx
+              .insert(candidates)
+              .values({
+                workspaceId,
+                firstName: values.firstName,
+                lastName: values.lastName,
+                email: values.email,
+                phone: values.phone,
+                address: submittedAddress,
+                linkedinUrl: values.linkedinUrl,
+                githubUrl: values.githubUrl,
+                websiteUrl: values.websiteUrl,
+                avatarUrl: values.photoUrl,
+                headline: values.headline,
+                educationEntries,
+                experienceEntries,
+                skills: values.skills ?? [],
+                experienceYears: values.experienceYears ?? null,
+              })
+              .returning()
+          )[0];
+
+      if (!candidate) {
+        throw new Error("Candidate could not be created.");
+      }
+
+      const [firstStage] = await tx
+        .select({ id: jobStages.id })
+        .from(jobStages)
+        .where(
+          and(
+            eq(jobStages.workspaceId, workspaceId),
+            eq(jobStages.jobId, job.id),
+          ),
+        )
+        .orderBy(asc(jobStages.order))
+        .limit(1);
+
+      if (!firstStage) {
         return {
           ok: false,
-          message: "You've already applied to this job",
+          message: "This job is not accepting applications yet.",
         };
       }
-    }
 
-    const candidate = existingCandidate
-      ? (
-          await tx
-            .update(candidates)
-            .set({
-              firstName: values.firstName,
-              lastName: values.lastName,
-              phone: values.phone,
-              address: submittedAddress,
-              linkedinUrl: values.linkedinUrl,
-              githubUrl: values.githubUrl,
-              websiteUrl: values.websiteUrl,
-              avatarUrl: values.photoUrl,
-              headline: values.headline,
-              educationEntries,
-              experienceEntries,
-              ...(values.skills && values.skills.length > 0
-                ? { skills: values.skills }
-                : {}),
-              ...(values.experienceYears != null
-                ? { experienceYears: values.experienceYears }
-                : {}),
-              updatedAt: new Date(),
-            })
-            .where(eq(candidates.id, existingCandidate.id))
-            .returning()
-        )[0]
-      : (
-          await tx
-            .insert(candidates)
-            .values({
-              workspaceId,
-              firstName: values.firstName,
-              lastName: values.lastName,
-              email: values.email,
-              phone: values.phone,
-              address: submittedAddress,
-              linkedinUrl: values.linkedinUrl,
-              githubUrl: values.githubUrl,
-              websiteUrl: values.websiteUrl,
-              avatarUrl: values.photoUrl,
-              headline: values.headline,
-              educationEntries,
-              experienceEntries,
-              skills: values.skills ?? [],
-              experienceYears: values.experienceYears ?? null,
-            })
-            .returning()
-        )[0];
+      const now = new Date();
+      const [nextPipelineOrder] = await tx
+        .select({
+          value: sql<number>`coalesce(max(${applications.pipelineOrder}), 0) + 1`,
+        })
+        .from(applications)
+        .where(
+          and(
+            eq(applications.workspaceId, workspaceId),
+            eq(applications.currentStageId, firstStage.id),
+          ),
+        );
+      const [application] = await tx
+        .insert(applications)
+        .values({
+          workspaceId,
+          candidateId: candidate.id,
+          jobId: job.id,
+          currentStageId: firstStage.id,
+          pipelineOrder: nextPipelineOrder?.value ?? 1,
+          source: "public_form",
+          status: "active",
+          appliedAt: now,
+          coverLetter: values.coverLetter ?? null,
+          snapshot: {
+            phone: values.phone ?? null,
+            address: submittedAddress,
+            photoUrl: values.photoUrl ?? null,
+            headline: values.headline ?? null,
+            linkedinUrl: values.linkedinUrl ?? null,
+            githubUrl: values.githubUrl ?? null,
+            websiteUrl: values.websiteUrl ?? null,
+            coverLetter: values.coverLetter ?? null,
+            educationEntries,
+            experienceEntries,
+            resumeUrl: values.resumeUrl ?? null,
+            resumeFileName: values.resumeFileName ?? null,
+            resumeFileType: values.resumeFileType ?? null,
+            resumeFileSize: values.resumeFileSize ?? null,
+          },
+        })
+        .returning({ id: applications.id });
 
-    if (!candidate) {
-      throw new Error("Candidate could not be created.");
-    }
+      if (!application) {
+        throw new Error("Application could not be created.");
+      }
 
-    const [firstStage] = await tx
-      .select({ id: jobStages.id })
-      .from(jobStages)
-      .where(
-        and(
-          eq(jobStages.workspaceId, workspaceId),
-          eq(jobStages.jobId, job.id),
-        ),
-      )
-      .orderBy(asc(jobStages.order))
-      .limit(1);
+      if (
+        values.resumeUrl &&
+        values.resumeFileName &&
+        values.resumeFileType &&
+        values.resumeFileSize
+      ) {
+        await tx.insert(candidateFiles).values({
+          workspaceId,
+          candidateId: candidate.id,
+          fileName: values.resumeFileName,
+          fileUrl: values.resumeUrl,
+          fileType: values.resumeFileType,
+          fileSize: values.resumeFileSize,
+          uploadedById: null,
+        });
+      }
 
-    if (!firstStage) {
-      return {
-        ok: false,
-        message: "This job is not accepting applications yet.",
-      };
-    }
-
-    const now = new Date();
-    const [nextPipelineOrder] = await tx
-      .select({
-        value: sql<number>`coalesce(max(${applications.pipelineOrder}), 0) + 1`,
-      })
-      .from(applications)
-      .where(
-        and(
-          eq(applications.workspaceId, workspaceId),
-          eq(applications.currentStageId, firstStage.id),
-        ),
-      );
-    const [application] = await tx
-      .insert(applications)
-      .values({
+      await tx.insert(applicationStageHistory).values({
         workspaceId,
+        applicationId: application.id,
+        fromStageId: null,
+        toStageId: firstStage.id,
+        movedById: null,
+      });
+
+      const persistedQuestions = await tx
+        .select({
+          dbId: applicationQuestions.id,
+          id: applicationQuestions.key,
+          label: applicationQuestions.label,
+          type: applicationQuestions.type,
+          required: applicationQuestions.required,
+        })
+        .from(applicationQuestions)
+        .where(
+          and(
+            eq(applicationQuestions.workspaceId, workspaceId),
+            eq(applicationQuestions.jobId, job.id),
+          ),
+        )
+        .orderBy(asc(applicationQuestions.order));
+      const answersToInsert = buildQuestionAnswerRows({
+        workspaceId,
+        applicationId: application.id,
+        questions: persistedQuestions,
+        answers: values.questionAnswers,
+      }).filter((row) => row.answer.length > 0);
+
+      if (answersToInsert.length > 0) {
+        await tx.insert(applicationAnswers).values(answersToInsert);
+      }
+
+      await tx.insert(activityEvents).values({
+        workspaceId,
+        actorId: null,
+        entityType: "application",
+        entityId: application.id,
+        type: "application.created",
+        metadata: {
+          jobTitle: job.title,
+          candidateName: `${candidate.firstName} ${candidate.lastName}`,
+          resumeFileName: values.resumeFileName ?? null,
+          resumeKey: values.resumeKey ?? null,
+          questionAnswers: values.questionAnswers,
+        },
+      });
+
+      // Persist consent record (GDPR Art. 7 , proof of consent).
+      if (options?.consent) {
+        await tx.insert(consentRecords).values({
+          workspaceId,
+          candidateId: candidate.id,
+          applicationId: application.id,
+          consentType: "data_processing",
+          consentText: options.consent.consentText,
+          granted: true,
+          ipAddress: options.consent.ipAddress,
+          userAgent: options.consent.userAgent,
+        });
+      }
+
+      const owners = await tx
+        .select({ email: authUsers.email })
+        .from(authMembers)
+        .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
+        .where(
+          and(
+            eq(authMembers.organizationId, workspaceId),
+            eq(authMembers.role, "owner"),
+          ),
+        );
+
+      createdEvent.current = {
+        workspaceId,
+        applicationId: application.id,
         candidateId: candidate.id,
         jobId: job.id,
-        currentStageId: firstStage.id,
-        pipelineOrder: nextPipelineOrder?.value ?? 1,
-        source: "public_form",
-        status: "active",
-        appliedAt: now,
-        coverLetter: values.coverLetter ?? null,
-        snapshot: {
-          phone: values.phone ?? null,
-          address: submittedAddress,
-          photoUrl: values.photoUrl ?? null,
-          headline: values.headline ?? null,
-          linkedinUrl: values.linkedinUrl ?? null,
-          githubUrl: values.githubUrl ?? null,
-          websiteUrl: values.websiteUrl ?? null,
-          coverLetter: values.coverLetter ?? null,
-          educationEntries,
-          experienceEntries,
-          resumeUrl: values.resumeUrl ?? null,
-          resumeFileName: values.resumeFileName ?? null,
-          resumeFileType: values.resumeFileType ?? null,
-          resumeFileSize: values.resumeFileSize ?? null,
-        },
-      })
-      .returning({ id: applications.id });
-
-    if (!application) {
-      throw new Error("Application could not be created.");
-    }
-
-    if (
-      values.resumeUrl &&
-      values.resumeFileName &&
-      values.resumeFileType &&
-      values.resumeFileSize
-    ) {
-      await tx.insert(candidateFiles).values({
-        workspaceId,
-        candidateId: candidate.id,
-        fileName: values.resumeFileName,
-        fileUrl: values.resumeUrl,
-        fileType: values.resumeFileType,
-        fileSize: values.resumeFileSize,
-        uploadedById: null,
-      });
-    }
-
-    await tx.insert(applicationStageHistory).values({
-      workspaceId,
-      applicationId: application.id,
-      fromStageId: null,
-      toStageId: firstStage.id,
-      movedById: null,
-    });
-
-    const persistedQuestions = await tx
-      .select({
-        dbId: applicationQuestions.id,
-        id: applicationQuestions.key,
-        label: applicationQuestions.label,
-        type: applicationQuestions.type,
-        required: applicationQuestions.required,
-      })
-      .from(applicationQuestions)
-      .where(
-        and(
-          eq(applicationQuestions.workspaceId, workspaceId),
-          eq(applicationQuestions.jobId, job.id),
-        ),
-      )
-      .orderBy(asc(applicationQuestions.order));
-    const answersToInsert = buildQuestionAnswerRows({
-      workspaceId,
-      applicationId: application.id,
-      questions: persistedQuestions,
-      answers: values.questionAnswers,
-    }).filter((row) => row.answer.length > 0);
-
-    if (answersToInsert.length > 0) {
-      await tx.insert(applicationAnswers).values(answersToInsert);
-    }
-
-    await tx.insert(activityEvents).values({
-      workspaceId,
-      actorId: null,
-      entityType: "application",
-      entityId: application.id,
-      type: "application.created",
-      metadata: {
         jobTitle: job.title,
-        candidateName: `${candidate.firstName} ${candidate.lastName}`,
-        resumeFileName: values.resumeFileName ?? null,
-        resumeKey: values.resumeKey ?? null,
-        questionAnswers: values.questionAnswers,
-      },
-    });
-
-    // Persist consent record (GDPR Art. 7 , proof of consent).
-    if (options?.consent) {
-      await tx.insert(consentRecords).values({
-        workspaceId,
-        candidateId: candidate.id,
-        applicationId: application.id,
-        consentType: "data_processing",
-        consentText: options.consent.consentText,
-        granted: true,
-        ipAddress: options.consent.ipAddress,
-        userAgent: options.consent.userAgent,
-      });
-    }
-
-    const owners = await tx
-      .select({ email: authUsers.email })
-      .from(authMembers)
-      .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
-      .where(
-        and(
-          eq(authMembers.organizationId, workspaceId),
-          eq(authMembers.role, "owner"),
-        ),
-      );
-
-    createdEvent.current = {
-      workspaceId,
-      applicationId: application.id,
-      candidateId: candidate.id,
-      jobId: job.id,
-      jobTitle: job.title,
-      candidateEmail: candidate.email,
-      candidateName: `${candidate.firstName} ${candidate.lastName}`,
-    };
-
-    return {
-      ok: true,
-      applicationId: application.id,
-      candidateId: candidate.id,
-      email: {
         candidateEmail: candidate.email,
-        candidateFirstName: candidate.firstName,
         candidateName: `${candidate.firstName} ${candidate.lastName}`,
-        jobTitle: job.title,
-        workspaceId,
-        workspaceName: workspace.name,
-        workspaceSlug: workspace.slug,
-        ownerEmails: owners.map((owner) => owner.email),
-      },
-    };
-  });
+      };
+
+      return {
+        ok: true,
+        applicationId: application.id,
+        candidateId: candidate.id,
+        email: {
+          candidateEmail: candidate.email,
+          candidateFirstName: candidate.firstName,
+          candidateName: `${candidate.firstName} ${candidate.lastName}`,
+          jobTitle: job.title,
+          workspaceId,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.slug,
+          ownerEmails: owners.map((owner) => owner.email),
+        },
+      };
+    },
+  );
 
   const event = createdEvent.current;
   if (event) {

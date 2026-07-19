@@ -149,10 +149,14 @@ TypeScript toolchain are build-time only.
 ## Backup, restore, and upgrade
 
 ```bash
-AGE_RECIPIENT=age1... npx @harly/cli backup
-AGE_IDENTITY=/secure/key.txt AGE_RECIPIENT=age1... npx @harly/cli restore backup.tar.gz.age --force
-npx @harly/cli restore backup.tar.gz --force --allow-plaintext
-AGE_RECIPIENT=age1... npx @harly/cli update --to 0.1.0-beta.2 --yes
+# Works everywhere: a private local rollback point (mode 0600).
+npx @harly/cli backup
+npx @harly/cli update --to <release-version> --yes
+npx @harly/cli restore backups/harly-2026-...tar.gz --force
+
+# Optional advanced encryption for a portable backup.
+AGE_RECIPIENT=age1... npx @harly/cli backup --encrypt
+AGE_IDENTITY=/secure/key.txt npx @harly/cli restore backup.tar.gz.age --force
 ```
 
 Restore verifies every archived file checksum, creates a safety backup before
@@ -162,15 +166,19 @@ to succeed. A failed restore keeps the safety archive under `backups/`.
 
 Backup stops app/scheduler, keeps PostgreSQL running, creates `pg_dump -Fc`,
 includes local uploads/config and checksums every included file before it can
-succeed. Encryption with `age` is required unless plaintext is explicitly
-chosen with `--allow-plaintext`. A restore validates the archive and creates a
-fresh safety backup before changing data. S3 objects are not embedded in the
-archive: use bucket versioning and an off-provider backup policy. Upgrades take
-a backup first, run the single migrator, wait for readiness, and finish with
-doctor.
+succeed. By default it creates a local rollback archive readable only by the
+deployment owner; this is convenient for a failed update, not a replacement for
+off-host disaster recovery. A restore validates the archive and creates a fresh
+safety backup before changing data. S3 objects are not embedded in the archive:
+use bucket versioning and an off-provider backup policy. Upgrades take a backup
+first, run the single migrator, wait for readiness, and finish with doctor.
 
 Migrations are forward-only. Restore the full backup when a release does not
 declare schema-compatible image rollback.
+
+For managed platforms, use their managed PostgreSQL backups/snapshots together
+with S3 bucket encryption and versioning. They do not require installing `age`.
+See [backup choices](backups.md) for the simple and advanced paths.
 
 ### Verify your backups actually restore (do this before you rely on them)
 
@@ -179,7 +187,7 @@ A backup you have never restored is a guess. Prove recovery end-to-end against a
 
 ```bash
 HARLY_DESTRUCTIVE_OK=1 \
-  tooling/create-harly/test/backup-restore.destructive.sh /path/to/installation
+  tooling/harly/test/backup-restore.destructive.sh /path/to/installation
 ```
 
 It seeds known rows and an uploaded object, backs them up, drops the entire

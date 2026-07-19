@@ -47,7 +47,7 @@ export default async function SetupPage() {
           <p className="mt-3 text-sm leading-6 text-muted-foreground">
             When you ran{" "}
             <code className="rounded bg-kraft px-1.5 py-0.5 font-mono text-[0.8em] text-foreground">
-              create-harly init
+              harly init
             </code>
             , it printed a one-time setup token. Paste it below to claim this
             deployment. It stays valid for 15 minutes.

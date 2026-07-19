@@ -19,10 +19,12 @@ export function PortalLoginForm({
   hasGoogle,
   hasGitHub,
   hasLinkedIn,
+  workspaceSlug,
 }: {
   hasGoogle: boolean;
   hasGitHub: boolean;
   hasLinkedIn: boolean;
+  workspaceSlug: string;
 }) {
   const params = useSearchParams();
   const error = params.get("error");
@@ -35,7 +37,7 @@ export function PortalLoginForm({
   function submitMagicLink(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
     start(async () => {
-      const result = await sendPortalMagicLinkAction(email);
+      const result = await sendPortalMagicLinkAction(email, workspaceSlug);
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -45,7 +47,7 @@ export function PortalLoginForm({
   }
 
   function oauthHref(provider: "google" | "github" | "linkedin") {
-    return `/api/portal/auth?provider=${provider}&next=${encodeURIComponent(next)}`;
+    return `/api/portal/auth?provider=${provider}&workspace=${encodeURIComponent(workspaceSlug)}&next=${encodeURIComponent(next)}`;
   }
 
   if (sent) {

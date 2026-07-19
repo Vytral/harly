@@ -8,7 +8,6 @@ import {
   createPortalSession,
   exchangeGoogleCode,
   findOrCreateCandidateByEmail,
-  getPortalWorkspaceId,
   isPortalEnabled,
 } from "@/lib/portal-auth";
 import { PORTAL_OAUTH_STATE_COOKIE, verifyPortalOAuthState } from "@/lib/portal-oauth-state";
@@ -16,16 +15,12 @@ import { PORTAL_OAUTH_STATE_COOKIE, verifyPortalOAuthState } from "@/lib/portal-
 export const runtime = "nodejs";
 
 export async function GET(request: NextRequest) {
-  if (!(await isPortalEnabled())) {
-    return NextResponse.json({ error: "Portal not enabled." }, { status: 404 });
-  }
-
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const state = searchParams.get("state") ?? "";
   const cookieStore = await cookies();
-  const next = verifyPortalOAuthState(cookieStore.get(PORTAL_OAUTH_STATE_COOKIE)?.value, state);
-  if (!next) redirect("/portal/login?error=oauth_state" as Route);
+  const oauthState = verifyPortalOAuthState(cookieStore.get(PORTAL_OAUTH_STATE_COOKIE)?.value, state);
+  if (!oauthState) redirect("/portal/login?error=oauth_state" as Route);
 
   if (!code) redirect("/portal/login?error=oauth_denied" as Route);
 
@@ -33,19 +28,19 @@ export async function GET(request: NextRequest) {
   const redirectUri = `${appUrl}/api/portal/auth/callback/google`;
 
   try {
-    const userInfo = await exchangeGoogleCode(code!, redirectUri);
-    const workspaceId = await getPortalWorkspaceId();
-    if (!workspaceId) redirect("/portal/login?error=no_workspace" as Route);
+    const workspaceId = oauthState!.workspaceId;
+    if (!(await isPortalEnabled(workspaceId))) redirect("/portal/login?error=no_workspace" as Route);
+    const userInfo = await exchangeGoogleCode(code!, redirectUri, workspaceId);
 
     const candidateId = await findOrCreateCandidateByEmail(
-      workspaceId!,
+      workspaceId,
       userInfo.email,
       { firstName: userInfo.firstName, lastName: userInfo.lastName },
       userInfo.avatarUrl,
     );
 
     const ua = request.headers.get("user-agent") ?? undefined;
-    const raw = await createPortalSession(candidateId, workspaceId!, ua);
+    const raw = await createPortalSession(candidateId, workspaceId, ua);
 
     cookieStore.delete(PORTAL_OAUTH_STATE_COOKIE);
     cookieStore.set(PORTAL_SESSION_COOKIE, raw, {
@@ -56,7 +51,7 @@ export async function GET(request: NextRequest) {
       maxAge: 60 * 60 * 24 * 30,
     });
 
-    redirect(next as Route);
+    redirect(oauthState!.next as Route);
   } catch (err) {
     console.error("Google OAuth callback error:", err);
     redirect("/portal/login?error=oauth_failed" as Route);

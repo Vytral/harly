@@ -57,6 +57,7 @@ export default async function PortalDashboardPage() {
       heroImageUrl: workspaceSettings.heroImageUrl,
       primaryColor: workspaceSettings.primaryColor,
       showStatus: workspaceSettings.portalShowApplicationStatus,
+      showHiringTeam: workspaceSettings.portalShowHiringTeam,
     })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, session.workspaceId))
@@ -98,16 +99,18 @@ export default async function PortalDashboardPage() {
     }
   }
 
-  const teamMembers = await db
-    .select({
-      name: user.name,
-      image: user.image,
-      jobTitle: user.jobTitle,
-    })
-    .from(member)
-    .innerJoin(user, eq(user.id, member.userId))
-    .where(eq(member.organizationId, session.workspaceId))
-    .limit(8);
+  const teamMembers = settings?.showHiringTeam
+    ? await db
+        .select({
+          name: user.name,
+          image: user.image,
+          jobTitle: user.jobTitle,
+        })
+        .from(member)
+        .innerJoin(user, eq(user.id, member.userId))
+        .where(eq(member.organizationId, session.workspaceId))
+        .limit(8)
+    : [];
 
   // Primary app = first active one, fallback to most recent
   const primaryApp = appRows.find((a) => a.status === "active") ?? appRows[0] ?? null;

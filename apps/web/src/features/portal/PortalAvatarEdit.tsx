@@ -17,7 +17,7 @@ import {
 import { getImageFileValidationError } from "@/lib/storage-validation";
 import { updatePortalCandidateAvatarAction } from "@/features/portal/profile-actions";
 
-async function portalUploadImage(file: Blob): Promise<string> {
+async function portalUploadImage(file: Blob): Promise<{ fileUrl: string; key: string }> {
   const presign = await fetch("/api/portal/storage/presign", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -44,7 +44,7 @@ async function portalUploadImage(file: Blob): Promise<string> {
   });
 
   if (!put.ok) throw new Error("Upload failed.");
-  return data.fileUrl;
+  return { fileUrl: data.fileUrl, key: data.key };
 }
 
 type PortalAvatarEditProps = {
@@ -83,15 +83,18 @@ export function PortalAvatarEdit({
     setCropOpen(false);
     startTransition(async () => {
       try {
-        const url = await portalUploadImage(blob);
-        setLocalAvatar(url);
+        const previousAvatar = localAvatar;
+        const { fileUrl, key } = await portalUploadImage(blob);
         const result = await updatePortalCandidateAvatarAction({
-          avatarUrl: url,
+          avatarUrl: fileUrl,
+          key,
         });
         if (!result.success) {
+          setLocalAvatar(previousAvatar);
           toast.error(result.error ?? "Could not update avatar.");
           return;
         }
+        setLocalAvatar(fileUrl);
         toast.success("Avatar updated.");
         router.refresh();
       } catch {
@@ -104,15 +107,17 @@ export function PortalAvatarEdit({
   }
 
   function removeAvatar() {
-    setLocalAvatar(null);
+    const previousAvatar = localAvatar;
     startTransition(async () => {
       const result = await updatePortalCandidateAvatarAction({
         avatarUrl: null,
       });
       if (!result.success) {
+        setLocalAvatar(previousAvatar);
         toast.error(result.error ?? "Could not remove avatar.");
         return;
       }
+      setLocalAvatar(null);
       toast.success("Avatar removed.");
       router.refresh();
     });
@@ -141,7 +146,7 @@ export function PortalAvatarEdit({
           onClick={(e) => { e.stopPropagation(); inputRef.current?.click(); }}
           disabled={saving}
           aria-label="Change avatar"
-          className="absolute bottom-0 right-0 flex size-7 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm opacity-0 transition-all duration-150 ease-out group-hover:opacity-100 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none active:scale-[0.97]"
+          className="absolute bottom-0 right-0 flex size-7 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm transition-all duration-150 ease-out hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] sm:opacity-0 sm:group-hover:opacity-100"
         >
           <Pencil className="size-3.5" strokeWidth={1.8} />
         </button>
@@ -151,7 +156,7 @@ export function PortalAvatarEdit({
             onClick={removeAvatar}
             disabled={saving}
             aria-label="Remove avatar"
-            className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm opacity-0 transition-all duration-150 group-hover:opacity-100 hover:bg-destructive/10 hover:text-destructive"
+            className="absolute -right-1 -top-1 flex size-5 items-center justify-center rounded-full border bg-card text-muted-foreground shadow-sm transition-all duration-150 hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:opacity-0 sm:group-hover:opacity-100"
           >
             <X className="size-3" />
           </button>

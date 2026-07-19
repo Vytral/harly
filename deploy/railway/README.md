@@ -3,7 +3,7 @@
 Create a Railway project with these services:
 
 1. **Postgres** — Railway managed PostgreSQL.
-2. **Harly** — Docker image `ghcr.io/vytral/harly:0.1.0-beta.1`; apply
+2. **Harly** — Docker image `ghcr.io/vytral/harly:0.1.0-beta.2`; apply
    `railway.app.json` as its config-as-code file.
 3. **Scheduler** — same image; apply `railway.scheduler.json`.
 

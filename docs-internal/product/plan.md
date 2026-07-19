@@ -21,7 +21,7 @@ A production-grade, self-hosteable ATS with:
 - File uploads (CVs via R2/S3)
 - Transactional email (Resend)
 - Customizable job board (branding, domain, questions)
-- One-command setup (`npx @harly/create`)
+- One-command setup (`npx @harly/cli`)
 - Docker Compose for self-hosting
 - Deploy templates for Railway and Fly.io
 - Public docs and landing page
@@ -36,7 +36,7 @@ A production-grade, self-hosteable ATS with:
 | 4 | Job board + application flow | Week 5 | 🔲 |
 | 5 | Pipeline + candidate profiles | Week 6 | 🔲 |
 | 6 | Dashboard + analytics | Week 7 | 🔲 |
-| 7 | `npx @harly/create` CLI | Week 9 | 🔲 |
+| 7 | `npx @harly/cli` CLI | Week 9 | 🔲 |
 | 8 | Landing page live | Week 9 | 🔲 |
 | 9 | Docs published | Week 10 | 🔲 |
 | 10 | Product Hunt launch | Week 10 | 🔲 |

@@ -13,6 +13,7 @@ import {
   candidateFiles,
   candidateNotes,
   candidateTags,
+  dsarRequests,
   interviews,
   jobs,
   jobStages,
@@ -912,7 +913,10 @@ export async function restoreCandidate(candidateId: string) {
 }
 
 /** Permanently delete a trashed candidate and all related records (cascade). */
-export async function permanentlyDeleteCandidate(candidateId: string) {
+export async function permanentlyDeleteCandidate(
+  candidateId: string,
+  processedBy: string,
+) {
   const { organization: workspace } = await getWorkspaceContext();
 
   // Cancel any Google Calendar events for this candidate's interviews before
@@ -942,6 +946,27 @@ export async function permanentlyDeleteCandidate(candidateId: string) {
   // linked via candidateId also cascade-delete their messages; this explicit
   // delete covers the same rows and is safe to run regardless.
   await deleteConversationsForCandidate(candidateId);
+
+  // The destructive action in Trash is the staff approval to fulfil an open
+  // erasure request. Complete it before the FK is set to null by deletion.
+  const now = new Date();
+  await db
+    .update(dsarRequests)
+    .set({
+      status: "completed",
+      processedBy,
+      notes: "Erasure fulfilled by permanent candidate deletion.",
+      completedAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(dsarRequests.workspaceId, workspace.id),
+        eq(dsarRequests.candidateId, candidateId),
+        eq(dsarRequests.type, "erasure"),
+        inArray(dsarRequests.status, ["pending", "processing"]),
+      ),
+    );
 
   const [deleted] = await db
     .delete(candidates)

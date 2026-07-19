@@ -8,10 +8,12 @@ import {
   activityEvents,
   applications,
   applicationStageHistory,
+  candidatePortalNotifications,
   candidates,
   jobs,
   jobStages,
   organization,
+  workspaceSettings,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
@@ -106,6 +108,7 @@ async function getApplicationsForAction(
   return db
     .select({
       id: applications.id,
+      candidateId: applications.candidateId,
       currentStageId: applications.currentStageId,
       status: applications.status,
       candidateEmail: candidates.email,
@@ -143,6 +146,13 @@ export async function moveApplicationInPipeline(
       return { success: false, error: "Workspace access denied." };
     }
 
+    const [portalSettings] = await db
+      .select({ showApplicationStatus: workspaceSettings.portalShowApplicationStatus })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.organizationId, input.workspaceId))
+      .limit(1);
+    const shouldNotifyPortalStatus = portalSettings?.showApplicationStatus !== false;
+
     // Captured inside the transaction, emitted after commit (see data.ts note).
     const stageEvent: {
       current: {
@@ -156,6 +166,7 @@ export async function moveApplicationInPipeline(
       const [application] = await tx
         .select({
           id: applications.id,
+          candidateId: applications.candidateId,
           currentStageId: applications.currentStageId,
           updatedAt: applications.updatedAt,
           status: applications.status,
@@ -287,6 +298,22 @@ export async function moveApplicationInPipeline(
           status: nextStatus,
         },
       });
+
+      if (
+        shouldNotifyPortalStatus &&
+        application.status === "active" &&
+        nextStatus === "rejected"
+      ) {
+        await tx.insert(candidatePortalNotifications).values({
+          workspaceId: input.workspaceId,
+          candidateId: application.candidateId,
+          type: "application_rejected",
+          title: `Application for ${application.jobTitle} not selected`,
+          body: "We appreciate your interest and encourage you to apply for other roles.",
+          href: `/portal/applications/${application.id}`,
+          metadata: { applicationId: application.id, status: nextStatus },
+        });
+      }
 
       const candidateName = `${application.candidateFirstName} ${application.candidateLastName}`;
       const stageEmailConfig = normalizeStageEmailConfig(
@@ -638,6 +665,13 @@ export async function updateApplicationStatus(
       return { success: false, error: "No applications selected." };
     }
 
+    const [portalSettings] = await db
+      .select({ showApplicationStatus: workspaceSettings.portalShowApplicationStatus })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.organizationId, input.workspaceId))
+      .limit(1);
+    const shouldNotifyStatus = portalSettings?.showApplicationStatus !== false;
+
     const now = new Date();
     await db.transaction(async (tx) => {
       await tx
@@ -659,6 +693,37 @@ export async function updateApplicationStatus(
           type: `application.${input.status}`,
           metadata: { status: input.status },
         });
+      }
+
+      if (
+        shouldNotifyStatus &&
+        (input.status === "hired" || input.status === "rejected")
+      ) {
+        const changedApplications = applicationRows.filter(
+          (application) => application.status !== input.status,
+        );
+        if (changedApplications.length > 0) {
+          await tx.insert(candidatePortalNotifications).values(
+            changedApplications.map((application) => ({
+              workspaceId: input.workspaceId,
+              candidateId: application.candidateId,
+              type:
+                input.status === "hired"
+                  ? "application_hired"
+                  : "application_rejected",
+              title:
+                input.status === "hired"
+                  ? `Congratulations! You've been hired for ${application.jobTitle}`
+                  : `Application for ${application.jobTitle} not selected`,
+              body:
+                input.status === "hired"
+                  ? "We're excited to have you on the team!"
+                  : "We appreciate your interest and encourage you to apply for other roles.",
+              href: `/portal/applications/${application.id}`,
+              metadata: { applicationId: application.id, status: input.status },
+            })),
+          );
+        }
       }
     });
 

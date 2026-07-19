@@ -385,6 +385,9 @@ export function AiScoreCard({
                   Updated <RelativeTime value={evaluation.updatedAt} />
                 </span>
               </div>
+              <p className="text-xs leading-5 text-muted-foreground">
+                AI guidance only — review the evidence and make the hiring decision yourself. Do not use this score as the sole basis for a decision.
+              </p>
             </CardContent>
           </Card>
         );

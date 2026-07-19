@@ -19,11 +19,13 @@ Railway template.
 
 ## Fly.io
 
-The wizard creates `harly-fly/fly.toml`. From that directory, create the app
-with `fly launch --no-deploy`, attach Fly Managed Postgres, import the generated
-`.env` as secrets, then run `fly deploy`. The config uses separate `web` and
-`scheduler` processes, a one-time migration release command, and the readiness
-endpoint. Fly terminates HTTPS; do not add Caddy.
+[`fly.toml`](../fly.toml) is the canonical, versioned Fly configuration at the
+repository root, so `fly deploy` works without a path argument. Replace its
+placeholder `app` name, run `fly launch --no-deploy`, attach Fly Managed
+Postgres, import the generated `.env` as secrets, then run `fly deploy`. The
+config uses separate `web` and `scheduler` processes, a one-time migration
+release command, and the readiness endpoint. Fly terminates HTTPS; do not add
+Caddy.
 
 Both platforms require S3-compatible storage. Database backups and S3 object
 backups are separate responsibilities: enable bucket versioning and test a

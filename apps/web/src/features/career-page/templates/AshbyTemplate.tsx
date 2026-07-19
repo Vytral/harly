@@ -22,7 +22,6 @@ import { RichBody } from "@/features/career-page/RichBody";
 const reveal =
   "duration-500 animate-in fade-in slide-in-from-bottom-3 fill-mode-backwards motion-reduce:animate-none";
 
-
 /** Distinct, sorted facet values for a key. */
 function facet(jobs: Job[], pick: (j: Job) => string | null): string[] {
   const set = new Set<string>();
@@ -58,7 +57,8 @@ export function AshbyTemplate({
 
   const departments = useMemo(() => facet(jobs, (j) => j.department), [jobs]);
   const locations = useMemo(
-    () => facet(jobs, (j) => j.location ?? formatWorkplaceType(j.workplaceType)),
+    () =>
+      facet(jobs, (j) => j.location ?? formatWorkplaceType(j.workplaceType)),
     [jobs],
   );
   const types = useMemo(
@@ -67,7 +67,9 @@ export function AshbyTemplate({
   );
 
   const [query, setQuery] = useState("");
-  const [sel, setSel] = useState<Record<"department" | "location" | "type", Set<string>>>({
+  const [sel, setSel] = useState<
+    Record<"department" | "location" | "type", Set<string>>
+  >({
     department: new Set(),
     location: new Set(),
     type: new Set(),
@@ -86,7 +88,10 @@ export function AshbyTemplate({
     const q = query.trim().toLowerCase();
     return jobs.filter((j) => {
       if (q && !j.title.toLowerCase().includes(q)) return false;
-      if (sel.department.size && !(j.department && sel.department.has(j.department)))
+      if (
+        sel.department.size &&
+        !(j.department && sel.department.has(j.department))
+      )
         return false;
       if (sel.location.size) {
         const loc = j.location ?? formatWorkplaceType(j.workplaceType);
@@ -112,8 +117,18 @@ export function AshbyTemplate({
   }, [shown]);
 
   const facetGroups = [
-    { key: "department" as const, label: "Department", icon: Building2, values: departments },
-    { key: "location" as const, label: "Location", icon: MapPin, values: locations },
+    {
+      key: "department" as const,
+      label: "Department",
+      icon: Building2,
+      values: departments,
+    },
+    {
+      key: "location" as const,
+      label: "Location",
+      icon: MapPin,
+      values: locations,
+    },
     { key: "type" as const, label: "Type", icon: Briefcase, values: types },
   ].filter((g) => enabled.includes(g.key) && g.values.length > 0);
 
@@ -123,8 +138,11 @@ export function AshbyTemplate({
       <header className="border-b border-zinc-200 dark:border-zinc-800">
         <div
           className={`mx-auto flex max-w-6xl items-center gap-3 px-6 py-5 ${
-            config.hero.logoPosition === "center" ? "justify-center" :
-            config.hero.logoPosition === "right" ? "justify-end" : "justify-start"
+            config.hero.logoPosition === "center"
+              ? "justify-center"
+              : config.hero.logoPosition === "right"
+                ? "justify-end"
+                : "justify-start"
           }`}
         >
           {logo ? (
@@ -204,7 +222,11 @@ export function AshbyTemplate({
                           style={on ? { backgroundColor: accent } : undefined}
                         >
                           {on && (
-                            <svg viewBox="0 0 12 12" className="size-3 text-white" fill="none">
+                            <svg
+                              viewBox="0 0 12 12"
+                              className="size-3 text-white"
+                              fill="none"
+                            >
                               <path
                                 d="M2.5 6.5l2.5 2.5 4.5-5"
                                 stroke="currentColor"
@@ -247,7 +269,8 @@ export function AshbyTemplate({
                         {dept}
                       </h2>
                       <span className="text-xs tabular-nums text-zinc-400">
-                        {deptJobs.length} {deptJobs.length === 1 ? "role" : "roles"}
+                        {deptJobs.length}{" "}
+                        {deptJobs.length === 1 ? "role" : "roles"}
                       </span>
                     </div>
                     <div className="mt-3 divide-y divide-zinc-100 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
@@ -261,7 +284,8 @@ export function AshbyTemplate({
                             {job.title}
                           </span>
                           <span className="hidden text-sm text-zinc-500 dark:text-zinc-400 sm:inline">
-                            {job.location ?? formatWorkplaceType(job.workplaceType)}
+                            {job.location ??
+                              formatWorkplaceType(job.workplaceType)}
                           </span>
                           <span className="hidden text-sm text-zinc-500 dark:text-zinc-400 sm:inline">
                             {formatEmploymentType(job.employmentType)}
@@ -288,7 +312,10 @@ export function AshbyTemplate({
             <h2 className="mb-8 text-2xl font-semibold tracking-tight">
               {config.testimonials.title}
             </h2>
-            <CareerTestimonials items={config.testimonials.items} accent={accent} />
+            <CareerTestimonials
+              items={config.testimonials.items}
+              accent={accent}
+            />
           </div>
         </div>
       )}
@@ -307,7 +334,15 @@ export function AshbyTemplate({
 
       <footer className="border-t border-zinc-200 dark:border-zinc-800">
         <div className="py-8">
-          <CareerFooter config={config} workspaceName={workspace.name} maxWidth="max-w-6xl" iconRounded="rounded-md" portalEnabled={portalEnabled} />
+          <CareerFooter
+            config={config}
+            workspaceName={workspace.name}
+            portalWorkspaceSlug={workspace.slug}
+            maxWidth="max-w-6xl"
+            iconRounded="rounded-md"
+            portalEnabled={portalEnabled}
+            legalBasePath={boardRoot === "/" ? "/legal" : `${boardRoot}/legal`}
+          />
         </div>
       </footer>
     </div>

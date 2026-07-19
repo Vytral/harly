@@ -20,7 +20,10 @@ import { getPublicJobApplicationContext } from "@/features/applications/data";
 import { sendApplicationReceivedEmails } from "@/features/applications/notifications";
 import { storage } from "@/lib/storage";
 import { extractResumeText } from "@/lib/resume/extract-text";
-import { isWorkspaceStorageKey, maxResumeFileSize } from "@/lib/storage-validation";
+import {
+  isWorkspaceStorageKey,
+  maxResumeFileSize,
+} from "@/lib/storage-validation";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { parseResumeWithAI } from "@/lib/ai/surfaces/parse-resume";
 import { getServerLogger } from "@/lib/logger";
@@ -88,7 +91,10 @@ export async function parseResumeAction(input: {
         workspaceSlug: input.workspaceSlug,
       })
     : null;
-  if (!jobContext || !isWorkspaceStorageKey(jobContext.workspaceId, key, "resumes")) {
+  if (
+    !jobContext ||
+    !isWorkspaceStorageKey(jobContext.workspaceId, key, "resumes")
+  ) {
     return { ok: false };
   }
 
@@ -344,18 +350,27 @@ export async function submitApplicationAction(
 
   const consentGiven = formData.get("consentGiven") === "true";
 
-  // Fetch the consent text from workspace settings (used for the consent record).
+  // Resolve the wording on the server, rather than trusting a browser value.
   let consentText =
     "I agree to the privacy policy and consent to the processing of my personal data.";
-  if (consentGiven) {
-    const [settings] = await db
-      .select({ consentCheckboxText: workspaceSettings.consentCheckboxText })
-      .from(workspaceSettings)
-      .where(eq(workspaceSettings.organizationId, jobContext.workspaceId))
-      .limit(1);
-    if (settings?.consentCheckboxText) {
-      consentText = settings.consentCheckboxText;
-    }
+  const [settings] = await db
+    .select({
+      consentCheckboxText: workspaceSettings.consentCheckboxText,
+      legalConfigured: workspaceSettings.legalConfigured,
+      legalPages: workspaceSettings.legalPages,
+    })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, jobContext.workspaceId))
+    .limit(1);
+  if (settings?.legalConfigured && !consentGiven) {
+    return {
+      status: "error",
+      message:
+        "You must agree to the privacy policy to submit your application.",
+    };
+  }
+  if (settings?.consentCheckboxText) {
+    consentText = settings.consentCheckboxText;
   }
 
   try {

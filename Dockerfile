@@ -14,7 +14,7 @@ COPY packages/emails/package.json packages/emails/package.json
 COPY packages/storage/package.json packages/storage/package.json
 COPY packages/ui/package.json packages/ui/package.json
 COPY packages/validators/package.json packages/validators/package.json
-COPY tooling/create-harly/package.json tooling/create-harly/package.json
+COPY tooling/harly/package.json tooling/harly/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1 \
@@ -28,7 +28,7 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     HARLY_SETUP_SECRET=build-only-setup-secret-0000000000000000 \
     HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
 RUN --mount=type=cache,id=harly-next-cache,target=/src/apps/web/.next/cache \
-    pnpm --filter @harly/create build && pnpm --filter web build
+    pnpm --filter @harly/cli build && pnpm --filter web build
 RUN pnpm exec esbuild tooling/runtime/src/entrypoint.ts --bundle --platform=node --format=esm --target=node22 --outfile=/tmp/harly-runtime.mjs
 
 FROM node:22-bookworm-slim AS runtime

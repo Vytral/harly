@@ -80,6 +80,7 @@ vi.mock("@harly/db", () => ({
   },
   activityEvents: {},
   applications: {},
+  candidatePortalNotifications: {},
   candidateFiles: {},
   candidates: {},
   interviews: {},

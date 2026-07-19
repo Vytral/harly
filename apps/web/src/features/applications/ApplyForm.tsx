@@ -1,6 +1,13 @@
 "use client";
 
-import { useActionState, useEffect, useReducer, useRef, useState, useTransition } from "react";
+import {
+  useActionState,
+  useEffect,
+  useReducer,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import {
   Check,
   Globe,
@@ -64,6 +71,8 @@ type ApplyFormProps = {
   legalConfigured?: boolean;
   consentCheckboxText?: string | null;
   legalPages?: Record<string, string> | null;
+  /** Prefix for the workspace-scoped published legal pages. */
+  legalBasePath?: string;
 };
 
 type TextField =
@@ -171,7 +180,9 @@ function validateUrl(value: string): string | null {
     return null;
   }
 
-  const normalUrl = /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const normalUrl = /^https?:\/\//i.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
 
   try {
     new URL(normalUrl);
@@ -184,7 +195,11 @@ function validateUrl(value: string): string | null {
 /** A select question whose options are exactly Yes/No renders as a segmented
  * toggle (Ashby variant) instead of a native dropdown. */
 function isYesNoQuestion(question: JobApplicationQuestion): boolean {
-  if (question.type !== "select" || !question.options || question.options.length !== 2) {
+  if (
+    question.type !== "select" ||
+    !question.options ||
+    question.options.length !== 2
+  ) {
     return false;
   }
   const lower = question.options.map((option) => option.trim().toLowerCase());
@@ -207,7 +222,8 @@ const textareaClassAshby =
 
 const labelClass = "text-sm font-medium text-zinc-800 dark:text-zinc-200";
 const requiredMarkClass = "text-red-500";
-const hintClass = "mt-1.5 text-xs text-zinc-500 leading-relaxed dark:text-zinc-400";
+const hintClass =
+  "mt-1.5 text-xs text-zinc-500 leading-relaxed dark:text-zinc-400";
 const inputIconClass = "pl-9";
 
 // Staggered entrance, matching the career templates' `reveal` pattern.
@@ -217,7 +233,12 @@ const reveal =
 // Inline SVG icon components (brand icons from better-icons / Iconify)
 function LinkedInIcon({ className }: { className?: string }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+    >
       <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2zm-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93zM6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37z" />
     </svg>
   );
@@ -225,7 +246,12 @@ function LinkedInIcon({ className }: { className?: string }) {
 
 function GitHubIcon({ className }: { className?: string }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={className}>
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      className={className}
+    >
       <path d="M12 2A10 10 0 0 0 2 12c0 4.42 2.87 8.17 6.84 9.5c.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34c-.46-1.16-1.11-1.47-1.11-1.47c-.91-.62.07-.6.07-.6c1 .07 1.53 1.03 1.53 1.03c.87 1.52 2.34 1.07 2.91.83c.09-.65.35-1.09.63-1.34c-2.22-.25-4.55-1.11-4.55-4.92c0-1.11.38-2 1.03-2.71c-.1-.25-.45-1.29.1-2.64c0 0 .84-.27 2.75 1.02c.79-.22 1.65-.33 2.5-.33s1.71.11 2.5.33c1.91-1.29 2.75-1.02 2.75-1.02c.55 1.35.2 2.39.1 2.64c.65.71 1.03 1.6 1.03 2.71c0 3.82-2.34 4.66-4.57 4.91c.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2" />
     </svg>
   );
@@ -233,16 +259,39 @@ function GitHubIcon({ className }: { className?: string }) {
 
 function TrashIcon({ className }: { className?: string }) {
   return (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" className={className}>
-      <path fill="currentColor" fillOpacity="0.16" d="M8 21h8a2 2 0 0 0 2-2V7H6v12a2 2 0 0 0 2 2" />
-      <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M14 11v6m-4-6v6M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7M4 7h16M7 7l2-4h6l2 4" />
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 24 24"
+      fill="none"
+      className={className}
+    >
+      <path
+        fill="currentColor"
+        fillOpacity="0.16"
+        d="M8 21h8a2 2 0 0 0 2-2V7H6v12a2 2 0 0 0 2 2"
+      />
+      <path
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+        d="M14 11v6m-4-6v6M6 7v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7M4 7h16M7 7l2-4h6l2 4"
+      />
     </svg>
   );
 }
 
-function InputIcon({ children, className }: { children: React.ReactNode; className?: string }) {
+function InputIcon({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
   return (
-    <span className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 ${className ?? ""}`}>
+    <span
+      className={`pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400 ${className ?? ""}`}
+    >
       {children}
     </span>
   );
@@ -290,7 +339,12 @@ function YesNoToggle({
   onChange: (next: string) => void;
 }) {
   return (
-    <div className={cn("mt-2 inline-flex p-1", "rounded-lg border border-zinc-200 dark:border-zinc-700")}>
+    <div
+      className={cn(
+        "mt-2 inline-flex p-1",
+        "rounded-lg border border-zinc-200 dark:border-zinc-700",
+      )}
+    >
       <input type="hidden" name={name} value={value} />
       {["Yes", "No"].map((option) => {
         const active = value === option;
@@ -307,7 +361,9 @@ function YesNoToggle({
                 ? "text-white shadow-sm"
                 : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
             )}
-            style={active ? { backgroundColor: "var(--board-primary)" } : undefined}
+            style={
+              active ? { backgroundColor: "var(--board-primary)" } : undefined
+            }
           >
             {option}
           </button>
@@ -370,11 +426,7 @@ function ConsentCheckbox({
   );
 }
 
-function entryErrorFor(
-  errors: EntryFieldErrors,
-  id: string,
-  field: string,
-) {
+function entryErrorFor(errors: EntryFieldErrors, id: string, field: string) {
   return errors[id]?.[field];
 }
 
@@ -414,7 +466,10 @@ type FormAction =
     }
   | { type: "REMOVE_EXPERIENCE_ENTRY"; id: string }
   | { type: "CLEAR_PERSONAL" }
-  | { type: "SET_FIELD_ERRORS"; errors: Partial<Record<keyof ApplicationFormValues, string[]>> }
+  | {
+      type: "SET_FIELD_ERRORS";
+      errors: Partial<Record<keyof ApplicationFormValues, string[]>>;
+    }
   | { type: "SET_QUESTION_ERRORS"; errors: Record<string, string[]> }
   | { type: "SET_EDUCATION_ERRORS"; errors: EntryFieldErrors }
   | { type: "SET_EXPERIENCE_ERRORS"; errors: EntryFieldErrors }
@@ -484,7 +539,9 @@ function formReducer(state: FormState, action: FormAction): FormState {
         educationErrors: (() => {
           const next = { ...state.educationErrors };
           if (next[action.id]) {
-            delete next[action.id][action.field as Extract<keyof EducationEntry, string>];
+            delete next[action.id][
+              action.field as Extract<keyof EducationEntry, string>
+            ];
             if (Object.keys(next[action.id]).length === 0) {
               delete next[action.id];
             }
@@ -497,14 +554,19 @@ function formReducer(state: FormState, action: FormAction): FormState {
       delete nextErrors[action.id];
       return {
         ...state,
-        educationEntries: state.educationEntries.filter((entry) => entry.id !== action.id),
+        educationEntries: state.educationEntries.filter(
+          (entry) => entry.id !== action.id,
+        ),
         educationErrors: nextErrors,
       };
     }
     case "ADD_EXPERIENCE_ENTRY":
       return {
         ...state,
-        experienceEntries: [...state.experienceEntries, createExperienceEntry()],
+        experienceEntries: [
+          ...state.experienceEntries,
+          createExperienceEntry(),
+        ],
       };
     case "UPDATE_EXPERIENCE_ENTRY":
       return {
@@ -526,7 +588,9 @@ function formReducer(state: FormState, action: FormAction): FormState {
         experienceErrors: (() => {
           const next = { ...state.experienceErrors };
           if (next[action.id]) {
-            delete next[action.id][action.field as Extract<keyof ExperienceEntry, string>];
+            delete next[action.id][
+              action.field as Extract<keyof ExperienceEntry, string>
+            ];
             if (Object.keys(next[action.id]).length === 0) {
               delete next[action.id];
             }
@@ -539,7 +603,9 @@ function formReducer(state: FormState, action: FormAction): FormState {
       delete nextErrors[action.id];
       return {
         ...state,
-        experienceEntries: state.experienceEntries.filter((entry) => entry.id !== action.id),
+        experienceEntries: state.experienceEntries.filter(
+          (entry) => entry.id !== action.id,
+        ),
         experienceErrors: nextErrors,
       };
     }
@@ -606,6 +672,7 @@ export function ApplyForm({
   legalConfigured = false,
   consentCheckboxText = null,
   legalPages = null,
+  legalBasePath = "/legal",
 }: ApplyFormProps) {
   const isAshby = variant === "ashby";
   const input = isAshby ? inputClassAshby : inputClass;
@@ -627,9 +694,13 @@ export function ApplyForm({
   } = form;
   const [showLinks, setShowLinks] = useState(false);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(null);
+  const [uploadedResume, setUploadedResume] = useState<UploadedResume | null>(
+    null,
+  );
   const [photoFile, setPhotoFile] = useState<File | null>(null);
-  const [uploadedPhoto, setUploadedPhoto] = useState<UploadedImage | null>(null);
+  const [uploadedPhoto, setUploadedPhoto] = useState<UploadedImage | null>(
+    null,
+  );
   const [detected, setDetected] = useState<DetectedSummary | null>(null);
   const [resumeError, setResumeError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
@@ -645,17 +716,29 @@ export function ApplyForm({
 
   const showConsentCheckbox = legalConfigured;
   const privacyPolicyUrl = legalPages?.privacyPolicy
-    ? `/legal/privacy-policy`
+    ? `${legalBasePath}/privacy-policy`
     : null;
-  const consentText = consentCheckboxText || "I agree to the privacy policy and consent to the processing of my personal data.";
+  const consentText =
+    consentCheckboxText ||
+    "I agree to the privacy policy and consent to the processing of my personal data.";
   const showPhone = isFieldEnabled(applicationConfig.sections.personal.phone);
-  const showAddress = isFieldEnabled(applicationConfig.sections.personal.address);
+  const showAddress = isFieldEnabled(
+    applicationConfig.sections.personal.address,
+  );
   const showPhoto = isFieldEnabled(applicationConfig.sections.personal.photo);
-  const showHeadline = isFieldEnabled(applicationConfig.sections.personal.headline);
+  const showHeadline = isFieldEnabled(
+    applicationConfig.sections.personal.headline,
+  );
   const showResume = isFieldEnabled(applicationConfig.sections.profile.resume);
-  const showEducation = isFieldEnabled(applicationConfig.sections.profile.education);
-  const showExperience = isFieldEnabled(applicationConfig.sections.profile.experience);
-  const showCoverLetter = isFieldEnabled(applicationConfig.sections.details.coverLetter);
+  const showEducation = isFieldEnabled(
+    applicationConfig.sections.profile.education,
+  );
+  const showExperience = isFieldEnabled(
+    applicationConfig.sections.profile.experience,
+  );
+  const showCoverLetter = isFieldEnabled(
+    applicationConfig.sections.details.coverLetter,
+  );
 
   function focusTargetForField(field: string | undefined) {
     if (!field) {
@@ -727,7 +810,8 @@ export function ApplyForm({
   }
 
   function validateClientFields() {
-    const nextErrors: Partial<Record<keyof ApplicationFormValues, string[]>> = {};
+    const nextErrors: Partial<Record<keyof ApplicationFormValues, string[]>> =
+      {};
     const nextQuestionErrors: Record<string, string[]> = {};
     const nextEducationErrors: EntryFieldErrors = {};
     const nextExperienceErrors: EntryFieldErrors = {};
@@ -765,7 +849,9 @@ export function ApplyForm({
     }
 
     for (const entry of educationEntries) {
-      const entryErrors: Partial<Record<Extract<keyof EducationEntry, string>, string[]>> = {};
+      const entryErrors: Partial<
+        Record<Extract<keyof EducationEntry, string>, string[]>
+      > = {};
       if (!entry.school?.trim()) {
         entryErrors.school = ["School is required."];
       }
@@ -775,7 +861,9 @@ export function ApplyForm({
     }
 
     for (const entry of experienceEntries) {
-      const entryErrors: Partial<Record<Extract<keyof ExperienceEntry, string>, string[]>> = {};
+      const entryErrors: Partial<
+        Record<Extract<keyof ExperienceEntry, string>, string[]>
+      > = {};
       if (!entry.company?.trim()) {
         entryErrors.company = ["Company is required."];
       }
@@ -826,7 +914,12 @@ export function ApplyForm({
     const firstEducationError = Object.keys(nextEducationErrors)[0];
     const firstExperienceError = Object.keys(nextExperienceErrors)[0];
 
-    if (firstError || firstQuestionError || firstEducationError || firstExperienceError) {
+    if (
+      firstError ||
+      firstQuestionError ||
+      firstEducationError ||
+      firstExperienceError
+    ) {
       focusField(
         focusTargetForField(firstError) ??
           firstQuestionError ??
@@ -974,7 +1067,9 @@ export function ApplyForm({
       }),
     });
 
-    const presignPayload = parseStoragePresignResponse(await presignResponse.json());
+    const presignPayload = parseStoragePresignResponse(
+      await presignResponse.json(),
+    );
 
     if (!presignResponse.ok || !presignPayload) {
       throw new Error("Unable to prepare resume upload.");
@@ -1002,17 +1097,22 @@ export function ApplyForm({
     const workspaceParam = workspaceSlug
       ? `?workspace=${encodeURIComponent(workspaceSlug)}`
       : "";
-    const presignResponse = await fetch(`/api/public/v1/image/presign${workspaceParam}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: file.name,
-        contentType: file.type,
-        contentLength: file.size,
-      }),
-    });
+    const presignResponse = await fetch(
+      `/api/public/v1/image/presign${workspaceParam}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          contentLength: file.size,
+        }),
+      },
+    );
 
-    const presignPayload = parseStoragePresignResponse(await presignResponse.json());
+    const presignPayload = parseStoragePresignResponse(
+      await presignResponse.json(),
+    );
 
     if (!presignResponse.ok || !presignPayload) {
       throw new Error("Unable to prepare photo upload.");
@@ -1098,7 +1198,9 @@ export function ApplyForm({
     }
 
     if (showConsentCheckbox && !consentGiven) {
-      setConsentError("You must agree to the privacy policy to submit your application.");
+      setConsentError(
+        "You must agree to the privacy policy to submit your application.",
+      );
       return;
     }
 
@@ -1284,11 +1386,13 @@ export function ApplyForm({
   const entryCardClass = isAshby
     ? "space-y-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/50"
     : "space-y-4 rounded-lg border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40";
-  const subLabelClass = "text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400";
+  const subLabelClass =
+    "text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400";
   const secondaryButtonClass = isAshby
     ? "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
     : "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50";
-  const removeButtonClass = "inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition hover:text-zinc-900 dark:hover:text-zinc-100";
+  const removeButtonClass =
+    "inline-flex items-center gap-1.5 text-xs font-medium text-zinc-500 transition hover:text-zinc-900 dark:hover:text-zinc-100";
   const educationFieldErrors = mergeErrors(
     fieldErrorsFor(state, "educationEntries"),
     clientFieldErrors.educationEntries,
@@ -1320,7 +1424,9 @@ export function ApplyForm({
             Remove
           </button>
         </div>
-        <FieldError errors={mergeErrors(entryErrors._entry, clientErrors._entry)} />
+        <FieldError
+          errors={mergeErrors(entryErrors._entry, clientErrors._entry)}
+        />
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
             <FieldLabel ashby={isAshby} required>
@@ -1331,87 +1437,135 @@ export function ApplyForm({
               name={`education-school-${entry.id}`}
               type="text"
               value={entry.school}
-              onChange={(event) => updateEducationEntry(entry.id, "school", event.target.value)}
+              onChange={(event) =>
+                updateEducationEntry(entry.id, "school", event.target.value)
+              }
               placeholder="University of..."
               className={`${input} mt-1.5`}
             />
-            <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "school"), entryErrorFor(clientEducationErrors, entry.id, "school"))} />
+            <FieldError
+              errors={mergeErrors(
+                entryErrorFor(state.educationErrors ?? {}, entry.id, "school"),
+                entryErrorFor(clientEducationErrors, entry.id, "school"),
+              )}
+            />
           </label>
           <label className="block">
-            <FieldLabel ashby={isAshby}>
-              Degree
-            </FieldLabel>
+            <FieldLabel ashby={isAshby}>Degree</FieldLabel>
             <input
               id={`education-degree-${entry.id}`}
               name={`education-degree-${entry.id}`}
               type="text"
               value={entry.degree ?? ""}
-              onChange={(event) => updateEducationEntry(entry.id, "degree", event.target.value)}
+              onChange={(event) =>
+                updateEducationEntry(entry.id, "degree", event.target.value)
+              }
               placeholder="Bachelor's degree"
               className={`${input} mt-1.5`}
             />
-            <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "degree"), entryErrorFor(clientEducationErrors, entry.id, "degree"))} />
+            <FieldError
+              errors={mergeErrors(
+                entryErrorFor(state.educationErrors ?? {}, entry.id, "degree"),
+                entryErrorFor(clientEducationErrors, entry.id, "degree"),
+              )}
+            />
           </label>
           <label className="block">
-            <FieldLabel ashby={isAshby}>
-              Field of study
-            </FieldLabel>
+            <FieldLabel ashby={isAshby}>Field of study</FieldLabel>
             <input
               id={`education-field-${entry.id}`}
               name={`education-field-${entry.id}`}
               type="text"
               value={entry.field ?? ""}
-              onChange={(event) => updateEducationEntry(entry.id, "field", event.target.value)}
+              onChange={(event) =>
+                updateEducationEntry(entry.id, "field", event.target.value)
+              }
               placeholder="Computer science"
               className={`${input} mt-1.5`}
             />
-            <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "field"), entryErrorFor(clientEducationErrors, entry.id, "field"))} />
+            <FieldError
+              errors={mergeErrors(
+                entryErrorFor(state.educationErrors ?? {}, entry.id, "field"),
+                entryErrorFor(clientEducationErrors, entry.id, "field"),
+              )}
+            />
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <FieldLabel ashby={isAshby}>
-                Start date
-              </FieldLabel>
+              <FieldLabel ashby={isAshby}>Start date</FieldLabel>
               <input
                 id={`education-startDate-${entry.id}`}
                 name={`education-startDate-${entry.id}`}
                 type="month"
                 value={entry.startDate ?? ""}
-                onChange={(event) => updateEducationEntry(entry.id, "startDate", event.target.value)}
+                onChange={(event) =>
+                  updateEducationEntry(
+                    entry.id,
+                    "startDate",
+                    event.target.value,
+                  )
+                }
                 className={`${input} mt-1.5`}
               />
-              <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "startDate"), entryErrorFor(clientEducationErrors, entry.id, "startDate"))} />
+              <FieldError
+                errors={mergeErrors(
+                  entryErrorFor(
+                    state.educationErrors ?? {},
+                    entry.id,
+                    "startDate",
+                  ),
+                  entryErrorFor(clientEducationErrors, entry.id, "startDate"),
+                )}
+              />
             </label>
             <label className="block">
-              <FieldLabel ashby={isAshby}>
-                End date
-              </FieldLabel>
+              <FieldLabel ashby={isAshby}>End date</FieldLabel>
               <input
                 id={`education-endDate-${entry.id}`}
                 name={`education-endDate-${entry.id}`}
                 type="month"
                 value={entry.endDate ?? ""}
-                onChange={(event) => updateEducationEntry(entry.id, "endDate", event.target.value)}
+                onChange={(event) =>
+                  updateEducationEntry(entry.id, "endDate", event.target.value)
+                }
                 className={`${input} mt-1.5`}
               />
-              <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "endDate"), entryErrorFor(clientEducationErrors, entry.id, "endDate"))} />
+              <FieldError
+                errors={mergeErrors(
+                  entryErrorFor(
+                    state.educationErrors ?? {},
+                    entry.id,
+                    "endDate",
+                  ),
+                  entryErrorFor(clientEducationErrors, entry.id, "endDate"),
+                )}
+              />
             </label>
           </div>
         </div>
         <label className="block">
-          <FieldLabel ashby={isAshby}>
-            Description
-          </FieldLabel>
+          <FieldLabel ashby={isAshby}>Description</FieldLabel>
           <textarea
             id={`education-description-${entry.id}`}
             name={`education-description-${entry.id}`}
             rows={3}
             value={entry.description ?? ""}
-            onChange={(event) => updateEducationEntry(entry.id, "description", event.target.value)}
+            onChange={(event) =>
+              updateEducationEntry(entry.id, "description", event.target.value)
+            }
             placeholder="Achievements, honors, thesis, or relevant notes."
             className={`${textarea} mt-1.5`}
           />
-          <FieldError errors={mergeErrors(entryErrorFor(state.educationErrors ?? {}, entry.id, "description"), entryErrorFor(clientEducationErrors, entry.id, "description"))} />
+          <FieldError
+            errors={mergeErrors(
+              entryErrorFor(
+                state.educationErrors ?? {},
+                entry.id,
+                "description",
+              ),
+              entryErrorFor(clientEducationErrors, entry.id, "description"),
+            )}
+          />
         </label>
       </div>
     );
@@ -1439,7 +1593,9 @@ export function ApplyForm({
             Remove
           </button>
         </div>
-        <FieldError errors={mergeErrors(entryErrors._entry, clientErrors._entry)} />
+        <FieldError
+          errors={mergeErrors(entryErrors._entry, clientErrors._entry)}
+        />
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
             <FieldLabel ashby={isAshby} required>
@@ -1450,11 +1606,22 @@ export function ApplyForm({
               name={`experience-company-${entry.id}`}
               type="text"
               value={entry.company}
-              onChange={(event) => updateExperienceEntry(entry.id, "company", event.target.value)}
+              onChange={(event) =>
+                updateExperienceEntry(entry.id, "company", event.target.value)
+              }
               placeholder="Company name"
               className={`${input} mt-1.5`}
             />
-            <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "company"), entryErrorFor(clientExperienceErrors, entry.id, "company"))} />
+            <FieldError
+              errors={mergeErrors(
+                entryErrorFor(
+                  state.experienceErrors ?? {},
+                  entry.id,
+                  "company",
+                ),
+                entryErrorFor(clientExperienceErrors, entry.id, "company"),
+              )}
+            />
           </label>
           <label className="block">
             <FieldLabel ashby={isAshby} required>
@@ -1465,56 +1632,94 @@ export function ApplyForm({
               name={`experience-title-${entry.id}`}
               type="text"
               value={entry.title}
-              onChange={(event) => updateExperienceEntry(entry.id, "title", event.target.value)}
+              onChange={(event) =>
+                updateExperienceEntry(entry.id, "title", event.target.value)
+              }
               placeholder="Senior software engineer"
               className={`${input} mt-1.5`}
             />
-            <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "title"), entryErrorFor(clientExperienceErrors, entry.id, "title"))} />
+            <FieldError
+              errors={mergeErrors(
+                entryErrorFor(state.experienceErrors ?? {}, entry.id, "title"),
+                entryErrorFor(clientExperienceErrors, entry.id, "title"),
+              )}
+            />
           </label>
           <label className="block">
-            <FieldLabel ashby={isAshby}>
-              Location
-            </FieldLabel>
+            <FieldLabel ashby={isAshby}>Location</FieldLabel>
             <input
               id={`experience-location-${entry.id}`}
               name={`experience-location-${entry.id}`}
               type="text"
               value={entry.location ?? ""}
-              onChange={(event) => updateExperienceEntry(entry.id, "location", event.target.value)}
+              onChange={(event) =>
+                updateExperienceEntry(entry.id, "location", event.target.value)
+              }
               placeholder="Remote, Santiago, Chile"
               className={`${input} mt-1.5`}
             />
-            <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "location"), entryErrorFor(clientExperienceErrors, entry.id, "location"))} />
+            <FieldError
+              errors={mergeErrors(
+                entryErrorFor(
+                  state.experienceErrors ?? {},
+                  entry.id,
+                  "location",
+                ),
+                entryErrorFor(clientExperienceErrors, entry.id, "location"),
+              )}
+            />
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <FieldLabel ashby={isAshby}>
-                Start date
-              </FieldLabel>
+              <FieldLabel ashby={isAshby}>Start date</FieldLabel>
               <input
                 id={`experience-startDate-${entry.id}`}
                 name={`experience-startDate-${entry.id}`}
                 type="month"
                 value={entry.startDate ?? ""}
-                onChange={(event) => updateExperienceEntry(entry.id, "startDate", event.target.value)}
+                onChange={(event) =>
+                  updateExperienceEntry(
+                    entry.id,
+                    "startDate",
+                    event.target.value,
+                  )
+                }
                 className={`${input} mt-1.5`}
               />
-              <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "startDate"), entryErrorFor(clientExperienceErrors, entry.id, "startDate"))} />
+              <FieldError
+                errors={mergeErrors(
+                  entryErrorFor(
+                    state.experienceErrors ?? {},
+                    entry.id,
+                    "startDate",
+                  ),
+                  entryErrorFor(clientExperienceErrors, entry.id, "startDate"),
+                )}
+              />
             </label>
             <label className="block">
-              <FieldLabel ashby={isAshby}>
-                End date
-              </FieldLabel>
+              <FieldLabel ashby={isAshby}>End date</FieldLabel>
               <input
                 id={`experience-endDate-${entry.id}`}
                 name={`experience-endDate-${entry.id}`}
                 type="month"
                 value={entry.endDate ?? ""}
-                onChange={(event) => updateExperienceEntry(entry.id, "endDate", event.target.value)}
+                onChange={(event) =>
+                  updateExperienceEntry(entry.id, "endDate", event.target.value)
+                }
                 disabled={Boolean(entry.current)}
                 className={`${input} mt-1.5`}
               />
-              <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "endDate"), entryErrorFor(clientExperienceErrors, entry.id, "endDate"))} />
+              <FieldError
+                errors={mergeErrors(
+                  entryErrorFor(
+                    state.experienceErrors ?? {},
+                    entry.id,
+                    "endDate",
+                  ),
+                  entryErrorFor(clientExperienceErrors, entry.id, "endDate"),
+                )}
+              />
             </label>
           </div>
         </div>
@@ -1524,25 +1729,36 @@ export function ApplyForm({
             name={`experience-current-${entry.id}`}
             type="checkbox"
             checked={Boolean(entry.current)}
-            onChange={(event) => updateExperienceEntry(entry.id, "current", event.target.checked)}
+            onChange={(event) =>
+              updateExperienceEntry(entry.id, "current", event.target.checked)
+            }
             className="size-4 rounded border-zinc-300 text-[var(--board-primary)] focus:ring-[var(--board-primary)]"
           />
           I currently work here
         </label>
         <label className="block">
-          <FieldLabel ashby={isAshby}>
-            Description
-          </FieldLabel>
+          <FieldLabel ashby={isAshby}>Description</FieldLabel>
           <textarea
             id={`experience-description-${entry.id}`}
             name={`experience-description-${entry.id}`}
             rows={4}
             value={entry.description ?? ""}
-            onChange={(event) => updateExperienceEntry(entry.id, "description", event.target.value)}
+            onChange={(event) =>
+              updateExperienceEntry(entry.id, "description", event.target.value)
+            }
             placeholder="Scope, achievements, technologies, or impact."
             className={`${textarea} mt-1.5`}
           />
-          <FieldError errors={mergeErrors(entryErrorFor(state.experienceErrors ?? {}, entry.id, "description"), entryErrorFor(clientExperienceErrors, entry.id, "description"))} />
+          <FieldError
+            errors={mergeErrors(
+              entryErrorFor(
+                state.experienceErrors ?? {},
+                entry.id,
+                "description",
+              ),
+              entryErrorFor(clientExperienceErrors, entry.id, "description"),
+            )}
+          />
         </label>
       </div>
     );
@@ -1575,8 +1791,16 @@ export function ApplyForm({
       />
       <input type="hidden" name="photoUrl" value={fields.photoUrl} />
       {/* Hidden fields for resume-parsed data */}
-      <input type="hidden" name="skills" value={detected?.skills ? JSON.stringify(detected.skills) : "[]"} />
-      <input type="hidden" name="experienceYears" value={detected?.experienceYears ?? ""} />
+      <input
+        type="hidden"
+        name="skills"
+        value={detected?.skills ? JSON.stringify(detected.skills) : "[]"}
+      />
+      <input
+        type="hidden"
+        name="experienceYears"
+        value={detected?.experienceYears ?? ""}
+      />
 
       {state.status === "error" && state.message ? (
         <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
@@ -1589,86 +1813,92 @@ export function ApplyForm({
         <>
           {/* Autofill from resume */}
           {showResume ? (
-          <div className={cn(cardClass, reveal)} style={{ animationDelay: "0ms" }}>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-3">
-                <span
-                  className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-lg"
-                  style={{
-                    backgroundColor: "color-mix(in srgb, var(--board-primary) 12%, transparent)",
-                    color: "var(--board-primary)",
-                  }}
-                  aria-hidden
-                >
-                  <Upload className="size-[18px]" strokeWidth={1.8} />
-                </span>
-                <div>
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                    Autofill from resume
-                  </p>
-                  <p className="mt-1 max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                    Upload your resume to autofill key application fields.
-                  </p>
+            <div
+              className={cn(cardClass, reveal)}
+              style={{ animationDelay: "0ms" }}
+            >
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <span
+                    className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-lg"
+                    style={{
+                      backgroundColor:
+                        "color-mix(in srgb, var(--board-primary) 12%, transparent)",
+                      color: "var(--board-primary)",
+                    }}
+                    aria-hidden
+                  >
+                    <Upload className="size-[18px]" strokeWidth={1.8} />
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                      Autofill from resume
+                    </p>
+                    <p className="mt-1 max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                      Upload your resume to autofill key application fields.
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <label
-                htmlFor="resumeFile"
-                className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]"
-                style={{
-                  borderColor: "color-mix(in srgb, var(--board-primary) 40%, transparent)",
-                  color: "var(--board-primary)",
-                }}
-              >
-                {resumeFile ? "Replace file" : "Upload file"}
-              </label>
-            </div>
-
-            {resumeFile ? (
-              <p className="mt-4 flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                <span
-                  className="inline-flex size-5 items-center justify-center rounded-full text-white"
-                  style={{ backgroundColor: "var(--board-primary)" }}
-                  aria-hidden
-                >
-                  <Check className="size-3" strokeWidth={3} />
-                </span>
-                {resumeFile.name} ({formatFileSize(resumeFile.size)})
-              </p>
-            ) : (
-              <label
-                htmlFor="resumeFile"
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={cn(
-                  "group mt-4 flex cursor-pointer flex-col items-center gap-3 rounded-lg border border-dashed bg-zinc-50/50 px-6 py-7 text-center transition hover:bg-zinc-50 dark:bg-zinc-800/30 dark:hover:bg-zinc-800/50 sm:flex-row sm:justify-center sm:gap-4 sm:text-left",
-                  isDragging
-                    ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/5"
-                    : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500",
-                )}
-              >
-                <span
-                  className="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-4 text-sm font-semibold transition-transform duration-150 group-active:scale-[0.98] dark:bg-zinc-900"
+                <label
+                  htmlFor="resumeFile"
+                  className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]"
                   style={{
-                    borderColor: "color-mix(in srgb, var(--board-primary) 40%, transparent)",
+                    borderColor:
+                      "color-mix(in srgb, var(--board-primary) 40%, transparent)",
                     color: "var(--board-primary)",
                   }}
                 >
-                  <Paperclip className="size-4" strokeWidth={2} />
-                  {isDragging ? "Drop here" : "Upload File"}
-                </span>
-                <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                  {isDragging ? "Release to upload" : "or drag and drop here"}
-                </span>
-              </label>
-            )}
-            {!resumeFile ? (
-              <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500 sm:text-left">
-                .pdf, .doc, .docx · up to 10MB
-              </p>
-            ) : null}
-            {resumeStatus}
-          </div>
+                  {resumeFile ? "Replace file" : "Upload file"}
+                </label>
+              </div>
+
+              {resumeFile ? (
+                <p className="mt-4 flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  <span
+                    className="inline-flex size-5 items-center justify-center rounded-full text-white"
+                    style={{ backgroundColor: "var(--board-primary)" }}
+                    aria-hidden
+                  >
+                    <Check className="size-3" strokeWidth={3} />
+                  </span>
+                  {resumeFile.name} ({formatFileSize(resumeFile.size)})
+                </p>
+              ) : (
+                <label
+                  htmlFor="resumeFile"
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={cn(
+                    "group mt-4 flex cursor-pointer flex-col items-center gap-3 rounded-lg border border-dashed bg-zinc-50/50 px-6 py-7 text-center transition hover:bg-zinc-50 dark:bg-zinc-800/30 dark:hover:bg-zinc-800/50 sm:flex-row sm:justify-center sm:gap-4 sm:text-left",
+                    isDragging
+                      ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/5"
+                      : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500",
+                  )}
+                >
+                  <span
+                    className="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-4 text-sm font-semibold transition-transform duration-150 group-active:scale-[0.98] dark:bg-zinc-900"
+                    style={{
+                      borderColor:
+                        "color-mix(in srgb, var(--board-primary) 40%, transparent)",
+                      color: "var(--board-primary)",
+                    }}
+                  >
+                    <Paperclip className="size-4" strokeWidth={2} />
+                    {isDragging ? "Drop here" : "Upload File"}
+                  </span>
+                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                    {isDragging ? "Release to upload" : "or drag and drop here"}
+                  </span>
+                </label>
+              )}
+              {!resumeFile ? (
+                <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500 sm:text-left">
+                  .pdf, .doc, .docx · up to 10MB
+                </p>
+              ) : null}
+              {resumeStatus}
+            </div>
           ) : null}
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -1696,13 +1926,17 @@ export function ApplyForm({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="block">
-                <FieldLabel ashby required>First name</FieldLabel>
+                <FieldLabel ashby required>
+                  First name
+                </FieldLabel>
                 <input
                   name="firstName"
                   type="text"
                   autoComplete="given-name"
                   value={fields.firstName}
-                  onChange={(event) => updateField("firstName", event.target.value)}
+                  onChange={(event) =>
+                    updateField("firstName", event.target.value)
+                  }
                   placeholder="Type here..."
                   className={`${input} mt-1.5`}
                 />
@@ -1710,13 +1944,17 @@ export function ApplyForm({
               </label>
 
               <label className="block">
-                <FieldLabel ashby required>Last name</FieldLabel>
+                <FieldLabel ashby required>
+                  Last name
+                </FieldLabel>
                 <input
                   name="lastName"
                   type="text"
                   autoComplete="family-name"
                   value={fields.lastName}
-                  onChange={(event) => updateField("lastName", event.target.value)}
+                  onChange={(event) =>
+                    updateField("lastName", event.target.value)
+                  }
                   placeholder="Type here..."
                   className={`${input} mt-1.5`}
                 />
@@ -1725,7 +1963,9 @@ export function ApplyForm({
             </div>
 
             <label className="block">
-              <FieldLabel ashby required>Email</FieldLabel>
+              <FieldLabel ashby required>
+                Email
+              </FieldLabel>
               <input
                 name="email"
                 type="email"
@@ -1739,79 +1979,101 @@ export function ApplyForm({
             </label>
 
             {showPhoto ? (
-            <div className="block">
-              <FieldLabel ashby required={isFieldRequired(applicationConfig.sections.personal.photo)}>
-                Photo
-              </FieldLabel>
-              <label
-                htmlFor="photoFile"
-                className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
-              >
-                <span>{photoFile ? photoFile.name : "Upload a profile photo"}</span>
-                <span className="text-xs text-zinc-500">PNG, JPG, WEBP</span>
-              </label>
-              {photoStatus}
-            </div>
+              <div className="block">
+                <FieldLabel
+                  ashby
+                  required={isFieldRequired(
+                    applicationConfig.sections.personal.photo,
+                  )}
+                >
+                  Photo
+                </FieldLabel>
+                <label
+                  htmlFor="photoFile"
+                  className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
+                >
+                  <span>
+                    {photoFile ? photoFile.name : "Upload a profile photo"}
+                  </span>
+                  <span className="text-xs text-zinc-500">PNG, JPG, WEBP</span>
+                </label>
+                {photoStatus}
+              </div>
             ) : null}
 
             {showPhone ? (
-            <label className="block">
-              <FieldLabel ashby>Phone</FieldLabel>
-              <PhoneInput
-                name="phone"
-                value={fields.phone}
-                onChange={(v) => updateField("phone", v)}
-                className="mt-1.5"
-              />
-              <p className={hintClass}>
-                The hiring team may use this number to contact you about this job.
-              </p>
-              <FieldError errors={fieldErrorsFor(state, "phone")} />
-            </label>
+              <label className="block">
+                <FieldLabel ashby>Phone</FieldLabel>
+                <PhoneInput
+                  name="phone"
+                  value={fields.phone}
+                  onChange={(v) => updateField("phone", v)}
+                  className="mt-1.5"
+                />
+                <p className={hintClass}>
+                  The hiring team may use this number to contact you about this
+                  job.
+                </p>
+                <FieldError errors={fieldErrorsFor(state, "phone")} />
+              </label>
             ) : null}
 
             {showAddress ? (
-            <label className="block">
-              <FieldLabel ashby required={isFieldRequired(applicationConfig.sections.personal.address)}>
-                Address
-              </FieldLabel>
-              <div className="relative mt-1.5">
-                <InputIcon>
-                  <MapPin className="size-4" strokeWidth={1.8} />
-                </InputIcon>
-                <input
-                  name="address"
-                  type="text"
-                  autoComplete="street-address"
-                  value={fields.address}
-                  onChange={(event) => updateField("address", event.target.value)}
-                  placeholder="City, region, country"
-                  className={`${input} ${inputIconClass}`}
-                />
-              </div>
-              <p className={hintClass}>
-                Include your city, region, and country so the hiring team can
-                evaluate your application.
-              </p>
-              <FieldError errors={fieldErrorsFor(state, "address")} />
-            </label>
+              <label className="block">
+                <FieldLabel
+                  ashby
+                  required={isFieldRequired(
+                    applicationConfig.sections.personal.address,
+                  )}
+                >
+                  Address
+                </FieldLabel>
+                <div className="relative mt-1.5">
+                  <InputIcon>
+                    <MapPin className="size-4" strokeWidth={1.8} />
+                  </InputIcon>
+                  <input
+                    name="address"
+                    type="text"
+                    autoComplete="street-address"
+                    value={fields.address}
+                    onChange={(event) =>
+                      updateField("address", event.target.value)
+                    }
+                    placeholder="City, region, country"
+                    className={`${input} ${inputIconClass}`}
+                  />
+                </div>
+                <p className={hintClass}>
+                  Include your city, region, and country so the hiring team can
+                  evaluate your application.
+                </p>
+                <FieldError errors={fieldErrorsFor(state, "address")} />
+              </label>
             ) : null}
 
             {showHeadline ? (
-            <label className="block">
-              <FieldLabel ashby required={isFieldRequired(applicationConfig.sections.personal.headline)}>
-                Headline
-              </FieldLabel>
-              <input
-                name="headline"
-                type="text"
-                value={fields.headline}
-                onChange={(event) => updateField("headline", event.target.value)}
-                placeholder="Senior backend engineer"
-                className={`${input} mt-1.5`}
-              />
-              <FieldError errors={fieldErrorsFor(state, "headline")} />
-            </label>
+              <label className="block">
+                <FieldLabel
+                  ashby
+                  required={isFieldRequired(
+                    applicationConfig.sections.personal.headline,
+                  )}
+                >
+                  Headline
+                </FieldLabel>
+                <input
+                  name="headline"
+                  type="text"
+                  value={fields.headline}
+                  onChange={(event) =>
+                    updateField("headline", event.target.value)
+                  }
+                  placeholder="Senior backend engineer"
+                  className={`${input} mt-1.5`}
+                />
+                <FieldError errors={fieldErrorsFor(state, "headline")} />
+              </label>
             ) : null}
           </section>
 
@@ -1833,11 +2095,15 @@ export function ApplyForm({
                       <div>
                         <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                           Education
-                          {isFieldRequired(applicationConfig.sections.profile.education) ? (
+                          {isFieldRequired(
+                            applicationConfig.sections.profile.education,
+                          ) ? (
                             <span className={requiredMarkClass}>*</span>
                           ) : null}
                         </p>
-                        <p className={hintClass}>Add one or more education entries.</p>
+                        <p className={hintClass}>
+                          Add one or more education entries.
+                        </p>
                       </div>
                       <button
                         id="education-add-button"
@@ -1865,11 +2131,15 @@ export function ApplyForm({
                       <div>
                         <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
                           Experience
-                          {isFieldRequired(applicationConfig.sections.profile.experience) ? (
+                          {isFieldRequired(
+                            applicationConfig.sections.profile.experience,
+                          ) ? (
                             <span className={requiredMarkClass}>*</span>
                           ) : null}
                         </p>
-                        <p className={hintClass}>Add one or more work experience entries.</p>
+                        <p className={hintClass}>
+                          Add one or more work experience entries.
+                        </p>
                       </div>
                       <button
                         id="experience-add-button"
@@ -1906,7 +2176,8 @@ export function ApplyForm({
                 </h2>
               </div>
 
-              {!showLinks && !hasRequiredProfileLink(applicationConfig.profileLinks) ? (
+              {!showLinks &&
+              !hasRequiredProfileLink(applicationConfig.profileLinks) ? (
                 <button
                   type="button"
                   onClick={() => setShowLinks(true)}
@@ -1919,12 +2190,21 @@ export function ApplyForm({
                 <div className="space-y-4">
                   {applicationConfig.profileLinks.linkedin.enabled ? (
                     <label className="block">
-                      <FieldLabel ashby required={applicationConfig.profileLinks.linkedin.required}>
+                      <FieldLabel
+                        ashby
+                        required={
+                          applicationConfig.profileLinks.linkedin.required
+                        }
+                      >
                         LinkedIn
                       </FieldLabel>
-                      <p className={hintClass}>e.g.: linkedin.com/in/yourname</p>
+                      <p className={hintClass}>
+                        e.g.: linkedin.com/in/yourname
+                      </p>
                       <div className="relative mt-1.5">
-                        <InputIcon><LinkedInIcon className="size-4" /></InputIcon>
+                        <InputIcon>
+                          <LinkedInIcon className="size-4" />
+                        </InputIcon>
                         <input
                           name="linkedinUrl"
                           type="text"
@@ -1947,12 +2227,19 @@ export function ApplyForm({
                   ) : null}
                   {applicationConfig.profileLinks.github.enabled ? (
                     <label className="block">
-                      <FieldLabel ashby required={applicationConfig.profileLinks.github.required}>
+                      <FieldLabel
+                        ashby
+                        required={
+                          applicationConfig.profileLinks.github.required
+                        }
+                      >
                         GitHub
                       </FieldLabel>
                       <p className={hintClass}>e.g.: github.com/yourname</p>
                       <div className="relative mt-1.5">
-                        <InputIcon><GitHubIcon className="size-4" /></InputIcon>
+                        <InputIcon>
+                          <GitHubIcon className="size-4" />
+                        </InputIcon>
                         <input
                           name="githubUrl"
                           type="text"
@@ -1975,12 +2262,19 @@ export function ApplyForm({
                   ) : null}
                   {applicationConfig.profileLinks.website.enabled ? (
                     <label className="block">
-                      <FieldLabel ashby required={applicationConfig.profileLinks.website.required}>
+                      <FieldLabel
+                        ashby
+                        required={
+                          applicationConfig.profileLinks.website.required
+                        }
+                      >
                         Portfolio or personal website
                       </FieldLabel>
                       <p className={hintClass}>e.g.: yoursite.com</p>
                       <div className="relative mt-1.5">
-                        <InputIcon><Globe className="size-4" strokeWidth={1.8} /></InputIcon>
+                        <InputIcon>
+                          <Globe className="size-4" strokeWidth={1.8} />
+                        </InputIcon>
                         <input
                           name="websiteUrl"
                           type="text"
@@ -2020,7 +2314,12 @@ export function ApplyForm({
               <div className="space-y-5">
                 {showCoverLetter ? (
                   <label className="block">
-                    <FieldLabel ashby required={isFieldRequired(applicationConfig.sections.details.coverLetter)}>
+                    <FieldLabel
+                      ashby
+                      required={isFieldRequired(
+                        applicationConfig.sections.details.coverLetter,
+                      )}
+                    >
                       Cover letter
                     </FieldLabel>
                     <textarea
@@ -2046,7 +2345,9 @@ export function ApplyForm({
                         </FieldLabel>
                       </label>
                       {!yesNo && question.placeholder ? (
-                        <p className={hintClass}>e.g.: {question.placeholder}</p>
+                        <p className={hintClass}>
+                          e.g.: {question.placeholder}
+                        </p>
                       ) : null}
                       {question.type === "textarea" ? (
                         <textarea
@@ -2152,9 +2453,25 @@ export function ApplyForm({
             style={{ backgroundColor: "var(--board-primary)" }}
           >
             {isSubmittingForm || isPending ? (
-              <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none">
-                <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" opacity="0.2" />
-                <path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
+              <svg
+                className="size-4 animate-spin"
+                viewBox="0 0 24 24"
+                fill="none"
+              >
+                <circle
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  opacity="0.2"
+                />
+                <path
+                  d="M12 2a10 10 0 0 1 10 10"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                />
               </svg>
             ) : null}
             {isSubmittingForm
@@ -2171,84 +2488,86 @@ export function ApplyForm({
         /* ────────────────────────── Default variant ────────────────────────── */
         <>
           {showResume ? (
-          <div className={cardClass}>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-900 dark:text-zinc-100">
-                  Resume
-                </p>
-                <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                  Upload once. We&apos;ll attach it to your application and use it
-                  to pre-fill the form below.
-                </p>
+            <div className={cardClass}>
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-zinc-900 dark:text-zinc-100">
+                    Resume
+                  </p>
+                  <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                    Upload once. We&apos;ll attach it to your application and
+                    use it to pre-fill the form below.
+                  </p>
+                </div>
+                {resumeFile ? (
+                  <label
+                    htmlFor="resumeFile"
+                    className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-zinc-200 bg-white px-5 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500"
+                  >
+                    Replace file
+                  </label>
+                ) : (
+                  <label
+                    htmlFor="resumeFile"
+                    className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md px-5 text-sm font-medium text-white transition hover:brightness-110"
+                    style={{ backgroundColor: "var(--board-primary)" }}
+                  >
+                    Upload resume
+                  </label>
+                )}
               </div>
               {resumeFile ? (
-                <label
-                  htmlFor="resumeFile"
-                  className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md border border-zinc-200 bg-white px-5 text-sm font-medium text-zinc-700 transition hover:border-zinc-400 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:border-zinc-500"
-                >
-                  Replace file
-                </label>
+                <p className="mt-3 flex items-center gap-2 text-sm font-medium text-zinc-700">
+                  <span
+                    className="inline-flex size-5 items-center justify-center rounded-full text-white"
+                    style={{ backgroundColor: "var(--board-primary)" }}
+                    aria-hidden
+                  >
+                    <Check className="size-3" strokeWidth={3} />
+                  </span>
+                  Uploaded: {resumeFile.name} ({formatFileSize(resumeFile.size)}
+                  )
+                </p>
               ) : (
                 <label
                   htmlFor="resumeFile"
-                  className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md px-5 text-sm font-medium text-white transition hover:brightness-110"
-                  style={{ backgroundColor: "var(--board-primary)" }}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={cn(
+                    "group mt-4 flex cursor-pointer flex-col items-center rounded-md border border-dashed bg-zinc-50/50 px-6 py-8 text-center transition hover:bg-zinc-50 dark:bg-zinc-800/30 dark:hover:bg-zinc-800/50",
+                    isDragging
+                      ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/5"
+                      : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500",
+                  )}
                 >
-                  Upload resume
+                  <span
+                    className="mb-3 flex size-11 items-center justify-center rounded-full transition-transform duration-150 group-hover:-translate-y-0.5 motion-reduce:transform-none"
+                    style={{
+                      backgroundColor:
+                        "color-mix(in srgb, var(--board-primary) 14%, transparent)",
+                      color: "var(--board-primary)",
+                    }}
+                    aria-hidden
+                  >
+                    <UploadCloud className="size-5" strokeWidth={1.8} />
+                  </span>
+                  <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                    <span
+                      className="font-medium"
+                      style={{ color: "var(--board-primary)" }}
+                    >
+                      {isDragging ? "Drop here" : "Choose a file"}
+                    </span>{" "}
+                    {isDragging ? "Release to upload" : "or drag and drop here"}
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
+                    .pdf, .doc, .docx · up to 10MB
+                  </p>
                 </label>
               )}
+              {resumeStatus}
             </div>
-            {resumeFile ? (
-              <p className="mt-3 flex items-center gap-2 text-sm font-medium text-zinc-700">
-                <span
-                  className="inline-flex size-5 items-center justify-center rounded-full text-white"
-                  style={{ backgroundColor: "var(--board-primary)" }}
-                  aria-hidden
-                >
-                  <Check className="size-3" strokeWidth={3} />
-                </span>
-                Uploaded: {resumeFile.name} ({formatFileSize(resumeFile.size)})
-              </p>
-            ) : (
-              <label
-                htmlFor="resumeFile"
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                className={cn(
-                  "group mt-4 flex cursor-pointer flex-col items-center rounded-md border border-dashed bg-zinc-50/50 px-6 py-8 text-center transition hover:bg-zinc-50 dark:bg-zinc-800/30 dark:hover:bg-zinc-800/50",
-                  isDragging
-                    ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/5"
-                    : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500",
-                )}
-              >
-                <span
-                  className="mb-3 flex size-11 items-center justify-center rounded-full transition-transform duration-150 group-hover:-translate-y-0.5 motion-reduce:transform-none"
-                  style={{
-                    backgroundColor: "color-mix(in srgb, var(--board-primary) 14%, transparent)",
-                    color: "var(--board-primary)",
-                  }}
-                  aria-hidden
-                >
-                  <UploadCloud className="size-5" strokeWidth={1.8} />
-                </span>
-                <p className="text-sm text-zinc-700 dark:text-zinc-300">
-                  <span
-                    className="font-medium"
-                    style={{ color: "var(--board-primary)" }}
-                  >
-                    {isDragging ? "Drop here" : "Choose a file"}
-                  </span>{" "}
-                  {isDragging ? "Release to upload" : "or drag and drop here"}
-                </p>
-                <p className="mt-1 text-xs text-zinc-400 dark:text-zinc-500">
-                  .pdf, .doc, .docx · up to 10MB
-                </p>
-              </label>
-            )}
-            {resumeStatus}
-          </div>
           ) : null}
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -2278,7 +2597,9 @@ export function ApplyForm({
                   type="text"
                   autoComplete="given-name"
                   value={fields.firstName}
-                  onChange={(event) => updateField("firstName", event.target.value)}
+                  onChange={(event) =>
+                    updateField("firstName", event.target.value)
+                  }
                   className={`${input} mt-1.5`}
                 />
                 <FieldError errors={fieldErrorsFor(state, "firstName")} />
@@ -2291,7 +2612,9 @@ export function ApplyForm({
                   type="text"
                   autoComplete="family-name"
                   value={fields.lastName}
-                  onChange={(event) => updateField("lastName", event.target.value)}
+                  onChange={(event) =>
+                    updateField("lastName", event.target.value)
+                  }
                   className={`${input} mt-1.5`}
                 />
                 <FieldError errors={fieldErrorsFor(state, "lastName")} />
@@ -2312,79 +2635,99 @@ export function ApplyForm({
             </label>
 
             {showPhoto ? (
-            <div className="mt-4 block">
-              <FieldLabel required={isFieldRequired(applicationConfig.sections.personal.photo)}>
-                Photo
-              </FieldLabel>
-              <label
-                htmlFor="photoFile"
-                className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
-              >
-                <span>{photoFile ? photoFile.name : "Upload a profile photo"}</span>
-                <span className="text-xs text-zinc-500">PNG, JPG, WEBP</span>
-              </label>
-              {photoStatus}
-            </div>
+              <div className="mt-4 block">
+                <FieldLabel
+                  required={isFieldRequired(
+                    applicationConfig.sections.personal.photo,
+                  )}
+                >
+                  Photo
+                </FieldLabel>
+                <label
+                  htmlFor="photoFile"
+                  className="mt-1.5 flex cursor-pointer items-center justify-between rounded-lg border border-dashed border-zinc-300 px-4 py-3 text-sm text-zinc-700 transition hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
+                >
+                  <span>
+                    {photoFile ? photoFile.name : "Upload a profile photo"}
+                  </span>
+                  <span className="text-xs text-zinc-500">PNG, JPG, WEBP</span>
+                </label>
+                {photoStatus}
+              </div>
             ) : null}
 
             {showPhone ? (
-            <label className="mt-4 block">
-              <FieldLabel>Phone</FieldLabel>
-              <PhoneInput
-                name="phone"
-                value={fields.phone}
-                onChange={(v) => updateField("phone", v)}
-                className="mt-1.5"
-              />
-              <p className={hintClass}>
-                The hiring team may use this number to contact you about this job.
-              </p>
-              <FieldError errors={fieldErrorsFor(state, "phone")} />
-            </label>
+              <label className="mt-4 block">
+                <FieldLabel>Phone</FieldLabel>
+                <PhoneInput
+                  name="phone"
+                  value={fields.phone}
+                  onChange={(v) => updateField("phone", v)}
+                  className="mt-1.5"
+                />
+                <p className={hintClass}>
+                  The hiring team may use this number to contact you about this
+                  job.
+                </p>
+                <FieldError errors={fieldErrorsFor(state, "phone")} />
+              </label>
             ) : null}
 
             {showAddress ? (
-            <label className="mt-4 block">
-              <FieldLabel required={isFieldRequired(applicationConfig.sections.personal.address)}>
-                Address
-              </FieldLabel>
-              <input
-                name="address"
-                type="text"
-                autoComplete="street-address"
-                value={fields.address}
-                onChange={(event) => updateField("address", event.target.value)}
-                placeholder="City, region, country"
-                className={`${input} mt-1.5`}
-              />
-              <p className={hintClass}>
-                Include your city, region, and country so the hiring team can
-                evaluate your application.
-              </p>
-              <FieldError errors={fieldErrorsFor(state, "address")} />
-            </label>
+              <label className="mt-4 block">
+                <FieldLabel
+                  required={isFieldRequired(
+                    applicationConfig.sections.personal.address,
+                  )}
+                >
+                  Address
+                </FieldLabel>
+                <input
+                  name="address"
+                  type="text"
+                  autoComplete="street-address"
+                  value={fields.address}
+                  onChange={(event) =>
+                    updateField("address", event.target.value)
+                  }
+                  placeholder="City, region, country"
+                  className={`${input} mt-1.5`}
+                />
+                <p className={hintClass}>
+                  Include your city, region, and country so the hiring team can
+                  evaluate your application.
+                </p>
+                <FieldError errors={fieldErrorsFor(state, "address")} />
+              </label>
             ) : null}
 
             {showHeadline ? (
-            <label className="mt-4 block">
-              <FieldLabel required={isFieldRequired(applicationConfig.sections.personal.headline)}>
-                Headline
-              </FieldLabel>
-              <input
-                name="headline"
-                type="text"
-                value={fields.headline}
-                onChange={(event) => updateField("headline", event.target.value)}
-                placeholder="Senior backend engineer"
-                className={`${input} mt-1.5`}
-              />
-              <FieldError errors={fieldErrorsFor(state, "headline")} />
-            </label>
+              <label className="mt-4 block">
+                <FieldLabel
+                  required={isFieldRequired(
+                    applicationConfig.sections.personal.headline,
+                  )}
+                >
+                  Headline
+                </FieldLabel>
+                <input
+                  name="headline"
+                  type="text"
+                  value={fields.headline}
+                  onChange={(event) =>
+                    updateField("headline", event.target.value)
+                  }
+                  placeholder="Senior backend engineer"
+                  className={`${input} mt-1.5`}
+                />
+                <FieldError errors={fieldErrorsFor(state, "headline")} />
+              </label>
             ) : null}
 
             {hasAnyProfileLink(applicationConfig.profileLinks) ? (
               <div className="mt-5">
-                {!showLinks && !hasRequiredProfileLink(applicationConfig.profileLinks) ? (
+                {!showLinks &&
+                !hasRequiredProfileLink(applicationConfig.profileLinks) ? (
                   <button
                     type="button"
                     onClick={() => setShowLinks(true)}
@@ -2397,11 +2740,17 @@ export function ApplyForm({
                   <div className="grid gap-4 sm:grid-cols-3">
                     {applicationConfig.profileLinks.linkedin.enabled ? (
                       <label className="block">
-                        <FieldLabel required={applicationConfig.profileLinks.linkedin.required}>
+                        <FieldLabel
+                          required={
+                            applicationConfig.profileLinks.linkedin.required
+                          }
+                        >
                           LinkedIn
                         </FieldLabel>
                         <div className="relative mt-1.5">
-                          <InputIcon><LinkedInIcon className="size-4" /></InputIcon>
+                          <InputIcon>
+                            <LinkedInIcon className="size-4" />
+                          </InputIcon>
                           <input
                             name="linkedinUrl"
                             type="text"
@@ -2424,11 +2773,17 @@ export function ApplyForm({
                     ) : null}
                     {applicationConfig.profileLinks.github.enabled ? (
                       <label className="block">
-                        <FieldLabel required={applicationConfig.profileLinks.github.required}>
+                        <FieldLabel
+                          required={
+                            applicationConfig.profileLinks.github.required
+                          }
+                        >
                           GitHub
                         </FieldLabel>
                         <div className="relative mt-1.5">
-                          <InputIcon><GitHubIcon className="size-4" /></InputIcon>
+                          <InputIcon>
+                            <GitHubIcon className="size-4" />
+                          </InputIcon>
                           <input
                             name="githubUrl"
                             type="text"
@@ -2451,11 +2806,17 @@ export function ApplyForm({
                     ) : null}
                     {applicationConfig.profileLinks.website.enabled ? (
                       <label className="block">
-                        <FieldLabel required={applicationConfig.profileLinks.website.required}>
+                        <FieldLabel
+                          required={
+                            applicationConfig.profileLinks.website.required
+                          }
+                        >
                           Website
                         </FieldLabel>
                         <div className="relative mt-1.5">
-                          <InputIcon><Globe className="size-4" strokeWidth={1.8} /></InputIcon>
+                          <InputIcon>
+                            <Globe className="size-4" strokeWidth={1.8} />
+                          </InputIcon>
                           <input
                             name="websiteUrl"
                             type="text"
@@ -2496,11 +2857,15 @@ export function ApplyForm({
                       <div>
                         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                           Education
-                          {isFieldRequired(applicationConfig.sections.profile.education) ? (
+                          {isFieldRequired(
+                            applicationConfig.sections.profile.education,
+                          ) ? (
                             <span className={requiredMarkClass}>*</span>
                           ) : null}
                         </p>
-                        <p className={hintClass}>Add one or more education entries.</p>
+                        <p className={hintClass}>
+                          Add one or more education entries.
+                        </p>
                       </div>
                       <button
                         id="education-add-button"
@@ -2528,11 +2893,15 @@ export function ApplyForm({
                       <div>
                         <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                           Experience
-                          {isFieldRequired(applicationConfig.sections.profile.experience) ? (
+                          {isFieldRequired(
+                            applicationConfig.sections.profile.experience,
+                          ) ? (
                             <span className={requiredMarkClass}>*</span>
                           ) : null}
                         </p>
-                        <p className={hintClass}>Add one or more work experience entries.</p>
+                        <p className={hintClass}>
+                          Add one or more work experience entries.
+                        </p>
                       </div>
                       <button
                         id="experience-add-button"
@@ -2560,12 +2929,18 @@ export function ApplyForm({
           {showCoverLetter || applicationConfig.questions.length > 0 ? (
             <section className={cardClass}>
               <div className="border-b border-zinc-100 pb-4 dark:border-zinc-800">
-                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">Details</h2>
+                <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                  Details
+                </h2>
               </div>
               <div className="mt-5 space-y-5">
                 {showCoverLetter ? (
                   <label className="block">
-                    <FieldLabel required={isFieldRequired(applicationConfig.sections.details.coverLetter)}>
+                    <FieldLabel
+                      required={isFieldRequired(
+                        applicationConfig.sections.details.coverLetter,
+                      )}
+                    >
                       Cover letter
                     </FieldLabel>
                     <textarea

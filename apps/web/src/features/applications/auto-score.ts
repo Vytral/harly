@@ -20,6 +20,7 @@ import { extractResumeText } from "@/lib/resume/extract-text";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { maxResumeFileSize } from "@/lib/storage-validation";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
+import { logAiCandidateDecision } from "@/lib/ai/governance";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
 
 /**
@@ -135,7 +136,7 @@ export async function scheduleAutoScore(
       )
       .orderBy(applicationQuestions.order);
 
-    const result = await scoreCandidateWithAI(aiConfig, {
+    const scoreInput = {
       job: {
         title: row.jobTitle,
         description: row.jobDescription,
@@ -154,7 +155,8 @@ export async function scheduleAutoScore(
         skills: Array.isArray(row.skills) ? (row.skills as string[]) : [],
         experienceYears: row.experienceYears,
       },
-    });
+    };
+    const result = await scoreCandidateWithAI(aiConfig, scoreInput);
 
     const values = {
       workspaceId,
@@ -192,6 +194,27 @@ export async function scheduleAutoScore(
         recommendation: result.recommendation,
         jobTitle: row.jobTitle,
         auto: true,
+      },
+    });
+
+    await logAiCandidateDecision({
+      workspaceId,
+      candidateId: row.candidateId,
+      applicationId: row.applicationId,
+      jobId: row.jobId,
+      provider: aiConfig.provider,
+      modelId: aiConfig.modelId,
+      inputFingerprintSource: scoreInput,
+      outputFingerprintSource: result,
+      inputSummary: {
+        usedResume: resumeText !== null,
+        answerCount: answerRows.length,
+        skillsCount: Array.isArray(row.skills) ? row.skills.length : 0,
+      },
+      outputSummary: {
+        score: result.score,
+        recommendation: result.recommendation,
+        criteriaCount: result.criteria.length,
       },
     });
   } catch (error) {

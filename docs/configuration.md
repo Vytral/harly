@@ -19,7 +19,7 @@ HARLY_SETUP_SECRET=<independent-32-byte-secret>
 HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
 ```
 
-Do not reuse secrets. `create-harly init` generates each independently and
+Do not reuse secrets. `harly init` generates each independently and
 writes `.env` with mode `0600`.
 
 ## Storage

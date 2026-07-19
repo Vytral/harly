@@ -1316,13 +1316,13 @@ export async function permanentlyDeleteCandidateAction(
   candidateId: string,
 ): Promise<CandidateActionState> {
   await requirePermission("candidates:delete");
-  const result = await permanentlyDeleteCandidate(candidateId);
+  const { organization, user } = await getWorkspaceContext();
+  const result = await permanentlyDeleteCandidate(candidateId, user.email);
 
   if (!result.ok) {
     return { success: false, error: result.error };
   }
 
-  const { organization, user } = await getWorkspaceContext();
   await logAuditEvent({
     workspaceId: organization.id,
     actorId: user.id,

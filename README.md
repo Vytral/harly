@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  A self-hosted, open-source applicant tracking system for teams that want control over their hiring stack.
+  A self-hosted, open-source, GDPR-ready applicant tracking system for teams that want control over their hiring stack.
 </p>
 
 <p align="center">
@@ -13,11 +13,11 @@
 </p>
 
 <p align="center">
-  <a href="https://vercel.com/new/clone?repository-url=https://github.com/Vytral/harly"><strong>Deploy to Vercel</strong></a>
-  &nbsp;&middot;&nbsp;
-  <a href="https://railway.com/new"><strong>Deploy on Railway</strong></a>
-  &nbsp;&middot;&nbsp;
-  <a href="#docker--self-hosting"><strong>Self-host with Docker/Postgres</strong></a>
+  <a href="https://vercel.com/new/clone?repository-url=https://github.com/Vytral/harly"><img src="https://img.shields.io/badge/Deploy-Vercel-000000?logo=vercel&logoColor=white" alt="Deploy to Vercel" /></a>
+  <a href="docs/cloud-deployments.md#railway"><img src="https://img.shields.io/badge/Deploy-Railway-0B0D0E?logo=railway&logoColor=white" alt="Deploy on Railway" /></a>
+  <a href="docs/cloud-deployments.md#flyio"><img src="https://img.shields.io/badge/Deploy-Fly.io-7B3FE4?logo=flydotio&logoColor=white" alt="Deploy on Fly.io" /></a>
+  <a href="docs/cloud-deployments.md#digitalocean-app-platform"><img src="https://img.shields.io/badge/Deploy-DigitalOcean-0080FF?logo=digitalocean&logoColor=white" alt="Deploy on DigitalOcean" /></a>
+  <a href="#docker--self-hosting"><img src="https://img.shields.io/badge/Self--host-Docker-2496ED?logo=docker&logoColor=white" alt="Self-host with Docker" /></a>
 </p>
 
 > **Public beta.** Harly is usable for small, self-hosted teams, but it is still evolving. Review the [launch checklist](docs/launch-checklist.md), make a backup, and test upgrades in a non-production environment before relying on it for critical hiring.
@@ -29,7 +29,7 @@ Harly is a self-hostable ATS for startups, agencies, and technical teams. It bri
 - Public job boards, career pages, SEO metadata, and embeddable job widgets
 - Jobs, custom application questions, candidate profiles, notes, files, tags, and talent pools
 - Kanban and list pipeline views with search, filters, bulk actions, and tasks
-- Interviews, offers, notifications, reports, audit logs, consent, and GDPR-oriented controls
+- Interviews, offers, notifications, reports, audit logs, consent, and GDPR-ready privacy controls
 - Candidate portal with OAuth and profile management
 - REST API v1, API keys, OpenAPI output, and outbound webhooks
 - Google Calendar, Cal.com, Slack, Outlook, Zoom, email, storage, and AI integrations
@@ -41,6 +41,22 @@ Harly is a self-hostable ATS for startups, agencies, and technical teams. It bri
 - **Avoid per-seat ATS pricing.** Start with a small Docker deployment and grow when your hiring operation does.
 - **Adapt the workflow.** Harly is AGPL-3.0-only open source: inspect it, contribute to it, or modify it for your team.
 - **Keep AI optional.** AI features use a workspace-configured provider key encrypted at rest; core recruiting workflows do not require an AI provider.
+
+## GDPR-ready by design
+
+Harly gives European hiring teams the privacy controls they need to build
+responsible recruiting workflows:
+
+- Candidate data export, authenticated deletion requests, and a reviewed permanent-erasure workflow
+- Configurable retention, consent evidence, activity audit trails, and workspace-scoped legal notices
+- Human-reviewed AI assistance with minimised audit fingerprints; AI scores are guidance, never the sole basis for a hiring decision
+- Self-hosting with infrastructure and storage choices under your control
+
+Harly provides compliance tooling, not legal advice. Each organisation remains
+responsible for its lawful basis, notices, processor contracts, international
+transfers, production configuration, and legal obligations. See the
+[privacy and AI operations guide](docs/compliance-operations.md) for the
+operator checklist.
 
 ## Stack
 
@@ -88,7 +104,7 @@ pnpm test
 
 ## Deployment
 
-The deployment-specific steps and environment variable reference live in [`docs/self-hosting.md`](docs/self-hosting.md) and [`docs/configuration.md`](docs/configuration.md).
+The deployment-specific steps and environment variable reference live in [`docs/self-hosting.md`](docs/self-hosting.md), [`docs/cloud-deployments.md`](docs/cloud-deployments.md), and [`docs/configuration.md`](docs/configuration.md).
 
 ### Vercel
 

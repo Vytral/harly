@@ -224,17 +224,18 @@ jobs:
           key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
       - name: Build CLI and install its tarball in an empty directory
         run: |
-          pnpm --filter @harly/create test
-          cd tooling/create-harly
+          pnpm --filter @harly/cli test
+          cd tooling/harly
           npm pack
           mkdir -p /tmp/harly-cli-smoke
           cd /tmp/harly-cli-smoke
           npm init -y
-          npm install "$GITHUB_WORKSPACE"/tooling/create-harly/harly-create-*.tgz
-          npx create-harly --help
+          npm install "$GITHUB_WORKSPACE"/tooling/harly/harly-cli-*.tgz
+          npx harly --help
       - name: Validate Compose profiles
         run: |
-          export HARLY_IMAGE=ghcr.io/vytral/harly:0.1.0-beta.1 HARLY_VERSION=0.1.0-beta.1 HARLY_URL=http://localhost:3000
+          export HARLY_IMAGE="$(node -p \"const r=require('./release-manifest.json'); r.image + '@' + r.digest\")"
+          export HARLY_VERSION="$(node -p \"require('./release-manifest.json').version\")" HARLY_URL=http://localhost:3000
           export POSTGRES_USER=harly POSTGRES_PASSWORD=harly POSTGRES_DB=harly
           export BETTER_AUTH_SECRET=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa AI_ENCRYPTION_KEY=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           export STORAGE_UPLOAD_SECRET=cccccccccccccccccccccccccccccccc CRON_SECRET=dddddddddddddddddddddddddddddddd

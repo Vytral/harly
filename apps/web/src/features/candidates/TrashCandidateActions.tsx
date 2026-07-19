@@ -80,7 +80,8 @@ export function TrashCandidateActions({
             <DialogTitle>Delete permanently?</DialogTitle>
             <DialogDescription>
               “{candidateName}” and all their applications, notes, files, and
-              messages will be removed for good. This can&apos;t be undone.
+              messages will be removed for good. This can&apos;t be undone. Any
+              pending erasure request will be marked fulfilled.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
