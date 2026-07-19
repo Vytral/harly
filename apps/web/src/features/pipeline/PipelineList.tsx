@@ -114,6 +114,7 @@ export function PipelineList({
     if (result.success) {
       toast.success(`${label} ${selectedIds.length} candidate${selectedIds.length === 1 ? "" : "s"}.`);
       setSelected(new Set());
+      router.refresh();
     } else {
       toast.error(result.error ?? "Could not update candidates.");
     }
@@ -153,6 +154,7 @@ export function PipelineList({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search candidates…"
+            aria-label="Search candidates"
             className="h-9 pl-9"
           />
         </div>
@@ -244,10 +246,15 @@ export function PipelineList({
                 key={a.id}
                 role="button"
                 tabIndex={0}
+                aria-label={`Open ${fullName} profile`}
                 data-state={isSelected ? "selected" : undefined}
                 onClick={() => router.push(`/dashboard/candidates/${a.candidateId}`)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") router.push(`/dashboard/candidates/${a.candidateId}`);
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    router.push(`/dashboard/candidates/${a.candidateId}`);
+                  }
                 }}
                 className="group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)] items-center gap-x-3 gap-y-2 px-4 py-3.5 transition-colors hover:bg-muted/40 data-[state=selected]:bg-accent/40 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_auto]"
               >

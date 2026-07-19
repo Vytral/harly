@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 type CandidateCardProps = {
   application: PipelineApplication;
   selected: boolean;
+  disabled?: boolean;
   onSelect: (applicationId: string, selected: boolean) => void;
   onStatusChange: (
     applicationIds: string[],
@@ -109,6 +110,7 @@ function StageAgePill({ value }: { value: string }) {
 export function CandidateCard({
   application,
   selected,
+  disabled = false,
   onSelect,
   onStatusChange,
 }: CandidateCardProps) {
@@ -131,6 +133,9 @@ export function CandidateCard({
   return (
     <article
       ref={setNodeRef}
+      role="link"
+      tabIndex={0}
+      aria-label={`Open ${fullName} profile`}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       onPointerDownCapture={(event) => {
         pointerStartRef.current = { x: event.clientX, y: event.clientY };
@@ -144,6 +149,13 @@ export function CandidateCard({
             )
           : 0;
         if (!isDragging && movedDistance <= 6) {
+          router.push(`/dashboard/candidates/${application.candidateId}`);
+        }
+      }}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
           router.push(`/dashboard/candidates/${application.candidateId}`);
         }
       }}
@@ -168,6 +180,7 @@ export function CandidateCard({
         >
           <Checkbox
             checked={selected}
+            disabled={disabled}
             onCheckedChange={(checked) =>
               onSelect(application.id, checked === true)
             }
@@ -190,6 +203,7 @@ export function CandidateCard({
           type="button"
           {...attributes}
           {...listeners}
+          disabled={disabled}
           onClick={(event) => event.stopPropagation()}
           className="shrink-0 touch-none cursor-grab rounded-md p-0.5 text-muted-foreground/50 opacity-40 transition hover:bg-accent hover:text-foreground hover:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
           aria-label={`Drag ${fullName}`}
@@ -214,8 +228,9 @@ export function CandidateCard({
       </div>
 
       <div className="mt-2.5 flex justify-end gap-1 border-t pt-2 opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-focus-within:opacity-100">
-        <button
-          type="button"
+          <button
+            type="button"
+            disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
             onStatusChange([application.id], "hired");
@@ -225,8 +240,9 @@ export function CandidateCard({
           <CheckIcon className="size-3" />
           Hire
         </button>
-        <button
-          type="button"
+          <button
+            type="button"
+            disabled={disabled}
           onClick={(event) => {
             event.stopPropagation();
             onStatusChange([application.id], "rejected");

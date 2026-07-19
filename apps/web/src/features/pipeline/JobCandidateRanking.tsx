@@ -62,6 +62,15 @@ export function JobCandidateRanking({
   );
   const scored = activeApplications.filter((application) => application.aiScore != null).length;
   const unscored = activeApplications.length - scored;
+  const scoredRankById = useMemo(
+    () =>
+      new Map(
+        activeApplications
+          .filter((application) => application.aiScore != null)
+          .map((application, index) => [application.id, index + 1]),
+      ),
+    [activeApplications],
+  );
 
   async function rankUnscored() {
     if (unscored === 0) return;
@@ -83,7 +92,7 @@ export function JobCandidateRanking({
 
         totalSucceeded += result.succeeded;
         totalFailed += result.failed;
-        if (result.remaining === 0) break;
+        if (result.remaining === 0 || result.succeeded === 0) break;
       }
 
       if (totalSucceeded > 0 || totalFailed > 0) {
@@ -133,12 +142,12 @@ export function JobCandidateRanking({
           </div>
         ) : (
           <div className="divide-y divide-border/60 overflow-hidden rounded-lg border bg-card">
-            {activeApplications.map((application, index) => {
+            {activeApplications.map((application) => {
               const recommendation = application.aiRecommendation;
               const meta = recommendation
                 ? RECOMMENDATION_META[recommendation]
                 : null;
-              const hasEvaluation = application.aiScore != null && meta;
+              const hasEvaluation = application.aiScore != null;
 
               return (
                 <div
@@ -146,7 +155,7 @@ export function JobCandidateRanking({
                   className="flex items-center gap-3 px-3 py-3 transition-colors hover:bg-muted/40 sm:px-4"
                 >
                   <span className="w-5 shrink-0 text-center text-xs font-semibold tabular-nums text-muted-foreground">
-                    {hasEvaluation ? index + 1 : "–"}
+                    {hasEvaluation ? scoredRankById.get(application.id) : "–"}
                   </span>
                   <Link
                     href={`/dashboard/candidates/${application.candidateId}`}
@@ -177,11 +186,13 @@ export function JobCandidateRanking({
                   ) : null}
 
                   <div className="flex shrink-0 items-center gap-2">
-                    {hasEvaluation && meta ? (
+                    {hasEvaluation && application.aiScore != null ? (
                       <>
-                        <Badge className={cn("hidden text-[11px] sm:inline-flex", meta.className)}>
-                          {meta.label}
-                        </Badge>
+                        {meta ? (
+                          <Badge className={cn("hidden text-[11px] sm:inline-flex", meta.className)}>
+                            {meta.label}
+                          </Badge>
+                        ) : null}
                         <span
                           className={cn(
                             "text-base font-semibold tabular-nums",

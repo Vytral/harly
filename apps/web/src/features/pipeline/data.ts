@@ -1,6 +1,16 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, max, notInArray, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  isNull,
+  max,
+  notInArray,
+  sql,
+} from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -79,7 +89,13 @@ async function getDefaultPipelineJobId(workspaceId: string) {
         eq(applications.jobId, jobs.id),
       ),
     )
-    .where(and(eq(jobs.workspaceId, workspaceId), eq(jobs.status, "open")))
+    .where(
+      and(
+        eq(jobs.workspaceId, workspaceId),
+        eq(jobs.status, "open"),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .orderBy(desc(jobs.createdAt))
     .limit(1);
 
@@ -90,7 +106,9 @@ async function getDefaultPipelineJobId(workspaceId: string) {
   const [latestJob] = await db
     .select({ id: jobs.id })
     .from(jobs)
-    .where(eq(jobs.workspaceId, workspaceId))
+    .where(
+      and(eq(jobs.workspaceId, workspaceId), isNull(jobs.deletedAt)),
+    )
     .orderBy(desc(jobs.createdAt))
     .limit(1);
 
@@ -172,7 +190,9 @@ export async function getPipelineData(
       status: jobs.status,
     })
     .from(jobs)
-    .where(eq(jobs.workspaceId, workspace.id))
+    .where(
+      and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)),
+    )
     .orderBy(desc(jobs.createdAt));
 
   if (jobOptions.length === 0) {
@@ -239,7 +259,11 @@ export async function getPipelineData(
       )
       .innerJoin(
         jobs,
-        and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
+        and(
+          eq(jobs.workspaceId, workspace.id),
+          eq(jobs.id, applications.jobId),
+          isNull(jobs.deletedAt),
+        ),
       )
       .leftJoin(latestStageMove, eq(latestStageMove.applicationId, applications.id))
       .leftJoin(

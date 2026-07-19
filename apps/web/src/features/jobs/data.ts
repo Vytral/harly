@@ -41,7 +41,10 @@ const workspaceBrandingSelect = {
   logoStyle: workspaceSettings.logoStyle,
   legalConfigured: workspaceSettings.legalConfigured,
   consentCheckboxText: workspaceSettings.consentCheckboxText,
-  legalPages: sql<Record<string, string> | null>`(${workspaceSettings.legalPages}::jsonb)`,
+  legalPages: sql<Record<
+    string,
+    string
+  > | null>`(${workspaceSettings.legalPages}::jsonb)`,
 } as const;
 
 type WorkspaceBrandingRow = {
@@ -84,7 +87,11 @@ export function toBoardBranding(
   };
 }
 
-export { formatEmploymentType, formatWorkplaceType, formatJobStatus } from "@/lib/format";
+export {
+  formatEmploymentType,
+  formatWorkplaceType,
+  formatJobStatus,
+} from "@/lib/format";
 
 const defaultStages = [
   { name: "Applied", color: "#E0F2FE" },
@@ -196,9 +203,7 @@ export async function listWorkspaceDepartments() {
   const rows = await db
     .selectDistinct({ department: jobs.department })
     .from(jobs)
-    .where(
-      and(eq(jobs.workspaceId, workspace.id), isNotNull(jobs.department)),
-    )
+    .where(and(eq(jobs.workspaceId, workspace.id), isNotNull(jobs.department)))
     .orderBy(asc(jobs.department));
 
   return rows
@@ -213,7 +218,10 @@ export async function listTrashedJobs() {
     .select()
     .from(jobs)
     .where(
-      and(eq(jobs.workspaceId, workspace.id), sql`${jobs.deletedAt} is not null`),
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        sql`${jobs.deletedAt} is not null`,
+      ),
     )
     .orderBy(desc(jobs.deletedAt));
 }
@@ -233,7 +241,9 @@ export async function trashJob(jobId: string) {
     )
     .returning({ id: jobs.id, slug: jobs.slug });
 
-  return job ? ({ ok: true, slug: job.slug } as const) : ({ ok: false, error: "Job not found." } as const);
+  return job
+    ? ({ ok: true, slug: job.slug } as const)
+    : ({ ok: false, error: "Job not found." } as const);
 }
 
 /** Restore a job out of the trash. */
@@ -245,14 +255,16 @@ export async function restoreJob(jobId: string) {
     .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, workspace.id)))
     .returning({ id: jobs.id });
 
-  return job ? ({ ok: true } as const) : ({ ok: false, error: "Job not found." } as const);
+  return job
+    ? ({ ok: true } as const)
+    : ({ ok: false, error: "Job not found." } as const);
 }
 
 export async function listOpenJobs() {
   return db
     .select()
     .from(jobs)
-    .where(eq(jobs.status, "open"))
+    .where(and(eq(jobs.status, "open"), isNull(jobs.deletedAt)))
     .orderBy(desc(jobs.publishedAt), desc(jobs.createdAt));
 }
 
@@ -276,7 +288,13 @@ export async function listOpenJobsForWorkspaceSlug(workspaceSlug: string) {
   const workspaceJobs = await db
     .select()
     .from(jobs)
-    .where(and(eq(jobs.workspaceId, workspace.id), eq(jobs.status, "open")))
+    .where(
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.status, "open"),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .orderBy(desc(jobs.publishedAt), desc(jobs.createdAt));
 
   return { workspace, jobs: workspaceJobs };
@@ -303,7 +321,9 @@ export async function getDashboardJob(jobId: string) {
   const stages = await db
     .select()
     .from(jobStages)
-    .where(and(eq(jobStages.jobId, job.id), eq(jobStages.workspaceId, workspace.id)))
+    .where(
+      and(eq(jobStages.jobId, job.id), eq(jobStages.workspaceId, workspace.id)),
+    )
     .orderBy(asc(jobStages.order));
 
   return { job, stages, workspace };
@@ -335,7 +355,9 @@ export async function getPublicJobDetail(input: {
         eq(jobs.slug, input.jobSlug),
         eq(jobs.status, "open"),
         isNull(jobs.deletedAt),
-        input.workspaceSlug ? eq(organization.slug, input.workspaceSlug) : undefined,
+        input.workspaceSlug
+          ? eq(organization.slug, input.workspaceSlug)
+          : undefined,
       ),
     )
     .orderBy(desc(jobs.publishedAt), desc(jobs.createdAt))
@@ -384,7 +406,10 @@ export async function generateUniqueJobSlug(
 
 export async function createJob(values: JobFormValues) {
   const { organization: workspace, user } = await getWorkspaceContext();
-  const slug = await generateUniqueJobSlug(workspace.id, values.slug ?? values.title);
+  const slug = await generateUniqueJobSlug(
+    workspace.id,
+    values.slug ?? values.title,
+  );
 
   const [job] = await db.transaction(async (tx) => {
     const [createdJob] = await tx
@@ -530,7 +555,12 @@ export async function permanentlyDeleteJob(jobId: string) {
   const [applicationCount] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(applications)
-    .where(and(eq(applications.workspaceId, workspace.id), eq(applications.jobId, job.id)));
+    .where(
+      and(
+        eq(applications.workspaceId, workspace.id),
+        eq(applications.jobId, job.id),
+      ),
+    );
 
   if ((applicationCount?.count ?? 0) > 0) {
     return {
@@ -557,7 +587,13 @@ export async function updateJobStatus(jobId: string, status: JobStatus) {
       publishedAt: status === "open" ? now : null,
       updatedAt: now,
     })
-    .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, workspace.id)))
+    .where(
+      and(
+        eq(jobs.id, jobId),
+        eq(jobs.workspaceId, workspace.id),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .returning();
 
   return job ?? null;

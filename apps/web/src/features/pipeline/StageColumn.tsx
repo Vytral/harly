@@ -22,6 +22,7 @@ type StageColumnProps = {
   stage: PipelineStage;
   applications: PipelineApplication[];
   selectedIds: Set<string>;
+  disabled?: boolean;
   onSelect: (applicationId: string, selected: boolean) => void;
   onStatusChange: (
     applicationIds: string[],
@@ -34,6 +35,7 @@ export function StageColumn({
   stage,
   applications,
   selectedIds,
+  disabled = false,
   onSelect,
   onStatusChange,
   onToggleStageEmail,
@@ -67,6 +69,7 @@ export function StageColumn({
           </div>
           <button
             type="button"
+            disabled={disabled}
             onClick={() => onToggleStageEmail(stage.id, !emailOn)}
             title={
               emailOn
@@ -100,6 +103,7 @@ export function StageColumn({
               key={application.id}
               application={application}
               selected={selectedIds.has(application.id)}
+              disabled={disabled}
               onSelect={onSelect}
               onStatusChange={onStatusChange}
             />

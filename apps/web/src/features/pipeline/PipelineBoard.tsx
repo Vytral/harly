@@ -13,6 +13,7 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
+import { useRouter } from "next/navigation";
 
 import {
   bulkMoveApplications,
@@ -181,6 +182,7 @@ export function PipelineBoard({
   stages: initialStages,
   applications,
 }: PipelineBoardProps) {
+  const router = useRouter();
   const [stages, setStages] = useState(initialStages);
   const [columns, setColumns] = useState<Map<string, PipelineApplication[]>>(
     () => buildColumns(initialStages, applications),
@@ -192,6 +194,7 @@ export function PipelineBoard({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [hideEmptyColumns, setHideEmptyColumns] = useState(false);
+  const [mutationPending, setMutationPending] = useState(false);
   const [mobileStage, setMobileStage] = useState<string>(
     initialStages[0]?.id ?? "",
   );
@@ -264,6 +267,7 @@ export function PipelineBoard({
   }
 
   async function handleDragEnd(event: DragEndEvent) {
+    if (mutationPending) return;
     const applicationId = String(event.active.id);
     const overId = event.over ? String(event.over.id) : null;
 
@@ -307,18 +311,25 @@ export function PipelineBoard({
 
     setColumns(optimisticColumns);
     setError(null);
+    setMutationPending(true);
 
-    const result = await moveApplicationInPipeline({
-      applicationId,
-      fromStageId: current.stageId,
-      toStageId: target.stageId,
-      workspaceId: current.application.workspaceId,
-      orderedApplicationIds,
-    });
+    try {
+      const result = await moveApplicationInPipeline({
+        applicationId,
+        fromStageId: current.stageId,
+        toStageId: target.stageId,
+        workspaceId: current.application.workspaceId,
+        orderedApplicationIds,
+      });
 
-    if (!result.success) {
-      setColumns(previousColumns);
-      setError(result.error ?? "Unable to update pipeline.");
+      if (!result.success) {
+        setColumns(previousColumns);
+        setError(result.error ?? "Unable to update pipeline.");
+      } else {
+        router.refresh();
+      }
+    } finally {
+      setMutationPending(false);
     }
   }
 
@@ -326,6 +337,7 @@ export function PipelineBoard({
     applicationIds: string[],
     status: PipelineApplication["status"],
   ) {
+    if (mutationPending) return;
     const allApplications = Array.from(columns.values()).flat();
     const firstApplication = allApplications.find((application) =>
       applicationIds.includes(application.id),
@@ -351,30 +363,36 @@ export function PipelineBoard({
 
     setColumns(optimisticColumns);
     setError(null);
+    setMutationPending(true);
 
-    const result = await updateApplicationStatus({
-      applicationIds,
-      workspaceId: firstApplication.workspaceId,
-      status,
-    });
+    try {
+      const result = await updateApplicationStatus({
+        applicationIds,
+        workspaceId: firstApplication.workspaceId,
+        status,
+      });
 
-    if (!result.success) {
-      setColumns(previousColumns);
-      setError(result.error ?? "Unable to update application status.");
-      return;
-    }
-
-    setSelectedIds((current) => {
-      const next = new Set(current);
-      for (const applicationId of applicationIds) {
-        next.delete(applicationId);
+      if (!result.success) {
+        setColumns(previousColumns);
+        setError(result.error ?? "Unable to update application status.");
+        return;
       }
-      return next;
-    });
+
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const applicationId of applicationIds) {
+          next.delete(applicationId);
+        }
+        return next;
+      });
+      router.refresh();
+    } finally {
+      setMutationPending(false);
+    }
   }
 
   async function handleBulkMove(toStageId: string) {
-    if (selectedApplications.length === 0) {
+    if (mutationPending || selectedApplications.length === 0) {
       return;
     }
 
@@ -403,23 +421,30 @@ export function PipelineBoard({
 
     setColumns(optimisticColumns);
     setError(null);
+    setMutationPending(true);
 
-    const result = await bulkMoveApplications({
-      applicationIds: movedIds,
-      toStageId,
-      workspaceId,
-    });
+    try {
+      const result = await bulkMoveApplications({
+        applicationIds: movedIds,
+        toStageId,
+        workspaceId,
+      });
 
-    if (!result.success) {
-      setColumns(previousColumns);
-      setError(result.error ?? "Unable to move selected candidates.");
-      return;
+      if (!result.success) {
+        setColumns(previousColumns);
+        setError(result.error ?? "Unable to move selected candidates.");
+        return;
+      }
+
+      setSelectedIds(new Set());
+      router.refresh();
+    } finally {
+      setMutationPending(false);
     }
-
-    setSelectedIds(new Set());
   }
 
   async function handleToggleStageEmail(stageId: string, enabled: boolean) {
+    if (mutationPending) return;
     const previousStages = stages;
     const stage = stages.find((item) => item.id === stageId);
 
@@ -437,16 +462,21 @@ export function PipelineBoard({
           : item,
       ),
     );
+    setMutationPending(true);
 
-    const result = await updateStageEmailSettings({
-      workspaceId: applications[0]?.workspaceId ?? "",
-      stageId,
-      candidateUpdatesEnabled: enabled,
-    });
+    try {
+      const result = await updateStageEmailSettings({
+        workspaceId: applications[0]?.workspaceId ?? "",
+        stageId,
+        candidateUpdatesEnabled: enabled,
+      });
 
-    if (!result.success) {
-      setStages(previousStages);
-      setError(result.error ?? "Unable to update stage email settings.");
+      if (!result.success) {
+        setStages(previousStages);
+        setError(result.error ?? "Unable to update stage email settings.");
+      }
+    } finally {
+      setMutationPending(false);
     }
   }
 
@@ -457,14 +487,20 @@ export function PipelineBoard({
         <Input
           type="search"
           value={searchQuery}
-          onChange={(event) => setSearchQuery(event.target.value)}
+          onChange={(event) => {
+            setSearchQuery(event.target.value);
+            setSelectedIds(new Set());
+          }}
           placeholder="Search candidates…"
           className="w-full pl-9 sm:w-48"
         />
       </div>
       <Select
         value={statusFilter}
-        onValueChange={(value) => setStatusFilter(value as StatusFilter)}
+        onValueChange={(value) => {
+          setStatusFilter(value as StatusFilter);
+          setSelectedIds(new Set());
+        }}
       >
         <SelectTrigger className="w-full sm:w-36">
           <SelectValue />
@@ -495,7 +531,7 @@ export function PipelineBoard({
       <div className="flex flex-wrap gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm">
+          <Button variant="outline" size="sm" disabled={mutationPending}>
               Move to stage
               <CaretDownIcon className="size-4" />
             </Button>
@@ -513,6 +549,7 @@ export function PipelineBoard({
         </DropdownMenu>
         <Button
           size="sm"
+          disabled={mutationPending}
           onClick={() =>
             void handleStatusChange(
               selectedApplications.map((application) => application.id),
@@ -526,6 +563,7 @@ export function PipelineBoard({
         <Button
           size="sm"
           variant="destructive"
+          disabled={mutationPending}
           onClick={() =>
             void handleStatusChange(
               selectedApplications.map((application) => application.id),
@@ -553,7 +591,11 @@ export function PipelineBoard({
       {bulkBar}
 
       {error ? (
-        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive">
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm font-medium text-destructive"
+        >
           {error}
         </div>
       ) : null}
@@ -587,6 +629,7 @@ export function PipelineBoard({
               key={application.id}
               application={application}
               selected={selectedIds.has(application.id)}
+              disabled={mutationPending}
               onSelect={handleSelect}
               onStatusChange={handleStatusChange}
             />
@@ -616,6 +659,7 @@ export function PipelineBoard({
                 stage={stage}
                 applications={filteredColumns.get(stage.id) ?? []}
                 selectedIds={selectedIds}
+                disabled={mutationPending}
                 onSelect={handleSelect}
                 onStatusChange={handleStatusChange}
                 onToggleStageEmail={(stageId, enabled) => {
