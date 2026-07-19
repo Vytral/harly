@@ -1701,11 +1701,9 @@ export const poolEntries = pgTable(
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex("pool_entries_workspace_candidate_idx").on(
-      table.workspaceId,
-      table.candidateId,
-      table.removedAt,
-    ),
+    uniqueIndex("pool_entries_active_workspace_candidate_idx")
+      .on(table.workspaceId, table.candidateId)
+      .where(sql`${table.removedAt} is null`),
     index("pool_entries_workspace_idx").on(table.workspaceId),
     index("pool_entries_candidate_idx").on(table.candidateId),
     index("pool_entries_job_idx").on(table.jobId),

@@ -57,6 +57,7 @@ export type CandidateListItem = {
   avatarUrl: string | null;
   githubUrl: string | null;
   applicationCount: number;
+  inPool: boolean;
   latestApplication: {
     applicationId: string;
     jobId: string;
@@ -125,23 +126,6 @@ export type CandidatePrivacyRequestItem = {
   notes: string | null;
   createdAt: Date;
   completedAt: Date | null;
-};
-
-export type TalentPoolEntry = {
-  applicationId: string;
-  candidateId: string;
-  fullName: string;
-  email: string | null;
-  avatarUrl: string | null;
-  githubUrl: string | null;
-  headline: string | null;
-  currentStageName: string | null;
-  evaluation: {
-    recommendation: "strong_yes" | "yes" | "maybe" | "no";
-    summary: string;
-    score: number;
-    usedResume: boolean;
-  } | null;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -242,6 +226,7 @@ export async function listCandidates() {
         avatarUrl: row.avatarUrl,
         githubUrl: row.githubUrl,
         applicationCount: 0,
+        inPool: false,
         latestApplication: null,
         createdAt: row.candidateCreatedAt,
         updatedAt: row.candidateUpdatedAt,
@@ -288,6 +273,22 @@ export async function listCandidates() {
     tagsByCandidate.set(tag.candidateId, existing);
   }
 
+  const candidateIds = Array.from(candidateMap.keys());
+  const activePoolRows =
+    candidateIds.length > 0
+      ? await db
+          .select({ candidateId: poolEntries.candidateId })
+          .from(poolEntries)
+          .where(
+            and(
+              eq(poolEntries.workspaceId, workspace.id),
+              isNull(poolEntries.removedAt),
+              inArray(poolEntries.candidateId, candidateIds),
+            ),
+          )
+      : [];
+  const inPoolIds = new Set(activePoolRows.map((row) => row.candidateId));
+
   return Array.from(candidateMap.values())
     .sort((first, second) => second.createdAt.getTime() - first.createdAt.getTime())
     .map((candidate) => ({
@@ -302,6 +303,7 @@ export async function listCandidates() {
       githubUrl: candidate.githubUrl,
       updatedAt: candidate.updatedAt,
       applicationCount: candidate.applicationCount,
+      inPool: inPoolIds.has(candidate.id),
       latestApplication: candidate.latestApplication,
       tags: tagsByCandidate.get(candidate.id) ?? [],
     }));

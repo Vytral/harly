@@ -14,6 +14,10 @@ import {
 } from "@harly/db";
 
 import { createApplicationForApi } from "@/features/applications/service";
+import {
+  ACTIVE_POOL_ENTRY_CONFLICT_MESSAGE,
+  isActivePoolEntryUniqueViolation,
+} from "@/features/pool/errors";
 
 /** Session-free talent-pool service for the REST API. */
 
@@ -171,7 +175,7 @@ export async function addPoolEntryForApi(input: {
       ),
     )
     .limit(1);
-  if (active) throw ApiError.conflict("Candidate is already in the talent pool.");
+  if (active) throw ApiError.conflict(ACTIVE_POOL_ENTRY_CONFLICT_MESSAGE);
 
   // A removal is reversible: revive most recent historical entry instead of
   // creating unbounded duplicate history for the same candidate.
@@ -187,42 +191,49 @@ export async function addPoolEntryForApi(input: {
     .orderBy(desc(poolEntries.addedAt), desc(poolEntries.id))
     .limit(1);
 
-  const now = new Date();
-  if (previous?.removedAt) {
-    const [restored] = await db
-      .update(poolEntries)
-      .set({
+  try {
+    const now = new Date();
+    if (previous?.removedAt) {
+      const [restored] = await db
+        .update(poolEntries)
+        .set({
+          jobId: input.values.jobId ?? null,
+          reason: input.values.reason ?? null,
+          source: input.values.source ?? "sourced",
+          addedById: input.actorId,
+          addedAt: now,
+          removedAt: null,
+          updatedAt: now,
+        })
+        .where(
+          and(
+            eq(poolEntries.id, previous.id),
+            eq(poolEntries.workspaceId, input.workspaceId),
+          ),
+        )
+        .returning();
+      return restored;
+    }
+
+    const [entry] = await db
+      .insert(poolEntries)
+      .values({
+        workspaceId: input.workspaceId,
+        candidateId: input.values.candidateId,
         jobId: input.values.jobId ?? null,
         reason: input.values.reason ?? null,
         source: input.values.source ?? "sourced",
         addedById: input.actorId,
         addedAt: now,
-        removedAt: null,
-        updatedAt: now,
       })
-      .where(
-        and(
-          eq(poolEntries.id, previous.id),
-          eq(poolEntries.workspaceId, input.workspaceId),
-        ),
-      )
       .returning();
-    return restored;
+    return entry;
+  } catch (error) {
+    if (isActivePoolEntryUniqueViolation(error)) {
+      throw ApiError.conflict(ACTIVE_POOL_ENTRY_CONFLICT_MESSAGE);
+    }
+    throw error;
   }
-
-  const [entry] = await db
-    .insert(poolEntries)
-    .values({
-      workspaceId: input.workspaceId,
-      candidateId: input.values.candidateId,
-      jobId: input.values.jobId ?? null,
-      reason: input.values.reason ?? null,
-      source: input.values.source ?? "sourced",
-      addedById: input.actorId,
-      addedAt: now,
-    })
-    .returning();
-  return entry;
 }
 
 export async function removePoolEntryForApi(input: {

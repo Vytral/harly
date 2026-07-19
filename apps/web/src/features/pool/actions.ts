@@ -13,6 +13,10 @@ import {
   poolEntries,
 } from "@harly/db";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  ACTIVE_POOL_ENTRY_CONFLICT_MESSAGE,
+  isActivePoolEntryUniqueViolation,
+} from "@/features/pool/errors";
 
 export type PoolActionState = { success: boolean; error?: string };
 
@@ -48,19 +52,26 @@ export async function addToPoolAction(input: {
     .limit(1);
 
   if (existing) {
-    return { success: false, error: "Candidate is already in the pool." };
+    return { success: false, error: ACTIVE_POOL_ENTRY_CONFLICT_MESSAGE };
   }
 
-  await db.insert(poolEntries).values({
-    workspaceId: workspace.id,
-    candidateId: parsed.data.candidateId,
-    jobId: parsed.data.jobId ?? null,
-    reason: parsed.data.reason ?? null,
-    source: parsed.data.source,
-    addedById: user.id,
-  });
+  try {
+    await db.insert(poolEntries).values({
+      workspaceId: workspace.id,
+      candidateId: parsed.data.candidateId,
+      jobId: parsed.data.jobId ?? null,
+      reason: parsed.data.reason ?? null,
+      source: parsed.data.source,
+      addedById: user.id,
+    });
+  } catch (error) {
+    if (isActivePoolEntryUniqueViolation(error)) {
+      return { success: false, error: ACTIVE_POOL_ENTRY_CONFLICT_MESSAGE };
+    }
+    throw error;
+  }
 
-  revalidatePath("/dashboard/pool");
+  revalidatePath("/dashboard/talent-pool");
   revalidatePath("/dashboard/candidates");
   return { success: true };
 }
@@ -98,7 +109,7 @@ export async function removeFromPoolAction(input: {
     .set({ removedAt: new Date() })
     .where(eq(poolEntries.id, entry.id));
 
-  revalidatePath("/dashboard/pool");
+  revalidatePath("/dashboard/talent-pool");
   revalidatePath("/dashboard/candidates");
   return { success: true };
 }
@@ -141,7 +152,7 @@ export async function bulkRemoveFromPoolAction(input: {
     ),
   );
 
-  revalidatePath("/dashboard/pool");
+  revalidatePath("/dashboard/talent-pool");
   revalidatePath("/dashboard/candidates");
   return { success: true };
 }
@@ -283,7 +294,7 @@ export async function assignFromPoolToJobAction(input: {
     };
   }
 
-  revalidatePath("/dashboard/pool");
+  revalidatePath("/dashboard/talent-pool");
   revalidatePath("/dashboard/candidates");
   revalidatePath("/dashboard/pipeline");
   revalidatePath(`/dashboard/jobs/${parsed.data.jobId}`);

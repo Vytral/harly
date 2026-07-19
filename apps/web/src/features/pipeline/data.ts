@@ -41,6 +41,7 @@ export type PipelineApplication = {
   candidateFirstName: string;
   candidateLastName: string;
   candidateEmail: string;
+  candidateHeadline: string | null;
   candidateAvatarUrl: string | null;
   candidateAvatarFallbackSrcs: string[];
   source: string | null;
@@ -50,6 +51,8 @@ export type PipelineApplication = {
   lastStageMovedAt: string | null;
   aiScore: number | null;
   aiRecommendation: "strong_yes" | "yes" | "maybe" | "no" | null;
+  aiSummary: string | null;
+  aiUsedResume: boolean | null;
 };
 
 export type PipelineData =
@@ -213,6 +216,7 @@ export async function getPipelineData(
         candidateFirstName: candidates.firstName,
         candidateLastName: candidates.lastName,
         candidateEmail: candidates.email,
+        candidateHeadline: candidates.headline,
         candidateAvatarUrl: candidates.avatarUrl,
         candidateGithubUrl: candidates.githubUrl,
         source: applications.source,
@@ -222,6 +226,8 @@ export async function getPipelineData(
         lastStageMovedAt: latestStageMove.createdAt,
         aiScore: aiEvaluations.score,
         aiRecommendation: aiEvaluations.recommendation,
+        aiSummary: aiEvaluations.summary,
+        aiUsedResume: aiEvaluations.usedResume,
       })
       .from(applications)
       .innerJoin(

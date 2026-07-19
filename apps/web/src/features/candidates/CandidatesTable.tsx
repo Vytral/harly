@@ -9,7 +9,6 @@ import {
   MoreHorizontal,
   RotateCcw,
   Search,
-  Star,
   Trash2,
   User,
   XCircle,
@@ -22,7 +21,7 @@ import {
   restoreCandidateAction,
   trashCandidateAction,
 } from "@/features/candidates/actions";
-import { addToPoolAction } from "@/features/pool/actions";
+import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
 import { toCsv } from "@/lib/csv";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
@@ -45,6 +44,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { FilterPill, FILTER_ALL } from "@/components/ui/FilterPill";
+import { BookmarkSimpleIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
 
 export type CandidateRow = {
@@ -68,6 +68,7 @@ export type CandidateRow = {
   applicationId: string | null;
   /** Epoch millis of last candidate update. */
   updatedAt: number;
+  inPool: boolean;
 };
 
 type SortKey = "recent" | "oldest" | "modified" | "name";
@@ -307,12 +308,22 @@ export function CandidatesTable({
 
   function runTogglePool(row: CandidateRow) {
     startTransition(async () => {
-      const result = await addToPoolAction({ candidateId: row.id, source: "sourced" });
+      const result = row.inPool
+        ? await removeFromPoolAction({ candidateId: row.id })
+        : await addToPoolAction({ candidateId: row.id, source: "sourced" });
       if (result.success) {
-        toast.success(`${row.fullName} added to pool.`);
+        toast.success(
+          row.inPool
+            ? `${row.fullName} removed from pool.`
+            : `${row.fullName} added to pool.`,
+        );
         router.refresh();
       } else {
-        toast.error(result.error ?? "Could not add to pool.");
+        toast.error(
+          result.error ??
+            (row.inPool ? "Could not remove from pool." : "Could not add to pool."),
+        );
+        router.refresh();
       }
     });
   }
@@ -546,6 +557,12 @@ export function CandidatesTable({
                             {row.department}
                           </span>
                         ) : null}
+                        {row.inPool ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">
+                            <BookmarkSimpleIcon className="size-3 fill-current" />
+                            In Pool
+                          </span>
+                        ) : null}
                       </div>
                       <p className="truncate text-sm text-muted-foreground">
                         {[row.role, row.location].filter(Boolean).join(" · ") || row.email}
@@ -704,8 +721,8 @@ function RowActions({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePool}>
-          <Star className="size-4" />
-          Add to Pool
+          <BookmarkSimpleIcon className={cn("size-4", row.inPool && "fill-current")} />
+          {row.inPool ? "Remove from Pool" : "Add to Pool"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={onDelete}>

@@ -1,11 +1,14 @@
 import { Suspense } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PipelineBoard } from "@/features/pipeline/PipelineBoard";
+import { JobCandidateRanking } from "@/features/pipeline/JobCandidateRanking";
 import { PipelineJobSelect } from "@/features/pipeline/PipelineJobSelect";
 import { PipelineList } from "@/features/pipeline/PipelineList";
 import { PipelineSummaryCard } from "@/features/pipeline/PipelineSummaryCard";
 import { PipelineViewToggle } from "@/features/pipeline/PipelineViewToggle";
 import { getPipelineData } from "@/features/pipeline/data";
+import { getWorkspaceAiStatus } from "@/lib/ai/config";
+import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +23,11 @@ type PipelinePageProps = {
 export default async function PipelinePage({ searchParams }: PipelinePageProps) {
   const { job, jobId, view: rawView } = await searchParams;
   const view = rawView === "board" ? "board" : "list";
-  const data = await getPipelineData(jobId ?? job);
+  const { organization: workspace } = await getWorkspaceContext();
+  const [data, aiStatus] = await Promise.all([
+    getPipelineData(jobId ?? job),
+    getWorkspaceAiStatus(workspace.id),
+  ]);
 
   if (data.kind === "empty") {
     return (
@@ -75,6 +82,16 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
       <Suspense fallback={null}>
         <PipelineSummaryCard jobId={data.selectedJob.id} />
       </Suspense>
+      <JobCandidateRanking
+        key={`ranking-${data.selectedJob.id}`}
+        jobId={data.selectedJob.id}
+        jobTitle={data.selectedJob.title}
+        applications={data.applications}
+        stages={data.stages}
+        aiConfigured={
+          aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
+        }
+      />
       {view === "list" ? (
         <PipelineList
           key={`list-${data.selectedJob.id}`}

@@ -10,6 +10,7 @@ import {
   db,
   jobEmbeddings,
   jobs,
+  poolEntries,
 } from "@harly/db";
 
 import type { AiModelConfig } from "@/lib/ai/providers";
@@ -21,12 +22,25 @@ function hashText(text: string): string {
   return createHash("sha256").update(text).digest("hex");
 }
 
-/** Number of active candidate records available to rank in a workspace. */
+/** Number of active Talent Pool candidates available to rank in a workspace. */
 export async function countCandidatePool(workspaceId: string): Promise<number> {
   const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
-    .from(candidates)
-    .where(and(eq(candidates.workspaceId, workspaceId), isNull(candidates.deletedAt)));
+    .select({ n: sql<number>`count(distinct ${poolEntries.candidateId})::int` })
+    .from(poolEntries)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, poolEntries.candidateId),
+        eq(candidates.workspaceId, workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(poolEntries.workspaceId, workspaceId),
+        isNull(poolEntries.removedAt),
+      ),
+    );
   return row?.n ?? 0;
 }
 
@@ -191,11 +205,19 @@ export async function ensureCandidateEmbedding(
   return { skipped: false };
 }
 
-/** Candidates never embedded, or edited since their last embedding , a cheap SQL-only check. */
+/** Active Talent Pool candidates never embedded, or edited since their last embedding. */
 export async function countCandidatesNeedingIndex(workspaceId: string): Promise<number> {
   const [row] = await db
-    .select({ n: sql<number>`count(*)::int` })
+    .select({ n: sql<number>`count(distinct ${candidates.id})::int` })
     .from(candidates)
+    .innerJoin(
+      poolEntries,
+      and(
+        eq(poolEntries.candidateId, candidates.id),
+        eq(poolEntries.workspaceId, workspaceId),
+        isNull(poolEntries.removedAt),
+      ),
+    )
     .leftJoin(
       candidateEmbeddings,
       and(
@@ -213,11 +235,19 @@ export async function countCandidatesNeedingIndex(workspaceId: string): Promise<
   return row?.n ?? 0;
 }
 
-/** Next batch of candidate IDs that need (re-)indexing, oldest-first. */
+/** Next batch of active Talent Pool candidate IDs that need (re-)indexing, oldest-first. */
 async function nextCandidatesToIndex(workspaceId: string, limit: number): Promise<string[]> {
   const rows = await db
-    .select({ id: candidates.id })
+    .selectDistinct({ id: candidates.id, updatedAt: candidates.updatedAt })
     .from(candidates)
+    .innerJoin(
+      poolEntries,
+      and(
+        eq(poolEntries.candidateId, candidates.id),
+        eq(poolEntries.workspaceId, workspaceId),
+        isNull(poolEntries.removedAt),
+      ),
+    )
     .leftJoin(
       candidateEmbeddings,
       and(
@@ -273,7 +303,7 @@ export type JobMatch = {
   similarityPct: number;
 };
 
-/** Rank the workspace's whole candidate pool against a job by embedding similarity. */
+/** Rank active Talent Pool candidates against a job by embedding similarity. */
 export async function matchCandidatesForJob(
   config: AiModelConfig,
   workspaceId: string,
@@ -311,9 +341,17 @@ export async function matchCandidatesForJob(
         isNull(candidates.deletedAt),
       ),
     )
+    .innerJoin(
+      poolEntries,
+      and(
+        eq(poolEntries.candidateId, candidates.id),
+        eq(poolEntries.workspaceId, workspaceId),
+        isNull(poolEntries.removedAt),
+      ),
+    )
     .where(eq(candidateEmbeddings.workspaceId, workspaceId));
 
-  const ranked = rows
+  const ranked = Array.from(new Map(rows.map((row) => [row.candidateId, row])).values())
     .map((row) => {
       const similarity = cosineSimilarity(jobVector, row.embedding as number[]);
       return {

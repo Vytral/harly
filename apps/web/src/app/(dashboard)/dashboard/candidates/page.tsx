@@ -60,6 +60,7 @@ export default async function CandidatesPage({ searchParams }: CandidatesPagePro
       phone: candidate.phone,
       avatarUrl: candidate.avatarUrl,
       avatarFallbackSrcs: candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl),
+      inPool: candidate.inPool,
       location: candidate.location,
       role: candidate.latestApplication?.jobTitle ?? null,
       department: candidate.latestApplication?.department ?? null,

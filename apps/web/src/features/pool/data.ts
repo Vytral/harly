@@ -55,6 +55,7 @@ export async function listPoolCandidates(filters?: {
     .select({
       poolEntryId: poolEntries.id,
       candidateId: candidates.id,
+      jobId: poolEntries.jobId,
       firstName: candidates.firstName,
       lastName: candidates.lastName,
       email: candidates.email,
@@ -97,24 +98,42 @@ export async function listPoolCandidates(filters?: {
     tagsByCandidate.set(tag.candidateId, existing);
   }
 
-  // Get best AI evaluation for each candidate
+  // Only use an evaluation for the job that contextualizes the active pool
+  // entry. A Talent Pool candidate without a job context must not inherit a
+  // score from an unrelated historical application.
   const evalRows = await db
     .select({
       candidateId: aiEvaluations.candidateId,
+      jobId: aiEvaluations.jobId,
       score: aiEvaluations.score,
       recommendation: aiEvaluations.recommendation,
     })
     .from(aiEvaluations)
-    .where(inArray(aiEvaluations.candidateId, candidateIds));
+    .innerJoin(
+      poolEntries,
+      and(
+        eq(poolEntries.workspaceId, workspace.id),
+        eq(poolEntries.candidateId, aiEvaluations.candidateId),
+        eq(poolEntries.jobId, aiEvaluations.jobId),
+        isNull(poolEntries.removedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(aiEvaluations.workspaceId, workspace.id),
+        inArray(aiEvaluations.candidateId, candidateIds),
+      ),
+    );
 
-  const bestEvalByCandidate = new Map<
+  const evaluationByPoolContext = new Map<
     string,
     { score: number; recommendation: string }
   >();
   for (const ev of evalRows) {
-    const existing = bestEvalByCandidate.get(ev.candidateId);
+    const key = `${ev.candidateId}:${ev.jobId}`;
+    const existing = evaluationByPoolContext.get(key);
     if (!existing || ev.score > existing.score) {
-      bestEvalByCandidate.set(ev.candidateId, {
+      evaluationByPoolContext.set(key, {
         score: ev.score,
         recommendation: ev.recommendation,
       });
@@ -137,9 +156,11 @@ export async function listPoolCandidates(filters?: {
     reason: row.reason,
     addedAt: row.addedAt,
     tags: tagsByCandidate.get(row.candidateId) ?? [],
-    bestScore: bestEvalByCandidate.get(row.candidateId)?.score ?? null,
+    bestScore:
+      evaluationByPoolContext.get(`${row.candidateId}:${row.jobId}`)?.score ?? null,
     bestRecommendation:
-      bestEvalByCandidate.get(row.candidateId)?.recommendation ?? null,
+      evaluationByPoolContext.get(`${row.candidateId}:${row.jobId}`)?.recommendation ??
+      null,
   }));
 
   // Client-side filters for fields not easy to filter in SQL
