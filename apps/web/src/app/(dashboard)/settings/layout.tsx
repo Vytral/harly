@@ -15,7 +15,11 @@ export default async function SettingsLayout({
   // open to everyone; each page also guards itself via requirePagePermission.
   const permissions = await getCurrentPermissions();
   const allowedHrefs = Object.entries(SETTINGS_SECTION_PERMISSION)
-    .filter(([, perm]) => permissions.includes(perm))
+    .filter(([, required]) =>
+      Array.isArray(required)
+        ? required.some((permission) => permissions.includes(permission))
+        : permissions.includes(required),
+    )
     .map(([href]) => href);
 
   return (

@@ -59,7 +59,9 @@ export function AppSidebar({
   const visibleWorkspaceNav = workspaceNav.filter(
     (item) =>
       !item.requiredPermission ||
-      userPermissions.includes(item.requiredPermission),
+      (Array.isArray(item.requiredPermission)
+        ? item.requiredPermission.some((permission) => userPermissions.includes(permission))
+        : userPermissions.includes(item.requiredPermission)),
   );
 
   const canInvite = userPermissions.includes("members:invite");

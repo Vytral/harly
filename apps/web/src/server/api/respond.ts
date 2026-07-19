@@ -9,6 +9,12 @@ import {
   type ApiErrorCode,
   type PaginationMeta,
 } from "@harly/api";
+import { getRequestRateLimit } from "@/server/api/auth";
+import { releaseIdempotencyReservation } from "@/server/api/idempotency";
+import {
+  rateLimitResultFromError,
+  type RateLimitResult,
+} from "@/server/api/ratelimit";
 
 /**
  * Transport layer for the REST API: turns service results / thrown ApiErrors
@@ -18,17 +24,46 @@ import {
 export const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Api-Key",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Api-Key, Idempotency-Key",
+  "Access-Control-Expose-Headers": "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After, Harly-API-Version, Deprecation, Sunset",
   "Access-Control-Max-Age": "86400",
 };
 
 type RespondOptions = { cors?: boolean; status?: number };
 
 function withHeaders(response: NextResponse, cors?: boolean): NextResponse {
+  response.headers.set("Harly-API-Version", "1.0.0");
+  // Do not guess a retirement date. Deployers can announce a future v2 with a
+  // standards-compliant Sunset date without changing every route handler.
+  const sunset = process.env.API_V1_SUNSET;
+  if (sunset) {
+    response.headers.set("Deprecation", "true");
+    response.headers.set("Sunset", sunset);
+  }
   if (cors) {
     for (const [key, value] of Object.entries(CORS_HEADERS)) {
       response.headers.set(key, value);
     }
+  }
+  return response;
+}
+
+function withRateLimitHeaders(
+  response: NextResponse,
+  rateLimit: RateLimitResult | null,
+): NextResponse {
+  if (!rateLimit) return response;
+  response.headers.set("X-RateLimit-Limit", String(rateLimit.limit));
+  response.headers.set("X-RateLimit-Remaining", String(rateLimit.remaining));
+  response.headers.set(
+    "X-RateLimit-Reset",
+    String(Math.ceil(rateLimit.resetAt / 1000)),
+  );
+  if (response.status === 429) {
+    response.headers.set(
+      "Retry-After",
+      String(Math.max(0, Math.ceil((rateLimit.resetAt - Date.now()) / 1000))),
+    );
   }
   return response;
 }
@@ -78,13 +113,24 @@ export function withApi(
   return async (request: Request, context: unknown): Promise<NextResponse> => {
     try {
       const response = await handler(request, context);
-      return withHeaders(response, options?.cors);
+      return withRateLimitHeaders(
+        withHeaders(response, options?.cors),
+        getRequestRateLimit(request),
+      );
     } catch (error) {
+      await Promise.resolve(releaseIdempotencyReservation(request)).catch((releaseError) => {
+        console.error("[api] failed to release idempotency reservation", releaseError);
+      });
+      const rateLimit =
+        getRequestRateLimit(request) ?? rateLimitResultFromError(error);
       if (error instanceof ApiError) {
-        return apiError(error.code, error.message, {
-          cors: options?.cors,
-          details: error.details,
-        });
+        return withRateLimitHeaders(
+          apiError(error.code, error.message, {
+            cors: options?.cors,
+            details: error.details,
+          }),
+          rateLimit,
+        );
       }
       // ZodError has an `issues` array , surface it as a 422 without coupling
       // this layer to a specific zod version.
@@ -94,15 +140,21 @@ export function withApi(
         "issues" in error &&
         Array.isArray((error as { issues: unknown[] }).issues)
       ) {
-        return apiError("unprocessable", "Validation failed.", {
-          cors: options?.cors,
-          details: (error as { issues: unknown[] }).issues,
-        });
+        return withRateLimitHeaders(
+          apiError("unprocessable", "Validation failed.", {
+            cors: options?.cors,
+            details: (error as { issues: unknown[] }).issues,
+          }),
+          rateLimit,
+        );
       }
       console.error("[api] unhandled route error", error);
-      return apiError("internal", "Something went wrong.", {
-        cors: options?.cors,
-      });
+      return withRateLimitHeaders(
+        apiError("internal", "Something went wrong.", {
+          cors: options?.cors,
+        }),
+        rateLimit,
+      );
     }
   };
 }

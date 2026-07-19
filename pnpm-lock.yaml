@@ -100,6 +100,9 @@ importers:
       '@harly/storage':
         specifier: workspace:*
         version: link:../../packages/storage
+      '@harly/validators':
+        specifier: workspace:*
+        version: link:../../packages/validators
       '@iconify/react':
         specifier: ^6.0.2
         version: 6.0.2(react@19.2.4)
@@ -439,7 +442,11 @@ importers:
 
   packages/ui: {}
 
-  packages/validators: {}
+  packages/validators:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   tooling/harly:
     dependencies:

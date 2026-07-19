@@ -26,7 +26,7 @@ export type NavItem = {
   exact?: boolean;
   badge?: NavBadge;
   /** When set, the item is hidden unless the viewer holds this permission. */
-  requiredPermission?: Permission;
+  requiredPermission?: Permission | Permission[];
 };
 
 /** Primary sections , the recruiter's daily surfaces. */
@@ -55,7 +55,7 @@ export const workspaceNav: NavItem[] = [
     label: "Settings",
     href: "/settings",
     icon: Settings,
-    requiredPermission: "settings:edit",
+    requiredPermission: ["settings:edit", "dsar:manage"],
   },
 ];
 

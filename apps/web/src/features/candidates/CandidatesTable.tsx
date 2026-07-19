@@ -9,7 +9,6 @@ import {
   MoreHorizontal,
   RotateCcw,
   Search,
-  Zap,
   Star,
   Trash2,
   User,
@@ -474,8 +473,8 @@ export function CandidatesTable({
         </div>
       ) : null}
 
-      {/* List + AI rail */}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_18rem]">
+      {/* Candidate list */}
+      <div>
         <div className="min-w-0">
           {/* Column headers , aligned to the row grid */}
           <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 px-4 pb-2 sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_2.25rem]">
@@ -636,27 +635,6 @@ export function CandidatesTable({
           templates={emailTemplates}
           onSent={() => setSelected(new Set())}
         />
-
-        {/* AI sourcing rail */}
-        <aside className="h-fit lg:sticky lg:top-20">
-          <div className="rounded-2xl border border-border/70 bg-card p-5">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-accent px-2.5 py-1 text-[0.7rem] font-semibold uppercase tracking-wide text-accent-foreground">
-              <Zap className="size-3.5" />
-              AI sourcing
-            </span>
-            <p className="mt-3 text-sm font-semibold">Expand your candidate pool</p>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Search passive candidates from job boards, social and external
-              databases against your own criteria.
-            </p>
-            <Button disabled className="mt-4 w-full" variant="outline">
-              Find candidates
-            </Button>
-            <p className="mt-2 text-center text-xs text-muted-foreground">
-              Coming soon. Connect your own AI keys.
-            </p>
-          </div>
-        </aside>
       </div>
     </div>
   );

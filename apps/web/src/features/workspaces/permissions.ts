@@ -15,6 +15,7 @@ export const PERMISSIONS = [
   "candidates:edit",
   "candidates:delete",
   "candidates:move",
+  "dsar:manage",
   "collab:write", // notes, scorecards, schedule interviews, message
   "offers:manage",
   "templates:manage",
@@ -52,6 +53,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "candidates:edit", label: "Edit candidates" },
       { key: "candidates:delete", label: "Delete / reject candidates" },
       { key: "candidates:move", label: "Move in pipeline" },
+    ],
+  },
+  {
+    label: "Privacy",
+    permissions: [
+      {
+        key: "dsar:manage",
+        label: "Review privacy requests",
+        hint: "Approve or deny candidate data export and erasure requests",
+      },
     ],
   },
   {
@@ -115,6 +126,7 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "offers:manage",
     "templates:manage",
     "members:read",
+    "dsar:manage",
   ],
   hiring_manager: ["candidates:move", "collab:write", "members:read"],
 };
@@ -162,7 +174,7 @@ export function roleLabel(role: string): string {
  * by the nav (to hide what you can't open) and each page (to redirect direct
  * URL access). Sections not listed here are open to any member.
  */
-export const SETTINGS_SECTION_PERMISSION: Record<string, Permission> = {
+export const SETTINGS_SECTION_PERMISSION: Record<string, Permission | Permission[]> = {
   "/settings": "settings:edit",
   "/settings/members": "members:read",
   "/settings/roles": "roles:manage",
@@ -171,6 +183,6 @@ export const SETTINGS_SECTION_PERMISSION: Record<string, Permission> = {
   "/settings/integrations": "integrations:manage",
   "/settings/developers": "integrations:manage",
   "/settings/security": "security:manage",
-  "/settings/legal": "settings:edit",
+  "/settings/legal": ["settings:edit", "dsar:manage"],
   "/settings/portal": "settings:edit",
 };

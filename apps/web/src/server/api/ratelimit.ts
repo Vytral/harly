@@ -16,11 +16,22 @@ import { db, rateLimitBuckets } from "@harly/db";
  */
 type Bucket = { count: number; resetAt: number };
 
-export type RateLimitResult = { remaining: number; resetAt: number };
+/** Quota state for the request that just consumed a slot. */
+export type RateLimitResult = {
+  limit: number;
+  remaining: number;
+  resetAt: number;
+};
+
+type RateLimitErrorDetails = { rateLimit: RateLimitResult };
 
 export interface RateLimitStore {
   /** Consume one slot for `key`; throws `ApiError.rateLimited` when exhausted. */
-  consume(key: string, limit: number, windowMs: number): Promise<RateLimitResult>;
+  consume(
+    key: string,
+    limit: number,
+    windowMs: number,
+  ): Promise<RateLimitResult>;
 }
 
 export type RateLimitOptions = {
@@ -33,30 +44,73 @@ export type RateLimitOptions = {
 const RATE_LIMITED_MESSAGE =
   "Rate limit exceeded. Slow down and try again shortly.";
 
+function rateLimitExceeded(limit: number, resetAt: number): ApiError {
+  return new ApiError("rate_limited", RATE_LIMITED_MESSAGE, {
+    rateLimit: { limit, remaining: 0, resetAt },
+  } satisfies RateLimitErrorDetails);
+}
+
+/** Read quota state attached to a rate-limit rejection, if present. */
+export function rateLimitResultFromError(
+  error: unknown,
+): RateLimitResult | null {
+  if (!(error instanceof ApiError) || error.code !== "rate_limited")
+    return null;
+  const details = error.details;
+  if (!details || typeof details !== "object" || !("rateLimit" in details)) {
+    return null;
+  }
+  const value = details.rateLimit;
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+  const rateLimit = value as Record<string, unknown>;
+  if (
+    typeof rateLimit.limit !== "number" ||
+    typeof rateLimit.remaining !== "number" ||
+    typeof rateLimit.resetAt !== "number"
+  ) {
+    return null;
+  }
+  return rateLimit as RateLimitResult;
+}
+
 export class MemoryStore implements RateLimitStore {
   private buckets = new Map<string, Bucket>();
 
-  async consume(key: string, limit: number, windowMs: number): Promise<RateLimitResult> {
+  async consume(
+    key: string,
+    limit: number,
+    windowMs: number,
+  ): Promise<RateLimitResult> {
     const now = Date.now();
     const existing = this.buckets.get(key);
 
     if (!existing || existing.resetAt <= now) {
       const resetAt = now + windowMs;
       this.buckets.set(key, { count: 1, resetAt });
-      return { remaining: limit - 1, resetAt };
+      return { limit, remaining: limit - 1, resetAt };
     }
 
     if (existing.count >= limit) {
-      throw ApiError.rateLimited(RATE_LIMITED_MESSAGE);
+      throw rateLimitExceeded(limit, existing.resetAt);
     }
 
     existing.count += 1;
-    return { remaining: limit - existing.count, resetAt: existing.resetAt };
+    return {
+      limit,
+      remaining: limit - existing.count,
+      resetAt: existing.resetAt,
+    };
   }
 }
 
 export class DatabaseStore implements RateLimitStore {
-  async consume(key: string, limit: number, windowMs: number): Promise<RateLimitResult> {
+  async consume(
+    key: string,
+    limit: number,
+    windowMs: number,
+  ): Promise<RateLimitResult> {
     return db.transaction(async (tx) => {
       const now = Date.now();
       const [row] = await tx
@@ -75,11 +129,11 @@ export class DatabaseStore implements RateLimitStore {
             target: rateLimitBuckets.key,
             set: { count: 1, resetAt, updatedAt: new Date() },
           });
-        return { remaining: limit - 1, resetAt: resetAt.getTime() };
+        return { limit, remaining: limit - 1, resetAt: resetAt.getTime() };
       }
 
       if (row.count >= limit) {
-        throw ApiError.rateLimited(RATE_LIMITED_MESSAGE);
+        throw rateLimitExceeded(limit, row.resetAt.getTime());
       }
 
       const next = row.count + 1;
@@ -87,7 +141,7 @@ export class DatabaseStore implements RateLimitStore {
         .update(rateLimitBuckets)
         .set({ count: next, updatedAt: new Date() })
         .where(eq(rateLimitBuckets.key, key));
-      return { remaining: limit - next, resetAt: row.resetAt.getTime() };
+      return { limit, remaining: limit - next, resetAt: row.resetAt.getTime() };
     });
   }
 }
@@ -96,7 +150,9 @@ const memoryStore = new MemoryStore();
 const databaseStore = new DatabaseStore();
 
 function defaultStore(): RateLimitStore {
-  return process.env.RATE_LIMIT_STORE === "database" ? databaseStore : memoryStore;
+  return process.env.RATE_LIMIT_STORE === "database"
+    ? databaseStore
+    : memoryStore;
 }
 
 /**

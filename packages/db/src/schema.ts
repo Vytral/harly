@@ -2075,6 +2075,48 @@ export const apiKeys = pgTable(
 );
 
 /**
+ * Durable responses for mutating developer API requests carrying an
+ * `Idempotency-Key`. Keys are scoped to the authenticated credential and route
+ * so a retry can safely replay the original result without repeating writes.
+ */
+export const apiIdempotencyKeys = pgTable(
+  "api_idempotency_keys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    apiKeyId: uuid("api_key_id")
+      .notNull()
+      .references(() => apiKeys.id, { onDelete: "cascade" }),
+    method: text("method").notNull(),
+    path: text("path").notNull(),
+    idempotencyKey: text("idempotency_key").notNull(),
+    // SHA-256 of the exact request body. Same key with a different body fails.
+    requestHash: text("request_hash").notNull(),
+    // "processing" | "completed"
+    status: text("status").default("processing").notNull(),
+    responseStatus: integer("response_status"),
+    responseBody: jsonb("response_body"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("api_idempotency_keys_key_route_uidx").on(
+      table.apiKeyId,
+      table.method,
+      table.path,
+      table.idempotencyKey,
+    ),
+    index("api_idempotency_keys_workspace_expires_idx").on(
+      table.workspaceId,
+      table.expiresAt,
+    ),
+    index("api_idempotency_keys_expires_idx").on(table.expiresAt),
+  ],
+);
+
+/**
  * Outbound webhook subscriptions. Each endpoint has its own signing secret,
  * encrypted at rest (AES-256-GCM, same scheme as other workspace secrets), and
  * subscribes to a set of event types.
@@ -2151,6 +2193,8 @@ export const webhookDeliveries = pgTable(
 
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type NewApiKey = typeof apiKeys.$inferInsert;
+export type ApiIdempotencyKey = typeof apiIdempotencyKeys.$inferSelect;
+export type NewApiIdempotencyKey = typeof apiIdempotencyKeys.$inferInsert;
 export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
 export type NewWebhookEndpoint = typeof webhookEndpoints.$inferInsert;
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;

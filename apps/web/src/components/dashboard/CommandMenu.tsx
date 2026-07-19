@@ -41,7 +41,11 @@ export function CommandMenu({
   const navItems = [
     ...primaryNav,
     ...workspaceNav.filter(
-      (item) => !item.requiredPermission || userPermissions.includes(item.requiredPermission),
+      (item) =>
+        !item.requiredPermission ||
+        (Array.isArray(item.requiredPermission)
+          ? item.requiredPermission.some((permission) => userPermissions.includes(permission))
+          : userPermissions.includes(item.requiredPermission)),
     ),
   ];
 

@@ -37,6 +37,7 @@ import { listCandidateInterviews } from "@/features/interviews/data";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listOffersForCandidate } from "@/features/offers/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { can } from "@/features/workspaces/permissions-server";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
@@ -94,13 +95,15 @@ export default async function CandidateDetailPage({
     notFound();
   }
 
-  const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags, aiEvaluations, inPool } =
+  const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags, aiEvaluations, inPool, privacyRequests } =
     profile;
   const isHired = applications.some((application) => application.status === "hired");
-  const [calStatus, aiStatus, workspaceContext] = await Promise.all([
+  const [calStatus, aiStatus, workspaceContext, canManageDsar, canDeleteCandidates] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
     getWorkspaceAiStatus(workspaceId),
     getWorkspaceContext(),
+    can("dsar:manage"),
+    can("candidates:delete"),
   ]);
   const workspaceName = workspaceContext.organization.name;
   const currentUserName = workspaceContext.user.name;
@@ -364,7 +367,7 @@ export default async function CandidateDetailPage({
 
               {/* Actions , grouped with clear hierarchy, delete isolated */}
               <div
-                className={`w-full min-w-0 lg:pl-2${isHired ? " lg:mx-auto lg:-translate-x-[82px]" : ""}`}
+                className={`w-full min-w-0 lg:pl-2${isHired ? " lg:pl-[76px]" : ""}`}
               >
                 <CandidateActionBar
                   candidate={actionCandidate}
@@ -436,6 +439,12 @@ export default async function CandidateDetailPage({
               aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
             }
             offers={offers}
+            privacyRequests={canManageDsar ? privacyRequests.map((request) => ({
+              ...request,
+              createdAt: request.createdAt.toISOString(),
+              completedAt: request.completedAt?.toISOString() ?? null,
+            })) : []}
+            canFulfilErasure={canManageDsar && canDeleteCandidates}
           />
         </div>
 

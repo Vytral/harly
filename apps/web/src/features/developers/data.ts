@@ -58,6 +58,7 @@ export async function createApiKey(input: {
   name: string;
   type: ApiKeyType;
   scopes: string[];
+  environment?: "live" | "test";
   createdById?: string | null;
   expiresAt?: Date | null;
 }): Promise<{ key: ApiKey; raw: string }> {
@@ -66,7 +67,10 @@ export async function createApiKey(input: {
     throw ApiError.badRequest("At least one valid scope is required.");
   }
 
-  const generated = generateApiKey({ type: input.type });
+  const generated = generateApiKey({
+    type: input.type,
+    environment: input.environment,
+  });
   const [row] = await db
     .insert(apiKeys)
     .values({
@@ -161,7 +165,9 @@ export async function createWebhookEndpoint(input: {
   createdById?: string | null;
 }): Promise<{ endpoint: WebhookEndpoint; secret: string }> {
   await validateWebhookUrl(input.url).catch((error) => {
-    throw ApiError.badRequest(error instanceof Error ? error.message : "Invalid webhook URL.");
+    throw ApiError.badRequest(
+      error instanceof Error ? error.message : "Invalid webhook URL.",
+    );
   });
   const events = validateEvents(input.events);
   const secret = generateWebhookSecret();
@@ -187,20 +193,29 @@ export async function createWebhookEndpoint(input: {
 export async function updateWebhookEndpoint(input: {
   workspaceId: string;
   id: string;
-  patch: { url?: string; events?: string[]; enabled?: boolean; description?: string | null };
+  patch: {
+    url?: string;
+    events?: string[];
+    enabled?: boolean;
+    description?: string | null;
+  };
 }): Promise<WebhookEndpoint> {
   const set: Partial<typeof webhookEndpoints.$inferInsert> = {
     updatedAt: new Date(),
   };
   if (input.patch.url !== undefined) {
     await validateWebhookUrl(input.patch.url).catch((error) => {
-      throw ApiError.badRequest(error instanceof Error ? error.message : "Invalid webhook URL.");
+      throw ApiError.badRequest(
+        error instanceof Error ? error.message : "Invalid webhook URL.",
+      );
     });
     set.url = input.patch.url;
   }
-  if (input.patch.events !== undefined) set.events = validateEvents(input.patch.events);
+  if (input.patch.events !== undefined)
+    set.events = validateEvents(input.patch.events);
   if (input.patch.enabled !== undefined) set.enabled = input.patch.enabled;
-  if (input.patch.description !== undefined) set.description = input.patch.description;
+  if (input.patch.description !== undefined)
+    set.description = input.patch.description;
 
   const [endpoint] = await db
     .update(webhookEndpoints)
@@ -263,10 +278,22 @@ export function serializeDelivery(delivery: WebhookDelivery) {
   };
 }
 
+export const WEBHOOK_DELIVERY_STATUSES = [
+  "pending",
+  "processing",
+  "success",
+  "failed",
+  "exhausted",
+] as const;
+
+export type WebhookDeliveryStatus =
+  (typeof WEBHOOK_DELIVERY_STATUSES)[number];
+
 export async function listWebhookDeliveries(input: {
   workspaceId: string;
   endpointId: string;
   limit?: number;
+  status?: WebhookDeliveryStatus;
 }): Promise<WebhookDelivery[]> {
   return db
     .select()
@@ -275,8 +302,47 @@ export async function listWebhookDeliveries(input: {
       and(
         eq(webhookDeliveries.workspaceId, input.workspaceId),
         eq(webhookDeliveries.endpointId, input.endpointId),
+        input.status ? eq(webhookDeliveries.status, input.status) : undefined,
       ),
     )
     .orderBy(desc(webhookDeliveries.createdAt))
     .limit(input.limit ?? 20);
+}
+
+/** Queue a fresh delivery from an existing record without altering its audit log. */
+export async function replayWebhookDelivery(input: {
+  workspaceId: string;
+  endpointId: string;
+  deliveryId: string;
+}): Promise<WebhookDelivery> {
+  await getWebhookEndpoint({
+    workspaceId: input.workspaceId,
+    id: input.endpointId,
+  });
+
+  const [original] = await db
+    .select()
+    .from(webhookDeliveries)
+    .where(
+      and(
+        eq(webhookDeliveries.id, input.deliveryId),
+        eq(webhookDeliveries.workspaceId, input.workspaceId),
+        eq(webhookDeliveries.endpointId, input.endpointId),
+      ),
+    )
+    .limit(1);
+  if (!original) throw ApiError.notFound("Webhook delivery not found.");
+
+  const [replay] = await db
+    .insert(webhookDeliveries)
+    .values({
+      workspaceId: input.workspaceId,
+      endpointId: input.endpointId,
+      event: original.event,
+      payload: original.payload,
+      status: "pending",
+      attempts: 0,
+    })
+    .returning();
+  return replay;
 }

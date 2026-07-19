@@ -7,7 +7,9 @@ import {
 } from "@/features/candidates/service";
 import { authenticateApiKey } from "@/server/api/auth";
 import { candidateCreateSchema } from "@/server/api/schemas";
+import { reserveIdempotencyKey } from "@/server/api/idempotency";
 import { apiOk, withApi } from "@/server/api/respond";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
@@ -34,6 +36,12 @@ export const GET = withApi(async (request) => {
 /** POST /api/v1/candidates , create a candidate. */
 export const POST = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "candidates:write");
+  const idempotency = await reserveIdempotencyKey(request, ctx);
+  if (idempotency.kind === "replay") {
+    return NextResponse.json(idempotency.response.body, {
+      status: idempotency.response.status,
+    });
+  }
   const values = candidateCreateSchema.parse(
     await request.json().catch(() => null),
   );
@@ -41,5 +49,12 @@ export const POST = withApi(async (request) => {
     workspaceId: ctx.workspaceId,
     values,
   });
-  return apiOk(serializeCandidate(candidate), { status: 201 });
+  const response = apiOk(serializeCandidate(candidate), { status: 201 });
+  if (idempotency.kind === "reserved") {
+    await idempotency.complete({
+      status: response.status,
+      body: await response.clone().json(),
+    });
+  }
+  return response;
 });

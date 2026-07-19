@@ -108,11 +108,14 @@ export function SsoProviderDrawer({
           clientSecret: oidcClientSecret.trim(),
         };
       } else {
+        const origin = typeof window !== "undefined" ? window.location.origin : "";
+        const spEntityId = `${origin}/api/auth/sso/saml2/sp/metadata`;
         input.samlConfig = {
           entryPoint: samlEntryPoint.trim(),
           cert: samlCert.trim(),
-          audience: samlAudience.trim() || undefined,
-          callbackUrl: `${typeof window !== "undefined" ? window.location.origin : ""}/api/auth/sso/saml2/sp/acs/${providerId.trim()}`,
+          audience: samlAudience.trim() || spEntityId,
+          callbackUrl: `${origin}/api/auth/sso/saml2/sp/acs/${providerId.trim()}`,
+          spMetadata: { entityID: spEntityId },
         };
       }
 

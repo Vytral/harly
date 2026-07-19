@@ -1,9 +1,4 @@
-import {
-  ApiError,
-  decodeCursor,
-  paginate,
-  parseLimit,
-} from "@harly/api";
+import { ApiError, decodeCursor, paginate, parseLimit } from "@harly/api";
 
 import {
   createJobForApi,
@@ -13,8 +8,10 @@ import {
 import type { JobStatus } from "@/features/jobs/validation";
 import { authenticateApiKey } from "@/server/api/auth";
 import { resolveWorkspaceActorUserId } from "@/server/api/actor";
+import { reserveIdempotencyKey } from "@/server/api/idempotency";
 import { jobCreateSchema } from "@/server/api/schemas";
 import { apiOk, withApi } from "@/server/api/respond";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
@@ -43,12 +40,23 @@ export const GET = withApi(async (request) => {
 /** POST /api/v1/jobs , create a job. */
 export const POST = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "jobs:write");
+  const idempotency = await reserveIdempotencyKey(request, ctx);
+  if (idempotency.kind === "replay") {
+    return NextResponse.json(idempotency.response.body, {
+      status: idempotency.response.status,
+    });
+  }
   const body = await request.json().catch(() => null);
   const values = jobCreateSchema.parse(body);
 
-  const actorUserId = await resolveWorkspaceActorUserId(ctx.workspaceId);
+  const actorUserId = await resolveWorkspaceActorUserId(
+    ctx.workspaceId,
+    ctx.createdById,
+  );
   if (!actorUserId) {
-    throw ApiError.unprocessable("Workspace has no owner to attribute this to.");
+    throw ApiError.unprocessable(
+      "Workspace has no owner to attribute this to.",
+    );
   }
 
   const job = await createJobForApi({
@@ -56,5 +64,12 @@ export const POST = withApi(async (request) => {
     actorUserId,
     values,
   });
-  return apiOk(serializeJob(job), { status: 201 });
+  const response = apiOk(serializeJob(job), { status: 201 });
+  if (idempotency.kind === "reserved") {
+    await idempotency.complete({
+      status: response.status,
+      body: await response.clone().json(),
+    });
+  }
+  return response;
 });

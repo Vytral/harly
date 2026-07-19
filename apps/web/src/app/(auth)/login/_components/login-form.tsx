@@ -164,6 +164,32 @@ export function LoginForm({ redirect }: { redirect?: string }) {
     }
   }
 
+  async function continueWithSSO() {
+    setError(null);
+    setSent(false);
+
+    const trimmedEmail = email.trim();
+    if (!trimmedEmail) {
+      setError("Enter your work email to continue with SSO.");
+      return;
+    }
+
+    setIsPending(true);
+    try {
+      const result = await authClient.signIn.sso({
+        email: trimmedEmail,
+        callbackURL,
+        errorCallbackURL: "/login",
+      });
+
+      if (result.error) {
+        setError(result.error.message ?? "Unable to start enterprise SSO.");
+      }
+    } finally {
+      setIsPending(false);
+    }
+  }
+
   async function signInWithPasskey() {
     setError(null);
     setSent(false);
@@ -367,6 +393,17 @@ export function LoginForm({ redirect }: { redirect?: string }) {
           <LinkedInIcon />
           Continue with LinkedIn
         </button>
+
+        {email.trim() && (
+          <button
+            type="button"
+            onClick={continueWithSSO}
+            disabled={isPending}
+            className="w-full rounded-lg border border-input py-3 text-sm font-medium text-foreground transition hover:border-ring hover:bg-muted disabled:opacity-50"
+          >
+            Continue with company SSO
+          </button>
+        )}
 
         {email.trim() && (
           <button

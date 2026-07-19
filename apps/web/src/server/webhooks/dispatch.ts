@@ -21,7 +21,9 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const RESPONSE_BODY_LIMIT = 500;
 
 function nextRetryAt(attempts: number): Date | null {
-  const delay = RETRY_BACKOFF_MS[attempts];
+  // `attempts` already includes the failed attempt. The first failure must
+  // therefore use the first configured delay (one minute), not the second.
+  const delay = RETRY_BACKOFF_MS[attempts - 1];
   return delay ? new Date(Date.now() + delay) : null;
 }
 
@@ -32,6 +34,7 @@ function nextRetryAt(attempts: number): Date | null {
 export async function deliverWebhook(
   delivery: WebhookDelivery,
   endpoint: WebhookEndpoint,
+  options?: { workerId?: string },
 ): Promise<"success" | "failed" | "exhausted"> {
   const attemptNumber = delivery.attempts + 1;
   const body = JSON.stringify(delivery.payload);
@@ -93,7 +96,17 @@ export async function deliverWebhook(
       lockedBy: null,
       updatedAt: new Date(),
     })
-    .where(eq(webhookDeliveries.id, delivery.id));
+    .where(
+      and(
+        eq(webhookDeliveries.id, delivery.id),
+        options?.workerId
+          ? eq(webhookDeliveries.lockedBy, options.workerId)
+          : undefined,
+        options?.workerId
+          ? eq(webhookDeliveries.status, "processing")
+          : undefined,
+      ),
+    );
 
   return status;
 }
@@ -108,18 +121,21 @@ export async function dispatchDueWebhooks(
 ): Promise<{ processed: number; success: number; failed: number }> {
   const workerId = randomUUID();
   const idsFilter = ids?.length
-    ? sql`and "id" in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`
+    ? sql`and delivery."id" in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`
     : sql``;
   const claimed = (await db.execute(sql`
     with candidates as (
-      select "id"
-      from "webhook_deliveries"
+      select delivery."id"
+      from "webhook_deliveries" as delivery
+      inner join "webhook_endpoints" as endpoint
+        on endpoint."id" = delivery."endpoint_id"
+        and endpoint."enabled" = true
       where (
-        ("status" in ('pending', 'failed') and ("next_retry_at" is null or "next_retry_at" <= now()))
-        or ("status" = 'processing' and "locked_at" < now() - interval '5 minutes')
+        (delivery."status" in ('pending', 'failed') and (delivery."next_retry_at" is null or delivery."next_retry_at" <= now()))
+        or (delivery."status" = 'processing' and delivery."locked_at" < now() - interval '5 minutes')
       )
       ${idsFilter}
-      order by "created_at"
+      order by delivery."created_at"
       for update skip locked
       limit ${limit}
     )
@@ -149,10 +165,33 @@ export async function dispatchDueWebhooks(
     .orderBy(asc(webhookDeliveries.createdAt))
     .limit(limit);
 
+  // Endpoint can be disabled after the claim and before the read above. Put
+  // those rows back in the queue rather than stranding them as `processing`.
+  const dueIds = new Set(due.map((row) => row.delivery.id));
+  const releasedIds = claimed
+    .map((row) => row.id)
+    .filter((id) => !dueIds.has(id));
+  if (releasedIds.length > 0) {
+    await db
+      .update(webhookDeliveries)
+      .set({
+        status: "pending",
+        lockedAt: null,
+        lockedBy: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          inArray(webhookDeliveries.id, releasedIds),
+          eq(webhookDeliveries.lockedBy, workerId),
+        ),
+      );
+  }
+
   let success = 0;
   let failed = 0;
   for (const row of due) {
-    const result = await deliverWebhook(row.delivery, row.endpoint);
+    const result = await deliverWebhook(row.delivery, row.endpoint, { workerId });
     if (result === "success") success += 1;
     else failed += 1;
   }

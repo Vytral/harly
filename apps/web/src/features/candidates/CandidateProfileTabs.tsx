@@ -44,6 +44,7 @@ import { NoteForm } from "@/features/candidates/NoteForm";
 import { EmailDrawer, type EmailTemplateOption } from "@/features/candidates/EmailDrawer";
 import type { TemplateValues } from "@/features/email-templates/interpolate";
 import { createCandidateNote } from "@/features/candidates/actions";
+import { fulfilDsarErasureAction, reviewDsarRequestAction } from "@/features/workspaces/dsar-actions";
 import {
   generateInterviewBriefAction,
   setInterviewStatus,
@@ -66,6 +67,7 @@ import type {
   CandidateAiEvaluationItem,
   CandidateApplicationStatus,
   CandidateNoteItem,
+  CandidatePrivacyRequestItem,
   NoteMention,
 } from "@/features/candidates/data";
 import { AiButton } from "@/components/ui/AiButton";
@@ -85,8 +87,9 @@ import {
 import { Sheet, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import { RelativeTime } from "@/lib/date-hydration";
+import { RelativeTime, ShortDate } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
 type CandidateProfileApplication = {
@@ -178,6 +181,8 @@ type CandidateProfileTabsProps = {
   scheduleMembers: ScheduleMemberOption[];
   scheduleCal: ScheduleCalConfig;
   currentUserId?: string;
+  privacyRequests?: Array<Omit<CandidatePrivacyRequestItem, "createdAt" | "completedAt"> & { createdAt: string; completedAt: string | null }>;
+  canFulfilErasure?: boolean;
 };
 
 const INTERVIEW_MODE_ICON = {
@@ -266,6 +271,8 @@ export function CandidateProfileTabs({
   scheduleMembers,
   scheduleCal,
   currentUserId,
+  privacyRequests = [],
+  canFulfilErasure = false,
 }: CandidateProfileTabsProps) {
   const [tab, setTab] = useState("profile");
 
@@ -273,7 +280,7 @@ export function CandidateProfileTabs({
     <Tabs value={tab} onValueChange={setTab}>
       <TabsList
         variant="line"
-        className="w-full justify-start gap-5 overflow-x-auto border-b border-border/60 [&>button]:flex-none [&>button]:px-0.5"
+        className="w-full justify-start gap-3 overflow-x-auto border-b border-border/60 text-sm [&>button]:flex-none [&>button]:px-0.5"
       >
         <TabsTrigger value="profile">Profile</TabsTrigger>
         <TabsTrigger value="interviews">
@@ -296,6 +303,12 @@ export function CandidateProfileTabs({
           Activity
           <TabCount value={activity.length + notes.length} />
         </TabsTrigger>
+        {privacyRequests.length > 0 ? (
+          <TabsTrigger value="privacy">
+            Privacy
+            <TabCount value={privacyRequests.length} />
+          </TabsTrigger>
+        ) : null}
       </TabsList>
 
       {/* ── Profile , AI match leads, single "Details" panel follows ── */}
@@ -417,6 +430,40 @@ export function CandidateProfileTabs({
         {activity.length === 0 && notes.length === 0 ? (
           <EmptyTab icon={MessageSquare} text="No activity yet." />
         ) : null}
+      </TabsContent>
+
+      <TabsContent value="privacy" className="mt-4 space-y-3">
+        <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-4">
+          <div>
+            <p className="text-sm font-medium">Privacy requests</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Review the candidate’s applications, communication, notes, and activity before recording a decision.
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={() => setTab("activity")}>
+            View activity
+          </Button>
+        </div>
+        {privacyRequests.map((request) => (
+          <PrivacyRequestCard
+            key={request.id}
+            request={request}
+            candidateId={candidateId}
+            candidateEmail={candidateEmail}
+            canFulfilErasure={canFulfilErasure}
+            inventory={{
+              applications: applications.length,
+              interviews: interviews.length,
+              messages: messages.length,
+              files: files.length,
+              notes: notes.length,
+              scorecards: scorecards.length,
+              aiEvaluations: aiEvaluations.length,
+              offers: offers.length,
+              activity: activity.length,
+            }}
+          />
+        ))}
       </TabsContent>
 
       {/* ── Communication ── */}
@@ -567,6 +614,267 @@ export function CandidateProfileTabs({
       </TabsContent>
 
     </Tabs>
+  );
+}
+
+type PrivacyRequest = NonNullable<CandidateProfileTabsProps["privacyRequests"]>[number];
+
+type PrivacyInventory = {
+  applications: number;
+  interviews: number;
+  messages: number;
+  files: number;
+  notes: number;
+  scorecards: number;
+  aiEvaluations: number;
+  offers: number;
+  activity: number;
+};
+
+const INVENTORY_ROWS: Array<{ key: keyof PrivacyInventory; label: string }> = [
+  { key: "applications", label: "Applications" },
+  { key: "interviews", label: "Interviews" },
+  { key: "messages", label: "Email messages" },
+  { key: "files", label: "Files & résumés" },
+  { key: "notes", label: "Internal notes" },
+  { key: "scorecards", label: "Scorecards" },
+  { key: "aiEvaluations", label: "AI evaluations" },
+  { key: "offers", label: "Offers" },
+];
+
+// GDPR Art. 12(3): respond to a data-subject request within one month.
+const DSAR_DUE_DAYS = 30;
+
+function PrivacyRequestCard({
+  request,
+  candidateId,
+  candidateEmail,
+  canFulfilErasure,
+  inventory,
+}: {
+  request: PrivacyRequest;
+  candidateId: string;
+  candidateEmail: string;
+  canFulfilErasure: boolean;
+  inventory: PrivacyInventory;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [note, setNote] = useState("");
+  const [confirmEmail, setConfirmEmail] = useState("");
+
+  function review(decision: "approve" | "deny") {
+    startTransition(async () => {
+      const result = await reviewDsarRequestAction({
+        requestId: request.id,
+        decision,
+        notes: note || undefined,
+      });
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not review the request.");
+        return;
+      }
+      toast.success(decision === "approve" ? "Request approved for fulfilment." : "Request denied.");
+      router.refresh();
+    });
+  }
+
+  function fulfilErasure() {
+    startTransition(async () => {
+      const result = await fulfilDsarErasureAction({ requestId: request.id, candidateId });
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not fulfil the erasure request.");
+        return;
+      }
+      toast.success("Candidate data erased and request fulfilled.");
+      router.replace("/dashboard/candidates");
+    });
+  }
+
+  const statusLabel = request.status === "processing"
+    ? "In progress"
+    : request.status[0].toUpperCase() + request.status.slice(1);
+
+  const statusBadge = {
+    pending: "warning",
+    processing: "info",
+    completed: "success",
+    denied: "danger",
+  }[request.status] as "warning" | "info" | "success" | "danger";
+
+  const dueDate = new Date(new Date(request.createdAt).getTime() + DSAR_DUE_DAYS * 86_400_000);
+  const isOpen = request.status === "pending" || request.status === "processing";
+  const isErasure = request.type === "erasure";
+  const scoped = INVENTORY_ROWS.filter((row) => inventory[row.key] > 0);
+  const emailConfirmed = confirmEmail.trim().toLowerCase() === candidateEmail.trim().toLowerCase();
+
+  const source = request.requestedBy ? "candidate portal" : null;
+
+  return (
+    <Card className="max-w-xl">
+      <CardContent className="space-y-5 py-5">
+        {/* Heading , title + status on one line, timing floated right */}
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h3 className="font-medium">
+              {isErasure ? "Erasure request" : "Data export request"}
+            </h3>
+            <Badge variant={statusBadge}>
+              {statusLabel}
+            </Badge>
+          </div>
+          <span className="shrink-0 text-[13px] text-muted-foreground">
+            <RelativeTime value={request.createdAt} />
+          </span>
+        </div>
+
+        {/* One-line context , who, how, deadline */}
+        <p className="text-sm text-muted-foreground">
+          Requested by{" "}
+          <span className="text-foreground">{request.requestedBy ?? "the candidate"}</span>
+          {source ? ` via ${source}` : ""}
+          {isOpen ? (
+            <> · respond by <ShortDate value={dueDate} /></>
+          ) : null}
+          {request.processedBy ? <> · reviewed by {request.processedBy}</> : null}
+        </p>
+
+        {/* Data in scope , scannable number grid, not a label-value list */}
+        {isErasure ? (
+          <div className="rounded-xl bg-muted/40 p-5">
+            <p className="text-[13px] text-muted-foreground">
+              {scoped.length > 0
+                ? "Approving permanently destroys the following"
+                : "No linked records — only the candidate profile remains"}
+            </p>
+            {scoped.length > 0 ? (
+              <dl className="mt-4 grid grid-cols-[repeat(3,auto)] justify-start gap-x-12 gap-y-5">
+                {scoped.map((row) => (
+                  <div key={row.key}>
+                    <dd className="text-xl font-medium tabular-nums leading-none">
+                      {inventory[row.key]}
+                    </dd>
+                    <dt className="mt-1.5 text-[13px] text-muted-foreground">{row.label}</dt>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+          </div>
+        ) : null}
+
+        {/* Prior review note , only for already-decided requests */}
+        {request.notes && request.status !== "pending" ? (
+          <p className="whitespace-pre-line text-sm text-muted-foreground">
+            {request.notes}
+          </p>
+        ) : null}
+
+        {/* Decision , pending: optional note + Deny / Approve */}
+        {request.status === "pending" ? (
+          <div className="space-y-4">
+            <Textarea
+              value={note}
+              onChange={(event) => setNote(event.target.value)}
+              placeholder="Internal review note (optional)"
+              maxLength={1000}
+              className="min-h-[70px] resize-y text-sm"
+            />
+            <div className="flex gap-2.5">
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={isPending}
+                    className="border-destructive/30 text-destructive hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    Deny
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Deny this request?</DialogTitle>
+                    <DialogDescription>This records the decision and its review note in the audit log.</DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose asChild><Button variant="outline" disabled={isPending}>Cancel</Button></DialogClose>
+                    <DialogClose asChild><Button variant="destructive" disabled={isPending} onClick={() => review("deny")}>Deny request</Button></DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button size="sm" disabled={isPending}>Approve</Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Approve for fulfilment?</DialogTitle>
+                    <DialogDescription>
+                      {isErasure
+                        ? "Approval moves the request to fulfilment; it does not delete data yet. A role with candidate deletion access confirms the erasure in a second step."
+                        : "This records your approval in the audit log."}
+                    </DialogDescription>
+                  </DialogHeader>
+                  <DialogFooter>
+                    <DialogClose asChild><Button variant="outline" disabled={isPending}>Cancel</Button></DialogClose>
+                    <DialogClose asChild><Button disabled={isPending} onClick={() => review("approve")}>Approve request</Button></DialogClose>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+        ) : null}
+
+        {/* Fulfilment , processing erasure: irreversible confirm */}
+        {request.status === "processing" && isErasure ? (
+          canFulfilErasure ? (
+            <Dialog onOpenChange={(open) => { if (!open) setConfirmEmail(""); }}>
+              <DialogTrigger asChild>
+                <Button size="sm" variant="destructive" disabled={isPending}>
+                  Erase candidate data
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Permanently erase candidate data?</DialogTitle>
+                  <DialogDescription>
+                    This fulfils the approved request. The candidate profile and every linked record above are permanently removed, then you return to Candidates.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2">
+                  <label htmlFor={`erase-confirm-${request.id}`} className="text-sm text-muted-foreground">
+                    Type <span className="font-medium text-foreground">{candidateEmail}</span> to confirm.
+                  </label>
+                  <Input
+                    id={`erase-confirm-${request.id}`}
+                    value={confirmEmail}
+                    onChange={(event) => setConfirmEmail(event.target.value)}
+                    placeholder={candidateEmail}
+                    autoComplete="off"
+                  />
+                </div>
+                <DialogFooter>
+                  <DialogClose asChild><Button variant="outline" disabled={isPending}>Cancel</Button></DialogClose>
+                  <DialogClose asChild>
+                    <Button
+                      variant="destructive"
+                      disabled={isPending || !emailConfirmed}
+                      onClick={fulfilErasure}
+                    >
+                      Erase permanently
+                    </Button>
+                  </DialogClose>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Approved and awaiting fulfilment — a role with candidate deletion access must complete the erasure.
+            </p>
+          )
+        ) : null}
+      </CardContent>
+    </Card>
   );
 }
 

@@ -36,6 +36,9 @@ import {
 } from "@/features/interviews/shared";
 import type { InterviewType, InterviewMode } from "@/features/interviews/shared";
 import { cancelInterviewGCalEvent } from "@/lib/gcal/sync";
+import { storage } from "@/lib/storage";
+import { isWorkspaceStorageKey } from "@/lib/storage-validation";
+import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 
 export type CandidateApplicationStatus =
   | "active"
@@ -113,6 +116,17 @@ export type CandidateActivityItem = {
   createdAt: Date;
 };
 
+export type CandidatePrivacyRequestItem = {
+  id: string;
+  type: "export" | "erasure";
+  status: "pending" | "processing" | "completed" | "denied";
+  requestedBy: string | null;
+  processedBy: string | null;
+  notes: string | null;
+  createdAt: Date;
+  completedAt: Date | null;
+};
+
 export type TalentPoolEntry = {
   applicationId: string;
   candidateId: string;
@@ -141,6 +155,26 @@ function textFromMetadata(value: unknown, key: string) {
 
   const entry = value[key];
   return typeof entry === "string" ? entry : null;
+}
+
+function workspaceStorageKeyFromUrl(workspaceId: string, fileUrl: string) {
+  const resumeKey = resumeKeyFromUrl(fileUrl);
+  if (resumeKey && isWorkspaceStorageKey(workspaceId, resumeKey, "resumes")) {
+    return resumeKey;
+  }
+
+  const path = fileUrl.startsWith("/")
+    ? fileUrl
+    : (() => {
+        try {
+          return new URL(fileUrl).pathname;
+        } catch {
+          return fileUrl;
+        }
+      })();
+  const marker = path.indexOf("workspaces/");
+  const key = marker >= 0 ? path.slice(marker) : null;
+  return key && isWorkspaceStorageKey(workspaceId, key, "images") ? key : null;
 }
 
 export async function listCandidates() {
@@ -246,6 +280,7 @@ export async function listCandidates() {
     .from(candidateTags)
     .where(eq(candidateTags.workspaceId, workspace.id))
     .orderBy(candidateTags.label);
+
   const tagsByCandidate = new Map<string, string[]>();
   for (const tag of tagRows) {
     const existing = tagsByCandidate.get(tag.candidateId) ?? [];
@@ -755,6 +790,26 @@ export async function getCandidateProfile(candidateId: string) {
 
   const inPool = !!poolEntry;
 
+  const privacyRequests = await db
+    .select({
+      id: dsarRequests.id,
+      type: dsarRequests.type,
+      status: dsarRequests.status,
+      requestedBy: dsarRequests.requestedBy,
+      processedBy: dsarRequests.processedBy,
+      notes: dsarRequests.notes,
+      createdAt: dsarRequests.createdAt,
+      completedAt: dsarRequests.completedAt,
+    })
+    .from(dsarRequests)
+    .where(
+      and(
+        eq(dsarRequests.workspaceId, workspace.id),
+        eq(dsarRequests.candidateId, candidate.id),
+      ),
+    )
+    .orderBy(desc(dsarRequests.createdAt));
+
   return {
     workspaceId: workspace.id,
     candidate: {
@@ -805,6 +860,7 @@ export async function getCandidateProfile(candidateId: string) {
       updatedAt: row.updatedAt.toISOString(),
     })),
     tags: tagRows,
+    privacyRequests,
     messages: messageRows.map((row) => ({
       id: row.id,
       direction: row.direction,
@@ -919,6 +975,44 @@ export async function permanentlyDeleteCandidate(
 ) {
   const { organization: workspace } = await getWorkspaceContext();
 
+  const [candidate] = await db
+    .select({ avatarUrl: candidates.avatarUrl })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.id, candidateId),
+        eq(candidates.workspaceId, workspace.id),
+        isNotNull(candidates.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!candidate) return { ok: false, error: "Candidate not found in trash." } as const;
+
+  // Candidate rows cascade-delete, but object storage does not. Remove every
+  // workspace-owned resume and avatar first; fail closed if any object cannot
+  // be erased so the request can be retried instead of claiming completion.
+  const fileRows = await db
+    .select({ fileUrl: candidateFiles.fileUrl })
+    .from(candidateFiles)
+    .where(
+      and(
+        eq(candidateFiles.workspaceId, workspace.id),
+        eq(candidateFiles.candidateId, candidateId),
+      ),
+    );
+  const storageKeys = new Set(
+    [...fileRows.map((file) => file.fileUrl), candidate.avatarUrl]
+      .filter((url): url is string => Boolean(url))
+      .map((url) => workspaceStorageKeyFromUrl(workspace.id, url))
+      .filter((key): key is string => Boolean(key)),
+  );
+  const storageResults = await Promise.allSettled(
+    [...storageKeys].map((key) => storage.delete(key)),
+  );
+  if (storageResults.some((result) => result.status === "rejected")) {
+    return { ok: false, error: "Could not erase every stored candidate file. Please retry." } as const;
+  }
+
   // Cancel any Google Calendar events for this candidate's interviews before
   // the cascade delete removes the rows (and we lose the gcalEventId refs).
   const linkedInterviews = await db
@@ -950,12 +1044,28 @@ export async function permanentlyDeleteCandidate(
   // The destructive action in Trash is the staff approval to fulfil an open
   // erasure request. Complete it before the FK is set to null by deletion.
   const now = new Date();
+  const [openErasure] = await db
+    .select({ notes: dsarRequests.notes })
+    .from(dsarRequests)
+    .where(
+      and(
+        eq(dsarRequests.workspaceId, workspace.id),
+        eq(dsarRequests.candidateId, candidateId),
+        eq(dsarRequests.type, "erasure"),
+        inArray(dsarRequests.status, ["pending", "processing"]),
+      ),
+    )
+    .orderBy(desc(dsarRequests.createdAt))
+    .limit(1);
+
   await db
     .update(dsarRequests)
     .set({
       status: "completed",
       processedBy,
-      notes: "Erasure fulfilled by permanent candidate deletion.",
+      notes: [openErasure?.notes, "Erasure fulfilled by permanent candidate deletion."]
+        .filter(Boolean)
+        .join("\n\n"),
       completedAt: now,
       updatedAt: now,
     })

@@ -9,9 +9,11 @@ import {
 } from "@/features/applications/service";
 import { authenticateApiKey } from "@/server/api/auth";
 import { applicationCreateSchema } from "@/server/api/schemas";
+import { reserveIdempotencyKey } from "@/server/api/idempotency";
 import { apiOk, withApi } from "@/server/api/respond";
 import { scheduleAutoScore } from "@/features/applications/auto-score";
 import { scheduleAutoDuplicateCheck } from "@/features/applications/auto-duplicates";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -43,6 +45,12 @@ export const GET = withApi(async (request) => {
 /** POST /api/v1/applications , manually create an application. */
 export const POST = withApi(async (request) => {
   const ctx = await authenticateApiKey(request, "applications:write");
+  const idempotency = await reserveIdempotencyKey(request, ctx);
+  if (idempotency.kind === "replay") {
+    return NextResponse.json(idempotency.response.body, {
+      status: idempotency.response.status,
+    });
+  }
   const values = applicationCreateSchema.parse(
     await request.json().catch(() => null),
   );
@@ -58,5 +66,12 @@ export const POST = withApi(async (request) => {
       scheduleAutoDuplicateCheck(application.candidateId, ctx.workspaceId),
     ]);
   });
-  return apiOk(serializeApplication(application), { status: 201 });
+  const response = apiOk(serializeApplication(application), { status: 201 });
+  if (idempotency.kind === "reserved") {
+    await idempotency.complete({
+      status: response.status,
+      body: await response.clone().json(),
+    });
+  }
+  return response;
 });

@@ -116,6 +116,27 @@ export async function createApplicationForApi(input: {
       .limit(1);
     if (!candidate) throw ApiError.notFound("Candidate not found.");
 
+    const [firstStage] = await tx
+      .select({ id: jobStages.id })
+      .from(jobStages)
+      .where(
+        and(
+          eq(jobStages.workspaceId, workspaceId),
+          eq(jobStages.jobId, jobId),
+        ),
+      )
+      .orderBy(asc(jobStages.order))
+      .limit(1);
+    if (!firstStage) {
+      throw ApiError.unprocessable("This job has no pipeline stages.");
+    }
+
+    // Serialise writes entering one stage. Besides preserving pipeline order,
+    // this makes the duplicate read below safe under concurrent API requests.
+    await tx.execute(
+      sql`select pg_advisory_xact_lock(hashtext(${workspaceId} || ':' || ${firstStage.id}))`,
+    );
+
     const [duplicate] = await tx
       .select({ id: applications.id })
       .from(applications)
@@ -131,21 +152,6 @@ export async function createApplicationForApi(input: {
       throw ApiError.conflict(
         "This candidate has already applied to this job.",
       );
-    }
-
-    const [firstStage] = await tx
-      .select({ id: jobStages.id })
-      .from(jobStages)
-      .where(
-        and(
-          eq(jobStages.workspaceId, workspaceId),
-          eq(jobStages.jobId, jobId),
-        ),
-      )
-      .orderBy(asc(jobStages.order))
-      .limit(1);
-    if (!firstStage) {
-      throw ApiError.unprocessable("This job has no pipeline stages.");
     }
 
     const [nextOrder] = await tx
@@ -189,6 +195,91 @@ export async function createApplicationForApi(input: {
     application: serializeApplication(application),
   });
   return application;
+}
+
+export type BulkApplicationItem =
+  | {
+      candidateId: string;
+      outcome: "created";
+      application: Application;
+    }
+  | {
+      candidateId: string;
+      outcome: "conflict" | "failed";
+      error: { code: string; message: string };
+    };
+
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505"
+  );
+}
+
+async function createBulkItem(input: {
+  workspaceId: string;
+  jobId: string;
+  candidateId: string;
+  source?: string;
+}): Promise<BulkApplicationItem> {
+  try {
+    const application = await createApplicationForApi(input);
+    return { candidateId: input.candidateId, outcome: "created", application };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return {
+        candidateId: input.candidateId,
+        outcome: error.code === "conflict" ? "conflict" : "failed",
+        error: { code: error.code, message: error.message },
+      };
+    }
+    if (isUniqueViolation(error)) {
+      return {
+        candidateId: input.candidateId,
+        outcome: "conflict",
+        error: {
+          code: "conflict",
+          message: "This candidate has already applied to this job.",
+        },
+      };
+    }
+    console.error("[api] bulk application item failed", error);
+    return {
+      candidateId: input.candidateId,
+      outcome: "failed",
+      error: { code: "internal", message: "Could not create application." },
+    };
+  }
+}
+
+/**
+ * Create up to 100 applications with independent transactions. A bad or
+ * duplicate candidate never rolls back successful siblings; result order
+ * exactly matches `candidateIds`.
+ */
+export async function createApplicationsBulkForApi(input: {
+  workspaceId: string;
+  jobId: string;
+  candidateIds: string[];
+  source?: string;
+}): Promise<BulkApplicationItem[]> {
+  // Creation assigns a pipeline order from the current stage maximum. Keep a
+  // bulk request serial so its own items never race for that value.
+  const results: BulkApplicationItem[] = [];
+  for (const candidateId of input.candidateIds) {
+    results.push(
+      await createBulkItem({
+        workspaceId: input.workspaceId,
+        jobId: input.jobId,
+        candidateId,
+        source: input.source,
+      }),
+    );
+  }
+
+  return results;
 }
 
 export async function moveApplicationStageForApi(input: {

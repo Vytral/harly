@@ -15,6 +15,7 @@ import {
   DatabaseStore,
   MemoryStore,
   enforceRateLimit,
+  rateLimitResultFromError,
 } from "@/server/api/ratelimit";
 
 describe("MemoryStore rate limiting", () => {
@@ -27,11 +28,30 @@ describe("MemoryStore rate limiting", () => {
     expect([r1.remaining, r2.remaining, r3.remaining]).toEqual([2, 1, 0]);
     await expect(store.consume(key, 3, 60_000)).rejects.toThrow(ApiError);
   });
+
+  it("attaches quota state to an exhausted-budget error", async () => {
+    const store = new MemoryStore();
+    await store.consume("exhausted", 1, 60_000);
+
+    let caught: unknown;
+    try {
+      await store.consume("exhausted", 1, 60_000);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(rateLimitResultFromError(caught)).toMatchObject({
+      limit: 1,
+      remaining: 0,
+    });
+  });
 });
 
 describe("enforceRateLimit pluggable store", () => {
   it("delegates to the provided store", async () => {
-    const store = { consume: vi.fn(async () => ({ remaining: 9, resetAt: 0 })) };
+    const store = {
+      consume: vi.fn(async () => ({ limit: 10, remaining: 9, resetAt: 0 })),
+    };
     await enforceRateLimit("k", { limit: 10, windowMs: 1000 }, store as never);
     expect(store.consume).toHaveBeenCalledWith("k", 10, 1000);
   });
@@ -67,8 +87,8 @@ describe("DatabaseStore rate limiting (shared, multi-instance)", () => {
     mocks.transactionImpl.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx([row])),
     );
-    await expect(new DatabaseStore().consume("db-key", 5, 60_000)).rejects.toThrow(
-      ApiError,
-    );
+    await expect(
+      new DatabaseStore().consume("db-key", 5, 60_000),
+    ).rejects.toThrow(ApiError);
   });
 });

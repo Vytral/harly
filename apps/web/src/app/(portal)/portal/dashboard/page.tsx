@@ -10,12 +10,14 @@ import {
   jobs,
   jobStages,
   member,
+  organization,
   user,
   workspaceSettings,
 } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { PortalShell } from "@/features/portal/PortalShellServer";
-import { formatShort } from "@/lib/date";
+import { getPortalApplicationInterviews } from "@/server/portal-applications";
+import { formatShort, formatTime } from "@/lib/date";
 import { cn } from "@/lib/utils";
 import {
   CheckCircleIcon,
@@ -49,19 +51,26 @@ export default async function PortalDashboardPage() {
   const session = await resolvePortalSession(token);
   if (!session) redirect("/portal/login" as Route);
 
-  const [settings] = await db
-    .select({
-      tagline: workspaceSettings.tagline,
-      description: workspaceSettings.description,
-      websiteUrl: workspaceSettings.websiteUrl,
-      heroImageUrl: workspaceSettings.heroImageUrl,
-      primaryColor: workspaceSettings.primaryColor,
-      showStatus: workspaceSettings.portalShowApplicationStatus,
-      showHiringTeam: workspaceSettings.portalShowHiringTeam,
-    })
-    .from(workspaceSettings)
-    .where(eq(workspaceSettings.organizationId, session.workspaceId))
-    .limit(1);
+  const [[settings], [org]] = await Promise.all([
+    db
+      .select({
+        tagline: workspaceSettings.tagline,
+        description: workspaceSettings.description,
+        websiteUrl: workspaceSettings.websiteUrl,
+        heroImageUrl: workspaceSettings.heroImageUrl,
+        primaryColor: workspaceSettings.primaryColor,
+        showStatus: workspaceSettings.portalShowApplicationStatus,
+        showHiringTeam: workspaceSettings.portalShowHiringTeam,
+      })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.organizationId, session.workspaceId))
+      .limit(1),
+    db
+      .select({ name: organization.name, logo: organization.logo })
+      .from(organization)
+      .where(eq(organization.id, session.workspaceId))
+      .limit(1),
+  ]);
 
   const showPipeline = settings?.showStatus !== false;
   const accentColor = settings?.primaryColor ?? "#18181b";
@@ -115,38 +124,45 @@ export default async function PortalDashboardPage() {
   // Primary app = first active one, fallback to most recent
   const primaryApp = appRows.find((a) => a.status === "active") ?? appRows[0] ?? null;
   const otherApps = primaryApp ? appRows.filter((a) => a.id !== primaryApp.id) : [];
+  const interviews = primaryApp
+    ? await getPortalApplicationInterviews(primaryApp.id)
+    : [];
 
   return (
     <PortalShell>
-      {/* ── Hero Banner ── */}
-      <div className="relative mb-6 overflow-hidden rounded-2xl">
-        {settings?.heroImageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- external URL from workspace
-          <img
-            src={settings.heroImageUrl}
-            alt="Company banner"
-            className="h-44 w-full object-cover sm:h-52"
-          />
-        ) : (
-          <div
-            className="h-44 w-full sm:h-52"
-            style={{
-              background: `linear-gradient(135deg, ${accentColor}, ${accentColor}88, ${accentColor}44)`,
-            }}
-          />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
-        <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-6">
-          <h1 className="text-lg font-semibold text-white sm:text-xl">
-            Hello, {session.firstName}!
-          </h1>
-          {settings?.tagline && (
-            <p className="mt-0.5 text-sm text-white/80">{settings.tagline}</p>
-          )}
-        </div>
-      </div>
+      <div className="font-sans">
+        <section className="overflow-hidden rounded-[1.35rem] border border-border/70 bg-card shadow-[0_18px_45px_-38px_rgba(15,23,42,0.5)]">
+          <div className="grid min-h-48 sm:grid-cols-[38%_62%] sm:min-h-64">
+            <div className="relative min-h-40 overflow-hidden bg-muted sm:min-h-full">
+              {settings?.heroImageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element -- workspace-managed public asset
+                <img src={settings.heroImageUrl} alt="" className="absolute inset-0 size-full object-cover" />
+              ) : (
+                <>
+                  <div className="absolute -left-[18%] -top-[52%] size-[86%] rounded-full border-[2.75rem] border-white/35" style={{ backgroundColor: accentColor }} />
+                  <div className="absolute -bottom-[43%] left-[21%] size-[92%] rounded-full border-[2.75rem] border-white/20" style={{ backgroundColor: accentColor }} />
+                  <div className="absolute -right-[25%] top-[15%] size-[88%] rounded-full bg-white/20" />
+                </>
+              )}
+            </div>
+            <div className="relative flex min-h-48 items-end overflow-hidden px-6 py-7 sm:min-h-64 sm:px-10" style={{ backgroundColor: accentColor }}>
+              <div className="absolute inset-0 bg-black/15" />
+              <div className="relative flex items-center gap-3 text-white sm:gap-4">
+                {org?.logo ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- workspace-managed public asset
+                  <img src={org.logo} alt="" className="size-11 rounded-xl bg-white/95 object-cover p-1.5 sm:size-14" />
+                ) : (
+                  <span className="flex size-11 items-center justify-center rounded-xl bg-white/15 text-xl font-bold sm:size-14 sm:text-2xl">
+                    {(org?.name ?? "C").charAt(0).toUpperCase()}
+                  </span>
+                )}
+                <p className="text-2xl font-semibold tracking-[-0.045em] sm:text-4xl">{org?.name ?? "Careers"}</p>
+              </div>
+            </div>
+          </div>
+        </section>
 
-      {appRows.length === 0 ? (
+        {appRows.length === 0 ? (
         /* ── Empty state ── */
         <div className="rounded-2xl border border-dashed border-border bg-card p-10 text-center">
           <BriefcaseIcon className="mx-auto mb-3 size-8 text-muted-foreground/50" />
@@ -162,35 +178,33 @@ export default async function PortalDashboardPage() {
             <ArrowUpRightIcon className="size-3.5" />
           </Link>
         </div>
-      ) : (
-        <>
-          {/* ── Candidate header ── */}
-          {primaryApp && (
-            <div className="mb-6">
-              <h2 className="text-2xl font-bold text-foreground">
+        ) : (
+          <div className="mt-10">
+            {primaryApp && (
+              <section className="border-b border-border/70 pb-7">
+                <div className="flex flex-wrap items-start justify-between gap-5">
+                  <div>
+                    <h1 className="text-3xl font-semibold tracking-[-0.055em] text-foreground sm:text-[2.6rem]">
                 {session.firstName} {session.lastName}
-              </h2>
-              <p className="mt-0.5 text-sm text-muted-foreground">
-                For{" "}
-                <Link
-                  href={`/portal/applications/${primaryApp.id}` as Route}
-                  className="font-medium text-foreground underline-offset-2 hover:underline"
-                >
-                  {primaryApp.jobTitle}
-                </Link>
-              </p>
-            </div>
-          )}
+                    </h1>
+                    <p className="mt-1.5 text-base text-muted-foreground">
+                      For <Link href={`/portal/applications/${primaryApp.id}` as Route} className="font-semibold text-foreground underline-offset-4 hover:underline">{primaryApp.jobTitle}</Link> at {org?.name ?? "this company"}
+                    </p>
+                  </div>
+                  {teamMembers.length > 0 ? <HiringTeamAvatars members={teamMembers} accentColor={accentColor} /> : null}
+                </div>
+                <p className="mt-6 max-w-4xl text-base leading-7 text-muted-foreground">
+                  Welcome, {session.firstName}. We&apos;ll use this space to share interview details, updates, and everything you need for the next step.
+                </p>
+              </section>
+            )}
 
-          {/* ── 2-column layout ── */}
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[320px_1fr]">
-            {/* ── LEFT COLUMN ── */}
-            <div className="space-y-6">
-              {/* Interview plan */}
+            <div className="mt-9 grid grid-cols-1 gap-10 lg:grid-cols-[minmax(16rem,0.78fr)_minmax(0,1.6fr)]">
+              <div className="space-y-9">
               {primaryApp && showPipeline && (stagesByJob.get(primaryApp.jobId) ?? []).length > 0 && (
                 <section>
-                  <h3 className="mb-3 text-sm font-semibold text-foreground">Interview plan</h3>
-                  <div className="overflow-hidden rounded-xl border border-border bg-card">
+                    <h2 className="mb-4 text-lg font-semibold tracking-[-0.025em] text-foreground">Interview plan</h2>
+                    <div className="overflow-hidden rounded-2xl bg-muted/55 p-2">
                     <InterviewPlanSidebar
                       app={primaryApp}
                       stages={stagesByJob.get(primaryApp.jobId) ?? []}
@@ -199,15 +213,14 @@ export default async function PortalDashboardPage() {
                 </section>
               )}
 
-              {/* Meet your hiring team */}
               {teamMembers.length > 0 && (
                 <section>
-                  <h3 className="mb-3 text-sm font-semibold text-foreground">Meet your hiring team</h3>
-                  <div className="space-y-2">
+                    <h2 className="mb-4 text-lg font-semibold tracking-[-0.025em] text-foreground">Meet your hiring team</h2>
+                    <div className="divide-y divide-border/70 border-y border-border/70">
                     {teamMembers.map((m, i) => (
                       <div
                         key={`${m.name}-${i}`}
-                        className="flex items-center gap-3 rounded-xl border border-border bg-card p-3"
+                        className="flex items-center gap-3 py-3.5"
                       >
                         {m.image ? (
                           // eslint-disable-next-line @next/next/no-img-element -- external URL
@@ -239,13 +252,15 @@ export default async function PortalDashboardPage() {
               )}
             </div>
 
-            {/* ── RIGHT COLUMN ── */}
-            <div className="space-y-6">
-              {/* Other applications */}
+              <div className="space-y-10">
+                <section>
+                  <h2 className="mb-4 text-lg font-semibold tracking-[-0.025em] text-foreground">Interviews</h2>
+                  <InterviewList interviews={interviews} applicationId={primaryApp?.id ?? null} accentColor={accentColor} />
+                </section>
               {otherApps.length > 0 && (
                 <section>
-                  <h3 className="mb-3 text-sm font-semibold text-foreground">Other applications</h3>
-                  <div className="space-y-2">
+                    <h2 className="mb-4 text-lg font-semibold tracking-[-0.025em] text-foreground">Other applications</h2>
+                    <div className="divide-y divide-border/70 border-y border-border/70">
                     {otherApps.map((row) => {
                       const stages = stagesByJob.get(row.jobId) ?? [];
                       const currentIdx = stages.findIndex((s) => s.id === row.currentStageId);
@@ -254,7 +269,7 @@ export default async function PortalDashboardPage() {
                         <Link
                           key={row.id}
                           href={`/portal/applications/${row.id}` as Route}
-                          className="block rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/50"
+                          className="block py-4 transition-colors hover:bg-muted/40"
                         >
                           <div className="flex items-center justify-between gap-3">
                             <div className="min-w-0">
@@ -301,14 +316,10 @@ export default async function PortalDashboardPage() {
                 </section>
               )}
 
-              {/* Company info */}
               {(settings?.description || settings?.websiteUrl) && (
                 <section>
-                  <div className="overflow-hidden rounded-xl border border-border bg-card">
-                    <div className="p-5">
-                      <h3 className="mb-2 text-sm font-semibold text-foreground">
-                        About the company
-                      </h3>
+                    <div className="border-t border-border/70 pt-7">
+                      <h2 className="mb-3 text-lg font-semibold tracking-[-0.025em] text-foreground">Welcome to {org?.name ?? "the team"}</h2>
                       {settings.description && (
                         <p className="text-sm leading-relaxed text-muted-foreground">
                           {settings.description}
@@ -327,13 +338,13 @@ export default async function PortalDashboardPage() {
                         </a>
                       )}
                     </div>
-                  </div>
                 </section>
               )}
             </div>
+            </div>
           </div>
-        </>
-      )}
+        )}
+      </div>
     </PortalShell>
   );
 }
@@ -393,6 +404,107 @@ function InterviewPlanSidebar({
               </p>
             </div>
           </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function HiringTeamAvatars({
+  members,
+  accentColor,
+}: {
+  members: Array<{
+    name: string | null;
+    image: string | null;
+    jobTitle: string | null;
+  }>;
+  accentColor: string;
+}) {
+  const visible = members.slice(0, 4);
+  const overflow = members.length - visible.length;
+
+  return (
+    <div className="flex -space-x-2" aria-label="Hiring team">
+      {visible.map((member, index) =>
+        member.image ? (
+          // eslint-disable-next-line @next/next/no-img-element -- workspace member image
+          <img
+            key={`${member.name}-${index}`}
+            src={member.image}
+            alt={member.name ?? "Hiring team member"}
+            className="size-10 rounded-full border-2 border-background object-cover"
+          />
+        ) : (
+          <span
+            key={`${member.name}-${index}`}
+            className="flex size-10 items-center justify-center rounded-full border-2 border-background text-xs font-semibold text-white"
+            style={{ backgroundColor: accentColor }}
+            title={member.name ?? "Hiring team member"}
+          >
+            {(member.name ?? "?").charAt(0).toUpperCase()}
+          </span>
+        ),
+      )}
+      {overflow > 0 ? (
+        <span className="flex size-10 items-center justify-center rounded-full border-2 border-background bg-foreground text-xs font-semibold text-background">
+          +{overflow}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function InterviewList({
+  interviews,
+  applicationId,
+  accentColor,
+}: {
+  interviews: Awaited<ReturnType<typeof getPortalApplicationInterviews>>;
+  applicationId: string | null;
+  accentColor: string;
+}) {
+  const scheduled = interviews.filter((interview) => interview.status === "scheduled");
+
+  if (scheduled.length === 0) {
+    return (
+      <div className="border-y border-border/70 py-7">
+        <p className="text-sm text-muted-foreground">No interviews are scheduled yet. We&apos;ll let you know when there&apos;s a next step.</p>
+        {applicationId ? <Link href={`/portal/applications/${applicationId}` as Route} className="mt-3 inline-flex text-sm font-semibold text-foreground underline-offset-4 hover:underline">View application</Link> : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="divide-y divide-border/70 rounded-2xl border border-border/70 bg-card px-5 sm:px-6">
+      {scheduled.map((interview) => {
+        const date = new Intl.DateTimeFormat("en-US", {
+          weekday: "short",
+          day: "numeric",
+          month: "short",
+        }).format(interview.scheduledAt);
+
+        return (
+          <Link
+            key={interview.id}
+            href={`/portal/applications/${applicationId}` as Route}
+            className="group flex items-center gap-4 py-4 first:pt-5 last:pb-5"
+          >
+            <time dateTime={interview.scheduledAt.toISOString()} className="flex size-14 shrink-0 flex-col items-center justify-center rounded-xl bg-muted text-center leading-none">
+              <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: accentColor }}>{date.split(" ")[0]}</span>
+              <span className="mt-1 text-xl font-semibold tracking-tight text-foreground">{date.split(" ").at(-1)}</span>
+            </time>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-base font-semibold tracking-[-0.02em] text-foreground group-hover:underline group-hover:underline-offset-4">{interview.title ?? interview.type}</span>
+              <span className="mt-1 block text-sm text-muted-foreground">{formatTime(interview.scheduledAt)} · {interview.durationMins} min</span>
+            </span>
+            {interview.interviewerImage ? (
+              // eslint-disable-next-line @next/next/no-img-element -- workspace member image
+              <img src={interview.interviewerImage} alt={interview.interviewerName ?? "Interviewer"} className="size-10 rounded-full object-cover" />
+            ) : interview.interviewerName ? (
+              <span className="flex size-10 items-center justify-center rounded-full bg-muted text-xs font-semibold text-muted-foreground" title={interview.interviewerName}>{interview.interviewerName.charAt(0).toUpperCase()}</span>
+            ) : null}
+          </Link>
         );
       })}
     </div>

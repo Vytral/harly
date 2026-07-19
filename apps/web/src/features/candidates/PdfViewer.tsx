@@ -46,6 +46,10 @@ export function PdfViewer({
   const renderTokenRef = useRef(0);
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [zoom, setZoom] = useState(1);
+  // pdfjs is browser-only (canvas, worker, import.meta.url); render nothing on
+  // the server so the client-only toolbar/canvas never hydrates against SSR markup.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // ── Load the document ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -164,6 +168,20 @@ export function PdfViewer({
   }, [render]);
 
   const ready = state.status === "ready";
+
+  if (!mounted) {
+    return (
+      <div
+        className={cn(
+          "flex min-h-40 flex-col items-center justify-center gap-2 rounded-lg border border-border bg-background text-sm text-muted-foreground shadow-sm shadow-black/[0.03]",
+          className,
+        )}
+      >
+        <Loader2 className="size-4 animate-spin" />
+        Loading résumé…
+      </div>
+    );
+  }
 
   return (
     <div

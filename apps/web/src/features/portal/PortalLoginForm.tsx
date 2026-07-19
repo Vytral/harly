@@ -36,12 +36,17 @@ export function PortalLoginForm({
 
   function submitMagicLink(e: React.SyntheticEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Browser autofill does not reliably fire React's change event. Read the
+    // native form value so a visibly-filled email can always be submitted.
+    const submittedEmail = new FormData(e.currentTarget).get("email");
+    const emailValue = typeof submittedEmail === "string" ? submittedEmail : "";
     start(async () => {
-      const result = await sendPortalMagicLinkAction(email, workspaceSlug);
+      const result = await sendPortalMagicLinkAction(emailValue, workspaceSlug);
       if (!result.ok) {
         toast.error(result.error);
         return;
       }
+      setEmail(emailValue);
       setSent(true);
     });
   }
@@ -153,6 +158,7 @@ export function PortalLoginForm({
       <form onSubmit={submitMagicLink} className="space-y-3">
         <input
           type="email"
+          name="email"
           placeholder="you@example.com"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -168,7 +174,7 @@ export function PortalLoginForm({
         />
         <button
           type="submit"
-          disabled={isPending || !email.trim()}
+          disabled={isPending}
           className={cn(
             "h-11 w-full rounded-xl bg-foreground text-sm font-semibold text-background",
             "transition-all duration-150 hover:bg-foreground/90 active:scale-[0.98]",

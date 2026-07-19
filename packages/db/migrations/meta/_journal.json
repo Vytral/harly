@@ -533,6 +533,13 @@
       "when": 1784426012865,
       "tag": "0075_tense_rockslide",
       "breakpoints": true
+    },
+    {
+      "idx": 76,
+      "version": "7",
+      "when": 1784436218655,
+      "tag": "0076_loud_bastion",
+      "breakpoints": true
     }
   ]
 }

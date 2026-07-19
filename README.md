@@ -174,6 +174,12 @@ docs/             Operator and contributor documentation
 
 Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
 
+## Roadmap
+
+See the public [Harly roadmap](ROADMAP.md) for current priorities and longer-term
+direction. It distinguishes features Harly can build directly from integrations
+that depend on third-party access, credentials, or commercial agreements.
+
 ## Project status and support
 
 Harly is maintained by its open-source contributors. The public beta currently targets small, self-hosted teams. We do not offer a hosted service, SLA, or managed recovery; operators remain responsible for their own infrastructure, backups, access controls, and legal obligations.

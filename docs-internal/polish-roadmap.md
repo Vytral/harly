@@ -1,85 +1,90 @@
-# Harly — Polish Roadmap
+# Harly — Internal Delivery Roadmap
 
-_Última actualización: 2026-07-05_
+_Última actualización: 2026-07-19_
 
-Trabajo para llevar Harly a nivel Workable/Ashby. Self-hosting / OSS P0 excluido intencionalmente — primero se pulen features.
+Este documento traduce el [roadmap público](../ROADMAP.md) a prioridades de
+ejecución. No es una promesa de fechas ni una lista para perseguir paridad de
+features con Workable, Ashby o Greenhouse. La prioridad es que el flujo central
+de Harly sea confiable para equipos pequeños que valoran self-hosting, control
+de datos y extensibilidad.
 
-## Status snapshot (hecho)
+## Capacidades establecidas
 
-- **Career pages**: builder con 4 templates (Minimal, Playful, Ashby, Greenhouse), live preview, board público con SEO. Workstream 1 COMPLETO.
-- **Tasks**: board cards/rows, crear/asignar/completar, linked a candidatos/jobs. Workstream 3 COMPLETO.
-- **Reports**: funnel, time-to-hire, source effectiveness, gráficos. Workstream 5 parcialmente completo.
-- **Public API v1** + outbound webhooks + embeddable widget (`/embed/widget.js`) + Developers settings.
-- **Full email set**: apply, stage, reject, offer extended/withdrawn, interview scheduled/canceled + platform auth emails.
-- **Compliance base**: consent checkbox, audit logs, legal settings, public legal pages.
-- **Repo lint + typecheck green** (root-cause fixes, no eslint-disable).
-- **Calendars**: real month grid + filters + clickthrough. COMPLETO.
-- **⌘K search**: spotlight palette con búsqueda real sobre jobs y candidates. COMPLETO.
-- **Inbound email**: webhook receiver, reply tracking, settings UI. COMPLETO.
+- Career pages con builder, cuatro templates, board público, widget embebible,
+  sitemap, robots, metadata y `JobPosting` structured data.
+- Jobs, aplicaciones, candidatos, talent pool, pipeline Kanban/lista, tareas,
+  entrevistas, scorecards y ofertas.
+- Calendarios y videollamadas mediante Google, Microsoft/Teams, Cal.com, Zoom y
+  Jitsi, según la configuración del operador.
+- Email outbound durable, templates, inbox/reply tracking e IMAP/webhooks.
+- REST API v1, API keys con scopes, OpenAPI y webhooks outbound firmados.
+- Candidate portal, consentimiento, retención, DSAR/export/erasure, audit logs,
+  Turnstile y avisos legales configurables.
+- Organizaciones, RBAC, passkeys, 2FA y SSO OIDC/SAML.
+- IA BYO-key para asistencia dentro de Harly; los flujos centrales no dependen
+  de un proveedor de IA.
+- CLI, Docker, scheduler, doctor, backups, restores y almacenamiento local/S3.
 
-## Visible holes
+## P0 — confianza de lanzamiento
 
-- `templates` — ComingSoon stub.
-- `apps/docs` — stub vacío.
-- `apps/marketing` — stub vacío.
-- `@harly/config`, `@harly/ui`, `@harly/validators` — packages vacíos.
+- [ ] Ejecutar y documentar pruebas del recorrido completo en un deployment
+  limpio: setup → job → apply → review → interview → offer.
+- [ ] Probar onboarding sin asistencia con usuarios externos y corregir primero
+  bloqueos, pérdida de datos, permisos, errores confusos y accesibilidad.
+- [ ] Aumentar cobertura de aislamiento por workspace, RBAC, intake público,
+  colas durables y operaciones destructivas de privacidad.
+- [ ] Completar documentación pública de instalación, configuración, upgrades,
+  integraciones y solución de problemas.
+- [ ] Cerrar stubs visibles o retirarlos de navegación hasta que tengan un flujo
+  funcional.
 
----
+## P1 — flujos adaptables
 
-## Workstream 1 — Career-page builder + templates ✅ COMPLETO
+- [ ] Custom fields en candidates y jobs.
+- [ ] Approval workflows para requisiciones y ofertas.
+- [ ] Templates reutilizables para jobs, entrevistas y scorecards.
+- [ ] Reporting más profundo, filtros guardados y exports configurables.
+- [ ] SCIM y administración enterprise adicional.
+- [ ] Integration SDK documentado para adaptadores mantenidos por la comunidad.
 
-4 templates implementados: Minimal, Playful, Ashby, Greenhouse. Builder con live preview. Board público con SEO por slug.
+## P2 — ecosistema e AI-assisted sourcing
 
-## Workstream 2 — Calendars ✅ COMPLETO
+### Fase 1 — asistencia sin adquisición de datos
 
-Calendar view de entrevistas. Implementado: real month grid + filters + clickthrough.
+- [ ] Generar estrategias de sourcing y consultas Boolean/X-Ray desde los
+  criterios de un job.
+- [ ] Permitir copiar/abrir consultas para que el recruiter revise resultados en
+  la fuente original.
+- [ ] Importar manualmente sólo los perfiles elegidos, registrando source y
+  consentimiento/base legal cuando corresponda.
 
-## Workstream 3 — Tasks ✅ COMPLETO
+### Fase 2 — contrato abierto de proveedores
 
-Board con cards/rows, crear/asignar/completar, filtros (mine/all/overdue), linked a candidatos/jobs.
+- [ ] Diseñar `SourcingProvider` con búsqueda paginada, normalización de perfil,
+  provenance, límites, errores y capabilities explícitas.
+- [ ] Mantener credenciales cifradas y scoped por workspace.
+- [ ] Deduplicar contra candidatos existentes antes de importar.
+- [ ] Exigir selección humana antes de guardar o contactar perfiles.
 
-## Workstream 4 — Real ⌘K search ✅ COMPLETO
+### Fase 3 — adaptadores autorizados
 
-Spotlight palette con búsqueda real sobre jobs y candidates (ilike, workspace-scoped).
+- [ ] Evaluar uno o dos proveedores profesionales con API y licencia compatibles
+  con self-hosting y almacenamiento de datos de candidatos.
+- [ ] Añadir ranking explicable contra criterios del job usando el proveedor de
+  IA configurado por el workspace.
+- [ ] Documentar costos, términos, retención, eliminación y responsabilidades
+  del operador para cada adaptador.
 
-## Workstream 5 — SEO / Google for Jobs ← parcialmente hecho
+Una API key de OpenAI, Anthropic, Gemini u otro modelo no entrega acceso a
+LinkedIn, job boards o bases externas. No implementar scraping no autorizado ni
+presentar AI sourcing en la UI antes de que exista un proveedor funcional y un
+flujo completo, legalmente sostenible y verificable.
 
-Career pages ya tienen SEO básico. Falta:
+## Secuencia recomendada
 
-- **Structured data**: emitir `schema.org/JobPosting` JSON-LD por job en `board/[slug]/jobs/[jobSlug]`.
-- **Sitemaps + metadata**: `board/[slug]/sitemap.ts`, canonical URLs, OpenGraph/Twitter cards por job, `robots`.
-- **Verify**: Rich Results Test pasa en una job URL; sitemap lista jobs abiertos; OG preview renderiza.
-
-## Workstream 6 — Compliance (parcialmente hecho)
-
-- [x] Consent checkbox en apply form.
-- [x] Audit logs wiring en acciones clave.
-- [x] Legal settings admin + public legal pages.
-- [ ] **GDPR/CCPA export**: per-candidate export (JSON/zip de profile + applications + files + messages).
-- [ ] **GDPR/CCPA delete/anonymize**: hard-delete vs scrub PII, keep aggregate. Server actions + audit entry.
-- [ ] **Turnstile (optional)**: Cloudflare Turnstile en apply form + intake API, env-gated.
-- **Verify**: export produce bundle completo; delete scrub PII; audit rows escritos; Turnstile bloquea tokens inválidos cuando está habilitado.
-
-## Workstream 7 — Two-way email / inbox ✅ COMPLETO
-
-Inbound email integration: webhook receiver (Resend + Postmark), reply tracking, settings UI.
-
-## Workstream 8 — Enterprise (después)
-
-- **SSO/SAML + SCIM** (Better Auth SSO plugin / WorkOS-style) — workspace-level.
-- **Custom fields** en candidates/jobs (jsonb definitions + render en forms/profile).
-- **Approval workflows** — job requisition + offer approval chains (`approvals` table, states, notify approvers).
-
----
-
-## Sequencing recomendado
-
-1. ~~Career-page builder + templates~~ ✅
-2. ~~Calendars~~ ✅
-3. ~~⌘K search~~ ✅
-4. **Compliance export/delete** (GDPR) ← SIGUIENTE
-5. ~~Two-way email / inbox~~ ✅
-6. **SEO / Google for Jobs** (inbound, pequeño, combina con career page)
-7. **Enterprise** (SSO, custom fields, approvals)
-
-Cada uno como branch propio + verification pass.
+1. Confianza de lanzamiento y usuarios reales.
+2. Documentación pública y eliminación de stubs.
+3. Custom fields, templates y approvals según demanda observada.
+4. Integration SDK.
+5. AI-assisted sourcing fase 1; fases 2–3 sólo después de validar necesidad y
+   proveedores.
