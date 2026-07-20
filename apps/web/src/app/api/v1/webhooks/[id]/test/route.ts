@@ -3,7 +3,7 @@ import { db, webhookDeliveries } from "@harly/db";
 import { getWebhookEndpoint } from "@/features/developers/data";
 import { authenticateApiKey } from "@/server/api/auth";
 import { reserveIdempotencyKey } from "@/server/api/idempotency";
-import { deliverWebhook } from "@/server/webhooks/dispatch";
+import { dispatchDueWebhooks } from "@/server/webhooks/dispatch";
 import { apiOk, withApi } from "@/server/api/respond";
 import { NextResponse } from "next/server";
 
@@ -40,8 +40,13 @@ export const POST = withApi(async (request, context) => {
     })
     .returning();
 
-  const status = await deliverWebhook(delivery, endpoint);
-  const response = apiOk({ delivered: status === "success", status, deliveryId: delivery.id });
+  // Route the ping through the same claim+lock dispatcher the cron uses, so a
+  // concurrent cron tick can't double-deliver the test ping (the previous
+  // direct deliverWebhook call had no worker lock and raced with the cron).
+  const summary = await dispatchDueWebhooks(1, [delivery.id]);
+  const delivered = summary.success > 0;
+  const status = delivered ? "success" : summary.failed > 0 ? "failed" : "pending";
+  const response = apiOk({ delivered, status, deliveryId: delivery.id });
   if (idempotency.kind === "reserved") {
     await idempotency.complete({ status: response.status, body: await response.clone().json() });
   }

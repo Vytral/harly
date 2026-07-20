@@ -19,8 +19,12 @@ import {
   type WebhookEndpoint,
 } from "@harly/db";
 import { encryptSecret } from "@/lib/crypto";
+import { createLogger } from "@/lib/logger";
 import { validateWebhookUrl } from "@/lib/ssrf";
 import { isWebhookEvent, type WebhookEvent } from "@/server/webhooks/events";
+import { dispatchDueWebhooks } from "@/server/webhooks/dispatch";
+
+const log = createLogger("developers");
 
 /**
  * Developer-platform data layer: API keys + webhook endpoints, scoped by
@@ -344,5 +348,13 @@ export async function replayWebhookDelivery(input: {
       attempts: 0,
     })
     .returning();
+
+  // Best-effort immediate delivery (matching emitWebhookEvent), so a replay
+  // actually reaches the endpoint now instead of waiting for the next cron
+  // tick. The dispatcher is the safety net if this fails.
+  void dispatchDueWebhooks(1, [replay.id]).catch((err) =>
+    log.error({ err, deliveryId: replay.id }, "replayWebhookDelivery: immediate dispatch failed"),
+  );
+
   return replay;
 }
