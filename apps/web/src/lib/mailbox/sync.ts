@@ -74,6 +74,7 @@ async function syncMailboxOnce(workspaceId: string): Promise<{ imported: number;
   if (!config) return { imported: 0, skipped: 0 };
   const client = new ImapFlow({ host: config.imap.host, port: config.imap.port, secure: config.imap.tls, auth: { user: config.imap.user, pass: config.imap.password }, logger: false });
   let imported = 0; let skipped = 0;
+  let nonFatalError: string | null = null;
   try {
     await client.connect();
     const lock = await client.getMailboxLock(config.imap.folder);
@@ -106,14 +107,13 @@ async function syncMailboxOnce(workspaceId: string): Promise<{ imported: number;
           }
         } catch (error) {
           await Promise.allSettled(storedAttachments.map(({ storageKey }) => storage.delete(storageKey)));
-          await db.delete(mailMessages).where(eq(mailMessages.id, saved.id));
-          log.warn({ messageId: saved.id }, "mail attachment could not be stored; message will be retried");
-          throw error;
+          nonFatalError = error instanceof Error ? `Attachment sync failed: ${error.message.slice(0, 900)}` : "Attachment sync failed.";
+          log.warn({ messageId: saved.id, error: nonFatalError }, "mail attachment could not be stored; message was kept");
         }
         await db.update(mailThreads).set({ lastMessageAt: receivedAt, ...(message.flags?.has("\\Seen") ? {} : { unreadCount: sql`${mailThreads.unreadCount} + 1` }) }).where(eq(mailThreads.id, threadId));
         imported++;
       }
-      await db.update(mailboxes).set({ uidValidity, lastUid: mailbox.uidNext ? mailbox.uidNext - 1 : config.lastUid, lastSyncedAt: new Date(), lastHealthyAt: new Date(), lastError: null }).where(eq(mailboxes.id, config.id));
+      await db.update(mailboxes).set({ uidValidity, lastUid: mailbox.uidNext ? mailbox.uidNext - 1 : config.lastUid, lastSyncedAt: new Date(), lastHealthyAt: new Date(), lastError: nonFatalError }).where(eq(mailboxes.id, config.id));
     } finally { lock.release(); }
   } catch (error) {
     const lastError = error instanceof Error ? error.message.slice(0, 1000) : "Mailbox synchronization failed";

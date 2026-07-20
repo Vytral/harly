@@ -1,7 +1,18 @@
 import "server-only";
 
 import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
-import { candidates, db, mailAttachments, mailMessages, mailThreads, user } from "@harly/db";
+import {
+  applications,
+  candidates,
+  db,
+  jobs,
+  mailAttachments,
+  mailMessages,
+  mailThreads,
+  mailboxes,
+  member as workspaceMember,
+  user,
+} from "@harly/db";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
@@ -29,6 +40,13 @@ export type InboxThread = {
   candidateId: string | null;
   candidateName: string | null;
   ownerName: string | null;
+  ownerId?: string | null;
+  ownerImage?: string | null;
+  applicationId?: string | null;
+  jobId?: string | null;
+  jobTitle?: string | null;
+  applicationStatus?: string | null;
+  hasInboundReply?: boolean;
   preview: string | null;
 };
 
@@ -43,6 +61,17 @@ export type InboxMessage = {
   direction: "inbound" | "outbound";
   read: boolean;
   attachments: Array<{ id: string; filename: string; contentType: string; size: number }>;
+};
+
+export type InboxMember = { id: string; name: string; image: string | null };
+export type InboxCandidate = { id: string; name: string; email: string; avatarUrl: string | null };
+export type InboxApplication = { id: string; candidateId: string; jobId: string; jobTitle: string; status: string };
+export type InboxMailboxStatus = {
+  configured: boolean;
+  enabled: boolean;
+  lastSyncedAt: string | null;
+  lastHealthyAt: string | null;
+  lastError: string | null;
 };
 
 const PAGE_SIZE = 40;
@@ -70,6 +99,10 @@ export async function getInboxData(input: {
   threads: InboxThread[];
   messages: Record<string, InboxMessage[]>;
   hasMore: boolean;
+  members: InboxMember[];
+  candidates: InboxCandidate[];
+  applications: InboxApplication[];
+  mailboxStatus: InboxMailboxStatus;
 }> {
   const { organization, user: currentUser } = await getWorkspaceContext();
   const filter = normalizeInboxFilter(input.filter);
@@ -91,32 +124,66 @@ export async function getInboxData(input: {
       : undefined,
   );
 
-  const threadRows = await db
-    .select({
-      id: mailThreads.id,
-      transport: mailThreads.source,
-      subject: mailThreads.subject,
-      participantEmail: mailThreads.participantEmail,
-      status: mailThreads.status,
-      unreadCount: mailThreads.unreadCount,
-      lastMessageAt: mailThreads.lastMessageAt,
-      candidateId: mailThreads.candidateId,
-      candidateFirstName: candidates.firstName,
-      candidateLastName: candidates.lastName,
-      ownerName: user.name,
-      preview: sql<string | null>`(
-        select mm.text_body from mail_messages mm
-        where mm.thread_id = ${mailThreads.id}
-        order by mm.received_at desc limit 1
-      )`,
-    })
-    .from(mailThreads)
-    .leftJoin(candidates, eq(candidates.id, mailThreads.candidateId))
-    .leftJoin(user, eq(user.id, mailThreads.ownerId))
-    .where(threadWhere)
-    .orderBy(desc(mailThreads.lastMessageAt))
-    .limit(PAGE_SIZE + 1)
-    .offset(offset);
+  const [threadRows, memberRows, candidateRows, applicationRows, mailboxRows] = await Promise.all([
+    db
+      .select({
+        id: mailThreads.id,
+        transport: mailThreads.source,
+        subject: mailThreads.subject,
+        participantEmail: mailThreads.participantEmail,
+        status: mailThreads.status,
+        unreadCount: mailThreads.unreadCount,
+        lastMessageAt: mailThreads.lastMessageAt,
+        candidateId: mailThreads.candidateId,
+        candidateFirstName: candidates.firstName,
+        candidateLastName: candidates.lastName,
+        ownerId: mailThreads.ownerId,
+        ownerName: user.name,
+        ownerImage: user.image,
+        applicationId: mailThreads.applicationId,
+        jobId: jobs.id,
+        jobTitle: jobs.title,
+        applicationStatus: applications.status,
+        hasInboundReply: sql<boolean>`exists (select 1 from mail_messages reply where reply.thread_id = ${mailThreads.id} and reply.direction = 'inbound')`,
+        preview: sql<string | null>`(
+          select mm.text_body from mail_messages mm
+          where mm.thread_id = ${mailThreads.id}
+          order by mm.received_at desc limit 1
+        )`,
+      })
+      .from(mailThreads)
+      .leftJoin(candidates, and(eq(candidates.id, mailThreads.candidateId), eq(candidates.workspaceId, organization.id)))
+      .leftJoin(user, eq(user.id, mailThreads.ownerId))
+      .leftJoin(workspaceMember, and(eq(workspaceMember.userId, user.id), eq(workspaceMember.organizationId, organization.id)))
+      .leftJoin(applications, and(eq(applications.id, mailThreads.applicationId), eq(applications.workspaceId, organization.id)))
+      .leftJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, organization.id)))
+      .where(threadWhere)
+      .orderBy(desc(mailThreads.lastMessageAt))
+      .limit(PAGE_SIZE + 1)
+      .offset(offset),
+    db
+      .select({ id: user.id, name: user.name, image: user.image })
+      .from(workspaceMember)
+      .innerJoin(user, eq(user.id, workspaceMember.userId))
+      .where(eq(workspaceMember.organizationId, organization.id))
+      .orderBy(user.name),
+    db
+      .select({ id: candidates.id, firstName: candidates.firstName, lastName: candidates.lastName, email: candidates.email, avatarUrl: candidates.avatarUrl })
+      .from(candidates)
+      .where(and(eq(candidates.workspaceId, organization.id), isNull(candidates.deletedAt)))
+      .orderBy(candidates.lastName, candidates.firstName),
+    db
+      .select({ id: applications.id, candidateId: applications.candidateId, jobId: applications.jobId, jobTitle: jobs.title, status: applications.status })
+      .from(applications)
+      .innerJoin(jobs, eq(jobs.id, applications.jobId))
+      .where(and(eq(applications.workspaceId, organization.id), isNull(jobs.deletedAt)))
+      .orderBy(jobs.title),
+    db
+      .select({ configured: sql<boolean>`true`, enabled: mailboxes.enabled, lastSyncedAt: mailboxes.lastSyncedAt, lastHealthyAt: mailboxes.lastHealthyAt, lastError: mailboxes.lastError })
+      .from(mailboxes)
+      .where(eq(mailboxes.workspaceId, organization.id))
+      .limit(1),
+  ]);
 
   const hasMore = threadRows.length > PAGE_SIZE;
   const threads: InboxThread[] = threadRows.slice(0, PAGE_SIZE).map((row) => ({
@@ -132,7 +199,14 @@ export async function getInboxData(input: {
     candidateName: row.candidateFirstName
       ? `${row.candidateFirstName} ${row.candidateLastName}`.trim()
       : null,
+    ownerId: row.ownerId,
     ownerName: row.ownerName,
+    ownerImage: row.ownerImage,
+    applicationId: row.applicationId,
+    jobId: row.jobId,
+    jobTitle: row.jobTitle,
+    applicationStatus: row.applicationStatus,
+    hasInboundReply: Boolean(row.hasInboundReply),
     preview: row.preview,
   }));
 
@@ -186,5 +260,26 @@ export async function getInboxData(input: {
     }));
   }
 
-  return { threads, messages, hasMore };
+  return {
+    threads,
+    messages,
+    hasMore,
+    members: memberRows,
+    candidates: candidateRows.map((row) => ({
+      id: row.id,
+      name: `${row.firstName} ${row.lastName}`.trim(),
+      email: row.email,
+      avatarUrl: row.avatarUrl,
+    })),
+    applications: applicationRows,
+    mailboxStatus: mailboxRows[0]
+      ? {
+          configured: true,
+          enabled: mailboxRows[0].enabled,
+          lastSyncedAt: mailboxRows[0].lastSyncedAt?.toISOString() ?? null,
+          lastHealthyAt: mailboxRows[0].lastHealthyAt?.toISOString() ?? null,
+          lastError: mailboxRows[0].lastError,
+        }
+      : { configured: false, enabled: false, lastSyncedAt: null, lastHealthyAt: null, lastError: null },
+  };
 }

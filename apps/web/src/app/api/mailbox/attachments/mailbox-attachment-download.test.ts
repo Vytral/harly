@@ -34,6 +34,9 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
 vi.mock("@/lib/storage", () => ({
   storage: { read: mocks.storageRead },
 }));
+vi.mock("@/lib/audit-log", () => ({
+  logAuditEvent: vi.fn(),
+}));
 
 import { GET } from "./[attachmentId]/route";
 
@@ -43,6 +46,7 @@ describe("F2-10 mailbox attachment download authorization", () => {
   it("returns 403 when the caller lacks permission", async () => {
     mocks.getWorkspaceContext.mockResolvedValue({
       organization: { id: WORKSPACE_ID },
+      user: { id: "user-1", email: "user@example.com" },
     });
     mocks.requirePermission.mockRejectedValue(new Error("Forbidden"));
 
@@ -56,6 +60,7 @@ describe("F2-10 mailbox attachment download authorization", () => {
   it("returns 404 for an attachment that does not belong to the workspace", async () => {
     mocks.getWorkspaceContext.mockResolvedValue({
       organization: { id: WORKSPACE_ID },
+      user: { id: "user-1", email: "user@example.com" },
     });
     mocks.requirePermission.mockResolvedValue(undefined);
     mocks.attachmentRows = []; // no row scoped to this workspace
@@ -71,6 +76,7 @@ describe("F2-10 mailbox attachment download authorization", () => {
   it("serves the file bytes with safe headers when authorized", async () => {
     mocks.getWorkspaceContext.mockResolvedValue({
       organization: { id: WORKSPACE_ID },
+      user: { id: "user-1", email: "user@example.com" },
     });
     mocks.requirePermission.mockResolvedValue(undefined);
     mocks.attachmentRows = [

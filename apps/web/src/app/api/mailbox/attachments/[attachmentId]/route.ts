@@ -5,6 +5,7 @@ import { db, mailAttachments } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { storage } from "@/lib/storage";
+import { logAuditEvent } from "@/lib/audit-log";
 
 export const runtime = "nodejs";
 
@@ -19,7 +20,7 @@ export async function GET(
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
   const { attachmentId } = await params;
-  const { organization } = await getWorkspaceContext();
+  const { organization, user } = await getWorkspaceContext();
   const [attachment] = await db
     .select({
       filename: mailAttachments.filename,
@@ -39,6 +40,15 @@ export async function GET(
 
   try {
     const content = await storage.read(attachment.storageKey);
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      actorEmail: user.email,
+      action: "mailbox.attachment.downloaded",
+      resourceType: "mail_attachment",
+      resourceId: attachmentId,
+      metadata: { filename: attachment.filename, size: attachment.size },
+    });
     return new NextResponse(new Uint8Array(content).slice(), {
       headers: {
         "Content-Type": attachment.contentType,

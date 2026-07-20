@@ -11,7 +11,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   const query = await searchParams;
   const filter = Array.isArray(query.filter) ? query.filter[0] : query.filter;
   const page = Number.isFinite(Number(query.page)) ? Math.max(0, Number(query.page)) : 0;
-  const { threads, messages, hasMore } = await getInboxData({
+  const { threads, messages, hasMore, members, candidates, applications, mailboxStatus } = await getInboxData({
     filter,
     page,
     threadId: query.thread,
@@ -25,6 +25,10 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
         initialFilter={normalizeInboxFilter(filter)}
         page={page}
         hasMore={hasMore}
+        members={members}
+        candidates={candidates}
+        applications={applications}
+        mailboxStatus={mailboxStatus}
       />
     </div>
   );

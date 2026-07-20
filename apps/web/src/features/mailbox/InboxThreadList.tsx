@@ -27,7 +27,7 @@ export function matchesInboxFilter(thread: InboxThread, filter: InboxFilter) {
     case "all":
       return thread.status === "open";
     case "replies":
-      return true;
+      return thread.status === "open" && thread.hasInboundReply !== false;
     case "unassigned":
       return thread.status === "open" && !thread.candidateId;
     case "unread":
