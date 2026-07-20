@@ -36,15 +36,22 @@ type Filter = "all" | "unread";
 export function InboxList({ items }: { items: NotificationItem[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<Filter>("all");
   const unread = items.filter((item) => !item.read).length;
 
   const visible = filter === "unread" ? items.filter((i) => !i.read) : items;
 
   function open(item: NotificationItem) {
+    setError(null);
     startTransition(async () => {
       if (!item.read) {
-        await markNotificationRead({ notificationId: item.id });
+        try {
+          const result = await markNotificationRead({ notificationId: item.id });
+          if (!result.success) setError("Could not mark the notification as read.");
+        } catch {
+          setError("Could not mark the notification as read.");
+        }
       }
       if (item.href) {
         router.push(item.href as Route);
@@ -55,26 +62,54 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
   }
 
   function toggleRead(item: NotificationItem) {
+    setError(null);
     startTransition(async () => {
-      if (item.read) {
-        await markNotificationUnread({ notificationId: item.id });
-      } else {
-        await markNotificationRead({ notificationId: item.id });
+      try {
+        const result = item.read
+          ? await markNotificationUnread({ notificationId: item.id })
+          : await markNotificationRead({ notificationId: item.id });
+        if (!result.success) {
+          setError("Could not update the notification.");
+          return;
+        }
+      } catch {
+        setError("Could not update the notification.");
+        return;
       }
       router.refresh();
     });
   }
 
   function remove(item: NotificationItem) {
+    setError(null);
     startTransition(async () => {
-      await deleteNotification({ notificationId: item.id });
+      try {
+        const result = await deleteNotification({ notificationId: item.id });
+        if (!result.success) {
+          setError("Could not delete the notification.");
+          return;
+        }
+      } catch {
+        setError("Could not delete the notification.");
+        return;
+      }
       router.refresh();
     });
   }
 
   function markAll() {
+    setError(null);
     startTransition(async () => {
-      await markAllNotificationsRead();
+      try {
+        const result = await markAllNotificationsRead();
+        if (!result.success) {
+          setError("Could not mark all notifications as read.");
+          return;
+        }
+      } catch {
+        setError("Could not mark all notifications as read.");
+        return;
+      }
       router.refresh();
     });
   }
@@ -133,6 +168,12 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
           </Button>
         ) : null}
       </div>
+
+      {error ? (
+        <p role="alert" className="text-sm text-destructive">
+          {error}
+        </p>
+      ) : null}
 
       {visible.length === 0 ? (
         <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">

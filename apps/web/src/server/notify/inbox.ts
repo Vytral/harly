@@ -23,6 +23,7 @@ type NotifyParams = {
   body?: string;
   href?: string;
   metadata?: Record<string, unknown>;
+  dedupeKey?: string;
 };
 
 export async function createNotification(
@@ -41,8 +42,11 @@ export async function createNotification(
       body: rest.body ?? null,
       href: rest.href ?? null,
       metadata: rest.metadata ?? null,
+      dedupeKey: rest.dedupeKey ?? null,
     })),
-  );
+  ).onConflictDoNothing({
+    target: [notifications.workspaceId, notifications.userId, notifications.dedupeKey],
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -86,6 +90,7 @@ export async function notifyInboundEmail(params: {
   candidateId: string;
   candidateName: string;
   subject: string;
+  messageId?: string;
 }): Promise<void> {
   try {
     let recipientIds = await getJobTeamMemberIds(params.workspaceId, params.jobId);
@@ -101,6 +106,7 @@ export async function notifyInboundEmail(params: {
       body: params.subject || "New candidate reply",
       href: `/dashboard/candidates/${params.candidateId}`,
       metadata: { candidateId: params.candidateId, jobId: params.jobId },
+      dedupeKey: params.messageId ? `email:${params.messageId}` : undefined,
     });
   } catch (error) {
     console.error("[notify] inbound email notify failed", {
@@ -242,6 +248,7 @@ export async function notifyInboxEvent(
   event: WebhookEvent,
   data: EventPayload,
   actorId?: string,
+  eventId?: string,
 ): Promise<void> {
   try {
     const recipientIds = await resolveRecipients(workspaceId, event, data, actorId);
@@ -261,6 +268,7 @@ export async function notifyInboxEvent(
       body: body ?? undefined,
       href: href ?? undefined,
       metadata: { event },
+      dedupeKey: eventId ? `event:${eventId}` : undefined,
     });
   } catch (error) {
     console.error("[notify] inbox notify failed", { workspaceId, event, error });

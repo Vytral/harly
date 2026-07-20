@@ -38,13 +38,20 @@ export function NotificationsBell({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
   const unread = notifications.filter((n) => !n.read).length;
 
   function openItem(item: NotificationItem) {
     setOpen(false);
+    setError(null);
     startTransition(async () => {
       if (!item.read) {
-        await markNotificationRead({ notificationId: item.id });
+        try {
+          const result = await markNotificationRead({ notificationId: item.id });
+          if (!result.success) setError("Could not mark notification as read.");
+        } catch {
+          setError("Could not mark notification as read.");
+        }
       }
       if (item.href) {
         router.push(item.href as Route);
@@ -55,11 +62,19 @@ export function NotificationsBell({
 
   function toggleRead(e: React.MouseEvent, item: NotificationItem) {
     e.stopPropagation();
+    setError(null);
     startTransition(async () => {
-      if (item.read) {
-        await markNotificationUnread({ notificationId: item.id });
-      } else {
-        await markNotificationRead({ notificationId: item.id });
+      try {
+        const result = item.read
+          ? await markNotificationUnread({ notificationId: item.id })
+          : await markNotificationRead({ notificationId: item.id });
+        if (!result.success) {
+          setError("Could not update notification.");
+          return;
+        }
+      } catch {
+        setError("Could not update notification.");
+        return;
       }
       router.refresh();
     });
@@ -67,15 +82,35 @@ export function NotificationsBell({
 
   function dismiss(e: React.MouseEvent, item: NotificationItem) {
     e.stopPropagation();
+    setError(null);
     startTransition(async () => {
-      await deleteNotification({ notificationId: item.id });
+      try {
+        const result = await deleteNotification({ notificationId: item.id });
+        if (!result.success) {
+          setError("Could not delete notification.");
+          return;
+        }
+      } catch {
+        setError("Could not delete notification.");
+        return;
+      }
       router.refresh();
     });
   }
 
   function markAll() {
+    setError(null);
     startTransition(async () => {
-      await markAllNotificationsRead();
+      try {
+        const result = await markAllNotificationsRead();
+        if (!result.success) {
+          setError("Could not mark notifications as read.");
+          return;
+        }
+      } catch {
+        setError("Could not mark notifications as read.");
+        return;
+      }
       router.refresh();
     });
   }
@@ -126,6 +161,11 @@ export function NotificationsBell({
             </Button>
           ) : null}
         </div>
+        {error ? (
+          <p role="alert" className="border-b px-4 py-2 text-xs text-destructive">
+            {error}
+          </p>
+        ) : null}
 
         {notifications.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
