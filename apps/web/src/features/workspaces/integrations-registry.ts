@@ -2,6 +2,7 @@ import "server-only";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
+import { getWorkspaceDocuSignStatus } from "@/lib/docusign/config";
 import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
 import { getWorkspaceJitsiStatus } from "@/lib/jitsi/config";
 import { getWorkspaceChatStatus } from "@/lib/notify/config";
@@ -22,7 +23,8 @@ import { getZoomConfig } from "@/lib/zoom/config";
 export type IntegrationCategory =
   | "calendar"
   | "communication"
-  | "automation";
+  | "automation"
+  | "signing";
 
 export type IntegrationSlug =
   | "cal"
@@ -38,6 +40,7 @@ export type IntegrationSlug =
   | "telegram"
   | "gmail"
   | "linkedin"
+  | "docusign"
   | "zapier"
   | "webhooks";
 
@@ -63,12 +66,14 @@ export const CATEGORY_LABELS: Record<IntegrationCategory, string> = {
   calendar: "Calendar & scheduling",
   communication: "Communication",
   automation: "Automation",
+  signing: "Signature",
 };
 
 export const CATEGORY_ORDER: IntegrationCategory[] = [
   "calendar",
   "communication",
   "automation",
+  "signing",
 ];
 
 export const INTEGRATIONS: IntegrationDefinition[] = [
@@ -209,6 +214,17 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     comingSoon: true,
   },
   {
+    slug: "docusign",
+    name: "DocuSign",
+    category: "signing",
+    description: "Send offers for legally-binding e-signatures.",
+    detail:
+      "Connect DocuSign so candidates sign their offer inside the candidate portal. When you send an offer, Harly creates a DocuSign envelope and the candidate signs on DocuSign's hosted page — the signed PDF lands back on the offer and the status flips automatically.",
+    // Yellow DocuSign mark on light neutral so the yellow reads (saturated mark
+    // -> light bg per the contrast rule).
+    tileClassName: "bg-gradient-to-br from-white via-yellow-50 to-amber-100",
+  },
+  {
     slug: "zapier",
     name: "Zapier & Make",
     category: "automation",
@@ -248,13 +264,14 @@ export type IntegrationStatuses = {
   chat: Awaited<ReturnType<typeof getWorkspaceChatStatus>>;
   telegram: Awaited<ReturnType<typeof getWorkspaceTelegramStatus>>;
   jitsi: Awaited<ReturnType<typeof getWorkspaceJitsiStatus>>;
+  docusign: Awaited<ReturnType<typeof getWorkspaceDocuSignStatus>>;
 };
 
 /** Fetch every connectable integration's status for a workspace in parallel. */
 export async function getIntegrationStatuses(
   workspaceId: string,
 ): Promise<IntegrationStatuses> {
-  const [cal, gcal, slack, outlook, zoom, chat, telegram, jitsi] =
+  const [cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docusign] =
     await Promise.all([
       getWorkspaceCalStatus(workspaceId),
       getWorkspaceGCalStatus(workspaceId),
@@ -264,8 +281,9 @@ export async function getIntegrationStatuses(
       getWorkspaceChatStatus(workspaceId),
       getWorkspaceTelegramStatus(workspaceId),
       getWorkspaceJitsiStatus(workspaceId),
+      getWorkspaceDocuSignStatus(workspaceId),
     ]);
-  return { cal, gcal, slack, outlook, zoom, chat, telegram, jitsi };
+  return { cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docusign };
 }
 
 /** Resolve whether a given integration slug is currently connected. */
@@ -295,6 +313,8 @@ export function isConnected(
       return statuses.telegram.hasToken;
     case "jitsi":
       return statuses.jitsi.enabled && Boolean(statuses.jitsi.baseUrl);
+    case "docusign":
+      return statuses.docusign.enabled && statuses.docusign.hasToken;
     default:
       return false;
   }
