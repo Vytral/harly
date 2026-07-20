@@ -51,6 +51,8 @@ vi.mock("@harly/db", () => {
     candidates: {},
     organization: {},
     activityEvents: {},
+    documentAssociations: {},
+    documents: {},
   };
 });
 

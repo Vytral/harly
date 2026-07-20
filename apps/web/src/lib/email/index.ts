@@ -5,6 +5,7 @@ import type React from "react";
 import {
   createEmailSender,
   type EmailSender,
+  type EmailAttachment,
   type SendEmailResult,
 } from "@harly/emails";
 
@@ -22,6 +23,7 @@ export type SendEmailOptions = {
   replyTo?: string;
   messageId?: string;
   idempotencyKey?: string;
+  attachments?: EmailAttachment[];
 };
 
 /** Send a platform-level email (welcome, invitations...) using the env-configured sender. */

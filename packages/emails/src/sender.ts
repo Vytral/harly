@@ -7,6 +7,13 @@ export type SendEmailOptions = {
   replyTo?: string;
   messageId?: string;
   idempotencyKey?: string;
+  attachments?: EmailAttachment[];
+};
+
+export type EmailAttachment = {
+  filename: string;
+  content: Buffer;
+  contentType?: string;
 };
 
 export type SendEmailResult = { messageId?: string };
@@ -41,7 +48,7 @@ export type EmailProviderConfig = ResendProviderConfig | SmtpProviderConfig;
 
 function createResendSender(config: ResendProviderConfig): EmailSender {
   return {
-    async send({ to, subject, react, replyTo, messageId, idempotencyKey }) {
+    async send({ to, subject, react, replyTo, messageId, idempotencyKey, attachments }) {
       const [{ render }, { Resend }] = await Promise.all([
         import("@react-email/render"),
         import("resend"),
@@ -57,10 +64,23 @@ function createResendSender(config: ResendProviderConfig): EmailSender {
           html,
           replyTo,
           headers: messageId ? { "Message-ID": messageId } : undefined,
+          attachments: attachments?.map((attachment) => ({
+            filename: attachment.filename,
+            content: attachment.content,
+            contentType: attachment.contentType,
+          })),
         },
         idempotencyKey ? { idempotencyKey } : undefined,
       );
-      return { messageId: result.data?.id ?? messageId };
+      if (result.error) {
+        throw new Error(
+          `Resend rejected email (${result.error.name}): ${result.error.message}`,
+        );
+      }
+      if (!result.data?.id) {
+        throw new Error("Resend accepted the email without returning a message ID.");
+      }
+      return { messageId: result.data.id };
     },
   };
 }
@@ -78,7 +98,7 @@ function createSmtpSender(config: SmtpProviderConfig): EmailSender {
   }
 
   return {
-    async send({ to, subject, react, replyTo, messageId }) {
+    async send({ to, subject, react, replyTo, messageId, attachments }) {
       const [{ render }, transport] = await Promise.all([
         import("@react-email/render"),
         transporter(),
@@ -92,6 +112,11 @@ function createSmtpSender(config: SmtpProviderConfig): EmailSender {
         html,
         replyTo,
         messageId,
+        attachments: attachments?.map((attachment) => ({
+          filename: attachment.filename,
+          content: attachment.content,
+          contentType: attachment.contentType,
+        })),
       });
       return { messageId: info.messageId };
     },

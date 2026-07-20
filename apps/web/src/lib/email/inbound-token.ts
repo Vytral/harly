@@ -6,6 +6,18 @@ import { eq } from "drizzle-orm";
 
 import { applications, db, workspaceSettings } from "@harly/db";
 
+/** Resend/SMTP need a hostname, not a URL, localhost, or a host:port pair. */
+export function normalizeInboundReplyDomain(value: string): string | null {
+  const domain = value.trim().toLowerCase();
+  if (
+    domain.length > 253 ||
+    !/^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)
+  ) {
+    return null;
+  }
+  return domain;
+}
+
 /**
  * Lazily generate and persist the opaque inbound-reply routing token for an
  * application. Idempotent , returns the existing token if one is already
@@ -58,6 +70,9 @@ export async function getInboundReplyTo(
     return undefined;
   }
 
+  const domain = normalizeInboundReplyDomain(row.emailInboundReplyDomain);
+  if (!domain) return undefined;
+
   const token = await ensureApplicationInboundToken(applicationId);
-  return `reply+${token}@${row.emailInboundReplyDomain}`;
+  return `reply+${token}@${domain}`;
 }

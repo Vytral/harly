@@ -191,6 +191,7 @@ export async function processInboundEmail(
     candidateId: application.candidateId,
     candidateName: email.from,
     subject: email.subject,
+    messageId,
   });
 
   const { revalidatePath } = await import("next/cache");
