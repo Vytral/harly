@@ -11,9 +11,15 @@ import { notifyChatEvent, notifyTelegramEvent } from "@/server/notify/dispatch";
 import { notifyInboxEvent } from "@/server/notify/inbox";
 import { notifyOutlookEvent } from "@/server/notify/outlook";
 import { notifyZoomEvent } from "@/server/notify/zoom";
+import { dispatchWorkflowEvent } from "@/features/automations/dispatch";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("webhooks");
+
+type EmitWebhookOptions = {
+  actorId?: string;
+  eventId?: string;
+};
 
 /**
  * Emit a domain event to all subscribed webhook endpoints.
@@ -27,6 +33,7 @@ export async function emitWebhookEvent(
   workspaceId: string,
   event: WebhookEvent,
   data: Record<string, unknown>,
+  options: EmitWebhookOptions = {},
 ): Promise<void> {
   try {
     const endpoints = await db
@@ -71,7 +78,21 @@ export async function emitWebhookEvent(
   void notifyChatEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyChatEvent failed"));
   void notifyTelegramEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyTelegramEvent failed"));
   void notifySlackEvent(workspaceId, event, data).catch((err) => log.error(err, "notifySlackEvent failed"));
-  void notifyInboxEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyInboxEvent failed"));
+  void notifyInboxEvent(
+    workspaceId,
+    event,
+    data,
+    options.actorId ?? (typeof data.actorId === "string" ? data.actorId : undefined),
+    options.eventId ?? (typeof data.eventId === "string" ? data.eventId : undefined),
+  ).catch((err) => log.error(err, "notifyInboxEvent failed"));
   void notifyOutlookEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyOutlookEvent failed"));
   void notifyZoomEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyZoomEvent failed"));
+
+  // Fire-and-forget: workflow automations. Finds enabled workflows whose
+  // trigger matches this event and kicks off a best-effort run per match
+  // (decision D3 — same pattern as the chat notify above). The run row is
+  // persisted before execution, so a crash leaves it reclaimable by the cron.
+  void dispatchWorkflowEvent(workspaceId, event, data).catch((err) =>
+    log.error(err, "dispatchWorkflowEvent failed"),
+  );
 }
