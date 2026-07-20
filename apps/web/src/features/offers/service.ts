@@ -14,9 +14,20 @@ import {
   offers,
   type Offer,
 } from "@harly/db";
+// NOTE: `organization` no longer imported directly — `getOfferRecipient` in
+// ./core owns the candidates ⨝ organization join so both layers share it.
 
-import { processEmailOutbox } from "@/lib/email/outbox-processor";
+import {
+  enqueueEmailOutbox,
+  processEmailOutbox,
+} from "@/lib/email/outbox-processor";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import {
+  assertOfferTerms,
+  getOfferRecipient,
+  offerHasExpired,
+  type OfferTerms,
+} from "./core";
 
 /** Workspace-scoped offer service for REST API. Never reads session state. */
 
@@ -62,19 +73,9 @@ function cursorWhere(cursor: Cursor | null) {
   );
 }
 
-function assertOfferTerms(values: Partial<OfferApiInput>) {
-  if (
-    values.expiresAt &&
-    values.startDate &&
-    values.expiresAt.getTime() < values.startDate.getTime()
-  ) {
-    throw ApiError.unprocessable("Offer expiry cannot be before its start date.");
-  }
-  if (values.salaryAmount === null) {
-    if (values.currency !== null || values.salaryPeriod !== null) {
-      throw ApiError.unprocessable("Currency and salary period require a salary amount.");
-    }
-  }
+function assertOfferTermsOrThrow(values: OfferTerms) {
+  const result = assertOfferTerms(values);
+  if (!result.ok) throw ApiError.unprocessable(result.message);
 }
 
 export async function listOffersForApi(input: {
@@ -91,8 +92,12 @@ export async function listOffersForApi(input: {
     .where(
       and(
         eq(offers.workspaceId, input.workspaceId),
-        input.candidateId ? eq(offers.candidateId, input.candidateId) : undefined,
-        input.applicationId ? eq(offers.applicationId, input.applicationId) : undefined,
+        input.candidateId
+          ? eq(offers.candidateId, input.candidateId)
+          : undefined,
+        input.applicationId
+          ? eq(offers.applicationId, input.applicationId)
+          : undefined,
         input.status ? eq(offers.status, input.status) : undefined,
         cursorWhere(input.cursor),
       ),
@@ -125,7 +130,7 @@ export async function createOfferForApi(input: {
   applicationId: string;
   values: OfferApiInput;
 }): Promise<Offer> {
-  assertOfferTerms(input.values);
+  assertOfferTermsOrThrow(input.values);
 
   const created = await db.transaction(async (tx) => {
     const [application] = await tx
@@ -182,7 +187,7 @@ export async function updateOfferForApi(input: {
   }
 
   const values = { ...existing, ...input.values };
-  assertOfferTerms(values);
+  assertOfferTermsOrThrow(values);
   const [updated] = await db
     .update(offers)
     .set({
@@ -216,6 +221,11 @@ export async function sendOfferForApi(input: {
   if (offer.status !== "draft") {
     throw ApiError.conflict("Only draft offers can be sent.");
   }
+  if (offerHasExpired(offer.expiresAt)) {
+    throw ApiError.conflict(
+      "This offer has expired and can no longer be sent.",
+    );
+  }
 
   const [candidate] = await db
     .select({ email: candidates.email })
@@ -228,27 +238,30 @@ export async function sendOfferForApi(input: {
     )
     .limit(1);
   if (!candidate?.email) {
-    throw ApiError.unprocessable("The candidate does not have an email address.");
+    throw ApiError.unprocessable(
+      "The candidate does not have an email address.",
+    );
   }
 
-  const [outbox] = await db
-    .insert(emailOutbox)
-    .values({
-      workspaceId: input.workspaceId,
-      kind: "offer.extended",
-      payload: { offerId: offer.id, actorId: input.actorUserId },
-    })
-    .returning({ id: emailOutbox.id });
-  if (!outbox) throw ApiError.internal("Unable to queue offer delivery.");
+  // enqueueEmailOutbox dedupes by a hash of (kind, payload), so a double send
+  // (double-click, retry, AI agent) reuses the same outbox row instead of
+  // creating duplicates and double-counting deliveries / offer.sent events.
+  const outboxId = await enqueueEmailOutbox(
+    input.workspaceId,
+    "offer.extended",
+    { offerId: offer.id, actorId: input.actorUserId },
+  );
 
-  await processEmailOutbox({ ids: [outbox.id] });
+  await processEmailOutbox({ ids: [outboxId] });
   const [delivery] = await db
     .select({ status: emailOutbox.status })
     .from(emailOutbox)
-    .where(eq(emailOutbox.id, outbox.id))
+    .where(eq(emailOutbox.id, outboxId))
     .limit(1);
   if (delivery?.status !== "sent") {
-    throw ApiError.internal("Offer delivery failed. It has been queued for retry.");
+    throw ApiError.internal(
+      "Offer delivery failed. It has been queued for retry.",
+    );
   }
   return getOfferForApi(input);
 }
@@ -263,14 +276,20 @@ export async function decideOfferForApi(input: {
   if (offer.status !== "sent") {
     throw ApiError.conflict("Only sent offers can be decided.");
   }
-  if (offer.expiresAt && offer.expiresAt.getTime() < Date.now()) {
-    throw ApiError.conflict("This offer has expired and can no longer be decided.");
+  if (offerHasExpired(offer.expiresAt)) {
+    throw ApiError.conflict(
+      "This offer has expired and can no longer be decided.",
+    );
   }
 
   const decided = await db.transaction(async (tx) => {
     const [updated] = await tx
       .update(offers)
-      .set({ status: input.decision, decidedAt: new Date(), updatedAt: new Date() })
+      .set({
+        status: input.decision,
+        decidedAt: new Date(),
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(offers.workspaceId, input.workspaceId),
@@ -283,7 +302,11 @@ export async function decideOfferForApi(input: {
 
     if (input.decision === "accepted") {
       const [application] = await tx
-        .select({ id: applications.id, currentStageId: applications.currentStageId })
+        .select({
+          id: applications.id,
+          status: applications.status,
+          currentStageId: applications.currentStageId,
+        })
         .from(applications)
         .where(
           and(
@@ -293,6 +316,15 @@ export async function decideOfferForApi(input: {
         )
         .limit(1);
       if (!application) throw ApiError.notFound("Application not found.");
+      // Guard: accepting an offer moves the application to `hired`. Refuse if
+      // the application is no longer `active` (rejected/withdrawn/hired by
+      // another flow) — otherwise we'd silently revive a dead candidacy or
+      // overwrite a competing decision. Roll back the offer update too.
+      if (application.status !== "active") {
+        throw ApiError.conflict(
+          "This application is no longer active. Refresh and try again.",
+        );
+      }
 
       const [hiredStage] = await tx
         .select({ id: jobStages.id })
@@ -373,7 +405,11 @@ export async function withdrawOfferForApi(input: {
   const withdrawn = await db.transaction(async (tx) => {
     const [updated] = await tx
       .update(offers)
-      .set({ status: "withdrawn", decidedAt: new Date(), updatedAt: new Date() })
+      .set({
+        status: "withdrawn",
+        decidedAt: new Date(),
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(offers.workspaceId, input.workspaceId),
@@ -382,7 +418,8 @@ export async function withdrawOfferForApi(input: {
         ),
       )
       .returning();
-    if (!updated) throw ApiError.conflict("This offer can no longer be withdrawn.");
+    if (!updated)
+      throw ApiError.conflict("This offer can no longer be withdrawn.");
 
     await tx.insert(activityEvents).values({
       workspaceId: input.workspaceId,
@@ -394,6 +431,26 @@ export async function withdrawOfferForApi(input: {
     });
     return updated;
   });
+
+  if (offer.status === "sent") {
+    const recipient = await getOfferRecipient(
+      input.workspaceId,
+      offer.candidateId,
+    );
+    if (recipient?.email) {
+      const id = await enqueueEmailOutbox(
+        input.workspaceId,
+        "offer.withdrawn",
+        {
+          candidateEmail: recipient.email,
+          candidateName: recipient.firstName,
+          companyName: recipient.companyName,
+          jobTitle: offer.title,
+        },
+      );
+      await processEmailOutbox({ ids: [id], workspaceId: input.workspaceId });
+    }
+  }
 
   return withdrawn;
 }

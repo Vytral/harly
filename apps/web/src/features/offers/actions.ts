@@ -1,31 +1,33 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createElement } from "react";
-import { and, eq } from "drizzle-orm";
+import { and, eq, or } from "drizzle-orm";
 import { z } from "zod";
 
 import {
   activityEvents,
   applications,
   applicationStageHistory,
-  candidates,
   db,
+  emailOutbox,
   jobHiringTeam,
   jobStages,
   notifications,
   offers,
-  emailOutbox,
-  organization,
 } from "@harly/db";
-import { OfferWithdrawn, offerWithdrawnSubject } from "@harly/emails";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
-import { getWorkspaceEmailBranding } from "@/lib/email/branding";
-import { sendWorkspaceEmail } from "@/lib/email";
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
-import { processEmailOutbox } from "@/lib/email/outbox-processor";
+import {
+  enqueueEmailOutbox,
+  processEmailOutbox,
+} from "@/lib/email/outbox-processor";
+import {
+  assertOfferTerms,
+  getOfferRecipient,
+  offerHasExpired,
+} from "./core";
 
 const log = createLogger("offers");
 
@@ -60,14 +62,17 @@ async function getOfferRow(workspaceId: string, offerId: string) {
   return row ?? null;
 }
 
-async function logOfferActivity(input: {
-  workspaceId: string;
-  actorId: string;
-  applicationId: string;
-  type: string;
-  metadata: Record<string, unknown>;
-}) {
-  await db.insert(activityEvents).values({
+async function logOfferActivity(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  input: {
+    workspaceId: string;
+    actorId: string;
+    applicationId: string;
+    type: string;
+    metadata: Record<string, unknown>;
+  },
+) {
+  await tx.insert(activityEvents).values({
     workspaceId: input.workspaceId,
     actorId: input.actorId,
     entityType: "application",
@@ -134,12 +139,26 @@ export async function createOffer(input: {
     };
   }
 
+  const terms = assertOfferTerms({
+    salaryAmount: parsed.data.salaryAmount,
+    currency: parsed.data.currency,
+    salaryPeriod: parsed.data.salaryPeriod,
+    startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : null,
+    expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
+  });
+  if (!terms.ok) {
+    return { success: false, error: terms.message };
+  }
+
   let context;
   try {
     context = await requirePermission("offers:manage");
   } catch (error) {
     log.error(error, "createOffer failed");
-    return { success: false, error: "You do not have permission to manage offers." };
+    return {
+      success: false,
+      error: "You do not have permission to manage offers.",
+    };
   }
   const workspaceId = context.organization.id;
 
@@ -180,7 +199,7 @@ export async function createOffer(input: {
       createdById: context.user.id,
     });
 
-    await logOfferActivity({
+    await logOfferActivity(tx, {
       workspaceId,
       actorId: context.user.id,
       applicationId: application.id,
@@ -213,12 +232,26 @@ export async function updateOffer(input: {
     };
   }
 
+  const terms = assertOfferTerms({
+    salaryAmount: parsed.data.salaryAmount,
+    currency: parsed.data.currency,
+    salaryPeriod: parsed.data.salaryPeriod,
+    startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : null,
+    expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
+  });
+  if (!terms.ok) {
+    return { success: false, error: terms.message };
+  }
+
   let context;
   try {
     context = await requirePermission("offers:manage");
   } catch (error) {
     log.error(error, "updateOffer failed");
-    return { success: false, error: "You do not have permission to manage offers." };
+    return {
+      success: false,
+      error: "You do not have permission to manage offers.",
+    };
   }
   const workspaceId = context.organization.id;
 
@@ -249,7 +282,9 @@ export async function updateOffer(input: {
 const transitionSchema = z.object({ offerId: z.uuid() });
 
 /** draft → sent. */
-export async function sendOffer(input: { offerId: string }): Promise<ActionResult> {
+export async function sendOffer(input: {
+  offerId: string;
+}): Promise<ActionResult> {
   const parsed = transitionSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Invalid offer." };
 
@@ -257,8 +292,11 @@ export async function sendOffer(input: { offerId: string }): Promise<ActionResul
   try {
     context = await requirePermission("offers:manage");
   } catch (error) {
-    log.error(error, "updateOffer failed");
-    return { success: false, error: "You do not have permission to manage offers." };
+    log.error(error, "sendOffer failed");
+    return {
+      success: false,
+      error: "You do not have permission to manage offers.",
+    };
   }
   const workspaceId = context.organization.id;
 
@@ -267,34 +305,46 @@ export async function sendOffer(input: { offerId: string }): Promise<ActionResul
   if (offer.status !== "draft") {
     return { success: false, error: "Only draft offers can be sent." };
   }
+  if (offerHasExpired(offer.expiresAt)) {
+    return {
+      success: false,
+      error: "This offer has expired and can no longer be sent.",
+    };
+  }
 
   const recipient = await getOfferRecipient(workspaceId, offer.candidateId);
   if (!recipient?.email) {
-    return { success: false, error: "The candidate does not have an email address." };
+    return {
+      success: false,
+      error: "The candidate does not have an email address.",
+    };
   }
 
   // A durable outbox row is the single source of truth: the worker sends the
   // email and only then flips the offer to `sent`, so a crash mid-flight can
   // never leave the offer as `sent` without a delivered email (or resend it).
-  const [outbox] = await db
-    .insert(emailOutbox)
-    .values({
-      workspaceId,
-      kind: "offer.extended",
-      payload: { offerId: offer.id, actorId: context.user.id },
-    })
-    .returning({ id: emailOutbox.id });
+  // enqueueEmailOutbox dedupes by a hash of (kind, payload), so a double send
+  // (double-click, retry, AI agent) reuses the same row instead of creating
+  // duplicates and double-counting deliveries / offer.sent events.
+  const outboxId = await enqueueEmailOutbox(
+    workspaceId,
+    "offer.extended",
+    { offerId: offer.id, actorId: context.user.id },
+  );
 
-  await processEmailOutbox({ ids: [outbox.id] });
+  await processEmailOutbox({ ids: [outboxId] });
 
   const [updated] = await db
     .select({ status: emailOutbox.status })
     .from(emailOutbox)
-    .where(eq(emailOutbox.id, outbox.id))
+    .where(eq(emailOutbox.id, outboxId))
     .limit(1);
 
   if (updated?.status !== "sent") {
-    return { success: false, error: "Offer delivery failed. It has been queued for retry." };
+    return {
+      success: false,
+      error: "Offer delivery failed. It has been queued for retry.",
+    };
   }
 
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
@@ -318,8 +368,11 @@ export async function decideOffer(input: {
   try {
     context = await requirePermission("offers:manage");
   } catch (error) {
-    log.error(error, "updateOffer failed");
-    return { success: false, error: "You do not have permission to manage offers." };
+    log.error(error, "decideOffer failed");
+    return {
+      success: false,
+      error: "You do not have permission to manage offers.",
+    };
   }
   const workspaceId = context.organization.id;
 
@@ -328,17 +381,60 @@ export async function decideOffer(input: {
   if (offer.status !== "sent") {
     return { success: false, error: "Only sent offers can be decided." };
   }
-  if (offer.expiresAt && offer.expiresAt.getTime() < Date.now()) {
-    return { success: false, error: "This offer has expired and can no longer be decided." };
+  if (offerHasExpired(offer.expiresAt)) {
+    return {
+      success: false,
+      error: "This offer has expired and can no longer be decided.",
+    };
   }
 
   const decision = parsed.data.decision;
 
+  // Guard (accepted only): accepting moves the application to `hired`. Refuse
+  // up front if the application is no longer `active` (rejected/withdrawn/hired
+  // by another flow) — otherwise we'd silently revive a dead candidacy or
+  // overwrite a competing decision. Checked before the tx so we can return a
+  // clean ActionResult instead of throwing mid-transaction.
+  if (decision === "accepted") {
+    const [application] = await db
+      .select({ id: applications.id, status: applications.status })
+      .from(applications)
+      .where(
+        and(
+          eq(applications.workspaceId, workspaceId),
+          eq(applications.id, offer.applicationId),
+        ),
+      )
+      .limit(1);
+    if (!application) {
+      return { success: false, error: "Application not found." };
+    }
+    if (application.status !== "active") {
+      return {
+        success: false,
+        error: "This application is no longer active. Refresh and try again.",
+      };
+    }
+  }
+
   await db.transaction(async (tx) => {
-    await tx
+    const [updatedOffer] = await tx
       .update(offers)
       .set({ status: decision, decidedAt: new Date() })
-      .where(and(eq(offers.workspaceId, workspaceId), eq(offers.id, offer.id)));
+      .where(
+        and(
+          eq(offers.workspaceId, workspaceId),
+          eq(offers.id, offer.id),
+          eq(offers.status, "sent"),
+        ),
+      )
+      .returning({ id: offers.id });
+
+    if (!updatedOffer) {
+      throw new Error(
+        "Offer changed by another recruiter. Refresh and try again.",
+      );
+    }
 
     if (decision === "accepted") {
       const [application] = await tx
@@ -401,6 +497,15 @@ export async function decideOffer(input: {
         });
       }
     }
+
+    // Audit log inside the tx so it's atomic with the decision mutation.
+    await logOfferActivity(tx, {
+      workspaceId,
+      actorId: context.user.id,
+      applicationId: offer.applicationId,
+      type: decision === "accepted" ? "offer.accepted" : "offer.declined",
+      metadata: { title: offer.title },
+    });
   });
 
   if (decision === "accepted") {
@@ -411,15 +516,10 @@ export async function decideOffer(input: {
     });
   }
 
-  await logOfferActivity({
+  const decisionRecipient = await getOfferRecipient(
     workspaceId,
-    actorId: context.user.id,
-    applicationId: offer.applicationId,
-    type: decision === "accepted" ? "offer.accepted" : "offer.declined",
-    metadata: { title: offer.title },
-  });
-
-  const decisionRecipient = await getOfferRecipient(workspaceId, offer.candidateId);
+    offer.candidateId,
+  );
   await notifyHiringTeam({
     workspaceId,
     actorId: context.user.id,
@@ -447,8 +547,11 @@ export async function withdrawOffer(input: {
   try {
     context = await requirePermission("offers:manage");
   } catch (error) {
-    log.error(error, "updateOffer failed");
-    return { success: false, error: "You do not have permission to manage offers." };
+    log.error(error, "withdrawOffer failed");
+    return {
+      success: false,
+      error: "You do not have permission to manage offers.",
+    };
   }
   const workspaceId = context.organization.id;
 
@@ -459,12 +562,25 @@ export async function withdrawOffer(input: {
   }
 
   await db.transaction(async (tx) => {
-    await tx
+    const [updatedOffer] = await tx
       .update(offers)
       .set({ status: "withdrawn", decidedAt: new Date() })
-      .where(and(eq(offers.workspaceId, workspaceId), eq(offers.id, offer.id)));
+      .where(
+        and(
+          eq(offers.workspaceId, workspaceId),
+          eq(offers.id, offer.id),
+          or(eq(offers.status, "draft"), eq(offers.status, "sent")),
+        ),
+      )
+      .returning({ id: offers.id });
 
-    await logOfferActivity({
+    if (!updatedOffer) {
+      throw new Error(
+        "Offer changed by another recruiter. Refresh and try again.",
+      );
+    }
+
+    await logOfferActivity(tx, {
       workspaceId,
       actorId: context.user.id,
       applicationId: offer.applicationId,
@@ -477,43 +593,20 @@ export async function withdrawOffer(input: {
   if (offer.status === "sent") {
     const recipient = await getOfferRecipient(workspaceId, offer.candidateId);
     if (recipient?.email) {
-      const branding = await getWorkspaceEmailBranding(workspaceId);
-      void sendWorkspaceEmail(workspaceId, {
-        to: recipient.email,
-        subject: offerWithdrawnSubject({ companyName: recipient.companyName, jobTitle: offer.title }),
-        react: createElement(OfferWithdrawn, {
+      const outboxId = await enqueueEmailOutbox(
+        workspaceId,
+        "offer.withdrawn",
+        {
+          candidateEmail: recipient.email,
           candidateName: recipient.firstName,
           companyName: recipient.companyName,
-          companyLogoUrl: branding.logoUrl ?? undefined,
-          accentColor: branding.primaryColor ?? undefined,
-          socialLinks: branding.socialLinks,
           jobTitle: offer.title,
-        }),
-      });
+        },
+      );
+      await processEmailOutbox({ ids: [outboxId], workspaceId });
     }
   }
 
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
   return { success: true };
-}
-
-/** Candidate contact + company name for offer emails, workspace-scoped. */
-async function getOfferRecipient(workspaceId: string, candidateId: string) {
-  const [row] = await db
-    .select({
-      email: candidates.email,
-      firstName: candidates.firstName,
-      lastName: candidates.lastName,
-      companyName: organization.name,
-    })
-    .from(candidates)
-    .innerJoin(organization, eq(organization.id, candidates.workspaceId))
-    .where(
-      and(
-        eq(candidates.id, candidateId),
-        eq(candidates.workspaceId, workspaceId),
-      ),
-    )
-    .limit(1);
-  return row ?? null;
 }
