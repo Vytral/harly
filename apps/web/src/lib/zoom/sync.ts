@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db, interviews } from "@harly/db";
 
@@ -53,8 +53,15 @@ export async function cancelInterviewZoomMeeting(params: CancelInterviewZoomPara
     await db
       .update(interviews)
       .set({ zoomMeetingId: null })
-      .where(eq(interviews.id, params.interviewId));
+      .where(
+        and(
+          eq(interviews.id, params.interviewId),
+          eq(interviews.workspaceId, params.workspaceId),
+        ),
+      );
+    return true;
   } catch (error) {
     console.error("[zoom] Failed to cancel meeting", error);
+    return false;
   }
 }

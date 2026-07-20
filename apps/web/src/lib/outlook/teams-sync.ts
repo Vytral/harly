@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db, interviews } from "@harly/db";
 
@@ -11,8 +11,9 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("outlook-teams-sync");
 
 /**
- * Fire-and-forget: create a Teams online meeting for a video interview
- * and store the meeting ID + join URL back on the interview row.
+ * Create a Teams online meeting for a video interview and store the meeting
+ * ID + join URL back on the interview row. Returning null is intentional: the
+ * interview is still valid, but the caller must surface the provider failure.
  */
 export async function syncInterviewToTeams(opts: {
   workspaceId: string;
@@ -20,10 +21,10 @@ export async function syncInterviewToTeams(opts: {
   summary: string;
   start: Date;
   durationMins: number;
-}): Promise<void> {
+}): Promise<{ joinUrl?: string; meetingId: string } | null> {
   try {
     const config = await getWorkspaceOutlookConfig(opts.workspaceId);
-    if (!config) return;
+    if (!config) return null;
 
     const meeting = await createTeamsMeeting(config.accessToken, {
       subject: opts.summary,
@@ -41,31 +42,46 @@ export async function syncInterviewToTeams(opts: {
     await db
       .update(interviews)
       .set(update)
-      .where(eq(interviews.id, opts.interviewId));
+      .where(
+        and(
+          eq(interviews.id, opts.interviewId),
+          eq(interviews.workspaceId, opts.workspaceId),
+        ),
+      );
+
+    return { joinUrl: meeting.joinUrl, meetingId: meeting.id };
   } catch (err) {
     log.error(err, "[teams-sync] Failed to create meeting");
+    return null;
   }
 }
 
 /**
- * Fire-and-forget: delete the Teams meeting when interview is canceled.
+ * Delete the Teams meeting when interview is canceled.
  */
 export async function cancelInterviewTeamsMeeting(opts: {
   workspaceId: string;
   interviewId: string;
   teamsMeetingId: string;
-}): Promise<void> {
+}): Promise<boolean> {
   try {
     const config = await getWorkspaceOutlookConfig(opts.workspaceId);
-    if (!config) return;
+    if (!config) return false;
 
     await deleteTeamsMeeting(config.accessToken, opts.teamsMeetingId);
 
     await db
       .update(interviews)
       .set({ teamsMeetingId: null })
-      .where(eq(interviews.id, opts.interviewId));
+      .where(
+        and(
+          eq(interviews.id, opts.interviewId),
+          eq(interviews.workspaceId, opts.workspaceId),
+        ),
+      );
+    return true;
   } catch (err) {
     log.error(err, "[teams-sync] Failed to cancel meeting");
+    return false;
   }
 }

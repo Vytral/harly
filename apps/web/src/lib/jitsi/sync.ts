@@ -68,7 +68,7 @@ type CancelInterviewJitsiParams = {
 /** Stateless provider , nothing to delete remotely; just clear the room. */
 export async function cancelInterviewJitsiMeeting(
   params: CancelInterviewJitsiParams,
-) {
+): Promise<boolean> {
   try {
     await db
       .update(interviews)
@@ -79,7 +79,9 @@ export async function cancelInterviewJitsiMeeting(
           eq(interviews.workspaceId, params.workspaceId),
         ),
       );
+    return true;
   } catch (error) {
     console.error("[jitsi] Failed to clear meeting", error);
+    return false;
   }
 }

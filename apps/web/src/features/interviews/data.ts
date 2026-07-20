@@ -1,10 +1,11 @@
 import "server-only";
 
-import { and, asc, between, desc, eq, gte } from "drizzle-orm";
+import { and, asc, between, desc, eq, gte, inArray } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
   candidates,
+  interviewSyncs,
   interviews,
   jobs,
   user as authUsers,
@@ -24,6 +25,7 @@ export async function listCandidateInterviews(
   const rows = await db
     .select({
       id: interviews.id,
+      applicationId: interviews.applicationId,
       type: interviews.type,
       mode: interviews.mode,
       status: interviews.status,
@@ -56,8 +58,39 @@ export async function listCandidateInterviews(
     )
     .orderBy(desc(interviews.scheduledAt));
 
+  const syncRows = rows.length
+    ? await db
+        .select({
+          id: interviewSyncs.id,
+          interviewId: interviewSyncs.interviewId,
+          provider: interviewSyncs.provider,
+          operation: interviewSyncs.operation,
+          status: interviewSyncs.status,
+          attempts: interviewSyncs.attempts,
+          lastError: interviewSyncs.lastError,
+          nextRetryAt: interviewSyncs.nextRetryAt,
+        })
+        .from(interviewSyncs)
+        .where(
+          and(
+            eq(interviewSyncs.workspaceId, workspace.id),
+            inArray(
+              interviewSyncs.interviewId,
+              rows.map((row) => row.id),
+            ),
+          ),
+        )
+    : [];
+  const syncsByInterview = new Map<string, typeof syncRows>();
+  for (const sync of syncRows) {
+    const current = syncsByInterview.get(sync.interviewId) ?? [];
+    current.push(sync);
+    syncsByInterview.set(sync.interviewId, current);
+  }
+
   return rows.map((row) => ({
     id: row.id,
+    applicationId: row.applicationId,
     type: row.type,
     mode: row.mode,
     status: row.status,
@@ -74,18 +107,32 @@ export async function listCandidateInterviews(
     meetLink: row.meetLink,
     teamsMeetingId: row.teamsMeetingId,
     zoomMeetingId: row.zoomMeetingId,
-    briefContent: (row.briefContent ?? null) as import("@/lib/ai/schemas").InterviewBrief | null,
+    syncs: (syncsByInterview.get(row.id) ?? []).map((sync) => ({
+      id: sync.id,
+      provider: sync.provider,
+      operation: sync.operation,
+      status: sync.status,
+      attempts: sync.attempts,
+      lastError: sync.lastError,
+      nextRetryAt: sync.nextRetryAt?.toISOString() ?? null,
+    })),
+    briefContent: (row.briefContent ?? null) as
+      | import("@/lib/ai/schemas").InterviewBrief
+      | null,
   }));
 }
 
 /** Upcoming scheduled interviews across the workspace, soonest first. */
-export async function listUpcomingInterviews(): Promise<UpcomingInterviewItem[]> {
+export async function listUpcomingInterviews(): Promise<
+  UpcomingInterviewItem[]
+> {
   const { organization: workspace } = await getWorkspaceContext();
   const now = new Date();
 
   const rows = await db
     .select({
       id: interviews.id,
+      applicationId: interviews.applicationId,
       type: interviews.type,
       mode: interviews.mode,
       status: interviews.status,
@@ -131,6 +178,7 @@ export async function listUpcomingInterviews(): Promise<UpcomingInterviewItem[]>
 
   return rows.map((row) => ({
     id: row.id,
+    applicationId: row.applicationId,
     type: row.type,
     mode: row.mode,
     status: row.status,
@@ -163,6 +211,7 @@ export async function listInterviewsForRange(
   const rows = await db
     .select({
       id: interviews.id,
+      applicationId: interviews.applicationId,
       type: interviews.type,
       mode: interviews.mode,
       status: interviews.status,
@@ -207,6 +256,7 @@ export async function listInterviewsForRange(
 
   return rows.map((row) => ({
     id: row.id,
+    applicationId: row.applicationId,
     type: row.type,
     mode: row.mode,
     status: row.status,

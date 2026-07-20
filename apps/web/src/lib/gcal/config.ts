@@ -21,6 +21,22 @@ export type GCalConfig = {
   calendarId: string;
 };
 
+/** Mark a revoked OAuth connection unusable without touching the account label. */
+export async function invalidateWorkspaceGCalConnection(
+  workspaceId: string,
+): Promise<void> {
+  await db
+    .update(workspaceSettings)
+    .set({
+      gcalEnabled: false,
+      gcalRefreshTokenCiphertext: null,
+      gcalRefreshTokenIv: null,
+      gcalRefreshTokenTag: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(workspaceSettings.organizationId, workspaceId));
+}
+
 function getGoogleCredentials(): {
   clientId: string;
   clientSecret: string;

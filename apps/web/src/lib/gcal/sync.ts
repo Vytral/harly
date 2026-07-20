@@ -4,16 +4,35 @@ import { eq } from "drizzle-orm";
 
 import { db, interviews } from "@harly/db";
 
-import { getWorkspaceGCalConfig } from "@/lib/gcal/config";
-import { createEvent, updateEvent, deleteEvent } from "@/lib/gcal/client";
+import {
+  getWorkspaceGCalConfig,
+  invalidateWorkspaceGCalConnection,
+} from "@/lib/gcal/config";
+import {
+  createEvent,
+  deleteEvent,
+  getEvent,
+  updateEvent,
+} from "@/lib/gcal/client";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("gcal-sync");
 
+/** Google Calendar event IDs are the idempotency key for interview creation. */
+export function gcalEventIdForInterview(interviewId: string): string {
+  return `harly-${interviewId.replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase()}`;
+}
+
 /**
- * Fire-and-forget: create a Google Calendar event for a new interview and
- * store the event ID back on the interview row.
+ * Create a Google Calendar event for a new interview and store the event ID
+ * back on the interview row. The database interview is the source of truth:
+ * calendar failure is returned as a typed warning instead of rejecting the
+ * already-created interview.
  */
+export type GCalSyncResult =
+  | { ok: true; eventId: string; meetLink?: string }
+  | { ok: false; reason: "not_connected" | "invalid_grant" | "failed" };
+
 export async function syncInterviewToGCal(opts: {
   workspaceId: string;
   interviewId: string;
@@ -24,15 +43,16 @@ export async function syncInterviewToGCal(opts: {
   attendees?: string[];
   location?: string;
   mode?: string;
-}): Promise<void> {
+}): Promise<GCalSyncResult> {
   try {
     const config = await getWorkspaceGCalConfig(opts.workspaceId);
-    if (!config) return;
+    if (!config) return { ok: false, reason: "not_connected" };
 
-    const event = await createEvent(
-      config.oauth2Client,
-      config.calendarId,
-      {
+    const eventId = gcalEventIdForInterview(opts.interviewId);
+    let event;
+    try {
+      event = await createEvent(config.oauth2Client, config.calendarId, {
+        id: eventId,
         summary: opts.summary,
         description: opts.description,
         start: opts.start,
@@ -40,8 +60,15 @@ export async function syncInterviewToGCal(opts: {
         attendees: opts.attendees,
         location: opts.location,
         conferenceData: opts.mode === "video",
-      },
-    );
+      });
+    } catch (error) {
+      // A timeout can happen after Google committed the event but before Harly
+      // persisted gcalEventId. Re-read the deterministic event instead of
+      // creating a second invitation.
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("Google Calendar API 409")) throw error;
+      event = await getEvent(config.oauth2Client, config.calendarId, eventId);
+    }
 
     const update: Record<string, unknown> = { gcalEventId: event.id };
     if (event.hangoutLink) {
@@ -52,8 +79,19 @@ export async function syncInterviewToGCal(opts: {
       .update(interviews)
       .set(update)
       .where(eq(interviews.id, opts.interviewId));
+    return {
+      ok: true,
+      eventId: event.id,
+      meetLink: event.hangoutLink,
+    };
   } catch (err) {
     log.error(err, "[gcal-sync] Failed to create event");
+    const message = err instanceof Error ? err.message : String(err);
+    if (message.includes("invalid_grant")) {
+      await invalidateWorkspaceGCalConnection(opts.workspaceId);
+      return { ok: false, reason: "invalid_grant" };
+    }
+    return { ok: false, reason: "failed" };
   }
 }
 
@@ -64,10 +102,10 @@ export async function cancelInterviewGCalEvent(opts: {
   workspaceId: string;
   interviewId: string;
   gcalEventId: string;
-}): Promise<void> {
+}): Promise<boolean> {
   try {
     const config = await getWorkspaceGCalConfig(opts.workspaceId);
-    if (!config) return;
+    if (!config) return false;
 
     await deleteEvent(config.oauth2Client, config.calendarId, opts.gcalEventId);
 
@@ -75,8 +113,10 @@ export async function cancelInterviewGCalEvent(opts: {
       .update(interviews)
       .set({ gcalEventId: null })
       .where(eq(interviews.id, opts.interviewId));
+    return true;
   } catch (err) {
     log.error(err, "[gcal-sync] Failed to cancel event");
+    return false;
   }
 }
 

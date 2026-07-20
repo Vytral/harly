@@ -66,6 +66,8 @@ export async function createEvent(
   client: OAuth2Client,
   calendarId: string,
   event: {
+    /** Stable Google event id used to make retries safe after a timeout. */
+    id?: string;
     summary: string;
     description?: string;
     start: Date;
@@ -83,6 +85,7 @@ export async function createEvent(
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const body: Record<string, unknown> = {
+    id: event.id,
     summary: event.summary,
     description: event.description,
     location: event.location,
@@ -112,6 +115,18 @@ export async function createEvent(
       method: "POST",
       body: JSON.stringify(body),
     },
+  );
+}
+
+/** Read an event by its deterministic id after an idempotent create conflict. */
+export async function getEvent(
+  client: OAuth2Client,
+  calendarId: string,
+  eventId: string,
+): Promise<CalendarEvent> {
+  return gcalFetch<CalendarEvent>(
+    client,
+    `/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
   );
 }
 

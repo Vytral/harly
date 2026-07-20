@@ -136,6 +136,9 @@ vi.mock("@/lib/jitsi/sync", () => ({
   syncInterviewToJitsi: mocks.syncInterviewToJitsi,
   cancelInterviewJitsiMeeting: mocks.cancelInterviewJitsiMeeting,
 }));
+vi.mock("@/lib/interviews/sync-ledger", () => ({
+  trackInterviewSync: async ({ run }: { run: () => Promise<unknown> }) => run(),
+}));
 vi.mock("@/lib/gcal/sync", () => ({
   syncInterviewToGCal: mocks.syncInterviewToGCal,
   cancelInterviewGCalEvent: mocks.cancelInterviewGCalEvent,
@@ -345,6 +348,70 @@ describe("F1-10 single video provider", () => {
     expect(result.success).toBe(true);
     expect(mocks.syncInterviewToZoom).toHaveBeenCalledTimes(1);
     expect(mocks.syncInterviewToJitsi).not.toHaveBeenCalled();
+  });
+
+  it("reports a Teams creation failure instead of hiding it", async () => {
+    txMock([{ id: "app-1", jobId: "job-1" }], []);
+    mocks.getWorkspaceOutlookConfig.mockResolvedValue({ accessToken: "outlook" });
+    mocks.syncInterviewToTeams.mockResolvedValue(null);
+    mocks.selectQueue.push(
+      [
+        {
+          email: "c@example.com",
+          firstName: "C",
+          lastName: "D",
+          companyName: "A",
+          jobTitle: "J",
+        },
+      ],
+      [{ meetLink: null }],
+    );
+
+    const result = await scheduleInterview({
+      workspaceId: "ws-1",
+      candidateId: "candidate-1",
+      applicationId: "app-1",
+      type: "screening",
+      mode: "video",
+      scheduledAt: new Date(Date.now() + 3600_000).toISOString(),
+      durationMins: 45,
+      meetingProvider: "teams",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.warning).toMatch(/Teams could not create/i);
+  });
+
+  it("reports a Jitsi creation failure instead of hiding it", async () => {
+    txMock([{ id: "app-1", jobId: "job-1" }], []);
+    mocks.getWorkspaceJitsiConfig.mockResolvedValue({ baseUrl: "https://meet.jit.si" });
+    mocks.syncInterviewToJitsi.mockResolvedValue(null);
+    mocks.selectQueue.push(
+      [
+        {
+          email: "c@example.com",
+          firstName: "C",
+          lastName: "D",
+          companyName: "A",
+          jobTitle: "J",
+        },
+      ],
+      [{ meetLink: null }],
+    );
+
+    const result = await scheduleInterview({
+      workspaceId: "ws-1",
+      candidateId: "candidate-1",
+      applicationId: "app-1",
+      type: "screening",
+      mode: "video",
+      scheduledAt: new Date(Date.now() + 3600_000).toISOString(),
+      durationMins: 45,
+      meetingProvider: "jitsi",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.warning).toMatch(/Jitsi could not create/i);
   });
 });
 

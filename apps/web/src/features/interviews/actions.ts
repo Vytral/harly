@@ -40,6 +40,7 @@ import {
 } from "@/lib/jitsi/sync";
 import { getWorkspaceJitsiConfig } from "@/lib/jitsi/config";
 import { getZoomToken } from "@/lib/zoom/config";
+import { trackInterviewSync } from "@/lib/interviews/sync-ledger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
@@ -295,6 +296,7 @@ export async function scheduleInterview(
   error?: string;
   warning?: string;
   emailStatus?: InterviewEmailStatus;
+  interviewId?: string;
 }> {
   try {
     const parsed = scheduleSchema.safeParse(input);
@@ -483,16 +485,28 @@ export async function scheduleInterview(
         );
       };
       const syncCalendar = async (conferenceData: boolean) => {
-        const syncResult = await syncInterviewToGCal({
+        const syncResult = await trackInterviewSync({
           workspaceId: workspace.id,
           interviewId: result.interviewId,
-          summary,
-          description: data.notes ?? undefined,
-          start: when,
-          durationMins: data.durationMins,
-          attendees: attendees.length > 0 ? attendees : undefined,
-          location: data.location ?? undefined,
-          mode: conferenceData ? "video" : undefined,
+          provider: "google_calendar",
+          operation: "upsert",
+          run: () =>
+            syncInterviewToGCal({
+              workspaceId: workspace.id,
+              interviewId: result.interviewId,
+              summary,
+              description: data.notes ?? undefined,
+              start: when,
+              durationMins: data.durationMins,
+              attendees: attendees.length > 0 ? attendees : undefined,
+              location: data.location ?? undefined,
+              mode: conferenceData ? "video" : undefined,
+            }),
+          isSuccess: (providerResult) => providerResult.ok,
+          resourceId: (providerResult) =>
+            providerResult.ok ? providerResult.eventId : undefined,
+          resourceUrl: (providerResult) =>
+            providerResult.ok ? providerResult.meetLink : undefined,
         });
         if (syncResult && !syncResult.ok) {
           addCalendarSyncWarning(syncResult.reason);
@@ -545,13 +559,28 @@ export async function scheduleInterview(
               "Microsoft Teams is not connected; the interview was saved without a video link.",
             );
           } else {
-            await syncInterviewToTeams({
+            const teamsResult = await trackInterviewSync({
               workspaceId: workspace.id,
               interviewId: result.interviewId,
-              summary,
-              start: when,
-              durationMins: data.durationMins,
+              provider: "microsoft_teams",
+              operation: "upsert",
+              run: () =>
+                syncInterviewToTeams({
+                  workspaceId: workspace.id,
+                  interviewId: result.interviewId,
+                  summary,
+                  start: when,
+                  durationMins: data.durationMins,
+                }),
+              isSuccess: Boolean,
+              resourceId: (providerResult) => providerResult?.meetingId,
+              resourceUrl: (providerResult) => providerResult?.joinUrl,
             });
+            if (!teamsResult) {
+              warnings.push(
+                "Teams could not create a meeting; the interview was saved without a video link.",
+              );
+            }
           }
         } else if (provider === "jitsi") {
           if (!jitsiConfig) {
@@ -559,34 +588,94 @@ export async function scheduleInterview(
               "Jitsi Meet is not connected; the interview was saved without a video link.",
             );
           } else {
-            await syncInterviewToJitsi({
+            const jitsiResult = await trackInterviewSync({
               workspaceId: workspace.id,
               interviewId: result.interviewId,
+              provider: "jitsi",
+              operation: "upsert",
+              run: () =>
+                syncInterviewToJitsi({
+                  workspaceId: workspace.id,
+                  interviewId: result.interviewId,
+                }),
+              isSuccess: Boolean,
+              resourceId: (providerResult) => providerResult?.room,
+              resourceUrl: (providerResult) => providerResult?.joinUrl,
             });
+            if (!jitsiResult) {
+              warnings.push(
+                "Jitsi could not create a meeting link; the interview was saved without a video link.",
+              );
+            }
           }
         } else if (zoomToken) {
-          await syncInterviewToZoom({
+          const zoomResult = await trackInterviewSync({
             workspaceId: workspace.id,
             interviewId: result.interviewId,
-            summary,
-            start: when,
-            durationMins: data.durationMins,
+            provider: "zoom",
+            operation: "upsert",
+            run: () =>
+              syncInterviewToZoom({
+                workspaceId: workspace.id,
+                interviewId: result.interviewId,
+                summary,
+                start: when,
+                durationMins: data.durationMins,
+              }),
+            isSuccess: Boolean,
+            resourceId: (providerResult) => providerResult?.meetingId,
+            resourceUrl: (providerResult) => providerResult?.joinUrl,
           });
+          if (!zoomResult) {
+            warnings.push(
+              "Zoom could not create a meeting; the interview was saved without a video link.",
+            );
+          }
         } else if (outlookConfig) {
-          await syncInterviewToTeams({
+          const teamsResult = await trackInterviewSync({
             workspaceId: workspace.id,
             interviewId: result.interviewId,
-            summary,
-            start: when,
-            durationMins: data.durationMins,
+            provider: "microsoft_teams",
+            operation: "upsert",
+            run: () =>
+              syncInterviewToTeams({
+                workspaceId: workspace.id,
+                interviewId: result.interviewId,
+                summary,
+                start: when,
+                durationMins: data.durationMins,
+              }),
+            isSuccess: Boolean,
+            resourceId: (providerResult) => providerResult?.meetingId,
+            resourceUrl: (providerResult) => providerResult?.joinUrl,
           });
+          if (!teamsResult) {
+            warnings.push(
+              "Teams could not create a meeting; the interview was saved without a video link.",
+            );
+          }
         } else if (gcalConfig) {
           await syncCalendar(true);
         } else if (jitsiConfig) {
-          await syncInterviewToJitsi({
+          const jitsiResult = await trackInterviewSync({
             workspaceId: workspace.id,
             interviewId: result.interviewId,
+            provider: "jitsi",
+            operation: "upsert",
+            run: () =>
+              syncInterviewToJitsi({
+                workspaceId: workspace.id,
+                interviewId: result.interviewId,
+              }),
+            isSuccess: Boolean,
+            resourceId: (providerResult) => providerResult?.room,
+            resourceUrl: (providerResult) => providerResult?.joinUrl,
           });
+          if (!jitsiResult) {
+            warnings.push(
+              "Jitsi could not create a meeting link; the interview was saved without a video link.",
+            );
+          }
         }
         const [synced] = await db
           .select({ meetLink: interviews.meetLink })
@@ -683,7 +772,7 @@ export async function setInterviewStatus(input: {
   interviewId: string;
   candidateId: string;
   status: "completed" | "canceled";
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string }> {
   try {
     const parsed = statusSchema.safeParse(input);
     if (!parsed.success) {
@@ -737,36 +826,76 @@ export async function setInterviewStatus(input: {
     }
 
     const updatedInterview = updated[0];
+    const providerWarnings: string[] = [];
 
-    if (parsed.data.status === "canceled" && updatedInterview?.gcalEventId) {
-      void cancelInterviewGCalEvent({
+    const gcalEventId = updatedInterview?.gcalEventId;
+    if (parsed.data.status === "canceled" && gcalEventId) {
+      const canceled = await trackInterviewSync({
         workspaceId: workspace.id,
         interviewId: parsed.data.interviewId,
-        gcalEventId: updatedInterview.gcalEventId,
+        provider: "google_calendar",
+        operation: "cancel",
+        run: () =>
+          cancelInterviewGCalEvent({
+            workspaceId: workspace.id,
+            interviewId: parsed.data.interviewId,
+            gcalEventId,
+          }),
+        isSuccess: Boolean,
       });
+      if (!canceled) providerWarnings.push("Google Calendar");
     }
 
-    if (parsed.data.status === "canceled" && updatedInterview?.teamsMeetingId) {
-      void cancelInterviewTeamsMeeting({
+    const teamsMeetingId = updatedInterview?.teamsMeetingId;
+    if (parsed.data.status === "canceled" && teamsMeetingId) {
+      const canceled = await trackInterviewSync({
         workspaceId: workspace.id,
         interviewId: parsed.data.interviewId,
-        teamsMeetingId: updatedInterview.teamsMeetingId,
+        provider: "microsoft_teams",
+        operation: "cancel",
+        run: () =>
+          cancelInterviewTeamsMeeting({
+            workspaceId: workspace.id,
+            interviewId: parsed.data.interviewId,
+            teamsMeetingId,
+          }),
+        isSuccess: Boolean,
       });
+      if (!canceled) providerWarnings.push("Microsoft Teams");
     }
 
-    if (parsed.data.status === "canceled" && updatedInterview?.zoomMeetingId) {
-      void cancelInterviewZoomMeeting({
+    const zoomMeetingId = updatedInterview?.zoomMeetingId;
+    if (parsed.data.status === "canceled" && zoomMeetingId) {
+      const canceled = await trackInterviewSync({
         workspaceId: workspace.id,
         interviewId: parsed.data.interviewId,
-        zoomMeetingId: updatedInterview.zoomMeetingId,
+        provider: "zoom",
+        operation: "cancel",
+        run: () =>
+          cancelInterviewZoomMeeting({
+            workspaceId: workspace.id,
+            interviewId: parsed.data.interviewId,
+            zoomMeetingId,
+          }),
+        isSuccess: Boolean,
       });
+      if (!canceled) providerWarnings.push("Zoom");
     }
 
     if (parsed.data.status === "canceled" && updatedInterview?.jitsiRoom) {
-      void cancelInterviewJitsiMeeting({
+      const canceled = await trackInterviewSync({
         workspaceId: workspace.id,
         interviewId: parsed.data.interviewId,
+        provider: "jitsi",
+        operation: "cancel",
+        run: () =>
+          cancelInterviewJitsiMeeting({
+            workspaceId: workspace.id,
+            interviewId: parsed.data.interviewId,
+          }),
+        isSuccess: Boolean,
       });
+      if (!canceled) providerWarnings.push("Jitsi");
     }
 
     // Let the candidate know when an interview is called off.
@@ -822,7 +951,14 @@ export async function setInterviewStatus(input: {
       interview: serializeInterview(updatedInterview),
     });
 
-    return { success: true };
+    return {
+      success: true,
+      ...(providerWarnings.length > 0
+        ? {
+            warning: `Interview canceled, but ${providerWarnings.join(", ")} could not be synchronized. The provider meeting may still exist and needs manual cleanup.`,
+          }
+        : {}),
+    };
   } catch (error) {
     log.error(error, "setInterviewStatus failed");
     return {
@@ -907,6 +1043,8 @@ export async function rescheduleInterview(input: {
         gcalEventId: interviews.gcalEventId,
         teamsMeetingId: interviews.teamsMeetingId,
         zoomMeetingId: interviews.zoomMeetingId,
+        jitsiRoom: interviews.jitsiRoom,
+        mode: interviews.mode,
         title: interviews.title,
         type: interviews.type,
       })
@@ -1057,14 +1195,24 @@ export async function rescheduleInterview(input: {
 
     // Persist the new time/location only after the provider meeting was
     // successfully recreated, keeping DB and provider state consistent.
+    // Only recompute the manual meetLink when no provider owns it , Zoom/Teams/
+    // Jitsi write their own link and must not be overwritten from `location`.
+    const hasProviderMeeting =
+      Boolean(row.teamsMeetingId) ||
+      Boolean(row.zoomMeetingId) ||
+      Boolean(row.jitsiRoom);
+    const rescheduleSet: Record<string, unknown> = {
+      scheduledAt: when,
+      durationMins: data.durationMins,
+      location: data.location ?? null,
+      updatedAt: new Date(),
+    };
+    if (!hasProviderMeeting) {
+      rescheduleSet.meetLink = deriveMeetLink(row.mode, data.location);
+    }
     await db
       .update(interviews)
-      .set({
-        scheduledAt: when,
-        durationMins: data.durationMins,
-        location: data.location ?? null,
-        updatedAt: new Date(),
-      })
+      .set(rescheduleSet)
       .where(
         and(
           eq(interviews.id, data.interviewId),
@@ -1481,6 +1629,30 @@ export async function updateInterview(input: {
             interviewId: row.id,
           });
         }
+      }
+    }
+
+    // Recompute the manual meetLink when the location or mode changed. Provider
+    // integrations (Zoom/Teams/Meet/Jitsi) write their own link straight to the
+    // row and are left untouched; the manual path derives from `location` (and
+    // clears a stale link when the interview is no longer a video call).
+    if (data.location !== undefined || data.mode !== undefined) {
+      const switchedToVideoNewProvider =
+        effectiveMode === "video" &&
+        data.mode !== undefined &&
+        !row.teamsMeetingId &&
+        !row.zoomMeetingId &&
+        !row.gcalEventId;
+      const providerHandlesLink =
+        Boolean(row.teamsMeetingId) ||
+        Boolean(row.zoomMeetingId) ||
+        Boolean(row.jitsiRoom) ||
+        Boolean(row.gcalEventId) ||
+        switchedToVideoNewProvider;
+      if (!(providerHandlesLink && effectiveMode === "video")) {
+        const effectiveLocation =
+          data.location !== undefined ? data.location : row.location;
+        set.meetLink = deriveMeetLink(effectiveMode, effectiveLocation);
       }
     }
 
