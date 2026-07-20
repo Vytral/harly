@@ -14,6 +14,9 @@ vi.mock("@harly/db", () => ({
     transaction: (fn: (tx: unknown) => Promise<unknown>) =>
       mocks.transactionImpl(fn),
   },
+  // auth.ts (imported transitively) wires drizzleAdapter(db, { schema }),
+  // so the mock must surface a `schema` export or vitest throws on import.
+  schema: {},
   applications: {},
   candidates: {},
   jobs: {},
@@ -25,12 +28,22 @@ vi.mock("@harly/db", () => ({
   candidateFiles: {},
   activityEvents: {},
   consentRecords: {},
-  authMembers: {},
-  authUsers: {},
+  // Export names (not local aliases): data.ts imports `member as authMembers`
+  // and `user as authUsers`; workspaces/context imports `member`/`organization`.
+  member: {},
+  user: {},
   workspaceSettings: {},
 }));
 
 vi.mock("@/server/webhooks/emit", () => ({ emitWebhookEvent: vi.fn() }));
+
+// data.ts -> jobs/data -> workspaces/context -> @/lib/auth -> @harly/auth,
+// which calls loadHarlyConfig() at module load. In CI without HARLY_URL set
+// that throws, so stub the config module before the import chain runs.
+vi.mock("@harly/config", () => ({
+  loadHarlyConfig: () => ({ HARLY_URL: "https://test.local" }),
+  formatConfigError: () => "config error",
+}));
 
 import { createPublicApplication } from "./data";
 

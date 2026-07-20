@@ -1,7 +1,5 @@
 "use client";
 
-import { cn } from "@/lib/utils";
-
 type InterviewDateBadgeProps = {
   date: Date;
   variant?: "default" | "compact";

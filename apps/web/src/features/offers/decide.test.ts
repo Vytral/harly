@@ -91,7 +91,7 @@ vi.mock("@harly/db", () => {
         values: () => ({ returning: async () => mocks.insertQueue.shift() ?? [{ id: "x" }] }),
       })),
       update: vi.fn(() => ({
-        set: (set: Record<string, unknown>) => ({ where: () => ({}) }),
+        set: () => ({ where: () => ({}) }),
       })),
       transaction: (fn: (tx: unknown) => Promise<unknown>) =>
         mocks.transactionImpl(fn),

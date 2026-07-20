@@ -12,7 +12,6 @@ import {
   getPortalJobStages,
 } from "@/server/portal-applications";
 import { PortalShell } from "@/features/portal/PortalShellServer";
-import { cn } from "@/lib/utils";
 import { PortalHorizontalPipeline } from "@/features/portal/PortalHorizontalPipeline";
 import { PortalInterviewCard } from "@/features/portal/PortalInterviewCard";
 import { PortalOfferSignCard } from "@/features/portal/PortalOfferSignCard";
@@ -239,7 +238,6 @@ export default async function ApplicationDetailPage({
               {upcomingInterviews.map((iv) => (
                 <PortalInterviewCard
                   key={iv.id}
-                  id={iv.id}
                   title={iv.title ?? iv.type}
                   scheduledAt={iv.scheduledAt}
                   durationMins={iv.durationMins}
@@ -262,7 +260,6 @@ export default async function ApplicationDetailPage({
               {pastInterviews.map((iv) => (
                 <PortalInterviewCard
                   key={iv.id}
-                  id={iv.id}
                   title={iv.title ?? iv.type}
                   scheduledAt={iv.scheduledAt}
                   durationMins={iv.durationMins}
