@@ -10,11 +10,12 @@ import {
   db,
   interviews,
   jobs,
-  member,
   type Interview,
 } from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+
+import { findWorkspaceMember } from "./core";
 
 /** Workspace-scoped, session-free interview service for REST API handlers. */
 
@@ -78,16 +79,7 @@ function cursorWhere(cursor: Cursor | null) {
 }
 
 async function assertWorkspaceMember(workspaceId: string, userId: string) {
-  const [row] = await db
-    .select({ userId: member.userId })
-    .from(member)
-    .where(
-      and(
-        eq(member.organizationId, workspaceId),
-        eq(member.userId, userId),
-      ),
-    )
-    .limit(1);
+  const row = await findWorkspaceMember(workspaceId, userId);
   if (!row) throw ApiError.forbidden("User is not a member of this workspace.");
 }
 
@@ -96,6 +88,15 @@ async function assertInterviewerMember(
   interviewerId: string | null | undefined,
 ) {
   if (interviewerId) await assertWorkspaceMember(workspaceId, interviewerId);
+}
+
+/** A scheduled interview time must be in the future. Past times produce a
+ *  "scheduled" row the candidate gets an email for but that never surfaces in
+ *  the upcoming list (which filters gte(now)), so the recruiter loses it. */
+function assertFutureWhen(when: Date) {
+  if (when.getTime() < Date.now()) {
+    throw ApiError.unprocessable("Interview time must be in the future.");
+  }
 }
 
 async function assertNoInterviewerConflict(input: {
@@ -186,6 +187,7 @@ export async function createInterviewForApi(input: {
     assertWorkspaceMember(input.workspaceId, input.actorUserId),
     assertInterviewerMember(input.workspaceId, input.values.interviewerId),
   ]);
+  assertFutureWhen(input.values.scheduledAt);
 
   const created = await db.transaction(async (tx) => {
     const [application] = await tx
@@ -302,6 +304,12 @@ export async function updateInterviewForApi(input: {
       : input.values.interviewerId;
   const scheduledAt = input.values.scheduledAt ?? current.scheduledAt;
   const durationMins = input.values.durationMins ?? current.durationMins;
+  // Only validate futurity when the caller is moving the time; leaving the
+  // existing time untouched (which may now be in the past if the interview was
+  // sitting idle) should not block other edits.
+  if (input.values.scheduledAt !== undefined) {
+    assertFutureWhen(scheduledAt);
+  }
   await assertInterviewerMember(input.workspaceId, interviewerId);
   await assertNoInterviewerConflict({
     workspaceId: input.workspaceId,
