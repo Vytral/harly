@@ -51,6 +51,7 @@ const INTEGRATION_LOGOS: Record<IntegrationSlug, Logo> = {
   "google-calendar": svgBrand("google-calendar", "Google Calendar"),
   "google-meet": svgBrand("google-meet", "Google Meet"),
   "outlook-calendar": svgBrand("microsoft-outlook", "Microsoft Outlook"),
+  "microsoft-teams": svgBrand("microsoft-teams", "Microsoft Teams"),
   zoom: svgBrand("zoom", "Zoom"),
   jitsi: svgBrand("jitsi", "Jitsi"),
   slack: svgBrand("slack", "Slack"),

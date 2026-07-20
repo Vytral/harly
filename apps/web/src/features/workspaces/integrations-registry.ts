@@ -29,6 +29,7 @@ export type IntegrationSlug =
   | "google-calendar"
   | "google-meet"
   | "outlook-calendar"
+  | "microsoft-teams"
   | "zoom"
   | "jitsi"
   | "slack"
@@ -121,6 +122,17 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
       "Coordinate interviews and availability with Microsoft 365 and Outlook Calendar.",
     // Multicolor Outlook mark , light blue-tinted surface.
     tileClassName: "bg-gradient-to-br from-white via-sky-50 to-blue-200",
+  },
+  {
+    slug: "microsoft-teams",
+    name: "Microsoft Teams",
+    category: "calendar",
+    description: "Generate video links for every video interview.",
+    detail:
+      "Connect Microsoft to add a Teams meeting link to every scheduled video interview. Teams shares your Outlook connection — connect once and both light up.",
+    // Multicolor Teams mark , light indigo-blue neutral so every fill reads
+    // while staying distinct from Outlook's stronger blue and Zoom's sky tile.
+    tileClassName: "bg-gradient-to-br from-white via-indigo-50 to-blue-100",
   },
   {
     slug: "jitsi",
@@ -271,6 +283,7 @@ export function isConnected(
       return statuses.zoom.installationState === "installed";
     case "outlook-calendar":
     case "outlook":
+    case "microsoft-teams":
       return statuses.outlook.enabled;
     case "slack":
       return statuses.slack.enabled;

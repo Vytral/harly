@@ -11,6 +11,7 @@ import { DiscordConnectPanel } from "@/features/workspaces/DiscordConnectPanel";
 import { GCalConnectPanel } from "@/features/workspaces/GCalConnectPanel";
 import { GoogleMeetConnectPanel } from "@/features/workspaces/GoogleMeetConnectPanel";
 import { JitsiConnectPanel } from "@/features/workspaces/JitsiConnectPanel";
+import { MicrosoftTeamsConnectPanel } from "@/features/workspaces/MicrosoftTeamsConnectPanel";
 import { OutlookConnectPanel } from "@/features/workspaces/OutlookConnectPanel";
 import { SlackConnectPanel } from "@/features/workspaces/SlackConnectPanel";
 import { TelegramConnectPanel } from "@/features/workspaces/TelegramConnectPanel";
@@ -52,6 +53,7 @@ const DETAIL_LOGOS: Record<IntegrationSlug, Logo> = {
   "google-calendar": svgBrand("google-calendar", "Google Calendar"),
   "google-meet": svgBrand("google-meet", "Google Meet"),
   "outlook-calendar": svgBrand("microsoft-outlook", "Microsoft Outlook"),
+  "microsoft-teams": svgBrand("microsoft-teams", "Microsoft Teams"),
   zoom: svgBrand("zoom", "Zoom"),
   jitsi: svgBrand("jitsi", "Jitsi"),
   slack: svgBrand("slack", "Slack"),
@@ -260,6 +262,18 @@ async function renderPanel(
           canEdit={ctx.canEdit}
           workspaceId={ctx.organizationId}
           name={integration.name}
+          tileClassName={integration.tileClassName}
+          description={integration.detail}
+        />
+      );
+    }
+    case "microsoft-teams": {
+      const status = await getWorkspaceOutlookStatus(ctx.organizationId);
+      return (
+        <MicrosoftTeamsConnectPanel
+          status={status}
+          canEdit={ctx.canEdit}
+          workspaceId={ctx.organizationId}
           tileClassName={integration.tileClassName}
           description={integration.detail}
         />
