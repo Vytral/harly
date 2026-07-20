@@ -219,7 +219,7 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     category: "signing",
     description: "Send offers for legally-binding e-signatures.",
     detail:
-      "Connect DocuSign so candidates sign their offer inside the candidate portal. When you send an offer, Harly creates a DocuSign envelope and the candidate signs on DocuSign's hosted page — the signed PDF lands back on the offer and the status flips automatically.",
+      "Connect DocuSign so candidates sign their offer inside the candidate portal. When you send an offer, Harly creates a DocuSign envelope and the candidate signs on DocuSign's hosted page. The signed PDF lands back on the offer and the status flips automatically.",
     // Yellow DocuSign mark on light neutral so the yellow reads (saturated mark
     // -> light bg per the contrast rule).
     tileClassName: "bg-gradient-to-br from-white via-yellow-50 to-amber-100",

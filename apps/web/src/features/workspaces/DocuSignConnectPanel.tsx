@@ -16,7 +16,13 @@ import {
   InlineReveal,
 } from "@/features/workspaces/IntegrationDetailShell";
 import { StatCell } from "@/features/workspaces/settings-ui";
-import { WarningCircleIcon, SpinnerIcon, GearSixIcon } from "@/components/ui/icons/phosphor";
+import {
+  ArrowUpRightIcon,
+  GearSixIcon,
+  KeyDuotoneIcon,
+  SpinnerIcon,
+  WarningCircleIcon,
+} from "@/components/ui/icons/phosphor";
 import { TheSvgLogo } from "@/components/ui/icons/brands";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -42,7 +48,9 @@ export function DocuSignConnectPanel({
 }) {
   const router = useRouter();
   const connected = status.enabled && status.hasToken;
-  const [open, setOpen] = useState(connected || !status.hasCredentials);
+  // Form is hidden until the owner clicks Connect/Manage. Landing on the page
+  // never shows the form inline. Matches Cal/Slack panels.
+  const [open, setOpen] = useState(false);
   const [testing, startTest] = useTransition();
   const [disconnecting, startDisconnect] = useTransition();
   const [savingChannel, startSaveChannel] = useTransition();
@@ -95,7 +103,11 @@ export function DocuSignConnectPanel({
         action={
           canEdit ? (
             connected ? (
-              <Button variant="outline" onClick={() => setOpen((value) => !value)} aria-expanded={open}>
+              <Button
+                variant="outline"
+                onClick={() => setOpen((value) => !value)}
+                aria-expanded={open}
+              >
                 <GearSixIcon className="size-4" />
                 {open ? "Hide settings" : "Manage"}
               </Button>
@@ -107,8 +119,13 @@ export function DocuSignConnectPanel({
                 </a>
               </Button>
             ) : (
-              <Button onClick={() => setOpen((value) => !value)} disabled={!status.encryptionReady}>
-                Set up DocuSign
+              <Button
+                onClick={() => setOpen((value) => !value)}
+                disabled={!status.encryptionReady}
+                aria-expanded={open}
+              >
+                <KeyDuotoneIcon className="size-4" />
+                Connect
               </Button>
             )
           ) : null
@@ -144,7 +161,6 @@ export function DocuSignConnectPanel({
 
       {canEdit ? (
         <InlineReveal open={open}>
-          {!status.hasCredentials ? <CredentialsForm onSaved={() => router.refresh()} /> : null}
           {connected ? (
             <Card className="space-y-4 p-5">
               <div>
@@ -160,6 +176,13 @@ export function DocuSignConnectPanel({
                 Disconnect DocuSign
               </Button>
             </Card>
+          ) : !status.hasCredentials ? (
+            <CredentialsForm
+              onSaved={() => {
+                setOpen(false);
+                router.refresh();
+              }}
+            />
           ) : null}
         </InlineReveal>
       ) : null}
@@ -171,6 +194,11 @@ function CredentialsForm({ onSaved }: { onSaved: () => void }) {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [saving, startSave] = useTransition();
+
+  const redirectUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/api/integrations/docusign/callback`
+      : "";
 
   function save() {
     startSave(async () => {
@@ -185,25 +213,92 @@ function CredentialsForm({ onSaved }: { onSaved: () => void }) {
   }
 
   return (
-    <Card className="space-y-4 p-5">
-      <div>
-        <h2 className="font-display text-base font-semibold tracking-tight">DocuSign app credentials</h2>
-        <p className="text-sm text-muted-foreground">Store the Integration Key and Secret encrypted for this workspace.</p>
+    <Card className="p-6">
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div className="space-y-0.5">
+          <h2 className="font-display text-base font-semibold tracking-tight">
+            Connect DocuSign
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Create a DocuSign app, then paste the credentials. Your Secret is
+            encrypted at rest.
+          </p>
+        </div>
+        <a
+          href="https://admindoc.docusign.com/apps-and-keys"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-pine transition-colors hover:text-pine-strong"
+        >
+          DocuSign apps
+          <ArrowUpRightIcon className="size-3.5" />
+        </a>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5">
+
+      <div className="space-y-4">
+        <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1.5">
+          <p className="font-medium text-foreground">How to get credentials:</p>
+          <ol className="list-decimal space-y-1 pl-4">
+            <li>
+              Go to{" "}
+              <a
+                href="https://admindoc.docusign.com/apps-and-keys"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                admindoc.docusign.com/apps-and-keys
+              </a>{" "}
+              and create a new app
+            </li>
+            <li>
+              Add a Redirect URI set to: <code>{redirectUrl}</code>
+            </li>
+            <li>
+              Grant the <code>signature</code> scope
+            </li>
+            <li>Copy the Integration Key and generate a Secret</li>
+          </ol>
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="docusign-client-id">Integration Key</Label>
-          <Input id="docusign-client-id" value={clientId} onChange={(event) => setClientId(event.target.value)} autoComplete="off" />
+          <Input
+            id="docusign-client-id"
+            value={clientId}
+            onChange={(event) => setClientId(event.target.value)}
+            placeholder="e.g. 1a2b3c4d-..."
+            autoComplete="off"
+            className="font-mono text-xs"
+          />
         </div>
-        <div className="space-y-1.5">
+
+        <div className="space-y-2">
           <Label htmlFor="docusign-client-secret">Secret</Label>
-          <Input id="docusign-client-secret" type="password" value={clientSecret} onChange={(event) => setClientSecret(event.target.value)} autoComplete="new-password" />
+          <Input
+            id="docusign-client-secret"
+            type="password"
+            value={clientSecret}
+            onChange={(event) => setClientSecret(event.target.value)}
+            placeholder="e.g. abc123def456..."
+            autoComplete="off"
+            className="font-mono text-xs"
+          />
+          <p className="text-xs text-muted-foreground">
+            Encrypted at rest. Never visible again after saving.
+          </p>
         </div>
       </div>
-      <Button onClick={save} disabled={saving || !clientId.trim() || !clientSecret.trim()}>
-        {saving ? <SpinnerIcon className="size-3.5" /> : null}
-        Save credentials
-      </Button>
+
+      <div className="mt-6 flex justify-end">
+        <Button
+          onClick={save}
+          disabled={saving || !clientId.trim() || !clientSecret.trim()}
+        >
+          {saving ? <SpinnerIcon className="size-4" /> : null}
+          Save credentials
+        </Button>
+      </div>
     </Card>
   );
 }
