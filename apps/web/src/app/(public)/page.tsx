@@ -1,12 +1,23 @@
 import type { Route } from "next";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 
 import { getCareerPageData } from "@/features/career-page/data";
 import { PublicCareerPage } from "@/features/career-page/PublicCareerPage";
 import { getPublicWorkspaceSlug } from "@/lib/public-workspace";
 import { isPortalEnabled } from "@/lib/portal-auth";
+import { publicBoardMetadata } from "@/features/career-page/seo";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const slug = await getPublicWorkspaceSlug();
+  if (!slug) return {};
+  const data = await getCareerPageData(slug);
+  return data
+    ? publicBoardMetadata(data.workspace, data.config, { path: "" })
+    : {};
+}
 
 export default async function HomePage() {
   const slug = await getPublicWorkspaceSlug();

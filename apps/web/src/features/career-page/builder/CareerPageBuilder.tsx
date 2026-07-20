@@ -73,7 +73,7 @@ export function CareerPageBuilder({
     startSave(async () => {
       const result = await saveCareerPageConfigAction(config);
       if (result.success) {
-        toast.success("Career page saved. It&apos;s live.");
+        toast.success("Career page saved. It's live.");
         setDirty(false);
       } else {
         toast.error(result.error ?? "Could not save.");
@@ -94,7 +94,7 @@ export function CareerPageBuilder({
           onSave={handleSave}
           saving={saving}
           dirty={dirty}
-          boardUrl="/"
+          boardUrl={`/board/${workspace.slug}`}
         />
       }
     >
@@ -171,7 +171,7 @@ export function CareerPageBuilder({
                 config={config}
                 workspace={workspace}
                 jobs={jobs}
-                boardRoot=""
+                boardRoot={`/board/${workspace.slug}`}
               />
             </PreviewFrame>
           ) : (

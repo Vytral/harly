@@ -8,7 +8,7 @@ import { useEffect, useRef } from "react";
  * Allows iframes, images, videos, and all standard HTML , the admin is trusted
  * to embed what they want on their own career page.
  */
-export function RichBody({ html }: { html: string }) {
+export function RichBody({ html, className }: { html: string; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export function RichBody({ html }: { html: string }) {
   return (
     <div
       ref={ref}
-      className="prose prose-zinc max-w-none dark:prose-invert prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-[--career-accent] prose-a:no-underline hover:prose-a:underline prose-img:rounded-xl prose-blockquote:border-l-[--career-accent]"
+      className={className ?? "prose prose-zinc max-w-none dark:prose-invert prose-headings:font-semibold prose-headings:tracking-tight prose-a:text-[--career-accent] prose-a:no-underline hover:prose-a:underline prose-img:rounded-xl prose-blockquote:border-l-[--career-accent]"}
     />
   );
 }

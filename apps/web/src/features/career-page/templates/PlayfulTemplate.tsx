@@ -247,7 +247,12 @@ export function PlayfulTemplate({
           {config.positions.title}
         </h2>
         <div className="mt-7">
-          <CareerPositions jobs={jobs} boardRoot={boardRoot} accent={accent} />
+          <CareerPositions
+            jobs={jobs}
+            boardRoot={boardRoot}
+            accent={accent}
+            filters={config.positions.filters}
+          />
         </div>
       </section>
 

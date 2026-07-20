@@ -1,10 +1,9 @@
-import parse from "html-react-parser";
-
 import {
   parseJobContentSections,
   parseKeywords,
   parseOfficePhotos,
 } from "@/features/jobs/config";
+import { RichBody } from "@/features/career-page/RichBody";
 
 type JobLike = {
   description: string;
@@ -18,7 +17,12 @@ type JobLike = {
 
 function JobContent({ content }: { content: string }) {
   if (content.trimStart().startsWith("<")) {
-    return <div className="prose-job mt-3">{parse(content)}</div>;
+    return (
+      <RichBody
+        html={content}
+        className="prose-job mt-3 max-w-none dark:prose-invert prose-headings:font-semibold prose-a:text-[--career-accent] prose-a:no-underline hover:prose-a:underline"
+      />
+    );
   }
   return <p className="mt-3 whitespace-pre-line">{content}</p>;
 }

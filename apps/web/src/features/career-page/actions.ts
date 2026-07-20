@@ -1,8 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
-
 import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
@@ -11,6 +9,7 @@ import {
   normalizeCareerPageConfig,
 } from "@/features/career-page/config";
 import { createLogger } from "@/lib/logger";
+import { logAuditEvent } from "@/lib/audit-log";
 
 const log = createLogger("career-page");
 
@@ -40,23 +39,38 @@ export async function saveCareerPageConfigAction(
   const workspaceId = context.organization.id;
 
   try {
-    const updated = await db
-      .update(workspaceSettings)
-      .set({ careerPageConfig: config, updatedAt: new Date() })
-      .where(eq(workspaceSettings.organizationId, workspaceId))
-      .returning({ id: workspaceSettings.organizationId });
-
-    if (updated.length === 0) {
-      await db
-        .insert(workspaceSettings)
-        .values({ organizationId: workspaceId, careerPageConfig: config });
-    }
+    await db
+      .insert(workspaceSettings)
+      .values({
+        organizationId: workspaceId,
+        careerPageConfig: config,
+      })
+      .onConflictDoUpdate({
+        target: workspaceSettings.organizationId,
+        set: { careerPageConfig: config, updatedAt: new Date() },
+      });
   } catch (error) {
     log.error(error, "saveCareerPageConfigAction failed");
     return { success: false, error: "Could not save. Try again." };
   }
 
+  await logAuditEvent({
+    workspaceId,
+    actorId: context.user.id,
+    actorEmail: context.user.email,
+    action: "career_page.updated",
+    resourceType: "career_page",
+    resourceId: workspaceId,
+    metadata: {
+      template: config.template,
+      indexable: config.seo.indexable,
+    },
+  });
+
   revalidatePath(`/board/${context.organization.slug}`);
+  revalidatePath(`/board/${context.organization.slug}/jobs`);
+  revalidatePath("/");
+  revalidatePath("/jobs");
   revalidatePath("/sitemap.xml");
   revalidatePath("/dashboard/career-page");
   return { success: true };

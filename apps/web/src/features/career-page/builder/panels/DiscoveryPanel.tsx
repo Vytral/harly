@@ -18,7 +18,7 @@ export function DiscoveryPanel({
   update: ConfigUpdater;
   workspace: WorkspaceBoardBranding;
 }) {
-  const title = config.seo.title || `${workspace.name} careers`;
+  const title = config.seo.title || workspace.name || "Careers";
   const description = config.seo.description || workspace.description || workspace.tagline || "Explore open roles and build your next chapter with us.";
 
   return (
@@ -35,7 +35,7 @@ export function DiscoveryPanel({
           When off, the careers page and every job use noindex and are removed from Harly&apos;s sitemap.
         </p>
         <Field label="SEO title">
-          <Input value={config.seo.title} maxLength={70} onChange={(event) => update((draft) => (draft.seo.title = event.target.value))} placeholder={`${workspace.name} careers`} />
+          <Input value={config.seo.title} maxLength={70} onChange={(event) => update((draft) => (draft.seo.title = event.target.value))} placeholder={workspace.name || "Careers"} />
         </Field>
         <Field label="Meta description">
           <textarea

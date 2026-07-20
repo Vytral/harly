@@ -7,7 +7,11 @@ import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 import type { Job } from "@harly/db";
 
 function origin() {
-  return (process.env.HARLY_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+  const configured = process.env.HARLY_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  // A production deployment without a public URL should never publish
+  // localhost as its canonical origin. Relative URLs remain valid metadata
+  // until the deployment is configured correctly.
+  return (configured ?? (process.env.NODE_ENV === "production" ? "" : "http://localhost:3000")).replace(/\/$/, "");
 }
 
 function plainText(value: string) {
@@ -18,38 +22,55 @@ function boardUrl(workspaceSlug: string) {
   return `${origin()}/board/${workspaceSlug}`;
 }
 
+function pathUrl(path: string) {
+  const normalized = path ? (path.startsWith("/") ? path : `/${path}`) : "/";
+  return `${origin()}${normalized}`;
+}
+
 function robots(indexable: boolean) {
   return indexable ? { index: true, follow: true } : { index: false, follow: true };
 }
 
-export function publicBoardMetadata(workspace: WorkspaceBoardBranding, config: CareerPageConfig): Metadata {
-  const url = boardUrl(workspace.slug);
-  const title = config.seo.title || `${workspace.name} careers`;
+export function publicBoardMetadata(
+  workspace: WorkspaceBoardBranding,
+  config: CareerPageConfig,
+  options?: { path?: string },
+): Metadata {
+  const url = options?.path !== undefined ? pathUrl(options.path) : boardUrl(workspace.slug);
+  const title = config.seo.title || workspace.name || "Careers";
   const description = config.seo.description || workspace.description || workspace.tagline || `Explore open roles at ${workspace.name}.`;
   const image = config.seo.socialImageUrl ?? config.hero.imageUrl ?? workspace.heroImageUrl ?? workspace.logoUrl ?? undefined;
+  const favicon = config.seo.faviconUrl ?? workspace.logoUrl ?? undefined;
 
   return {
     title,
     description,
     robots: robots(config.seo.indexable),
     alternates: { canonical: url },
-    icons: config.seo.faviconUrl ? { icon: config.seo.faviconUrl } : undefined,
+    icons: favicon ? { icon: favicon } : undefined,
     openGraph: { type: "website", url, title, description, siteName: workspace.name, images: image ? [{ url: image }] : undefined },
     twitter: { card: image ? "summary_large_image" : "summary", title, description, images: image ? [image] : undefined },
   };
 }
 
-export function publicJobMetadata(workspace: WorkspaceBoardBranding, config: CareerPageConfig, job: Job): Metadata {
-  const url = `${boardUrl(workspace.slug)}/jobs/${job.slug}`;
+export function publicJobMetadata(
+  workspace: WorkspaceBoardBranding,
+  config: CareerPageConfig,
+  job: Job,
+  options?: { path?: string },
+): Metadata {
+  const base = options?.path !== undefined ? pathUrl(options.path) : boardUrl(workspace.slug);
+  const url = `${base.replace(/\/$/, "")}/jobs/${job.slug}`;
   const title = `${job.title} at ${workspace.name}`;
   const description = plainText(job.description).slice(0, 180) || `Apply for ${job.title} at ${workspace.name}.`;
   const image = config.seo.socialImageUrl ?? config.hero.imageUrl ?? workspace.heroImageUrl ?? workspace.logoUrl ?? undefined;
+  const favicon = config.seo.faviconUrl ?? workspace.logoUrl ?? undefined;
   return {
     title,
     description,
     robots: robots(config.seo.indexable),
     alternates: { canonical: url },
-    icons: config.seo.faviconUrl ? { icon: config.seo.faviconUrl } : undefined,
+    icons: favicon ? { icon: favicon } : undefined,
     openGraph: { type: "website", url, title, description, siteName: workspace.name, images: image ? [{ url: image }] : undefined },
     twitter: { card: image ? "summary_large_image" : "summary", title, description, images: image ? [image] : undefined },
   };
@@ -80,6 +101,14 @@ export function jobPostingJsonLd(workspace: WorkspaceBoardBranding, job: Job) {
     posting.baseSalary = { "@type": "MonetaryAmount", currency: job.currency, value: { "@type": "QuantitativeValue", minValue: job.salaryMin, maxValue: job.salaryMax, unitText: job.salaryPeriod === "annual" ? "YEAR" : "MONTH" } };
   }
   return posting;
+}
+
+/** Escape JSON before placing it inside an HTML script raw-text element. */
+export function serializeJsonLd(value: unknown) {
+  return JSON.stringify(value)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/&/g, "\\u0026");
 }
 
 export { boardUrl };

@@ -2,14 +2,14 @@ import { notFound } from "next/navigation";
 
 import { CareerPageBuilder } from "@/features/career-page/builder/CareerPageBuilder";
 import { getCareerPageData } from "@/features/career-page/data";
-import { getWorkspaceContext } from "@/features/workspaces/context";
+import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getLegalSettingsData } from "@/features/workspaces/legal-settings-actions";
 import { VALID_LEGAL_SLUGS } from "@/features/legal/data";
 
 export const dynamic = "force-dynamic";
 
 export default async function CareerPagePage() {
-  const { organization } = await getWorkspaceContext();
+  const { organization } = await requirePagePermission("settings:edit");
   const [data, legalSettings] = await Promise.all([
     getCareerPageData(organization.slug),
     getLegalSettingsData(),

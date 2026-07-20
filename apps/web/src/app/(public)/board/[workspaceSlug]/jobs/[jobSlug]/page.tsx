@@ -3,7 +3,11 @@ import type { Metadata } from "next";
 
 import { JobChrome } from "@/features/career-page/job/JobChrome";
 import { JobOverviewBody } from "@/features/career-page/job/JobOverviewBody";
-import { jobPostingJsonLd, publicJobMetadata } from "@/features/career-page/seo";
+import {
+  jobPostingJsonLd,
+  publicJobMetadata,
+  serializeJsonLd,
+} from "@/features/career-page/seo";
 import { getPublicJobDetail } from "@/features/jobs/data";
 import { isPortalEnabled } from "@/lib/portal-auth";
 
@@ -33,7 +37,12 @@ export default async function BoardJobPage({ params }: Props) {
 
   return (
     <>
-      {jsonLd ? <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} /> : null}
+      {jsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: serializeJsonLd(jsonLd) }}
+        />
+      ) : null}
       <JobChrome config={config} workspace={workspace} job={job} boardRoot={boardRoot} activeTab="overview" portalEnabled={portalEnabled}>
         <JobOverviewBody job={job} />
       </JobChrome>

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { eq } from "drizzle-orm";
+import { cache } from "react";
 
 import { db, workspaceSettings } from "@harly/db";
 
@@ -14,7 +15,7 @@ import {
  * Everything the public career page needs: branding + open jobs (reused from
  * the existing board query) plus the workspace's career-page config.
  */
-export async function getCareerPageData(slug: string): Promise<{
+export const getCareerPageData = cache(async function getCareerPageData(slug: string): Promise<{
   workspace: NonNullable<
     Awaited<ReturnType<typeof listOpenJobsForWorkspaceSlug>>["workspace"]
   >;
@@ -35,4 +36,4 @@ export async function getCareerPageData(slug: string): Promise<{
     jobs,
     config: normalizeCareerPageConfig(settings?.config),
   };
-}
+});

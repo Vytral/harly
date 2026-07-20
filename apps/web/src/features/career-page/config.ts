@@ -231,6 +231,14 @@ function asArray<T>(value: unknown): T[] {
   return Array.isArray(value) ? (value as T[]) : [];
 }
 
+const LEGAL_SLUGS = new Set([
+  "privacy-policy",
+  "terms-of-service",
+  "cookie-policy",
+  "candidate-notice",
+  "ai-transparency-notice",
+]);
+
 function isValidHexColor(s: string): boolean {
   return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s);
 }
@@ -254,11 +262,15 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
     hero: {
       headline: r.hero?.headline ?? base.hero.headline,
       subhead: r.hero?.subhead ?? base.hero.subhead,
-      imageUrl: r.hero?.imageUrl ?? base.hero.imageUrl,
+      imageUrl: safeImageUrl(r.hero?.imageUrl),
       // Old configs stored "tint"; treat anything but "none" as the gradient.
       overlay: r.hero?.overlay === "none" ? "none" : "gradient",
-      overlayFrom: r.hero?.overlayFrom ?? base.hero.overlayFrom,
-      overlayTo: r.hero?.overlayTo ?? base.hero.overlayTo,
+      overlayFrom: typeof r.hero?.overlayFrom === "string" && isValidHexColor(r.hero.overlayFrom)
+        ? r.hero.overlayFrom
+        : base.hero.overlayFrom,
+      overlayTo: typeof r.hero?.overlayTo === "string" && isValidHexColor(r.hero.overlayTo)
+        ? r.hero.overlayTo
+        : base.hero.overlayTo,
       logoPosition: (["left", "center", "right"] as const).includes(r.hero?.logoPosition as "left" | "center" | "right")
         ? (r.hero!.logoPosition as "left" | "center" | "right")
         : base.hero.logoPosition,
@@ -267,8 +279,8 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
       bannerEnabled: typeof r.hero?.bannerEnabled === "boolean" ? r.hero.bannerEnabled : base.hero.bannerEnabled,
       overlayOpacity: typeof r.hero?.overlayOpacity === "number" ? Math.min(100, Math.max(0, r.hero.overlayOpacity)) : base.hero.overlayOpacity,
       logoType: (["logo", "fullLogo"] as const).includes(r.hero?.logoType as "logo" | "fullLogo") ? (r.hero!.logoType as "logo" | "fullLogo") : base.hero.logoType,
-      bannerLogoLight: r.hero?.bannerLogoLight ?? base.hero.bannerLogoLight,
-      bannerLogoDark: r.hero?.bannerLogoDark ?? base.hero.bannerLogoDark,
+      bannerLogoLight: safeImageUrl(r.hero?.bannerLogoLight),
+      bannerLogoDark: safeImageUrl(r.hero?.bannerLogoDark),
       bannerLogoVariant: (["light", "dark"] as const).includes(r.hero?.bannerLogoVariant as "light" | "dark") ? (r.hero!.bannerLogoVariant as "light" | "dark") : base.hero.bannerLogoVariant,
       ctaButtonText: typeof r.hero?.ctaButtonText === "string" && r.hero.ctaButtonText.trim() ? r.hero.ctaButtonText.trim() : base.hero.ctaButtonText,
     },
@@ -283,7 +295,9 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
     },
     gallery: {
       enabled: Boolean(r.gallery?.enabled),
-      images: asArray<string>(r.gallery?.images),
+      images: asArray<unknown>(r.gallery?.images)
+        .map(safeImageUrl)
+        .filter((url): url is string => url !== null),
       autoplay: Boolean(r.gallery?.autoplay),
       speed: r.gallery?.speed === "normal" ? "normal" : "slow",
     },
@@ -295,7 +309,23 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
     testimonials: {
       enabled: Boolean(r.testimonials?.enabled),
       title: r.testimonials?.title ?? base.testimonials.title,
-      items: asArray<CareerTestimonial>(r.testimonials?.items),
+      items: asArray<unknown>(r.testimonials?.items).flatMap((item) => {
+        if (!item || typeof item !== "object") return [];
+        const value = item as Partial<CareerTestimonial>;
+        if (
+          typeof value.quote !== "string" ||
+          typeof value.name !== "string" ||
+          typeof value.role !== "string"
+        ) {
+          return [];
+        }
+        return [{
+          quote: value.quote,
+          name: value.name,
+          role: value.role,
+          avatar: safeImageUrl(value.avatar) ?? "",
+        }];
+      }),
     },
     faq: {
       enabled: Boolean(r.faq?.enabled),
@@ -304,18 +334,31 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
     },
     positions: {
       title: r.positions?.title ?? base.positions.title,
-      filters: asArray<"department" | "location" | "type">(r.positions?.filters),
+      filters: asArray<unknown>(r.positions?.filters).filter(
+        (filter): filter is "department" | "location" | "type" =>
+          filter === "department" || filter === "location" || filter === "type",
+      ),
     },
     cta: {
       enabled: Boolean(r.cta?.enabled),
       title: r.cta?.title ?? base.cta.title,
       body: r.cta?.body ?? base.cta.body,
-      color: r.cta?.color ?? base.cta.color,
+      color: typeof r.cta?.color === "string" && isValidHexColor(r.cta.color)
+        ? r.cta.color
+        : base.cta.color,
       buttonText: typeof r.cta?.buttonText === "string" && r.cta.buttonText.trim() ? r.cta.buttonText.trim() : base.cta.buttonText,
     },
     footer: {
-      socials: asArray<CareerSocialLink>(r.footer?.socials),
-      legalLinks: asArray<string>(r.footer?.legalLinks),
+      socials: asArray<CareerSocialLink>(r.footer?.socials).filter(
+        (social) =>
+          social &&
+          socialPlatforms.includes(social.platform) &&
+          typeof social.url === "string" &&
+          (social.url.trim() === "" || safeHttpUrl(social.url) !== null),
+      ),
+      legalLinks: asArray<string>(r.footer?.legalLinks).filter((slug) =>
+        LEGAL_SLUGS.has(slug),
+      ),
     },
     seo: {
       indexable: typeof r.seo?.indexable === "boolean" ? r.seo.indexable : base.seo.indexable,
@@ -326,7 +369,9 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
     },
     theme: {
       mode: colorModes.includes(r.theme?.mode as ColorMode) ? (r.theme!.mode as ColorMode) : base.theme.mode,
-      background: typeof r.theme?.background === "string" ? r.theme.background : base.theme.background,
+      background: typeof r.theme?.background === "string" && isValidHexColor(r.theme.background)
+        ? r.theme.background
+        : base.theme.background,
       font: fontFamilies.includes(r.theme?.font as FontFamily) ? (r.theme!.font as FontFamily) : base.theme.font,
       accent: typeof r.theme?.accent === "string" && isValidHexColor(r.theme.accent)
         ? r.theme.accent
@@ -339,7 +384,29 @@ export function normalizeCareerPageConfig(raw: unknown): CareerPageConfig {
 /** Normalise a user-provided image URL: blank or invalid → null. */
 export function safeImageUrl(url: unknown): string | null {
   if (typeof url !== "string" || !url.trim()) return null;
-  return url.trim();
+  const value = url.trim();
+  if (value.startsWith("/") && !value.startsWith("//")) return value;
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? value
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Validate external links without allowing script/data URLs. */
+export function safeHttpUrl(url: unknown): string | null {
+  if (typeof url !== "string" || !url.trim()) return null;
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.protocol === "http:" || parsed.protocol === "https:"
+      ? parsed.toString()
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 /** True when a template has been chosen → render the new career page. */
@@ -371,6 +438,19 @@ export function isLightColor(hex: string): boolean {
 
 // --- Validation (builder save) ----------------------------------------------
 const s = (max: number) => z.string().max(max);
+const optionalImageUrl = z
+  .string()
+  .max(600)
+  .refine((value) => value === "" || safeImageUrl(value) !== null, "Image URL must use http(s) or a local path.")
+  .nullable();
+const imageUrlValue = z
+  .string()
+  .max(600)
+  .refine((value) => value === "" || safeImageUrl(value) !== null, "Image URL must use http(s) or a local path.");
+const optionalHexColor = z
+  .string()
+  .refine((value) => value === "" || isValidHexColor(value), "Use a valid hex color.")
+  .nullable();
 const chip = z.object({ label: s(40), icon: s(40).optional() });
 const stat = z.object({ label: s(40), value: s(60), icon: s(40).optional() });
 const value = z.object({ title: s(60), body: s(400), art: s(200).optional() });
@@ -380,18 +460,18 @@ export const careerPageConfigSchema = z.object({
   hero: z.object({
     headline: s(120),
     subhead: s(200),
-    imageUrl: s(600).nullable(),
+    imageUrl: optionalImageUrl,
     overlay: z.enum(["gradient", "none"]),
-    overlayFrom: s(20).nullable(),
-    overlayTo: s(20).nullable(),
+    overlayFrom: optionalHexColor,
+    overlayTo: optionalHexColor,
     logoPosition: z.enum(["left", "center", "right"]),
     showName: z.boolean(),
     showHeadline: z.boolean(),
     bannerEnabled: z.boolean(),
     overlayOpacity: z.number().min(0).max(100),
     logoType: z.enum(["logo", "fullLogo"]),
-    bannerLogoLight: s(600).nullable(),
-    bannerLogoDark: s(600).nullable(),
+    bannerLogoLight: optionalImageUrl,
+    bannerLogoDark: optionalImageUrl,
     bannerLogoVariant: z.enum(["light", "dark"]),
     ctaButtonText: s(60),
   }),
@@ -403,7 +483,7 @@ export const careerPageConfigSchema = z.object({
   }),
   gallery: z.object({
     enabled: z.boolean(),
-    images: z.array(s(600)).max(12),
+    images: z.array(imageUrlValue).max(12),
     autoplay: z.boolean(),
     speed: z.enum(["slow", "normal"]),
   }),
@@ -415,7 +495,7 @@ export const careerPageConfigSchema = z.object({
   testimonials: z.object({
     enabled: z.boolean(),
     title: s(60),
-    items: z.array(z.object({ quote: s(600), name: s(60), role: s(60), avatar: s(600) })).max(12),
+    items: z.array(z.object({ quote: s(600), name: s(60), role: s(60), avatar: imageUrlValue })).max(12),
   }),
   faq: z.object({
     enabled: z.boolean(),
@@ -430,25 +510,25 @@ export const careerPageConfigSchema = z.object({
     enabled: z.boolean(),
     title: s(120),
     body: s(400),
-    color: s(20).nullable(),
+    color: optionalHexColor,
     buttonText: s(60),
   }),
   footer: z.object({
-    socials: z.array(z.object({ platform: z.enum(socialPlatforms), url: s(600).refine((value) => !value || /^https?:\/\//i.test(value), "Social links must use http(s).") })).max(8),
+    socials: z.array(z.object({ platform: z.enum(socialPlatforms), url: s(600).refine((value) => !value || safeHttpUrl(value) !== null, "Social links must use http(s).") })).max(8),
     legalLinks: z.array(s(80)).max(10),
   }),
   seo: z.object({
     indexable: z.boolean().default(true),
     title: s(70),
     description: s(180),
-    faviconUrl: s(600).nullable(),
-    socialImageUrl: s(600).nullable(),
+    faviconUrl: optionalImageUrl,
+    socialImageUrl: optionalImageUrl,
   }),
   theme: z.object({
     mode: z.enum(["light", "dark"]),
-    background: s(20),
+    background: s(20).refine(isValidHexColor, "Use a valid hex color."),
     font: z.enum(["sans", "serif", "display", "mono"]),
-    accent: s(20).nullable(),
+    accent: optionalHexColor,
     rounded: z.enum(["soft", "sharp"]),
   }),
 });

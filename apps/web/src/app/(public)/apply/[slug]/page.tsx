@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 
 import { ApplyForm } from "@/features/applications/ApplyForm";
 import { getPublicJobDetail } from "@/features/jobs/data";
@@ -6,8 +7,10 @@ import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { JobChrome } from "@/features/career-page/job/JobChrome";
 import { resolveTurnstileSiteKey } from "@/lib/turnstile";
 import { isPortalEnabled } from "@/lib/portal-auth";
+import { getPublicWorkspaceSlug } from "@/lib/public-workspace";
 
 export const dynamic = "force-dynamic";
+export const metadata: Metadata = { robots: { index: false, follow: true } };
 
 type ApplyPageProps = {
   params: Promise<{ slug: string }>;
@@ -15,7 +18,10 @@ type ApplyPageProps = {
 
 export default async function ApplyPage({ params }: ApplyPageProps) {
   const { slug } = await params;
-  const detail = await getPublicJobDetail({ jobSlug: slug });
+  const workspaceSlug = await getPublicWorkspaceSlug();
+  const detail = workspaceSlug
+    ? await getPublicJobDetail({ jobSlug: slug, workspaceSlug })
+    : null;
 
   if (!detail) notFound();
 
