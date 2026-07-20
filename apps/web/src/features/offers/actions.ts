@@ -9,6 +9,7 @@ import {
   applications,
   applicationStageHistory,
   db,
+  documentAssociations,
   emailOutbox,
   jobHiringTeam,
   jobStages,
@@ -17,12 +18,14 @@ import {
 } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { getDocumentAccessForUser } from "@/features/documents/access";
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
+import { createOfferEnvelope } from "@/lib/docusign/offer-document";
 import {
   assertOfferTerms,
   getOfferRecipient,
@@ -44,6 +47,7 @@ const offerFieldsSchema = z.object({
 
 const createOfferSchema = offerFieldsSchema.extend({
   applicationId: z.uuid(),
+  documentIds: z.array(z.uuid()).max(20).optional().default([]),
 });
 
 const updateOfferSchema = offerFieldsSchema.extend({
@@ -130,6 +134,7 @@ export async function createOffer(input: {
   startDate: string | null;
   expiresAt: string | null;
   notes: string | null;
+  documentIds?: string[];
 }): Promise<ActionResult> {
   const parsed = createOfferSchema.safeParse(input);
   if (!parsed.success) {
@@ -181,8 +186,24 @@ export async function createOffer(input: {
     return { success: false, error: "Application not found." };
   }
 
+  if (parsed.data.documentIds.length > 0) {
+    const accessible = await Promise.all(
+      parsed.data.documentIds.map((documentId) =>
+        getDocumentAccessForUser({
+          documentId,
+          workspaceId,
+          userId: context.user.id,
+          roleKey: context.roleKey,
+        }),
+      ),
+    );
+    if (accessible.some((document) => !document)) {
+      return { success: false, error: "One or more selected documents are not accessible." };
+    }
+  }
+
   await db.transaction(async (tx) => {
-    await tx.insert(offers).values({
+    const [createdOffer] = await tx.insert(offers).values({
       workspaceId,
       applicationId: application.id,
       candidateId: application.candidateId,
@@ -197,7 +218,18 @@ export async function createOffer(input: {
       expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
       notes: parsed.data.notes,
       createdById: context.user.id,
-    });
+    }).returning({ id: offers.id });
+    if (createdOffer && parsed.data.documentIds.length > 0) {
+      await tx.insert(documentAssociations).values(
+        parsed.data.documentIds.map((documentId) => ({
+          workspaceId,
+          documentId,
+          targetType: "offer",
+          targetId: createdOffer.id,
+          createdById: context.user.id,
+        })),
+      );
+    }
 
     await logOfferActivity(tx, {
       workspaceId,
@@ -318,6 +350,16 @@ export async function sendOffer(input: {
       success: false,
       error: "The candidate does not have an email address.",
     };
+  }
+
+  // DocuSign offer-signature channel: when the workspace opted into e-signature,
+  // create the DocuSign envelope BEFORE the email. The email still notifies the
+  // candidate (and points them to the portal to sign); the envelopeId is the
+  // primary correlation key for the Connect webhook to flip the offer status.
+  const envelopeId = await createOfferEnvelope({ workspaceId, offer });
+  if (envelopeId === null) {
+    // DocuSign not configured for this workspace (channel = "email") OR not
+    // connected — either way, fall through to the standard email-only flow.
   }
 
   // A durable outbox row is the single source of truth: the worker sends the

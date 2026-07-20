@@ -129,6 +129,17 @@ export function MicrosoftTeamsLogo({ className }: IconProps) {
   );
 }
 
+export function DocuSignLogo({ className }: IconProps) {
+  return (
+    <img
+      src={`${THESVG_BASE}/docusign/default.svg`}
+      alt="DocuSign"
+      className={cn("size-5", className)}
+      aria-hidden="true"
+    />
+  );
+}
+
 export function ZoomLogo({ className }: IconProps) {
   return (
     <img

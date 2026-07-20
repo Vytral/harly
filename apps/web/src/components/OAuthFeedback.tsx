@@ -17,6 +17,7 @@ export function OAuthFeedback() {
       { key: "slack", errorKey: "slack_error", label: "Slack" },
       { key: "outlook", errorKey: "outlook_error", label: "Microsoft Outlook" },
       { key: "zoom", errorKey: "zoom_error", label: "Zoom" },
+      { key: "docusign", errorKey: "docusign_error", label: "DocuSign" },
     ];
 
     let dirty = false;

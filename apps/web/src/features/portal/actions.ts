@@ -13,6 +13,7 @@ import {
   db,
   jobs,
   jobStages,
+  offers,
   workspaceSettings,
   consentRecords,
   candidatePortalMagicLinks,
@@ -38,6 +39,20 @@ const log = createLogger("portal-actions");
 const emailSchema = z.string().email().max(254).toLowerCase().trim();
 
 export type SendMagicLinkResult = { ok: true } | { ok: false; error: string };
+
+// Used as the form's progressive-enhancement action. This ensures a submit
+// that happens before the client component hydrates is still handled by the
+// server action instead of falling back to GET /portal/login?email=....
+export async function sendPortalMagicLinkFormAction(
+  workspaceSlug: string,
+  formData: FormData,
+): Promise<void> {
+  const email = formData.get("email");
+  await sendPortalMagicLinkAction(
+    typeof email === "string" ? email : "",
+    workspaceSlug,
+  );
+}
 
 export async function sendPortalMagicLinkAction(
   email: string,
@@ -275,5 +290,91 @@ export async function applyToJobAction(
   } catch (error) {
     log.error(error, "applyToJobAction failed");
     return { ok: false, error: "Unable to submit application." };
+  }
+}
+
+/**
+ * Generate the DocuSign embedded-signing URL for an offer the candidate was
+ * sent via e-signature. Auth is the candidate portal session (JWT), not a
+ * dashboard session. The URL is single-use + short-lived (~5 min), so it is
+ * generated on demand and never persisted. `returnUrl` sends the candidate back
+ * to the portal application page after the signing ceremony.
+ */
+export async function createOfferSigningViewAction(input: {
+  applicationId: string;
+}): Promise<{ ok: true; signingUrl: string } | { ok: false; error: string }> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
+  if (!token) return { ok: false, error: "Your session has expired." };
+  const session = await resolvePortalSession(token);
+  if (!session) return { ok: false, error: "Your session has expired." };
+
+  // The offer must belong to this candidate's application in this workspace and
+  // be a DocuSign offer still awaiting decision.
+  const [offer] = await db
+    .select({
+      id: offers.id,
+      status: offers.status,
+      docusignEnvelopeId: offers.docusignEnvelopeId,
+      candidateId: offers.candidateId,
+      applicationId: offers.applicationId,
+    })
+    .from(offers)
+    .where(
+      and(
+        eq(offers.workspaceId, session.workspaceId),
+        eq(offers.applicationId, input.applicationId),
+        eq(offers.candidateId, session.candidateId),
+        eq(offers.status, "sent"),
+      ),
+    )
+    .limit(1);
+
+  if (!offer || !offer.docusignEnvelopeId) {
+    return { ok: false, error: "No offer is waiting for your signature." };
+  }
+
+  const { freshDocuSignContext, createRecipientView } = await import(
+    "@/lib/docusign/client"
+  );
+  const { getOfferRecipient } = await import("@/features/offers/core");
+
+  const ctx = await freshDocuSignContext(session.workspaceId);
+  if (!ctx) {
+    return { ok: false, error: "Electronic signing is not available." };
+  }
+
+  const recipient = await getOfferRecipient(session.workspaceId, offer.candidateId);
+  if (!recipient?.email) {
+    return { ok: false, error: "Your contact details are missing." };
+  }
+  const userName =
+    [recipient.firstName, recipient.lastName].filter(Boolean).join(" ") ||
+    recipient.email;
+
+  const appUrl = (
+    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  ).replace(/\/$/, "");
+  const returnUrl = `${appUrl}/portal/applications/${input.applicationId}?signed=pending`;
+
+  try {
+    const view = await createRecipientView(
+      ctx.baseUrl,
+      ctx.accessToken,
+      ctx.accountId,
+      offer.docusignEnvelopeId,
+      {
+        returnUrl,
+        authenticationMethod: "none",
+        email: recipient.email,
+        userName,
+        // Must match the clientUserId set on the signer at envelope creation.
+        clientUserId: `harly-${offer.candidateId}`,
+      },
+    );
+    return { ok: true, signingUrl: view.url };
+  } catch (error) {
+    log.error({ error, offerId: offer.id }, "createOfferSigningViewAction failed");
+    return { ok: false, error: "Could not start the signing session." };
   }
 }

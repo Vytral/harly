@@ -8,45 +8,95 @@ import { applications, db, jobs, workspaceSettings } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import {
   getPortalApplicationInterviews,
+  getPortalApplicationOffer,
   getPortalJobStages,
 } from "@/server/portal-applications";
 import { PortalShell } from "@/features/portal/PortalShellServer";
-import { formatShort, formatTime } from "@/lib/date";
 import { cn } from "@/lib/utils";
+import { PortalHorizontalPipeline } from "@/features/portal/PortalHorizontalPipeline";
+import { PortalInterviewCard } from "@/features/portal/PortalInterviewCard";
+import { PortalOfferSignCard } from "@/features/portal/PortalOfferSignCard";
+import { PortalStatusBadge } from "@/features/portal/PortalStatusBadge";
+import { PortalEmptyState } from "@/features/portal/PortalEmptyState";
+import { PortalActivityTimeline, type ActivityItem } from "@/features/portal/PortalActivityTimeline";
 import {
-  CheckCircleIcon,
-  LockSimpleIcon,
-  MapPinIcon,
+  CalendarBlankIcon,
 } from "@/components/ui/icons/phosphor";
+import { formatShort } from "@/lib/date";
 
 export const dynamic = "force-dynamic";
 
-const STATUS_STYLES = {
-  active: "bg-blue-50 text-blue-700 ring-blue-200/60 dark:bg-blue-950/50 dark:text-blue-400 dark:ring-blue-800/40",
-  hired: "bg-emerald-50 text-emerald-700 ring-emerald-200/60 dark:bg-emerald-950/50 dark:text-emerald-400 dark:ring-emerald-800/40",
-  rejected: "bg-red-50 text-red-600 ring-red-200/60 dark:bg-red-950/50 dark:text-red-400 dark:ring-red-800/40",
-  withdrawn: "bg-muted text-muted-foreground ring-border",
-} as const;
-
-const STATUS_LABELS = {
-  active: "In progress",
-  hired: "Hired",
-  rejected: "Not selected",
-  withdrawn: "Withdrawn",
-} as const;
-
-const INTERVIEW_STATUS_STYLES = {
-  scheduled: "bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-400",
-  completed: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400",
-  canceled: "bg-muted text-muted-foreground",
-} as const;
-
 type PageProps = {
   params: Promise<{ applicationId: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 };
 
-export default async function ApplicationDetailPage({ params }: PageProps) {
+function synthesizeActivities(
+  app: { id: string; status: string; appliedAt: Date; updatedAt: Date },
+  interviews: Awaited<ReturnType<typeof getPortalApplicationInterviews>>,
+): ActivityItem[] {
+  const items: ActivityItem[] = [];
+  items.push({
+    id: `${app.id}-applied`,
+    type: "applied",
+    label: "Application submitted",
+    timestamp: app.appliedAt,
+  });
+  for (const iv of interviews) {
+    if (iv.status === "completed") {
+      items.push({
+        id: `${iv.id}-done`,
+        type: "interview_completed",
+        label: `${iv.title ?? iv.type} completed`,
+        timestamp: new Date(iv.scheduledAt.getTime() + iv.durationMins * 60_000),
+      });
+    } else if (iv.status === "scheduled") {
+      items.push({
+        id: `${iv.id}-sched`,
+        type: "interview_scheduled",
+        label: `${iv.title ?? iv.type} scheduled`,
+        timestamp: iv.scheduledAt,
+      });
+    }
+  }
+  if (app.status === "hired") {
+    items.push({
+      id: `${app.id}-hired`,
+      type: "offer",
+      label: "Offer received!",
+      timestamp: app.updatedAt,
+    });
+  }
+  if (app.status === "rejected") {
+    items.push({
+      id: `${app.id}-rejected`,
+      type: "rejected",
+      label: "Application not selected",
+      timestamp: app.updatedAt,
+    });
+  }
+  return items.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+}
+
+const WORKPLACE_LABELS: Record<string, string> = {
+  remote: "Remote",
+  hybrid: "Hybrid",
+  onsite: "On-site",
+};
+
+const EMPLOYMENT_LABELS: Record<string, string> = {
+  full_time: "Full-time",
+  part_time: "Part-time",
+  contract: "Contract",
+  internship: "Internship",
+};
+
+export default async function ApplicationDetailPage({
+  params,
+  searchParams,
+}: PageProps) {
   const { applicationId } = await params;
+  const searchParamsMap = await searchParams;
   const cookieStore = await cookies();
   const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
   if (!token) redirect("/portal/login" as Route);
@@ -59,6 +109,7 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
       id: applications.id,
       status: applications.status,
       appliedAt: applications.appliedAt,
+      updatedAt: applications.updatedAt,
       jobId: applications.jobId,
       currentStageId: applications.currentStageId,
       jobTitle: jobs.title,
@@ -88,28 +139,33 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
   const showStatus = settingsRow?.showStatus !== false;
 
   const stages = await getPortalJobStages(appRow.jobId);
-
-  const currentIdx = stages.findIndex((s) => s.id === appRow.currentStageId);
-  const isTerminal = appRow.status === "rejected" || appRow.status === "withdrawn";
-
   const interviewsList = await getPortalApplicationInterviews(appRow.id);
+  const activities = synthesizeActivities(appRow, interviewsList);
 
-  const WORKPLACE_LABELS: Record<string, string> = {
-    remote: "Remote",
-    hybrid: "Hybrid",
-    onsite: "On-site",
-  };
+  // DocuSign e-signature offer, if the recruiter sent one via the docusign
+  // channel. `?signed=pending` is set as the DocuSign returnUrl after the
+  // signing ceremony — the Connect webhook flips the offer status async.
+  const docusignOffer = await getPortalApplicationOffer({
+    applicationId: appRow.id,
+    candidateId: session.candidateId,
+    workspaceId: session.workspaceId,
+  });
+  const signedParam = searchParamsMap["signed"];
+  const signedPending =
+    (Array.isArray(signedParam) ? signedParam[0] : signedParam) === "pending" &&
+    docusignOffer?.status === "sent";
 
-  const EMPLOYMENT_LABELS: Record<string, string> = {
-    full_time: "Full-time",
-    part_time: "Part-time",
-    contract: "Contract",
-    internship: "Internship",
-  };
+  const now = new Date();
+  const upcomingInterviews = interviewsList.filter(
+    (i) => i.status === "scheduled" && i.scheduledAt > now,
+  );
+  const pastInterviews = interviewsList.filter(
+    (i) => i.status === "completed" || (i.status === "scheduled" && i.scheduledAt <= now),
+  );
 
   return (
     <PortalShell>
-      <div className="space-y-6">
+      <div className="space-y-8">
         {/* Back link */}
         <Link
           href="/portal/dashboard"
@@ -118,169 +174,128 @@ export default async function ApplicationDetailPage({ params }: PageProps) {
           <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
           </svg>
-          Back to dashboard
+          Back to applications
         </Link>
 
         {/* Header */}
-        <div>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                {appRow.jobTitle}
-              </h1>
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
-                {appRow.jobDepartment && <span>{appRow.jobDepartment}</span>}
-                {appRow.jobLocation && <span>{appRow.jobLocation}</span>}
-                {appRow.jobWorkplaceType && (
-                  <span>{WORKPLACE_LABELS[appRow.jobWorkplaceType] ?? appRow.jobWorkplaceType}</span>
-                )}
-                {appRow.jobEmploymentType && (
-                  <span>{EMPLOYMENT_LABELS[appRow.jobEmploymentType] ?? appRow.jobEmploymentType}</span>
-                )}
-              </div>
-            </div>
-            <span className={cn("shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold ring-1 ring-inset", STATUS_STYLES[appRow.status])}>
-              {STATUS_LABELS[appRow.status]}
-            </span>
-          </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Applied {formatShort(appRow.appliedAt)}
-          </p>
-        </div>
-
-        {/* 2-column layout */}
-        <div className={cn("grid grid-cols-1 gap-6", showStatus && "lg:grid-cols-[320px_1fr]")}>
-          {/* LEFT: Pipeline */}
-          {showStatus && (
-          <div className="space-y-6">
-            <section>
-              <h3 className="mb-3 text-sm font-semibold text-foreground">Interview plan</h3>
-              <div className="overflow-hidden rounded-xl border border-border bg-card">
-                <div className="p-4">
-                  {stages.map((stage, i) => {
-                    const completed = !isTerminal && currentIdx >= 0 && i < currentIdx;
-                    const isCurrent = !isTerminal && i === currentIdx;
-                    const isLast = i === stages.length - 1;
-
-                    return (
-                      <div key={stage.id} className="flex gap-3">
-                        <div className="flex flex-col items-center">
-                          <div className={cn(
-                            "flex size-5 shrink-0 items-center justify-center rounded-full",
-                            completed && "bg-emerald-100 text-emerald-600 dark:bg-emerald-950 dark:text-emerald-400",
-                            isCurrent && "bg-blue-100 text-blue-600 ring-2 ring-blue-200 ring-offset-1 dark:bg-blue-950 dark:text-blue-400 dark:ring-blue-800 dark:ring-offset-card",
-                            !completed && !isCurrent && "bg-muted text-muted-foreground",
-                            isTerminal && isCurrent && "bg-red-50 text-red-400 ring-2 ring-red-200 ring-offset-1 dark:bg-red-950 dark:text-red-400 dark:ring-red-800",
-                          )}>
-                            {completed ? (
-                              <CheckCircleIcon className="size-3.5" />
-                            ) : isCurrent ? (
-                              <div className="size-2 rounded-full bg-current" />
-                            ) : (
-                              <LockSimpleIcon className="size-3" />
-                            )}
-                          </div>
-                          {!isLast && (
-                            <div
-                              className={cn("my-0.5 w-px flex-1", completed ? "bg-emerald-200 dark:bg-emerald-800" : "bg-border")}
-                              style={{ minHeight: 16 }}
-                            />
-                          )}
-                        </div>
-                        <div className={cn("pb-3", isLast && "pb-0")}>
-                          <p className={cn(
-                            "text-sm leading-5",
-                            isCurrent
-                              ? "font-semibold text-foreground"
-                              : completed
-                                ? "font-medium text-foreground"
-                                : "text-muted-foreground",
-                          )}>
-                            {stage.name}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </section>
-          </div>
-          )}
-
-          {/* RIGHT: Interviews */}
-          <div className="space-y-6">
-            <section>
-              <h3 className="mb-3 text-sm font-semibold text-foreground">Interviews</h3>
-              {interviewsList.length === 0 ? (
-                <div className="rounded-xl border border-dashed border-border bg-card p-8 text-center">
-                  <svg className="mx-auto mb-2 size-6 text-muted-foreground/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                  </svg>
-                  <p className="text-sm text-muted-foreground">No interviews scheduled yet</p>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {interviewsList.map((iv) => (
-                    <div
-                      key={iv.id}
-                      className="rounded-xl border border-border bg-card p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm font-semibold text-foreground">
-                            {iv.title ?? iv.type}
-                          </p>
-                          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
-                              </svg>
-                              {formatTime(iv.scheduledAt)} · {iv.durationMins} min
-                            </span>
-                            <span className="flex items-center gap-1">
-                              {iv.mode === "video" ? (
-                                <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z" />
-                                </svg>
-                              ) : (
-                                <MapPinIcon className="size-3" />
-                              )}
-                              {iv.mode === "video" ? "Video call" : iv.location ?? "In person"}
-                            </span>
-                          </div>
-                        </div>
-                        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold", INTERVIEW_STATUS_STYLES[iv.status])}>
-                          {iv.status}
-                        </span>
-                      </div>
-
-                      {iv.interviewerName && (
-                        <div className="mt-3 flex items-center gap-2 border-t border-border pt-3">
-                          {iv.interviewerImage ? (
-                            // eslint-disable-next-line @next/next/no-img-element -- external URL
-                            <img
-                              src={iv.interviewerImage}
-                              alt={iv.interviewerName}
-                              className="size-6 rounded-full object-cover"
-                            />
-                          ) : (
-                            <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-                              {iv.interviewerName.charAt(0).toUpperCase()}
-                            </div>
-                          )}
-                          <span className="text-xs text-muted-foreground">
-                            with <span className="font-medium text-foreground">{iv.interviewerName}</span>
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+              {appRow.jobTitle}
+            </h1>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+              {appRow.jobDepartment && <span>{appRow.jobDepartment}</span>}
+              {appRow.jobLocation && <span>{appRow.jobLocation}</span>}
+              {appRow.jobWorkplaceType && (
+                <span>{WORKPLACE_LABELS[appRow.jobWorkplaceType] ?? appRow.jobWorkplaceType}</span>
               )}
-            </section>
+              {appRow.jobEmploymentType && (
+                <span>{EMPLOYMENT_LABELS[appRow.jobEmploymentType] ?? appRow.jobEmploymentType}</span>
+              )}
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              Applied {formatShort(appRow.appliedAt)}
+            </p>
           </div>
+          <PortalStatusBadge status={appRow.status} />
         </div>
+
+        {/* DocuSign offer — review & sign / pending / accepted / declined */}
+        {docusignOffer && (
+          <PortalOfferSignCard
+            applicationId={appRow.id}
+            offer={{
+              id: docusignOffer.id,
+              // The query filters status to sent/accepted/declined (inArray);
+              // drizzle still infers the full enum, so narrow here.
+              status: docusignOffer.status as "sent" | "accepted" | "declined",
+              title: docusignOffer.title,
+              docusignEnvelopeId: docusignOffer.docusignEnvelopeId,
+              expiresAt: docusignOffer.expiresAt,
+            }}
+            signedPending={signedPending}
+          />
+        )}
+
+        {/* Horizontal pipeline */}
+        {showStatus && stages.length > 0 && (
+          <section>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">Interview plan</h2>
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <PortalHorizontalPipeline
+                stages={stages}
+                currentStageId={appRow.currentStageId}
+                applicationStatus={appRow.status}
+              />
+            </div>
+          </section>
+        )}
+
+        {/* Upcoming interviews */}
+        {upcomingInterviews.length > 0 && (
+          <section>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">Upcoming Interviews</h2>
+            <div className="space-y-3">
+              {upcomingInterviews.map((iv) => (
+                <PortalInterviewCard
+                  key={iv.id}
+                  id={iv.id}
+                  title={iv.title ?? iv.type}
+                  scheduledAt={iv.scheduledAt}
+                  durationMins={iv.durationMins}
+                  location={iv.location}
+                  interviewers={[
+                    { name: iv.interviewerName, image: iv.interviewerImage },
+                  ]}
+                  meetingUrl={iv.meetingUrl}
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Past interviews */}
+        {pastInterviews.length > 0 && (
+          <section>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">Past Interviews</h2>
+            <div className="space-y-3">
+              {pastInterviews.map((iv) => (
+                <PortalInterviewCard
+                  key={iv.id}
+                  id={iv.id}
+                  title={iv.title ?? iv.type}
+                  scheduledAt={iv.scheduledAt}
+                  durationMins={iv.durationMins}
+                  location={iv.location}
+                  interviewers={[
+                    { name: iv.interviewerName, image: iv.interviewerImage },
+                  ]}
+                  meetingUrl={iv.meetingUrl}
+                  compact
+                />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* No interviews at all */}
+        {interviewsList.length === 0 && (
+          <PortalEmptyState
+            icon={CalendarBlankIcon}
+            title="No interviews scheduled yet"
+            description="Your application is being reviewed. We'll notify you when an interview is booked."
+          />
+        )}
+
+        {/* Activity timeline (full mode, all activities) */}
+        {activities.length > 0 && (
+          <section>
+            <h2 className="mb-4 text-lg font-semibold text-foreground">Activity</h2>
+            <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+              <PortalActivityTimeline activities={activities} />
+            </div>
+          </section>
+        )}
       </div>
     </PortalShell>
   );

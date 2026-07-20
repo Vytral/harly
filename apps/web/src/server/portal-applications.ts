@@ -1,11 +1,12 @@
 import "server-only";
 
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import {
   applications,
   db,
   interviews,
   jobStages,
+  offers,
   organization,
   user,
 } from "@harly/db";
@@ -24,6 +25,7 @@ export const portalInterviewSelect = {
   scheduledAt: interviews.scheduledAt,
   durationMins: interviews.durationMins,
   location: interviews.location,
+  meetingUrl: interviews.meetLink,
   interviewerName: user.name,
   interviewerImage: user.image,
 } as const;
@@ -83,4 +85,44 @@ export async function getPortalOrganizationName(workspaceId: string) {
     .where(eq(organization.id, workspaceId))
     .limit(1);
   return row?.name;
+}
+
+/**
+ * The DocuSign offer the candidate can sign from the portal, if any. Scoped to
+ * the candidate's application in the workspace and limited to e-signature
+ * offers (docusignEnvelopeId set) that are still awaiting or just received a
+ * decision. `sent` = actionable (show the "Review & sign" CTA); `accepted`/
+ * `declined` = terminal confirmation surfaced after the signing ceremony.
+ */
+export async function getPortalApplicationOffer(input: {
+  applicationId: string;
+  candidateId: string;
+  workspaceId: string;
+}) {
+  const [offer] = await db
+    .select({
+      id: offers.id,
+      status: offers.status,
+      title: offers.title,
+      docusignEnvelopeId: offers.docusignEnvelopeId,
+      expiresAt: offers.expiresAt,
+      decidedAt: offers.decidedAt,
+      createdAt: offers.createdAt,
+    })
+    .from(offers)
+    .where(
+      and(
+        eq(offers.workspaceId, input.workspaceId),
+        eq(offers.applicationId, input.applicationId),
+        eq(offers.candidateId, input.candidateId),
+        // E-signature offers only: envelopeId must be present.
+        isNotNull(offers.docusignEnvelopeId),
+        // Actionable (sent) or just-decided (the webhook flips these after the
+        // signing ceremony). Draft/withdrawn offers are never surfaced here.
+        inArray(offers.status, ["sent", "accepted", "declined"]),
+      ),
+    )
+    .orderBy(asc(offers.createdAt))
+    .limit(1);
+  return offer;
 }
