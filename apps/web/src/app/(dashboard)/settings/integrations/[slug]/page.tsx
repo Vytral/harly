@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { CalConnectPanel } from "@/features/workspaces/CalConnectPanel";
 import { DiscordConnectPanel } from "@/features/workspaces/DiscordConnectPanel";
 import { GCalConnectPanel } from "@/features/workspaces/GCalConnectPanel";
+import { GoogleMeetConnectPanel } from "@/features/workspaces/GoogleMeetConnectPanel";
 import { JitsiConnectPanel } from "@/features/workspaces/JitsiConnectPanel";
 import { OutlookConnectPanel } from "@/features/workspaces/OutlookConnectPanel";
 import { SlackConnectPanel } from "@/features/workspaces/SlackConnectPanel";
@@ -49,6 +50,7 @@ function svgBrand(slug: string, alt: string, variant = "default"): Logo {
 const DETAIL_LOGOS: Record<IntegrationSlug, Logo> = {
   cal: svgBrand("caldotcom", "Cal.com", "dark"),
   "google-calendar": svgBrand("google-calendar", "Google Calendar"),
+  "google-meet": svgBrand("google-meet", "Google Meet"),
   "outlook-calendar": svgBrand("microsoft-outlook", "Microsoft Outlook"),
   zoom: svgBrand("zoom", "Zoom"),
   jitsi: svgBrand("jitsi", "Jitsi"),
@@ -180,6 +182,18 @@ async function renderPanel(
       const status = await getWorkspaceGCalStatus(ctx.organizationId);
       return (
         <GCalConnectPanel
+          status={status}
+          canEdit={ctx.canEdit}
+          workspaceId={ctx.organizationId}
+          tileClassName={integration.tileClassName}
+          description={integration.detail}
+        />
+      );
+    }
+    case "google-meet": {
+      const status = await getWorkspaceGCalStatus(ctx.organizationId);
+      return (
+        <GoogleMeetConnectPanel
           status={status}
           canEdit={ctx.canEdit}
           workspaceId={ctx.organizationId}

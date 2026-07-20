@@ -27,6 +27,7 @@ export type IntegrationCategory =
 export type IntegrationSlug =
   | "cal"
   | "google-calendar"
+  | "google-meet"
   | "outlook-calendar"
   | "zoom"
   | "jitsi"
@@ -89,6 +90,17 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
       "Keep interviews and interviewer availability in sync with Google Calendar across your whole team.",
     // Multicolor Google mark , light neutral so every fill reads.
     tileClassName: "bg-gradient-to-br from-white via-sky-50 to-sky-200",
+  },
+  {
+    slug: "google-meet",
+    name: "Google Meet",
+    category: "calendar",
+    description: "Generate video links for every video interview.",
+    detail:
+      "Connect Google to add a Google Meet video link to every scheduled video interview. Meet shares your Google Calendar connection — connect once and both light up.",
+    // Multicolor Meet mark , light emerald-teal neutral so every fill reads
+    // while staying distinct from the GCal sky tile and Zoom's stronger blue.
+    tileClassName: "bg-gradient-to-br from-white via-emerald-50 to-teal-100",
   },
   {
     slug: "zoom",
@@ -253,6 +265,7 @@ export function isConnected(
     case "cal":
       return statuses.cal.enabled;
     case "google-calendar":
+    case "google-meet":
       return statuses.gcal.enabled;
     case "zoom":
       return statuses.zoom.installationState === "installed";

@@ -49,6 +49,7 @@ function svgBrand(slug: string, alt: string, variant = "default"): Logo {
 const INTEGRATION_LOGOS: Record<IntegrationSlug, Logo> = {
   cal: svgBrand("caldotcom", "Cal.com", "dark"),
   "google-calendar": svgBrand("google-calendar", "Google Calendar"),
+  "google-meet": svgBrand("google-meet", "Google Meet"),
   "outlook-calendar": svgBrand("microsoft-outlook", "Microsoft Outlook"),
   zoom: svgBrand("zoom", "Zoom"),
   jitsi: svgBrand("jitsi", "Jitsi"),
