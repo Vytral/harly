@@ -565,6 +565,7 @@ export async function getCandidateProfile(candidateId: string) {
       ? await db
           .select({
             id: activityEvents.id,
+            entityType: activityEvents.entityType,
             entityId: activityEvents.entityId,
             type: activityEvents.type,
             metadata: activityEvents.metadata,
@@ -577,15 +578,23 @@ export async function getCandidateProfile(candidateId: string) {
             and(
               eq(activityEvents.workspaceId, workspace.id),
               or(
-                eq(activityEvents.entityId, candidate.id),
-                inArray(activityEvents.entityId, applicationIds),
+                and(
+                  eq(activityEvents.entityType, "candidate"),
+                  eq(activityEvents.entityId, candidate.id),
+                ),
+                and(
+                  eq(activityEvents.entityType, "application"),
+                  inArray(activityEvents.entityId, applicationIds),
+                ),
               ),
             ),
           )
-          .orderBy(desc(activityEvents.createdAt))
+          .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
+          .limit(500)
       : await db
           .select({
             id: activityEvents.id,
+            entityType: activityEvents.entityType,
             entityId: activityEvents.entityId,
             type: activityEvents.type,
             metadata: activityEvents.metadata,
@@ -597,10 +606,12 @@ export async function getCandidateProfile(candidateId: string) {
           .where(
             and(
               eq(activityEvents.workspaceId, workspace.id),
+              eq(activityEvents.entityType, "candidate"),
               eq(activityEvents.entityId, candidate.id),
             ),
           )
-          .orderBy(desc(activityEvents.createdAt));
+          .orderBy(desc(activityEvents.createdAt), desc(activityEvents.id))
+          .limit(500);
 
   const applicationJobTitles = new Map(
     candidateApplications.map((application) => [

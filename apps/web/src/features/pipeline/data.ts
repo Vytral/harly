@@ -23,6 +23,7 @@ import {
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
+import { statusForStageName } from "@/features/pipeline/state";
 
 export type PipelineJobOption = {
   id: string;
@@ -163,6 +164,14 @@ export async function getNextStage(
   const currentIndex = currentStageId
     ? stages.findIndex((stage) => stage.id === currentStageId)
     : -1;
+
+  // Terminal stages are not followed by another actionable stage. A pipeline
+  // may order the default `Rejected` stage after `Hired`, but advancing a hired
+  // candidate into rejected would be semantically wrong.
+  const currentStage = currentIndex >= 0 ? stages[currentIndex] : null;
+  if (currentStage && statusForStageName(currentStage.name) !== "active") {
+    return null;
+  }
 
   return stages[currentIndex + 1] ?? null;
 }

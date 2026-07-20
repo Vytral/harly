@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -27,6 +27,7 @@ import { buildQuestionAnswerRows } from "@/features/applications/questions";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import type { ApplicationFormValues } from "@/lib/validations/applications";
 import { isWorkspaceStorageKey } from "@/lib/storage-validation";
+import { publicJobVisibilityConditions } from "@/features/jobs/data";
 
 export type PublicApplicationResult =
   | {
@@ -91,8 +92,7 @@ export async function getPublicJobApplicationContext(input: {
     .where(
       and(
         eq(jobs.slug, input.jobSlug),
-        eq(jobs.status, "open"),
-        isNull(jobs.deletedAt),
+        publicJobVisibilityConditions(),
         input.workspaceSlug
           ? eq(organization.slug, input.workspaceSlug)
           : undefined,
@@ -152,7 +152,7 @@ export async function createPublicApplication(
         .where(
           and(
             eq(jobs.slug, input.jobSlug),
-            eq(jobs.status, "open"),
+            publicJobVisibilityConditions(),
             input.workspaceSlug
               ? eq(organization.slug, input.workspaceSlug)
               : undefined,

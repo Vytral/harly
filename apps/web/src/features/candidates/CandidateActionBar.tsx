@@ -64,7 +64,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-function isPdfResume(url: string, fileType: string | null, fileName: string | null) {
+function isPdfResume(
+  url: string,
+  fileType: string | null,
+  fileName: string | null,
+) {
   return (
     fileType === "application/pdf" ||
     (fileName ?? url).toLowerCase().endsWith(".pdf")
@@ -92,7 +96,8 @@ const STATUS_ACTIONS: Array<{
     status: "active",
     label: "Reactivate",
     icon: RotateCcw,
-    confirm: "Reactivate {name}? Their applications return to the active pipeline.",
+    confirm:
+      "Reactivate {name}? Their applications return to the active pipeline.",
   },
 ];
 
@@ -185,7 +190,11 @@ function CandidateStatusMenu({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  function handleSelect(status: CandidateStatus, label: string, confirmMessage: string) {
+  function handleSelect(
+    status: CandidateStatus,
+    label: string,
+    confirmMessage: string,
+  ) {
     if (applicationIds.length === 0) {
       toast.error("This candidate has no application to update.");
       return;
@@ -215,16 +224,18 @@ function CandidateStatusMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        {STATUS_ACTIONS.map(({ status, label, icon: Icon, confirm, destructive }) => (
-          <DropdownMenuItem
-            key={status}
-            variant={destructive ? "destructive" : "default"}
-            onSelect={() => handleSelect(status, label, confirm)}
-          >
-            <Icon className="size-4" />
-            {label}
-          </DropdownMenuItem>
-        ))}
+        {STATUS_ACTIONS.map(
+          ({ status, label, icon: Icon, confirm, destructive }) => (
+            <DropdownMenuItem
+              key={status}
+              variant={destructive ? "destructive" : "default"}
+              onSelect={() => handleSelect(status, label, confirm)}
+            >
+              <Icon className="size-4" />
+              {label}
+            </DropdownMenuItem>
+          ),
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -270,7 +281,11 @@ function DeleteCandidateButton({
     <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
       <DialogTrigger asChild>
         {trigger ?? (
-          <Button size="sm" variant="outline" className="text-destructive hover:text-destructive">
+          <Button
+            size="sm"
+            variant="outline"
+            className="text-destructive hover:text-destructive"
+          >
             <Trash2 className="size-4" />
             Delete
           </Button>
@@ -285,10 +300,18 @@ function DeleteCandidateButton({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button variant="outline" onClick={() => setConfirmOpen(false)} disabled={isPending}>
+          <Button
+            variant="outline"
+            onClick={() => setConfirmOpen(false)}
+            disabled={isPending}
+          >
             Cancel
           </Button>
-          <Button variant="destructive" onClick={deleteCandidate} disabled={isPending}>
+          <Button
+            variant="destructive"
+            onClick={deleteCandidate}
+            disabled={isPending}
+          >
             {isPending ? "Deleting…" : "Delete candidate"}
           </Button>
         </DialogFooter>
@@ -330,7 +353,9 @@ export function CandidateActionBar({
   variant?: "full" | "compact";
   aiConfigured?: boolean;
 }) {
-  const applicationIds = applications.map((application) => application.applicationId);
+  const applicationIds = applications.map(
+    (application) => application.applicationId,
+  );
 
   const email = (
     <EmailDrawer
@@ -343,7 +368,12 @@ export function CandidateActionBar({
       aiConfigured={aiConfigured}
       trigger={
         variant === "compact" ? (
-          <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="Email">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="size-8 p-0 text-muted-foreground hover:text-foreground"
+            title="Email"
+          >
             <Mail className="size-4" />
             <span className="sr-only">Email</span>
           </Button>
@@ -368,7 +398,12 @@ export function CandidateActionBar({
       cal={cal}
       trigger={
         variant === "compact" ? (
-          <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="Schedule">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="size-8 p-0 text-muted-foreground hover:text-foreground"
+            title="Schedule"
+          >
             <CalendarClock className="size-4" />
             <span className="sr-only">Schedule</span>
           </Button>
@@ -382,14 +417,20 @@ export function CandidateActionBar({
     />
   );
 
-  const evaluate = (
+  const evaluate = applications[0] ? (
     <EvaluationDrawer
       candidateId={candidate.id}
       workspaceId={candidate.workspaceId}
+      applicationId={applications[0].applicationId}
       stageName={stageName}
       trigger={
         variant === "compact" ? (
-          <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="Evaluate">
+          <Button
+            size="sm"
+            variant="ghost"
+            className="size-8 p-0 text-muted-foreground hover:text-foreground"
+            title="Evaluate"
+          >
             <ClipboardCheck className="size-4" />
             <span className="sr-only">Evaluate</span>
           </Button>
@@ -401,7 +442,7 @@ export function CandidateActionBar({
         )
       }
     />
-  );
+  ) : null;
 
   const isHired = applications.some((app) => app.status === "hired");
   const reject = isHired ? null : (
@@ -450,7 +491,12 @@ export function CandidateActionBar({
         <EditCandidateDrawer
           candidate={candidate}
           trigger={
-            <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="Edit candidate">
+            <Button
+              size="sm"
+              variant="ghost"
+              className="size-8 p-0 text-muted-foreground hover:text-foreground"
+              title="Edit candidate"
+            >
               <Pencil className="size-4" />
               <span className="sr-only">Edit</span>
             </Button>
@@ -460,7 +506,12 @@ export function CandidateActionBar({
           isPdfResume(resumeUrl, resumeFileType, resumeFileName) ? (
             <Dialog>
               <DialogTrigger asChild>
-                <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="View resume">
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="size-8 p-0 text-muted-foreground hover:text-foreground"
+                  title="View resume"
+                >
                   <FileText className="size-4" />
                   <span className="sr-only">Resume</span>
                 </Button>
@@ -468,7 +519,9 @@ export function CandidateActionBar({
               <DialogContent className="sm:max-w-3xl">
                 <DialogHeader>
                   <DialogTitle className="flex items-center justify-between gap-3 pr-8">
-                    <span className="truncate">{resumeFileName ?? `${name}'s resume`}</span>
+                    <span className="truncate">
+                      {resumeFileName ?? `${name}'s resume`}
+                    </span>
                     <Button asChild size="sm" variant="outline">
                       <a href={resumeUrl} target="_blank" rel="noreferrer">
                         <Download className="size-4" />
@@ -488,7 +541,13 @@ export function CandidateActionBar({
               </DialogContent>
             </Dialog>
           ) : (
-            <Button asChild size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground" title="View resume">
+            <Button
+              asChild
+              size="sm"
+              variant="ghost"
+              className="size-8 p-0 text-muted-foreground hover:text-foreground"
+              title="View resume"
+            >
               <a href={resumeUrl} target="_blank" rel="noreferrer">
                 <FileText className="size-4" />
                 <span className="sr-only">Resume</span>

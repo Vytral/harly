@@ -414,8 +414,7 @@ export async function createCandidateNote(input: {
 
     return result;
   } catch (error) {
-    const message =
-      "Unable to create note.";
+    const message = "Unable to create note.";
 
     console.error("Failed to create candidate note", error);
 
@@ -507,8 +506,7 @@ export async function updateCandidateProfile(input: {
 
     return { success: true };
   } catch (error) {
-    const message =
-      "Unable to update candidate.";
+    const message = "Unable to update candidate.";
 
     console.error("Failed to update candidate profile", error);
 
@@ -659,7 +657,10 @@ export async function attachCandidateFile(input: {
             and(
               eq(candidateFiles.workspaceId, input.workspaceId),
               eq(candidateFiles.candidateId, input.candidateId),
-              eq(candidateFiles.contentHash, parsed.data.contentHash.toLowerCase()),
+              eq(
+                candidateFiles.contentHash,
+                parsed.data.contentHash.toLowerCase(),
+              ),
             ),
           )
           .orderBy(desc(candidateFiles.createdAt))
@@ -735,7 +736,9 @@ export async function attachCandidateFile(input: {
         success: true,
         file: {
           ...file,
-          parsedSkills: Array.isArray(file.parsedSkills) ? file.parsedSkills : [],
+          parsedSkills: Array.isArray(file.parsedSkills)
+            ? file.parsedSkills
+            : [],
           parsedAt: file.parsedAt?.toISOString() ?? null,
           createdAt: file.createdAt.toISOString(),
           uploadedByName: user.name,
@@ -749,8 +752,7 @@ export async function attachCandidateFile(input: {
 
     return result;
   } catch (error) {
-    const message =
-      "Unable to upload file.";
+    const message = "Unable to upload file.";
 
     console.error("Failed to attach candidate file", error);
 
@@ -762,7 +764,12 @@ async function assertCandidate(candidateId: string, workspaceId: string) {
   const [candidate] = await db
     .select({ id: candidates.id })
     .from(candidates)
-    .where(and(eq(candidates.id, candidateId), eq(candidates.workspaceId, workspaceId)))
+    .where(
+      and(
+        eq(candidates.id, candidateId),
+        eq(candidates.workspaceId, workspaceId),
+      ),
+    )
     .limit(1);
   return Boolean(candidate);
 }
@@ -771,22 +778,27 @@ async function assertCandidate(candidateId: string, workspaceId: string) {
 const scorecardSchema = z.object({
   candidateId: z.string().min(1),
   workspaceId: z.string().min(1),
+  applicationId: z.string().uuid(),
+  stageId: z.string().uuid().nullable().optional(),
   rating: z.enum(["strong", "mixed", "weak"]),
   comment: z.string().max(5000).optional(),
-  stageName: z.string().max(200).nullish(),
 });
 
 export async function createScorecard(input: {
   candidateId: string;
   workspaceId: string;
+  applicationId: string;
+  stageId?: string | null;
   rating: "strong" | "mixed" | "weak";
   comment?: string;
-  stageName?: string | null;
 }): Promise<{ success: boolean; error?: string }> {
   try {
     const parsed = scorecardSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid evaluation." };
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid evaluation.",
+      };
     }
     const { organization: workspace, user } = await getWorkspaceContext();
     if (workspace.id !== input.workspaceId) {
@@ -796,13 +808,50 @@ export async function createScorecard(input: {
     if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
       return { success: false, error: "Candidate not found." };
     }
+    const [application] = await db
+      .select({ id: applications.id, jobId: applications.jobId })
+      .from(applications)
+      .where(
+        and(
+          eq(applications.id, parsed.data.applicationId),
+          eq(applications.workspaceId, input.workspaceId),
+          eq(applications.candidateId, input.candidateId),
+        ),
+      )
+      .limit(1);
+    if (!application) {
+      return { success: false, error: "Application not found." };
+    }
+    let stageName: string | null = null;
+    if (parsed.data.stageId) {
+      const [stage] = await db
+        .select({ id: jobStages.id, name: jobStages.name })
+        .from(jobStages)
+        .where(
+          and(
+            eq(jobStages.id, parsed.data.stageId),
+            eq(jobStages.workspaceId, input.workspaceId),
+            eq(jobStages.jobId, application.jobId),
+          ),
+        )
+        .limit(1);
+      if (!stage) {
+        return {
+          success: false,
+          error: "Stage does not belong to this application.",
+        };
+      }
+      stageName = stage.name;
+    }
     await db.insert(scorecards).values({
       workspaceId: input.workspaceId,
       candidateId: input.candidateId,
+      applicationId: application.id,
+      stageId: parsed.data.stageId ?? null,
       authorId: user.id,
       rating: parsed.data.rating,
       comment: parsed.data.comment?.trim() || null,
-      stageName: parsed.data.stageName ?? null,
+      stageName,
     });
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
     return { success: true };
@@ -829,7 +878,10 @@ export async function addCandidateTag(input: {
   try {
     const parsed = tagSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid tag." };
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid tag.",
+      };
     }
     const { organization: workspace, user } = await getWorkspaceContext();
     if (workspace.id !== input.workspaceId) {
@@ -871,7 +923,12 @@ export async function removeCandidateTag(input: {
     await requirePermission("candidates:edit");
     await db
       .delete(candidateTags)
-      .where(and(eq(candidateTags.id, input.tagId), eq(candidateTags.workspaceId, input.workspaceId)));
+      .where(
+        and(
+          eq(candidateTags.id, input.tagId),
+          eq(candidateTags.workspaceId, input.workspaceId),
+        ),
+      );
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
     return { success: true };
   } catch {
@@ -906,7 +963,12 @@ export async function sendBulkCandidateEmail(input: {
   candidateIds: string[];
   subject: string;
   body: string;
-}): Promise<{ success: boolean; error?: string; sent: number; failed: number }> {
+}): Promise<{
+  success: boolean;
+  error?: string;
+  sent: number;
+  failed: number;
+}> {
   const parsed = bulkEmailSchema.safeParse(input);
   if (!parsed.success) {
     return {
@@ -919,9 +981,8 @@ export async function sendBulkCandidateEmail(input: {
 
   await requirePermission("collab:write");
 
-  const { interpolateTemplate } = await import(
-    "@/features/email-templates/interpolate"
-  );
+  const { interpolateTemplate } =
+    await import("@/features/email-templates/interpolate");
   const { organization: workspace, user } = await getWorkspaceContext();
 
   // Workspace-scoped fetch , ids from the client are never trusted directly.
@@ -941,7 +1002,12 @@ export async function sendBulkCandidateEmail(input: {
     );
 
   if (rows.length === 0) {
-    return { success: false, error: "No matching candidates.", sent: 0, failed: 0 };
+    return {
+      success: false,
+      error: "No matching candidates.",
+      sent: 0,
+      failed: 0,
+    };
   }
 
   // Latest application per candidate , job title for {{job_title}}, and the
@@ -961,7 +1027,10 @@ export async function sendBulkCandidateEmail(input: {
     .where(
       and(
         eq(applications.workspaceId, workspace.id),
-        inArray(applications.candidateId, rows.map((r) => r.id)),
+        inArray(
+          applications.candidateId,
+          rows.map((r) => r.id),
+        ),
       ),
     )
     .orderBy(desc(applications.appliedAt));
@@ -978,7 +1047,8 @@ export async function sendBulkCandidateEmail(input: {
   if (!sender) {
     return {
       success: false,
-      error: "Email sending is not configured. Go to Settings → Email to set up your sender.",
+      error:
+        "Email sending is not configured. Go to Settings → Email to set up your sender.",
       sent: 0,
       failed: 0,
     };
@@ -1019,7 +1089,11 @@ export async function sendBulkCandidateEmail(input: {
         });
       } catch (sendError) {
         emailLog.error(
-          { err: sendError, workspaceId: workspace.id, candidateId: candidate.id },
+          {
+            err: sendError,
+            workspaceId: workspace.id,
+            candidateId: candidate.id,
+          },
           "bulk candidate email provider rejected message",
         );
         status = "failed";
@@ -1053,7 +1127,13 @@ export async function sendBulkCandidateEmail(input: {
 
 const draftEmailSchema = z.object({
   candidateId: z.string().min(1),
-  type: z.enum(["screening", "interview_invite", "rejection", "offer", "followup"]),
+  type: z.enum([
+    "screening",
+    "interview_invite",
+    "rejection",
+    "offer",
+    "followup",
+  ]),
 });
 
 export type GenerateEmailDraftResult =
@@ -1119,7 +1199,10 @@ export async function generateEmailDraftAction(input: {
   // Also grab latest AI evaluation for context.
   const { aiEvaluations } = await import("@harly/db");
   const [evalRow] = await db
-    .select({ score: aiEvaluations.score, recommendation: aiEvaluations.recommendation })
+    .select({
+      score: aiEvaluations.score,
+      recommendation: aiEvaluations.recommendation,
+    })
     .from(aiEvaluations)
     .where(
       and(
@@ -1144,7 +1227,10 @@ export async function generateEmailDraftAction(input: {
     return { ok: true, subject: draft.subject, body: draft.body };
   } catch (error) {
     console.error("Email draft AI failed", error);
-    return { ok: false, error: "Draft generation failed. Check your AI settings." };
+    return {
+      ok: false,
+      error: "Draft generation failed. Check your AI settings.",
+    };
   }
 }
 
@@ -1158,7 +1244,10 @@ export async function sendCandidateMessage(input: {
   try {
     const parsed = messageSchema.safeParse(input);
     if (!parsed.success) {
-      return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid message." };
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid message.",
+      };
     }
     const { organization: workspace } = await getWorkspaceContext();
     if (workspace.id !== input.workspaceId) {
@@ -1206,7 +1295,11 @@ export async function sendCandidateMessage(input: {
         });
       } catch (sendError) {
         emailLog.error(
-          { err: sendError, workspaceId: workspace.id, candidateId: input.candidateId },
+          {
+            err: sendError,
+            workspaceId: workspace.id,
+            candidateId: input.candidateId,
+          },
           "candidate email provider rejected message",
         );
         status = "failed";
@@ -1230,11 +1323,18 @@ export async function sendCandidateMessage(input: {
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
 
     if (status === "failed") {
-      return { success: false, error: "Email failed to send.", delivered: false };
+      return {
+        success: false,
+        error: "Email failed to send.",
+        delivered: false,
+      };
     }
     return { success: true, delivered: status === "sent" };
   } catch (error) {
-    emailLog.error(error, "candidate email action failed before delivery completed");
+    emailLog.error(
+      error,
+      "candidate email action failed before delivery completed",
+    );
     return {
       success: false,
       error: "Unable to send message.",
@@ -1357,7 +1457,10 @@ export async function refineScorecardTextAction(input: {
 }): Promise<RefineScorecardResult> {
   const parsed = refineScorecardSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
 
   await requirePermission("collab:write");
@@ -1378,9 +1481,8 @@ export async function refineScorecardTextAction(input: {
   );
 
   try {
-    const { refineScorecardTextWithAI } = await import(
-      "@/lib/ai/surfaces/refine-scorecard"
-    );
+    const { refineScorecardTextWithAI } =
+      await import("@/lib/ai/surfaces/refine-scorecard");
     const result = await refineScorecardTextWithAI(config, {
       comment: parsed.data.comment,
       jobTitle,
@@ -1410,7 +1512,10 @@ export async function suggestScorecardAttributesAction(input: {
 }): Promise<SuggestScorecardAttributesResult> {
   const parsed = suggestAttributesSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
+    return {
+      ok: false,
+      error: parsed.error.issues[0]?.message ?? "Invalid input.",
+    };
   }
 
   await requirePermission("collab:write");
@@ -1450,9 +1555,8 @@ export async function suggestScorecardAttributesAction(input: {
   }
 
   try {
-    const { suggestScorecardAttributesWithAI } = await import(
-      "@/lib/ai/surfaces/suggest-scorecard-attributes"
-    );
+    const { suggestScorecardAttributesWithAI } =
+      await import("@/lib/ai/surfaces/suggest-scorecard-attributes");
     const attributes = await suggestScorecardAttributesWithAI(config, {
       jobTitle: job.title,
       description: job.description,

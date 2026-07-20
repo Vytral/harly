@@ -18,6 +18,9 @@ import {
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { daysSince, formatShort } from "@/lib/date";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
+import { getHiringEvents } from "@/features/reports/data";
+import { can } from "@/features/workspaces/permissions-server";
+import { taskDueState } from "@/features/tasks/shared";
 
 const DAY_MS = 86_400_000;
 const PERF_DAYS = 14;
@@ -399,22 +402,7 @@ export const getHiringPerformance = cache(async () => {
           gte(interviews.scheduledAt, prevStart),
         ),
       ),
-    db
-      .select({ at: applicationStageHistory.createdAt })
-      .from(applicationStageHistory)
-      .innerJoin(
-        jobStages,
-        and(
-          eq(jobStages.id, applicationStageHistory.toStageId),
-          eq(jobStages.name, "Hired"),
-        ),
-      )
-      .where(
-        and(
-          eq(applicationStageHistory.workspaceId, workspace.id),
-          gte(applicationStageHistory.createdAt, prevStart),
-        ),
-      ),
+    getHiringEvents(workspace.id, { since: prevStart }),
     db
       .select({ at: applicationStageHistory.createdAt })
       .from(applicationStageHistory)
@@ -435,7 +423,7 @@ export const getHiringPerformance = cache(async () => {
 
   const apps = splitCount(appRows.map((r) => r.at), windowStart);
   const ivs = splitCount(interviewRows.map((r) => r.at), windowStart);
-  const hires = splitCount(hireRows.map((r) => r.at), windowStart);
+  const hires = splitCount(hireRows.map((r) => r.hiredAt), windowStart);
   const offers = splitCount(offerRows.map((r) => r.at), windowStart);
 
   const curRate = offers.cur > 0 ? hires.cur / offers.cur : 0;
@@ -473,7 +461,7 @@ export const getHiringPerformance = cache(async () => {
     series: {
       applications: bucketSeries(appRows.map((r) => r.at), windowStart),
       interviews: bucketSeries(interviewRows.map((r) => r.at), windowStart),
-      hires: bucketSeries(hireRows.map((r) => r.at), windowStart),
+      hires: bucketSeries(hireRows.map((r) => r.hiredAt), windowStart),
     },
   };
 });
@@ -642,6 +630,7 @@ export type InboxItem = Awaited<ReturnType<typeof getInbox>>[number];
 // ── My tasks (dashboard widget) ─────────────────────────────────────────────
 
 export const getMyDashboardTasks = cache(async () => {
+  if (!(await can("tasks:read"))) return [];
   const { organization: workspace, user: currentUser } = await getWorkspaceContext();
   const now = new Date();
 
@@ -658,11 +647,26 @@ export const getMyDashboardTasks = cache(async () => {
       jobTitle: jobs.title,
     })
     .from(tasks)
-    .leftJoin(candidates, eq(candidates.id, tasks.candidateId))
-    .leftJoin(jobs, eq(jobs.id, tasks.jobId))
+    .leftJoin(
+      candidates,
+      and(
+        eq(candidates.id, tasks.candidateId),
+        eq(candidates.workspaceId, tasks.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .leftJoin(
+      jobs,
+      and(
+        eq(jobs.id, tasks.jobId),
+        eq(jobs.workspaceId, tasks.workspaceId),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(tasks.workspaceId, workspace.id),
+        isNull(tasks.deletedAt),
         eq(tasks.ownerId, currentUser.id),
         or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
       ),
@@ -680,17 +684,8 @@ export const getMyDashboardTasks = cache(async () => {
     )
     .limit(6);
 
-  const todayUtc = now.toISOString().slice(0, 10);
-
   return rows.map((r) => {
-    const dueDate = r.dueDate ? new Date(r.dueDate) : null;
-    let dueState: "overdue" | "today" | "soon" | null = null;
-    if (dueDate) {
-      const dueDateUtc = dueDate.toISOString().slice(0, 10);
-      if (dueDateUtc < todayUtc) dueState = "overdue";
-      else if (dueDateUtc === todayUtc) dueState = "today";
-      else dueState = "soon";
-    }
+    const dueState = taskDueState(r.dueDate?.toISOString() ?? null, now);
 
     return {
       id: r.id,

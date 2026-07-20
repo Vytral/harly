@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   AlertTriangle,
   ArrowDownLeft,
@@ -13,12 +14,14 @@ import {
   FileText,
   Mail,
   MapPin,
+  NotebookTabs,
   MessageSquare,
   Minus,
   Paperclip,
   Pencil,
   Phone,
   Plus,
+  RotateCcw,
   ThumbsDown,
   ThumbsUp,
   Video,
@@ -41,15 +44,22 @@ import type {
 import { OffersPanel } from "@/features/offers/OffersPanel";
 import type { CandidateOfferItem } from "@/features/offers/shared";
 import { NoteForm } from "@/features/candidates/NoteForm";
-import { EmailDrawer, type EmailTemplateOption } from "@/features/candidates/EmailDrawer";
+import {
+  EmailDrawer,
+  type EmailTemplateOption,
+} from "@/features/candidates/EmailDrawer";
 import type { TemplateValues } from "@/features/email-templates/interpolate";
 import { createCandidateNote } from "@/features/candidates/actions";
-import { fulfilDsarErasureAction, reviewDsarRequestAction } from "@/features/workspaces/dsar-actions";
+import {
+  fulfilDsarErasureAction,
+  reviewDsarRequestAction,
+} from "@/features/workspaces/dsar-actions";
 import {
   generateInterviewBriefAction,
   setInterviewStatus,
   summarizeInterviewNotesAction,
 } from "@/features/interviews/actions";
+import { retryInterviewSyncAction } from "@/features/interviews/sync-actions";
 import {
   interviewModeLabel,
   interviewTypeLabel,
@@ -167,7 +177,10 @@ type CandidateProfileTabsProps = {
   applications: CandidateProfileApplication[];
   notes: CandidateNoteItem[];
   files: CandidateFile[];
-  activity: Array<Omit<CandidateActivityItem, "createdAt"> & { createdAt: string }>;
+  relatedDocuments: Array<{ id: string; name: string; mimeType: string }>;
+  activity: Array<
+    Omit<CandidateActivityItem, "createdAt"> & { createdAt: string }
+  >;
   scorecards: Scorecard[];
   messages: CandidateMessage[];
   interviews: CandidateInterviewItem[];
@@ -181,7 +194,12 @@ type CandidateProfileTabsProps = {
   scheduleMembers: ScheduleMemberOption[];
   scheduleCal: ScheduleCalConfig;
   currentUserId?: string;
-  privacyRequests?: Array<Omit<CandidatePrivacyRequestItem, "createdAt" | "completedAt"> & { createdAt: string; completedAt: string | null }>;
+  privacyRequests?: Array<
+    Omit<CandidatePrivacyRequestItem, "createdAt" | "completedAt"> & {
+      createdAt: string;
+      completedAt: string | null;
+    }
+  >;
   canFulfilErasure?: boolean;
 };
 
@@ -257,6 +275,7 @@ export function CandidateProfileTabs({
   applications,
   notes,
   files,
+  relatedDocuments,
   activity,
   scorecards,
   messages,
@@ -302,6 +321,10 @@ export function CandidateProfileTabs({
         <TabsTrigger value="activity">
           Activity
           <TabCount value={activity.length + notes.length} />
+        </TabsTrigger>
+        <TabsTrigger value="documents">
+          Documents
+          <TabCount value={relatedDocuments.length} />
         </TabsTrigger>
         {privacyRequests.length > 0 ? (
           <TabsTrigger value="privacy">
@@ -361,10 +384,7 @@ export function CandidateProfileTabs({
           />
         </div>
         {interviews.length === 0 ? (
-          <EmptyTab
-            icon={CalendarClock}
-            text="No interviews scheduled yet."
-          />
+          <EmptyTab icon={CalendarClock} text="No interviews scheduled yet." />
         ) : (
           interviews.map((interview) => (
             <InterviewCard
@@ -437,10 +457,15 @@ export function CandidateProfileTabs({
           <div>
             <p className="text-sm font-medium">Privacy requests</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Review the candidate’s applications, communication, notes, and activity before recording a decision.
+              Review the candidate’s applications, communication, notes, and
+              activity before recording a decision.
             </p>
           </div>
-          <Button size="sm" variant="outline" onClick={() => setTab("activity")}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => setTab("activity")}
+          >
             View activity
           </Button>
         </div>
@@ -500,7 +525,8 @@ export function CandidateProfileTabs({
             <Card
               key={message.id}
               className={cn(
-                message.direction === "inbound" && "border-l-4 border-l-slate-info",
+                message.direction === "inbound" &&
+                  "border-l-4 border-l-slate-info",
               )}
             >
               <CardContent className="space-y-1.5">
@@ -514,7 +540,9 @@ export function CandidateProfileTabs({
                     ) : null}
                     <p className="font-medium">{message.subject}</p>
                   </div>
-                  <Badge variant={message.status === "failed" ? "danger" : "neutral"}>
+                  <Badge
+                    variant={message.status === "failed" ? "danger" : "neutral"}
+                  >
                     {MESSAGE_STATUS_LABEL[message.status]}
                   </Badge>
                 </div>
@@ -564,17 +592,25 @@ export function CandidateProfileTabs({
               ? "No evaluations yet."
               : `${scorecards.length} evaluation${scorecards.length === 1 ? "" : "s"}.`}
           </p>
-          <EvaluationDrawer
-            candidateId={candidateId}
-            workspaceId={workspaceId}
-            stageName={stageName}
-            trigger={
-              <Button size="sm">
-                <ClipboardCheck className="size-4" />
-                Add evaluation
-              </Button>
-            }
-          />
+          {applications[0] ? (
+            <EvaluationDrawer
+              candidateId={candidateId}
+              workspaceId={workspaceId}
+              applicationId={applications[0].id}
+              stageName={stageName}
+              trigger={
+                <Button size="sm">
+                  <ClipboardCheck className="size-4" />
+                  Add evaluation
+                </Button>
+              }
+            />
+          ) : (
+            <Button size="sm" disabled>
+              <ClipboardCheck className="size-4" />
+              Add evaluation
+            </Button>
+          )}
         </div>
         {scorecards.map((scorecard) => {
           const meta = RATING_META[scorecard.rating];
@@ -582,7 +618,12 @@ export function CandidateProfileTabs({
             <Card key={scorecard.id}>
               <CardContent className="space-y-2">
                 <div className="flex items-center justify-between gap-3">
-                  <span className={cn("flex items-center gap-1.5 text-sm font-semibold", meta.className)}>
+                  <span
+                    className={cn(
+                      "flex items-center gap-1.5 text-sm font-semibold",
+                      meta.className,
+                    )}
+                  >
                     <meta.icon className="size-4" strokeWidth={2} />
                     {meta.label}
                   </span>
@@ -591,10 +632,13 @@ export function CandidateProfileTabs({
                   ) : null}
                 </div>
                 {scorecard.comment ? (
-                  <p className="whitespace-pre-line text-sm">{scorecard.comment}</p>
+                  <p className="whitespace-pre-line text-sm">
+                    {scorecard.comment}
+                  </p>
                 ) : null}
                 <p className="text-xs text-muted-foreground">
-                  {scorecard.authorName ?? "Someone"} · <RelativeTime value={scorecard.createdAt} />
+                  {scorecard.authorName ?? "Someone"} ·{" "}
+                  <RelativeTime value={scorecard.createdAt} />
                 </p>
               </CardContent>
             </Card>
@@ -610,14 +654,27 @@ export function CandidateProfileTabs({
             id: application.id,
             jobTitle: application.jobTitle,
           }))}
+          documents={relatedDocuments}
         />
       </TabsContent>
 
+      <TabsContent value="documents" className="mt-4 space-y-4">
+        <div className="flex items-start justify-between gap-3 rounded-xl border border-primary/20 bg-primary/[0.03] p-4">
+          <div className="flex min-w-0 gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><NotebookTabs className="size-4" /></span>
+            <div><p className="text-sm font-medium">Candidate documents</p><p className="mt-1 text-xs leading-5 text-muted-foreground">CVs and documents linked to this candidate stay visible here while the Documents hub remains the source of truth.</p></div>
+          </div>
+          <Button asChild size="sm" variant="outline"><Link href={{ pathname: "/dashboard/documents", query: { candidateId } }}>Open hub</Link></Button>
+        </div>
+        {relatedDocuments.length === 0 ? <div className="rounded-xl border border-dashed px-6 py-12 text-center"><NotebookTabs className="mx-auto size-6 text-muted-foreground" /><p className="mt-3 text-sm font-medium">No linked documents yet</p><p className="mt-1 text-sm text-muted-foreground">Upload a document in the hub and associate it with this candidate.</p></div> : <div className="divide-y rounded-xl border">{relatedDocuments.map((document) => <Link key={document.id} href={{ pathname: "/dashboard/documents", query: { documentId: document.id } }} className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/30"><FileText className="size-4 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{document.name}</span><span className="text-xs text-muted-foreground">{document.mimeType === "application/pdf" ? "PDF" : "Document"}</span><ExternalLink className="size-3.5 text-muted-foreground" /></Link>)}</div>}
+      </TabsContent>
     </Tabs>
   );
 }
 
-type PrivacyRequest = NonNullable<CandidateProfileTabsProps["privacyRequests"]>[number];
+type PrivacyRequest = NonNullable<
+  CandidateProfileTabsProps["privacyRequests"]
+>[number];
 
 type PrivacyInventory = {
   applications: number;
@@ -674,14 +731,21 @@ function PrivacyRequestCard({
         toast.error(result.error ?? "Could not review the request.");
         return;
       }
-      toast.success(decision === "approve" ? "Request approved for fulfilment." : "Request denied.");
+      toast.success(
+        decision === "approve"
+          ? "Request approved for fulfilment."
+          : "Request denied.",
+      );
       router.refresh();
     });
   }
 
   function fulfilErasure() {
     startTransition(async () => {
-      const result = await fulfilDsarErasureAction({ requestId: request.id, candidateId });
+      const result = await fulfilDsarErasureAction({
+        requestId: request.id,
+        candidateId,
+      });
       if (!result.ok) {
         toast.error(result.error ?? "Could not fulfil the erasure request.");
         return;
@@ -691,9 +755,10 @@ function PrivacyRequestCard({
     });
   }
 
-  const statusLabel = request.status === "processing"
-    ? "In progress"
-    : request.status[0].toUpperCase() + request.status.slice(1);
+  const statusLabel =
+    request.status === "processing"
+      ? "In progress"
+      : request.status[0].toUpperCase() + request.status.slice(1);
 
   const statusBadge = {
     pending: "warning",
@@ -702,11 +767,15 @@ function PrivacyRequestCard({
     denied: "danger",
   }[request.status] as "warning" | "info" | "success" | "danger";
 
-  const dueDate = new Date(new Date(request.createdAt).getTime() + DSAR_DUE_DAYS * 86_400_000);
-  const isOpen = request.status === "pending" || request.status === "processing";
+  const dueDate = new Date(
+    new Date(request.createdAt).getTime() + DSAR_DUE_DAYS * 86_400_000,
+  );
+  const isOpen =
+    request.status === "pending" || request.status === "processing";
   const isErasure = request.type === "erasure";
   const scoped = INVENTORY_ROWS.filter((row) => inventory[row.key] > 0);
-  const emailConfirmed = confirmEmail.trim().toLowerCase() === candidateEmail.trim().toLowerCase();
+  const emailConfirmed =
+    confirmEmail.trim().toLowerCase() === candidateEmail.trim().toLowerCase();
 
   const source = request.requestedBy ? "candidate portal" : null;
 
@@ -719,9 +788,7 @@ function PrivacyRequestCard({
             <h3 className="font-medium">
               {isErasure ? "Erasure request" : "Data export request"}
             </h3>
-            <Badge variant={statusBadge}>
-              {statusLabel}
-            </Badge>
+            <Badge variant={statusBadge}>{statusLabel}</Badge>
           </div>
           <span className="shrink-0 text-[13px] text-muted-foreground">
             <RelativeTime value={request.createdAt} />
@@ -731,12 +798,19 @@ function PrivacyRequestCard({
         {/* One-line context , who, how, deadline */}
         <p className="text-sm text-muted-foreground">
           Requested by{" "}
-          <span className="text-foreground">{request.requestedBy ?? "the candidate"}</span>
+          <span className="text-foreground">
+            {request.requestedBy ?? "the candidate"}
+          </span>
           {source ? ` via ${source}` : ""}
           {isOpen ? (
-            <> · respond by <ShortDate value={dueDate} /></>
+            <>
+              {" "}
+              · respond by <ShortDate value={dueDate} />
+            </>
           ) : null}
-          {request.processedBy ? <> · reviewed by {request.processedBy}</> : null}
+          {request.processedBy ? (
+            <> · reviewed by {request.processedBy}</>
+          ) : null}
         </p>
 
         {/* Data in scope , scannable number grid, not a label-value list */}
@@ -754,7 +828,9 @@ function PrivacyRequestCard({
                     <dd className="text-xl font-medium tabular-nums leading-none">
                       {inventory[row.key]}
                     </dd>
-                    <dt className="mt-1.5 text-[13px] text-muted-foreground">{row.label}</dt>
+                    <dt className="mt-1.5 text-[13px] text-muted-foreground">
+                      {row.label}
+                    </dt>
                   </div>
                 ))}
               </dl>
@@ -794,17 +870,34 @@ function PrivacyRequestCard({
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Deny this request?</DialogTitle>
-                    <DialogDescription>This records the decision and its review note in the audit log.</DialogDescription>
+                    <DialogDescription>
+                      This records the decision and its review note in the audit
+                      log.
+                    </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
-                    <DialogClose asChild><Button variant="outline" disabled={isPending}>Cancel</Button></DialogClose>
-                    <DialogClose asChild><Button variant="destructive" disabled={isPending} onClick={() => review("deny")}>Deny request</Button></DialogClose>
+                    <DialogClose asChild>
+                      <Button variant="outline" disabled={isPending}>
+                        Cancel
+                      </Button>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Button
+                        variant="destructive"
+                        disabled={isPending}
+                        onClick={() => review("deny")}
+                      >
+                        Deny request
+                      </Button>
+                    </DialogClose>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button size="sm" disabled={isPending}>Approve</Button>
+                  <Button size="sm" disabled={isPending}>
+                    Approve
+                  </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
@@ -816,8 +909,19 @@ function PrivacyRequestCard({
                     </DialogDescription>
                   </DialogHeader>
                   <DialogFooter>
-                    <DialogClose asChild><Button variant="outline" disabled={isPending}>Cancel</Button></DialogClose>
-                    <DialogClose asChild><Button disabled={isPending} onClick={() => review("approve")}>Approve request</Button></DialogClose>
+                    <DialogClose asChild>
+                      <Button variant="outline" disabled={isPending}>
+                        Cancel
+                      </Button>
+                    </DialogClose>
+                    <DialogClose asChild>
+                      <Button
+                        disabled={isPending}
+                        onClick={() => review("approve")}
+                      >
+                        Approve request
+                      </Button>
+                    </DialogClose>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
@@ -828,7 +932,11 @@ function PrivacyRequestCard({
         {/* Fulfilment , processing erasure: irreversible confirm */}
         {request.status === "processing" && isErasure ? (
           canFulfilErasure ? (
-            <Dialog onOpenChange={(open) => { if (!open) setConfirmEmail(""); }}>
+            <Dialog
+              onOpenChange={(open) => {
+                if (!open) setConfirmEmail("");
+              }}
+            >
               <DialogTrigger asChild>
                 <Button size="sm" variant="destructive" disabled={isPending}>
                   Erase candidate data
@@ -838,12 +946,21 @@ function PrivacyRequestCard({
                 <DialogHeader>
                   <DialogTitle>Permanently erase candidate data?</DialogTitle>
                   <DialogDescription>
-                    This fulfils the approved request. The candidate profile and every linked record above are permanently removed, then you return to Candidates.
+                    This fulfils the approved request. The candidate profile and
+                    every linked record above are permanently removed, then you
+                    return to Candidates.
                   </DialogDescription>
                 </DialogHeader>
                 <div className="space-y-2">
-                  <label htmlFor={`erase-confirm-${request.id}`} className="text-sm text-muted-foreground">
-                    Type <span className="font-medium text-foreground">{candidateEmail}</span> to confirm.
+                  <label
+                    htmlFor={`erase-confirm-${request.id}`}
+                    className="text-sm text-muted-foreground"
+                  >
+                    Type{" "}
+                    <span className="font-medium text-foreground">
+                      {candidateEmail}
+                    </span>{" "}
+                    to confirm.
                   </label>
                   <Input
                     id={`erase-confirm-${request.id}`}
@@ -854,7 +971,11 @@ function PrivacyRequestCard({
                   />
                 </div>
                 <DialogFooter>
-                  <DialogClose asChild><Button variant="outline" disabled={isPending}>Cancel</Button></DialogClose>
+                  <DialogClose asChild>
+                    <Button variant="outline" disabled={isPending}>
+                      Cancel
+                    </Button>
+                  </DialogClose>
                   <DialogClose asChild>
                     <Button
                       variant="destructive"
@@ -869,7 +990,8 @@ function PrivacyRequestCard({
             </Dialog>
           ) : (
             <p className="text-sm text-muted-foreground">
-              Approved and awaiting fulfilment — a role with candidate deletion access must complete the erasure.
+              Approved and awaiting fulfilment — a role with candidate deletion
+              access must complete the erasure.
             </p>
           )
         ) : null}
@@ -910,8 +1032,23 @@ function InterviewCard({
         toast.error(result.error ?? "Could not update.");
         return;
       }
-      toast.success(status === "completed" ? "Marked complete" : "Interview canceled");
+      toast.success(
+        status === "completed" ? "Marked complete" : "Interview canceled",
+      );
+      if (result.warning) toast.warning(result.warning);
       (router as { refresh?: () => void }).refresh?.();
+    });
+  }
+
+  function retrySync(syncId: string) {
+    startTransition(async () => {
+      const result = await retryInterviewSyncAction({ syncId });
+      if (!result.success) {
+        toast.error(result.error ?? "Could not retry synchronization.");
+        return;
+      }
+      toast.success("Synchronization retried");
+      router.refresh();
     });
   }
 
@@ -937,15 +1074,17 @@ function InterviewCard({
                 members={members}
                 currentUserId={currentUserId}
                 trigger={
-                  <Button size="sm" variant="ghost" className="size-8 p-0 text-muted-foreground hover:text-foreground">
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="size-8 p-0 text-muted-foreground hover:text-foreground"
+                  >
                     <Pencil className="size-4" />
                   </Button>
                 }
               />
             ) : null}
-            <Badge variant={statusMeta.variant}>
-              {statusMeta.label}
-            </Badge>
+            <Badge variant={statusMeta.variant}>{statusMeta.label}</Badge>
           </div>
         </div>
 
@@ -958,7 +1097,10 @@ function InterviewCard({
         {/* Location */}
         {interview.location ? (
           <div className="flex items-center gap-2 text-sm text-foreground/90">
-            <MapPin className="size-4 shrink-0 text-muted-foreground" strokeWidth={1.8} />
+            <MapPin
+              className="size-4 shrink-0 text-muted-foreground"
+              strokeWidth={1.8}
+            />
             <span className="truncate">{interview.location}</span>
           </div>
         ) : null}
@@ -999,6 +1141,44 @@ function InterviewCard({
           </Button>
         ) : null}
 
+        {/* Provider sync recovery */}
+        {interview.syncs?.map((sync) => {
+          if (sync.status === "synced" || sync.status === "canceled") return null;
+          const providerLabel =
+            sync.provider === "google_calendar"
+              ? "Google Calendar"
+              : sync.provider === "microsoft_teams"
+                ? "Microsoft Teams"
+                : sync.provider === "jitsi"
+                  ? "Jitsi"
+                  : "Zoom";
+          const pending = sync.status === "pending";
+          return (
+            <div
+              key={sync.id}
+              className="flex items-center gap-2 rounded-lg border border-amber-200/70 bg-amber-50/70 px-3 py-2 text-sm dark:border-amber-900/50 dark:bg-amber-950/20"
+            >
+              <AlertTriangle className="size-4 shrink-0 text-amber-600" />
+              <span className="min-w-0 flex-1 text-amber-900 dark:text-amber-200">
+                {pending
+                  ? `${providerLabel} sync is pending.`
+                  : `${providerLabel} sync failed${sync.lastError ? `: ${sync.lastError}` : "."}`}
+              </span>
+              {!pending ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={isPending}
+                  onClick={() => retrySync(sync.id)}
+                >
+                  <RotateCcw className="size-3.5" />
+                  Retry
+                </Button>
+              ) : null}
+            </div>
+          );
+        })}
+
         {/* Notes */}
         {interview.notes ? (
           <div className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -1016,7 +1196,9 @@ function InterviewCard({
               size="sm"
               className="size-7 text-[11px]"
             />
-            <span className="text-sm font-medium">{interview.interviewerName}</span>
+            <span className="text-sm font-medium">
+              {interview.interviewerName}
+            </span>
           </div>
         ) : null}
 
@@ -1036,15 +1218,22 @@ function InterviewCard({
                     <DialogHeader>
                       <DialogTitle>Mark interview as complete?</DialogTitle>
                       <DialogDescription>
-                        This will mark the interview with {interview.interviewerName ?? "the interviewer"} as completed.
+                        This will mark the interview with{" "}
+                        {interview.interviewerName ?? "the interviewer"} as
+                        completed.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline" disabled={isPending}>Cancel</Button>
+                        <Button variant="outline" disabled={isPending}>
+                          Cancel
+                        </Button>
                       </DialogClose>
                       <DialogClose asChild>
-                        <Button disabled={isPending} onClick={() => update("completed")}>
+                        <Button
+                          disabled={isPending}
+                          onClick={() => update("completed")}
+                        >
                           {isPending ? "Saving…" : "Confirm"}
                         </Button>
                       </DialogClose>
@@ -1068,15 +1257,22 @@ function InterviewCard({
                     <DialogHeader>
                       <DialogTitle>Cancel this interview?</DialogTitle>
                       <DialogDescription>
-                        The candidate will be notified. This action cannot be undone.
+                        The candidate will be notified. This action cannot be
+                        undone.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
                       <DialogClose asChild>
-                        <Button variant="outline" disabled={isPending}>Go back</Button>
+                        <Button variant="outline" disabled={isPending}>
+                          Go back
+                        </Button>
                       </DialogClose>
                       <DialogClose asChild>
-                        <Button variant="destructive" disabled={isPending} onClick={() => update("canceled")}>
+                        <Button
+                          variant="destructive"
+                          disabled={isPending}
+                          onClick={() => update("canceled")}
+                        >
                           {isPending ? "Canceling…" : "Yes, cancel interview"}
                         </Button>
                       </DialogClose>
@@ -1086,7 +1282,12 @@ function InterviewCard({
               </>
             ) : null}
             {interview.gcalEventId ? (
-              <Button asChild size="sm" variant="ghost" className="text-muted-foreground">
+              <Button
+                asChild
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground"
+              >
                 <a
                   href={`https://calendar.google.com/calendar/r/search?q=${encodeURIComponent(interview.gcalEventId)}`}
                   target="_blank"
@@ -1130,7 +1331,10 @@ function InterviewCard({
               <EvaluationDrawer
                 candidateId={candidateId}
                 workspaceId={workspaceId}
-                stageName={interview.title ?? interviewTypeLabel(interview.type)}
+                applicationId={interview.applicationId}
+                stageName={
+                  interview.title ?? interviewTypeLabel(interview.type)
+                }
                 trigger={
                   <Button size="sm" variant="outline">
                     <ClipboardCheck className="size-4" />
@@ -1187,7 +1391,11 @@ function InterviewBriefSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen} mobilePresentation="bottom-on-mobile">
+    <Sheet
+      open={open}
+      onOpenChange={setOpen}
+      mobilePresentation="bottom-on-mobile"
+    >
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
         title="Interview Brief"
@@ -1207,13 +1415,19 @@ function InterviewBriefSheet({
         {brief ? (
           <div className="space-y-5 text-sm">
             <div>
-              <p className="mb-1.5 font-medium text-foreground">Candidate summary</p>
-              <p className="text-muted-foreground leading-relaxed">{brief.candidateSummary}</p>
+              <p className="mb-1.5 font-medium text-foreground">
+                Candidate summary
+              </p>
+              <p className="text-muted-foreground leading-relaxed">
+                {brief.candidateSummary}
+              </p>
             </div>
 
             {brief.keyAreasToProbe.length > 0 ? (
               <div>
-                <p className="mb-1.5 font-medium text-foreground">Key areas to probe</p>
+                <p className="mb-1.5 font-medium text-foreground">
+                  Key areas to probe
+                </p>
                 <ul className="space-y-1 text-muted-foreground">
                   {brief.keyAreasToProbe.map((area, i) => (
                     <li key={i} className="flex items-start gap-2">
@@ -1227,7 +1441,9 @@ function InterviewBriefSheet({
 
             {brief.suggestedQuestions.length > 0 ? (
               <div>
-                <p className="mb-1.5 font-medium text-foreground">Suggested questions</p>
+                <p className="mb-1.5 font-medium text-foreground">
+                  Suggested questions
+                </p>
                 <ol className="space-y-2 text-muted-foreground">
                   {brief.suggestedQuestions.map((q, i) => (
                     <li key={i} className="flex items-start gap-2">
@@ -1244,7 +1460,10 @@ function InterviewBriefSheet({
             {brief.redFlags.length > 0 ? (
               <div className="rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
                 <div className="mb-1.5 flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
-                  <AlertTriangle className="size-3.5 shrink-0" strokeWidth={2} />
+                  <AlertTriangle
+                    className="size-3.5 shrink-0"
+                    strokeWidth={2}
+                  />
                   Watch for
                 </div>
                 <ul className="space-y-1 text-amber-700/90 dark:text-amber-400/80">
@@ -1264,7 +1483,8 @@ function InterviewBriefSheet({
               <BrainCircuit className="size-5" strokeWidth={1.8} />
             </span>
             <p className="text-sm text-muted-foreground max-w-[220px]">
-              Generate a brief to get candidate context, suggested questions, and areas to probe.
+              Generate a brief to get candidate context, suggested questions,
+              and areas to probe.
             </p>
           </div>
         )}
@@ -1344,7 +1564,11 @@ function SummarizeNotesSheet({
   }
 
   return (
-    <Sheet open={open} onOpenChange={setOpen} mobilePresentation="bottom-on-mobile">
+    <Sheet
+      open={open}
+      onOpenChange={setOpen}
+      mobilePresentation="bottom-on-mobile"
+    >
       <SheetTrigger asChild>{trigger}</SheetTrigger>
       <DrawerLayout
         title="Summarize interview notes"
@@ -1386,12 +1610,16 @@ function SummarizeNotesSheet({
             <div className="space-y-5 text-sm">
               <div>
                 <p className="mb-1.5 font-medium text-foreground">Summary</p>
-                <p className="text-muted-foreground leading-relaxed">{summary.executiveSummary}</p>
+                <p className="text-muted-foreground leading-relaxed">
+                  {summary.executiveSummary}
+                </p>
               </div>
 
               {summary.positiveSignals.length > 0 ? (
                 <div>
-                  <p className="mb-1.5 font-medium text-foreground">Positive signals</p>
+                  <p className="mb-1.5 font-medium text-foreground">
+                    Positive signals
+                  </p>
                   <ul className="space-y-1 text-muted-foreground">
                     {summary.positiveSignals.map((s, i) => (
                       <li key={i} className="flex items-start gap-2">
@@ -1418,14 +1646,17 @@ function SummarizeNotesSheet({
               ) : null}
 
               <div className="flex items-center gap-2">
-                <p className="font-medium text-foreground">Suggested decision</p>
+                <p className="font-medium text-foreground">
+                  Suggested decision
+                </p>
                 <span
                   className={cn(
                     "rounded-full px-2.5 py-0.5 text-xs font-medium",
                     DECISION_META[summary.suggestedDecision]?.className,
                   )}
                 >
-                  {DECISION_META[summary.suggestedDecision]?.label ?? summary.suggestedDecision}
+                  {DECISION_META[summary.suggestedDecision]?.label ??
+                    summary.suggestedDecision}
                 </span>
               </div>
 
@@ -1445,7 +1676,13 @@ function SummarizeNotesSheet({
 }
 
 /** Empty-state slot for tabs that have no data yet. */
-function EmptyTab({ icon: Icon, text }: { icon: typeof MessageSquare; text: string }) {
+function EmptyTab({
+  icon: Icon,
+  text,
+}: {
+  icon: typeof MessageSquare;
+  text: string;
+}) {
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-12 text-center">
       <Icon className="size-5 text-muted-foreground" />

@@ -100,11 +100,13 @@ export function ScheduleDialog({
   const [interviewerId, setInterviewerId] = useState("");
   const [location, setLocation] = useState("");
   const [notes, setNotes] = useState("");
+  const [sendEmail, setSendEmail] = useState(Boolean(candidateEmail.trim()));
   const [isPending, startTransition] = useTransition();
   const [availabilityWarning, setAvailabilityWarning] = useState<string | null>(null);
   const [checkingAvailability, setCheckingAvailability] = useState(false);
 
   const hasApplication = applications.length > 0;
+  const hasCandidateEmail = candidateEmail.trim().length > 0;
   const locationLabel = mode === "onsite" ? "Address" : "Meeting link";
 
   const calLinkAvailable = cal.enabled && Boolean(cal.bookingUrl);
@@ -176,6 +178,7 @@ export function ScheduleDialog({
     setInterviewerId("");
     setLocation("");
     setNotes("");
+    setSendEmail(hasCandidateEmail);
     setAvailabilityWarning(null);
   }
 
@@ -204,12 +207,27 @@ export function ScheduleDialog({
         interviewerId: interviewerId || null,
         location: location.trim() || null,
         notes: notes.trim() || null,
+        sendEmail: sendEmail && hasCandidateEmail,
       });
       if (!result.success) {
         toast.error(result.error ?? "Could not schedule.");
         return;
       }
-      toast.success("Interview scheduled");
+      if (result.warning && result.emailStatus !== "failed") {
+        toast.warning(result.warning);
+      }
+      if (result.emailStatus === "sent") {
+        toast.success("Interview scheduled and invitation sent");
+      } else if (result.emailStatus === "skipped") {
+        toast.success("Interview scheduled without sending an invitation");
+      } else if (result.emailStatus === "failed") {
+        toast.warning(
+          result.warning ??
+            "Interview scheduled, but the invitation email could not be sent.",
+        );
+      } else {
+        toast.success("Interview scheduled");
+      }
       setOpen(false);
       reset();
       router.refresh();
@@ -406,6 +424,26 @@ export function ScheduleDialog({
             {checkingAvailability ? (
               <p className="text-xs text-muted-foreground">Checking availability…</p>
             ) : null}
+
+            <label className="flex items-start gap-3 rounded-lg border bg-muted/20 px-3.5 py-3">
+              <input
+                type="checkbox"
+                checked={sendEmail}
+                onChange={(event) => setSendEmail(event.target.checked)}
+                disabled={!hasCandidateEmail}
+                className="mt-0.5 size-4 accent-primary"
+              />
+              <span className="space-y-0.5">
+                <span className="block text-sm font-medium">
+                  Send invitation email
+                </span>
+                <span className="block text-xs text-muted-foreground">
+                  {hasCandidateEmail
+                    ? "The candidate will receive the interview details after scheduling."
+                    : "Add an email address to this candidate before sending an invitation."}
+                </span>
+              </span>
+            </label>
           </div>
         )}
 
@@ -416,7 +454,13 @@ export function ScheduleDialog({
             </Button>
           </DialogClose>
           <Button onClick={submit} disabled={isPending || !hasApplication}>
-            {isPending ? "Scheduling…" : "Schedule"}
+            {isPending
+              ? sendEmail && hasCandidateEmail
+                ? "Scheduling & sending…"
+                : "Scheduling…"
+              : sendEmail && hasCandidateEmail
+                ? "Schedule & send invite"
+                : "Schedule without email"}
           </Button>
         </DialogFooter>
       </DialogContent>

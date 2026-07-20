@@ -75,6 +75,10 @@ export function GCalConnectPanel({
         toast.success("Connection is working!");
       } else {
         toast.error(result.error ?? "Connection test failed.");
+        // An invalid_grant clears the stored token server-side. Refresh here so
+        // the panel immediately changes from the stale connected state to the
+        // actionable Connect Google state.
+        router.refresh();
       }
     });
   }

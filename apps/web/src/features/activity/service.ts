@@ -9,7 +9,9 @@ import {
   candidateNotes,
   candidates,
   db,
+  documents,
   jobs,
+  tasks,
   user,
 } from "@harly/db";
 
@@ -18,6 +20,8 @@ export const ACTIVITY_ENTITY_TYPES = [
   "application",
   "job",
   "note",
+  "document",
+  "task",
 ] as const;
 
 export type ActivityEntityType = (typeof ACTIVITY_ENTITY_TYPES)[number];
@@ -112,9 +116,13 @@ async function assertEntityInWorkspace(input: {
       ? candidates
       : input.entityType === "application"
         ? applications
-        : input.entityType === "job"
-          ? jobs
-          : candidateNotes;
+      : input.entityType === "job"
+        ? jobs
+        : input.entityType === "note"
+          ? candidateNotes
+          : input.entityType === "document"
+            ? documents
+            : tasks;
   const [entity] = await db
     .select({ id: table.id })
     .from(table)

@@ -256,6 +256,9 @@ export async function moveApplicationInPipeline(
           and(
             eq(applications.id, input.applicationId),
             eq(applications.workspaceId, input.workspaceId),
+            input.fromStageId
+              ? eq(applications.currentStageId, input.fromStageId)
+              : undefined,
             eq(applications.updatedAt, application.updatedAt),
           ),
         )
@@ -421,16 +424,16 @@ export async function moveApplicationInPipeline(
         fromStageId: event.fromStageId,
         toStageId: event.toStageId,
         status: event.status,
-      });
+      }, { actorId: user.id });
       if (event.becameHired) {
         await emitWebhookEvent(input.workspaceId, "application.hired", {
           application: { id: event.applicationId },
-        });
+        }, { actorId: user.id });
       }
       if (event.becameRejected) {
         await emitWebhookEvent(input.workspaceId, "application.rejected", {
           application: { id: event.applicationId },
-        });
+        }, { actorId: user.id });
       }
     }
 
@@ -738,16 +741,16 @@ export async function bulkMoveApplications(
         fromStageId: evt.fromStageId,
         toStageId: input.toStageId,
         status: evt.status,
-      });
+      }, { actorId: user.id });
       if (evt.becameHired) {
         void emitWebhookEvent(input.workspaceId, "application.hired", {
           application: { id: evt.applicationId },
-        });
+        }, { actorId: user.id });
       }
       if (evt.becameRejected) {
         void emitWebhookEvent(input.workspaceId, "application.rejected", {
           application: { id: evt.applicationId },
-        });
+        }, { actorId: user.id });
       }
     }
 
@@ -1040,11 +1043,11 @@ export async function updateApplicationStatus(
       if (input.status === "hired") {
         void emitWebhookEvent(input.workspaceId, "application.hired", {
           application: { id: applicationId },
-        });
+        }, { actorId: user.id });
       } else if (input.status === "rejected") {
         void emitWebhookEvent(input.workspaceId, "application.rejected", {
           application: { id: applicationId },
-        });
+        }, { actorId: user.id });
       }
     }
     for (const event of stageEvents) {
@@ -1053,7 +1056,7 @@ export async function updateApplicationStatus(
         fromStageId: event.fromStageId,
         toStageId: event.toStageId,
         status: event.status,
-      });
+      }, { actorId: user.id });
     }
     void sendPipelineEmails(input.workspaceId, emails);
 

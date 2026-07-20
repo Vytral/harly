@@ -1,6 +1,19 @@
 import "server-only";
 
-import { and, asc, desc, eq, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  or,
+  sql,
+} from "drizzle-orm";
+import { cache } from "react";
 
 import { slugify } from "@/lib/utils";
 import { db } from "@harly/db";
@@ -85,6 +98,20 @@ export function toBoardBranding(
     consentCheckboxText: row.consentCheckboxText ?? null,
     legalPages: row.legalPages ?? null,
   };
+}
+
+/**
+ * A public job must be open, not deleted, already published, and not past its
+ * configured closing date. Null dates preserve legacy open jobs that predate
+ * publication scheduling.
+ */
+export function publicJobVisibilityConditions(now = new Date()) {
+  return and(
+    eq(jobs.status, "open"),
+    isNull(jobs.deletedAt),
+    or(isNull(jobs.publishedAt), lte(jobs.publishedAt, now)),
+    or(isNull(jobs.validThrough), gte(jobs.validThrough, now)),
+  );
 }
 
 export {
@@ -264,7 +291,7 @@ export async function listOpenJobs() {
   return db
     .select()
     .from(jobs)
-    .where(and(eq(jobs.status, "open"), isNull(jobs.deletedAt)))
+    .where(publicJobVisibilityConditions())
     .orderBy(desc(jobs.publishedAt), desc(jobs.createdAt));
 }
 
@@ -291,8 +318,7 @@ export async function listOpenJobsForWorkspaceSlug(workspaceSlug: string) {
     .where(
       and(
         eq(jobs.workspaceId, workspace.id),
-        eq(jobs.status, "open"),
-        isNull(jobs.deletedAt),
+        publicJobVisibilityConditions(),
       ),
     )
     .orderBy(desc(jobs.publishedAt), desc(jobs.createdAt));
@@ -334,10 +360,11 @@ export async function getPublicJob(slug: string) {
   return detail?.job ?? null;
 }
 
-export async function getPublicJobDetail(input: {
-  jobSlug: string;
-  workspaceSlug?: string;
-}) {
+const getPublicJobDetailCached = cache(async function getPublicJobDetailCached(
+  jobSlug: string,
+  workspaceSlug?: string,
+) {
+  const input = { jobSlug, workspaceSlug };
   const [row] = await db
     .select({
       job: jobs,
@@ -353,8 +380,7 @@ export async function getPublicJobDetail(input: {
     .where(
       and(
         eq(jobs.slug, input.jobSlug),
-        eq(jobs.status, "open"),
-        isNull(jobs.deletedAt),
+        publicJobVisibilityConditions(),
         input.workspaceSlug
           ? eq(organization.slug, input.workspaceSlug)
           : undefined,
@@ -363,15 +389,20 @@ export async function getPublicJobDetail(input: {
     .orderBy(desc(jobs.publishedAt), desc(jobs.createdAt))
     .limit(1);
 
-  if (!row) {
-    return null;
-  }
+  if (!row) return null;
 
   return {
     job: row.job,
     workspace: toBoardBranding(row.workspace),
     config: normalizeCareerPageConfig(row.careerConfig),
   };
+});
+
+export async function getPublicJobDetail(input: {
+  jobSlug: string;
+  workspaceSlug?: string;
+}) {
+  return getPublicJobDetailCached(input.jobSlug, input.workspaceSlug);
 }
 
 export async function generateUniqueJobSlug(

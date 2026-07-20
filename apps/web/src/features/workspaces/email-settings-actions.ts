@@ -12,6 +12,7 @@ import { createEmailSender, type EmailProviderConfig } from "@harly/emails";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
+import { normalizeInboundReplyDomain } from "@/lib/email/inbound-token";
 import {
   getWorkspaceEmailConfig,
   getWorkspaceEmailStatus,
@@ -184,6 +185,12 @@ export async function saveInboundEmailSettingsAction(input: {
   }
 
   const { enabled, provider, replyDomain, webhookSecret, resendApiKey } = input;
+  if (enabled && !normalizeInboundReplyDomain(replyDomain)) {
+    return {
+      ok: false,
+      error: "Enter a valid reply domain, for example replies.example.com.",
+    };
+  }
   const status = await getWorkspaceInboundEmailStatus(context.organization.id);
 
   if (enabled && !webhookSecret && !status.hasWebhookSecret) {

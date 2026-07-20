@@ -8,7 +8,7 @@ import { after } from "next/server";
 import { db, workspaceSettings } from "@harly/db";
 import { createPublicApplication } from "@/features/applications/data";
 import { verifyTurnstileToken } from "@/lib/turnstile";
-import { clientIp } from "@/server/api/ratelimit";
+import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import {
   candidateEducationEntrySchema,
   candidateExperienceEntrySchema,
@@ -36,23 +36,8 @@ import {
 import { scheduleAutoScore } from "@/features/applications/auto-score";
 import { scheduleAutoDuplicateCheck } from "@/features/applications/auto-duplicates";
 
-// Rate limiter: IP → {count, resetAt}. Per IP, max 5 parse calls per 60s window.
-// Stricter than before to prevent API key drain on public AI parsing.
-const _parseRateLimit = new Map<string, { count: number; resetAt: number }>();
 const PARSE_LIMIT = 5;
 const PARSE_WINDOW_MS = 60_000;
-
-function checkParseRateLimit(ip: string): boolean {
-  const now = Date.now();
-  const entry = _parseRateLimit.get(ip);
-  if (!entry || now > entry.resetAt) {
-    _parseRateLimit.set(ip, { count: 1, resetAt: now + PARSE_WINDOW_MS });
-    return true;
-  }
-  if (entry.count >= PARSE_LIMIT) return false;
-  entry.count++;
-  return true;
-}
 
 export type ParseResumeResult =
   | { ok: true; fields: ResumeAutofillFields }
@@ -77,11 +62,20 @@ export async function parseResumeAction(input: {
 
   // Rate-limit by IP to prevent API key drain.
   const requestHeaders = await headers();
-  const ip =
-    requestHeaders.get("cf-connecting-ip") ??
-    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "unknown";
-  if (!checkParseRateLimit(ip)) {
+  const ip = clientIp(
+    new Request("http://harly.local", {
+      headers: {
+        "x-forwarded-for": requestHeaders.get("x-forwarded-for") ?? "",
+        "x-real-ip": requestHeaders.get("x-real-ip") ?? "",
+      },
+    }),
+  );
+  try {
+    await enforceRateLimit(`public:resume-parse:${ip}`, {
+      limit: PARSE_LIMIT,
+      windowMs: PARSE_WINDOW_MS,
+    });
+  } catch {
     return { ok: false };
   }
 

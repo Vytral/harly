@@ -79,6 +79,9 @@ export function GoogleMeetConnectPanel({
         toast.success("Connection is working!");
       } else {
         toast.error(result.error ?? "Connection test failed.");
+        // The server clears a revoked token on invalid_grant; refresh so the
+        // panel immediately exposes the reconnect action.
+        router.refresh();
       }
     });
   }
