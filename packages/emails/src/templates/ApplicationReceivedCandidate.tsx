@@ -37,7 +37,7 @@ export function ApplicationReceivedCandidate({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+      <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         Application received
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
@@ -53,9 +53,9 @@ export function ApplicationReceivedCandidate({
         <Section className="mt-2">
           <Button
             href={jobBoardUrl}
-            className="bg-brand text-[15px] leading-[1.5] tracking-[-0.075px] font-inter text-fg-inverted inline-block border-none px-6 py-3.5 text-center box-border no-underline"
+            className="bg-brand text-[14px] leading-[1.5] font-inter text-fg-inverted inline-block border-none px-4 py-2.5 text-center box-border no-underline"
           >
-            See other open roles  →
+            See other open roles
           </Button>
         </Section>
       ) : null}

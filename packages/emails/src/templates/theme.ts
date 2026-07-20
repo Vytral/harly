@@ -51,18 +51,18 @@ export const harlyTailwindConfig: TailwindConfig = {
           "0px 76px 21px 0px rgba(63,98,18,0), 0px 49px 19px 0px rgba(63,98,18,0.01), 0px 27px 16px 0px rgba(63,98,18,0.05), 0px 12px 12px 0px rgba(63,98,18,0.09), 0px 3px 7px 0px rgba(17,17,17,0.10)",
       },
       fontFamily: {
-        sans: ['Inter', "Arial", "Helvetica Neue", "sans-serif"],
+        sans: ["Arial", "Helvetica", "sans-serif"],
         inter: ['Inter', "Arial", "sans-serif"],
       },
       // Display + body scale, in px (pixelBasedPreset already neutralises rem).
-      // Matte uses a 48px display; our cards are narrower (560px) so we cap
-      // the hero at 32px to keep it legible without wrapping awkwardly.
+      // Matte uses a 48px display for the reset-password hero. Other templates
+      // can use the smaller 32px scale when their content is more verbose.
       // Applied via arbitrary Tailwind values (text-[32px] leading-[1.2]
       // tracking-[-0.6px]) in templates — Tailwind v4 doesn't expose named
       // font-NN utilities from theme.extend.fontSize keys, so defining them
       // here would produce dead classes.
       maxWidth: {
-        card: "560px",
+        card: "640px",
       },
     },
   },

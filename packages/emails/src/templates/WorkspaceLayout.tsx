@@ -52,25 +52,24 @@ export function WorkspaceLayout({
         <Preview>{preview}</Preview>
         <Body className="bg-canvas font-inter text-[14px] leading-[1.5] text-fg m-0 p-0">
           <Container className="mx-auto max-w-card px-4 pt-16 pb-6">
-            <Section className="shadow-harly-card rounded-[14px]">
-              <Section className="border-stroke rounded-[14px] border bg-bg overflow-hidden">
-                {/* Header — company logo / lockup + evergreen accent rule */}
-                <Section className="px-10 pt-10 pb-7">
+            <Section className="shadow-harly-card rounded-[8px]">
+              <Section className="border-stroke rounded-[8px] border bg-bg">
+                {/* Header — the Matte reference keeps the mark airy and unadorned. */}
+                <Section className="mobile:px-6! px-10 pt-16">
                   <EmailLogo
                     logoUrl={companyLogoUrl}
                     name={companyName}
                     variant="workspace"
                   />
                 </Section>
-                <Section className="border-brand border-t-4" />
 
                 {/* Body */}
-                <Section className="px-10 pt-10 pb-14 text-left">
+                <Section className="mobile:px-6! px-10 pt-8 pb-14 text-left">
                   {children}
                 </Section>
 
                 {/* Footer */}
-                <Section className="border-stroke border-t px-10 py-12">
+                <Section className="border-stroke border-t px-10 py-8">
                   <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">
                     Sent by {companyName} · {poweredByHarlyInline()}
                   </Text>

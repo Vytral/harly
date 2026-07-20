@@ -71,7 +71,7 @@ export function InterviewScheduled({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+      <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         Interview confirmed
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
@@ -94,16 +94,16 @@ export function InterviewScheduled({
                     href={calendarLinks.googleCalendarUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="bg-brand text-[15px] leading-[1.5] tracking-[-0.075px] font-inter text-fg-inverted inline-block border-none px-6 py-3.5 text-center box-border no-underline"
+                    className="bg-brand text-[14px] leading-[1.5] font-inter text-fg-inverted inline-block border-none px-4 py-2.5 text-center box-border no-underline"
                   >
-                    Google Calendar  →
+                    Google Calendar
                   </a>
                 </td>
                 <td className="pb-2" style={{ paddingBottom: 8 }}>
                   <a
                     href={calendarLinks.icsDataUri}
                     download={`${interviewType}-${jobTitle}.ics`}
-                    className="border-stroke text-[15px] leading-[1.5] tracking-[-0.075px] font-inter text-fg inline-block rounded-[10px] border bg-bg px-6 py-3.5 text-center box-border no-underline"
+                    className="border-stroke text-[14px] leading-[1.5] font-inter text-fg inline-block border bg-bg px-4 py-2.5 text-center box-border no-underline"
                   >
                     Download .ics
                   </a>

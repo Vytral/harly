@@ -39,7 +39,7 @@ export function CandidateStageUpdate({
       accentColor={accentColor}
       socialLinks={socialLinks}
     >
-      <Text className="text-[32px] leading-[1.2] tracking-[-0.6px] font-inter text-fg m-0 mb-3.5 font-bold">
+      <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         You&apos;re moving forward
       </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>

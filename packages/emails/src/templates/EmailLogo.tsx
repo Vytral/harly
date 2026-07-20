@@ -2,10 +2,10 @@ import { Img, Link, Text } from "@react-email/components";
 
 // Harly full wordmark served from the product CDN (raster PNG — Gmail and
 // Outlook won't render an inline SVG <img>, so the brand logo must be PNG).
-// Source asset is 1672×941; rendered at height 30 → width ≈ 53.
+// Source asset is 1672×941; rendered at height 62 → width ≈ 110.
 const HARLY_LOGO_URL = "https://cdn.harly.dev/harly-full-logo-transparent-black.png";
-const HARLY_LOGO_WIDTH = 53;
-const HARLY_LOGO_HEIGHT = 30;
+const HARLY_LOGO_WIDTH = 110;
+const HARLY_LOGO_HEIGHT = 62;
 
 type EmailLogoProps = {
   /** Absolute URL to a raster (PNG/JPG/WebP) logo. SVG won't render in Gmail. */
