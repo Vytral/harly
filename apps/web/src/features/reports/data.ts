@@ -118,7 +118,12 @@ export async function getHiringEvents(
     .groupBy(applications.id, applications.appliedAt);
 
   return options.since
-    ? query.having(gte(hiredAt, options.since))
+    ? // Compare the aggregated min() against the cutoff as an ISO string.
+      // Passing a raw Date into `having(gte(sqlAlias, Date))` reaches
+      // postgres-js without the timestamp column's custom serializer and throws
+      // ERR_INVALID_ARG_TYPE ("Received an instance of Date"). An ISO string
+      // casts cleanly to timestamptz in the comparison.
+      query.having(sql`min(${applicationStageHistory.createdAt}) >= ${options.since.toISOString()}`)
     : query;
 }
 
