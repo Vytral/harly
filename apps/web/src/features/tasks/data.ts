@@ -1,16 +1,19 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, count, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
+  applications,
   candidates,
+  interviews,
   jobs,
   tasks,
   user as authUsers,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { can, requirePermission } from "@/features/workspaces/permissions-server";
 import type { TaskItem, TaskStatus } from "./shared";
 
 function toItem(row: {
@@ -89,8 +92,22 @@ function baseQuery() {
     .select(baseSelect())
     .from(tasks)
     .innerJoin(authUsers, eq(authUsers.id, tasks.ownerId))
-    .leftJoin(candidates, eq(candidates.id, tasks.candidateId))
-    .leftJoin(jobs, eq(jobs.id, tasks.jobId));
+    .leftJoin(
+      candidates,
+      and(
+        eq(candidates.id, tasks.candidateId),
+        eq(candidates.workspaceId, tasks.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .leftJoin(
+      jobs,
+      and(
+        eq(jobs.id, tasks.jobId),
+        eq(jobs.workspaceId, tasks.workspaceId),
+        isNull(jobs.deletedAt),
+      ),
+    );
 }
 
 export const listTasks = cache(
@@ -99,9 +116,10 @@ export const listTasks = cache(
     ownerId?: string;
     priority?: string;
   }): Promise<TaskItem[]> => {
+    await requirePermission("tasks:read");
     const { organization: workspace } = await getWorkspaceContext();
 
-    const conditions = [eq(tasks.workspaceId, workspace.id)];
+    const conditions = [eq(tasks.workspaceId, workspace.id), isNull(tasks.deletedAt)];
 
     // All statuses (incl. canceled) so the board can show the full lifecycle.
     if (filters?.status) {
@@ -138,16 +156,24 @@ export const listTasks = cache(
 );
 
 export const getTask = cache(async (taskId: string): Promise<TaskItem | null> => {
+  await requirePermission("tasks:read");
   const { organization: workspace } = await getWorkspaceContext();
 
   const [row] = await baseQuery()
-    .where(and(eq(tasks.id, taskId), eq(tasks.workspaceId, workspace.id)))
+    .where(
+      and(
+        eq(tasks.id, taskId),
+        eq(tasks.workspaceId, workspace.id),
+        isNull(tasks.deletedAt),
+      ),
+    )
     .limit(1);
 
   return row ? toItem(row) : null;
 });
 
 export const getTaskCounts = cache(async () => {
+  await requirePermission("tasks:read");
   const { organization: workspace } = await getWorkspaceContext();
 
   const rows = await db
@@ -156,7 +182,7 @@ export const getTaskCounts = cache(async () => {
       count: count(),
     })
     .from(tasks)
-    .where(eq(tasks.workspaceId, workspace.id))
+    .where(and(eq(tasks.workspaceId, workspace.id), isNull(tasks.deletedAt)))
     .groupBy(tasks.status);
 
   const counts: Record<string, number> = {
@@ -174,6 +200,7 @@ export const getTaskCounts = cache(async () => {
 });
 
 export const getMyTasksDueCount = cache(async () => {
+  if (!(await can("tasks:read"))) return 0;
   const { organization: workspace, user } = await getWorkspaceContext();
   const now = new Date();
   const weekFromNow = new Date(now.getTime() + 7 * 86_400_000);
@@ -185,10 +212,11 @@ export const getMyTasksDueCount = cache(async () => {
       and(
         eq(tasks.workspaceId, workspace.id),
         eq(tasks.ownerId, user.id),
+        isNull(tasks.deletedAt),
         or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
-        or(
-          isNull(tasks.dueDate),
-          lt(tasks.dueDate, weekFromNow),
+        and(
+          isNotNull(tasks.dueDate),
+          lte(tasks.dueDate, weekFromNow),
         ),
       ),
     );
@@ -197,6 +225,7 @@ export const getMyTasksDueCount = cache(async () => {
 });
 
 export const listWorkspaceMembers = cache(async () => {
+  await requirePermission("tasks:read");
   const { organization: workspace } = await getWorkspaceContext();
 
   const { member } = await import("@harly/db");
@@ -213,4 +242,139 @@ export const listWorkspaceMembers = cache(async () => {
     .orderBy(asc(authUsers.name));
 
   return rows;
+});
+
+export type TaskCandidateOption = {
+  id: string;
+  firstName: string;
+  lastName: string;
+  avatarUrl: string | null;
+};
+
+export type TaskApplicationOption = {
+  id: string;
+  candidateId: string;
+  jobId: string;
+  candidateName: string;
+  jobTitle: string;
+};
+
+export type TaskInterviewOption = {
+  id: string;
+  applicationId: string;
+  candidateId: string;
+  jobId: string;
+  label: string;
+  scheduledAt: string;
+};
+
+export type TaskJobOption = { id: string; title: string };
+
+export const listTaskContextOptions = cache(async () => {
+  await requirePermission("tasks:read");
+  const { organization: workspace } = await getWorkspaceContext();
+
+  const [candidateRows, applicationRows, interviewRows, jobRows] = await Promise.all([
+    db
+      .select({
+        id: candidates.id,
+        firstName: candidates.firstName,
+        lastName: candidates.lastName,
+        avatarUrl: candidates.avatarUrl,
+      })
+      .from(candidates)
+      .where(and(eq(candidates.workspaceId, workspace.id), isNull(candidates.deletedAt)))
+      .orderBy(asc(candidates.lastName), asc(candidates.firstName))
+      .limit(500),
+    db
+      .select({
+        id: applications.id,
+        candidateId: applications.candidateId,
+        jobId: applications.jobId,
+        candidateFirst: candidates.firstName,
+        candidateLast: candidates.lastName,
+        jobTitle: jobs.title,
+      })
+      .from(applications)
+      .innerJoin(
+        candidates,
+        and(
+          eq(candidates.id, applications.candidateId),
+          eq(candidates.workspaceId, workspace.id),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, applications.jobId),
+          eq(jobs.workspaceId, workspace.id),
+          isNull(jobs.deletedAt),
+        ),
+      )
+      .where(eq(applications.workspaceId, workspace.id))
+      .orderBy(desc(applications.appliedAt))
+      .limit(500),
+    db
+      .select({
+        id: interviews.id,
+        applicationId: interviews.applicationId,
+        candidateId: interviews.candidateId,
+        jobId: interviews.jobId,
+        title: interviews.title,
+        type: interviews.type,
+        scheduledAt: interviews.scheduledAt,
+      })
+      .from(interviews)
+      .innerJoin(
+        candidates,
+        and(
+          eq(candidates.id, interviews.candidateId),
+          eq(candidates.workspaceId, workspace.id),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, interviews.jobId),
+          eq(jobs.workspaceId, workspace.id),
+          isNull(jobs.deletedAt),
+        ),
+      )
+      .where(eq(interviews.workspaceId, workspace.id))
+      .orderBy(desc(interviews.scheduledAt))
+      .limit(500),
+    db
+      .select({ id: jobs.id, title: jobs.title })
+      .from(jobs)
+      .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)))
+      .orderBy(asc(jobs.title))
+      .limit(500),
+  ]);
+
+  return {
+    candidates: candidateRows,
+    applications: applicationRows.map((row) => ({
+      id: row.id,
+      candidateId: row.candidateId,
+      jobId: row.jobId,
+      candidateName: `${row.candidateFirst} ${row.candidateLast}`,
+      jobTitle: row.jobTitle,
+    })),
+    interviews: interviewRows.map((row) => ({
+      id: row.id,
+      applicationId: row.applicationId,
+      candidateId: row.candidateId,
+      jobId: row.jobId,
+      label: row.title ?? `${row.type.replaceAll("_", " ")} · ${row.scheduledAt.toISOString().slice(0, 10)}`,
+      scheduledAt: row.scheduledAt.toISOString(),
+    })),
+    jobs: jobRows,
+  } satisfies {
+    candidates: TaskCandidateOption[];
+    applications: TaskApplicationOption[];
+    interviews: TaskInterviewOption[];
+    jobs: TaskJobOption[];
+  };
 });

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Calendar, Flag, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { InterviewerSelect, type InterviewerOption } from "@/features/candidates/InterviewerSelect";
 import { updateTask } from "./actions";
+import { TaskLinkFields, type TaskContextOptions, type TaskLinkValues } from "./TaskLinkFields";
 import type { TaskItem, TaskPriority } from "./shared";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "./shared";
 
@@ -38,12 +40,14 @@ export function EditTaskDialog({
   onOpenChange,
   task,
   members,
+  contextOptions,
   onSave,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   task: TaskItem | null;
   members: Member[];
+  contextOptions: TaskContextOptions;
   onSave: () => void;
 }) {
   const [pending, startTransition] = useTransition();
@@ -52,6 +56,12 @@ export function EditTaskDialog({
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "medium");
   const [dueDate, setDueDate] = useState(task?.dueDate?.slice(0, 10) ?? "");
   const [ownerId, setOwnerId] = useState(task?.ownerId ?? members[0]?.id ?? "");
+  const [links, setLinks] = useState<TaskLinkValues>({
+    candidateId: task?.candidateId ?? null,
+    applicationId: task?.applicationId ?? null,
+    jobId: task?.jobId ?? null,
+    interviewId: task?.interviewId ?? null,
+  });
   const [error, setError] = useState<string | null>(null);
 
   function syncFrom(t: TaskItem) {
@@ -60,6 +70,12 @@ export function EditTaskDialog({
     setPriority(t.priority);
     setDueDate(t.dueDate?.slice(0, 10) ?? "");
     setOwnerId(t.ownerId);
+    setLinks({
+      candidateId: t.candidateId,
+      applicationId: t.applicationId,
+      jobId: t.jobId,
+      interviewId: t.interviewId,
+    });
     setError(null);
   }
 
@@ -77,13 +93,18 @@ export function EditTaskDialog({
       const result = await updateTask({
         taskId: task.id,
         title: title.trim(),
-        description: description.trim() || undefined,
+        description: description.trim() || null,
         priority,
-        dueDate: dueDate || undefined,
+        dueDate: dueDate || null,
         ownerId: ownerId || undefined,
+        candidateId: links.candidateId,
+        applicationId: links.applicationId,
+        jobId: links.jobId,
+        interviewId: links.interviewId,
       });
 
       if (result.success) {
+        toast.success("Task updated");
         onSave();
       } else {
         setError(result.error ?? "Something went wrong.");
@@ -111,7 +132,9 @@ export function EditTaskDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <label htmlFor="edit-task-title" className="sr-only">Task title</label>
             <Input
+              id="edit-task-title"
               placeholder="Task title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -121,7 +144,9 @@ export function EditTaskDialog({
           </div>
 
           <div>
+            <label htmlFor="edit-task-description" className="sr-only">Description</label>
             <Textarea
+              id="edit-task-description"
               placeholder="Description (optional)"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -141,11 +166,12 @@ export function EditTaskDialog({
             </div>
 
             <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+              <label htmlFor="edit-task-due-date" className="mb-1.5 block text-xs font-medium text-zinc-500">
                 <Calendar className="mr-1 inline size-3" />
                 Due date
               </label>
               <Input
+                id="edit-task-due-date"
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
@@ -153,6 +179,8 @@ export function EditTaskDialog({
               />
             </div>
           </div>
+
+          <TaskLinkFields value={links} options={contextOptions} onChange={setLinks} />
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-zinc-500">
@@ -164,6 +192,7 @@ export function EditTaskDialog({
                 <button
                   key={p}
                   type="button"
+                  aria-pressed={priority === p}
                   onClick={() => setPriority(p)}
                   className={cn(
                     "rounded-md border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
@@ -179,7 +208,7 @@ export function EditTaskDialog({
           </div>
 
           {error && (
-            <p className="text-sm text-red-600">{error}</p>
+            <p role="alert" className="text-sm text-red-600">{error}</p>
           )}
 
           <DialogFooter>

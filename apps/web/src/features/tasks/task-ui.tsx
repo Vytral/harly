@@ -10,7 +10,13 @@ import {
 } from "lucide-react";
 
 import { UserAvatar } from "@/components/ui/UserAvatar";
-import type { TaskItem, TaskPriority, TaskStatus } from "./shared";
+import {
+  currentTaskDateKey,
+  taskDateKey,
+  type TaskItem,
+  type TaskPriority,
+  type TaskStatus,
+} from "./shared";
 
 // ── status + priority visual language ────────────────────────────────────────
 
@@ -71,19 +77,22 @@ export type UrgencyKey = "overdue" | "today" | "week" | "later" | "none";
 
 const DAY = 86_400_000;
 
-export function startOfToday(): number {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.getTime();
+export function startOfToday(): string {
+  return currentTaskDateKey();
 }
 
 /** Bucket an open task by how soon it is due , the recruiter's triage order. */
-export function urgencyOf(iso: string | null, todayStart: number): UrgencyKey {
+export function urgencyOf(iso: string | null, todayStart: string): UrgencyKey {
   if (!iso) return "none";
-  const due = new Date(iso).getTime();
-  if (due < todayStart) return "overdue";
-  if (due < todayStart + DAY) return "today";
-  if (due < todayStart + 7 * DAY) return "week";
+  const due = taskDateKey(iso);
+  const today = todayStart;
+  if (!due) return "none";
+  if (due < today) return "overdue";
+  if (due === today) return "today";
+  const daysAway = Math.round(
+    (Date.parse(`${due}T00:00:00`) - Date.parse(`${today}T00:00:00`)) / DAY,
+  );
+  if (daysAway < 7) return "week";
   return "later";
 }
 
@@ -111,13 +120,14 @@ export function RelativeDate({ iso }: { iso: string | null }) {
   // Reading the clock is impure, so it lives in useMemo (not the render body).
   const view = useMemo(() => {
     if (!iso) return { label: "No date", cls: "text-muted-foreground" };
-    const d = new Date(iso);
+    const dateKey = taskDateKey(iso);
+    if (!dateKey) return { label: "No date", cls: "text-muted-foreground" };
+    const d = new Date(`${dateKey}T12:00:00`);
     const label = new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(d);
-    const dueDateUtc = d.toISOString().slice(0, 10);
-    const todayUtc = new Date().toISOString().slice(0, 10);
-    if (dueDateUtc < todayUtc) return { label, cls: "font-medium text-rust" };
-    if (dueDateUtc === todayUtc) return { label, cls: "font-medium text-clay" };
-    const daysAway = Math.round((d.getTime() - new Date(todayUtc).getTime()) / DAY);
+    const today = currentTaskDateKey();
+    if (dateKey < today) return { label, cls: "font-medium text-rust" };
+    if (dateKey === today) return { label, cls: "font-medium text-clay" };
+    const daysAway = Math.round((Date.parse(`${dateKey}T00:00:00`) - Date.parse(`${today}T00:00:00`)) / DAY);
     if (daysAway <= 2) return { label, cls: "text-clay" };
     return { label, cls: "text-muted-foreground" };
   }, [iso]);

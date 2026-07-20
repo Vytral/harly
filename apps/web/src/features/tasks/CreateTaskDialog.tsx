@@ -1,41 +1,21 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Calendar, Check, ChevronsUpDown, Flag, Loader2, User } from "lucide-react";
+import { Calendar, Flag, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { Textarea } from "@/components/ui/textarea";
-import { UserAvatar } from "@/components/ui/UserAvatar";
 import { InterviewerSelect } from "@/features/candidates/InterviewerSelect";
+import { TaskLinkFields, type TaskContextOptions, type TaskLinkValues } from "./TaskLinkFields";
 import { createTask } from "./actions";
 import type { TaskPriority, TaskStatus } from "./shared";
 import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, TASK_STATUS_LABELS } from "./shared";
 
 type Member = { id: string; name: string; image: string | null };
-type CandidateOption = { id: string; firstName: string; lastName: string; avatarUrl: string | null };
 
 const PRIORITY_COLOR: Record<TaskPriority, string> = {
   low: "border-zinc-300 text-zinc-500",
@@ -44,101 +24,17 @@ const PRIORITY_COLOR: Record<TaskPriority, string> = {
   urgent: "border-red-300 text-red-600",
 };
 
-function CandidateCombobox({
-  value,
-  onChange,
-  candidates,
-}: {
-  value: string | null;
-  onChange: (id: string | null) => void;
-  candidates: CandidateOption[];
-}) {
-  const [open, setOpen] = useState(false);
-
-  const selected = candidates.find((c) => c.id === value);
-  const selectedName = selected ? `${selected.firstName} ${selected.lastName}` : null;
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          className="w-full justify-between"
-        >
-          {selected ? (
-            <span className="flex items-center gap-2">
-              <UserAvatar
-                name={selectedName!}
-                src={selected.avatarUrl}
-                size="sm"
-                className="size-5 text-[10px]"
-              />
-              <span className="truncate">{selectedName}</span>
-            </span>
-          ) : (
-            <span className="text-muted-foreground">Link a candidate (optional)</span>
-          )}
-          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-        <Command>
-          <CommandInput placeholder="Search candidates..." />
-          <CommandList>
-            <CommandEmpty>No candidates found.</CommandEmpty>
-            <CommandGroup>
-              <CommandItem
-                value="none"
-                onSelect={() => {
-                  onChange(null);
-                  setOpen(false);
-                }}
-                className="flex items-center gap-2"
-              >
-                <User className="size-5 text-muted-foreground" />
-                <span className="flex-1">None</span>
-                <Check className={cn("size-4", !value ? "opacity-100" : "opacity-0")} />
-              </CommandItem>
-              {candidates.map((c) => {
-                const name = `${c.firstName} ${c.lastName}`;
-                return (
-                  <CommandItem
-                    key={c.id}
-                    value={name}
-                    onSelect={() => {
-                      onChange(c.id);
-                      setOpen(false);
-                    }}
-                    className="flex items-center gap-2"
-                  >
-                    <UserAvatar name={name} src={c.avatarUrl} size="sm" className="size-5 text-[10px]" />
-                    <span className="flex-1 truncate">{name}</span>
-                    <Check className={cn("size-4", value === c.id ? "opacity-100" : "opacity-0")} />
-                  </CommandItem>
-                );
-              })}
-            </CommandGroup>
-          </CommandList>
-        </Command>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
 export function CreateTaskDialog({
   open,
   onOpenChange,
   members,
-  candidates = [],
+  contextOptions,
   defaultStatus = "pending",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   members: Member[];
-  candidates?: CandidateOption[];
+  contextOptions: TaskContextOptions;
   defaultStatus?: TaskStatus;
 }) {
   const [pending, startTransition] = useTransition();
@@ -147,7 +43,12 @@ export function CreateTaskDialog({
   const [priority, setPriority] = useState<TaskPriority>("medium");
   const [dueDate, setDueDate] = useState("");
   const [ownerId, setOwnerId] = useState(members[0]?.id ?? "");
-  const [candidateId, setCandidateId] = useState<string | null>(null);
+  const [links, setLinks] = useState<TaskLinkValues>({
+    candidateId: null,
+    applicationId: null,
+    jobId: null,
+    interviewId: null,
+  });
   const [error, setError] = useState<string | null>(null);
 
   const interviewerOptions = members.map((m) => ({
@@ -162,7 +63,7 @@ export function CreateTaskDialog({
     setPriority("medium");
     setDueDate("");
     setOwnerId(members[0]?.id ?? "");
-    setCandidateId(null);
+    setLinks({ candidateId: null, applicationId: null, jobId: null, interviewId: null });
     setError(null);
   }
 
@@ -178,10 +79,14 @@ export function CreateTaskDialog({
         status: defaultStatus,
         dueDate: dueDate || undefined,
         ownerId,
-        candidateId: candidateId ?? undefined,
+        candidateId: links.candidateId,
+        applicationId: links.applicationId,
+        jobId: links.jobId,
+        interviewId: links.interviewId,
       });
 
       if (result.success) {
+        toast.success("Task created");
         reset();
         onOpenChange(false);
       } else {
@@ -210,7 +115,9 @@ export function CreateTaskDialog({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
+            <label htmlFor="new-task-title" className="sr-only">Task title</label>
             <Input
+              id="new-task-title"
               placeholder="Task title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
@@ -220,7 +127,9 @@ export function CreateTaskDialog({
           </div>
 
           <div>
+            <label htmlFor="new-task-description" className="sr-only">Description</label>
             <Textarea
+              id="new-task-description"
               placeholder="Description (optional)"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -240,11 +149,12 @@ export function CreateTaskDialog({
             </div>
 
             <div className="flex-1">
-              <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+              <label htmlFor="new-task-due-date" className="mb-1.5 block text-xs font-medium text-zinc-500">
                 <Calendar className="mr-1 inline size-3" />
                 Due date
               </label>
               <Input
+                id="new-task-due-date"
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
@@ -253,17 +163,7 @@ export function CreateTaskDialog({
             </div>
           </div>
 
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-zinc-500">
-              <User className="mr-1 inline size-3" />
-              Candidate
-            </label>
-            <CandidateCombobox
-              value={candidateId}
-              onChange={setCandidateId}
-              candidates={candidates}
-            />
-          </div>
+          <TaskLinkFields value={links} options={contextOptions} onChange={setLinks} />
 
           <div>
             <label className="mb-1.5 block text-xs font-medium text-zinc-500">
@@ -275,6 +175,7 @@ export function CreateTaskDialog({
                 <button
                   key={p}
                   type="button"
+                  aria-pressed={priority === p}
                   onClick={() => setPriority(p)}
                   className={cn(
                     "rounded-md border px-3 py-1.5 text-xs font-medium capitalize transition-colors",
@@ -290,7 +191,7 @@ export function CreateTaskDialog({
           </div>
 
           {error && (
-            <p className="text-sm text-red-600">{error}</p>
+            <p role="alert" className="text-sm text-red-600">{error}</p>
           )}
 
           <DialogFooter>

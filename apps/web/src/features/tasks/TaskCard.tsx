@@ -5,10 +5,12 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   Briefcase,
   Calendar,
+  CalendarClock,
   CheckCircle2,
   Circle,
   Clock,
   GripVertical,
+  FileText,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -73,7 +75,7 @@ export function TaskMenu({ task, handlers }: { task: TaskItem; handlers: TaskHan
 }
 
 function Meta({ task }: { task: TaskItem }) {
-  if (!task.candidateName && !task.jobTitle) return null;
+  if (!task.candidateName && !task.jobTitle && !task.applicationId && !task.interviewId) return null;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
       {task.candidateName && (
@@ -97,6 +99,30 @@ function Meta({ task }: { task: TaskItem }) {
             </Link>
           ) : (
             <span className="truncate">{task.jobTitle}</span>
+          )}
+        </span>
+      )}
+      {task.applicationId && (
+        <span className="inline-flex items-center gap-1">
+          <FileText className="size-3" />
+          {task.candidateId ? (
+            <Link href={`/dashboard/candidates/${task.candidateId}`} className="hover:underline">
+              Application
+            </Link>
+          ) : (
+            "Application"
+          )}
+        </span>
+      )}
+      {task.interviewId && (
+        <span className="inline-flex items-center gap-1">
+          <CalendarClock className="size-3" />
+          {task.candidateId ? (
+            <Link href={`/dashboard/candidates/${task.candidateId}`} className="hover:underline">
+              Interview
+            </Link>
+          ) : (
+            "Interview"
           )}
         </span>
       )}

@@ -5,6 +5,7 @@ import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 import { ApiError, type Cursor } from "@harly/api";
 import {
   applications,
+  activityEvents,
   candidates,
   db,
   interviews,
@@ -38,7 +39,7 @@ export type TaskApiInput = {
 
 export type TaskApiUpdateInput = Partial<TaskApiInput>;
 
-type TaskLinks = Pick<
+export type TaskLinks = Pick<
   Task,
   "candidateId" | "applicationId" | "jobId" | "interviewId"
 >;
@@ -90,6 +91,7 @@ export async function listTasksForApi(input: {
     .where(
       and(
         eq(tasks.workspaceId, input.workspaceId),
+        isNull(tasks.deletedAt),
         input.ownerId ? eq(tasks.ownerId, input.ownerId) : undefined,
         input.status ? eq(tasks.status, input.status) : undefined,
         input.priority ? eq(tasks.priority, input.priority) : undefined,
@@ -114,7 +116,11 @@ export async function getTaskForApi(input: {
     .select()
     .from(tasks)
     .where(
-      and(eq(tasks.id, input.taskId), eq(tasks.workspaceId, input.workspaceId)),
+      and(
+        eq(tasks.id, input.taskId),
+        eq(tasks.workspaceId, input.workspaceId),
+        isNull(tasks.deletedAt),
+      ),
     )
     .limit(1);
 
@@ -122,7 +128,7 @@ export async function getTaskForApi(input: {
   return task;
 }
 
-async function assertWorkspaceMember(input: {
+export async function assertWorkspaceMember(input: {
   workspaceId: string;
   userId: string;
   label: "Actor" | "Task owner";
@@ -150,7 +156,7 @@ async function assertWorkspaceMember(input: {
  * describe one coherent candidate/application/job/interview tuple.  Foreign
  * keys alone cannot provide either guarantee because they are global ids.
  */
-async function assertTaskLinks(
+export async function assertTaskLinks(
   workspaceId: string,
   links: TaskLinks,
 ): Promise<void> {
@@ -248,6 +254,26 @@ async function assertTaskLinks(
   }
 }
 
+/**
+ * Shared integrity guard for every task write path. Foreign keys protect
+ * global existence, but not tenant membership, so the UI and REST API must
+ * use the same workspace checks.
+ */
+export async function assertTaskReferences(input: {
+  workspaceId: string;
+  ownerId: string;
+  links: TaskLinks;
+}): Promise<void> {
+  await Promise.all([
+    assertWorkspaceMember({
+      workspaceId: input.workspaceId,
+      userId: input.ownerId,
+      label: "Task owner",
+    }),
+    assertTaskLinks(input.workspaceId, input.links),
+  ]);
+}
+
 export async function createTaskForApi(input: {
   workspaceId: string;
   actorId: string;
@@ -259,38 +285,50 @@ export async function createTaskForApi(input: {
       userId: input.actorId,
       label: "Actor",
     }),
-    assertWorkspaceMember({
+    assertTaskReferences({
       workspaceId: input.workspaceId,
-      userId: input.values.ownerId,
-      label: "Task owner",
-    }),
-    assertTaskLinks(input.workspaceId, {
-      candidateId: input.values.candidateId ?? null,
-      applicationId: input.values.applicationId ?? null,
-      jobId: input.values.jobId ?? null,
-      interviewId: input.values.interviewId ?? null,
+      ownerId: input.values.ownerId,
+      links: {
+        candidateId: input.values.candidateId ?? null,
+        applicationId: input.values.applicationId ?? null,
+        jobId: input.values.jobId ?? null,
+        interviewId: input.values.interviewId ?? null,
+      },
     }),
   ]);
 
   const status = input.values.status ?? "pending";
-  const [task] = await db
-    .insert(tasks)
-    .values({
+  const task = await db.transaction(async (tx) => {
+    const [created] = await tx
+      .insert(tasks)
+      .values({
+        workspaceId: input.workspaceId,
+        title: input.values.title,
+        description: input.values.description ?? null,
+        status,
+        priority: input.values.priority ?? "medium",
+        dueDate: input.values.dueDate ?? null,
+        completedAt: status === "completed" ? new Date() : null,
+        ownerId: input.values.ownerId,
+        candidateId: input.values.candidateId ?? null,
+        applicationId: input.values.applicationId ?? null,
+        jobId: input.values.jobId ?? null,
+        interviewId: input.values.interviewId ?? null,
+        createdById: input.actorId,
+      })
+      .returning();
+
+    if (!created) throw ApiError.internal("Task could not be created.");
+    await tx.insert(activityEvents).values({
       workspaceId: input.workspaceId,
-      title: input.values.title,
-      description: input.values.description ?? null,
-      status,
-      priority: input.values.priority ?? "medium",
-      dueDate: input.values.dueDate ?? null,
-      completedAt: status === "completed" ? new Date() : null,
-      ownerId: input.values.ownerId,
-      candidateId: input.values.candidateId ?? null,
-      applicationId: input.values.applicationId ?? null,
-      jobId: input.values.jobId ?? null,
-      interviewId: input.values.interviewId ?? null,
-      createdById: input.actorId,
-    })
-    .returning();
+      actorId: input.actorId,
+      entityType: "task",
+      entityId: created.id,
+      type: "task.created",
+      metadata: { taskId: created.id, status },
+    });
+    return created;
+  });
 
   return task;
 }
@@ -329,12 +367,11 @@ export async function updateTaskForApi(input: {
       userId: input.actorId,
       label: "Actor",
     }),
-    assertWorkspaceMember({
+    assertTaskReferences({
       workspaceId: input.workspaceId,
-      userId: ownerId,
-      label: "Task owner",
+      ownerId,
+      links,
     }),
-    assertTaskLinks(input.workspaceId, links),
   ]);
 
   const set: Partial<typeof tasks.$inferInsert> = { updatedAt: new Date() };
@@ -356,16 +393,30 @@ export async function updateTaskForApi(input: {
     set.completedAt = input.values.status === "completed" ? new Date() : null;
   }
 
-  const [task] = await db
-    .update(tasks)
-    .set(set)
-    .where(
-      and(eq(tasks.id, input.taskId), eq(tasks.workspaceId, input.workspaceId)),
-    )
-    .returning();
+  return db.transaction(async (tx) => {
+    const [task] = await tx
+      .update(tasks)
+      .set(set)
+      .where(
+        and(
+          eq(tasks.id, input.taskId),
+          eq(tasks.workspaceId, input.workspaceId),
+          isNull(tasks.deletedAt),
+        ),
+      )
+      .returning();
 
-  if (!task) throw ApiError.notFound("Task not found.");
-  return task;
+    if (!task) throw ApiError.notFound("Task not found.");
+    await tx.insert(activityEvents).values({
+      workspaceId: input.workspaceId,
+      actorId: input.actorId,
+      entityType: "task",
+      entityId: task.id,
+      type: input.values.status === "completed" ? "task.completed" : "task.updated",
+      metadata: { taskId: task.id, status: input.values.status ?? null },
+    });
+    return task;
+  });
 }
 
 export async function deleteTaskForApi(input: {
@@ -383,9 +434,27 @@ export async function deleteTaskForApi(input: {
     taskId: input.taskId,
   });
 
-  await db
-    .delete(tasks)
-    .where(
-      and(eq(tasks.id, input.taskId), eq(tasks.workspaceId, input.workspaceId)),
-    );
+  await db.transaction(async (tx) => {
+    const [deleted] = await tx
+      .update(tasks)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(tasks.id, input.taskId),
+          eq(tasks.workspaceId, input.workspaceId),
+          isNull(tasks.deletedAt),
+        ),
+      )
+      .returning({ id: tasks.id });
+
+    if (!deleted) throw ApiError.notFound("Task not found.");
+    await tx.insert(activityEvents).values({
+      workspaceId: input.workspaceId,
+      actorId: input.actorId,
+      entityType: "task",
+      entityId: deleted.id,
+      type: "task.deleted",
+      metadata: { taskId: deleted.id },
+    });
+  });
 }

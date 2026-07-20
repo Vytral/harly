@@ -1,6 +1,6 @@
 "use client";
 
-import { Briefcase, Calendar, Flag, User } from "lucide-react";
+import { Briefcase, Calendar, CalendarClock, FileText, Flag, User } from "lucide-react";
 import Link from "next/link";
 
 import { cn } from "@/lib/utils";
@@ -44,7 +44,7 @@ export function TaskRow({ task, handlers }: { task: TaskItem; handlers: TaskHand
         <p className={cn("truncate text-sm font-medium leading-snug", done && "text-muted-foreground line-through")}>
           {task.title}
         </p>
-        {(task.candidateName || task.jobTitle) && (
+        {(task.candidateName || task.jobTitle || task.applicationId || task.interviewId) && (
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
             {task.candidateName && (
               <span className="inline-flex items-center gap-1">
@@ -67,6 +67,30 @@ export function TaskRow({ task, handlers }: { task: TaskItem; handlers: TaskHand
                   </Link>
                 ) : (
                   <span className="truncate">{task.jobTitle}</span>
+                )}
+              </span>
+            )}
+            {task.applicationId && (
+              <span className="inline-flex items-center gap-1">
+                <FileText className="size-3" />
+                {task.candidateId ? (
+                  <Link href={`/dashboard/candidates/${task.candidateId}`} className="hover:underline">
+                    Application
+                  </Link>
+                ) : (
+                  "Application"
+                )}
+              </span>
+            )}
+            {task.interviewId && (
+              <span className="inline-flex items-center gap-1">
+                <CalendarClock className="size-3" />
+                {task.candidateId ? (
+                  <Link href={`/dashboard/candidates/${task.candidateId}`} className="hover:underline">
+                    Interview
+                  </Link>
+                ) : (
+                  "Interview"
                 )}
               </span>
             )}

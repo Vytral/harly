@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { KanbanSquare, List, Plus, Search } from "lucide-react";
 import { toast } from "sonner";
 
@@ -20,9 +21,10 @@ import { CreateTaskDialog } from "./CreateTaskDialog";
 import { EditTaskDialog } from "./EditTaskDialog";
 import { TaskBoard } from "./TaskBoard";
 import { TaskList } from "./TaskList";
-import { startOfToday, type TaskHandlers } from "./task-ui";
-import type { TaskItem, TaskStatus } from "./shared";
-import { TASK_PRIORITIES, TASK_PRIORITY_LABELS } from "./shared";
+import { type TaskHandlers } from "./task-ui";
+import { taskDueState, type TaskItem, type TaskStatus } from "./shared";
+import { TASK_PRIORITIES, TASK_PRIORITY_LABELS, TASK_STATUSES, TASK_STATUS_LABELS } from "./shared";
+import type { TaskContextOptions } from "./TaskLinkFields";
 
 type Member = { id: string; name: string; image: string | null };
 type View = "list" | "board";
@@ -47,10 +49,12 @@ function SummaryChip({ count, label, tone }: { count: number; label: string; ton
 export function TasksView({
   tasks: initialTasks,
   members,
+  contextOptions,
 }: {
   tasks: TaskItem[];
   members: Member[];
   counts: Record<string, number>;
+  contextOptions: TaskContextOptions;
 }) {
   // Optimistic edits are derived on top of the server's `initialTasks` , a
   // status-override map plus a removed-set , so there is no prop→state mirror
@@ -66,6 +70,9 @@ export function TasksView({
   const [query, setQuery] = useState("");
   const [assignee, setAssignee] = useState("all");
   const [priority, setPriority] = useState("all");
+  const [status, setStatus] = useState("all");
+  const [due, setDue] = useState("all");
+  const router = useRouter();
 
   const tasks = useMemo(
     () =>
@@ -102,13 +109,16 @@ export function TasksView({
       });
       if (!res.success) {
         toast.error(res.error ?? "Couldn't update task.");
+      } else {
+        router.refresh();
       }
     },
-    [settle],
+    [router, settle],
   );
 
   const runRemove = useCallback(
     async (id: string) => {
+      if (!window.confirm("Archive this task? It will leave the active task list.")) return;
       setPending((p) => new Set(p).add(id));
       setRemoved((r) => new Set(r).add(id));
       const res = await deleteTask(id);
@@ -120,9 +130,11 @@ export function TasksView({
           return next;
         });
         toast.error(res.error ?? "Couldn't delete task.");
+      } else {
+        router.refresh();
       }
     },
-    [settle],
+    [router, settle],
   );
 
   const handlers = useMemo<TaskHandlers>(
@@ -145,15 +157,19 @@ export function TasksView({
     return tasks.filter((t) => {
       if (assignee !== "all" && t.ownerId !== assignee) return false;
       if (priority !== "all" && t.priority !== priority) return false;
+      if (status !== "all" && t.status !== status) return false;
+      const dueState = taskDueState(t.dueDate);
+      if (due === "due" && !dueState) return false;
+      if (due === "overdue" && dueState !== "overdue") return false;
+      if (due === "no_due" && t.dueDate) return false;
       if (!q) return true;
       return [t.title, t.candidateName, t.jobTitle, t.ownerName]
         .filter(Boolean)
         .some((v) => v!.toLowerCase().includes(q));
     });
-  }, [tasks, query, assignee, priority]);
+  }, [tasks, query, assignee, priority, status, due]);
 
   const summary = useMemo(() => {
-    const todayStart = startOfToday();
     let open = 0;
     let overdue = 0;
     let done = 0;
@@ -161,7 +177,7 @@ export function TasksView({
       if (t.status === "completed") done += 1;
       else if (t.status === "pending" || t.status === "in_progress") {
         open += 1;
-        if (t.dueDate && new Date(t.dueDate).getTime() < todayStart) overdue += 1;
+        if (taskDueState(t.dueDate) === "overdue") overdue += 1;
       }
     }
     return { open, overdue, done };
@@ -176,6 +192,7 @@ export function TasksView({
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="search"
+            aria-label="Search tasks"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search tasks…"
@@ -184,7 +201,7 @@ export function TasksView({
         </div>
 
         <Select value={assignee} onValueChange={setAssignee}>
-          <SelectTrigger className="w-full sm:w-44">
+          <SelectTrigger aria-label="Filter by assignee" className="w-full sm:w-44">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -198,7 +215,7 @@ export function TasksView({
         </Select>
 
         <Select value={priority} onValueChange={setPriority}>
-          <SelectTrigger className="w-full sm:w-36">
+          <SelectTrigger aria-label="Filter by priority" className="w-full sm:w-36">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -208,6 +225,30 @@ export function TasksView({
                 {TASK_PRIORITY_LABELS[p]}
               </SelectItem>
             ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={status} onValueChange={setStatus}>
+          <SelectTrigger aria-label="Filter by status" className="w-full sm:w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All statuses</SelectItem>
+            {TASK_STATUSES.map((item) => (
+              <SelectItem key={item} value={item}>{TASK_STATUS_LABELS[item]}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        <Select value={due} onValueChange={setDue}>
+          <SelectTrigger aria-label="Filter by due date" className="w-full sm:w-36">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All due dates</SelectItem>
+            <SelectItem value="due">With due date</SelectItem>
+            <SelectItem value="overdue">Overdue</SelectItem>
+            <SelectItem value="no_due">No due date</SelectItem>
           </SelectContent>
         </Select>
 
@@ -262,6 +303,7 @@ export function TasksView({
         onOpenChange={setCreateOpen}
         members={members}
         defaultStatus={createStatus}
+        contextOptions={contextOptions}
       />
 
       <EditTaskDialog
@@ -269,7 +311,11 @@ export function TasksView({
         onOpenChange={(v) => { if (!v) setEditingTask(null); }}
         task={editingTask}
         members={members}
-        onSave={() => setEditingTask(null)}
+        contextOptions={contextOptions}
+        onSave={() => {
+          setEditingTask(null);
+          router.refresh();
+        }}
       />
     </div>
   );
