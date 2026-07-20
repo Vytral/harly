@@ -85,6 +85,14 @@
   --sidebar-border: var(--hairline);
   --sidebar-ring: var(--pine);
 
+  /* Portal sidebar (dark evergreen variant, applied via .portal-sidebar class). */
+  --portal-sidebar: #2a331a;
+  --portal-sidebar-foreground: #ffffff;
+  --portal-sidebar-muted: rgba(255,255,255,0.55);
+  --portal-sidebar-accent: rgba(255,255,255,0.08);
+  --portal-sidebar-accent-foreground: #ffffff;
+  --portal-sidebar-border: rgba(255,255,255,0.08);
+
   /* ── Public job board (candidate-facing). Workspaces override via inline style. ── */
   --board-primary: #18181b;
   --board-primary-foreground: #ffffff;
@@ -153,6 +161,13 @@
   --color-board-primary-soft: var(--board-primary-soft);
   --color-board-surface: var(--board-surface);
   --color-board-surface-muted: var(--board-surface-muted);
+
+  --color-portal-sidebar: var(--portal-sidebar);
+  --color-portal-sidebar-foreground: var(--portal-sidebar-foreground);
+  --color-portal-sidebar-muted: var(--portal-sidebar-muted);
+  --color-portal-sidebar-accent: var(--portal-sidebar-accent);
+  --color-portal-sidebar-accent-foreground: var(--portal-sidebar-accent-foreground);
+  --color-portal-sidebar-border: var(--portal-sidebar-border);
 
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -248,6 +263,18 @@
 .board-canvas {
   background: var(--board-surface);
   color: var(--foreground);
+}
+
+/* Portal sidebar overrides: dark evergreen variant scoped via .portal-sidebar wrapper. */
+.portal-sidebar {
+  --sidebar: var(--portal-sidebar);
+  --sidebar-foreground: var(--portal-sidebar-foreground);
+  --sidebar-primary: var(--lime);
+  --sidebar-primary-foreground: var(--lime-ink);
+  --sidebar-accent: var(--portal-sidebar-accent);
+  --sidebar-accent-foreground: var(--portal-sidebar-accent-foreground);
+  --sidebar-border: var(--portal-sidebar-border);
+  --sidebar-ring: var(--lime);
 }
 
 @keyframes shimmer {

@@ -5,10 +5,10 @@ import type { Route } from "next";
 
 import { db, organization, candidates, workspaceSettings } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
-import { signOutPortalAction } from "@/features/portal/actions";
 import { PortalShellClient } from "@/features/portal/PortalShell";
+import { PortalSignOutButton } from "@/features/portal/PortalSignOutButton";
 import { getCandidatePortalUnreadNotificationCount } from "@/features/portal/notification-data";
-import { SignOutIcon } from "@/components/ui/icons/phosphor";
+import { normalizeCareerPageConfig } from "@/features/career-page/config";
 
 function getInitials(first: string, last: string): string {
   return ((first.charAt(0) || "") + (last.charAt(0) || "")).toUpperCase() || "?";
@@ -29,6 +29,7 @@ export async function PortalShell({ children }: { children: React.ReactNode }) {
       primaryColor: workspaceSettings.primaryColor,
       fullLogoUrl: workspaceSettings.sidebarLogoUrl,
       fullLogoDarkUrl: workspaceSettings.sidebarLogoDarkUrl,
+      careerPageConfig: workspaceSettings.careerPageConfig,
     })
     .from(organization)
     .leftJoin(workspaceSettings, eq(workspaceSettings.organizationId, organization.id))
@@ -47,6 +48,8 @@ export async function PortalShell({ children }: { children: React.ReactNode }) {
     }),
   ]);
 
+  const careerConfig = normalizeCareerPageConfig(org?.careerPageConfig);
+
   return (
     <PortalShellClient
       orgName={org?.name ?? "Careers"}
@@ -58,17 +61,10 @@ export async function PortalShell({ children }: { children: React.ReactNode }) {
       candidateInitials={getInitials(session.firstName, session.lastName)}
       candidateAvatarUrl={candidate?.avatarUrl ?? null}
       unreadNotificationCount={unreadNotificationCount}
-      signOutForm={
-        <form action={signOutPortalAction} className="w-full">
-          <button
-            type="submit"
-            className="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <SignOutIcon className="size-4" />
-            Sign out
-          </button>
-        </form>
-      }
+      signOutForm={<PortalSignOutButton />}
+      socials={careerConfig.footer.socials}
+      legalLinks={careerConfig.footer.legalLinks}
+      year={new Date().getFullYear()}
     >
       {children}
     </PortalShellClient>

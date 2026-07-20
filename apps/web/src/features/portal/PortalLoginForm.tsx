@@ -4,7 +4,10 @@ import { useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
 import { toast } from "sonner";
 
-import { sendPortalMagicLinkAction } from "@/features/portal/actions";
+import {
+  sendPortalMagicLinkAction,
+  sendPortalMagicLinkFormAction,
+} from "@/features/portal/actions";
 import { cn } from "@/lib/utils";
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -155,7 +158,11 @@ export function PortalLoginForm({
         </div>
       )}
 
-      <form onSubmit={submitMagicLink} className="space-y-3">
+      <form
+        action={sendPortalMagicLinkFormAction.bind(null, workspaceSlug)}
+        onSubmit={submitMagicLink}
+        className="space-y-3"
+      >
         <input
           type="email"
           name="email"
