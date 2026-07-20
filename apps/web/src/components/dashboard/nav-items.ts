@@ -10,6 +10,7 @@ import {
   Inbox,
   KanbanSquare,
   ListTodo,
+  NotebookTabs,
   Settings,
   Users,
   type LucideIcon,
@@ -50,7 +51,18 @@ export const workspaceNav: NavItem[] = [
     requiredPermission: "templates:manage",
   },
   { label: "Talent Pool", href: "/dashboard/talent-pool", icon: Bookmark },
-  { label: "Career Page", href: "/dashboard/career-page", icon: Globe },
+  {
+    label: "Career Page",
+    href: "/dashboard/career-page",
+    icon: Globe,
+    requiredPermission: "settings:edit",
+  },
+  {
+    label: "Documents",
+    href: "/dashboard/documents" as Route,
+    icon: NotebookTabs,
+    requiredPermission: "documents:read",
+  },
   {
     label: "Settings",
     href: "/settings",
