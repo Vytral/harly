@@ -1,7 +1,9 @@
 import "server-only";
 
-import { eq, desc } from "drizzle-orm";
+import { and, desc, eq, gte, ilike, lte, or } from "drizzle-orm";
 import { db, auditLogs, passkeys, workspaceSettings } from "@harly/db";
+import type { AuditSeverity } from "@/lib/audit-log";
+import { sanitizeAuditMetadata } from "@/lib/audit-log";
 
 export async function getSecurityPasskeys(userId: string) {
   const rows = await db
@@ -28,13 +30,40 @@ export async function getWorkspaceSecuritySettings(workspaceId: string) {
   return { require2fa: row?.require2fa ?? false };
 }
 
-export async function getWorkspaceAuditLogs(workspaceId: string) {
+export type AuditLogFilters = {
+  query?: string;
+  severity?: AuditSeverity;
+  from?: Date;
+  to?: Date;
+  limit?: number;
+};
+
+export async function getWorkspaceAuditLogs(
+  workspaceId: string,
+  filters: AuditLogFilters = {},
+) {
+  const query = filters.query?.trim();
   const rows = await db
     .select()
     .from(auditLogs)
-    .where(eq(auditLogs.workspaceId, workspaceId))
+    .where(
+      and(
+        eq(auditLogs.workspaceId, workspaceId),
+        filters.severity ? eq(auditLogs.severity, filters.severity) : undefined,
+        filters.from ? gte(auditLogs.createdAt, filters.from) : undefined,
+        filters.to ? lte(auditLogs.createdAt, filters.to) : undefined,
+        query
+          ? or(
+              ilike(auditLogs.action, `%${query}%`),
+              ilike(auditLogs.actorEmail, `%${query}%`),
+              ilike(auditLogs.resourceType, `%${query}%`),
+              ilike(auditLogs.ipAddress, `%${query}%`),
+            )
+          : undefined,
+      ),
+    )
     .orderBy(desc(auditLogs.createdAt))
-    .limit(200);
+    .limit(Math.min(Math.max(filters.limit ?? 200, 1), 50_000));
 
   return rows.map((r) => ({
     id: r.id,
@@ -44,7 +73,9 @@ export async function getWorkspaceAuditLogs(workspaceId: string) {
     resourceId: r.resourceId,
     ipAddress: r.ipAddress,
     userAgent: r.userAgent,
-    metadata: r.metadata as Record<string, unknown> | null,
+    metadata: sanitizeAuditMetadata(
+      r.metadata as Record<string, unknown> | undefined,
+    ),
     severity: r.severity,
     createdAt: r.createdAt.toISOString(),
   }));

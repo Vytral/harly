@@ -9,6 +9,7 @@ import {
   CaretDownIcon,
   CheckIcon,
   CopyIcon,
+  DownloadDuotoneIcon,
   SearchIcon,
 } from "@/components/ui/icons/phosphor";
 import { Card } from "@/components/ui/card";
@@ -73,7 +74,13 @@ function CopyButton({ value }: { value: string }) {
   );
 }
 
-export function AuditLogsCard({ logs }: { logs: AuditLogRow[] }) {
+export function AuditLogsCard({
+  logs,
+  canExport = false,
+}: {
+  logs: AuditLogRow[];
+  canExport?: boolean;
+}) {
   const [query, setQuery] = useState("");
   const [severityFilter, setSeverityFilter] = useState<Severity | "all">("all");
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -99,13 +106,17 @@ export function AuditLogsCard({ logs }: { logs: AuditLogRow[] }) {
   }, [logs, query, severityFilter]);
 
   const hasFilter = Boolean(query) || severityFilter !== "all";
+  const exportParams = new URLSearchParams();
+  if (query.trim()) exportParams.set("q", query.trim());
+  if (severityFilter !== "all") exportParams.set("severity", severityFilter);
+  const exportHref = `/api/security/audit-logs/export${exportParams.size ? `?${exportParams.toString()}` : ""}`;
 
   return (
     <Card className="gap-5 p-6">
       <SectionHeader
         icon={AuditDuotoneIcon}
         title="Audit Log"
-        description="A tamper-evident trail of security and administrative events in your workspace."
+        description="A workspace audit trail of security and administrative events."
         badge={
           <StatusPill tone="neutral" dot={false}>
             Last {logs.length} events
@@ -155,6 +166,16 @@ export function AuditLogsCard({ logs }: { logs: AuditLogRow[] }) {
             </button>
           ))}
         </div>
+
+        {canExport ? (
+          <a
+            href={exportHref}
+            className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors hover:bg-accent"
+          >
+            <DownloadDuotoneIcon className="size-4" />
+            Export CSV
+          </a>
+        ) : null}
       </div>
 
       {/* Log table */}

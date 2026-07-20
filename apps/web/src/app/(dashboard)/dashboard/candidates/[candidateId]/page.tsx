@@ -36,6 +36,7 @@ import { getNextStage } from "@/features/pipeline/data";
 import { listCandidateInterviews } from "@/features/interviews/data";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listOffersForCandidate } from "@/features/offers/data";
+import { listDocumentsForCandidate } from "@/features/documents/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { can } from "@/features/workspaces/permissions-server";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
@@ -81,7 +82,7 @@ export default async function CandidateDetailPage({
   params,
 }: CandidateDetailPageProps) {
   const { candidateId } = await params;
-  const [profile, allCandidates, members, interviews, offers, emailTemplates] =
+  const [profile, allCandidates, members, interviews, offers, emailTemplates, relatedDocuments] =
     await Promise.all([
       getCandidateProfile(candidateId),
       listCandidates(),
@@ -89,6 +90,7 @@ export default async function CandidateDetailPage({
       listCandidateInterviews(candidateId),
       listOffersForCandidate(candidateId),
       listEmailTemplates(),
+      listDocumentsForCandidate(candidateId),
     ]);
 
   if (!profile) {
@@ -422,6 +424,7 @@ export default async function CandidateDetailPage({
               parsedAt: file.parsedAt?.toISOString() ?? null,
               createdAt: file.createdAt.toISOString(),
             }))}
+            relatedDocuments={relatedDocuments}
             activity={serializedActivity}
             scorecards={scorecards}
             messages={messages}

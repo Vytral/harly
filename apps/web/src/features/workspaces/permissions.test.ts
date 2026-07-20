@@ -24,6 +24,28 @@ describe("workspace permissions", () => {
     expect(BUILTIN_ROLE_PERMISSIONS.recruiter).toContain("dsar:manage");
   });
 
+  it("gives recruiting roles report read access", () => {
+    expect(BUILTIN_ROLE_PERMISSIONS.recruiter).toContain("reports:read");
+    expect(BUILTIN_ROLE_PERMISSIONS.hiring_manager).toContain("reports:read");
+  });
+
+  it("gives recruiting roles explicit task read/write access", () => {
+    expect(BUILTIN_ROLE_PERMISSIONS.recruiter).toEqual(
+      expect.arrayContaining(["tasks:read", "tasks:write"]),
+    );
+    expect(BUILTIN_ROLE_PERMISSIONS.hiring_manager).toEqual(
+      expect.arrayContaining(["tasks:read", "tasks:write"]),
+    );
+  });
+
+  it("lets recruiters share documents while keeping that control out of hiring-manager defaults", () => {
+    expect(BUILTIN_ROLE_PERMISSIONS.recruiter).toEqual(
+      expect.arrayContaining(["documents:read", "documents:manage", "documents:share"]),
+    );
+    expect(BUILTIN_ROLE_PERMISSIONS.hiring_manager).toContain("documents:read");
+    expect(BUILTIN_ROLE_PERMISSIONS.hiring_manager).not.toContain("documents:share");
+  });
+
   it("maps settings sections to the more granular member and security permissions", () => {
     expect(SETTINGS_SECTION_PERMISSION["/settings/members"]).toBe("members:read");
     expect(SETTINGS_SECTION_PERMISSION["/settings/security"]).toBe("security:manage");

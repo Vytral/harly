@@ -17,8 +17,11 @@ export const PERMISSIONS = [
   "candidates:move",
   "dsar:manage",
   "collab:write", // notes, scorecards, schedule interviews, message
+  "tasks:read",
+  "tasks:write",
   "offers:manage",
   "templates:manage",
+  "reports:read",
   "members:read",
   "members:invite",
   "members:edit",
@@ -28,6 +31,10 @@ export const PERMISSIONS = [
   "integrations:manage",
   "roles:manage",
   "security:manage",
+  "documents:read",
+  "documents:manage",
+  "documents:share",
+  "automations:manage", // create / edit / toggle / delete workflows
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -74,6 +81,15 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         hint: "Write notes, add scorecards, schedule interviews, email candidates",
       },
       {
+        key: "tasks:read",
+        label: "View tasks",
+      },
+      {
+        key: "tasks:write",
+        label: "Create and manage tasks",
+        hint: "Create, edit, assign, complete, and archive tasks",
+      },
+      {
         key: "offers:manage",
         label: "Manage offers",
         hint: "Create, send and decide job offers",
@@ -81,6 +97,28 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       {
         key: "templates:manage",
         label: "Manage email templates",
+      },
+    ],
+  },
+  {
+    label: "Documents",
+    permissions: [
+      { key: "documents:read", label: "View documents" },
+      { key: "documents:manage", label: "Upload and manage documents" },
+      {
+        key: "documents:share",
+        label: "Share documents",
+        hint: "Change document access and member restrictions",
+      },
+    ],
+  },
+  {
+    label: "Analytics",
+    permissions: [
+      {
+        key: "reports:read",
+        label: "View reports",
+        hint: "View recruiting metrics, funnels, sources, and hiring trends",
       },
     ],
   },
@@ -96,6 +134,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "integrations:manage", label: "Manage integrations" },
       { key: "roles:manage", label: "Manage roles & permissions" },
       { key: "security:manage", label: "Manage workspace security", hint: "2FA enforcement, SSO, and security settings" },
+    ],
+  },
+  {
+    label: "Automations",
+    permissions: [
+      {
+        key: "automations:manage",
+        label: "Manage automations",
+        hint: "Create, edit, toggle, and delete workflow automations",
+      },
     ],
   },
 ];
@@ -123,12 +171,27 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "candidates:edit",
     "candidates:move",
     "collab:write",
+    "tasks:read",
+    "tasks:write",
     "offers:manage",
     "templates:manage",
+    "reports:read",
     "members:read",
     "dsar:manage",
+    "documents:read",
+    "documents:manage",
+    "documents:share",
+    "automations:manage",
   ],
-  hiring_manager: ["candidates:move", "collab:write", "members:read"],
+  hiring_manager: [
+    "candidates:move",
+    "collab:write",
+    "tasks:read",
+    "tasks:write",
+    "members:read",
+    "reports:read",
+    "documents:read",
+  ],
 };
 
 export function isBuiltinRole(role: string): role is BuiltinRole {

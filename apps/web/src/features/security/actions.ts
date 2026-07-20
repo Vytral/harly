@@ -20,6 +20,7 @@ async function getSession() {
 
 export async function deletePasskeyAction(passkeyId: string) {
   const session = await getSession();
+  const { organization } = await getWorkspaceContext();
 
   await db
     .delete(passkeys)
@@ -28,6 +29,7 @@ export async function deletePasskeyAction(passkeyId: string) {
     );
 
   await logAuditEvent({
+    workspaceId: organization.id,
     actorId: session.user.id,
     actorEmail: session.user.email,
     action: "passkey.deleted",

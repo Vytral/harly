@@ -32,7 +32,10 @@ export default async function SecuritySettingsPage() {
         existingConfigs={existingConfigs}
         ssoProviders={ssoProviders}
       />
-      <AuditLogsCard logs={auditLogRows} />
+      <AuditLogsCard
+        logs={auditLogRows}
+        canExport={roleKey === "owner" || roleKey === "admin"}
+      />
     </div>
   );
 }
