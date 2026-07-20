@@ -6,9 +6,9 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("audit");
 
-type AuditSeverity = "info" | "warning" | "critical";
+export type AuditSeverity = "info" | "warning" | "critical";
 
-interface LogAuditEventParams {
+export interface LogAuditEventParams {
   workspaceId?: string;
   actorId?: string;
   actorEmail?: string;
@@ -21,7 +21,60 @@ interface LogAuditEventParams {
   severity?: AuditSeverity;
 }
 
-export async function logAuditEvent(params: LogAuditEventParams) {
+const BLOCKED_METADATA_KEYS = new Set([
+  "body",
+  "content",
+  "credentials",
+  "cookie",
+  "html",
+  "password",
+  "prompt",
+  "raw",
+  "secret",
+  "token",
+  "useragent",
+  "user_agent",
+  "response",
+  "preview",
+]);
+
+function isBlockedMetadataKey(key: string) {
+  const normalized = key.toLowerCase().replace(/[-\s]/g, "_");
+  return BLOCKED_METADATA_KEYS.has(normalized);
+}
+
+/**
+ * Keep audit metadata useful without allowing free-form content, credentials,
+ * or unbounded nested JSON into the compliance surface.
+ */
+export function sanitizeAuditMetadata(
+  value: Record<string, unknown> | undefined,
+): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  function sanitize(input: unknown, depth: number): unknown {
+    if (input === null || typeof input === "boolean" || typeof input === "number") {
+      return input;
+    }
+    if (typeof input === "string") return input.slice(0, 500);
+    if (depth >= 2 || typeof input !== "object" || Array.isArray(input)) return undefined;
+
+    const output: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(input)) {
+      if (isBlockedMetadataKey(key) || Object.keys(output).length >= 40) continue;
+      const sanitized = sanitize(child, depth + 1);
+      if (sanitized !== undefined) output[key] = sanitized;
+    }
+    return output;
+  }
+
+  const sanitized = sanitize(value, 0);
+  return sanitized && typeof sanitized === "object" && !Array.isArray(sanitized)
+    ? (sanitized as Record<string, unknown>)
+    : null;
+}
+
+export async function logAuditEvent(params: LogAuditEventParams): Promise<boolean> {
   try {
     await db.insert(auditLogs).values({
       workspaceId: params.workspaceId ?? null,
@@ -32,12 +85,15 @@ export async function logAuditEvent(params: LogAuditEventParams) {
       resourceId: params.resourceId ?? null,
       ipAddress: params.ipAddress ?? null,
       userAgent: params.userAgent ?? null,
-      metadata: params.metadata ?? null,
+      metadata: sanitizeAuditMetadata(params.metadata) ?? null,
       severity: params.severity ?? "info",
     });
+    return true;
   } catch (err) {
-    // Audit log failures are non-fatal , log but don't surface to caller.
+    // Audit logging remains non-fatal for existing domain actions, but the
+    // boolean result lets critical callers surface/measure a missing record.
     log.error(err, "[audit] Failed to write audit log");
+    return false;
   }
 }
 
