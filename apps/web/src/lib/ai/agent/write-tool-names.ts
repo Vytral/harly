@@ -7,6 +7,7 @@
  * tool definitions in write-tools.ts.
  */
 export const AGENT_WRITE_TOOLS = [
+  "undoAgentAction",
   "moveCandidateStage",
   "rejectCandidate",
   "createTask",

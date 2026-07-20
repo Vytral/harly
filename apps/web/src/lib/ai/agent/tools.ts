@@ -43,6 +43,9 @@ import {
   generateInterviewBriefAction,
   summarizeInterviewNotesAction,
 } from "@/features/interviews/actions";
+import { getNextStage } from "@/features/pipeline/data";
+import { getIntegrationStatuses } from "@/features/workspaces/integrations-registry";
+import { listAgentActionReceipts } from "./action-receipts";
 
 /**
  * Context the tools run under. The cached widget/data fns resolve the workspace
@@ -52,6 +55,8 @@ import {
 export type HarlyToolContext = {
   workspaceId: string;
   userId: string;
+  /** Candidate visible on the current dashboard surface, if any. */
+  activeCandidateId?: string;
 };
 
 /** Cap a string field so large blobs don't blow up the model context. */
@@ -80,6 +85,27 @@ function plain(html: string | null | undefined, max = 2000): string | null {
  */
 function buildReadTools(ctx: HarlyToolContext) {
   return {
+    recentAgentActions: tool({
+      strict: true,
+      description:
+        "List the current user's most recent Harly actions, newest first. Use for 'what did you do', 'what happened', 'undo', 'deshazlo', or 'deshaz lo último'. The receipt id is internal: use it only to call undoAgentAction and never show it to the user.",
+      inputSchema: z.object({
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(20)
+          .describe("How many recent actions to return, from 1 to 20."),
+      }),
+      execute: async ({ limit }) => ({
+        actions: await listAgentActionReceipts({
+          workspaceId: ctx.workspaceId,
+          actorId: ctx.userId,
+          limit,
+        }),
+      }),
+    }),
+
     reviewPipeline: tool({
       strict: true,
       description:
@@ -177,8 +203,116 @@ function buildReadTools(ctx: HarlyToolContext) {
       execute: async ({ query }) => {
         const results = await searchWorkspace(query);
         return {
+          candidateCount: results.candidates.length,
+          jobCount: results.jobs.length,
           candidates: results.candidates.slice(0, 10),
           jobs: results.jobs.slice(0, 10),
+        };
+      },
+    }),
+
+    connectedIntegrations: tool({
+      strict: true,
+      description:
+        "Show which workspace integrations are connected and usable right now. Use for questions like 'what integrations do I have connected?', 'is Zoom connected?', or before scheduling an interview. Never claim integrations are inaccessible; this tool returns safe status only, never secrets.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const statuses = await getIntegrationStatuses(ctx.workspaceId);
+        const state = (connected: boolean, configured: boolean) =>
+          connected ? "connected" : configured ? "needs_reconnect" : "not_connected";
+
+        return {
+          integrations: [
+            {
+              name: "Google Calendar",
+              slug: "google-calendar",
+              status: state(
+                statuses.gcal.enabled &&
+                  statuses.gcal.hasRefreshToken &&
+                  statuses.gcal.hasCredentials &&
+                  statuses.gcal.encryptionReady,
+                statuses.gcal.enabled || statuses.gcal.hasRefreshToken,
+              ),
+              accountEmail: statuses.gcal.accountEmail,
+              calendarId: statuses.gcal.calendarId,
+            },
+            {
+              name: "Zoom",
+              slug: "zoom",
+              status: state(
+                statuses.zoom.installationState === "installed",
+                statuses.zoom.configured,
+              ),
+              accountEmail: statuses.zoom.accountEmail,
+            },
+            {
+              name: "Microsoft Outlook",
+              slug: "outlook",
+              status: state(
+                statuses.outlook.enabled &&
+                  statuses.outlook.hasToken &&
+                  statuses.outlook.encryptionReady,
+                statuses.outlook.enabled || statuses.outlook.hasToken,
+              ),
+              accountEmail: statuses.outlook.accountEmail,
+            },
+            {
+              name: "Jitsi Meet",
+              slug: "jitsi",
+              status: state(
+                statuses.jitsi.enabled && Boolean(statuses.jitsi.baseUrl),
+                statuses.jitsi.enabled || Boolean(statuses.jitsi.baseUrl),
+              ),
+              baseUrl: statuses.jitsi.baseUrl,
+            },
+            {
+              name: "Cal.com",
+              slug: "cal",
+              status: state(
+                statuses.cal.enabled &&
+                  statuses.cal.hasApiKey &&
+                  statuses.cal.encryptionReady,
+                statuses.cal.enabled || statuses.cal.hasApiKey,
+              ),
+              bookingUrl: statuses.cal.bookingUrl,
+            },
+            {
+              name: "Slack",
+              slug: "slack",
+              status: state(
+                statuses.slack.enabled &&
+                  statuses.slack.hasToken &&
+                  statuses.slack.encryptionReady,
+                statuses.slack.enabled || statuses.slack.hasToken,
+              ),
+              teamName: statuses.slack.teamName,
+              channelName: statuses.slack.channelName,
+            },
+            {
+              name: "Telegram",
+              slug: "telegram",
+              status: state(
+                statuses.telegram.enabled &&
+                  statuses.telegram.hasToken &&
+                  statuses.telegram.encryptionReady,
+                statuses.telegram.enabled || statuses.telegram.hasToken,
+              ),
+              botUsername: statuses.telegram.botUsername,
+            },
+            {
+              name:
+                statuses.chat.provider === "discord"
+                  ? "Discord"
+                  : "Chat notifications",
+              slug: statuses.chat.provider ?? "chat",
+              status: state(
+                statuses.chat.enabled &&
+                  statuses.chat.hasWebhook &&
+                  statuses.chat.encryptionReady,
+                statuses.chat.enabled || statuses.chat.hasWebhook,
+              ),
+            },
+          ],
         };
       },
     }),
@@ -213,12 +347,19 @@ function buildReadTools(ctx: HarlyToolContext) {
     candidateProfile: tool({
       strict: true,
       description:
-        "Get one candidate's full profile: contact info, applications + current stage, tags, scorecards, AI evaluations, and recent notes. Resolve candidateId via searchCandidates first. Use for 'tell me about X', 'what's the status of X'.",
+        "Get one candidate's full profile: contact info, applications + current stage, tags, scorecards, AI evaluations, and recent notes. Pass null when the user is looking at a candidate profile and use the active candidate. Otherwise resolve candidateId via searchCandidates first. Use for 'tell me about X', 'what's the status of X', or 'what do you think about this candidate'.",
       inputSchema: z.object({
-        candidateId: z.string().describe("The candidate id."),
+        candidateId: z
+          .string()
+          .nullable()
+          .describe("The candidate id, or null to use the active candidate."),
       }),
       execute: async ({ candidateId }) => {
-        const profile = await getCandidateProfile(candidateId);
+        const resolvedCandidateId = candidateId ?? ctx.activeCandidateId;
+        if (!resolvedCandidateId) {
+          return { found: false as const, reason: "candidate_required" as const };
+        }
+        const profile = await getCandidateProfile(resolvedCandidateId);
         if (!profile) return { found: false as const };
         const c = profile.candidate as Record<string, unknown>;
         return {
@@ -235,6 +376,7 @@ function buildReadTools(ctx: HarlyToolContext) {
             job: a.jobTitle,
             stage: a.currentStageName,
             status: a.status,
+            isActive: a.status === "active",
           })),
           tags: profile.tags.map((t) => t.label),
           scorecards: profile.scorecards.map((s) => ({
@@ -440,6 +582,53 @@ function buildReadTools(ctx: HarlyToolContext) {
         return {
           count: items.length,
           items: items.slice(0, 20),
+        };
+      },
+    }),
+
+    nextCandidateStage: tool({
+      strict: true,
+      description:
+        "Resolve the immediate next pipeline stage for a candidate's application. Pass null when the user is looking at a candidate profile and use the active candidate. Use before proposing 'pass this candidate', 'advance them', or 'move them to the next step'. Returns every application so you can ask which role only when there are multiple active applications.",
+      inputSchema: z.object({
+        candidateId: z
+          .string()
+          .nullable()
+          .describe("The candidate id, or null to use the active candidate."),
+      }),
+      execute: async ({ candidateId }) => {
+        const resolvedCandidateId = candidateId ?? ctx.activeCandidateId;
+        if (!resolvedCandidateId) {
+          return { found: false as const, reason: "candidate_required" as const };
+        }
+        const profile = await getCandidateProfile(resolvedCandidateId);
+        if (!profile) return { found: false as const };
+
+        const applications = await Promise.all(
+          profile.applications.map(async (application) => {
+            const next = await getNextStage(
+              application.jobId,
+              application.currentStageId,
+            );
+            return {
+              applicationId: application.id,
+              jobId: application.jobId,
+              job: application.jobTitle,
+              status: application.status,
+              currentStage: application.currentStageName,
+              nextStage: next
+                ? { id: next.id, name: next.name, order: next.order }
+                : null,
+            };
+          }),
+        );
+
+        const c = profile.candidate;
+        return {
+          found: true as const,
+          candidateId: c.id,
+          name: `${c.firstName} ${c.lastName}`,
+          applications,
         };
       },
     }),

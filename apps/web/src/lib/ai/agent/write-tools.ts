@@ -24,6 +24,19 @@ const summary = z
 
 export function buildWriteTools() {
   return {
+    undoAgentAction: tool({
+      strict: true,
+      description:
+        "Propose undoing one recent reversible Harly action. WRITE action — requires user confirmation. Use only the receiptId returned by recentAgentActions after the user says undo, deshazlo, or deshaz lo último; never invent or expose receipt ids.",
+      inputSchema: z.object({
+        summary,
+        receiptId: z
+          .string()
+          .min(1)
+          .describe("The recent reversible action receipt selected by Harly."),
+      }),
+    }),
+
     moveCandidateStage: tool({
       strict: true,
       description:
@@ -249,7 +262,7 @@ export function buildWriteTools() {
     scheduleInterview: tool({
       strict: true,
       description:
-        "Propose scheduling an interview. WRITE action , requires user confirmation. Resolve candidateId + applicationId first. interviewerId is optional (null = unassigned).",
+        "Propose scheduling an interview. WRITE action , requires user confirmation. Resolve candidateId first, then use the candidate's only active application automatically when the user says 'the role they were recruited for'. Ask only when there are multiple active applications. Preserve an explicit title and meeting link. If the user supplied a URL, location MUST contain that exact URL and meetingProvider MUST be external; never replace it or set it to null. interviewerId is optional (null = unassigned).",
       inputSchema: z.object({
         summary,
         candidateId: z.string().describe("The candidate id."),
@@ -265,11 +278,29 @@ export function buildWriteTools() {
           .describe(
             "Local datetime string (YYYY-MM-DDTHH:mm) or ISO timestamp.",
           ),
+        timeZone: z
+          .string()
+          .nullable()
+          .describe(
+            "IANA timezone for a candidate-local time, e.g. America/Santiago, or null when the timestamp already includes an offset.",
+          ),
         durationMins: z.number().describe("Duration in minutes (5–480)."),
         interviewerId: z
           .string()
           .nullable()
           .describe("Interviewer user id, or null."),
+        title: z.string().nullable().describe("Human interview title, or null."),
+        location: z
+          .string()
+          .describe(
+            "Meeting URL or physical location. Copy an explicit URL exactly; use an empty string only when no location was provided.",
+          ),
+        notes: z.string().nullable().describe("Optional interview notes, or null."),
+        meetingProvider: z
+          .enum(["auto", "google_meet", "zoom", "teams", "jitsi", "external"])
+          .describe(
+            "Video provider preference. Use external when the user supplied a meeting URL.",
+          ),
       }),
     }),
 
