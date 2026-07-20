@@ -8,6 +8,7 @@ import { CaretLeftIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
 import { CalConnectPanel } from "@/features/workspaces/CalConnectPanel";
 import { DiscordConnectPanel } from "@/features/workspaces/DiscordConnectPanel";
+import { DocuSignConnectPanel } from "@/features/workspaces/DocuSignConnectPanel";
 import { GCalConnectPanel } from "@/features/workspaces/GCalConnectPanel";
 import { GoogleMeetConnectPanel } from "@/features/workspaces/GoogleMeetConnectPanel";
 import { JitsiConnectPanel } from "@/features/workspaces/JitsiConnectPanel";
@@ -24,6 +25,7 @@ import {
 } from "@/features/workspaces/integrations-registry";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
+import { getWorkspaceDocuSignStatus } from "@/lib/docusign/config";
 import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
 import { getWorkspaceJitsiStatus } from "@/lib/jitsi/config";
 import { getWorkspaceChatStatus } from "@/lib/notify/config";
@@ -64,6 +66,7 @@ const DETAIL_LOGOS: Record<IntegrationSlug, Logo> = {
   linkedin: svgBrand("linkedin", "LinkedIn"),
   zapier: svgBrand("zapier", "Zapier"),
   webhooks: svgBrand("zapier", "Webhooks"),
+  docusign: svgBrand("docusign", "DocuSign"),
 };
 
 type DetailPageProps = {
@@ -284,6 +287,18 @@ async function renderPanel(
       return (
         <ZoomConnectPanel
           config={config}
+          canEdit={ctx.canEdit}
+          workspaceId={ctx.organizationId}
+          tileClassName={integration.tileClassName}
+          description={integration.detail}
+        />
+      );
+    }
+    case "docusign": {
+      const status = await getWorkspaceDocuSignStatus(ctx.organizationId);
+      return (
+        <DocuSignConnectPanel
+          status={status}
           canEdit={ctx.canEdit}
           workspaceId={ctx.organizationId}
           tileClassName={integration.tileClassName}

@@ -62,6 +62,7 @@ const INTEGRATION_LOGOS: Record<IntegrationSlug, Logo> = {
   linkedin: svgBrand("linkedin", "LinkedIn"),
   zapier: svgBrand("zapier", "Zapier"),
   webhooks: svgBrand("zapier", "Webhooks"),
+  docusign: svgBrand("docusign", "DocuSign"),
 };
 
 const GreenhouseImportLogo = svgBrand("greenhouse", "Greenhouse");
