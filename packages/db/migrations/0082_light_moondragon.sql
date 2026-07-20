@@ -1,0 +1,2 @@
+ALTER TABLE "notifications" ADD COLUMN "dedupe_key" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "notifications_workspace_user_dedupe_idx" ON "notifications" USING btree ("workspace_id","user_id","dedupe_key");

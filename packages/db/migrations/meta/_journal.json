@@ -547,6 +547,48 @@
       "when": 1784499915936,
       "tag": "0077_spicy_silhouette",
       "breakpoints": true
+    },
+    {
+      "idx": 78,
+      "version": "7",
+      "when": 1784518828987,
+      "tag": "0078_material_lester",
+      "breakpoints": true
+    },
+    {
+      "idx": 79,
+      "version": "7",
+      "when": 1784520874523,
+      "tag": "0079_red_iron_patriot",
+      "breakpoints": true
+    },
+    {
+      "idx": 80,
+      "version": "7",
+      "when": 1784521326887,
+      "tag": "0080_strange_impossible_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 81,
+      "version": "7",
+      "when": 1784521407435,
+      "tag": "0081_mean_vector",
+      "breakpoints": true
+    },
+    {
+      "idx": 82,
+      "version": "7",
+      "when": 1784524021581,
+      "tag": "0082_light_moondragon",
+      "breakpoints": true
+    },
+    {
+      "idx": 83,
+      "version": "7",
+      "when": 1784524913299,
+      "tag": "0083_wealthy_ravenous",
+      "breakpoints": true
     }
   ]
 }

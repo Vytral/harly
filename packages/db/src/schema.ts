@@ -56,6 +56,8 @@ export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "application",
   "job",
   "note",
+  "document",
+  "task",
 ]);
 
 export const scorecardRatingEnum = pgEnum("scorecard_rating", [
@@ -107,6 +109,25 @@ export const interviewStatusEnum = pgEnum("interview_status", [
   "canceled",
 ]);
 
+export const interviewSyncProviderEnum = pgEnum("interview_sync_provider", [
+  "google_calendar",
+  "zoom",
+  "microsoft_teams",
+  "jitsi",
+]);
+
+export const interviewSyncOperationEnum = pgEnum("interview_sync_operation", [
+  "upsert",
+  "cancel",
+]);
+
+export const interviewSyncStatusEnum = pgEnum("interview_sync_status", [
+  "pending",
+  "synced",
+  "failed",
+  "canceled",
+]);
+
 export const aiRecommendationEnum = pgEnum("ai_recommendation", [
   "strong_yes",
   "yes",
@@ -130,6 +151,14 @@ export const poolEntrySourceEnum = pgEnum("pool_entry_source", [
 ]);
 
 export const salaryPeriodEnum = pgEnum("salary_period", ["annual", "monthly"]);
+
+// Workflow engine: per-execution lifecycle of a workflow run.
+export const workflowRunStatusEnum = pgEnum("workflow_run_status", [
+  "running",
+  "succeeded",
+  "failed",
+  "skipped",
+]);
 
 // Better Auth
 export const user = pgTable("user", {
@@ -626,6 +655,29 @@ export const workspaceSettings = pgTable("workspace_settings", {
   // URL is the only config; rooms are random slugs composed per interview.
   jitsiEnabled: boolean("jitsi_enabled").default(false).notNull(),
   jitsiBaseUrl: text("jitsi_base_url"),
+  // DocuSign OAuth (per-workspace credentials). Tokens + client secret encrypted
+  // at rest (AES-256-GCM). accountId + baseUrl resolve from getUserInfo on
+  // callback and are needed for every eSignature REST call.
+  docusignEnabled: boolean("docusign_enabled").default(false).notNull(),
+  docusignAccountEmail: text("docusign_account_email"),
+  docusignAccountId: text("docusign_account_id"),
+  docusignBaseUrl: text("docusign_base_url"),
+  docusignClientId: text("docusign_client_id"),
+  docusignClientSecretCiphertext: text("docusign_client_secret_ciphertext"),
+  docusignClientSecretIv: text("docusign_client_secret_iv"),
+  docusignClientSecretTag: text("docusign_client_secret_tag"),
+  docusignAccessTokenCiphertext: text("docusign_access_token_ciphertext"),
+  docusignAccessTokenIv: text("docusign_access_token_iv"),
+  docusignAccessTokenTag: text("docusign_access_token_tag"),
+  docusignRefreshTokenCiphertext: text("docusign_refresh_token_ciphertext"),
+  docusignRefreshTokenIv: text("docusign_refresh_token_iv"),
+  docusignRefreshTokenTag: text("docusign_refresh_token_tag"),
+  // DocuSign Connect webhook HMAC key used to verify inbound envelope status
+  // posts. Plaintext — same class as calWebhookSecret, not a bearer credential.
+  docusignConnectSecret: text("docusign_connect_secret"),
+  // Offer delivery channel: "email" (default) or "docusign" (collect signature
+  // via embedded signing inside the candidate portal, email notifies instead).
+  offerSignatureChannel: text("offer_signature_channel").default("email").notNull(),
   ...timestamps(),
 });
 
@@ -1260,6 +1312,266 @@ export const candidateFiles = pgTable(
   ],
 );
 
+// ATS documents. These tables deliberately keep storage keys private: every
+// read goes through the authenticated document download route.
+export const documents = pgTable(
+  "documents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    originalName: text("original_name").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    checksum: text("checksum").notNull(),
+    storageKey: text("storage_key").notNull(),
+    categoryId: uuid("category_id").references(() => documentCategories.id, {
+      onDelete: "set null",
+    }),
+    status: text("status").default("active").notNull(),
+    signatureStatus: text("signature_status").default("unsigned").notNull(),
+    signatureProvider: text("signature_provider"),
+    signatureEnvelopeId: text("signature_envelope_id"),
+    signatureUrl: text("signature_url"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    ownerId: text("owner_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    legacyCandidateFileId: uuid("legacy_candidate_file_id").references(
+      () => candidateFiles.id,
+      { onDelete: "set null" },
+    ),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("documents_workspace_legacy_candidate_file_idx").on(
+      table.workspaceId,
+      table.legacyCandidateFileId,
+    ),
+    index("documents_workspace_status_idx").on(table.workspaceId, table.status),
+    index("documents_workspace_updated_at_idx").on(
+      table.workspaceId,
+      table.updatedAt,
+    ),
+    index("documents_workspace_category_idx").on(
+      table.workspaceId,
+      table.categoryId,
+    ),
+  ],
+);
+
+export const documentCategories = pgTable(
+  "document_categories",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    slug: text("slug").notNull(),
+    accent: text("accent").default("pine").notNull(),
+    active: boolean("active").default(true).notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("document_categories_workspace_slug_idx").on(
+      table.workspaceId,
+      table.slug,
+    ),
+    index("document_categories_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+export const documentVersions = pgTable(
+  "document_versions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    versionNumber: integer("version_number").notNull(),
+    storageKey: text("storage_key").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    checksum: text("checksum").notNull(),
+    uploadedById: text("uploaded_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    isCurrent: boolean("is_current").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("document_versions_document_version_idx").on(
+      table.documentId,
+      table.versionNumber,
+    ),
+    index("document_versions_workspace_document_idx").on(
+      table.workspaceId,
+      table.documentId,
+    ),
+  ],
+);
+
+export const documentAssociations = pgTable(
+  "document_associations",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    targetType: text("target_type").notNull(),
+    targetId: uuid("target_id"),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("document_associations_target_idx").on(
+      table.documentId,
+      table.targetType,
+      table.targetId,
+    ),
+    index("document_associations_workspace_target_idx").on(
+      table.workspaceId,
+      table.targetType,
+      table.targetId,
+    ),
+  ],
+);
+
+export const documentAccessRoles = pgTable(
+  "document_access_roles",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    roleKey: text("role_key").notNull(),
+    accessLevel: text("access_level").default("read").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("document_access_roles_document_role_idx").on(
+      table.documentId,
+      table.roleKey,
+    ),
+    index("document_access_roles_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+export const documentAccessMembers = pgTable(
+  "document_access_members",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessLevel: text("access_level").default("read").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("document_access_members_document_user_idx").on(
+      table.documentId,
+      table.userId,
+    ),
+    index("document_access_members_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+export const documentAssignments = pgTable(
+  "document_assignments",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    assignmentType: text("assignment_type").default("reviewer").notNull(),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("document_assignments_document_user_type_idx").on(
+      table.documentId,
+      table.userId,
+      table.assignmentType,
+    ),
+    index("document_assignments_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+export const documentRequirements = pgTable(
+  "document_requirements",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    stageId: uuid("stage_id").references(() => jobStages.id, {
+      onDelete: "cascade",
+    }),
+    categoryId: uuid("category_id").references(() => documentCategories.id, {
+      onDelete: "cascade",
+    }),
+    label: text("label").notNull(),
+    required: boolean("required").default(true).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("document_requirements_workspace_job_idx").on(
+      table.workspaceId,
+      table.jobId,
+    ),
+  ],
+);
+
+export type Document = typeof documents.$inferSelect;
+export type NewDocument = typeof documents.$inferInsert;
+export type DocumentCategory = typeof documentCategories.$inferSelect;
+export type DocumentVersion = typeof documentVersions.$inferSelect;
+
 // Audit trail
 export const activityEvents = pgTable(
   "activity_events",
@@ -1362,6 +1674,10 @@ export const offers = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
+    // DocuSign envelope id when the offer was sent via e-signature (channel =
+    // "docusign"). The Connect webhook maps this back to the offer to flip
+    // status to accepted/declined and attach the signed PDF. Null for email-only offers.
+    docusignEnvelopeId: text("docusign_envelope_id"),
     ...timestamps(),
   },
   (table) => [
@@ -1496,7 +1812,7 @@ export const emailTemplates = pgTable(
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type NewEmailTemplate = typeof emailTemplates.$inferInsert;
 
-// In-app notifications (mentions, and later: assignments, interviews, …)
+    // In-app notifications (mentions, and later: assignments, interviews, …)
 export const notifications = pgTable(
   "notifications",
   {
@@ -1518,6 +1834,8 @@ export const notifications = pgTable(
     // In-app destination, e.g. /dashboard/candidates/<id>.
     href: text("href"),
     metadata: jsonb("metadata"),
+    // Stable event key used to make retried domain notifications idempotent.
+    dedupeKey: text("dedupe_key"),
     readAt: timestamp("read_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
@@ -1530,6 +1848,11 @@ export const notifications = pgTable(
       table.createdAt,
     ),
     index("notifications_workspace_idx").on(table.workspaceId),
+    uniqueIndex("notifications_workspace_user_dedupe_idx").on(
+      table.workspaceId,
+      table.userId,
+      table.dedupeKey,
+    ),
   ],
 );
 
@@ -1908,6 +2231,50 @@ export const interviewsRelations = relations(interviews, ({ one }) => ({
   }),
 }));
 
+/**
+ * Durable provider synchronization state. The interview remains the source
+ * of truth; this table records the desired provider operation and makes
+ * failures visible/reclaimable instead of leaving them only in logs.
+ */
+export const interviewSyncs = pgTable(
+  "interview_syncs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    interviewId: uuid("interview_id")
+      .notNull()
+      .references(() => interviews.id, { onDelete: "cascade" }),
+    provider: interviewSyncProviderEnum("provider").notNull(),
+    operation: interviewSyncOperationEnum("operation")
+      .default("upsert")
+      .notNull(),
+    status: interviewSyncStatusEnum("status").default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    lastAttemptAt: timestamp("last_attempt_at", { withTimezone: true }),
+    syncedAt: timestamp("synced_at", { withTimezone: true }),
+    providerResourceId: text("provider_resource_id"),
+    providerUrl: text("provider_url"),
+    lastError: text("last_error"),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("interview_syncs_interview_provider_idx").on(
+      table.interviewId,
+      table.provider,
+    ),
+    index("interview_syncs_due_idx").on(table.status, table.nextRetryAt),
+    index("interview_syncs_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
+  ],
+);
+
 export type Scorecard = typeof scorecards.$inferSelect;
 export type NewScorecard = typeof scorecards.$inferInsert;
 export type AiEvaluation = typeof aiEvaluations.$inferSelect;
@@ -1936,6 +2303,8 @@ export type NewMailUnificationMigration =
   typeof mailUnificationMigrations.$inferInsert;
 export type Interview = typeof interviews.$inferSelect;
 export type NewInterview = typeof interviews.$inferInsert;
+export type InterviewSync = typeof interviewSyncs.$inferSelect;
+export type NewInterviewSync = typeof interviewSyncs.$inferInsert;
 
 export type ApplicationAnswer = typeof applicationAnswers.$inferSelect;
 export type NewApplicationAnswer = typeof applicationAnswers.$inferInsert;
@@ -1995,6 +2364,7 @@ export const tasks = pgTable(
     priority: text("priority").default("medium").notNull(),
     dueDate: timestamp("due_date", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     ownerId: text("owner_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
@@ -2017,6 +2387,7 @@ export const tasks = pgTable(
     index("tasks_workspace_idx").on(table.workspaceId),
     index("tasks_owner_idx").on(table.ownerId),
     index("tasks_workspace_status_idx").on(table.workspaceId, table.status),
+    index("tasks_workspace_deleted_idx").on(table.workspaceId, table.deletedAt),
   ],
 );
 
@@ -2584,6 +2955,47 @@ export const aiMessages = pgTable(
   ],
 );
 
+/**
+ * Durable confirmation receipts for Harly AI write actions.
+ *
+ * The UI can retry a server action after a slow network response, so the
+ * tool-call id is the stable idempotency key for one confirmation card. The
+ * normalized input hash prevents a reused id from targeting a different
+ * resource. Results are intentionally stored as the small normalized write
+ * result, never as the full AI conversation or prompt.
+ */
+export const aiActionReceipts = pgTable(
+  "ai_action_receipts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    actorId: text("actor_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    actionId: text("action_id").notNull(),
+    toolName: text("tool_name").notNull(),
+    requestHash: text("request_hash").notNull(),
+    // "processing" | "completed" | "failed"
+    status: text("status").default("processing").notNull(),
+    result: jsonb("result"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("ai_action_receipts_workspace_action_uidx").on(
+      table.workspaceId,
+      table.actionId,
+    ),
+    index("ai_action_receipts_workspace_created_at_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    index("ai_action_receipts_expires_idx").on(table.expiresAt),
+  ],
+);
+
 export type AiConversation = typeof aiConversations.$inferSelect;
 
 /**
@@ -2673,6 +3085,186 @@ export const rateLimitBuckets = pgTable(
 export type RateLimitBucket = typeof rateLimitBuckets.$inferSelect;
 export type NewRateLimitBucket = typeof rateLimitBuckets.$inferInsert;
 
+// ---------------------------------------------------------------------------
+// Workflow engine — visual automations (WHEN → IF → DO)
+//
+// A workflow is a rule: a trigger (a domain event + optional filter), a
+// condition tree (AND/OR/NOT over candidate/application/job/ai fields), and a
+// sequential list of actions. The shape is arbitrarily nested, so trigger /
+// conditions / actions live in jsonb validated strictly by Zod at the edge
+// (features/automations/schema.ts). `triggerEvent` is promoted to a real
+// column so the dispatch path can index it cheaply on every emitted event.
+// ---------------------------------------------------------------------------
+
+/**
+ * The definition of a workflow — the persistent rule. Runs with the
+ * permissions of `createdById` (decision D1): the workflow acts in the name of
+ * the recruiter who created it, until we migrate to a dedicated `automation`
+ * role. If that user loses access, runs fail with a clear error (trade-off T1).
+ */
+export const workflowDefinitions = pgTable(
+  "workflow_definitions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    enabled: boolean("enabled").default(true).notNull(),
+    // The triggering webhook event, promoted to a column for the dispatch index.
+    // Kept in sync with `trigger.event` (validated at write time).
+    triggerEvent: text("trigger_event").notNull(),
+    // { event, filter? } — see automations/schema.ts TriggerSchema.
+    trigger: jsonb("trigger")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
+    // Condition tree (leaf | and | or | not). Empty/absent = always match.
+    conditions: jsonb("conditions")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    // Ordered list of { type, config } action descriptors.
+    actions: jsonb("actions")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps(),
+  },
+  (table) => [
+    // Dispatch hot path: on every emitted event, find enabled workflows for
+    // this workspace listening to that event. Single index covers both filters.
+    index("workflow_definitions_workspace_enabled_event_idx").on(
+      table.workspaceId,
+      table.enabled,
+      table.triggerEvent,
+    ),
+    index("workflow_definitions_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+/**
+ * Each execution of a workflow — the audit + debug + replay record. Inserted
+ * with `status = 'running'` before the engine runs, so a crashed process leaves
+ * a reclaimable row (same pattern as webhook_deliveries, trade-off T3).
+ */
+export const workflowRuns = pgTable(
+  "workflow_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workflowId: uuid("workflow_id")
+      .notNull()
+      .references(() => workflowDefinitions.id, { onDelete: "cascade" }),
+    triggerEvent: text("trigger_event").notNull(),
+    // The data payload of the emitted event that started this run.
+    triggerPayload: jsonb("trigger_payload")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
+    // { matched, evaluated: [...] } — what the condition evaluator produced.
+    conditionResult: jsonb("condition_result"),
+    status: workflowRunStatusEnum("status").default("running").notNull(),
+    // Best-effort async: a stalled `running` row is reclaimed by the cron,
+    // mirroring dispatchDueWebhooks. Used to detect re-entrant loops too.
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    // Parent run when this run was triggered by an action of another run
+    // (loop-detection, FASE 2.4). Null for runs started directly by an event.
+    parentRunId: uuid("parent_run_id"),
+    error: text("error"),
+    ...timestamps(),
+  },
+  (table) => [
+    index("workflow_runs_workspace_workflow_started_idx").on(
+      table.workspaceId,
+      table.workflowId,
+      table.startedAt,
+    ),
+    index("workflow_runs_status_started_idx").on(
+      table.status,
+      table.startedAt,
+    ),
+    index("workflow_runs_parent_idx").on(table.parentRunId),
+  ],
+);
+
+/**
+ * Granular per-action log inside a run — one row per executed action, with its
+ * input and result. Powers the run timeline in the dashboard and replay.
+ */
+export const workflowRunSteps = pgTable(
+  "workflow_run_steps",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => workflowRuns.id, { onDelete: "cascade" }),
+    actionType: text("action_type").notNull(),
+    actionInput: jsonb("action_input")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
+    // { success, error?, data? } — the action's normalized result.
+    result: jsonb("result"),
+    status: text("status").default("pending").notNull(),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [index("workflow_run_steps_run_idx").on(table.runId)],
+);
+
+/**
+ * Workspace-level named secrets, encrypted at rest (AES-256-GCM, same scheme
+ * as webhook endpoint secrets). Referenced from `http_request` actions as
+ * `{{secrets.NAME}}` so secrets never sit in plaintext inside the actions
+ * jsonb (trade-off T4). Write-once values; rotate by deleting + recreating.
+ */
+export const workspaceSecrets = pgTable(
+  "workspace_secrets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    // Encrypted value (ciphertext / iv / tag, all base64 — see lib/crypto).
+    secretCiphertext: text("secret_ciphertext").notNull(),
+    secretIv: text("secret_iv").notNull(),
+    secretTag: text("secret_tag").notNull(),
+    description: text("description"),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("workspace_secrets_ws_name_idx").on(
+      table.workspaceId,
+      table.name,
+    ),
+  ],
+);
+
+export type WorkflowDefinition = typeof workflowDefinitions.$inferSelect;
+export type NewWorkflowDefinition = typeof workflowDefinitions.$inferInsert;
+export type WorkflowRun = typeof workflowRuns.$inferSelect;
+export type NewWorkflowRun = typeof workflowRuns.$inferInsert;
+export type WorkflowRunStep = typeof workflowRunSteps.$inferSelect;
+export type NewWorkflowRunStep = typeof workflowRunSteps.$inferInsert;
+export type WorkspaceSecret = typeof workspaceSecrets.$inferSelect;
+export type NewWorkspaceSecret = typeof workspaceSecrets.$inferInsert;
+
 export type NewAiConversation = typeof aiConversations.$inferInsert;
 export type AiMessage = typeof aiMessages.$inferSelect;
 export type NewAiMessage = typeof aiMessages.$inferInsert;
+export type AiActionReceipt = typeof aiActionReceipts.$inferSelect;
+export type NewAiActionReceipt = typeof aiActionReceipts.$inferInsert;
