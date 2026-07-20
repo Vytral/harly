@@ -38,12 +38,14 @@ export function OfferDrawer({
   onOpenChange,
   applications,
   offer,
+  documents,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   applications: Array<{ id: string; jobTitle: string }>;
   /** When set, the drawer edits this draft offer instead of creating one. */
   offer: CandidateOfferItem | null;
+  documents: Array<{ id: string; name: string; mimeType: string }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -57,6 +59,7 @@ export function OfferDrawer({
   const [startDate, setStartDate] = useState("");
   const [expiresAt, setExpiresAt] = useState("");
   const [notes, setNotes] = useState("");
+  const [documentIds, setDocumentIds] = useState<string[]>([]);
 
   // Hydrate fields when switching into edit mode (or reset for create). Done as
   // a render-time sync keyed on the drawer target , the React-recommended
@@ -75,6 +78,7 @@ export function OfferDrawer({
       setStartDate(offer ? isoToDateInput(offer.startDate) : "");
       setExpiresAt(offer ? isoToDateInput(offer.expiresAt) : "");
       setNotes(offer?.notes ?? "");
+      setDocumentIds([]);
     }
   }
 
@@ -103,7 +107,7 @@ export function OfferDrawer({
     startTransition(async () => {
       const result = offer
         ? await updateOffer({ offerId: offer.id, ...fields })
-        : await createOffer({ applicationId, ...fields });
+        : await createOffer({ applicationId, ...fields, documentIds });
 
       if (!result.success) {
         toast.error(result.error ?? "Could not save the offer.");
@@ -165,6 +169,25 @@ export function OfferDrawer({
               placeholder="Senior Frontend Engineer"
             />
           </div>
+
+          {!offer && documents.length > 0 ? (
+            <div className="space-y-2">
+              <Label>Attach documents</Label>
+              <div className="max-h-36 divide-y overflow-y-auto rounded-lg border">
+                {documents.map((document) => {
+                  const checked = documentIds.includes(document.id);
+                  return (
+                    <label key={document.id} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted/30">
+                      <input type="checkbox" checked={checked} onChange={() => setDocumentIds((current) => checked ? current.filter((id) => id !== document.id) : [...current, document.id])} />
+                      <span className="min-w-0 flex-1 truncate">{document.name}</span>
+                      <span className="text-xs text-muted-foreground">{document.mimeType === "application/pdf" ? "PDF" : "File"}</span>
+                    </label>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-muted-foreground">Selected files will be associated with this offer and available when the offer is sent.</p>
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-[1fr_6rem_7.5rem] gap-2">
             <div className="space-y-2">

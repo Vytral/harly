@@ -58,7 +58,7 @@ function workspacePrefix(workspaceId: string) {
 export function isWorkspaceStorageKey(
   workspaceId: string,
   key: string,
-  kind: "resumes" | "images",
+  kind: "resumes" | "images" | "documents",
 ) {
   return key.startsWith(`${workspacePrefix(workspaceId)}/${kind}/`) && !key.includes("..");
 }
@@ -107,6 +107,43 @@ export function getImageFileValidationError(file: File) {
 
 export function createImageStorageKey(workspaceId: string, filename: string) {
   return `${workspacePrefix(workspaceId)}/images/${crypto.randomUUID()}/${sanitizeFilename(filename)}`;
+}
+
+export const maxDocumentFileSize = 25 * 1024 * 1024;
+
+export const allowedDocumentContentTypes = [
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+] as const;
+
+export const documentUploadRequestSchema = z.object({
+  filename: z.string().trim().min(1).max(255),
+  contentType: z.enum(allowedDocumentContentTypes),
+  contentLength: z.number().int().positive().max(maxDocumentFileSize),
+});
+
+export function createDocumentStorageKey(workspaceId: string, filename: string) {
+  return `${workspacePrefix(workspaceId)}/documents/${crypto.randomUUID()}/${sanitizeFilename(filename)}`;
+}
+
+export function documentExtensionMatches(filename: string, contentType: string) {
+  const extension = filename.toLowerCase().split(".").pop() ?? "";
+  const allowed: Record<string, string[]> = {
+    pdf: ["application/pdf"],
+    doc: ["application/msword"],
+    docx: ["application/vnd.openxmlformats-officedocument.wordprocessingml.document"],
+    png: ["image/png"],
+    jpg: ["image/jpeg"],
+    jpeg: ["image/jpeg"],
+    gif: ["image/gif"],
+    webp: ["image/webp"],
+  };
+  return (allowed[extension] ?? []).includes(contentType);
 }
 
 export function createPublicApplicationImageStorageKey(

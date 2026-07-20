@@ -6,7 +6,9 @@ import { getLocalUploadPath } from "@harly/storage";
 
 import {
   allowedImageContentTypes,
+  allowedDocumentContentTypes,
   allowedResumeContentTypes,
+  maxDocumentFileSize,
   maxImageFileSize,
   maxResumeFileSize,
 } from "@/lib/storage-validation";
@@ -34,18 +36,25 @@ async function handleUpload(request: NextRequest) {
 
   const isResume = key.includes("/resumes/");
   const isImage = key.includes("/images/");
+  const isDocument = key.includes("/documents/");
 
   if (
-    (!isResume && !isImage) ||
+    (!isResume && !isImage && !isDocument) ||
     !key.startsWith(`workspaces/${intent.workspaceId}/`)
   ) {
     return NextResponse.json({ error: "Invalid key." }, { status: 400 });
   }
 
-  const allowedTypes = isImage
-    ? allowedImageContentTypes
-    : allowedResumeContentTypes;
-  const maxSize = isImage ? maxImageFileSize : maxResumeFileSize;
+  const allowedTypes = isDocument
+    ? allowedDocumentContentTypes
+    : isImage
+      ? allowedImageContentTypes
+      : allowedResumeContentTypes;
+  const maxSize = isDocument
+    ? maxDocumentFileSize
+    : isImage
+      ? maxImageFileSize
+      : maxResumeFileSize;
 
   const contentType = request.headers.get("content-type") ?? "";
 

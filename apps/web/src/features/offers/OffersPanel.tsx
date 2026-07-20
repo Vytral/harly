@@ -27,9 +27,11 @@ import { ShortDate, RelativeTime } from "@/lib/date-hydration";
 export function OffersPanel({
   offers,
   applications,
+  documents,
 }: {
   offers: CandidateOfferItem[];
   applications: Array<{ id: string; jobTitle: string }>;
+  documents: Array<{ id: string; name: string; mimeType: string }>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -218,6 +220,7 @@ export function OffersPanel({
           }
         }}
         applications={applications}
+        documents={documents}
         offer={editing}
       />
     </div>
