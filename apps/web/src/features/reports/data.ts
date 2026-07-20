@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
 
 import {
   applications,
@@ -11,7 +11,13 @@ import {
   jobStages,
   offers,
 } from "@harly/db";
-import { getWorkspaceContext } from "@/features/workspaces/context";
+import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  averageTimeToHireDays,
+  bucketTimeToHire,
+  countEventsBetween,
+  type HiringEvent,
+} from "./metrics";
 
 /**
  * Hiring analytics for the Reports page. All queries are workspace-scoped and
@@ -67,6 +73,55 @@ export type ReportsData = {
   comparison: ReportsComparison;
 };
 
+/**
+ * Canonical hiring events. A hire is the first transition of an application
+ * into a stage named Hired, rather than a later update to the application row.
+ * Keeping this query here gives Reports, the dashboard and AI the same clock.
+ */
+export async function getHiringEvents(
+  workspaceId: string,
+  options: { since?: Date } = {},
+): Promise<HiringEvent[]> {
+  const hiredAt = sql<Date>`min(${applicationStageHistory.createdAt})`;
+
+  const query = db
+    .select({
+      applicationId: applications.id,
+      appliedAt: applications.appliedAt,
+      hiredAt,
+    })
+    .from(applications)
+    .innerJoin(
+      applicationStageHistory,
+      and(
+        eq(applicationStageHistory.applicationId, applications.id),
+        eq(applicationStageHistory.workspaceId, workspaceId),
+      ),
+    )
+    .innerJoin(
+      jobStages,
+      and(
+        eq(jobStages.id, applicationStageHistory.toStageId),
+        eq(jobStages.workspaceId, workspaceId),
+        sql`lower(trim(${jobStages.name})) = 'hired'`,
+      ),
+    )
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, applications.jobId),
+        eq(jobs.workspaceId, workspaceId),
+        isNull(jobs.deletedAt),
+      ),
+    )
+    .where(eq(applications.workspaceId, workspaceId))
+    .groupBy(applications.id, applications.appliedAt);
+
+  return options.since
+    ? query.having(gte(hiredAt, options.since))
+    : query;
+}
+
 function deltaPct(current: number, previous: number): number | null {
   if (previous <= 0) return null;
   return Math.round(((current - previous) / previous) * 100);
@@ -83,7 +138,7 @@ const MONTH_LABELS = [
 
 /** Period-over-period comparison range, in days. Defaults to 30 (current 30d vs prior 30d). */
 export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
-  const { organization } = await getWorkspaceContext();
+  const { organization } = await requirePermission("reports:read");
   const ws = organization.id;
   const now = new Date();
   const since90 = new Date(now.getTime() - 90 * DAY_SECONDS * 1000);
@@ -95,20 +150,23 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
     openRolesRow,
     candidatesRow,
     apps90Row,
-    hiresRow,
-    timeToHireRow,
+    hiringEvents,
     offerRow,
     monthRows,
     funnelRows,
     sourceRows,
-    hireMonthRows,
-    timeToHireDaysRows,
     comparisonRow,
   ] = await Promise.all([
     db
       .select({ n: sql<number>`count(*)::int` })
       .from(jobs)
-      .where(and(eq(jobs.workspaceId, ws), eq(jobs.status, "open"))),
+      .where(
+        and(
+          eq(jobs.workspaceId, ws),
+          eq(jobs.status, "open"),
+          isNull(jobs.deletedAt),
+        ),
+      ),
     db
       .select({ n: sql<number>`count(*)::int` })
       .from(candidates)
@@ -116,29 +174,30 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
     db
       .select({ n: sql<number>`count(*)::int` })
       .from(applications)
-      .where(and(eq(applications.workspaceId, ws), gte(applications.appliedAt, since90))),
-    db
-      .select({ n: sql<number>`count(*)::int` })
-      .from(applications)
-      .where(and(eq(applications.workspaceId, ws), eq(applications.status, "hired"))),
-    db
-      .select({
-        avgSeconds: sql<number | null>`avg(extract(epoch from (${applications.updatedAt} - ${applications.appliedAt})))`,
-      })
-      .from(applications)
-      .where(
+      .innerJoin(
+        jobs,
         and(
-          eq(applications.workspaceId, ws),
-          eq(applications.status, "hired"),
-          sql`${applications.appliedAt} is not null`,
+          eq(jobs.id, applications.jobId),
+          eq(jobs.workspaceId, ws),
+          isNull(jobs.deletedAt),
         ),
-      ),
+      )
+      .where(and(eq(applications.workspaceId, ws), gte(applications.appliedAt, since90))),
+    getHiringEvents(ws),
     db
       .select({
         accepted: sql<number>`count(*) filter (where ${offers.status} = 'accepted')::int`,
         decided: sql<number>`count(*) filter (where ${offers.status} in ('accepted','declined'))::int`,
       })
       .from(offers)
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, offers.jobId),
+          eq(jobs.workspaceId, ws),
+          isNull(jobs.deletedAt),
+        ),
+      )
       .where(eq(offers.workspaceId, ws)),
     db
       .select({
@@ -146,6 +205,14 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
         n: sql<number>`count(*)::int`,
       })
       .from(applications)
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, applications.jobId),
+          eq(jobs.workspaceId, ws),
+          isNull(jobs.deletedAt),
+        ),
+      )
       .where(
         and(
           eq(applications.workspaceId, ws),
@@ -159,7 +226,28 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
         n: sql<number>`count(distinct ${applicationStageHistory.applicationId})::int`,
       })
       .from(applicationStageHistory)
-      .innerJoin(jobStages, eq(jobStages.id, applicationStageHistory.toStageId))
+      .innerJoin(
+        applications,
+        and(
+          eq(applications.id, applicationStageHistory.applicationId),
+          eq(applications.workspaceId, ws),
+        ),
+      )
+      .innerJoin(
+        jobStages,
+        and(
+          eq(jobStages.id, applicationStageHistory.toStageId),
+          eq(jobStages.workspaceId, ws),
+        ),
+      )
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, applications.jobId),
+          eq(jobs.workspaceId, ws),
+          isNull(jobs.deletedAt),
+        ),
+      )
       .where(eq(applicationStageHistory.workspaceId, ws))
       .groupBy(jobStages.name),
     db
@@ -169,60 +257,42 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
         hires: sql<number>`count(*) filter (where ${applications.status} = 'hired')::int`,
       })
       .from(applications)
-      .where(eq(applications.workspaceId, ws))
-      .groupBy(sql`coalesce(${applications.source}, 'unknown')`),
-    // Hires by month (trailing 12 months)
-    db
-      .select({
-        month: sql<string>`to_char(${applications.updatedAt}, 'YYYY-MM')`,
-        n: sql<number>`count(*)::int`,
-      })
-      .from(applications)
-      .where(
+      .innerJoin(
+        jobs,
         and(
-          eq(applications.workspaceId, ws),
-          eq(applications.status, "hired"),
-          gte(applications.updatedAt, new Date(now.getTime() - 365 * DAY_SECONDS * 1000)),
+          eq(jobs.id, applications.jobId),
+          eq(jobs.workspaceId, ws),
+          isNull(jobs.deletedAt),
         ),
       )
-      .groupBy(sql`to_char(${applications.updatedAt}, 'YYYY-MM')`),
-    // Time-to-hire distribution in day-range buckets
-    db
-      .select({
-        days: sql<number>`extract(epoch from (${applications.updatedAt} - ${applications.appliedAt}))::int / ${DAY_SECONDS}`,
-      })
-      .from(applications)
-      .where(
-        and(
-          eq(applications.workspaceId, ws),
-          eq(applications.status, "hired"),
-          sql`${applications.appliedAt} is not null`,
-        ),
-      ),
+      .where(eq(applications.workspaceId, ws))
+      .groupBy(sql`coalesce(${applications.source}, 'unknown')`),
     // Current vs previous period-over-period comparison (equal-length windows).
     db
       .select({
         curApps: sql<number>`count(*) filter (where ${applications.appliedAt} >= ${curStart}::timestamptz)::int`,
         prevApps: sql<number>`count(*) filter (where ${applications.appliedAt} >= ${prevStart}::timestamptz and ${applications.appliedAt} < ${curStart}::timestamptz)::int`,
-        curHires: sql<number>`count(*) filter (where ${applications.status} = 'hired' and ${applications.updatedAt} >= ${curStart}::timestamptz)::int`,
-        prevHires: sql<number>`count(*) filter (where ${applications.status} = 'hired' and ${applications.updatedAt} >= ${prevStart}::timestamptz and ${applications.updatedAt} < ${curStart}::timestamptz)::int`,
-        curAvgTthSeconds: sql<number | null>`avg(extract(epoch from (${applications.updatedAt} - ${applications.appliedAt}))) filter (where ${applications.status} = 'hired' and ${applications.appliedAt} is not null and ${applications.updatedAt} >= ${curStart}::timestamptz)`,
-        prevAvgTthSeconds: sql<number | null>`avg(extract(epoch from (${applications.updatedAt} - ${applications.appliedAt}))) filter (where ${applications.status} = 'hired' and ${applications.appliedAt} is not null and ${applications.updatedAt} >= ${prevStart}::timestamptz and ${applications.updatedAt} < ${curStart}::timestamptz)`,
       })
       .from(applications)
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, applications.jobId),
+          eq(jobs.workspaceId, ws),
+          isNull(jobs.deletedAt),
+        ),
+      )
       .where(eq(applications.workspaceId, ws)),
   ]);
 
   // Summary
-  const avgSeconds = timeToHireRow[0]?.avgSeconds ?? null;
   const decided = offerRow[0]?.decided ?? 0;
   const summary: ReportsSummary = {
     openRoles: openRolesRow[0]?.n ?? 0,
     totalCandidates: candidatesRow[0]?.n ?? 0,
     applications90d: apps90Row[0]?.n ?? 0,
-    hires: hiresRow[0]?.n ?? 0,
-    avgTimeToHireDays:
-      avgSeconds != null ? Math.round(Number(avgSeconds) / DAY_SECONDS) : null,
+    hires: hiringEvents.length,
+    avgTimeToHireDays: averageTimeToHireDays(hiringEvents),
     offerAcceptRate:
       decided > 0 ? Math.round(((offerRow[0]?.accepted ?? 0) / decided) * 100) : null,
   };
@@ -258,8 +328,17 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
     }))
     .sort((a, b) => b.candidates - a.candidates);
 
-  // Hires by month, trailing 12, zero-filled.
-  const hireCounts = new Map(hireMonthRows.map((r) => [r.month, r.n]));
+  // Hires by month, trailing 12, zero-filled. The month is the first Hired
+  // transition, not whichever later edit happened to touch the application.
+  const hireCounts = new Map<string, number>();
+  const yearStart = new Date(now.getTime() - 365 * DAY_SECONDS * 1000);
+  for (const event of hiringEvents) {
+    const hiredAt = new Date(event.hiredAt);
+    if (hiredAt >= yearStart) {
+      const key = monthKey(hiredAt);
+      hireCounts.set(key, (hireCounts.get(key) ?? 0) + 1);
+    }
+  }
   const hiresByMonth: MonthlyPoint[] = [];
   for (let i = 11; i >= 0; i--) {
     const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
@@ -271,28 +350,21 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
     });
   }
 
-  // Time-to-hire histogram buckets.
-  const TTH_BUCKETS: [string, number, number][] = [
-    ["0–14d", 0, 14],
-    ["15–30d", 15, 30],
-    ["31–60d", 31, 60],
-    ["61–90d", 61, 90],
-    ["90d+", 91, Infinity],
-  ];
-  const timeToHire: TimeToHireBucket[] = TTH_BUCKETS.map(([bucket]) => ({
-    bucket,
-    count: 0,
-  }));
-  for (const row of timeToHireDaysRows) {
-    const d = row.days;
-    const idx = TTH_BUCKETS.findIndex(([, lo, hi]) => d >= lo && d <= hi);
-    if (idx >= 0) timeToHire[idx].count++;
-  }
+  const timeToHire: TimeToHireBucket[] = bucketTimeToHire(hiringEvents);
 
   // Period-over-period comparison for the current stat cards.
   const cmp = comparisonRow[0];
-  const curAvgTth = cmp?.curAvgTthSeconds != null ? Number(cmp.curAvgTthSeconds) / DAY_SECONDS : 0;
-  const prevAvgTth = cmp?.prevAvgTthSeconds != null ? Number(cmp.prevAvgTthSeconds) / DAY_SECONDS : 0;
+  const currentStart = new Date(curStart);
+  const previousStart = new Date(prevStart);
+  const currentHires = hiringEvents.filter(
+    (event) => new Date(event.hiredAt) >= currentStart,
+  );
+  const previousHires = hiringEvents.filter((event) => {
+    const hiredAt = new Date(event.hiredAt);
+    return hiredAt >= previousStart && hiredAt < currentStart;
+  });
+  const curAvgTth = averageTimeToHireDays(currentHires);
+  const prevAvgTth = averageTimeToHireDays(previousHires);
   const comparison: ReportsComparison = {
     rangeDays,
     applications: {
@@ -301,16 +373,22 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
       deltaPct: deltaPct(cmp?.curApps ?? 0, cmp?.prevApps ?? 0),
     },
     hires: {
-      current: cmp?.curHires ?? 0,
-      previous: cmp?.prevHires ?? 0,
-      deltaPct: deltaPct(cmp?.curHires ?? 0, cmp?.prevHires ?? 0),
+      current: countEventsBetween(hiringEvents, currentStart),
+      previous: countEventsBetween(hiringEvents, previousStart, currentStart),
+      deltaPct: deltaPct(
+        countEventsBetween(hiringEvents, currentStart),
+        countEventsBetween(hiringEvents, previousStart, currentStart),
+      ),
     },
     avgTimeToHireDays: {
-      current: Math.round(curAvgTth),
-      previous: Math.round(prevAvgTth),
+      current: curAvgTth ?? 0,
+      previous: prevAvgTth ?? 0,
       // Standard current-vs-previous delta; a negative value means hiring got
       // *faster* here (fewer days), so the UI inverts polarity for this stat only.
-      deltaPct: cmp?.prevAvgTthSeconds != null ? deltaPct(curAvgTth, prevAvgTth) : null,
+      deltaPct:
+        prevAvgTth != null && curAvgTth != null
+          ? deltaPct(curAvgTth, prevAvgTth)
+          : null,
     },
   };
 
