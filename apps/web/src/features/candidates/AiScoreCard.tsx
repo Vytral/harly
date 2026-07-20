@@ -7,6 +7,7 @@ import { FileText } from "lucide-react";
 import { toast } from "sonner";
 
 import { generateAiEvaluationAction } from "@/features/candidates/ai-actions";
+import { withKeyLock } from "@/lib/client-mutex";
 import type { CandidateAiEvaluationItem } from "@/features/candidates/data";
 import { AiButton } from "@/components/ui/AiButton";
 import { Badge } from "@/components/ui/badge";
@@ -100,7 +101,9 @@ function GenerateButton({
 
   function run() {
     startTransition(async () => {
-      const result = await generateAiEvaluationAction({ applicationId });
+      const result = await withKeyLock(`application:${applicationId}`, () =>
+        generateAiEvaluationAction({ applicationId }),
+      );
       if (!result.success) {
         toast.error(result.error);
         return;

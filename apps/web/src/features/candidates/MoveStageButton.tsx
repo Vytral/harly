@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 
 import { moveApplicationStage } from "@/features/pipeline/actions";
+import { withKeyLock } from "@/lib/client-mutex";
 import { Button } from "@/components/ui/button";
 import { ArrowLineRightIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
@@ -42,12 +43,16 @@ export function MoveStageButton({
   function move() {
     if (!nextStage) return;
     startTransition(async () => {
-      const result = await moveApplicationStage({
-        applicationId: moveTarget.applicationId,
-        fromStageId: moveTarget.fromStageId,
-        toStageId: nextStage.id,
-        workspaceId: moveTarget.workspaceId,
-      });
+      const result = await withKeyLock(
+        `application:${moveTarget.applicationId}`,
+        () =>
+          moveApplicationStage({
+            applicationId: moveTarget.applicationId,
+            fromStageId: moveTarget.fromStageId,
+            toStageId: nextStage.id,
+            workspaceId: moveTarget.workspaceId,
+          }),
+      );
       if (result.success) {
         toast.success(`Moved to ${nextStage.name}.`);
         (router as { refresh?: () => void }).refresh?.();

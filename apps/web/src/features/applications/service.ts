@@ -7,15 +7,25 @@ import {
   db,
   applications,
   applicationStageHistory,
+  candidatePortalNotifications,
   candidates,
   jobs,
   jobStages,
+  organization,
+  workspaceSettings,
   type Application,
 } from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import { createLogger } from "@/lib/logger";
+import { withConcurrencyRetry } from "@/lib/concurrent";
+import {
+  enqueueEmailOutbox,
+  processEmailOutbox,
+} from "@/lib/email/outbox-processor";
 
 /** Workspace-scoped application service for the REST API. */
+const log = createLogger("applications");
 
 export function serializeApplication(application: Application) {
   return {
@@ -30,6 +40,79 @@ export function serializeApplication(application: Application) {
     createdAt: application.createdAt.toISOString(),
     updatedAt: application.updatedAt.toISOString(),
   };
+}
+
+async function notifyApplicationStatusChange(input: {
+  workspaceId: string;
+  application: Application;
+  status: "hired" | "rejected";
+}) {
+  const [settings] = await db
+    .select({
+      showApplicationStatus: workspaceSettings.portalShowApplicationStatus,
+    })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, input.workspaceId))
+    .limit(1);
+  const [details] = await db
+    .select({
+      email: candidates.email,
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      jobTitle: jobs.title,
+      workspaceName: organization.name,
+    })
+    .from(candidates)
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, input.application.jobId),
+        eq(jobs.workspaceId, input.workspaceId),
+      ),
+    )
+    .innerJoin(organization, eq(organization.id, input.workspaceId))
+    .where(
+      and(
+        eq(candidates.id, input.application.candidateId),
+        eq(candidates.workspaceId, input.workspaceId),
+      ),
+    )
+    .limit(1);
+  if (!details) return;
+
+  if (settings?.showApplicationStatus !== false) {
+    await db.insert(candidatePortalNotifications).values({
+      workspaceId: input.workspaceId,
+      candidateId: input.application.candidateId,
+      type:
+        input.status === "hired" ? "application_hired" : "application_rejected",
+      title:
+        input.status === "hired"
+          ? `Congratulations! You've been hired for ${details.jobTitle}`
+          : `Application for ${details.jobTitle} not selected`,
+      body:
+        input.status === "hired"
+          ? "We're excited to have you on the team!"
+          : "We appreciate your interest and encourage you to apply for other roles.",
+      href: `/portal/applications/${input.application.id}`,
+      metadata: { applicationId: input.application.id, status: input.status },
+    });
+  }
+
+  if (input.status === "rejected" && details.email) {
+    const id = await enqueueEmailOutbox(
+      input.workspaceId,
+      "pipeline.rejected",
+      {
+        candidateEmail: details.email,
+        candidateName: `${details.firstName} ${details.lastName}`,
+        jobTitle: details.jobTitle,
+        workspaceName: details.workspaceName,
+        type: "rejected",
+      },
+    );
+    await processEmailOutbox({ ids: [id], workspaceId: input.workspaceId });
+  }
 }
 
 function cursorWhere(cursor: Cursor | null) {
@@ -120,10 +203,7 @@ export async function createApplicationForApi(input: {
       .select({ id: jobStages.id })
       .from(jobStages)
       .where(
-        and(
-          eq(jobStages.workspaceId, workspaceId),
-          eq(jobStages.jobId, jobId),
-        ),
+        and(eq(jobStages.workspaceId, workspaceId), eq(jobStages.jobId, jobId)),
       )
       .orderBy(asc(jobStages.order))
       .limit(1);
@@ -286,101 +366,182 @@ export async function moveApplicationStageForApi(input: {
   workspaceId: string;
   applicationId: string;
   toStageId: string;
+  retryOnConflict?: boolean;
 }): Promise<Application> {
-  const application = await getApplicationForApi({
-    workspaceId: input.workspaceId,
-    applicationId: input.applicationId,
-  });
-
-  if (application.currentStageId === input.toStageId) {
-    return application;
-  }
-
-  const [stage] = await db
-    .select({ id: jobStages.id })
-    .from(jobStages)
-    .where(
-      and(
-        eq(jobStages.id, input.toStageId),
-        eq(jobStages.workspaceId, input.workspaceId),
-        eq(jobStages.jobId, application.jobId),
-      ),
-    )
-    .limit(1);
-  if (!stage) {
-    throw ApiError.unprocessable("Target stage does not belong to this job.");
-  }
-
-  const fromStageId = application.currentStageId;
-
-  const [updated] = await db.transaction(async (tx) => {
-    const [next] = await tx
-      .select({
-        value: sql<number>`coalesce(max(${applications.pipelineOrder}), 0) + 1`,
-      })
-      .from(applications)
-      .where(
-        and(
-          eq(applications.workspaceId, input.workspaceId),
-          eq(applications.currentStageId, input.toStageId),
-        ),
-      );
-
-    const result = await tx
-      .update(applications)
-      .set({
-        currentStageId: input.toStageId,
-        pipelineOrder: next?.value ?? 1,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(applications.id, input.applicationId),
-          eq(applications.workspaceId, input.workspaceId),
-        ),
-      )
-      .returning();
-
-    await tx.insert(applicationStageHistory).values({
+  const attemptMove = async (): Promise<Application> => {
+    const application = await getApplicationForApi({
       workspaceId: input.workspaceId,
       applicationId: input.applicationId,
-      fromStageId,
-      toStageId: input.toStageId,
-      movedById: null,
     });
 
-    return result;
-  });
+    if (application.currentStageId === input.toStageId) {
+      return application;
+    }
 
-  await emitWebhookEvent(input.workspaceId, "application.stage_changed", {
-    application: serializeApplication(updated),
-    fromStageId,
-    toStageId: input.toStageId,
-  });
-  return updated;
+    const [stage] = await db
+      .select({ id: jobStages.id, name: jobStages.name })
+      .from(jobStages)
+      .where(
+        and(
+          eq(jobStages.id, input.toStageId),
+          eq(jobStages.workspaceId, input.workspaceId),
+          eq(jobStages.jobId, application.jobId),
+        ),
+      )
+      .limit(1);
+    if (!stage) {
+      throw ApiError.unprocessable("Target stage does not belong to this job.");
+    }
+
+    const fromStageId = application.currentStageId;
+
+    const [updated] = await db.transaction(async (tx) => {
+      const [next] = await tx
+        .select({
+          value: sql<number>`coalesce(max(${applications.pipelineOrder}), 0) + 1`,
+        })
+        .from(applications)
+        .where(
+          and(
+            eq(applications.workspaceId, input.workspaceId),
+            eq(applications.currentStageId, input.toStageId),
+          ),
+        );
+
+      const result = await tx
+        .update(applications)
+        .set({
+          currentStageId: input.toStageId,
+          pipelineOrder: next?.value ?? 1,
+          ...(stage.name.toLowerCase() === "rejected"
+            ? { status: "rejected" }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(applications.id, input.applicationId),
+            eq(applications.workspaceId, input.workspaceId),
+            eq(applications.updatedAt, application.updatedAt),
+          ),
+        )
+        .returning();
+
+      if (result.length === 0) {
+        throw ApiError.conflict("Application changed; retry request.");
+      }
+
+      await tx.insert(applicationStageHistory).values({
+        workspaceId: input.workspaceId,
+        applicationId: input.applicationId,
+        fromStageId,
+        toStageId: input.toStageId,
+        movedById: null,
+      });
+
+      return result;
+    });
+
+    await emitWebhookEvent(input.workspaceId, "application.stage_changed", {
+      application: serializeApplication(updated),
+      fromStageId,
+      toStageId: input.toStageId,
+    });
+
+    return updated;
+  };
+
+  return input.retryOnConflict
+    ? withConcurrencyRetry(attemptMove, {
+        isConflict: (error) =>
+          error instanceof ApiError
+            ? error.code === "conflict"
+            : (error as { code?: string } | null)?.code === "conflict",
+        onExhausted: (error, attempts) =>
+          log.error(
+            { error, attempts, applicationId: input.applicationId },
+            "moveApplicationStageForApi exhausted concurrency retries",
+          ),
+      })
+    : attemptMove();
 }
 
 async function setApplicationStatus(
-  input: { workspaceId: string; applicationId: string },
-  status: Application["status"],
+  input: { workspaceId: string; applicationId: string; retryOnConflict?: boolean },
+  status: "hired" | "rejected",
   event: "application.hired" | "application.rejected",
 ): Promise<Application> {
-  await getApplicationForApi(input);
-  const [updated] = await db
-    .update(applications)
-    .set({ status, updatedAt: new Date() })
-    .where(
-      and(
-        eq(applications.id, input.applicationId),
-        eq(applications.workspaceId, input.workspaceId),
-      ),
-    )
-    .returning();
+  const attemptStatus = async (): Promise<Application> => {
+    const application = await getApplicationForApi(input);
+    const terminalStageName = status === "hired" ? "Hired" : "Rejected";
+    const [terminalStage] = await db
+      .select({ id: jobStages.id })
+      .from(jobStages)
+      .where(
+        and(
+          eq(jobStages.workspaceId, input.workspaceId),
+          eq(jobStages.jobId, application.jobId),
+          eq(jobStages.name, terminalStageName),
+        ),
+      )
+      .limit(1);
 
-  await emitWebhookEvent(input.workspaceId, event, {
-    application: serializeApplication(updated),
-  });
-  return updated;
+    const [updated] = await db.transaction(async (tx) => {
+      const [next] = await tx
+        .update(applications)
+        .set({
+          status,
+          ...(terminalStage ? { currentStageId: terminalStage.id } : {}),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(applications.id, input.applicationId),
+            eq(applications.workspaceId, input.workspaceId),
+            eq(applications.updatedAt, application.updatedAt),
+          ),
+        )
+        .returning();
+      if (!next) throw ApiError.conflict("Application changed; retry request.");
+
+      if (terminalStage && terminalStage.id !== application.currentStageId) {
+        await tx.insert(applicationStageHistory).values({
+          workspaceId: input.workspaceId,
+          applicationId: input.applicationId,
+          fromStageId: application.currentStageId,
+          toStageId: terminalStage.id,
+          movedById: null,
+        });
+      }
+      return [next];
+    });
+
+    await emitWebhookEvent(input.workspaceId, event, {
+      application: serializeApplication(updated),
+    });
+    if (application.status !== status) {
+      await notifyApplicationStatusChange({
+        workspaceId: input.workspaceId,
+        application: updated,
+        status,
+      });
+    }
+    return updated;
+  };
+
+  return input.retryOnConflict
+    ? withConcurrencyRetry(attemptStatus, {
+        isConflict: (error) =>
+          error instanceof ApiError
+            ? error.code === "conflict"
+            : (error as { code?: string } | null)?.code === "conflict",
+        onExhausted: (error, attempts) =>
+          log.error(
+            { error, attempts, applicationId: input.applicationId },
+            "setApplicationStatus exhausted concurrency retries",
+          ),
+      })
+    : attemptStatus();
 }
 
 export function hireApplicationForApi(input: {

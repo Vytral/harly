@@ -110,6 +110,50 @@ function makeTx(firstUpdateRows: unknown[]) {
   return { tx };
 }
 
+// Simulate `failures` consecutive guarded-update misses (optimistic lock
+// conflicts) before the move finally succeeds. Fresh row read each attempt.
+function makeTxWithFailures(failures: number) {
+  let attempt = 0;
+  const selectBuilder: Record<string, unknown> = {
+    from: () => selectBuilder,
+    innerJoin: () => selectBuilder,
+    where: () => selectBuilder,
+    limit: () => selectBuilder,
+    then: (_resolve: (v: unknown) => void) => {
+      // Each read returns the row with a *current* updatedAt, proving the
+      // retry re-reads fresh state instead of reusing the first snapshot.
+      attempt += 1;
+      const fresh = {
+        ...APPLICATION_ROW,
+        updatedAt: new Date(`2024-01-0${attempt}T00:00:00.000Z`),
+      };
+      _resolve([fresh]);
+    },
+  };
+
+  let updateCount = 0;
+  const updateBuilder: Record<string, unknown> = {
+    set: () => updateBuilder,
+    where: () => updateBuilder,
+    returning: async () => {
+      updateCount += 1;
+      // First `failures` updates miss (0 rows); the next one succeeds.
+      return updateCount <= failures ? [] : [{ id: "app-1" }];
+    },
+  };
+
+  const insertBuilder = {
+    values: () => ({ then: (_resolve: (v: unknown) => void) => _resolve([]) }),
+  };
+
+  const tx = {
+    select: () => selectBuilder,
+    update: () => updateBuilder,
+    insert: () => insertBuilder,
+  };
+  return { tx };
+}
+
 describe("F1-08 pipeline move concurrency guard", () => {
   beforeEach(() => {
     mocks.transactionImpl.mockReset();
@@ -120,10 +164,10 @@ describe("F1-08 pipeline move concurrency guard", () => {
     mocks.requirePermission.mockResolvedValue(undefined);
   });
 
-  it("rejects the move when the application was modified concurrently (optimistic lock)", async () => {
-    // Simulate another recruiter having changed the row: the guarded update
-    // matches 0 rows because `updatedAt` no longer matches.
-    const { tx } = makeTx([]);
+  it("rejects the move when the application stays modified concurrently (optimistic lock)", async () => {
+    // Persistent conflict: every guarded update matches 0 rows. The retry runs
+    // up to maxAttempts and then surfaces the real failure.
+    const { tx } = makeTxWithFailures(99);
     mocks.transactionImpl.mockImplementation(
       async (fn: (tx: unknown) => Promise<unknown>) => fn(tx),
     );
@@ -138,6 +182,7 @@ describe("F1-08 pipeline move concurrency guard", () => {
 
     expect(result.success).toBe(false);
     expect(result.error ?? "").toMatch(/changed by another recruiter|unable to move/i);
+    expect(mocks.transactionImpl).toHaveBeenCalledTimes(3);
   });
 
   it("completes the move when no concurrent modification occurred", async () => {
@@ -156,5 +201,47 @@ describe("F1-08 pipeline move concurrency guard", () => {
     });
 
     expect(result.success).toBe(true);
+  });
+
+  it("silently retries after a transient optimistic-lock conflict and succeeds on the next attempt", async () => {
+    // One conflict (another action touched the row), then the retry re-reads
+    // the fresh row and the move succeeds. Confirms no stale data leaks across
+    // attempts and exactly 2 transactions run.
+    const { tx } = makeTxWithFailures(1);
+    mocks.transactionImpl.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => fn(tx),
+    );
+
+    const result = await moveApplicationInPipeline({
+      applicationId: "app-1",
+      toStageId: "stage-target",
+      fromStageId: "stage-current",
+      workspaceId: WORKSPACE_ID,
+      orderedApplicationIds: ["app-1"],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.transactionImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("surfaces the real error after exhausting all retries instead of hanging", async () => {
+    // Three consecutive conflicts (maxAttempts = 3) → the action must return
+    // failure with the real message, not hang or loop forever.
+    const { tx } = makeTxWithFailures(99);
+    mocks.transactionImpl.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => fn(tx),
+    );
+
+    const result = await moveApplicationInPipeline({
+      applicationId: "app-1",
+      toStageId: "stage-target",
+      fromStageId: "stage-current",
+      workspaceId: WORKSPACE_ID,
+      orderedApplicationIds: ["app-1"],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error ?? "").toMatch(/changed by another recruiter|unable to move/i);
+    expect(mocks.transactionImpl).toHaveBeenCalledTimes(3);
   });
 });

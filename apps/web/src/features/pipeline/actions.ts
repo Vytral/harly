@@ -84,6 +84,10 @@ type PipelineEmail =
     };
 
 import { createLogger } from "@/lib/logger";
+import {
+  ConcurrencyConflictError,
+  withConcurrencyRetry,
+} from "@/lib/concurrent";
 
 const log = createLogger("pipeline");
 
@@ -179,7 +183,9 @@ export async function moveApplicationInPipeline(
     // Captured inside the transaction, emitted after commit (see data.ts note).
     const stageEvents: StageTransitionEvent[] = [];
 
-    const emails = await db.transaction<PipelineEmail[]>(async (tx) => {
+    const emails = await withConcurrencyRetry(
+      async () => {
+        return db.transaction<PipelineEmail[]>(async (tx) => {
       const [application] = await tx
         .select({
           id: applications.id,
@@ -256,7 +262,7 @@ export async function moveApplicationInPipeline(
         .returning({ id: applications.id });
 
       if (!updatedApplication) {
-        throw new Error("Application changed by another recruiter. Refresh and try again.");
+        throw new ConcurrencyConflictError();
       }
 
       if (input.orderedApplicationIds.length > 0) {
@@ -395,7 +401,16 @@ export async function moveApplicationInPipeline(
       }
 
       return [];
-    });
+        });
+      },
+      {
+        onExhausted: (error, attempts) =>
+          log.error(
+            { error, attempts, applicationId: input.applicationId },
+            "moveApplicationInPipeline exhausted concurrency retries",
+          ),
+      },
+    );
 
     revalidatePath("/dashboard/pipeline");
     void sendPipelineEmails(input.workspaceId, emails);
@@ -455,7 +470,9 @@ export async function bulkMoveApplications(
 
     const stageEvents: StageTransitionEvent[] = [];
 
-    const emails = await db.transaction<PipelineEmail[]>(async (tx) => {
+    const emails = await withConcurrencyRetry(
+      async () => {
+        return db.transaction<PipelineEmail[]>(async (tx) => {
       const [targetStage] = await tx
         .select({
           id: jobStages.id,
@@ -578,7 +595,9 @@ export async function bulkMoveApplications(
             )
             .returning({ id: applications.id });
           if (!updated) {
-            throw new Error("An application changed by another recruiter. Refresh and try again.");
+            throw new ConcurrencyConflictError(
+              "An application changed by another recruiter. Refresh and try again.",
+            );
           }
           versionById.set(applicationId, now);
         }
@@ -690,14 +709,25 @@ export async function bulkMoveApplications(
             ),
           )
           .returning({ id: applications.id });
-        if (!updated) {
-          throw new Error("Application ordering changed. Refresh and try again.");
-        }
-        versionById.set(applicationId, now);
+          if (!updated) {
+            throw new ConcurrencyConflictError(
+              "Application ordering changed. Refresh and try again.",
+            );
+          }
+          versionById.set(applicationId, now);
       }
 
       return collectedEmails;
-    });
+        });
+      },
+      {
+        onExhausted: (error, attempts) =>
+          log.error(
+            { error, attempts, workspaceId: input.workspaceId },
+            "bulkMoveApplications exhausted concurrency retries",
+          ),
+      },
+    );
 
     revalidatePath("/dashboard/pipeline");
     void sendPipelineEmails(input.workspaceId, emails);
@@ -767,7 +797,9 @@ export async function updateApplicationStatus(
 
     const stageEvents: StageTransitionEvent[] = [];
     const statusEvents: string[] = [];
-    const emails = await db.transaction<PipelineEmail[]>(async (tx) => {
+    const emails = await withConcurrencyRetry(
+      async () => {
+        return db.transaction<PipelineEmail[]>(async (tx) => {
       const now = new Date();
       const collectedEmails: PipelineEmail[] = [];
 
@@ -894,7 +926,7 @@ export async function updateApplicationStatus(
           .returning({ id: applications.id });
 
         if (!updated) {
-          throw new Error("Application changed by another recruiter. Refresh and try again.");
+          throw new ConcurrencyConflictError();
         }
 
         if (stageChanged) {
@@ -991,7 +1023,16 @@ export async function updateApplicationStatus(
       }
 
       return collectedEmails;
-    });
+        });
+      },
+      {
+        onExhausted: (error, attempts) =>
+          log.error(
+            { error, attempts, workspaceId: input.workspaceId },
+            "updateApplicationStatus exhausted concurrency retries",
+          ),
+      },
+    );
 
     revalidatePath("/dashboard/pipeline");
 

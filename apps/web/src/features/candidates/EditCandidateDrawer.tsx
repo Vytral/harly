@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { GithubIcon } from "@/components/ui/icons/GithubIcon";
 import { LinkedinLogo } from "@/components/ui/icons/brands";
 import { updateCandidateProfile } from "@/features/candidates/actions";
+import { withKeyLock } from "@/lib/client-mutex";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -64,20 +65,22 @@ export function EditCandidateDrawer({
           className="space-y-4"
           action={(formData) => {
             startTransition(async () => {
-              const result = await updateCandidateProfile({
-                candidateId: candidate.id,
-                workspaceId: candidate.workspaceId,
-                firstName: String(formData.get("firstName") ?? ""),
-                lastName: String(formData.get("lastName") ?? ""),
-                email: String(formData.get("email") ?? ""),
-                phone: String(formData.get("phone") ?? ""),
-                address: String(formData.get("address") ?? ""),
-                linkedinUrl: String(formData.get("linkedinUrl") ?? ""),
-                githubUrl: String(formData.get("githubUrl") ?? ""),
-                websiteUrl: String(formData.get("websiteUrl") ?? ""),
-                headline: String(formData.get("headline") ?? ""),
-                summary: String(formData.get("summary") ?? ""),
-              });
+              const result = await withKeyLock(`candidate:${candidate.id}`, () =>
+                updateCandidateProfile({
+                  candidateId: candidate.id,
+                  workspaceId: candidate.workspaceId,
+                  firstName: String(formData.get("firstName") ?? ""),
+                  lastName: String(formData.get("lastName") ?? ""),
+                  email: String(formData.get("email") ?? ""),
+                  phone: String(formData.get("phone") ?? ""),
+                  address: String(formData.get("address") ?? ""),
+                  linkedinUrl: String(formData.get("linkedinUrl") ?? ""),
+                  githubUrl: String(formData.get("githubUrl") ?? ""),
+                  websiteUrl: String(formData.get("websiteUrl") ?? ""),
+                  headline: String(formData.get("headline") ?? ""),
+                  summary: String(formData.get("summary") ?? ""),
+                }),
+              );
               if (!result.success) {
                 toast.error(result.error ?? "Unable to update candidate.");
                 return;
