@@ -1,7 +1,15 @@
 "use client";
 
+import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { HarlyAIButton, HarlyAIPanel } from "./HarlyAIPanel";
+
+function candidateIdFromPath(pathname: string | null): string | undefined {
+  const match = pathname?.match(
+    /^\/dashboard\/candidates\/([0-9a-f-]{36})(?:\/|$)/i,
+  );
+  return match?.[1];
+}
 
 export function HarlyAIWidget({
   userName,
@@ -14,15 +22,18 @@ export function HarlyAIWidget({
   candidateId?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const pathname = usePathname();
+  const activeCandidateId = candidateId ?? candidateIdFromPath(pathname);
 
   return (
     <>
       <HarlyAIPanel
+        key={activeCandidateId ?? "workspace"}
         userName={userName}
         aiEnabled={aiEnabled}
         open={open}
         onClose={() => setOpen(false)}
-        candidateId={candidateId}
+        candidateId={activeCandidateId}
       />
       <HarlyAIButton open={open} onClick={() => setOpen((v) => !v)} />
     </>

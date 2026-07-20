@@ -97,6 +97,40 @@ describe("POST /api/ai/chat", () => {
     expect(mocks.streamText).not.toHaveBeenCalled();
   });
 
+  it("accepts the extra keys the AI SDK v6 client sends (id, trigger, messageId) instead of 400ing", async () => {
+    const response = await POST(
+      request({
+        id: "chat-1",
+        messages: [message],
+        trigger: "submit",
+        messageId: "m-1",
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.validateUIMessages).toHaveBeenCalledWith({
+      messages: [message],
+      tools: { lookup: { execute: expect.any(Function) } },
+    });
+  });
+
+  it("passes the active candidate context to tools and the system prompt", async () => {
+    const candidateId = "6a5346f8-d3e6-4b2e-9d12-da950cc40274";
+    const response = await POST(
+      request({ messages: [message], candidateId }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.buildHarlyTools).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      userId: "user-1",
+      activeCandidateId: candidateId,
+    });
+    expect(mocks.buildHarlySystemPrompt).toHaveBeenCalledWith(
+      expect.objectContaining({ activeCandidateId: candidateId }),
+    );
+  });
+
   it("validates messages and propagates cancellation, usage, and both rate-limit scopes", async () => {
     const controller = new AbortController();
     const chatRequest = request({ messages: [message] }, controller.signal);
@@ -118,7 +152,7 @@ describe("POST /api/ai/chat", () => {
     );
     expect(mocks.streamText).toHaveBeenCalledWith(expect.objectContaining({
       abortSignal: chatRequest.signal,
-      maxOutputTokens: 2_048,
+      maxOutputTokens: 3_072,
       messages: [{ role: "user", content: "Hello" }],
     }));
     expect(mocks.recordAiUsage).toHaveBeenCalledWith(expect.objectContaining({

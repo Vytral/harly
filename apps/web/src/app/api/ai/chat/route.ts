@@ -19,23 +19,25 @@ import { recordAiUsage } from "@/lib/ai/usage";
 import { enforceRateLimit } from "@/server/api/ratelimit";
 
 export const runtime = "nodejs";
-export const maxDuration = 30;
+export const maxDuration = 45;
 
 const MAX_CHAT_BODY_BYTES = 256_000;
 const MAX_CHAT_MESSAGES = 40;
 const MAX_CHAT_HISTORY_CHARS = 100_000;
-const MAX_CHAT_OUTPUT_TOKENS = 2_048;
+const MAX_CHAT_OUTPUT_TOKENS = 3_072;
 const CHAT_RATE_LIMIT_WINDOW_MS = 60_000;
 const CHAT_WORKSPACE_RATE_LIMIT = 40;
 const CHAT_USER_RATE_LIMIT = 12;
 
-const chatRequestSchema = z
-  .object({
-    messages: z.unknown(),
-    conversationId: z.string().uuid().optional(),
-    candidateId: z.string().uuid().optional(),
-  })
-  .strict();
+// NOTE: the AI SDK v6 client (DefaultChatTransport / useChat v4) sends extra
+// top-level keys (`id`, `trigger`, `messageId`). Only validate the fields we
+// consume and ignore the rest, otherwise `.strict()` rejects the request with
+// a 400 ("Invalid request body").
+const chatRequestSchema = z.object({
+  messages: z.unknown(),
+  conversationId: z.string().uuid().optional(),
+  candidateId: z.string().uuid().optional(),
+});
 
 type HarlyChatMessage = UIMessage<
   unknown,
@@ -111,7 +113,11 @@ export async function POST(req: Request) {
 
   const workspaceId = context.organization.id;
   const userId = context.user.id;
-  const tools = buildHarlyTools({ workspaceId, userId });
+  const tools = buildHarlyTools({
+    workspaceId,
+    userId,
+    activeCandidateId: candidateId,
+  });
 
   let messages: HarlyChatMessage[];
   try {
@@ -149,6 +155,7 @@ export async function POST(req: Request) {
       workspaceName: context.organization.name,
       userName: context.user.name,
       role: context.role,
+      activeCandidateId: candidateId,
       today: new Intl.DateTimeFormat("en-US", {
         weekday: "long",
         year: "numeric",
@@ -159,11 +166,12 @@ export async function POST(req: Request) {
     messages: await convertToModelMessages(messages),
     tools,
     // Cap tool round-trips so an adversarial prompt can't loop the provider
-    // (IA-15). Bound the whole request just under the route's maxDuration.
-    stopWhen: stepCountIs(6),
+    // (IA-15), while leaving enough room for the normal resolve → inspect →
+    // propose flow. Bound the whole request just under the route's maxDuration.
+    stopWhen: stepCountIs(8),
     maxOutputTokens: MAX_CHAT_OUTPUT_TOKENS,
     abortSignal: req.signal,
-    timeout: 28_000,
+    timeout: 42_000,
     onError: (error) => {
       console.error("Harly AI chat stream error", {
         workspaceId,

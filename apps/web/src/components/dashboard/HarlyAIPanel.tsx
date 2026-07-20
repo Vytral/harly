@@ -35,7 +35,10 @@ import {
   PromptInputActions,
   PromptInputAction,
 } from "@/components/ui/prompt-input";
-import { confirmAgentWriteAction } from "@/lib/ai/agent/write-actions";
+import {
+  confirmAgentWriteAction,
+  undoAgentWriteAction,
+} from "@/lib/ai/agent/write-actions";
 import { isAgentWriteTool } from "@/lib/ai/agent/write-tool-names";
 import {
   listConversationsAction,
@@ -119,6 +122,7 @@ const TOOL_LABELS: Record<string, string> = {
   "tool-detectDuplicates": "Checking for duplicates",
   "tool-compareCandidates": "Comparing candidates",
   "tool-bulkScoreJob": "Scoring all applicants",
+  "tool-recentAgentActions": "Checking recent Harly actions",
 };
 
 // Custom markdown renderers: internal links (candidate/job profiles) use the
@@ -296,6 +300,76 @@ const SEVERITY_TONE: Record<string, string> = {
 function ToolResultCard({ toolName, output }: { toolName: string; output: unknown }) {
   if (!output || typeof output !== "object") return null;
   const o = output as Record<string, unknown>;
+
+  if (toolName === "recentAgentActions" && Array.isArray(o.actions)) {
+    const labelFor = (name: unknown) => {
+      const labels: Record<string, string> = {
+        moveCandidateStage: "Moved candidate",
+        rejectCandidate: "Rejected candidate",
+        createTask: "Created task",
+        updateTask: "Updated task",
+        completeMyOpenTasks: "Completed open tasks",
+        createJob: "Created draft job",
+        addCandidateNote: "Added candidate note",
+        addCandidateTag: "Added candidate tag",
+        createOffer: "Created draft offer",
+        sendOffer: "Sent offer",
+        decideOffer: "Recorded offer decision",
+        scheduleInterview: "Scheduled interview",
+        addToTalentPool: "Added candidate to talent pool",
+        assignFromPoolToJob: "Assigned candidate to job",
+        createScorecard: "Created scorecard",
+        sendCandidateEmail: "Sent candidate email",
+        undoAgentAction: "Undid an action",
+      };
+      if (typeof name !== "string") return "Harly action";
+      return labels[name] ?? name.replace(/([a-z])([A-Z])/g, "$1 $2");
+    };
+    const actions = o.actions as Array<Record<string, unknown>>;
+    return (
+      <Card className="gap-0 border-border/70 p-2 shadow-none">
+        {actions.length === 0 ? (
+          <span className="px-1 py-0.5 text-[12px] text-muted-foreground">No recent actions.</span>
+        ) : (
+          actions.map((action, index) => {
+            const success = action.success;
+            const tone =
+              success === true
+                ? "text-emerald-600 dark:text-emerald-400"
+                : success === false
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-muted-foreground";
+            const stateLabel =
+              action.status === "processing"
+                ? "In progress"
+                : success === true
+                  ? "Done"
+                  : success === false
+                    ? "Failed"
+                    : "Unknown";
+            return (
+              <div
+                key={typeof action.receiptId === "string" ? action.receiptId : index}
+                className="flex items-center gap-2 border-b border-border/50 px-1 py-2 last:border-0"
+              >
+                <span className={cn("size-1.5 shrink-0 rounded-full bg-current", tone)} />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[12px] font-medium">{labelFor(action.toolName)}</p>
+                  {typeof action.message === "string" && (
+                    <p className="truncate text-[11px] text-muted-foreground">{action.message}</p>
+                  )}
+                </div>
+                {action.undoable === true && (
+                  <span className="shrink-0 text-[10px] text-muted-foreground">Undo available</span>
+                )}
+                <span className={cn("shrink-0 text-[10px]", tone)}>{stateLabel}</span>
+              </div>
+            );
+          })
+        )}
+      </Card>
+    );
+  }
 
   // Pipeline → stage bars
   if (toolName === "reviewPipeline" && Array.isArray(o.stages)) {
@@ -918,6 +992,8 @@ function getWriteActionPreview(
     : [];
 
   switch (toolName) {
+    case "undoAgentAction":
+      return { title: "Undo action", details: [] };
     case "moveCandidateStage":
       return {
         title: "Move candidate",
@@ -1037,15 +1113,25 @@ function WriteConfirmCard({
   pending,
   onConfirm,
   onCancel,
+  onUndo,
 }: {
   toolCallId: string;
   toolName: string;
   summary: string;
   input: Record<string, unknown>;
-  done: { confirmed: boolean; error?: string; message?: string } | null;
+  done: {
+    confirmed: boolean;
+    error?: string;
+    message?: string;
+    receiptId?: string;
+    undoable?: boolean;
+    undoing?: boolean;
+    undone?: boolean;
+  } | null;
   pending: boolean;
   onConfirm: () => void;
   onCancel: () => void;
+  onUndo?: () => void;
 }) {
   const isMove = toolName === "moveCandidateStage";
   const from = String(input.fromStageName ?? "");
@@ -1077,6 +1163,17 @@ function WriteConfirmCard({
             <StagePath from={from} to={to} animate />
           </div>
         )}
+        {done.confirmed && done.undoable && !done.undone && onUndo ? (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="mt-2 h-7 px-2 text-xs"
+            onClick={onUndo}
+            disabled={done.undoing}
+          >
+            {done.undoing ? "Undoing…" : "Undo"}
+          </Button>
+        ) : null}
       </div>
     );
   }
@@ -1260,7 +1357,18 @@ function HarlyChat({
 }: HarlyChatProps) {
   const [input, setInput] = useState("");
   const [writeResults, setWriteResults] = useState<
-    Record<string, { confirmed: boolean; error?: string; message?: string }>
+    Record<
+      string,
+      {
+        confirmed: boolean;
+        error?: string;
+        message?: string;
+        receiptId?: string;
+        undoable?: boolean;
+        undoing?: boolean;
+        undone?: boolean;
+      }
+    >
   >({});
   const [pendingWriteIds, setPendingWriteIds] = useState<Set<string>>(() => new Set());
   const pendingWriteIdsRef = useRef(new Set<string>());
@@ -1315,13 +1423,15 @@ function HarlyChat({
     pendingWriteIdsRef.current.add(toolCallId);
     setPendingWriteIds((previous) => new Set(previous).add(toolCallId));
     try {
-      const res = await confirmAgentWriteAction(toolName, rawInput);
+      const res = await confirmAgentWriteAction(toolName, rawInput, toolCallId);
       setWriteResults((p) => ({
         ...p,
         [toolCallId]: {
           confirmed: true,
           error: res.success ? undefined : res.error,
           message: res.message,
+          receiptId: res.receiptId,
+          undoable: Boolean(res.undo),
         },
       }));
       void addToolOutput({
@@ -1339,6 +1449,27 @@ function HarlyChat({
         return next;
       });
     }
+  }
+
+  async function handleWriteUndo(toolCallId: string) {
+    const current = writeResults[toolCallId];
+    if (!current?.receiptId || current.undoing || current.undone) return;
+    setWriteResults((previous) => ({
+      ...previous,
+      [toolCallId]: { ...current, undoing: true },
+    }));
+    const result = await undoAgentWriteAction(current.receiptId);
+    setWriteResults((previous) => ({
+      ...previous,
+      [toolCallId]: {
+        ...current,
+        undoing: false,
+        undone: result.success,
+        undoable: result.success ? false : current.undoable,
+        error: result.success ? undefined : result.error,
+        message: result.success ? result.message ?? "Action undone." : current.message,
+      },
+    }));
   }
 
   const hasMessages = messages.length > 0;
@@ -1428,6 +1559,7 @@ function HarlyChat({
                           pending={pendingWriteIds.has(callId)}
                           onConfirm={() => handleWriteConfirm(toolName, callId, inputData, true)}
                           onCancel={() => handleWriteConfirm(toolName, callId, inputData, false)}
+                          onUndo={() => handleWriteUndo(callId)}
                         />,
                       );
                       if (
@@ -1578,9 +1710,13 @@ function HarlyChat({
                     ) : (
                       <Button
                         size="icon-sm"
-                        disabled={!input.trim()}
                         onClick={submit}
                         aria-label="Send"
+                        aria-disabled={!input.trim()}
+                        className={cn(
+                          !input.trim() &&
+                            "pointer-events-none opacity-50",
+                        )}
                       >
                         <ArrowUp className="size-3.5" strokeWidth={2.5} />
                       </Button>
