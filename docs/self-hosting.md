@@ -67,6 +67,16 @@ Visit `/setup`, enter `HARLY_SETUP_SECRET`, and create the account matching
 creation is a PostgreSQL-locked transaction that creates exactly one owner.
 After completion `/setup` is unavailable and registration is invite-only.
 
+### Configure Google Calendar and Google Meet
+
+Google Calendar and Google Meet are optional. Before connecting a workspace,
+create a Google Cloud OAuth web client, set `GOOGLE_CLIENT_ID` and
+`GOOGLE_CLIENT_SECRET` in the private `.env`, and register
+`<HARLY_URL>/api/integrations/google/callback` as an authorized redirect URI.
+Then connect the calendar from **Settings → Integrations**. Follow the
+[complete Google OAuth setup guide](integrations/google-calendar.md),
+including the localhost callback for development installations.
+
 ## Proxy modes
 
 - `caddy`: `COMPOSE_PROFILES=proxy`; Caddy publishes 80/443 and obtains TLS.

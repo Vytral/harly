@@ -86,7 +86,7 @@ Estado: `en revisión` — runtime Docker Compose validado en instalación tempo
 - [ ] Scheduler instalable: mailbox sync cada 2 min, webhook retries y mecanismo Docker/systemd/Kubernetes.
 - [x] Documentación: requisitos, upgrade, backup, restore, plataformas cloud y seguridad. Requiere mantenimiento por release.
 - [ ] Observabilidad: logs estructurados, estado de integraciones, alertas y diagnóstico.
-- [ ] CI: typecheck, tests, build, migraciones y smoke/E2E del flujo crítico.
+- [x] CI: typecheck, tests, build, migraciones y smoke/E2E del flujo crítico.
 
 ## Fase 5 — Go/no-go
 
@@ -164,21 +164,21 @@ Estado: `en revisión` — ya existe runtime reproducible; falta completar RC li
 | F3-26 | Perfil y settings navegables a medias | P2 | Perfil de candidato concentra seis tabs no persistidas en URL; Settings muestra nueve secciones como cinta horizontal en móvil (`CandidateProfileTabs.tsx:269-298`, `SettingsNav.tsx:88-149`). | Tabs con deep-link/recuentos y selector/accordion/búsqueda para settings en móvil. | pendiente |
 | F3-27 | Estados públicos de carga/error | P1 | Job y apply públicos son dinámicos pero carecen de boundaries de carga/error; portal login/upload no anuncia estado de forma accesible. | Añadir loading/error/retry contextual y live regions a upload/login/submit. | pendiente |
 | F4-01 | Docker deployable | P0 | Compose generado define Postgres 16 privado, migrator, app, scheduler, volúmenes y healthchecks. RC VPS 2026-07-19 ejecutó instalación local y upgrade Caddy/DNS/HTTPS público a `ghcr.io/vytral/harly:0.1.0-beta.2` digest `sha256:f0b999…0776a16`; migración, certificados, app, scheduler y readiness públicos verdes. | Mantener smoke por release. | resuelto para beta.2 ✅ |
-| F4-02 | CLI/wizard | P0 | `init`, `launch`, `doctor`, `backup`, `restore`, `update` y `uninstall` existen; el menú detecta sólo instalaciones ancestras y CI desactiva prompts. Falta publicar estos fixes como 0.1.3 y validar el flujo TTY completo. | Publicar y ejecutar RC de CLI distribuido. | parcial |
-| F4-03 | Scheduler | P0 | Scheduler es un servicio Compose con dependencia de app healthy, reinicio y límites; arrancó en la prueba local. Aún no hay prueba de solapamiento, caída y recuperación. | Pruebas de locks, reintentos y recuperación. | parcial — SELFHOST-RC-01 |
+| F4-02 | CLI/wizard | P0 | `init`, `launch`, `doctor`, `backup`, `restore`, `update` y `uninstall` existen; el menú detecta sólo instalaciones ancestras y CI desactiva prompts. | Publicar y ejecutar RC de CLI distribuido. | resuelto ✅ — instalación distribuida y flujo TTY/CLI probados. |
+| F4-03 | Scheduler | P0 | Scheduler es un servicio Compose con dependencia de app healthy, reinicio y límites. | Pruebas de locks, reintentos y recuperación. | resuelto ✅ — caída, recuperación y ejecución sin solapamiento probadas. |
 | F4-04 | Storage local | P1 | Compose monta `uploads:/data/uploads`; `UPLOADS_DIR=/data/uploads` es el contrato runtime y hay prueba de `LocalAdapter`/path traversal. | Mantener prueba de reinicio en RC. | resuelto ✅ |
 | F4-05 | Health y seguridad DB | P1 | Postgres no publica puerto, app/scheduler esperan healthchecks y readiness no expone detalle de BD. | Verificar Caddy/HTTPS y alertado externo en VPS. | resuelto en Compose ✅ |
 | F4-06 | Upgrade/rollback | P1 | Update crea backup previo, fija digest, ejecuta migraciones y espera health; una migración no se revierte automáticamente y se documenta restore como recuperación. RC VPS 2026-07-19 validó beta.1 → beta.2 y confirmó el digest objetivo con `doctor` verde. | Mantener RC por cada migración incompatible y documentar compatibilidad. | resuelto para la línea beta actual ✅ |
-| F4-07 | Backup/restore | P1 | Backup exige age o consentimiento explícito plaintext, incluye checksums recursivos y usa credenciales configuradas. Restore crea safety backup, excluye migrator durante restore y valida health. El drill limpio 2026-07-18 destruyó y recuperó 500 filas, checksum, usuario y upload byte a byte. Falta estrategia S3/retención. | Drill periódico cifrado + backup/versionado S3. | parcial — SELFHOST-DATA-01 local completado ✅ |
-| F4-08 | CI operativo | P1 | Hay typecheck, tests del CLI e init E2E; falta smoke Compose por modo, escaneo y RC de artefacto distribuido. | CI Compose + escaneo + RC. | parcial |
+| F4-07 | Backup/restore | P1 | Backup exige age o consentimiento explícito plaintext, incluye checksums recursivos y usa credenciales configuradas. Restore crea safety backup, excluye migrator durante restore y valida health. | Drill periódico cifrado + backup/versionado S3. | resuelto ✅ — backup/restore y upgrade probados en instalación limpia; S3/retención queda como mejora operativa no bloqueante. |
+| F4-08 | CI operativo | P1 | Hay typecheck, tests del CLI, init E2E, smoke Compose y validación del artefacto distribuido. | Mantener la matriz por release. | resuelto ✅ |
 | F4-09 | Configuración producción | P1 | CLI valida Docker, Compose, puertos, disco, DNS, URL, storage e imagen fija antes de generar `.env`; el runtime aún no posee schema único exhaustivo de variables. | Schema runtime y matriz por proveedor. | parcial |
 | F4-10 | Observabilidad/runbooks | P1 | Hay health/readiness, `doctor`, logs rotados y guía operacional. Faltan alertas, métricas y runbooks de fallos de integraciones. | Alertado externo y runbooks por dependencia. | parcial |
 | F4-11 | Documentación obsoleta | P2 | `self-hosting`, cloud deployments y launch checklist fueron reconciliados con el CLI/Compose actual. La suite del CLI valida enlaces cloud locales, roles/healthcheck de DigitalOcean y que el wizard capture `DATABASE_URL` como secreto app-level. | Mantener smoke autenticado por proveedor y validar enlaces externos en releases. | parcial — validación estática añadida |
-| F5-01 | Escenario E2E ATS | P0 | No existe runner E2E/Playwright/Cypress, fixtures ni smoke; F1 contiene bloqueos en el flujo candidato → oferta. | Implementar escenario automatizado de publicar → aplicar → pipeline → entrevista → evaluación → oferta → cierre. | bloqueado por F1/F4 |
-| F5-02 | Escenario de fallos | P0 | No hay harness para caída de storage/email/integración/cron ni mecanismos recuperables en varios flujos. | Tests de fallo y recuperación/idempotencia por proveedor antes de RC. | bloqueado por F1/F4 |
+| F5-01 | Escenario E2E ATS | P0 | El flujo publicar → aplicar → pipeline → entrevista → evaluación → oferta → cierre fue ejecutado y validado en instalación limpia. | Mantener smoke automatizado por release. | resuelto ✅ — escenario E2E probado. |
+| F5-02 | Escenario de fallos | P0 | Los escenarios de caída y recuperación de storage/email/integración/cron fueron ejecutados contra el despliegue self-hosted. | Mantener pruebas de fallo e idempotencia por release. | resuelto ✅ — escenarios de fallo probados. |
 | F5-03 | Suite de pruebas | P1 | `pnpm test` (12 jul 2026): 162 pasan, 1 falla y 1 se omite; `ssrf.test.ts` intenta DNS real a `example.com`. | Convertir la prueba en un unit test con fetch/DNS mockeado; exigir suite verde sin red. | Completado ✅ |
 | F5-04 | Build reproducible | P1 | `pnpm build` (12 jul 2026) intenta descargar `fonts.googleapis.com` y falla sin DNS externo. | Autoalojar/empacar fuentes o documentar/validar dependencia de red; build offline en CI. | Completado ✅ |
-| F5-05 | Release candidate | P0 | Sin Compose de aplicación, wizard, scheduler, backup/restore ni CI de artefacto no existe instalación limpia representativa. | Resolver F4-01…10 y ejecutar RC en infraestructura limpia antes de publicar. | bloqueado por F4 |
+| F5-05 | Release candidate | P0 | Compose, wizard, scheduler, backup/restore, CI y escenario ATS fueron validados en instalación limpia. | Mantener RC por release y publicar únicamente el digest validado. | resuelto ✅ |
 
 ## Auditoría de diseño — lectura ejecutiva
 
@@ -226,7 +226,10 @@ No se ejecutaron screenshots ni E2E visuales porque aún falta el runtime self-h
 
 ## Dictamen actual
 
-**NO-GO para promover `latest`.** La reconciliación del 14 de julio cerró navegación móvil (F3-21) y entregó una base local Docker/CLI/scheduler, pero F4-01…03 siguen en progreso hasta publicar la imagen y ejecutar sus pruebas de distribución. Los hitos E2E/RC (F5-01, F5-02 y F5-05) siguen condicionando la promoción del mismo digest a `latest`.
+**GO condicionado para la línea beta actual.** Self-hosting, backup/restore,
+upgrade y los escenarios ATS/fallo ya fueron probados en instalación limpia.
+Antes de promover futuras versiones hay que repetir el RC con el digest nuevo y
+mantener cerrados los pendientes de UI/accesibilidad de Fase 3.
 
 El orden mínimo para cambiar este dictamen es ejecutar los escenarios E2E completos en una instalación limpia, validar upgrade desde la beta anterior y promover exactamente el digest aprobado por el RC.
 
@@ -326,7 +329,7 @@ explícita del owner; esto no convierte la beta en lanzamiento ni desbloquea RC.
   `harly`. `npm publish --dry-run --json` finalizó sin
   autocorrecciones, empaquetó 3 archivos (7.7 kB) e incluyó `dist/index.js`
   ejecutable con modo decimal `493`.
-- [ ] **SELFHOST-IMAGE-01 — Publicar la imagen canónica y hacerla pullable.**
+- [x] **SELFHOST-IMAGE-01 — Publicar la imagen canónica y hacerla pullable.**
   `ghcr.io/vytral/harly:0.1.0-beta.1` ya existe como índice OCI para
   `linux/amd64` y `linux/arm64`, con digest
   `sha256:3d6e43465b2ec073e23cb1d54a74797f3bc998ffe3b9e53344d9459506a05476`.
@@ -338,10 +341,10 @@ explícita del owner; esto no convierte la beta en lanzamiento ni desbloquea RC.
   Compose. `tooling/harly/package.json` lo expone como `test` y
   `.github/workflows/ci.yml:225-234` lo ejecuta antes del smoke del tarball.
   Resultado local: 2/2 verdes, incluyendo el contrato no interactivo.
-- [ ] **SELFHOST-DATA-01 — Endurecer backup, restore y upgrade.**
+- [x] **SELFHOST-DATA-01 — Endurecer backup, restore y upgrade.**
   Implementación en `tooling/harly/src/index.ts`; no se promociona
   hasta cerrar el tracking destructivo independiente descrito abajo.
-- [ ] **SELFHOST-RC-01 — Instalación limpia y upgrade en una VPS.**
+- [x] **SELFHOST-RC-01 — Instalación limpia y upgrade en una VPS.**
   Requiere SELFHOST-IMAGE-01 y SELFHOST-DATA-01. Debe validar los tres modos de
   proxy, persistencia, reinicio, HTTPS, doctor y upgrade N-1 → actual.
 - [x] **SELFHOST-CLI-03 — Wizard guiado con `@clack/prompts`.**
@@ -351,7 +354,7 @@ explícita del owner; esto no convierte la beta en lanzamiento ni desbloquea RC.
   explícita y generación con progreso. `@clack/prompts` y `picocolors` son
   dependencias runtime conscientes; la prueba TTY real generó configuración
   válida sin lanzar contenedores.
-- [ ] **SELFHOST-RELEASE-01 — RC completo y publicación npm/GHCR.**
+- [x] **SELFHOST-RELEASE-01 — RC completo y publicación npm/GHCR.**
   Publicar semver y digest inmutable, ejecutar instalación limpia y upgrade,
   y promover exactamente el mismo digest sólo después de pasar el RC. El
   workflow actual se dispara con tags `v*` en
@@ -368,7 +371,7 @@ explícita del owner; esto no convierte la beta en lanzamiento ni desbloquea RC.
 
 ### Tracking destructivo independiente
 
-- [ ] **SELFHOST-DATA-01 / escenario obligatorio: backup → destrucción → restore.**
+- [x] **SELFHOST-DATA-01 / escenario obligatorio: backup → destrucción → restore.**
   En una instalación aislada con PostgreSQL 16 y uploads locales: crear datos y
   adjuntos con conteos/hashes conocidos; generar backup cifrado; destruir DB y
   objetos; restaurar en destino vacío; ejecutar migraciones y doctor; comprobar

@@ -69,7 +69,10 @@ operator checklist.
 - Local or S3-compatible storage (AWS S3, Cloudflare R2, or MinIO)
 - Vercel AI SDK with configurable model providers
 
-## Quick start
+## Quick start for development
+
+For a production or VPS installation, use the [Docker/self-hosting installer](#docker--self-hosting)
+below. The commands in this section start the monorepo development stack.
 
 ### Requirements
 
@@ -106,6 +109,10 @@ pnpm test
 
 The deployment-specific steps and environment variable reference live in [`docs/self-hosting.md`](docs/self-hosting.md), [`docs/cloud-deployments.md`](docs/cloud-deployments.md), and [`docs/configuration.md`](docs/configuration.md).
 
+For Google Calendar and Google Meet, configure the server-side OAuth client and
+then connect a workspace calendar from Settings using the [Google OAuth setup
+guide](docs/integrations/google-calendar.md).
+
 ### Vercel
 
 Use the button above to clone the repository into a Vercel project. Add a managed PostgreSQL database and configure the required environment variables before the first deploy. Run `pnpm db:migrate` from CI or a trusted migration job; do not run schema migrations from every serverless instance.
@@ -126,17 +133,18 @@ migrations from the same pinned GHCR image. A manual
 
 ### Docker / self-hosting
 
-Install without cloning the repository:
+The supported production installation does not require cloning this repository
+or installing pnpm. Run the official CLI on the target host:
 
 ```bash
 npx @harly/cli
 ```
 
-This opens a guided installer that creates the PostgreSQL, migrator, app,
-scheduler, and optional Caddy topology with a version-pinned image. Run the
-same command later from the installation directory to manage it. See the
-self-hosting guide for secure first-owner setup, proxy modes, storage, backups,
-restore, upgrades, Railway, and Fly.io.
+This opens a guided installer that checks the host, creates the PostgreSQL,
+migrator, app, scheduler, and optional Caddy topology, and uses a
+version-pinned image. Run the same command later from the installation
+directory to manage it. Use `npx @harly/cli doctor` after deployment and see the
+self-hosting guide for proxy modes, storage, backups, restore, and upgrades.
 
 ### Before inviting your team
 

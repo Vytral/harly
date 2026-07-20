@@ -10,6 +10,10 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "ai:smoke": "LIVE_AI_SMOKE=1 vitest run src/lib/ai/live-smoke.test.ts",
+    "ai:agent-smoke": "LIVE_AI_AGENT_SMOKE=1 vitest run src/lib/ai/live-agent-smoke.test.ts",
+    "ai:write-smoke": "LIVE_AI_WRITE_SMOKE=1 vitest run src/lib/ai/live-write-smoke.test.ts",
+    "ai:maxi-smoke": "LIVE_MAXI_AGENT_SMOKE=1 vitest run src/lib/ai/live-maximiliano-agent-smoke.test.ts",
+    "ai:gcal-smoke": "LIVE_GCAL_CONNECTION_SMOKE=1 vitest run src/lib/ai/live-gcal-connection-smoke.test.ts",
     "test:watch": "vitest"
   },
   "dependencies": {

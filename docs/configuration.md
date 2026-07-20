@@ -32,8 +32,17 @@ must use the `uploads` volume. For S3, R2, or MinIO set
 
 ## Optional integrations
 
-OAuth ID/secret pairs are all-or-nothing. Resend, SMTP, OAuth, IMAP, branding,
-Turnstile, and invitations can be configured from Harly after bootstrap.
+OAuth ID/secret pairs are all-or-nothing. Most workspace integrations can be
+configured from Harly after bootstrap. Google Calendar and Google Meet require
+the installation-level Google OAuth client to be configured on the server
+first; see the [Google Calendar and Google Meet setup guide](integrations/google-calendar.md).
+
+The OAuth client credentials stay in the server environment. User/workspace
+refresh tokens are stored encrypted in PostgreSQL after the workspace admin
+connects an account from Settings.
+
+Resend, SMTP, IMAP, branding, Turnstile, and invitations can be configured from
+Harly after bootstrap.
 Turnstile secrets are resolved server-side.
 
 Outbound webhook URLs must use HTTPS and resolve only to public addresses.
@@ -48,6 +57,7 @@ The scheduler calls these private endpoints with
 
 - `POST /api/cron/email-outbox` every 60 seconds
 - `POST /api/cron/webhooks/dispatch` every 60 seconds
+- `POST /api/cron/interview-sync` every 60 seconds
 - `POST /api/cron/mailbox-sync` every 120 seconds
 
 GET and query-string secrets are rejected. Email, SMTP, and webhook delivery

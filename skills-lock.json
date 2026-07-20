@@ -97,6 +97,12 @@
       "skillPath": "skills/motion-design/SKILL.md",
       "computedHash": "9fcf9130cc46ee8fd1d8e09a9263347a9d76efbcbfa46591cc4cefaf19bbb453"
     },
+    "react-email": {
+      "source": "resend/react-email",
+      "sourceType": "github",
+      "skillPath": "skills/react-email/SKILL.md",
+      "computedHash": "da0feefc6ddf4aaeff930ab203d269774da464429e35b178d2403d69d2dc2fb3"
+    },
     "resend-design-skills": {
       "source": "resend/design-skills",
       "sourceType": "github",

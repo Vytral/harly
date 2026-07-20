@@ -1,11 +1,18 @@
-# Docker Tooling
+# Docker tooling
 
-The root `docker-compose.yml` currently provisions PostgreSQL 16 for local development. The Harly web process runs with Node.js after the workspace build; there is not yet a maintained production application image in this directory.
+This directory contains the development database Compose file,
+`compose.dev.yml`. It provisions PostgreSQL 16 for the monorepo and is used by
+the root `pnpm db:up`, `pnpm db:migrate`, and `pnpm db:down` commands.
 
-See [`docs/self-hosting.md`](../../docs/self-hosting.md) for the supported Docker/PostgreSQL, Vercel, and Railway deployment paths.
+Production is a separate, generated Docker Compose deployment. The official
+entrypoint is:
 
-Planned additions:
+```bash
+npx @harly/cli
+```
 
-- Production application image
-- Compose overlays for S3-compatible storage and backups
-- Health checks and upgrade helpers
+The CLI writes a version-pinned Harly image configuration and Compose topology
+with PostgreSQL, a one-shot migrator, the app, the scheduler, and optional
+Caddy. Do not use `compose.dev.yml` as a production deployment. See
+[`docs/self-hosting.md`](../../docs/self-hosting.md) for requirements,
+operations, backups, restores, and upgrades.
