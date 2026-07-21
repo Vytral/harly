@@ -14,6 +14,7 @@ import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { getModel } from "@/lib/ai/registry";
 import { buildHarlyTools } from "@/lib/ai/agent";
 import { buildHarlySystemPrompt } from "@/lib/ai/agent/system-prompt";
+import { getWorkspaceKnowledge } from "@/lib/ai/agent/workspace-knowledge";
 import { persistConversation } from "@/features/ai-chat/data";
 import { recordAiUsage } from "@/lib/ai/usage";
 import { enforceRateLimit } from "@/server/api/ratelimit";
@@ -37,6 +38,15 @@ const chatRequestSchema = z.object({
   messages: z.unknown(),
   conversationId: z.string().uuid().optional(),
   candidateId: z.string().uuid().optional(),
+  mentionedCandidateIds: z.array(z.string().uuid()).max(8).optional(),
+  timeZone: z.string().trim().max(80).optional(),
+  surfaceContext: z
+    .object({
+      kind: z.enum(["candidate", "section"]),
+      label: z.string().trim().min(1).max(100),
+      path: z.string().trim().min(1).max(200),
+    })
+    .optional(),
 });
 
 type HarlyChatMessage = UIMessage<
@@ -85,6 +95,11 @@ export async function POST(req: Request) {
   let rawMessages: unknown[];
   let conversationId: string | undefined;
   let candidateId: string | undefined;
+  let mentionedCandidateIds: string[] = [];
+  let timeZone: string | undefined;
+  let surfaceContext:
+    | { kind: "candidate" | "section"; label: string; path: string }
+    | undefined;
   try {
     const body = chatRequestSchema.parse(await req.json());
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
@@ -96,6 +111,9 @@ export async function POST(req: Request) {
     rawMessages = body.messages;
     conversationId = body.conversationId;
     candidateId = body.candidateId;
+    mentionedCandidateIds = body.mentionedCandidateIds ?? [];
+    timeZone = body.timeZone;
+    surfaceContext = body.surfaceContext;
   } catch {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
@@ -113,10 +131,15 @@ export async function POST(req: Request) {
 
   const workspaceId = context.organization.id;
   const userId = context.user.id;
+  const workspaceKnowledge = await getWorkspaceKnowledge(
+    workspaceId,
+    context.organization.name,
+  );
   const tools = buildHarlyTools({
     workspaceId,
     userId,
     activeCandidateId: candidateId,
+    mentionedCandidateIds,
   });
 
   let messages: HarlyChatMessage[];
@@ -156,12 +179,16 @@ export async function POST(req: Request) {
       userName: context.user.name,
       role: context.role,
       activeCandidateId: candidateId,
+      mentionedCandidateIds,
+      activeSurface: surfaceContext,
+      workspaceKnowledge,
       today: new Intl.DateTimeFormat("en-US", {
         weekday: "long",
         year: "numeric",
         month: "long",
         day: "numeric",
       }).format(new Date()),
+      timeZone,
     }),
     messages: await convertToModelMessages(messages),
     tools,

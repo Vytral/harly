@@ -1,10 +1,11 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
-import { db, aiConversations } from "@harly/db";
+import { aiConversations, candidates, db } from "@harly/db";
 
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
+import { searchWorkspace } from "@/features/search/data";
 import {
   getConversationMessages,
   listConversations,
@@ -17,6 +18,56 @@ export async function listConversationsAction(): Promise<ConversationListItem[]>
   const context = await getWorkspaceContextOrNull();
   if (!context) return [];
   return listConversations();
+}
+
+/** Resolve the visible candidate label for the context chip without trusting client text. */
+export async function getCandidateContextAction(candidateId: string): Promise<{
+  id: string;
+  name: string;
+  email: string;
+} | null> {
+  const context = await getWorkspaceContextOrNull();
+  if (!context) return null;
+
+  const [candidate] = await db
+    .select({
+      id: candidates.id,
+      firstName: candidates.firstName,
+      lastName: candidates.lastName,
+      email: candidates.email,
+    })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.id, candidateId),
+        eq(candidates.workspaceId, context.organization.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .limit(1);
+
+  return candidate
+    ? {
+        id: candidate.id,
+        name: `${candidate.firstName} ${candidate.lastName}`.trim(),
+        email: candidate.email,
+      }
+    : null;
+}
+
+/** Search candidates for the @mention popover, always workspace-scoped. */
+export async function searchCandidateMentionsAction(query: string) {
+  const context = await getWorkspaceContextOrNull();
+  if (!context) return [];
+  const trimmed = query.trim().slice(0, 100);
+  if (!trimmed) return [];
+  const results = await searchWorkspace(trimmed);
+  return results.candidates.slice(0, 6).map((candidate) => ({
+    id: candidate.id,
+    name: candidate.name,
+    email: candidate.email,
+    avatarUrl: candidate.avatarUrl,
+  }));
 }
 
 /** Load one conversation's messages to seed the chat when switching threads. */

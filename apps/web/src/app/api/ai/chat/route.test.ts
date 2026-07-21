@@ -125,6 +125,7 @@ describe("POST /api/ai/chat", () => {
       workspaceId: "workspace-1",
       userId: "user-1",
       activeCandidateId: candidateId,
+      mentionedCandidateIds: [],
     });
     expect(mocks.buildHarlySystemPrompt).toHaveBeenCalledWith(
       expect.objectContaining({ activeCandidateId: candidateId }),

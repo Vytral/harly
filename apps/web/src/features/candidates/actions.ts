@@ -1134,6 +1134,7 @@ const draftEmailSchema = z.object({
     "offer",
     "followup",
   ]),
+  additionalInstructions: z.string().trim().max(2000).nullable().optional(),
 });
 
 export type GenerateEmailDraftResult =
@@ -1143,6 +1144,7 @@ export type GenerateEmailDraftResult =
 export async function generateEmailDraftAction(input: {
   candidateId: string;
   type: "screening" | "interview_invite" | "rejection" | "offer" | "followup";
+  additionalInstructions?: string | null;
 }): Promise<GenerateEmailDraftResult> {
   const parsed = draftEmailSchema.safeParse(input);
   if (!parsed.success) {
@@ -1223,6 +1225,7 @@ export async function generateEmailDraftAction(input: {
       senderName: user.name,
       aiScore: evalRow?.score ?? null,
       aiRecommendation: evalRow?.recommendation ?? null,
+      additionalInstructions: parsed.data.additionalInstructions ?? null,
     });
     return { ok: true, subject: draft.subject, body: draft.body };
   } catch (error) {

@@ -61,6 +61,50 @@ export type UpcomingInterviewItem = CandidateInterviewItem & {
   jobId: string;
 };
 
+/**
+ * Parse an ISO timestamp or a wall-clock value in an IANA timezone. This is
+ * intentionally client-safe so server actions and AI preparation can share
+ * the same scheduling semantics without exporting a synchronous helper from
+ * a `"use server"` module.
+ */
+export function parseScheduledAt(value: string, timeZone?: string | null): Date {
+  if (!timeZone || /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+    return new Date(value);
+  }
+
+  const wallValue = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
+    ? `${value}:00`
+    : value;
+  const wallTime = new Date(`${wallValue}Z`);
+  if (Number.isNaN(wallTime.getTime())) return new Date(value);
+
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(wallTime);
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const represented = Date.UTC(
+    values.year,
+    values.month - 1,
+    values.day,
+    values.hour,
+    values.minute,
+    values.second,
+  );
+  const offset = represented - wallTime.getTime();
+  return new Date(wallTime.getTime() - offset);
+}
+
 const TYPE_LABELS: Record<InterviewType, string> = {
   screening: "Screening",
   culture_fit: "Culture fit",

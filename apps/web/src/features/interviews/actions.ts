@@ -52,7 +52,10 @@ import {
   type InterviewNotesSummary,
 } from "@/lib/ai/schemas";
 import { createLogger } from "@/lib/logger";
-import { deriveMeetLink } from "@/features/interviews/shared";
+import {
+  deriveMeetLink,
+  parseScheduledAt,
+} from "@/features/interviews/shared";
 import { extractResumeText } from "@/lib/resume/extract-text";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { storage } from "@/lib/storage";
@@ -245,44 +248,6 @@ export type ScheduleInterviewInput = {
   timeZone?: string | null;
   sendEmail?: boolean;
 };
-
-function parseScheduledAt(value: string, timeZone?: string | null): Date {
-  if (!timeZone || /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
-    return new Date(value);
-  }
-
-  const wallValue = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(value)
-    ? `${value}:00`
-    : value;
-  const wallTime = new Date(`${wallValue}Z`);
-  if (Number.isNaN(wallTime.getTime())) return new Date(value);
-
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(wallTime);
-  const values = Object.fromEntries(
-    parts
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, Number(part.value)]),
-  );
-  const represented = Date.UTC(
-    values.year,
-    values.month - 1,
-    values.day,
-    values.hour,
-    values.minute,
-    values.second,
-  );
-  const offset = represented - wallTime.getTime();
-  return new Date(wallTime.getTime() - offset);
-}
 
 /**
  * Create a real interview row (not a fake note). Resolves the job from the

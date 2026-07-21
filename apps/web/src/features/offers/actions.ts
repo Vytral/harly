@@ -356,10 +356,14 @@ export async function sendOffer(input: {
   // create the DocuSign envelope BEFORE the email. The email still notifies the
   // candidate (and points them to the portal to sign); the envelopeId is the
   // primary correlation key for the Connect webhook to flip the offer status.
-  const envelopeId = await createOfferEnvelope({ workspaceId, offer });
-  if (envelopeId === null) {
-    // DocuSign not configured for this workspace (channel = "email") OR not
-    // connected — either way, fall through to the standard email-only flow.
+  try {
+    await createOfferEnvelope({ workspaceId, offer });
+  } catch (error) {
+    log.error({ error, offerId: offer.id }, "sendOffer: DocuSign envelope creation failed");
+    return {
+      success: false,
+      error: "Could not create the DocuSign envelope. Check the connection and Connect HMAC key, then try again.",
+    };
   }
 
   // A durable outbox row is the single source of truth: the worker sends the
