@@ -10,7 +10,9 @@ import {
   exchangeDocuSignCode,
   getDocuSignUserInfo,
 } from "@/lib/docusign/client";
+import { normalizeDocuSignRestBaseUrl } from "@/lib/docusign/config";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { getDocuSignRedirectUri, getHarlyPublicOrigin } from "@/lib/public-origin";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 
 const log = createLogger("api-docusign-callback");
@@ -70,10 +72,8 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
-  const redirectUri = `${appUrl}/api/integrations/docusign/callback`;
+  const appUrl = getHarlyPublicOrigin();
+  const redirectUri = getDocuSignRedirectUri();
 
   // Exchange code for tokens.
   const tokenData = await exchangeDocuSignCode({
@@ -106,7 +106,7 @@ export async function GET(req: NextRequest) {
       accountId = defaultAccount.account_id;
       // getUserInfo baseUri is the account host (e.g. https://eu.docusign.net);
       // the REST API root is baseUri + "/restapi".
-      restBaseUrl = `${defaultAccount.base_uri.replace(/\/$/, "")}/restapi`;
+      restBaseUrl = normalizeDocuSignRestBaseUrl(defaultAccount.base_uri);
     }
   } catch (err) {
     log.error(err, "Failed to fetch DocuSign userInfo");
@@ -125,10 +125,14 @@ export async function GET(req: NextRequest) {
     docusignEnabled: true,
     docusignAccountEmail: accountEmail,
     docusignAccountId: accountId,
+    docusignAuthBaseUrl: credentials.authBaseUrl,
     docusignBaseUrl: restBaseUrl,
     docusignAccessTokenCiphertext: encryptedAccess.ciphertext,
     docusignAccessTokenIv: encryptedAccess.iv,
     docusignAccessTokenTag: encryptedAccess.tag,
+    docusignAccessTokenExpiresAt: tokenData.expires_in
+      ? new Date(Date.now() + tokenData.expires_in * 1000)
+      : null,
     docusignRefreshTokenCiphertext: encryptedRefresh.ciphertext,
     docusignRefreshTokenIv: encryptedRefresh.iv,
     docusignRefreshTokenTag: encryptedRefresh.tag,
@@ -146,9 +150,7 @@ export async function GET(req: NextRequest) {
 }
 
 function redirectWithError(msg: string) {
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const url = new URL(`${appUrl}/settings/integrations`);
   url.searchParams.set("docusign_error", msg);
   return NextResponse.redirect(url.toString());

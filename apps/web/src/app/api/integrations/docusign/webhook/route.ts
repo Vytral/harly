@@ -1,11 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { and, eq } from "drizzle-orm";
-import { mkdir, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
-import { createHash } from "node:crypto";
+import { and, eq, isNull, or } from "drizzle-orm";
 
-import { candidateFiles, db, offers, workspaceSettings } from "@harly/db";
-import { getLocalUploadPath } from "@harly/storage";
+import {
+  db,
+  offers,
+  signatureEnvelopes,
+  signatureEvents,
+  signatureRecipients,
+  workspaceSettings,
+} from "@harly/db";
 
 import {
   connectCustomField,
@@ -14,12 +17,14 @@ import {
   verifyDocuSignHmac,
   type DocuSignConnectEvent,
 } from "@/lib/docusign/connect";
-import {
-  freshDocuSignContext,
-  getEnvelopeDocument,
-} from "@/lib/docusign/client";
 import { createLogger } from "@/lib/logger";
 import { decideOfferForApi } from "@/features/offers/service";
+import { syncDocumentsForEnvelope } from "@/lib/docusign/webhook-sync";
+import {
+  canAdvanceSignatureEnvelope,
+  signatureEnvelopeStatusForEvent,
+  type SignatureEnvelopeStatus,
+} from "@/lib/docusign/signature-state";
 
 const log = createLogger("api-docusign-webhook");
 
@@ -37,10 +42,10 @@ export const runtime = "nodejs";
  *  4. On `envelope-completed` / `envelope-declined`: resolve the offer by
  *     envelopeId (primary) or offerId custom field (secondary), flip its
  *     decision via decideOfferForApi (no session — actor = offer creator)
- *  5. On completed: download the combined signed PDF and persist it as a
- *     candidate_file
- *  6. Respond 2xx fast. Connect retries + dedups; offer status monotonicity
- *     (only `sent` offers can be decided) is the natural idempotency guard.
+ *  5. Persist the envelope state synchronously; the scheduler reconciles
+ *     completed artifacts out of band so Connect receives a fast 2xx.
+ *  6. Respond 2xx after the state transition. Connect retries are deduped by
+ *     event key and document signature states are monotonic.
  */
 export async function POST(request: NextRequest) {
   const workspaceId = request.nextUrl.searchParams.get("ws");
@@ -53,7 +58,10 @@ export async function POST(request: NextRequest) {
 
   // 2. Resolve + verify HMAC. Support comma-separated secrets for rotation.
   const [settings] = await db
-    .select({ secret: workspaceSettings.docusignConnectSecret })
+    .select({
+      secret: workspaceSettings.docusignConnectSecret,
+      accountId: workspaceSettings.docusignAccountId,
+    })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, workspaceId))
     .limit(1);
@@ -88,23 +96,14 @@ export async function POST(request: NextRequest) {
   }
 
   const eventName = event.event ?? "";
-  const decision =
-    eventName === "envelope-completed"
-      ? "accepted"
-      : eventName === "envelope-declined"
-        ? "declined"
-        : null;
-
-  // Non-decision events (sent, delivered, voided, recipient-*): ack + skip.
-  if (!decision) {
-    return NextResponse.json({ ok: true, skipped: eventName });
-  }
-
-  // 4. Resolve the offer. Primary: envelopeId stored on the offer. Secondary:
-  //    offerId custom field in the payload (redundant, requires includeData).
   const envelopeId = connectEnvelopeId(event);
   if (!envelopeId) {
     return NextResponse.json({ ok: true, skipped: "no envelopeId" });
+  }
+
+  if (!settings.accountId || event.data?.accountId !== settings.accountId) {
+    log.warn({ workspaceId, envelopeId }, "docusign webhook: account mismatch");
+    return NextResponse.json({ ok: true, skipped: "account mismatch" });
   }
 
   const customWorkspaceId = connectCustomField(event, "workspaceId");
@@ -118,122 +117,364 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, skipped: "workspace mismatch" });
   }
 
-  const offerConditions = [
-    eq(offers.docusignEnvelopeId, envelopeId),
-    eq(offers.workspaceId, workspaceId),
-  ];
-
-  const [offer] = await db
-    .select({
-      id: offers.id,
-      status: offers.status,
-      candidateId: offers.candidateId,
-      createdById: offers.createdById,
-      title: offers.title,
+  const eventKey = connectEventKey(event);
+  const signatureEnvelope = await ensureSignatureEnvelope({
+    workspaceId,
+    envelopeId,
+    offerId: connectCustomField(event, "offerId"),
+  });
+  const [insertedEvent] = await db
+    .insert(signatureEvents)
+    .values({
+      workspaceId,
+      envelopeId: signatureEnvelope.id,
+      eventKey,
+      eventType: eventName,
+      generatedAt: toDateOrNull(event.generatedDateTime),
+      retryCount: event.retryCount ?? null,
+      payload: event,
     })
-    .from(offers)
-    .where(and(...offerConditions))
-    .limit(1);
-
-  if (!offer) {
-    log.warn({ envelopeId, workspaceId }, "docusign webhook: offer not found");
-    return NextResponse.json({ ok: true, skipped: "offer not found" });
+    .onConflictDoNothing()
+    .returning({ id: signatureEvents.id, processedAt: signatureEvents.processedAt });
+  let recorded = insertedEvent;
+  if (!recorded) {
+    const [existingEvent] = await db
+      .select({ id: signatureEvents.id, processedAt: signatureEvents.processedAt })
+      .from(signatureEvents)
+      .where(and(eq(signatureEvents.workspaceId, workspaceId), eq(signatureEvents.eventKey, eventKey)))
+      .limit(1);
+    if (!existingEvent || existingEvent.processedAt) {
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+    recorded = existingEvent;
   }
 
-  // Idempotency: only `sent` offers can be decided. A replay of a completed
-  // event finds the offer already accepted/declined and skips cleanly.
-  if (offer.status !== "sent") {
-    return NextResponse.json({ ok: true, skipped: "already decided" });
-  }
-
-  log.info(
-    { envelopeId, offerId: offer.id, decision, key: connectEventKey(event) },
-    "docusign webhook: applying decision",
-  );
+  const envelopeStatus = signatureEnvelopeStatusForEvent(eventName);
+  const documentSignatureStatus =
+    eventName === "envelope-completed"
+      ? "signed"
+      : eventName === "envelope-declined" || eventName === "envelope-voided"
+        ? "declined"
+        : eventName === "envelope-sent" || eventName === "envelope-delivered"
+          ? "pending"
+          : null;
 
   try {
-    await decideOfferForApi({
+    await applySignatureEnvelopeEvent({
       workspaceId,
-      // Attribute the candidate's decision to the recruiter who sent the offer
-      // (the webhook has no human actor; the offer creator started the flow).
-      actorUserId: offer.createdById,
-      offerId: offer.id,
-      decision,
+      envelopeId: signatureEnvelope.id,
+      event,
+      eventKey,
+      status: envelopeStatus,
     });
-  } catch (err) {
-    log.error({ err, offerId: offer.id }, "docusign webhook: decideOffer failed");
-    // 500 so Connect retries; a competing decision or expiry may have raced.
-    return NextResponse.json(
-      { error: "Could not apply decision." },
-      { status: 500 },
-    );
-  }
-
-  // 5. On completed, persist the signed PDF as a candidate file.
-  if (decision === "accepted") {
-    try {
-      await persistSignedDocument(workspaceId, offer.candidateId, offer.id, envelopeId);
-    } catch (err) {
-      // The decision already applied — a PDF fetch failure should not make
-      // Connect retry the whole event (which would hit the "already decided"
-      // idempotency guard anyway). Log + ack.
-      log.error({ err, envelopeId }, "docusign webhook: signed PDF persist failed");
+    // PDF/certificate retrieval can be slow and must not make Connect retry a
+    // valid event. The reconciliation worker sees completed envelopes with a
+    // due `nextReconcileAt` and performs the durable artifact sync.
+    if (documentSignatureStatus && documentSignatureStatus !== "signed") {
+      await syncDocumentsForEnvelope({
+        workspaceId,
+        envelopeId,
+        signatureEnvelopeId: signatureEnvelope.id,
+        signatureStatus: documentSignatureStatus,
+        actorId: null,
+      });
     }
-  }
 
-  return NextResponse.json({ ok: true });
+    const decision =
+      eventName === "envelope-completed"
+        ? "accepted"
+        : eventName === "envelope-declined"
+          ? "declined"
+          : null;
+    if (!decision) {
+      await markSignatureEventProcessed(recorded.id);
+      return NextResponse.json({ ok: true, skipped: eventName });
+    }
+
+    let [offer] = await db
+      .select({
+        id: offers.id,
+        status: offers.status,
+        candidateId: offers.candidateId,
+        createdById: offers.createdById,
+        title: offers.title,
+      })
+      .from(offers)
+      .where(and(eq(offers.workspaceId, workspaceId), eq(offers.signatureEnvelopeRefId, signatureEnvelope.id)))
+      .limit(1);
+    if (!offer) {
+      [offer] = await db
+        .select({
+          id: offers.id,
+          status: offers.status,
+          candidateId: offers.candidateId,
+          createdById: offers.createdById,
+          title: offers.title,
+        })
+        .from(offers)
+        .where(and(eq(offers.workspaceId, workspaceId), eq(offers.docusignEnvelopeId, envelopeId)))
+        .limit(1);
+    }
+
+    // Envelope id is authoritative. The opaque offerId custom field is only a
+    // fallback for envelopes created before the primary correlation was saved.
+    const offerId = connectCustomField(event, "offerId");
+    if (!offer && offerId) {
+      [offer] = await db
+        .select({
+          id: offers.id,
+          status: offers.status,
+          candidateId: offers.candidateId,
+          createdById: offers.createdById,
+          title: offers.title,
+        })
+        .from(offers)
+        .where(and(
+          eq(offers.workspaceId, workspaceId),
+          eq(offers.id, offerId),
+          or(isNull(offers.docusignEnvelopeId), eq(offers.docusignEnvelopeId, envelopeId)),
+        ))
+        .limit(1);
+    }
+
+    if (!offer) {
+      log.warn({ envelopeId, workspaceId }, "docusign webhook: offer not found");
+      await markSignatureEventProcessed(recorded.id);
+      return NextResponse.json({ ok: true, skipped: "offer not found" });
+    }
+
+    if (offer.status === "sent") {
+      log.info(
+        { envelopeId, offerId: offer.id, decision, key: eventKey },
+        "docusign webhook: applying decision",
+      );
+      await decideOfferForApi({
+        workspaceId,
+        actorUserId: offer.createdById,
+        offerId: offer.id,
+        decision,
+      });
+    }
+
+    await markSignatureEventProcessed(recorded.id);
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    await db
+      .update(signatureEvents)
+      .set({
+        processingError: err instanceof Error ? err.message : "Unknown processing error",
+      })
+      .where(eq(signatureEvents.id, recorded.id))
+      .catch((updateError) => log.error(updateError, "docusign webhook: event error update failed"));
+    log.error({ err, envelopeId, eventName }, "docusign webhook processing failed");
+    return NextResponse.json({ error: "Could not process DocuSign event." }, { status: 500 });
+  }
 }
 
-/** Download the combined signed PDF from DocuSign and store it locally. */
-async function persistSignedDocument(
-  workspaceId: string,
-  candidateId: string,
-  offerId: string,
-  envelopeId: string,
-): Promise<void> {
-  const ctx = await freshDocuSignContext(workspaceId);
-  if (!ctx) {
-    log.warn({ workspaceId }, "docusign webhook: no context for PDF download");
-    return;
+function toDateOrNull(value: string | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+async function ensureSignatureEnvelope(input: {
+  workspaceId: string;
+  envelopeId: string;
+  offerId: string | null;
+}) {
+  const [existing] = await db
+    .select({ id: signatureEnvelopes.id, offerId: signatureEnvelopes.offerId })
+    .from(signatureEnvelopes)
+    .where(
+      and(
+        eq(signatureEnvelopes.workspaceId, input.workspaceId),
+        eq(signatureEnvelopes.provider, "docusign"),
+        eq(signatureEnvelopes.providerEnvelopeId, input.envelopeId),
+      ),
+    )
+    .limit(1);
+  if (existing) return existing;
+
+  let [offer] = await db
+    .select({
+      id: offers.id,
+      title: offers.title,
+      createdById: offers.createdById,
+    })
+    .from(offers)
+    .where(
+      and(
+        eq(offers.workspaceId, input.workspaceId),
+        eq(offers.docusignEnvelopeId, input.envelopeId),
+      ),
+    )
+    .limit(1);
+  if (!offer && input.offerId) {
+    [offer] = await db
+      .select({
+        id: offers.id,
+        title: offers.title,
+        createdById: offers.createdById,
+      })
+      .from(offers)
+      .where(
+        and(
+          eq(offers.workspaceId, input.workspaceId),
+          eq(offers.id, input.offerId),
+          or(
+            isNull(offers.docusignEnvelopeId),
+            eq(offers.docusignEnvelopeId, input.envelopeId),
+          ),
+        ),
+      )
+      .limit(1);
   }
 
-  // "combined" returns all envelope docs merged into one PDF.
-  const res = await getEnvelopeDocument(
-    ctx.baseUrl,
-    ctx.accessToken,
-    ctx.accountId,
-    envelopeId,
-    "combined",
-  );
-  const bytes = Buffer.from(await res.arrayBuffer());
-  const contentHash = createHash("sha256").update(bytes).digest("hex");
-
-  const fileName = `Offer signed.pdf`;
-  const key = `workspaces/${workspaceId}/documents/${offerId}/signed.pdf`;
-
-  if (process.env.STORAGE_PROVIDER === "s3") {
-    // S3 adapter has no server-side putObject; the presign→PUT flow is
-    // browser-side. For the webhook we fall back to local writes only.
-    // TODO(docusign): add a server-side putObject to the storage adapter so
-    // signed PDFs land in S3 too.
-    log.warn(
-      { workspaceId, envelopeId },
-      "docusign webhook: S3 server-side write not implemented, skipping PDF persist",
-    );
-    return;
+  const [created] = await db
+    .insert(signatureEnvelopes)
+    .values({
+      workspaceId: input.workspaceId,
+      provider: "docusign",
+      providerEnvelopeId: input.envelopeId,
+      kind: offer ? "offer" : "document",
+      offerId: offer?.id ?? null,
+      subject: offer?.title ?? null,
+      createdById: offer?.createdById ?? null,
+    })
+    .onConflictDoNothing()
+    .returning({ id: signatureEnvelopes.id, offerId: signatureEnvelopes.offerId });
+  if (created) {
+    if (offer) {
+      await db
+        .update(offers)
+        .set({
+          docusignEnvelopeId: input.envelopeId,
+          signatureEnvelopeRefId: created.id,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(offers.workspaceId, input.workspaceId), eq(offers.id, offer.id)));
+    }
+    return created;
   }
 
-  const uploadPath = getLocalUploadPath(key);
-  await mkdir(dirname(uploadPath), { recursive: true });
-  await writeFile(uploadPath, bytes);
+  const [raced] = await db
+    .select({ id: signatureEnvelopes.id, offerId: signatureEnvelopes.offerId })
+    .from(signatureEnvelopes)
+    .where(
+      and(
+        eq(signatureEnvelopes.workspaceId, input.workspaceId),
+        eq(signatureEnvelopes.provider, "docusign"),
+        eq(signatureEnvelopes.providerEnvelopeId, input.envelopeId),
+      ),
+    )
+    .limit(1);
+  if (!raced) throw new Error("Signature envelope could not be resolved.");
+  if (offer) {
+    await db
+      .update(offers)
+      .set({
+        docusignEnvelopeId: input.envelopeId,
+        signatureEnvelopeRefId: raced.id,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(offers.workspaceId, input.workspaceId), eq(offers.id, offer.id)));
+  }
+  return raced;
+}
 
-  await db.insert(candidateFiles).values({
-    workspaceId,
-    candidateId,
-    fileName,
-    fileUrl: `/uploads/${key}`,
-    fileType: "application/pdf",
-    fileSize: bytes.byteLength,
-    contentHash,
+async function applySignatureEnvelopeEvent(input: {
+  workspaceId: string;
+  envelopeId: string;
+  event: DocuSignConnectEvent;
+  eventKey: string;
+  status: SignatureEnvelopeStatus | null;
+}) {
+  const eventDate = toDateOrNull(input.event.generatedDateTime) ?? new Date();
+  const summary = input.event.data?.envelopeSummary;
+  const signers = summary?.recipients?.signers ?? [];
+
+  await db.transaction(async (tx) => {
+    const [current] = await tx
+      .select({ status: signatureEnvelopes.status })
+      .from(signatureEnvelopes)
+      .where(
+        and(
+          eq(signatureEnvelopes.id, input.envelopeId),
+          eq(signatureEnvelopes.workspaceId, input.workspaceId),
+        ),
+      )
+      .limit(1);
+    if (!current) throw new Error("Signature envelope disappeared during processing.");
+
+    const values: Partial<typeof signatureEnvelopes.$inferInsert> = {
+      lastEventAt: eventDate,
+      lastEventKey: input.eventKey,
+      nextReconcileAt: new Date(),
+      reconcileError: null,
+      updatedAt: new Date(),
+    };
+    if (input.status && canAdvanceSignatureEnvelope(current.status, input.status)) {
+      values.status = input.status;
+      if (input.status === "sent") values.sentAt = eventDate;
+      if (input.status === "delivered") values.deliveredAt = eventDate;
+      if (input.status === "completed") values.completedAt = toDateOrNull(summary?.completedDateTime) ?? eventDate;
+      if (input.status === "declined") values.declinedAt = toDateOrNull(summary?.declinedDateTime) ?? eventDate;
+      if (input.status === "voided") values.voidedAt = toDateOrNull(summary?.voidedDateTime) ?? eventDate;
+    }
+    await tx
+      .update(signatureEnvelopes)
+      .set(values)
+      .where(
+        and(
+          eq(signatureEnvelopes.id, input.envelopeId),
+          eq(signatureEnvelopes.workspaceId, input.workspaceId),
+        ),
+      );
+
+    const recipientRows = signers
+      .filter((signer) => signer.recipientId && signer.email && signer.name)
+      .map((signer) => ({
+        workspaceId: input.workspaceId,
+        envelopeId: input.envelopeId,
+        providerRecipientId: signer.recipientId as string,
+        role: "signer",
+        email: signer.email as string,
+        name: signer.name as string,
+        routingOrder: 1,
+        status: signer.status?.toLowerCase() ?? "unknown",
+        signedAt: signer.status?.toLowerCase() === "completed" ? eventDate : null,
+        declinedAt: signer.status?.toLowerCase() === "declined" ? eventDate : null,
+        declinedReason: signer.declinedReason ?? null,
+        updatedAt: new Date(),
+    }));
+    if (recipientRows.length > 0) {
+      for (const recipient of recipientRows) {
+        await tx
+          .insert(signatureRecipients)
+          .values(recipient)
+          .onConflictDoUpdate({
+            target: [signatureRecipients.envelopeId, signatureRecipients.providerRecipientId],
+            set: {
+              status: recipient.status,
+              signedAt: recipient.signedAt,
+              declinedAt: recipient.declinedAt,
+              declinedReason: recipient.declinedReason,
+              updatedAt: new Date(),
+            },
+          });
+      }
+    }
   });
 }
+
+async function markSignatureEventProcessed(eventId: string) {
+  await db
+    .update(signatureEvents)
+    .set({ processedAt: new Date(), processingError: null })
+    .where(eq(signatureEvents.id, eventId));
+}
+
+/**
+ * Download the completed envelope and create one immutable signed artifact in
+ * the Documents hub. The envelope id makes this operation idempotent.
+ */

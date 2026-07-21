@@ -1,18 +1,30 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
-import { db, offers, type Offer } from "@harly/db";
+import {
+  activityEvents,
+  db,
+  documentAssociations,
+  documents,
+  offers,
+  signatureEnvelopes,
+  signatureRecipients,
+  type Offer,
+} from "@harly/db";
 
 import {
   createEnvelope,
   freshDocuSignContext,
+  getDocuSignEnvelopeUrl,
   type CreateEnvelopeInput,
 } from "@/lib/docusign/client";
 import { createLogger } from "@/lib/logger";
 import { getWorkspaceDocuSignConfig } from "@/lib/docusign/config";
+import { getDocuSignWebhookBaseUrl } from "@/lib/public-origin";
 import { getOfferRecipient } from "@/features/offers/core";
 import { formatOfferComp } from "@/features/offers/shared";
+import { storage } from "@/lib/storage";
 
 const log = createLogger("docusign-offer-document");
 
@@ -40,6 +52,19 @@ function escapeHtml(s: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function documentExtension(mimeType: string): string {
+  const extensionByMime: Record<string, string> = {
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    "image/png": "png",
+    "image/jpeg": "jpg",
+    "image/gif": "gif",
+    "image/webp": "webp",
+  };
+  return extensionByMime[mimeType] ?? "";
 }
 
 /**
@@ -117,9 +142,15 @@ export async function createOfferEnvelope(input: {
   workspaceId: string;
   offer: Offer;
 }): Promise<string | null> {
+  if (input.offer.docusignEnvelopeId) {
+    return input.offer.docusignEnvelopeId;
+  }
   const config = await getWorkspaceDocuSignConfig(input.workspaceId);
   if (!config || config.offerSignatureChannel !== "docusign") {
     return null;
+  }
+  if (!config.connectSecret) {
+    throw new Error("Configure the DocuSign Connect HMAC key before sending signed offers.");
   }
 
   const ctx = await freshDocuSignContext(input.workspaceId);
@@ -139,6 +170,7 @@ export async function createOfferEnvelope(input: {
     );
     return null;
   }
+  const recipientEmail = recipient.email;
 
   const candidateName =
     [recipient.firstName, recipient.lastName].filter(Boolean).join(" ") ||
@@ -161,30 +193,69 @@ export async function createOfferEnvelope(input: {
     notes: input.offer.notes,
   });
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
-  const webhookUrl = `${appUrl}/api/integrations/docusign/webhook?ws=${input.workspaceId}`;
+  const webhookUrl = `${getDocuSignWebhookBaseUrl()}?ws=${encodeURIComponent(input.workspaceId)}`;
+
+  const attachedDocuments = await db
+    .select({
+      id: documents.id,
+      name: documents.name,
+      mimeType: documents.mimeType,
+      storageKey: documents.storageKey,
+      signatureStatus: documents.signatureStatus,
+    })
+    .from(documentAssociations)
+    .innerJoin(documents, eq(documents.id, documentAssociations.documentId))
+    .where(
+      and(
+        eq(documentAssociations.workspaceId, input.workspaceId),
+        eq(documentAssociations.targetType, "offer"),
+        eq(documentAssociations.targetId, input.offer.id),
+        eq(documents.workspaceId, input.workspaceId),
+        eq(documents.status, "active"),
+      ),
+    );
+
+  if (attachedDocuments.some((document) => ["signed", "pending"].includes(document.signatureStatus))) {
+    throw new Error("One or more attached documents already has an active DocuSign envelope.");
+  }
+
+  let attachedBytes = 0;
+  const envelopeDocuments: CreateEnvelopeInput["documents"] = [
+    {
+      documentId: "1",
+      name: "Offer.html",
+      fileExtension: "html",
+      htmlDefinition: {
+        source: "embedded",
+        documentBase64: Buffer.from(html, "utf8").toString("base64"),
+      },
+    },
+  ];
+  for (const document of attachedDocuments) {
+    const extension = documentExtension(document.mimeType);
+    if (!extension) throw new Error(`Unsupported DocuSign document type: ${document.mimeType}`);
+    const bytes = await storage.read(document.storageKey);
+    attachedBytes += bytes.byteLength;
+    if (attachedBytes > 20 * 1024 * 1024) {
+      throw new Error("Attached documents exceed DocuSign's 20 MB envelope limit.");
+    }
+    envelopeDocuments.push({
+      documentId: String(envelopeDocuments.length + 1),
+      name: document.name,
+      fileExtension: extension,
+      documentBase64: bytes.toString("base64"),
+    });
+  }
 
   // Sign tab near the bottom of the one-page letter.
   const documentId = "1";
   const envelopeInput: CreateEnvelopeInput = {
     emailSubject: `Offer from ${recipient.companyName ?? "us"} — ${input.offer.title}`,
     status: "sent",
-    documents: [
-      {
-        documentId,
-        name: "Offer.pdf",
-        fileExtension: "html",
-        htmlDefinition: {
-          source: "embedded",
-          documentBase64: Buffer.from(html, "utf8").toString("base64"),
-        },
-      },
-    ],
+    documents: envelopeDocuments,
     signers: [
       {
-        email: recipient.email,
+        email: recipientEmail,
         name: candidateName,
         recipientId: "1",
         routingOrder: "1",
@@ -245,24 +316,62 @@ export async function createOfferEnvelope(input: {
     envelopeInput,
   );
 
-  // Persist the envelopeId as the primary correlation key.
-  await db_updateOfferEnvelope(
-    input.workspaceId,
-    input.offer.id,
-    created.envelopeId,
-  );
+  // Persist the envelopeId as the primary correlation key and mark every
+  // attached ATS document as pending in the same transaction.
+  await db.transaction(async (tx) => {
+    const [signatureEnvelope] = await tx
+      .insert(signatureEnvelopes)
+      .values({
+        workspaceId: input.workspaceId,
+        provider: "docusign",
+        providerEnvelopeId: created.envelopeId,
+        kind: "offer",
+        status: "sent",
+        offerId: input.offer.id,
+        subject: envelopeInput.emailSubject,
+        createdById: input.offer.createdById,
+        sentAt: new Date(),
+      })
+      .returning({ id: signatureEnvelopes.id });
+    if (!signatureEnvelope) {
+      throw new Error("Signature envelope could not be saved.");
+    }
+    await tx.insert(signatureRecipients).values({
+      workspaceId: input.workspaceId,
+      envelopeId: signatureEnvelope.id,
+      providerRecipientId: "1",
+      role: "signer",
+      email: recipientEmail,
+      name: candidateName,
+      routingOrder: 1,
+      clientUserId: `harly-${input.offer.candidateId}`,
+      status: "sent",
+    });
+    await tx
+      .update(offers)
+      .set({
+        docusignEnvelopeId: created.envelopeId,
+        signatureEnvelopeRefId: signatureEnvelope.id,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(offers.workspaceId, input.workspaceId), eq(offers.id, input.offer.id)));
+    if (attachedDocuments.length > 0) {
+      await tx
+        .update(documents)
+        .set({ signatureStatus: "pending", signatureProvider: "docusign", signatureEnvelopeId: created.envelopeId, signatureEnvelopeRefId: signatureEnvelope.id, signatureUrl: getDocuSignEnvelopeUrl(ctx.baseUrl, created.envelopeId), updatedAt: new Date() })
+        .where(and(eq(documents.workspaceId, input.workspaceId), inArray(documents.id, attachedDocuments.map((document) => document.id))));
+      await tx.insert(activityEvents).values(
+        attachedDocuments.map((document) => ({
+          workspaceId: input.workspaceId,
+          actorId: input.offer.createdById,
+          entityType: "document" as const,
+          entityId: document.id,
+          type: "document.signature_changed",
+          metadata: { status: "pending", provider: "docusign", envelopeId: created.envelopeId, offerId: input.offer.id },
+        })),
+      );
+    }
+  });
 
   return created.envelopeId;
-}
-
-/** Persist the DocuSign envelopeId on the offer row (primary correlation key). */
-async function db_updateOfferEnvelope(
-  workspaceId: string,
-  offerId: string,
-  envelopeId: string,
-): Promise<void> {
-  await db
-    .update(offers)
-    .set({ docusignEnvelopeId: envelopeId, updatedAt: new Date() })
-    .where(and(eq(offers.workspaceId, workspaceId), eq(offers.id, offerId)));
 }

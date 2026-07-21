@@ -14,6 +14,32 @@ import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 export const DEFAULT_DOCUSIGN_BASE_URL =
   process.env.DOCUSIGN_BASE_URL ?? "https://account-d.docusign.com";
 
+/** Accept only the regional HTTPS REST hosts returned by DocuSign getUserInfo. */
+export function normalizeDocuSignRestBaseUrl(value: string | null | undefined) {
+  if (!value) return null;
+  try {
+    const url = new URL(value);
+    if (
+      url.protocol !== "https:" ||
+      !/(^|\.)docusign\.net$/i.test(url.hostname)
+    ) {
+      return null;
+    }
+    return `${url.origin}/restapi`;
+  } catch {
+    return null;
+  }
+}
+
+function inferDocuSignAuthBaseUrl(restBaseUrl: string | null | undefined) {
+  if (restBaseUrl?.includes("demo.docusign.net")) {
+    return "https://account-d.docusign.com";
+  }
+  if (restBaseUrl?.includes("docusign.net")) {
+    return "https://account.docusign.com";
+  }
+  return DEFAULT_DOCUSIGN_BASE_URL;
+}
 export type WorkspaceDocuSignStatus = {
   enabled: boolean;
   accountEmail: string | null;
@@ -21,6 +47,7 @@ export type WorkspaceDocuSignStatus = {
   hasCredentials: boolean;
   accountId: string | null;
   baseUrl: string | null;
+  hasConnectSecret: boolean;
   offerSignatureChannel: "email" | "docusign";
   encryptionReady: boolean;
 };
@@ -34,6 +61,7 @@ export type DocuSignCredentials = {
 
 export type DocuSignConfig = {
   accessToken: string;
+  accessTokenExpiresAt: Date | null;
   refreshToken: string;
   accountId: string;
   /** REST API base URL, e.g. https://eu.docusign.net/restapi (from getUserInfo). */
@@ -59,6 +87,7 @@ export async function getWorkspaceDocuSignStatus(
         workspaceSettings.docusignClientSecretCiphertext,
       docusignAccountId: workspaceSettings.docusignAccountId,
       docusignBaseUrl: workspaceSettings.docusignBaseUrl,
+      docusignConnectSecret: workspaceSettings.docusignConnectSecret,
       offerSignatureChannel: workspaceSettings.offerSignatureChannel,
     })
     .from(workspaceSettings)
@@ -82,6 +111,7 @@ export async function getWorkspaceDocuSignStatus(
     hasCredentials: hasDbCredentials || hasEnvCredentials,
     accountId: row?.docusignAccountId ?? null,
     baseUrl: row?.docusignBaseUrl ?? null,
+    hasConnectSecret: Boolean(row?.docusignConnectSecret),
     offerSignatureChannel: channel === "docusign" ? "docusign" : "email",
     encryptionReady: isEncryptionConfigured(),
   };
@@ -101,6 +131,7 @@ export async function getWorkspaceDocuSignCredentials(
         workspaceSettings.docusignClientSecretCiphertext,
       docusignClientSecretIv: workspaceSettings.docusignClientSecretIv,
       docusignClientSecretTag: workspaceSettings.docusignClientSecretTag,
+      docusignAuthBaseUrl: workspaceSettings.docusignAuthBaseUrl,
       docusignBaseUrl: workspaceSettings.docusignBaseUrl,
     })
     .from(workspaceSettings)
@@ -123,8 +154,8 @@ export async function getWorkspaceDocuSignCredentials(
       return {
         clientId: row.docusignClientId,
         clientSecret,
-        // Per-workspace resolved base URL (prod after getUserInfo) , else default.
-        authBaseUrl: row.docusignBaseUrl ?? DEFAULT_DOCUSIGN_BASE_URL,
+        // OAuth authorization host is separate from the regional REST base URL.
+        authBaseUrl: row.docusignAuthBaseUrl ?? inferDocuSignAuthBaseUrl(row.docusignBaseUrl),
       };
     } catch {
       // Fall through to env.
@@ -159,6 +190,8 @@ export async function getWorkspaceDocuSignConfig(
         workspaceSettings.docusignAccessTokenCiphertext,
       docusignAccessTokenIv: workspaceSettings.docusignAccessTokenIv,
       docusignAccessTokenTag: workspaceSettings.docusignAccessTokenTag,
+      docusignAccessTokenExpiresAt:
+        workspaceSettings.docusignAccessTokenExpiresAt,
       docusignRefreshTokenCiphertext:
         workspaceSettings.docusignRefreshTokenCiphertext,
       docusignRefreshTokenIv: workspaceSettings.docusignRefreshTokenIv,
@@ -187,6 +220,9 @@ export async function getWorkspaceDocuSignConfig(
     return null;
   }
 
+  const baseUrl = normalizeDocuSignRestBaseUrl(row.docusignBaseUrl);
+  if (!baseUrl) return null;
+
   try {
     const accessToken = decryptSecret({
       ciphertext: row.docusignAccessTokenCiphertext,
@@ -204,9 +240,10 @@ export async function getWorkspaceDocuSignConfig(
 
     return {
       accessToken,
+      accessTokenExpiresAt: row.docusignAccessTokenExpiresAt ?? null,
       refreshToken,
       accountId: row.docusignAccountId,
-      baseUrl: row.docusignBaseUrl,
+      baseUrl,
       offerSignatureChannel: channel === "docusign" ? "docusign" : "email",
       connectSecret: row.docusignConnectSecret ?? null,
     };

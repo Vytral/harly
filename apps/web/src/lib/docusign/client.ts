@@ -1,6 +1,6 @@
 import "server-only";
 
-import { encryptSecret } from "@/lib/crypto";
+import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { db, workspaceSettings } from "@harly/db";
 import { eq } from "drizzle-orm";
 
@@ -139,49 +139,104 @@ export async function refreshDocuSignToken(opts: {
   clientSecret: string;
   refreshToken: string;
 }): Promise<string> {
-  const res = await fetch(
-    `${opts.authBaseUrl.replace(/\/$/, "")}/oauth/token`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        Authorization: `Basic ${Buffer.from(
-          `${opts.clientId}:${opts.clientSecret}`,
-        ).toString("base64")}`,
+  return db.transaction(async (tx) => {
+    // DocuSign may rotate refresh tokens. Lock the workspace row so a web
+    // replica and the scheduler can never refresh the same grant concurrently.
+    const [row] = await tx
+      .select({
+        docusignAccessTokenCiphertext:
+          workspaceSettings.docusignAccessTokenCiphertext,
+        docusignAccessTokenIv: workspaceSettings.docusignAccessTokenIv,
+        docusignAccessTokenTag: workspaceSettings.docusignAccessTokenTag,
+        docusignAccessTokenExpiresAt:
+          workspaceSettings.docusignAccessTokenExpiresAt,
+        docusignRefreshTokenCiphertext:
+          workspaceSettings.docusignRefreshTokenCiphertext,
+        docusignRefreshTokenIv: workspaceSettings.docusignRefreshTokenIv,
+        docusignRefreshTokenTag: workspaceSettings.docusignRefreshTokenTag,
+      })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.organizationId, opts.workspaceId))
+      .for("update")
+      .limit(1);
+
+    // Reuse a valid token. The one-minute safety window avoids starting a
+    // long REST request with a token that is about to expire.
+    if (
+      row?.docusignAccessTokenExpiresAt &&
+      row.docusignAccessTokenExpiresAt.getTime() > Date.now() + 60_000 &&
+      row.docusignAccessTokenCiphertext &&
+      row.docusignAccessTokenIv &&
+      row.docusignAccessTokenTag
+    ) {
+      return decryptSecret({
+        ciphertext: row.docusignAccessTokenCiphertext,
+        iv: row.docusignAccessTokenIv,
+        tag: row.docusignAccessTokenTag,
+      });
+    }
+
+    let refreshToken = opts.refreshToken;
+    if (
+      row?.docusignRefreshTokenCiphertext &&
+      row.docusignRefreshTokenIv &&
+      row.docusignRefreshTokenTag
+    ) {
+      refreshToken = decryptSecret({
+        ciphertext: row.docusignRefreshTokenCiphertext,
+        iv: row.docusignRefreshTokenIv,
+        tag: row.docusignRefreshTokenTag,
+      });
+    }
+
+    const res = await fetch(
+      `${opts.authBaseUrl.replace(/\/$/, "")}/oauth/token`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          Authorization: `Basic ${Buffer.from(
+            `${opts.clientId}:${opts.clientSecret}`,
+          ).toString("base64")}`,
+        },
+        body: new URLSearchParams({
+          grant_type: "refresh_token",
+          refresh_token: refreshToken,
+        }),
       },
-      body: new URLSearchParams({
-        grant_type: "refresh_token",
-        refresh_token: opts.refreshToken,
-      }),
-    },
-  );
-
-  const data = (await res.json()) as DocuSignTokenResponse;
-  if (!data.access_token) {
-    throw new Error(
-      `DocuSign token refresh failed: ${data.error ?? "unknown"} , ${data.error_description ?? ""}`,
     );
-  }
 
-  // Refresh token may rotate; keep whichever we got back.
-  const newRefreshToken = data.refresh_token ?? opts.refreshToken;
-  const encryptedAccess = encryptSecret(data.access_token);
-  const encryptedRefresh = encryptSecret(newRefreshToken);
+    const data = (await res.json()) as DocuSignTokenResponse;
+    if (!data.access_token) {
+      throw new Error(
+        `DocuSign token refresh failed: ${data.error ?? "unknown"} , ${data.error_description ?? ""}`,
+      );
+    }
 
-  await db
-    .update(workspaceSettings)
-    .set({
-      docusignAccessTokenCiphertext: encryptedAccess.ciphertext,
-      docusignAccessTokenIv: encryptedAccess.iv,
-      docusignAccessTokenTag: encryptedAccess.tag,
-      docusignRefreshTokenCiphertext: encryptedRefresh.ciphertext,
-      docusignRefreshTokenIv: encryptedRefresh.iv,
-      docusignRefreshTokenTag: encryptedRefresh.tag,
-      updatedAt: new Date(),
-    })
-    .where(eq(workspaceSettings.organizationId, opts.workspaceId));
+    // Persist the rotated refresh token and access-token expiry atomically.
+    const newRefreshToken = data.refresh_token ?? refreshToken;
+    const encryptedAccess = encryptSecret(data.access_token);
+    const encryptedRefresh = encryptSecret(newRefreshToken);
+    const accessTokenExpiresAt = data.expires_in
+      ? new Date(Date.now() + data.expires_in * 1000)
+      : null;
 
-  return data.access_token;
+    await tx
+      .update(workspaceSettings)
+      .set({
+        docusignAccessTokenCiphertext: encryptedAccess.ciphertext,
+        docusignAccessTokenIv: encryptedAccess.iv,
+        docusignAccessTokenTag: encryptedAccess.tag,
+        docusignAccessTokenExpiresAt: accessTokenExpiresAt,
+        docusignRefreshTokenCiphertext: encryptedRefresh.ciphertext,
+        docusignRefreshTokenIv: encryptedRefresh.iv,
+        docusignRefreshTokenTag: encryptedRefresh.tag,
+        updatedAt: new Date(),
+      })
+      .where(eq(workspaceSettings.organizationId, opts.workspaceId));
+
+    return data.access_token;
+  });
 }
 
 /** True when DocuSign rejected the stored refresh token (revoked/expired). */
@@ -205,6 +260,16 @@ export async function freshDocuSignContext(
 } | null> {
   const config = await getWorkspaceDocuSignConfig(workspaceId);
   if (!config) return null;
+  if (
+    config.accessTokenExpiresAt &&
+    config.accessTokenExpiresAt.getTime() > Date.now() + 60_000
+  ) {
+    return {
+      accessToken: config.accessToken,
+      accountId: config.accountId,
+      baseUrl: config.baseUrl,
+    };
+  }
   const credentials = await getWorkspaceDocuSignCredentials(workspaceId);
   if (!credentials) return null;
   const accessToken = await refreshDocuSignToken({
@@ -222,6 +287,14 @@ export async function freshDocuSignContext(
 }
 
 export { DEFAULT_DOCUSIGN_BASE_URL };
+
+/** Sender-facing envelope link for the DocuSign web application. */
+export function getDocuSignEnvelopeUrl(restBaseUrl: string, envelopeId: string) {
+  const appHost = restBaseUrl.includes("demo.docusign.net")
+    ? "appdemo.docusign.com"
+    : "app.docusign.com";
+  return `https://${appHost}/documents/details/${encodeURIComponent(envelopeId)}`;
+}
 
 // ---- Envelopes + embedded signing (REST, v2.1) -----------------------------
 
@@ -382,6 +455,7 @@ export type EnvelopeStatus = {
   status?:
     | "sent"
     | "delivered"
+    | "signed"
     | "completed"
     | "declined"
     | "voided"
@@ -403,6 +477,41 @@ export async function getEnvelope(
     accessToken,
     `${REST_VERSION}/accounts/${accountId}/envelopes/${encodeURIComponent(envelopeId)}`,
   );
+}
+
+export type EnvelopeRecipientItem = {
+  recipientId?: string;
+  email?: string;
+  name?: string;
+  routingOrder?: string;
+  clientUserId?: string;
+  status?: string;
+  deliveredDateTime?: string;
+  signedDateTime?: string;
+  declinedDateTime?: string;
+  declinedReason?: string;
+};
+
+export type EnvelopeRecipientsResponse = {
+  signers?: EnvelopeRecipientItem[];
+  recipients?: {
+    signers?: EnvelopeRecipientItem[];
+  };
+};
+
+/** Fetch current recipient state for reconciliation and recovery from missed Connect events. */
+export async function listEnvelopeRecipients(
+  baseUrl: string,
+  accessToken: string,
+  accountId: string,
+  envelopeId: string,
+): Promise<EnvelopeRecipientItem[]> {
+  const data = await docusignFetch<EnvelopeRecipientsResponse>(
+    baseUrl,
+    accessToken,
+    `${REST_VERSION}/accounts/${accountId}/envelopes/${encodeURIComponent(envelopeId)}/recipients`,
+  );
+  return data.signers ?? data.recipients?.signers ?? [];
 }
 
 /**

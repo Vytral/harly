@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import {
   disconnectDocusignAction,
+  saveDocusignConnectSecretAction,
   saveDocusignCredentialsAction,
   saveOfferSignatureChannelAction,
   testDocusignAction,
@@ -37,12 +38,14 @@ export function DocuSignConnectPanel({
   status,
   canEdit,
   workspaceId,
+  redirectUri,
   tileClassName,
   description,
 }: {
   status: WorkspaceDocuSignStatus;
   canEdit: boolean;
   workspaceId: string;
+  redirectUri: string;
   tileClassName: string;
   description: string;
 }) {
@@ -54,6 +57,8 @@ export function DocuSignConnectPanel({
   const [testing, startTest] = useTransition();
   const [disconnecting, startDisconnect] = useTransition();
   const [savingChannel, startSaveChannel] = useTransition();
+  const [savingConnectSecret, startSaveConnectSecret] = useTransition();
+  const [connectSecret, setConnectSecret] = useState("");
   const installUrl = `/api/integrations/docusign/install?ws=${workspaceId}`;
 
   function testConnection() {
@@ -87,6 +92,19 @@ export function DocuSignConnectPanel({
         return;
       }
       toast.success(channel === "docusign" ? "DocuSign enabled for offers" : "Email enabled for offers");
+      router.refresh();
+    });
+  }
+
+  function saveConnectSecret() {
+    startSaveConnectSecret(async () => {
+      const result = await saveDocusignConnectSecretAction({ connectSecret });
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not save the Connect HMAC key.");
+        return;
+      }
+      setConnectSecret("");
+      toast.success("DocuSign Connect security key saved");
       router.refresh();
     });
   }
@@ -171,6 +189,27 @@ export function DocuSignConnectPanel({
                 <Button variant={status.offerSignatureChannel === "email" ? "default" : "outline"} disabled={savingChannel} onClick={() => setChannel("email")}>Email</Button>
                 <Button variant={status.offerSignatureChannel === "docusign" ? "default" : "outline"} disabled={savingChannel} onClick={() => setChannel("docusign")}>DocuSign</Button>
               </div>
+              <div className="space-y-3 border-t pt-4">
+                <div>
+                  <h2 className="font-display text-base font-semibold tracking-tight">DocuSign Connect</h2>
+                  <p className="text-sm text-muted-foreground">Store the account-level HMAC key so Harly can verify envelope status callbacks.</p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    type="password"
+                    value={connectSecret}
+                    onChange={(event) => setConnectSecret(event.target.value)}
+                    placeholder={status.hasConnectSecret ? "Key saved · enter a replacement" : "Paste the Connect HMAC key"}
+                    autoComplete="new-password"
+                    className="font-mono text-xs"
+                  />
+                  <Button onClick={saveConnectSecret} disabled={savingConnectSecret || !connectSecret.trim()}>
+                    {savingConnectSecret ? <SpinnerIcon className="size-4" /> : null}
+                    Save key
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">In DocuSign Admin → Connect, use the same key. Comma-separated old and new keys are supported during rotation.</p>
+              </div>
               <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={disconnect} disabled={disconnecting}>
                 {disconnecting ? <SpinnerIcon className="size-3.5" /> : null}
                 Disconnect DocuSign
@@ -178,6 +217,7 @@ export function DocuSignConnectPanel({
             </Card>
           ) : !status.hasCredentials ? (
             <CredentialsForm
+              redirectUri={redirectUri}
               onSaved={() => {
                 setOpen(false);
                 router.refresh();
@@ -190,15 +230,16 @@ export function DocuSignConnectPanel({
   );
 }
 
-function CredentialsForm({ onSaved }: { onSaved: () => void }) {
+function CredentialsForm({
+  onSaved,
+  redirectUri,
+}: {
+  onSaved: () => void;
+  redirectUri: string;
+}) {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [saving, startSave] = useTransition();
-
-  const redirectUrl =
-    typeof window !== "undefined"
-      ? `${window.location.origin}/api/integrations/docusign/callback`
-      : "";
 
   function save() {
     startSave(async () => {
@@ -252,13 +293,17 @@ function CredentialsForm({ onSaved }: { onSaved: () => void }) {
               and create a new app
             </li>
             <li>
-              Add a Redirect URI set to: <code>{redirectUrl}</code>
+              Add this exact Redirect URI: <code className="break-all">{redirectUri}</code>
             </li>
             <li>
-              Grant the <code>signature</code> scope
+              Grant the <code>signature</code> and <code>extended</code> scopes
             </li>
             <li>Copy the Integration Key and generate a Secret</li>
           </ol>
+          <p className="mt-2 border-t pt-2">
+            CORS is not required for Harly: DocuSign calls are made server-side.
+            Leave Origin URLs and browser HTTP methods empty.
+          </p>
         </div>
 
         <div className="space-y-2">

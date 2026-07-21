@@ -34,6 +34,10 @@ import { getWorkspaceSlackStatus } from "@/lib/slack/config";
 import { getWorkspaceTelegramStatus } from "@/lib/telegram/config";
 import { getZoomConfig } from "@/lib/zoom/config";
 import {
+  getDocuSignRedirectUri,
+  getHarlyPublicOrigin,
+} from "@/lib/public-origin";
+import {
   WEBHOOK_EVENTS,
   WEBHOOK_EVENT_LABELS,
 } from "@/server/webhooks/events";
@@ -102,7 +106,7 @@ export default async function IntegrationDetailPage({
     label: WEBHOOK_EVENT_LABELS[event],
   }));
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "") ?? null;
+  const appUrl = getHarlyPublicOrigin();
   const webhookUrl = appUrl
     ? `${appUrl}/api/webhooks/cal?ws=${organization.id}`
     : null;
@@ -301,6 +305,7 @@ async function renderPanel(
           status={status}
           canEdit={ctx.canEdit}
           workspaceId={ctx.organizationId}
+          redirectUri={getDocuSignRedirectUri()}
           tileClassName={integration.tileClassName}
           description={integration.detail}
         />

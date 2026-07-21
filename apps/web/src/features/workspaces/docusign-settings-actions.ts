@@ -43,6 +43,7 @@ async function clearDocusignToken(organizationId: string): Promise<void> {
       docusignAccessTokenCiphertext: null,
       docusignAccessTokenIv: null,
       docusignAccessTokenTag: null,
+      docusignAccessTokenExpiresAt: null,
       docusignRefreshTokenCiphertext: null,
       docusignRefreshTokenIv: null,
       docusignRefreshTokenTag: null,
@@ -114,6 +115,35 @@ export async function saveDocusignCredentialsAction(input: {
   return { ok: true };
 }
 
+/** Save one or more active DocuSign Connect HMAC secrets for rotation. */
+export async function saveDocusignConnectSecretAction(input: {
+  connectSecret: string;
+}): Promise<DocuSignActionResult> {
+  const context = await requirePermission("integrations:manage");
+  if (typeof input.connectSecret !== "string") {
+    return { ok: false, error: "Enter a valid DocuSign Connect HMAC key." };
+  }
+  const secrets = input.connectSecret
+    .split(",")
+    .map((secret) => secret.trim())
+    .filter(Boolean);
+  if (secrets.length === 0 || secrets.some((secret) => secret.length < 16)) {
+    return {
+      ok: false,
+      error: "Enter a valid DocuSign Connect HMAC key (16+ characters).",
+    };
+  }
+  if (secrets.length > 3 || secrets.join(",").length > 2048) {
+    return { ok: false, error: "You can keep up to three HMAC keys during rotation." };
+  }
+  await db
+    .update(workspaceSettings)
+    .set({ docusignConnectSecret: secrets.join(","), updatedAt: new Date() })
+    .where(eq(workspaceSettings.organizationId, context.organization.id));
+  revalidatePath(SETTINGS_PATH);
+  return { ok: true };
+}
+
 /** Toggle the per-workspace offer delivery channel (email | docusign). */
 export async function saveOfferSignatureChannelAction(
   channel: "email" | "docusign",
@@ -121,10 +151,10 @@ export async function saveOfferSignatureChannelAction(
   const context = await requirePermission("integrations:manage");
 
   const status = await getWorkspaceDocuSignStatus(context.organization.id);
-  if (channel === "docusign" && !status.hasToken) {
+  if (channel === "docusign" && (!status.hasToken || !status.hasConnectSecret)) {
     return {
       ok: false,
-      error: "Connect DocuSign before using it for offer signatures.",
+      error: "Connect DocuSign and save its Connect HMAC key before using it for offer signatures.",
     };
   }
 
@@ -147,13 +177,16 @@ export async function disconnectDocusignAction(): Promise<DocuSignActionResult> 
       docusignEnabled: false,
       docusignAccountEmail: null,
       docusignAccountId: null,
+      docusignAuthBaseUrl: null,
       docusignBaseUrl: null,
       docusignAccessTokenCiphertext: null,
       docusignAccessTokenIv: null,
       docusignAccessTokenTag: null,
+      docusignAccessTokenExpiresAt: null,
       docusignRefreshTokenCiphertext: null,
       docusignRefreshTokenIv: null,
       docusignRefreshTokenTag: null,
+      docusignConnectSecret: null,
       offerSignatureChannel: "email",
       updatedAt: new Date(),
     })

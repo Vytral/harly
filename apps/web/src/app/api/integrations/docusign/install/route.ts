@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
 import { getWorkspaceDocuSignCredentials } from "@/lib/docusign/config";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { getDocuSignRedirectUri } from "@/lib/public-origin";
 import { createInstallState } from "@/server/oauth-state";
 
 export const runtime = "nodejs";
@@ -44,10 +45,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
-  const redirectUri = `${appUrl}/api/integrations/docusign/callback`;
+  const redirectUri = getDocuSignRedirectUri();
 
   const state = await createInstallState({
     userId: session.user.id,

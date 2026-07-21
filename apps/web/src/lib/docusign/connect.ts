@@ -103,7 +103,7 @@ export type DocuSignConnectSigner = {
  * duplicates or out-of-order events; dedup by this composite key.
  */
 export function connectEventKey(event: DocuSignConnectEvent): string {
-  const env = event.data?.envelopeId ?? "";
+  const env = connectEnvelopeId(event) ?? "";
   return [
     event.configurationId ?? "",
     event.event ?? "",
@@ -114,11 +114,10 @@ export function connectEventKey(event: DocuSignConnectEvent): string {
 
 /** Pull the envelopeId from any of the (redundant) locations in the payload. */
 export function connectEnvelopeId(event: DocuSignConnectEvent): string | null {
-  return (
-    event.data?.envelopeId ??
-    event.data?.envelopeSummary?.envelopeId ??
-    null
-  );
+  const direct = event.data?.envelopeId ?? event.data?.envelopeSummary?.envelopeId;
+  if (direct) return direct;
+  const match = event.uri?.match(/\/envelopes\/([^/?]+)/i);
+  return match?.[1] ?? null;
 }
 
 /** Find a custom field value by name in the payload (secondary correlation). */
