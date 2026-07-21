@@ -1,0 +1,2 @@
+CREATE INDEX "documents_workspace_signature_envelope_idx" ON "documents" USING btree ("workspace_id","signature_envelope_ref_id");--> statement-breakpoint
+CREATE INDEX "offers_workspace_signature_envelope_idx" ON "offers" USING btree ("workspace_id","signature_envelope_ref_id");

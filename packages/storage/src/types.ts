@@ -17,6 +17,13 @@ export type StorageAdapter = {
   read(key: string): Promise<Buffer>;
 
   /**
+   * Write bytes from a trusted server-side integration (for example a signed
+   * document downloaded from DocuSign). Browser uploads should still use the
+   * presigned URL flow above.
+   */
+  put(key: string, content: Buffer, contentType: string): Promise<void>;
+
+  /**
    * Delete a file by key.
    */
   delete(key: string): Promise<void>;

@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "docusign_access_token_expires_at" timestamp with time zone;

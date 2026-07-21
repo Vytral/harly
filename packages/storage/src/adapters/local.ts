@@ -1,4 +1,4 @@
-import { readFile, rm } from "node:fs/promises";
+import { readFile, rm, writeFile, mkdir } from "node:fs/promises";
 import path from "node:path";
 
 import type { StorageAdapter } from "../types";
@@ -44,6 +44,12 @@ export class LocalAdapter implements StorageAdapter {
 
   async read(key: string) {
     return readFile(getLocalUploadPath(key));
+  }
+
+  async put(key: string, content: Buffer) {
+    const uploadPath = getLocalUploadPath(key);
+    await mkdir(path.dirname(uploadPath), { recursive: true });
+    await writeFile(uploadPath, content);
   }
 
   async delete(key: string) {

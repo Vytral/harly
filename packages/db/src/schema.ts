@@ -661,6 +661,9 @@ export const workspaceSettings = pgTable("workspace_settings", {
   docusignEnabled: boolean("docusign_enabled").default(false).notNull(),
   docusignAccountEmail: text("docusign_account_email"),
   docusignAccountId: text("docusign_account_id"),
+  // OAuth authorization host (account-d/account). Kept separate from the
+  // regional REST base URL resolved from getUserInfo.
+  docusignAuthBaseUrl: text("docusign_auth_base_url"),
   docusignBaseUrl: text("docusign_base_url"),
   docusignClientId: text("docusign_client_id"),
   docusignClientSecretCiphertext: text("docusign_client_secret_ciphertext"),
@@ -669,6 +672,9 @@ export const workspaceSettings = pgTable("workspace_settings", {
   docusignAccessTokenCiphertext: text("docusign_access_token_ciphertext"),
   docusignAccessTokenIv: text("docusign_access_token_iv"),
   docusignAccessTokenTag: text("docusign_access_token_tag"),
+  docusignAccessTokenExpiresAt: timestamp("docusign_access_token_expires_at", {
+    withTimezone: true,
+  }),
   docusignRefreshTokenCiphertext: text("docusign_refresh_token_ciphertext"),
   docusignRefreshTokenIv: text("docusign_refresh_token_iv"),
   docusignRefreshTokenTag: text("docusign_refresh_token_tag"),
@@ -1334,6 +1340,10 @@ export const documents = pgTable(
     signatureStatus: text("signature_status").default("unsigned").notNull(),
     signatureProvider: text("signature_provider"),
     signatureEnvelopeId: text("signature_envelope_id"),
+    signatureEnvelopeRefId: uuid("signature_envelope_ref_id").references(
+      () => signatureEnvelopes.id,
+      { onDelete: "set null" },
+    ),
     signatureUrl: text("signature_url"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     ownerId: text("owner_id").references(() => user.id, {
@@ -1361,6 +1371,10 @@ export const documents = pgTable(
     index("documents_workspace_category_idx").on(
       table.workspaceId,
       table.categoryId,
+    ),
+    index("documents_workspace_signature_envelope_idx").on(
+      table.workspaceId,
+      table.signatureEnvelopeRefId,
     ),
   ],
 );
@@ -1567,10 +1581,82 @@ export const documentRequirements = pgTable(
   ],
 );
 
+// A legal hold is deliberately separate from document status and retention
+// dates. Multiple independent notices may protect the same document; releasing
+// one must not release another. Physical objects remain untouched while a hold
+// is active.
+export const documentLegalHolds = pgTable(
+  "document_legal_holds",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      // Keep the hold record authoritative: a future physical deletion must
+      // be explicitly reconciled instead of cascading through the hold.
+      .references(() => documents.id, { onDelete: "restrict" }),
+    reason: text("reason").notNull(),
+    reference: text("reference"),
+    placedById: text("placed_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    placedAt: timestamp("placed_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    releasedById: text("released_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+    releaseReason: text("release_reason"),
+    ...timestamps(),
+  },
+  (table) => [
+    index("document_legal_holds_workspace_document_idx").on(
+      table.workspaceId,
+      table.documentId,
+    ),
+    index("document_legal_holds_workspace_active_idx").on(
+      table.workspaceId,
+      table.releasedAt,
+    ),
+  ],
+);
+
+// Idempotency record for DocuSign Connect deliveries. Connect retries and can
+// deliver events out of order; the composite key is stable across retries.
+export const docusignWebhookEvents = pgTable(
+  "docusign_webhook_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    eventKey: text("event_key").notNull(),
+    envelopeId: text("envelope_id").notNull(),
+    eventType: text("event_type").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("docusign_webhook_events_workspace_key_idx").on(
+      table.workspaceId,
+      table.eventKey,
+    ),
+    index("docusign_webhook_events_workspace_envelope_idx").on(
+      table.workspaceId,
+      table.envelopeId,
+    ),
+  ],
+);
+
 export type Document = typeof documents.$inferSelect;
 export type NewDocument = typeof documents.$inferInsert;
 export type DocumentCategory = typeof documentCategories.$inferSelect;
 export type DocumentVersion = typeof documentVersions.$inferSelect;
+export type DocumentLegalHold = typeof documentLegalHolds.$inferSelect;
 
 // Audit trail
 export const activityEvents = pgTable(
@@ -1678,6 +1764,10 @@ export const offers = pgTable(
     // "docusign"). The Connect webhook maps this back to the offer to flip
     // status to accepted/declined and attach the signed PDF. Null for email-only offers.
     docusignEnvelopeId: text("docusign_envelope_id"),
+    signatureEnvelopeRefId: uuid("signature_envelope_ref_id").references(
+      () => signatureEnvelopes.id,
+      { onDelete: "set null" },
+    ),
     ...timestamps(),
   },
   (table) => [
@@ -1688,11 +1778,185 @@ export const offers = pgTable(
     index("offers_application_idx").on(table.applicationId),
     index("offers_candidate_idx").on(table.candidateId),
     index("offers_workspace_status_idx").on(table.workspaceId, table.status),
+    index("offers_workspace_signature_envelope_idx").on(
+      table.workspaceId,
+      table.signatureEnvelopeRefId,
+    ),
   ],
 );
 
 export type Offer = typeof offers.$inferSelect;
 export type NewOffer = typeof offers.$inferInsert;
+
+// Provider-independent signing domain. DocuSign identifiers remain stored for
+// reconciliation, while Harly owns the lifecycle, recipients, evidence, and
+// document relationships. This lets another provider be added without adding
+// more provider-specific columns to documents or offers.
+export const signatureEnvelopes = pgTable(
+  "signature_envelopes",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    provider: text("provider").default("docusign").notNull(),
+    providerEnvelopeId: text("provider_envelope_id").notNull(),
+    kind: text("kind").default("document").notNull(),
+    status: text("status").default("created").notNull(),
+    // Kept as an indexed correlation field. The offer owns the FK to avoid a
+    // circular Drizzle initializer between offers and signature envelopes.
+    offerId: uuid("offer_id"),
+    subject: text("subject"),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    declinedAt: timestamp("declined_at", { withTimezone: true }),
+    voidedAt: timestamp("voided_at", { withTimezone: true }),
+    lastEventAt: timestamp("last_event_at", { withTimezone: true }),
+    lastEventKey: text("last_event_key"),
+    lastReconciledAt: timestamp("last_reconciled_at", { withTimezone: true }),
+    nextReconcileAt: timestamp("next_reconcile_at", { withTimezone: true }),
+    reconcileLockedUntil: timestamp("reconcile_locked_until", {
+      withTimezone: true,
+    }),
+    reconcileAttempts: integer("reconcile_attempts").default(0).notNull(),
+    reconcileError: text("reconcile_error"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("signature_envelopes_workspace_provider_id_idx").on(
+      table.workspaceId,
+      table.provider,
+      table.providerEnvelopeId,
+    ),
+    index("signature_envelopes_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
+    index("signature_envelopes_workspace_offer_idx").on(
+      table.workspaceId,
+      table.offerId,
+    ),
+    index("signature_envelopes_reconcile_idx").on(
+      table.workspaceId,
+      table.status,
+      table.nextReconcileAt,
+    ),
+  ],
+);
+
+export const signatureRecipients = pgTable(
+  "signature_recipients",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    envelopeId: uuid("envelope_id")
+      .notNull()
+      .references(() => signatureEnvelopes.id, { onDelete: "cascade" }),
+    providerRecipientId: text("provider_recipient_id").notNull(),
+    role: text("role").default("signer").notNull(),
+    email: text("email").notNull(),
+    name: text("name").notNull(),
+    routingOrder: integer("routing_order").default(1).notNull(),
+    clientUserId: text("client_user_id"),
+    status: text("status").default("created").notNull(),
+    signedAt: timestamp("signed_at", { withTimezone: true }),
+    declinedAt: timestamp("declined_at", { withTimezone: true }),
+    declinedReason: text("declined_reason"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("signature_recipients_envelope_provider_id_idx").on(
+      table.envelopeId,
+      table.providerRecipientId,
+    ),
+    index("signature_recipients_workspace_envelope_idx").on(
+      table.workspaceId,
+      table.envelopeId,
+    ),
+  ],
+);
+
+export const signatureEvents = pgTable(
+  "signature_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    envelopeId: uuid("envelope_id")
+      .notNull()
+      .references(() => signatureEnvelopes.id, { onDelete: "cascade" }),
+    eventKey: text("event_key").notNull(),
+    eventType: text("event_type").notNull(),
+    generatedAt: timestamp("generated_at", { withTimezone: true }),
+    retryCount: integer("retry_count"),
+    payload: jsonb("payload").notNull(),
+    processedAt: timestamp("processed_at", { withTimezone: true }),
+    processingError: text("processing_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("signature_events_workspace_key_idx").on(
+      table.workspaceId,
+      table.eventKey,
+    ),
+    index("signature_events_workspace_envelope_idx").on(
+      table.workspaceId,
+      table.envelopeId,
+    ),
+  ],
+);
+
+export const signatureArtifacts = pgTable(
+  "signature_artifacts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    envelopeId: uuid("envelope_id")
+      .notNull()
+      .references(() => signatureEnvelopes.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id").references(() => documents.id, {
+      onDelete: "set null",
+    }),
+    documentVersionId: uuid("document_version_id").references(
+      () => documentVersions.id,
+      { onDelete: "set null" },
+    ),
+    kind: text("kind").notNull(),
+    storageKey: text("storage_key").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    checksum: text("checksum").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("signature_artifacts_envelope_kind_idx").on(
+      table.envelopeId,
+      table.kind,
+    ),
+    index("signature_artifacts_workspace_envelope_idx").on(
+      table.workspaceId,
+      table.envelopeId,
+    ),
+  ],
+);
+
+export type SignatureEnvelope = typeof signatureEnvelopes.$inferSelect;
+export type SignatureRecipient = typeof signatureRecipients.$inferSelect;
+export type SignatureEvent = typeof signatureEvents.$inferSelect;
+export type SignatureArtifact = typeof signatureArtifacts.$inferSelect;
 
 /** Durable queue for outbound candidate communications. Workers may retry a
  * pending row safely; application mutations never depend on a dropped promise. */

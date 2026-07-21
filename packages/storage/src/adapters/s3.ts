@@ -76,6 +76,18 @@ export class S3Adapter implements StorageAdapter {
     return Buffer.from(bytes);
   }
 
+  async put(key: string, content: Buffer, contentType: string) {
+    await this.client.send(
+      new PutObjectCommand({
+        Bucket: this.config.bucket,
+        Key: key,
+        Body: content,
+        ContentLength: content.byteLength,
+        ContentType: contentType,
+      }),
+    );
+  }
+
   async delete(key: string) {
     await this.client.send(
       new DeleteObjectCommand({
