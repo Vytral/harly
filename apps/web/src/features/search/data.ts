@@ -26,6 +26,19 @@ export const emptySearchResults: SearchResults = { jobs: [], candidates: [] };
 export async function searchWorkspace(query: string): Promise<SearchResults> {
   const { organization: workspace } = await getWorkspaceContext();
   const like = `%${query}%`;
+  const nameTokens = query.trim().split(/\s+/).filter(Boolean).slice(0, 6);
+  const tokenNameMatch =
+    nameTokens.length > 1
+      ? and(
+          ...nameTokens.map((token) => {
+            const tokenLike = `%${token}%`;
+            return or(
+              ilike(candidates.firstName, tokenLike),
+              ilike(candidates.lastName, tokenLike),
+            );
+          }),
+        )
+      : undefined;
 
   const [jobRows, candidateRows] = await Promise.all([
     db
@@ -67,6 +80,7 @@ export async function searchWorkspace(query: string): Promise<SearchResults> {
           or(
             ilike(candidates.firstName, like),
             ilike(candidates.lastName, like),
+            tokenNameMatch,
             ilike(candidates.email, like),
             ilike(candidates.phone, like),
             ilike(candidates.headline, like),
