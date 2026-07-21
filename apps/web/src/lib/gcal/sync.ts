@@ -1,5 +1,6 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 
 import { db, interviews } from "@harly/db";
@@ -18,9 +19,13 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("gcal-sync");
 
-/** Google Calendar event IDs are the idempotency key for interview creation. */
+/**
+ * Google Calendar event IDs are the idempotency key for interview creation.
+ * Google only accepts base32hex characters (a-v and 0-9) for client IDs;
+ * UUIDs and a human-readable `harly-` prefix are therefore not safe here.
+ */
 export function gcalEventIdForInterview(interviewId: string): string {
-  return `harly-${interviewId.replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase()}`;
+  return `harl${createHash("sha256").update(interviewId).digest("hex")}`;
 }
 
 /**

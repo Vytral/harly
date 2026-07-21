@@ -29,7 +29,7 @@ import { gcalEventIdForInterview, syncInterviewToGCal } from "./sync";
 describe("Google Calendar interview sync", () => {
   it("derives a stable provider event id", () => {
     expect(gcalEventIdForInterview("6A5346F8-D3E6-4B2E-9D12-DA950CC40274")).toBe(
-      "harly-6a5346f8-d3e6-4b2e-9d12-da950cc40274",
+      "harl2d022172618d75e1daea03890ea0221627be0b703dfd8e87bdd126c75abaf3bf",
     );
   });
 
@@ -42,7 +42,7 @@ describe("Google Calendar interview sync", () => {
       new Error("Google Calendar API 409: already exists"),
     );
     mocks.getEvent.mockResolvedValue({
-      id: "harly-interview-1",
+      id: "harl50321e912e2c75386aa2a462826d3e839f78f522dcf10e8f8a61f23a41200bf3",
       hangoutLink: "https://meet.google.com/recovered",
     });
     mocks.update.mockReturnValue({
@@ -60,18 +60,18 @@ describe("Google Calendar interview sync", () => {
       }),
     ).resolves.toEqual({
       ok: true,
-      eventId: "harly-interview-1",
+      eventId: "harl50321e912e2c75386aa2a462826d3e839f78f522dcf10e8f8a61f23a41200bf3",
       meetLink: "https://meet.google.com/recovered",
     });
     expect(mocks.createEvent).toHaveBeenCalledWith(
       {},
       "primary",
-      expect.objectContaining({ id: "harly-interview-1" }),
+      expect.objectContaining({ id: "harl50321e912e2c75386aa2a462826d3e839f78f522dcf10e8f8a61f23a41200bf3" }),
     );
     expect(mocks.getEvent).toHaveBeenCalledWith(
       {},
       "primary",
-      "harly-interview-1",
+      "harl50321e912e2c75386aa2a462826d3e839f78f522dcf10e8f8a61f23a41200bf3",
     );
   });
 });

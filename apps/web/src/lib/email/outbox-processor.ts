@@ -307,23 +307,28 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
       offer.currency,
       offer.salaryPeriod,
     );
-    const offerDocuments = await db
-      .select({
-        name: documents.name,
-        mimeType: documents.mimeType,
-        storageKey: documents.storageKey,
-      })
-      .from(documentAssociations)
-      .innerJoin(documents, eq(documents.id, documentAssociations.documentId))
-      .where(
-        and(
-          eq(documentAssociations.workspaceId, row.workspaceId),
-          eq(documentAssociations.targetType, "offer"),
-          eq(documentAssociations.targetId, offer.id),
-          eq(documents.status, "active"),
-        ),
-      )
-      .limit(40);
+    // DocuSign envelopes already contain the selected ATS documents. Do not
+    // leak a second copy through the notification email or exceed Resend's
+    // attachment limits.
+    const offerDocuments = offer.docusignEnvelopeId
+      ? []
+      : await db
+          .select({
+            name: documents.name,
+            mimeType: documents.mimeType,
+            storageKey: documents.storageKey,
+          })
+          .from(documentAssociations)
+          .innerJoin(documents, eq(documents.id, documentAssociations.documentId))
+          .where(
+            and(
+              eq(documentAssociations.workspaceId, row.workspaceId),
+              eq(documentAssociations.targetType, "offer"),
+              eq(documentAssociations.targetId, offer.id),
+              eq(documents.status, "active"),
+            ),
+          )
+          .limit(40);
     const attachments = [] as Array<{ filename: string; content: Buffer; contentType: string }>;
     let attachmentBytes = 0;
     for (const document of offerDocuments) {
