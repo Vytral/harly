@@ -16,6 +16,7 @@ import {
   updateWorkflow,
 } from "./data";
 import { workflowInputSchema, type WorkflowDefinitionInput } from "./schema";
+import { dryRunWorkflow } from "./builder-data";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 
@@ -157,5 +158,55 @@ export async function deleteWorkflowAction(id: string): Promise<AutomationsActio
     return { ok: true };
   } catch (error) {
     return { ok: false, error: errorMessage(error, "Could not delete automation.") };
+  }
+}
+
+// ----- Builder support: dry-run + from-template ----------------------------
+
+/**
+ * Dry-run (T5): evaluate a *draft* condition tree against a sample candidate
+ * without persisting or running anything. The builder's "Test" button calls
+ * this so a recruiter can preview a match before saving. Gated by
+ * automations:manage (you must be able to edit to test-drive).
+ */
+export async function dryRunWorkflowAction(input: {
+  trigger: WorkflowDefinitionInput["trigger"];
+  conditions?: WorkflowDefinitionInput["conditions"];
+  candidateId?: string;
+}): Promise<AutomationsActionResult & {
+  matched?: boolean;
+  evaluated?: Array<{ text: string; matched: boolean }>;
+}> {
+  try {
+    await requirePermission("automations:manage");
+    const result = await dryRunWorkflow(input);
+    return { ok: true, ...result };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not run dry-run.") };
+  }
+}
+
+/**
+ * Create a workflow from a prebuilt template (FASE 4). The template supplies a
+ * full WorkflowDefinitionInput; we validate it with the shared Zod schema
+ * before persisting (never trust a constant blindly — the catalog is code, but
+ * the contract is the schema). Gated by automations:manage.
+ */
+export async function createWorkflowFromTemplateAction(
+  values: WorkflowDefinitionInput,
+): Promise<AutomationsActionResult & { workflow?: ReturnType<typeof serializeWorkflow> }> {
+  try {
+    const { organization, user } = await requirePermission("automations:manage");
+    const parsed = workflowInputSchema.parse(values);
+    const workflow = await createWorkflow({
+      workspaceId: organization.id,
+      values: parsed,
+      createdById: user.id,
+    });
+    revalidatePath(AUTOMATIONS_PATH);
+    return { ok: true, workflow: serializeWorkflow(workflow) };
+  } catch (error) {
+    log.error(error, "[automations] createWorkflowFromTemplateAction failed");
+    return { ok: false, error: errorMessage(error, "Could not create from template.") };
   }
 }
