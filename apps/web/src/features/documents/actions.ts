@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -16,6 +16,7 @@ import {
   documentAssociations,
   documentAssignments,
   documentCategories,
+  documentLegalHolds,
   documentVersions,
   documents,
   jobs,
@@ -29,6 +30,7 @@ import { requirePermission } from "@/features/workspaces/permissions-server";
 import { isWorkspaceStorageKey } from "@/lib/storage-validation";
 import { documentExtensionMatches, maxDocumentFileSize } from "@/lib/storage-validation";
 import { storage } from "@/lib/storage";
+import { isExternallyManagedSignatureProvider } from "@/lib/docusign/signature-state";
 
 const documentIdSchema = z.object({ documentId: z.uuid() });
 const associationSchema = z.object({
@@ -217,9 +219,139 @@ export async function setDocumentStatus(input: { documentId: string; status: "ac
   if (!parsed.success) return { ok: false, error: "Invalid document status." };
   const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
+  if (parsed.data.status === "archived") {
+    const [activeHold] = await db
+      .select({ id: documentLegalHolds.id })
+      .from(documentLegalHolds)
+      .where(
+        and(
+          eq(documentLegalHolds.workspaceId, context.organization.id),
+          eq(documentLegalHolds.documentId, input.documentId),
+          isNull(documentLegalHolds.releasedAt),
+        ),
+      )
+      .limit(1);
+    if (activeHold) {
+      return {
+        ok: false,
+        error: "This document is under legal hold and cannot be archived until every hold is released.",
+      };
+    }
+  }
   await db.transaction(async (tx) => {
     await tx.update(documents).set({ status: parsed.data.status }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
     await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: parsed.data.status === "archived" ? "document.archived" : "document.restored" });
+  });
+  revalidatePath("/dashboard/documents");
+  return { ok: true };
+}
+
+export async function placeDocumentLegalHold(input: {
+  documentId: string;
+  reason: string;
+  reference?: string | null;
+}): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const parsed = documentIdSchema
+    .extend({
+      reason: z.string().trim().min(3).max(2000),
+      reference: z.string().trim().max(160).nullable().optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Enter a reason for the legal hold." };
+  const access = await getDocumentAccessForUser({
+    documentId: input.documentId,
+    workspaceId: context.organization.id,
+    userId: context.user.id,
+    roleKey: context.roleKey,
+  });
+  if (!access || access.level !== "manage") {
+    return { ok: false, error: "You cannot place a legal hold on this document." };
+  }
+  await db.transaction(async (tx) => {
+    const [hold] = await tx
+      .insert(documentLegalHolds)
+      .values({
+        workspaceId: context.organization.id,
+        documentId: input.documentId,
+        reason: parsed.data.reason,
+        reference: parsed.data.reference || null,
+        placedById: context.user.id,
+      })
+      .returning({ id: documentLegalHolds.id });
+    if (!hold) throw new Error("Legal hold could not be created.");
+    await logDocumentActivity(tx, {
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      documentId: input.documentId,
+      type: "document.legal_hold_placed",
+      metadata: { holdId: hold.id, reference: parsed.data.reference || null },
+    });
+  });
+  revalidatePath("/dashboard/documents");
+  return { ok: true };
+}
+
+export async function releaseDocumentLegalHold(input: {
+  holdId: string;
+  releaseReason: string;
+}): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const parsed = z
+    .object({
+      holdId: z.uuid(),
+      releaseReason: z.string().trim().min(3).max(2000),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Enter a reason for releasing the legal hold." };
+  const [hold] = await db
+    .select({ id: documentLegalHolds.id, documentId: documentLegalHolds.documentId })
+    .from(documentLegalHolds)
+    .where(
+      and(
+        eq(documentLegalHolds.id, parsed.data.holdId),
+        eq(documentLegalHolds.workspaceId, context.organization.id),
+        isNull(documentLegalHolds.releasedAt),
+      ),
+    )
+    .limit(1);
+  if (!hold) return { ok: false, error: "Active legal hold not found." };
+  const access = await getDocumentAccessForUser({
+    documentId: hold.documentId,
+    workspaceId: context.organization.id,
+    userId: context.user.id,
+    roleKey: context.roleKey,
+  });
+  if (!access || access.level !== "manage") {
+    return { ok: false, error: "You cannot release this legal hold." };
+  }
+  await db.transaction(async (tx) => {
+    await tx
+      .update(documentLegalHolds)
+      .set({
+        releasedById: context.user.id,
+        releasedAt: new Date(),
+        releaseReason: parsed.data.releaseReason,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(documentLegalHolds.id, parsed.data.holdId),
+          eq(documentLegalHolds.workspaceId, context.organization.id),
+          isNull(documentLegalHolds.releasedAt),
+        ),
+      );
+    await logDocumentActivity(tx, {
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      documentId: hold.documentId,
+      type: "document.legal_hold_released",
+      metadata: { holdId: parsed.data.holdId },
+    });
   });
   revalidatePath("/dashboard/documents");
   return { ok: true };
@@ -319,6 +451,18 @@ export async function saveDocumentSignature(input: { documentId: string; status:
   if (!parsed.success) return { ok: false, error: "Invalid signature details." };
   const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot update this document." };
+  if (
+    isExternallyManagedSignatureProvider(access.document.signatureProvider) ||
+    isExternallyManagedSignatureProvider(parsed.data.provider)
+  ) {
+    return {
+      ok: false,
+      error: "DocuSign signature status is controlled by verified Connect events.",
+    };
+  }
+  if (access.document.signatureStatus === "signed" && parsed.data.status !== "signed") {
+    return { ok: false, error: "Signed documents are immutable. Create a new document for another signature cycle." };
+  }
   await db.transaction(async (tx) => {
     await tx.update(documents).set({ signatureStatus: parsed.data.status, signatureProvider: parsed.data.provider ?? null, signatureEnvelopeId: parsed.data.envelopeId ?? null, signatureUrl: parsed.data.url ?? null, expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
     await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.signature_changed", metadata: { status: parsed.data.status, provider: parsed.data.provider ?? null, envelopeId: parsed.data.envelopeId ?? null } });

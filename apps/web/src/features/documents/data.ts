@@ -10,6 +10,7 @@ import {
   documentAssociations,
   documentAssignments,
   documentCategories,
+  documentLegalHolds,
   documentVersions,
   documents,
   candidates,
@@ -139,7 +140,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
     db.select({ id: jobs.id, label: jobs.title }).from(jobs).where(eq(jobs.workspaceId, organization.id)).orderBy(jobs.title),
     db.select({ documentId: documentVersions.documentId, versionNumber: documentVersions.versionNumber, isCurrent: documentVersions.isCurrent }).from(documentVersions).where(eq(documentVersions.workspaceId, organization.id)),
   ]);
-  const [associationRows, accessRoleRows, accessMemberRows, assignmentRows, activityRows] = rows.length
+  const [associationRows, accessRoleRows, accessMemberRows, assignmentRows, activityRows, legalHoldRows] = rows.length
     ? await Promise.all([
       db
         .select({ documentId: documentAssociations.documentId, targetType: documentAssociations.targetType })
@@ -154,8 +155,9 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
       db.select({ documentId: documentAccessMembers.documentId, userId: documentAccessMembers.userId, accessLevel: documentAccessMembers.accessLevel }).from(documentAccessMembers).where(inArray(documentAccessMembers.documentId, rows.map((row) => row.id))),
       db.select({ documentId: documentAssignments.documentId, userId: documentAssignments.userId, assignmentType: documentAssignments.assignmentType }).from(documentAssignments).where(inArray(documentAssignments.documentId, rows.map((row) => row.id))),
       db.select({ documentId: activityEvents.entityId, id: activityEvents.id, type: activityEvents.type, actorName: authUsers.name, createdAt: activityEvents.createdAt }).from(activityEvents).leftJoin(authUsers, eq(authUsers.id, activityEvents.actorId)).where(and(eq(activityEvents.workspaceId, organization.id), eq(activityEvents.entityType, "document"), inArray(activityEvents.entityId, rows.map((row) => row.id)))).orderBy(desc(activityEvents.createdAt)).limit(200),
+      db.select({ documentId: documentLegalHolds.documentId, id: documentLegalHolds.id, reason: documentLegalHolds.reason, reference: documentLegalHolds.reference, placedAt: documentLegalHolds.placedAt, releasedAt: documentLegalHolds.releasedAt }).from(documentLegalHolds).where(and(eq(documentLegalHolds.workspaceId, organization.id), inArray(documentLegalHolds.documentId, rows.map((row) => row.id)))).orderBy(desc(documentLegalHolds.placedAt)),
     ])
-    : [[], [], [], [], []];
+    : [[], [], [], [], [], []];
   const labels = new Map<string, string[]>();
   for (const row of associationRows) {
     const current = labels.get(row.documentId) ?? [];
@@ -193,6 +195,18 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
     current.push({ versionNumber: row.versionNumber, isCurrent: row.isCurrent });
     versionsByDocument.set(row.documentId, current);
   }
+  const legalHoldsByDocument = new Map<string, Array<{ id: string; reason: string; reference: string | null; placedAt: string; releasedAt: string | null }>>();
+  for (const row of legalHoldRows) {
+    const current = legalHoldsByDocument.get(row.documentId) ?? [];
+    current.push({
+      id: row.id,
+      reason: row.reason,
+      reference: row.reference,
+      placedAt: row.placedAt.toISOString(),
+      releasedAt: row.releasedAt?.toISOString() ?? null,
+    });
+    legalHoldsByDocument.set(row.documentId, current);
+  }
   const visible = await Promise.all(
     rows.map(async (row): Promise<DocumentListItem | null> => {
       const access = await getDocumentAccess(row.id, {
@@ -213,6 +227,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
         activity: activityByDocument.get(row.id) ?? [],
         versionCount: versionsByDocument.get(row.id)?.length ?? 1,
         currentVersion: versionsByDocument.get(row.id)?.find((version) => version.isCurrent)?.versionNumber ?? 1,
+        legalHolds: legalHoldsByDocument.get(row.id) ?? [],
         expiresAt: row.expiresAt?.toISOString() ?? null,
         updatedAt: row.updatedAt.toISOString(),
         createdAt: row.createdAt.toISOString(),

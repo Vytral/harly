@@ -71,6 +71,13 @@ export type DocumentListItem = {
   activity: Array<{ id: string; type: string; actorName: string | null; createdAt: string }>;
   versionCount: number;
   currentVersion: number;
+  legalHolds: Array<{
+    id: string;
+    reason: string;
+    reference: string | null;
+    placedAt: string;
+    releasedAt: string | null;
+  }>;
   updatedAt: string;
   createdAt: string;
 };

@@ -13,6 +13,7 @@ import {
   FileImage,
   FileText,
   FolderCog,
+  Gavel,
   LockKeyhole,
   NotebookTabs,
   Plus,
@@ -35,6 +36,8 @@ import {
   createDocumentCategory,
   createDocumentVersion,
   assignDocument,
+  placeDocumentLegalHold,
+  releaseDocumentLegalHold,
   renameDocument,
   saveDocumentAcl,
   saveDocumentSignature,
@@ -236,7 +239,7 @@ function DocumentPreview({ document }: { document: DocumentListItem }) {
   return <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">Preview is not available for this file type.</div>;
 }
 
-function DocumentDetails({ data, document }: { data: DocumentHubData; document: DocumentListItem }) {
+function DocumentDetailsBody({ data, document }: { data: DocumentHubData; document: DocumentListItem }) {
   const router = useRouter();
   const [previewOpen, setPreviewOpen] = useState(false);
   const [renameOpen, setRenameOpen] = useState(false);
@@ -251,6 +254,91 @@ function DocumentDetails({ data, document }: { data: DocumentHubData; document: 
   const assignmentFor = (assignmentType: "owner" | "reviewer") => document.assignments.find((assignment) => assignment.assignmentType === assignmentType)?.userId ?? "";
   const saveSignatureStatus = (nextStatus: keyof typeof SIGNATURE_STATUS_META) => run(() => saveDocumentSignature({ documentId: document.id, status: nextStatus, provider: document.signatureProvider, envelopeId: document.signatureEnvelopeId, url: document.signatureUrl, expiresAt: document.expiresAt }), "Signature status updated");
   return <><div className="space-y-6"><div><div className="flex items-start gap-3"><span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><FileText className="size-5" /></span><div className="min-w-0 flex-1"><h2 className="break-words text-base font-semibold leading-6">{document.name}</h2><p className="mt-1 text-xs text-muted-foreground">{documentTypeLabel(document.mimeType)} · {formatDocumentSize(document.sizeBytes)} · v{document.currentVersion}</p></div></div><div className="mt-4 flex flex-wrap gap-1.5"><StatusPill className={status.className}>{status.label}</StatusPill><StatusPill className={signature.className}>{signature.label}</StatusPill>{document.category ? <StatusPill className="bg-muted text-muted-foreground">{document.category.name}</StatusPill> : null}</div></div><div className="grid grid-cols-2 gap-x-4 gap-y-4 border-y py-4 text-sm"><div><p className="text-xs text-muted-foreground">Association</p><p className="mt-1 font-medium">{document.associationLabels.join(" · ")}</p></div><div><p className="text-xs text-muted-foreground">Owner</p><p className="mt-1 font-medium">{document.ownerName ?? "Workspace"}</p></div><div><p className="text-xs text-muted-foreground">Updated</p><p className="mt-1 font-medium">{formatDate(document.updatedAt)}</p></div><div><p className="text-xs text-muted-foreground">Versions</p><p className="mt-1 font-medium">{document.versionCount}</p></div><div><p className="text-xs text-muted-foreground">Checksum</p><p className="mt-1 truncate font-mono text-[11px]" title={document.checksum}>{document.checksum.slice(0, 12)}…</p></div></div><div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Actions</p><div className="grid grid-cols-2 gap-2"><Button size="sm" variant="outline" disabled={!isPreviewable(document.mimeType)} onClick={() => setPreviewOpen(true)}><FileText className="size-4" />Preview</Button><Button size="sm" variant="outline" asChild><a href={`/api/documents/${document.id}?download=1`}><Download className="size-4" />Download</a></Button>{data.canManage ? <Button size="sm" variant="outline" onClick={() => setRenameOpen(true)}><FileText className="size-4" />Rename</Button> : null}{data.canManage ? <Button size="sm" variant="outline" disabled={isPending} onClick={() => run(() => setDocumentStatus({ documentId: document.id, status: document.status === "archived" ? "active" : "archived" }), document.status === "archived" ? "Document restored" : "Document archived")}>{document.status === "archived" ? <ArchiveRestore className="size-4" /> : <Archive className="size-4" />}{document.status === "archived" ? "Restore" : "Archive"}</Button> : null}{data.canManage ? <Button size="sm" variant="outline" disabled={isPending || document.signatureStatus === "signed" || document.signatureStatus === "pending"} onClick={() => setVersionOpen(true)}>New version</Button> : null}</div></div><div className="space-y-2"><div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Category</p><FolderCog className="size-4 text-muted-foreground" /></div><select value={document.category?.id ?? ""} disabled={!data.canManage} onChange={(event) => run(() => setDocumentCategory({ documentId: document.id, categoryId: event.target.value || null }), "Category updated")} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">No category</option>{data.categories.filter((category) => category.active).map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></div><div className="space-y-3"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Assignments</p>{(["owner", "reviewer"] as const).map((assignmentType) => <label key={assignmentType} className="block space-y-1.5"><span className="text-sm font-medium">{assignmentType === "owner" ? "Responsible" : "Reviewer"}</span><select value={assignmentFor(assignmentType)} disabled={!data.canManage || isPending} onChange={(event) => run(() => assignDocument({ documentId: document.id, userId: event.target.value || null, assignmentType }), `${assignmentType === "owner" ? "Responsible" : "Reviewer"} updated`)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm"><option value="">Not assigned</option>{data.members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}</select></label>)}</div><div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Access & ownership</p><div className="rounded-lg border bg-muted/20 p-3 text-sm"><p className="flex items-center gap-2"><ShieldCheck className="size-4 text-primary" />{document.accessRoles.length + document.accessMembers.length === 0 ? "Workspace permission" : `${document.accessRoles.length + document.accessMembers.length} explicit rule${document.accessRoles.length + document.accessMembers.length === 1 ? "" : "s"}`}</p><p className="mt-1 text-xs leading-5 text-muted-foreground">Owner and workspace admins retain access. ACL rules can narrow access for everyone else.</p></div>{data.canShare ? <Button size="sm" variant="outline" className="w-full" onClick={() => setAccessOpen(true)}><Users className="size-4" />Manage access</Button> : null}</div><div className="space-y-2"><div className="flex items-center justify-between"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Signature</p><LockKeyhole className="size-4 text-muted-foreground" /></div><select value={document.signatureStatus} disabled={!data.canManage || isPending} onChange={(event) => saveSignatureStatus(event.target.value as keyof typeof SIGNATURE_STATUS_META)} className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm">{Object.entries(SIGNATURE_STATUS_META).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}</select><div className="rounded-lg border p-3 text-sm"><p className="flex items-center gap-2"><LockKeyhole className="size-4 text-muted-foreground" />{signature.label}</p>{document.signatureProvider ? <p className="mt-1 text-xs text-muted-foreground">{document.signatureProvider}{document.signatureEnvelopeId ? ` · ${document.signatureEnvelopeId}` : ""}</p> : null}{document.signatureUrl ? <a href={document.signatureUrl} target="_blank" rel="noreferrer" className="mt-2 inline-block text-xs font-medium text-primary underline-offset-2 hover:underline">Open DocuSign envelope</a> : null}</div></div>{document.activity.length > 0 ? <div className="space-y-2"><p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Recent activity</p><div className="divide-y rounded-lg border">{document.activity.map((event) => <div key={event.id} className="px-3 py-2.5 text-sm"><p className="capitalize">{formatActivityType(event.type)}</p><p className="mt-0.5 text-xs text-muted-foreground">{event.actorName ?? "System"} · {formatDate(event.createdAt)}</p></div>)}</div></div> : null}</div><SidePanel open={previewOpen} onOpenChange={setPreviewOpen} title={document.name} description="Secure preview"><DocumentPreview document={document} /></SidePanel><Dialog open={renameOpen} onOpenChange={setRenameOpen}><DialogContent><DialogHeader><DialogTitle>Rename document</DialogTitle><DialogDescription>This changes metadata only. The stored file and checksum stay the same.</DialogDescription></DialogHeader><Input value={nextName} onChange={(event) => setNextName(event.target.value)} /><DialogFooter><Button variant="outline" onClick={() => setRenameOpen(false)}>Cancel</Button><Button onClick={rename} disabled={!nextName.trim() || isPending}>Save name</Button></DialogFooter></DialogContent></Dialog><AccessDialog data={data} document={document} open={accessOpen} onOpenChange={setAccessOpen} /><UploadDialog data={data} open={versionOpen} onOpenChange={setVersionOpen} replaceDocument={document} /></>;
+}
+
+function LegalHoldDialog({
+  document,
+  open,
+  onOpenChange,
+  activeHold,
+}: {
+  document: DocumentListItem;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  activeHold: DocumentListItem["legalHolds"][number] | null;
+}) {
+  const router = useRouter();
+  const [reason, setReason] = useState("");
+  const [reference, setReference] = useState("");
+  const [isPending, startTransition] = useTransition();
+  const releasing = Boolean(activeHold);
+
+  function submit() {
+    startTransition(async () => {
+      const result = releasing
+        ? await releaseDocumentLegalHold({ holdId: activeHold!.id, releaseReason: reason })
+        : await placeDocumentLegalHold({ documentId: document.id, reason, reference: reference || null });
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not update legal hold.");
+        return;
+      }
+      toast.success(releasing ? "Legal hold released" : "Legal hold placed");
+      setReason("");
+      setReference("");
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{releasing ? "Release legal hold" : "Place legal hold"}</DialogTitle>
+          <DialogDescription>
+            {releasing
+              ? "Record why this hold is being released. Other active holds, if any, remain in force."
+              : "This protects the document from archival until every active hold is released."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="legal-hold-reason">{releasing ? "Release reason" : "Reason"}</Label>
+            <textarea id="legal-hold-reason" value={reason} onChange={(event) => setReason(event.target.value)} rows={4} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring" placeholder={releasing ? "Investigation closed…" : "Active litigation, audit, or preservation notice…"} />
+          </div>
+          {!releasing ? <div className="space-y-2"><Label htmlFor="legal-hold-reference">Reference (optional)</Label><Input id="legal-hold-reference" value={reference} onChange={(event) => setReference(event.target.value)} placeholder="Matter, ticket, or case reference" /></div> : null}
+        </div>
+        <DialogFooter><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button onClick={submit} disabled={isPending || reason.trim().length < 3}>{isPending ? "Saving…" : releasing ? "Release hold" : "Place hold"}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function DocumentGovernance({ data, document }: { data: DocumentHubData; document: DocumentListItem }) {
+  const [holdOpen, setHoldOpen] = useState(false);
+  const activeHolds = document.legalHolds.filter((hold) => !hold.releasedAt);
+  const activeHold = activeHolds[0] ?? null;
+  return (
+    <div className="mt-6 space-y-3 border-t pt-5">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground"><Gavel className="size-4" />Governance</p>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">Preservation notices and signed evidence remain workspace-scoped and ACL-protected.</p>
+        </div>
+        {activeHolds.length > 0 ? <StatusPill className="bg-amber-500/10 text-amber-700">{activeHolds.length} active hold{activeHolds.length === 1 ? "" : "s"}</StatusPill> : null}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        <Button size="sm" variant="outline" asChild><a href={`/api/documents/${document.id}/evidence`}><Download className="size-4" />Export evidence</a></Button>
+        {data.canManage ? <Button size="sm" variant="outline" onClick={() => setHoldOpen(true)}><Gavel className="size-4" />{activeHold ? "Release legal hold" : "Place legal hold"}</Button> : null}
+      </div>
+      {activeHolds.length > 0 ? <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/[0.04] p-3 text-sm"><p className="font-medium text-amber-800">This document is preserved.</p>{activeHolds.map((hold) => <div key={hold.id} className="border-t border-amber-500/20 pt-2 text-xs leading-5 text-amber-900/80"><p>{hold.reason}</p>{hold.reference ? <p className="mt-0.5">Reference: {hold.reference}</p> : null}</div>)}</div> : null}
+      <LegalHoldDialog document={document} activeHold={activeHold} open={holdOpen} onOpenChange={setHoldOpen} />
+    </div>
+  );
+}
+
+function DocumentDetails({ data, document }: { data: DocumentHubData; document: DocumentListItem }) {
+  return <><DocumentDetailsBody data={data} document={document} /><DocumentGovernance data={data} document={document} /></>;
 }
 
 export function DocumentsHub({ data }: { data: DocumentHubData }) {
