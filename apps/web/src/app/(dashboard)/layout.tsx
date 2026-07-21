@@ -72,7 +72,12 @@ export default async function DashboardLayout({
             </main>
           </PageTitleProvider>
         </SidebarInset>
-        <HarlyAIWidget userName={user.name} aiEnabled={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady} />
+        <HarlyAIWidget
+          userName={user.name}
+          userId={user.id}
+          workspaceId={organization.id}
+          aiEnabled={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady}
+        />
       </SidebarProvider>
     </StickyBarProvider>
   );

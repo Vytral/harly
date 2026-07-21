@@ -43,6 +43,12 @@
       "skillPath": "skills/caveman-stats/SKILL.md",
       "computedHash": "47ce2de3d6cb39a75047b5c962e4eb3da15594e7397c94103e9a104d42626553"
     },
+    "docuseal-code": {
+      "source": "docusealco/docuseal-agent-skills",
+      "sourceType": "github",
+      "skillPath": "skills/docuseal-code/SKILL.md",
+      "computedHash": "96a2fc5f27ac99883153db96199051cdd5ed31d494a2c5df754076ff47f4f36b"
+    },
     "gsap-core": {
       "source": "greensock/gsap-skills",
       "sourceType": "github",

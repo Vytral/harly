@@ -44,6 +44,7 @@ import {
   listConversationsAction,
   loadConversationAction,
   deleteConversationAction,
+  searchCandidateMentionsAction,
 } from "@/features/ai-chat/actions";
 import type {
   ConversationListItem,
@@ -1343,8 +1344,9 @@ type HarlyChatProps = {
   conversationId: string;
   initialMessages: StoredUIMessage[];
   userName: string;
-  /** Optional candidate context, so the conversation is erased with the candidate (IA-02). */
+  /** Candidate currently visible in the dashboard. */
   candidateId?: string;
+  surfaceContext?: { kind: "candidate" | "section"; label: string; path: string };
   onConversationActivity: () => void;
 };
 
@@ -1353,9 +1355,17 @@ function HarlyChat({
   initialMessages,
   userName,
   candidateId,
+  surfaceContext,
   onConversationActivity,
 }: HarlyChatProps) {
   const [input, setInput] = useState("");
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionCandidates, setMentionCandidates] = useState<
+    Array<{ id: string; name: string; email: string; avatarUrl: string | null }>
+  >([]);
+  const [mentionedCandidates, setMentionedCandidates] = useState<
+    Record<string, string>
+  >({});
   const [writeResults, setWriteResults] = useState<
     Record<
       string,
@@ -1374,17 +1384,32 @@ function HarlyChat({
   const pendingWriteIdsRef = useRef(new Set<string>());
   const firstName = userName.split(" ")[0] ?? userName;
   const notifiedRef = useRef(false);
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
   const { messages, sendMessage, addToolOutput, status, stop } = useChat({
     id: conversationId,
     messages: initialMessages as never,
     transport: new DefaultChatTransport({
       api: "/api/ai/chat",
-      body: { conversationId, candidateId },
+      body: {
+        conversationId,
+        candidateId,
+        mentionedCandidateIds: Object.keys(mentionedCandidates),
+        surfaceContext,
+        timeZone,
+      },
     }),
   });
 
   const isBusy = status === "submitted" || status === "streaming";
+
+  useEffect(() => {
+    if (mentionQuery === null || mentionQuery.length === 0) return;
+    const timer = window.setTimeout(() => {
+      void searchCandidateMentionsAction(mentionQuery).then(setMentionCandidates);
+    }, 140);
+    return () => window.clearTimeout(timer);
+  }, [mentionQuery]);
 
   // After the first turn of a brand-new conversation finishes, refresh the
   // history list so it shows up with its derived title.
@@ -1394,6 +1419,32 @@ function HarlyChat({
       onConversationActivity();
     }
   }, [status, messages.length, onConversationActivity]);
+
+  function handleInputChange(value: string) {
+    setInput(value);
+    const mention = value.match(/(?:^|\s)@([^\n@]*)$/);
+    const nextMentionQuery = mention ? (mention[1] ?? "").trim() : null;
+    setMentionQuery(nextMentionQuery);
+    if (!nextMentionQuery) setMentionCandidates([]);
+    setMentionedCandidates((previous) =>
+      Object.fromEntries(
+        Object.entries(previous).filter(([, name]) =>
+          value.toLocaleLowerCase().includes(`@${name.toLocaleLowerCase()}`),
+        ),
+      ),
+    );
+  }
+
+  function selectMention(candidate: { id: string; name: string }) {
+    const mentionStart = input.lastIndexOf("@");
+    setInput(`${input.slice(0, mentionStart)}@${candidate.name} `);
+    setMentionQuery(null);
+    setMentionCandidates([]);
+    setMentionedCandidates((previous) => ({
+      ...previous,
+      [candidate.id]: candidate.name,
+    }));
+  }
 
   function submit() {
     const text = input.trim();
@@ -1672,19 +1723,52 @@ function HarlyChat({
 
             {/* Input */}
             <div className="shrink-0 border-t border-border/60 p-3">
-              <PromptInput
-                value={input}
-                onValueChange={setInput}
-                onSubmit={submit}
-                isLoading={isBusy}
-                maxHeight={120}
-                className="rounded-3xl border-border/60 bg-muted/30 px-3 py-2 shadow-none"
-              >
-                <PromptInputTextarea
-                  placeholder="Ask Harly AI…"
-                  className="min-h-[36px] bg-transparent py-1 text-[13px] dark:bg-transparent"
-                />
-                <PromptInputActions className="justify-between pt-1">
+              <div className="relative">
+                {mentionCandidates.length > 0 ? (
+                  <div className="absolute inset-x-0 bottom-full z-10 mb-2 overflow-hidden rounded-xl border border-border/70 bg-popover p-1 shadow-lg">
+                    <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                      Mention candidate
+                    </p>
+                    {mentionCandidates.map((candidate) => (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={() => selectMention(candidate)}
+                        className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent active:scale-[0.99]"
+                      >
+                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                          {candidate.name
+                            .split(" ")
+                            .map((part) => part[0])
+                            .join("")
+                            .slice(0, 2)}
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block truncate text-xs font-medium text-foreground">
+                            {candidate.name}
+                          </span>
+                          <span className="block truncate text-[11px] text-muted-foreground">
+                            {candidate.email}
+                          </span>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <PromptInput
+                  value={input}
+                  onValueChange={handleInputChange}
+                  onSubmit={submit}
+                  isLoading={isBusy}
+                  maxHeight={120}
+                  className="rounded-3xl border-border/60 bg-muted/30 px-3 py-2 shadow-none"
+                >
+                  <PromptInputTextarea
+                    placeholder="Ask Harly AI… Use @ to mention a candidate"
+                    className="min-h-[36px] bg-transparent py-1 text-[13px] dark:bg-transparent"
+                  />
+                  <PromptInputActions className="justify-between pt-1">
                   <PromptInputAction tooltip="Attach files (coming soon)">
                     <Button
                       type="button"
@@ -1722,8 +1806,9 @@ function HarlyChat({
                       </Button>
                     )}
                   </PromptInputAction>
-                </PromptInputActions>
-              </PromptInput>
+                  </PromptInputActions>
+                </PromptInput>
+              </div>
             </div>
       </>
     </div>
@@ -1838,11 +1923,13 @@ function HistoryDrawer({
 
 type HarlyAIPanelProps = {
   userName: string;
+  persistenceKey: string;
   aiEnabled: boolean;
   open: boolean;
   onClose: () => void;
-  /** Optional candidate context, so the conversation is erased with the candidate (IA-02). */
+  /** Candidate currently visible in the dashboard. */
   candidateId?: string;
+  surfaceContext?: { kind: "candidate" | "section"; label: string; path: string };
 };
 
 function freshId(): string {
@@ -1853,15 +1940,55 @@ function freshId(): string {
 
 export function HarlyAIPanel({
   userName,
+  persistenceKey,
   aiEnabled,
   open,
   onClose,
   candidateId,
+  surfaceContext,
 }: HarlyAIPanelProps) {
   const [conversationId, setConversationId] = useState<string>(() => freshId());
   const [initialMessages, setInitialMessages] = useState<StoredUIMessage[]>([]);
+  const [restoredPersistenceKey, setRestoredPersistenceKey] = useState<string | null>(null);
   const [conversations, setConversations] = useState<ConversationListItem[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const storedId = window.sessionStorage.getItem(`harly-ai:conversation:${persistenceKey}`);
+    if (!storedId) {
+      queueMicrotask(() => {
+        if (!cancelled) setRestoredPersistenceKey(persistenceKey);
+      });
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    void loadConversationAction(storedId).then((messages) => {
+      if (cancelled) return;
+      if (messages) {
+        setConversationId(storedId);
+        setInitialMessages(messages);
+      }
+      setRestoredPersistenceKey(persistenceKey);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [persistenceKey]);
+
+  const restoringConversation = restoredPersistenceKey !== persistenceKey;
+
+  useEffect(() => {
+    if (!restoringConversation) {
+      window.sessionStorage.setItem(
+        `harly-ai:conversation:${persistenceKey}`,
+        conversationId,
+      );
+    }
+  }, [conversationId, persistenceKey, restoringConversation]);
 
   const refreshList = useCallback(async () => {
     const list = await listConversationsAction();
@@ -1953,14 +2080,21 @@ export function HarlyAIPanel({
           </div>
         ) : (
           <>
-            <HarlyChat
-              key={conversationId}
-              conversationId={conversationId}
-              initialMessages={initialMessages}
-              userName={userName}
-              candidateId={candidateId}
-              onConversationActivity={refreshList}
-            />
+            {restoringConversation ? (
+              <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
+                Restoring your chat…
+              </div>
+            ) : (
+              <HarlyChat
+                key={conversationId}
+                conversationId={conversationId}
+                initialMessages={initialMessages}
+                userName={userName}
+                candidateId={candidateId}
+                surfaceContext={surfaceContext}
+                onConversationActivity={refreshList}
+              />
+            )}
             <HistoryDrawer
               open={historyOpen}
               conversations={conversations}

@@ -23,7 +23,10 @@ export function JobsPanel({ config, update }: { config: CareerPageConfig; update
         <Field label="Filters">
           {config.template === "playful" || config.template === "ashby" ? (
             <div className="flex flex-wrap gap-2">
-              {["department", "location", "type"].map((f) => {
+              {(config.template === "playful"
+                ? ["department"]
+                : ["department", "location", "type"]
+              ).map((f) => {
                 const filter = f as "department" | "location" | "type";
                 const on = config.positions.filters.includes(filter);
                 return (

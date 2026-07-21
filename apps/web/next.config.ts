@@ -43,7 +43,7 @@ const nextConfig: NextConfig = {
     "@harly/api",
     "@harly/config",
   ],
-  serverExternalPackages: ["postgres"],
+  serverExternalPackages: ["postgres", "unpdf"],
 };
 
 export default nextConfig;

@@ -13,6 +13,7 @@ import {
   NotebookTabs,
   Settings,
   Users,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -44,6 +45,12 @@ export const workspaceNav: NavItem[] = [
   { label: "Reports", href: "/dashboard/reports", icon: BarChart3 },
   { label: "Tasks", href: "/dashboard/tasks", icon: ListTodo, badge: "tasks" },
   { label: "Calendars", href: "/dashboard/calendars", icon: CalendarDays },
+  {
+    label: "Automations",
+    href: "/dashboard/automations" as Route,
+    icon: Workflow,
+    requiredPermission: "automations:manage",
+  },
   {
     label: "Templates",
     href: "/dashboard/templates",

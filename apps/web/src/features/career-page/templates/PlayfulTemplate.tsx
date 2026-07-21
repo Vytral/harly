@@ -251,7 +251,14 @@ export function PlayfulTemplate({
             jobs={jobs}
             boardRoot={boardRoot}
             accent={accent}
-            filters={config.positions.filters}
+            // Keep the Playful layout focused on the original department filter.
+            // Location and employment type filters belong to the structured
+            // Ashby template, where they have a dedicated sidebar.
+            filters={
+              config.positions.filters.includes("department")
+                ? ["department"]
+                : []
+            }
           />
         </div>
       </section>
