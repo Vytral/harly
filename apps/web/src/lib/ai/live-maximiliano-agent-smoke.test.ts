@@ -49,6 +49,9 @@ describe.skipIf(!live)("live Maximiliano Harly AI agent smoke test", () => {
         { getWorkspaceAiConfig },
         { buildHarlyTools },
         { buildHarlySystemPrompt },
+        { searchWorkspace },
+        { resolveCandidateReference },
+        { resolveCandidateApplication },
         { getModel },
         { generateText, stepCountIs },
       ] = await Promise.all([
@@ -57,6 +60,9 @@ describe.skipIf(!live)("live Maximiliano Harly AI agent smoke test", () => {
         import("@/lib/ai/config"),
         import("@/lib/ai/agent"),
         import("@/lib/ai/agent/system-prompt"),
+        import("@/features/search/data"),
+        import("@/lib/ai/agent/candidate-resolution"),
+        import("@/lib/ai/agent/application-resolution"),
         import("@/lib/ai/registry"),
         import("ai"),
       ]);
@@ -99,6 +105,29 @@ describe.skipIf(!live)("live Maximiliano Harly AI agent smoke test", () => {
         .where(eq(candidates.email, "maxi.m.retamales@gmail.com"))
         .limit(1);
       expect(target?.id).toBeTruthy();
+
+      const fullNameSearch = await searchWorkspace("Maximiliano Moldenhauer");
+      expect(fullNameSearch.candidates).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ id: target!.id }),
+        ]),
+      );
+      await expect(
+        resolveCandidateReference("Maximiliano M"),
+      ).resolves.toMatchObject({
+        status: "resolved",
+        candidate: { id: target!.id },
+      });
+      await expect(
+        resolveCandidateApplication({
+          candidateId: target!.id,
+          jobQuery: "Junior Software Engineer PHP",
+          applicationId: null,
+        }),
+      ).resolves.toMatchObject({
+        status: "resolved",
+        application: { applicationId: target!.applicationId },
+      });
 
       const aiConfig = await getWorkspaceAiConfig(liveState.workspaceId);
       expect(aiConfig).not.toBeNull();
@@ -144,6 +173,44 @@ describe.skipIf(!live)("live Maximiliano Harly AI agent smoke test", () => {
           }),
         ]),
       );
+
+      const reviewCandidateTool = (
+        tools.reviewCandidate as unknown as {
+          execute: (input: {
+            candidateId: string;
+            applicationId: string | null;
+            generateScore: boolean;
+          }) => Promise<{ reviewed: boolean; found: boolean; application?: unknown }>;
+        }
+      ).execute;
+      await expect(
+        reviewCandidateTool({
+          candidateId: target!.id,
+          applicationId: target!.applicationId,
+          generateScore: false,
+        }),
+      ).resolves.toMatchObject({
+        reviewed: true,
+        found: true,
+        application: { applicationId: target!.applicationId },
+      });
+
+      const hiringBriefTool = (
+        tools.hiringBrief as unknown as {
+          execute: () => Promise<{
+            candidatesToReview: unknown[];
+            jobsAtRisk: unknown[];
+            interviewsToday: unknown[];
+            taskCounts: Record<string, number>;
+          }>;
+        }
+      ).execute;
+      await expect(hiringBriefTool()).resolves.toMatchObject({
+        candidatesToReview: expect.any(Array),
+        jobsAtRisk: expect.any(Array),
+        interviewsToday: expect.any(Array),
+        taskCounts: expect.any(Object),
+      });
       const run = (prompt: string) =>
         generateText({
           model: getModel(aiConfig!),
@@ -180,7 +247,7 @@ describe.skipIf(!live)("live Maximiliano Harly AI agent smoke test", () => {
         "Using live workspace data, find the candidate with email maxi.m.retamales@gmail.com and tell me their current role, application status, and latest AI evaluation. Do not change anything.",
       );
       expect(profile.steps.flatMap((step) => step.toolCalls ?? []).some((call) =>
-        ["searchCandidates", "candidateProfile", "getCandidateScore"].includes(call.toolName),
+        ["resolveCandidate", "searchCandidates", "candidateProfile", "getCandidateScore"].includes(call.toolName),
       )).toBe(true);
       expect(profile.text).toMatch(/Maximiliano|Junior Software Engineer|hired|strong_yes/i);
       expect(writeWasProposed(profile)).toBe(false);
@@ -189,7 +256,7 @@ describe.skipIf(!live)("live Maximiliano Harly AI agent smoke test", () => {
         "I am looking at the candidate profile currently. What do you think about this candidate? Give me an evidence-based recruiting read and the most useful next step. Do not change anything.",
       );
       expect(contextualOpinion.steps.flatMap((step) => step.toolCalls ?? []).some((call) =>
-        ["candidateProfile", "getCandidateScore", "generateCandidateScore"].includes(call.toolName),
+        ["reviewCandidate", "candidateProfile", "getCandidateScore", "generateCandidateScore"].includes(call.toolName),
       )).toBe(true);
       expect(contextualOpinion.text.length).toBeGreaterThan(50);
       expect(writeWasProposed(contextualOpinion)).toBe(false);
@@ -207,7 +274,7 @@ describe.skipIf(!live)("live Maximiliano Harly AI agent smoke test", () => {
         "Review Maximiliano Moldenhauer's CV against the role from his application. Give an evidence-based pass/no-pass read. Do not change anything.",
       );
       expect(review.steps.flatMap((step) => step.toolCalls ?? []).some((call) =>
-        ["candidateProfile", "getCandidateScore", "generateCandidateScore"].includes(call.toolName),
+        ["resolveCandidate", "reviewCandidate", "candidateProfile", "getCandidateScore", "generateCandidateScore"].includes(call.toolName),
       )).toBe(true);
       expect(review.text.length).toBeGreaterThan(40);
       expect(writeWasProposed(review)).toBe(false);

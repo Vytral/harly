@@ -40,6 +40,7 @@ import {
   reserveAgentAction,
   type ActionReceiptResult,
 } from "./action-receipts";
+import { verifyInterviewOutcome } from "./interview-outcome";
 
 /**
  * Central dispatcher for Harly AI WRITE actions.
@@ -260,6 +261,7 @@ const scheduleInterviewSchema = z.object({
   meetingProvider: z
     .enum(["auto", "google_meet", "zoom", "teams", "jitsi", "external"])
     .default("auto"),
+  sendEmail: z.boolean().default(true),
 });
 
 /** Models can carry the sentence's final full stop into a structured title. */
@@ -342,6 +344,9 @@ const HANDLERS = {
         applicationId: input.applicationId,
         workspaceId: ctx.workspaceId,
       });
+      if (!before) {
+        return { success: false, error: "Application not found." };
+      }
       const res = await moveApplicationStage({
         applicationId: input.applicationId,
         fromStageId: null,
@@ -407,6 +412,7 @@ const HANDLERS = {
         success: res.success,
         error: res.error,
         message: "Task created.",
+        ...(res.success && res.taskId ? { taskId: res.taskId } : {}),
         ...(res.success && res.taskId && res.updatedAt
           ? {
               undo: {
@@ -466,6 +472,7 @@ const HANDLERS = {
       }
       return {
         success: true,
+        updatedCount: res.updatedCount ?? 0,
         message:
           res.updatedCount === 1
             ? "Completed 1 open task assigned to you."
@@ -618,13 +625,44 @@ const HANDLERS = {
         location: input.location,
         notes: input.notes,
         meetingProvider: input.meetingProvider,
+        sendEmail: input.sendEmail,
       });
+      const outcome =
+        res.success && res.interviewId
+          ? await verifyInterviewOutcome({
+              workspaceId: ctx.workspaceId,
+              interviewId: res.interviewId,
+              candidateId: input.candidateId,
+            })
+          : null;
+      const outcomeStatus = !outcome
+        ? "unverified"
+        : res.emailStatus === "failed"
+          ? "needs_attention"
+          : outcome.outcomeStatus;
+      const message = !res.success
+        ? "Interview could not be scheduled."
+        : outcomeStatus === "complete"
+          ? "Interview scheduled and verified."
+          : outcomeStatus === "missing_meeting_link"
+            ? "Interview saved, but no meeting link was created."
+            : outcomeStatus === "unverified"
+              ? "Interview was submitted, but its saved state could not be verified."
+              : "Interview saved, but delivery needs attention.";
       return {
         success: res.success,
         error: res.error,
-        message: res.warning
-          ? `Interview scheduled. ${res.warning}`
-          : "Interview scheduled.",
+        message: res.warning ? `${message} ${res.warning}` : message,
+        ...(res.success
+          ? {
+              interviewId: res.interviewId,
+              persisted: Boolean(outcome?.persisted),
+              deliveryStatus: outcomeStatus,
+              emailStatus: res.emailStatus ?? "skipped",
+              meetingLink: outcome?.meetingLink ?? null,
+              syncs: outcome?.syncs ?? [],
+            }
+          : {}),
         ...(res.success && res.interviewId
           ? {
               undo: {

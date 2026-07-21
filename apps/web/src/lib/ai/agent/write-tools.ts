@@ -262,7 +262,7 @@ export function buildWriteTools() {
     scheduleInterview: tool({
       strict: true,
       description:
-        "Propose scheduling an interview. WRITE action , requires user confirmation. Resolve candidateId first, then use the candidate's only active application automatically when the user says 'the role they were recruited for'. Ask only when there are multiple active applications. Preserve an explicit title and meeting link. If the user supplied a URL, location MUST contain that exact URL and meetingProvider MUST be external; never replace it or set it to null. interviewerId is optional (null = unassigned).",
+        "Propose scheduling an interview. WRITE action , requires user confirmation. Resolve candidateId first, then use the candidate's only active application automatically when the user says 'the role they were recruited for'. Ask only when there are multiple active applications. Preserve an explicit title and meeting link. If the user supplied a URL, location MUST contain that exact URL and meetingProvider MUST be external; never replace it or set it to null. interviewerId is optional (null = unassigned). Set sendEmail true for the standard interview invitation; set it false when the user also requested a separate custom-purpose email, so the candidate does not receive duplicate emails.",
       inputSchema: z.object({
         summary,
         candidateId: z.string().describe("The candidate id."),
@@ -300,6 +300,11 @@ export function buildWriteTools() {
           .enum(["auto", "google_meet", "zoom", "teams", "jitsi", "external"])
           .describe(
             "Video provider preference. Use external when the user supplied a meeting URL.",
+          ),
+        sendEmail: z
+          .boolean()
+          .describe(
+            "Send the standard interview invitation email as part of scheduling. Use false when a separate custom email will be sent.",
           ),
       }),
     }),
@@ -352,7 +357,7 @@ export function buildWriteTools() {
     sendCandidateEmail: tool({
       strict: true,
       description:
-        "Propose sending an email to a candidate. WRITE action , requires user confirmation. Resolve candidateId + the candidate's email first (candidateProfile). Optionally base it on a template (listEmailTemplates/emailTemplate).",
+        "Propose sending an email to a candidate. WRITE action , requires user confirmation. Resolve candidateId + the candidate's email first (candidateProfile). If the user supplied the purpose or wording, preserve it faithfully; do not ask for availability unless the user explicitly asked for availability.",
       inputSchema: z.object({
         summary,
         candidateId: z.string().describe("The candidate id."),

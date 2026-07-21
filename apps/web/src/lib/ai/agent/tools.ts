@@ -46,6 +46,14 @@ import {
 import { getNextStage } from "@/features/pipeline/data";
 import { getIntegrationStatuses } from "@/features/workspaces/integrations-registry";
 import { listAgentActionReceipts } from "./action-receipts";
+import { resolveCandidateReference } from "./candidate-resolution";
+import { resolveCandidateApplication } from "./application-resolution";
+import { resolveCandidateNextAction } from "./candidate-next-action";
+import { resolveJobReference } from "./job-resolution";
+import {
+  prepareInterviewScheduling,
+  type MeetingProviderChoice,
+} from "./interview-preparation";
 
 /**
  * Context the tools run under. The cached widget/data fns resolve the workspace
@@ -57,6 +65,8 @@ export type HarlyToolContext = {
   userId: string;
   /** Candidate visible on the current dashboard surface, if any. */
   activeCandidateId?: string;
+  /** Candidate ids selected through the current chat's @mention picker. */
+  mentionedCandidateIds?: string[];
 };
 
 /** Cap a string field so large blobs don't blow up the model context. */
@@ -167,6 +177,44 @@ function buildReadTools(ctx: HarlyToolContext) {
       },
     }),
 
+    hiringBrief: tool({
+      strict: true,
+      description:
+        "Create a compact proactive hiring brief for the workspace: candidates waiting longest for review, jobs at risk, interviews today, and task status counts. Use for 'catch me up', 'what needs attention?', 'give me my hiring brief', or at the start of a work session. This is read-only and returns the highest-signal next actions.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const [reviewRows, riskJobs, todayInterviews, taskCounts] =
+          await Promise.all([
+            getCandidatesNeedingReview(),
+            getJobsAtRisk(),
+            getTodayInterviews(),
+            getTaskCounts(),
+          ]);
+
+        return {
+          candidatesToReview: reviewRows.map((row) => ({
+            applicationId: row.id,
+            candidateId: row.candidateId,
+            name: row.name,
+            job: row.job,
+            stage: row.stage,
+            action: row.action,
+            waitingDays: row.ageDays,
+          })),
+          jobsAtRisk: riskJobs,
+          interviewsToday: todayInterviews.map((interview) => ({
+            interviewId: interview.id,
+            candidate: interview.candidate,
+            job: interview.job,
+            label: interview.label,
+            interviewer: interview.interviewer,
+            scheduledAt: interview.scheduledAt,
+          })),
+          taskCounts,
+        };
+      },
+    }),
+
     jobsAtRisk: tool({
       strict: true,
       description:
@@ -192,7 +240,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     searchCandidates: tool({
       strict: true,
       description:
-        "Search candidates and jobs by name, email, or title. Use to resolve a person/job the user names before reading details or proposing an action.",
+        "Browse candidates and jobs by name, email, or title. Use for discovery or lists. For a named candidate that needs an action or profile, prefer resolveCandidate because it returns resolved/ambiguous/not_found semantics.",
       inputSchema: z.object({
         query: z
           .string()
@@ -209,6 +257,49 @@ function buildReadTools(ctx: HarlyToolContext) {
           jobs: results.jobs.slice(0, 10),
         };
       },
+    }),
+
+    resolveCandidate: tool({
+      strict: true,
+      description:
+        "Resolve one human candidate reference into the unique workspace candidate. Handles full/partial names, initials, accents, punctuation, and email. Use before candidateProfile or any candidate write when the user names a person. If ambiguous, show the real alternatives and ask which one; never guess.",
+      inputSchema: z.object({
+        query: z
+          .string()
+          .min(1)
+          .max(100)
+          .describe("The candidate's name, partial name, or email."),
+      }),
+      execute: async ({ query }) => resolveCandidateReference(query),
+    }),
+
+    resolveApplication: tool({
+      strict: true,
+      description:
+        "Resolve which application belongs to a candidate. With no job query, select the only active application; with a job query, match the role; with multiple matches, return the real alternatives. Use before scheduling, moving stages, rejecting, scoring, or creating a task linked to 'their role'.",
+      inputSchema: z.object({
+        candidateId: z.string().describe("The resolved candidate id."),
+        jobQuery: z
+          .string()
+          .nullable()
+          .describe("A role/job phrase, or null when the user means their only active role."),
+        applicationId: z
+          .string()
+          .nullable()
+          .describe("An explicit application id when already known, otherwise null."),
+      }),
+      execute: async ({ candidateId, jobQuery, applicationId }) =>
+        resolveCandidateApplication({ candidateId, jobQuery, applicationId }),
+    }),
+
+    resolveJob: tool({
+      strict: true,
+      description:
+        "Resolve a named role into the unique workspace job. Handles exact titles, slugs, abbreviations, and partial titles across the complete job set. If ambiguous, return the real role alternatives and ask which one; never guess a job for a write.",
+      inputSchema: z.object({
+        query: z.string().min(1).max(120).describe("The role or job title."),
+      }),
+      execute: async ({ query }) => resolveJobReference(query),
     }),
 
     connectedIntegrations: tool({
@@ -235,6 +326,7 @@ function buildReadTools(ctx: HarlyToolContext) {
               ),
               accountEmail: statuses.gcal.accountEmail,
               calendarId: statuses.gcal.calendarId,
+              repairPath: "/settings/integrations/google-calendar",
             },
             {
               name: "Zoom",
@@ -398,6 +490,132 @@ function buildReadTools(ctx: HarlyToolContext) {
       },
     }),
 
+    reviewCandidate: tool({
+      strict: true,
+      description:
+        "Produce a complete read of one candidate for a hiring decision. It combines profile, active applications, resume evidence, AI fit evaluation, manual scorecards, notes, strengths, gaps, and missing evidence. Use directly for 'what do you think?', 'review/evaluate this candidate', or 'should I pass them?'. If there are multiple active applications and no applicationId is supplied, return the real roles and ask which one; never score the wrong role.",
+      inputSchema: z.object({
+        candidateId: z.string().describe("The candidate id."),
+        applicationId: z
+          .string()
+          .nullable()
+          .describe("The application to review, or null when there is one active application."),
+        generateScore: z
+          .boolean()
+          .describe("Generate a missing AI fit evaluation when the target application is clear."),
+      }),
+      execute: async ({ candidateId, applicationId, generateScore }) => {
+        let profile = await getCandidateProfile(candidateId);
+        if (!profile) return { reviewed: false as const, found: false as const };
+
+        const activeApplications = profile.applications.filter(
+          (application) => application.status === "active",
+        );
+        const selectedApplication = applicationId
+          ? profile.applications.find((application) => application.id === applicationId)
+          : activeApplications.length === 1
+            ? activeApplications[0]
+            : activeApplications.length === 0 && profile.applications.length === 1
+              ? profile.applications[0]
+              : undefined;
+
+        if (applicationId && !selectedApplication) {
+          return { reviewed: false as const, found: true as const, reason: "application_not_found" as const };
+        }
+
+        if (!selectedApplication && activeApplications.length > 1) {
+          return {
+            reviewed: false as const,
+            found: true as const,
+            reason: "application_required" as const,
+            applications: activeApplications.map((application) => ({
+              applicationId: application.id,
+              jobId: application.jobId,
+              job: application.jobTitle,
+              stage: application.currentStageName,
+            })),
+          };
+        }
+
+        let evaluation = selectedApplication
+          ? profile.aiEvaluations.find(
+              (candidateEvaluation) =>
+                candidateEvaluation.applicationId === selectedApplication.id,
+            )
+          : undefined;
+
+        if (!evaluation && generateScore && selectedApplication) {
+          const generated = await generateAiEvaluationAction({
+            applicationId: selectedApplication.id,
+          });
+          if (generated.success) {
+            profile = (await getCandidateProfile(candidateId)) ?? profile;
+            evaluation = profile.aiEvaluations.find(
+              (candidateEvaluation) =>
+                candidateEvaluation.applicationId === selectedApplication.id,
+            );
+          }
+        }
+
+        const missingEvidence = [
+          profile.files.length === 0 ? "resume" : null,
+          !evaluation ? "ai_evaluation" : null,
+          profile.scorecards.length === 0 ? "team_scorecards" : null,
+          profile.notes.length === 0 ? "internal_notes" : null,
+        ].filter((item): item is string => Boolean(item));
+
+        return {
+          reviewed: true as const,
+          found: true as const,
+          candidate: {
+            candidateId: profile.candidate.id,
+            name: `${profile.candidate.firstName} ${profile.candidate.lastName}`.trim(),
+            headline: profile.candidate.headline,
+            location: profile.candidate.location,
+            tags: profile.tags.map((tag) => tag.label),
+          },
+          application: selectedApplication
+            ? {
+                applicationId: selectedApplication.id,
+                jobId: selectedApplication.jobId,
+                job: selectedApplication.jobTitle,
+                stage: selectedApplication.currentStageName,
+                status: selectedApplication.status,
+              }
+            : null,
+          evidence: profile.files.slice(0, 3).map((file) => ({
+            fileName: file.fileName,
+            summary: clip(file.parsedSummary, 900),
+            skills: Array.isArray(file.parsedSkills)
+              ? (file.parsedSkills as string[]).slice(0, 15)
+              : [],
+            experienceYears: file.parsedExperienceYears,
+          })),
+          evaluation: evaluation
+            ? {
+                score: evaluation.score,
+                recommendation: evaluation.recommendation,
+                summary: clip(evaluation.summary, 900),
+                strengths: evaluation.strengths,
+                gaps: evaluation.gaps,
+                usedResume: evaluation.usedResume,
+              }
+            : null,
+          scorecards: profile.scorecards.slice(0, 8).map((scorecard) => ({
+            rating: scorecard.rating,
+            stage: scorecard.stageName,
+            author: scorecard.authorName,
+            comment: clip(scorecard.comment, 500),
+          })),
+          notes: profile.notes.slice(0, 5).map((note) => ({
+            author: note.authorName,
+            body: clip(note.body, 500),
+          })),
+          missingEvidence,
+        };
+      },
+    }),
+
     listJobs: tool({
       strict: true,
       description:
@@ -469,6 +687,31 @@ function buildReadTools(ctx: HarlyToolContext) {
           })),
         };
       },
+    }),
+
+    prepareInterview: tool({
+      strict: true,
+      description:
+        "Prepare an interview schedule without writing anything. Resolve the candidate's application, interpret the requested time in the supplied IANA timezone, check internal and Google Calendar availability, and choose/validate the video provider. Use before scheduling when the request includes a time or meeting provider. If status is needs_attention, explain the warning and still let the user decide through the confirmation card.",
+      inputSchema: z.object({
+        candidateId: z.string().describe("The resolved candidate id."),
+        jobQuery: z.string().nullable().describe("The role phrase, or null."),
+        applicationId: z.string().nullable().describe("The application id, or null."),
+        scheduledAt: z.string().describe("The requested local datetime or ISO timestamp."),
+        timeZone: z.string().nullable().describe("The candidate's IANA timezone, or null if the timestamp has an offset."),
+        durationMins: z.number().int().min(5).max(480).describe("Interview duration in minutes."),
+        interviewerId: z.string().nullable().describe("Optional interviewer id."),
+        meetingProvider: z
+          .enum(["auto", "google_meet", "zoom", "teams", "jitsi", "external"])
+          .describe("Requested provider, or auto."),
+        location: z.string().nullable().describe("Explicit meeting URL or physical location, if supplied."),
+      }),
+      execute: async (input) =>
+        prepareInterviewScheduling({
+          workspaceId: ctx.workspaceId,
+          ...input,
+          meetingProvider: input.meetingProvider as MeetingProviderChoice,
+        }),
     }),
 
     todayInterviews: tool({
@@ -631,6 +874,25 @@ function buildReadTools(ctx: HarlyToolContext) {
           applications,
         };
       },
+    }),
+
+    candidateNextAction: tool({
+      strict: true,
+      description:
+        "Resolve a candidate's application and the next valid pipeline stage in one read-only operation. Use for 'pass this candidate', 'advance them', 'move them forward', or 'what happens next?'. If the role is ambiguous, return the real roles; if the pipeline is terminal, explain that no next stage exists. Never propose a stage move from a guessed stage.",
+      inputSchema: z.object({
+        candidateId: z.string().describe("The resolved candidate id."),
+        jobQuery: z
+          .string()
+          .nullable()
+          .describe("The role phrase, or null when the user means the only active role."),
+        applicationId: z
+          .string()
+          .nullable()
+          .describe("An explicit application id, or null when it must be resolved."),
+      }),
+      execute: async ({ candidateId, jobQuery, applicationId }) =>
+        resolveCandidateNextAction({ candidateId, jobQuery, applicationId }),
     }),
 
     getCandidateScore: tool({
@@ -865,7 +1127,7 @@ function buildReadTools(ctx: HarlyToolContext) {
     draftCandidateEmail: tool({
       strict: true,
       description:
-        "Draft an email to a candidate with AI (does NOT send) , returns a subject + body you then show the user and, if they want, send via sendCandidateEmail. Pick the type that matches intent. Resolve candidateId first.",
+        "Draft an email to a candidate with AI (does NOT send), returns a subject + body. Use only when the user wants to review a draft first. If the user explicitly asks you to send an email and gives the purpose or wording, call sendCandidateEmail directly instead; never turn a confirmed meeting into an availability request.",
       inputSchema: z.object({
         candidateId: z.string().describe("The candidate id."),
         type: z
@@ -877,9 +1139,19 @@ function buildReadTools(ctx: HarlyToolContext) {
             "followup",
           ])
           .describe("The kind of email to draft."),
+        additionalInstructions: z
+          .string()
+          .trim()
+          .max(2000)
+          .nullable()
+          .describe("The user's exact purpose or wording to preserve, or null."),
       }),
-      execute: async ({ candidateId, type }) => {
-        const res = await generateEmailDraftAction({ candidateId, type });
+      execute: async ({ candidateId, type, additionalInstructions }) => {
+        const res = await generateEmailDraftAction({
+          candidateId,
+          type,
+          additionalInstructions,
+        });
         if (!res.ok) {
           return { drafted: false as const, error: res.error };
         }

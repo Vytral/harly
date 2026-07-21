@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   reserveAgentAction: vi.fn(),
   getAgentActionReceipt: vi.fn(),
   getApplicationForApi: vi.fn(),
+  verifyInterviewOutcome: vi.fn(),
 }));
 
 vi.mock("@/features/workspaces/context", () => ({
@@ -62,6 +63,9 @@ vi.mock("./action-receipts", () => ({
   parseAgentActionUndo: (value: unknown) =>
     value && typeof value === "object" && !Array.isArray(value) ? value : null,
 }));
+vi.mock("./interview-outcome", () => ({
+  verifyInterviewOutcome: mocks.verifyInterviewOutcome,
+}));
 
 import { confirmAgentWriteAction, undoAgentWriteAction } from "./write-actions";
 
@@ -82,6 +86,21 @@ describe("Harly AI task updates", () => {
     mocks.addToPoolAction.mockResolvedValue({ success: true });
     mocks.createScorecard.mockResolvedValue({ success: true });
     mocks.scheduleInterview.mockResolvedValue({ success: true });
+    mocks.verifyInterviewOutcome.mockResolvedValue({
+      persisted: true,
+      interviewId: "interview-1",
+      candidateId: "candidate-1",
+      applicationId: "application-1",
+      jobId: "job-1",
+      status: "scheduled",
+      scheduledAt: "2026-07-21T13:00:00.000Z",
+      durationMins: 60,
+      location: null,
+      meetingLink: null,
+      syncs: [],
+      outcomeStatus: "complete",
+      warnings: [],
+    });
     mocks.setInterviewStatus.mockResolvedValue({ success: true });
     mocks.moveApplicationStage.mockResolvedValue({ success: true });
     mocks.getApplicationForApi.mockResolvedValue({
@@ -231,6 +250,7 @@ describe("Harly AI task updates", () => {
       }),
     ).resolves.toEqual({
       success: true,
+      updatedCount: 3,
       message: "Completed 3 open tasks assigned to you.",
     });
 
@@ -258,6 +278,37 @@ describe("Harly AI task updates", () => {
       fromStageId: null,
       toStageId,
       workspaceId: "workspace-1",
+    });
+  });
+
+  it("returns verified delivery details after scheduling an interview", async () => {
+    const interviewId = "33333333-3333-4333-8333-333333333333";
+    mocks.scheduleInterview.mockResolvedValue({
+      success: true,
+      interviewId,
+      emailStatus: "sent",
+    });
+
+    await expect(
+      confirmAgentWriteAction("scheduleInterview", {
+        candidateId: "11111111-1111-4111-8111-111111111111",
+        applicationId: "22222222-2222-4222-8222-222222222222",
+        type: "technical",
+        mode: "video",
+        scheduledAt: "2026-07-21T13:00:00",
+        timeZone: "America/Santiago",
+        durationMins: 60,
+        interviewerId: null,
+        title: "Introduction to Syntrix",
+        location: "https://meet.google.com/test-link",
+        notes: null,
+        meetingProvider: "external",
+      }),
+    ).resolves.toMatchObject({
+      success: true,
+      interviewId,
+      deliveryStatus: "complete",
+      emailStatus: "sent",
     });
   });
 
@@ -479,11 +530,15 @@ describe("Harly AI task updates", () => {
         location: "https://meet.google.com/wdk-sfc-xck",
         notes: null,
         meetingProvider: "external",
+        sendEmail: false,
       }),
     ).resolves.toMatchObject({ success: true });
 
     expect(mocks.scheduleInterview).toHaveBeenCalledWith(
-      expect.objectContaining({ title: "Introduction to Syntrix" }),
+      expect.objectContaining({
+        title: "Introduction to Syntrix",
+        sendEmail: false,
+      }),
     );
   });
 });

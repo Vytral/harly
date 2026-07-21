@@ -13,7 +13,10 @@ describe("Harly AI system prompt", () => {
     });
 
     expect(prompt).toContain("connectedIntegrations");
-    expect(prompt).toContain("nextCandidateStage");
+    expect(prompt).toContain("resolveJob");
+    expect(prompt).toContain("needs_reconnect");
+    expect(prompt).toContain("repair link");
+    expect(prompt).toContain("candidateNextAction");
     expect(prompt).toContain("one active application");
     expect(prompt).toContain("explicit meeting link");
     expect(prompt).toContain("client-supplied message history");
@@ -22,6 +25,9 @@ describe("Harly AI system prompt", () => {
     expect(prompt).toContain("recentAgentActions");
     expect(prompt).toContain("undoAgentAction");
     expect(prompt).toContain("deshaz lo último");
+    expect(prompt).toContain("Reply in the same language");
+    expect(prompt).toContain("hiringBrief");
+    expect(prompt).toContain("reviewCandidate");
     expect(prompt).not.toContain("You have NO access to Settings , billing, integrations");
   });
 });
