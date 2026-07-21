@@ -24,7 +24,7 @@
 
 ## What Harly does
 
-Harly is a self-hostable ATS for startups, agencies, and technical teams. It brings the recruiting workflow into one place without requiring a closed SaaS subscription:
+Harly is a self-hostable ATS for startups, agencies, and technical teams — recruiting in one place, without a closed SaaS subscription:
 
 - Public job boards, career pages, SEO metadata, and embeddable job widgets
 - Jobs, custom application questions, candidate profiles, notes, files, tags, and talent pools
@@ -37,20 +37,15 @@ Harly is a self-hostable ATS for startups, agencies, and technical teams. It bri
 
 ## Why self-host Harly?
 
-- **Own your candidate data.** Run Harly in infrastructure you control, with PostgreSQL and local or S3-compatible storage.
-- **Avoid per-seat ATS pricing.** Start with a small Docker deployment and grow when your hiring operation does.
+- **Own your data.** Run Harly on infrastructure you control, with PostgreSQL and local or S3-compatible storage — no per-seat ATS pricing.
 - **Adapt the workflow.** Harly is AGPL-3.0-only open source: inspect it, contribute to it, or modify it for your team.
 - **Keep AI optional.** AI features use a workspace-configured provider key encrypted at rest; core recruiting workflows do not require an AI provider.
 
 ## GDPR-ready by design
 
-Harly gives European hiring teams the privacy controls they need to build
-responsible recruiting workflows:
-
 - Candidate data export, authenticated deletion requests, and a reviewed permanent-erasure workflow
 - Configurable retention, consent evidence, activity audit trails, and workspace-scoped legal notices
 - Human-reviewed AI assistance with minimised audit fingerprints; AI scores are guidance, never the sole basis for a hiring decision
-- Self-hosting with infrastructure and storage choices under your control
 
 Harly provides compliance tooling, not legal advice. Each organisation remains
 responsible for its lawful basis, notices, processor contracts, international
@@ -69,10 +64,34 @@ operator checklist.
 - Local or S3-compatible storage (AWS S3, Cloudflare R2, or MinIO)
 - Vercel AI SDK with configurable model providers
 
+## Deployment
+
+Get a running instance in one command — no cloning or building required, it uses the version-pinned GHCR image:
+
+```bash
+npx @harly/cli
+```
+
+This opens a guided installer that checks the host and creates the PostgreSQL, migrator, app, scheduler, and optional Caddy topology. Run the same command later from the installation directory to manage it. Use `npx @harly/cli doctor` after deployment, and see the self-hosting guide for proxy modes, storage, backups, restore, and upgrades.
+
+Prefer a managed platform? The same `npx @harly/cli` wizard also deploys to **Railway** and **DigitalOcean App Platform** (managed PostgreSQL, S3-compatible uploads, scheduler included). For **Vercel**, use the button above to clone the repo into a project, add a managed PostgreSQL database, and configure the environment variables before the first deploy — then run `pnpm db:migrate` from CI or a trusted migration job, not from every serverless instance.
+
+Full deployment steps and the environment variable reference live in [`docs/self-hosting.md`](docs/self-hosting.md), [`docs/cloud-deployments.md`](docs/cloud-deployments.md), and [`docs/configuration.md`](docs/configuration.md). A manual DigitalOcean [`app.template.yaml`](deploy/digitalocean/app.template.yaml) is also available. For Google Calendar and Google Meet, configure the server-side OAuth client and connect a workspace calendar from Settings using the [Google OAuth setup guide](docs/integrations/google-calendar.md).
+
+### Before inviting your team
+
+1. Use an HTTPS `HARLY_URL` and set independent production secrets.
+2. Run `npx @harly/cli doctor` after deployment.
+3. Configure off-host encrypted backups and prove a restore once.
+4. Create the first owner at `/setup`, then keep registration invite-only.
+
+### Career-page discovery
+
+Each workspace publishes a canonical board at `/board/<workspace-slug>`. In the Career Page Builder, **Discovery** controls search indexing, the search title, description, favicon, and share image. Harly exposes `/robots.txt` and `/sitemap.xml`; submit that sitemap to Search Console after setting an HTTPS `HARLY_URL`. Open jobs include `JobPosting` structured data and disappear from the sitemap when closed or moved to trash.
+
 ## Quick start for development
 
-For a production or VPS installation, use the [Docker/self-hosting installer](#docker--self-hosting)
-below. The commands in this section start the monorepo development stack.
+The steps above are for running Harly. To work on Harly itself, clone the monorepo and run the dev stack.
 
 ### Requirements
 
@@ -105,64 +124,6 @@ pnpm typecheck
 pnpm test
 ```
 
-## Deployment
-
-The deployment-specific steps and environment variable reference live in [`docs/self-hosting.md`](docs/self-hosting.md), [`docs/cloud-deployments.md`](docs/cloud-deployments.md), and [`docs/configuration.md`](docs/configuration.md).
-
-For Google Calendar and Google Meet, configure the server-side OAuth client and
-then connect a workspace calendar from Settings using the [Google OAuth setup
-guide](docs/integrations/google-calendar.md).
-
-### Vercel
-
-Use the button above to clone the repository into a Vercel project. Add a managed PostgreSQL database and configure the required environment variables before the first deploy. Run `pnpm db:migrate` from CI or a trusted migration job; do not run schema migrations from every serverless instance.
-
-### Railway
-
-Run `npx @harly/cli` and choose **Deploy on Railway**. Harly uses its
-version-pinned GHCR image, Railway managed PostgreSQL, a dedicated scheduler,
-and S3-compatible uploads; it does not require cloning or building this repo.
-
-### DigitalOcean App Platform
-
-Run `npx @harly/cli` and choose **Deploy on DigitalOcean** after creating a
-DigitalOcean Managed PostgreSQL database. The wizard emits a private App Spec
-with its encrypted `DATABASE_URL`, S3-compatible uploads, web, scheduler, and
-migrations from the same pinned GHCR image. A manual
-[`app.template.yaml`](deploy/digitalocean/app.template.yaml) is also available.
-
-### Docker / self-hosting
-
-The supported production installation does not require cloning this repository
-or installing pnpm. Run the official CLI on the target host:
-
-```bash
-npx @harly/cli
-```
-
-This opens a guided installer that checks the host, creates the PostgreSQL,
-migrator, app, scheduler, and optional Caddy topology, and uses a
-version-pinned image. Run the same command later from the installation
-directory to manage it. Use `npx @harly/cli doctor` after deployment and see the
-self-hosting guide for proxy modes, storage, backups, restore, and upgrades.
-
-### Before inviting your team
-
-1. Use an HTTPS `HARLY_URL` and set independent production secrets.
-2. Run `npx @harly/cli doctor` after deployment.
-3. Configure off-host encrypted backups and prove a restore once.
-4. Create the first owner at `/setup`, then keep registration invite-only.
-5. Read the [production launch checklist](docs/launch-checklist.md).
-
-### Career-page discovery
-
-Each workspace publishes a canonical board at `/board/<workspace-slug>`. In the
-Career Page Builder, **Discovery** controls search indexing, the search title,
-description, favicon, and share image. Harly exposes `/robots.txt` and
-`/sitemap.xml`; submit that sitemap to Search Console after setting an HTTPS
-`HARLY_URL`. Open jobs include `JobPosting` structured data and disappear from
-the sitemap when closed or moved to trash.
-
 ## Repository layout
 
 ```txt
@@ -180,19 +141,17 @@ docs/             Operator and contributor documentation
 
 ## Contributing
 
-Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).
+Contributions are welcome. Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request, and report vulnerabilities privately as described in [SECURITY.md](SECURITY.md) — never in a public issue.
 
 ## Roadmap
 
-See the public [Harly roadmap](ROADMAP.md) for current priorities and longer-term
-direction. It distinguishes features Harly can build directly from integrations
-that depend on third-party access, credentials, or commercial agreements.
+See the public [Harly roadmap](ROADMAP.md) for current priorities and longer-term direction. It distinguishes features Harly can build directly from integrations that depend on third-party access, credentials, or commercial agreements.
 
 ## Project status and support
 
 Harly is maintained by its open-source contributors. The public beta currently targets small, self-hosted teams. We do not offer a hosted service, SLA, or managed recovery; operators remain responsible for their own infrastructure, backups, access controls, and legal obligations.
 
-For feature work and bugs, use GitHub Issues. For vulnerabilities, never open a public issue — follow [SECURITY.md](SECURITY.md).
+For feature work and bugs, use GitHub Issues.
 
 ## License
 
