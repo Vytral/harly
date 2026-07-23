@@ -12,6 +12,7 @@ import type { AssignableRole } from "@/features/workspaces/InviteTeammatesSheet"
 import {
   completeOnboardingAction,
   saveOnboardingAboutAction,
+  saveOnboardingAvatarAction,
   saveOnboardingBrandingAction,
   setRequire2faAction,
 } from "@/features/onboarding/actions";
@@ -139,6 +140,7 @@ export function OwnerOnboarding({
   const [selfRole, setSelfRole] = useState<string>("");
   const [source, setSource] = useState<string>("");
   const [jobTitle, setJobTitle] = useState("");
+  const [avatar, setAvatar] = useState("");
 
   // Step 4, security
   const [require2fa, setRequire2fa] = useState(false);
@@ -195,6 +197,8 @@ export function OwnerOnboarding({
         source: source || undefined,
       });
       if (!res.ok) { setError(res.error ?? "Couldn't save your details."); return false; }
+      const avatarRes = await saveOnboardingAvatarAction(avatar || null);
+      if (!avatarRes.ok) { setError(avatarRes.error ?? "Couldn't save your photo."); return false; }
     }
     if (step === 3) {
       const res = await setRequire2faAction(require2fa);
@@ -277,6 +281,8 @@ export function OwnerOnboarding({
           onSource={setSource}
           jobTitle={jobTitle}
           onJobTitle={setJobTitle}
+          avatar={avatar}
+          onAvatar={setAvatar}
         />
       )}
       {step === 3 && <StepSecurity require2fa={require2fa} onToggle={setRequire2fa} />}
@@ -389,7 +395,7 @@ function StepBranding({ logoUrl, onLogo, tagline, onTagline, color, onColor }: {
   );
 }
 
-function StepAbout({ selfRole, onSelfRole, source, onSource, jobTitle, onJobTitle }: { selfRole: string; onSelfRole: (v: string) => void; source: string; onSource: (v: string) => void; jobTitle: string; onJobTitle: (v: string) => void }) {
+function StepAbout({ selfRole, onSelfRole, source, onSource, jobTitle, onJobTitle, avatar, onAvatar }: { selfRole: string; onSelfRole: (v: string) => void; source: string; onSource: (v: string) => void; jobTitle: string; onJobTitle: (v: string) => void; avatar: string; onAvatar: (v: string) => void }) {
   return (
     <StepStagger>
       <StepField>
@@ -398,7 +404,21 @@ function StepAbout({ selfRole, onSelfRole, source, onSource, jobTitle, onJobTitl
           subtitle="Helps us tailor Harly. Optional. Skip anything you'd rather not share."
         />
       </StepField>
-      <StepField className="mt-7 space-y-2">
+      <StepField className="mt-7 flex items-center gap-5">
+        <FileDropzone
+          value={avatar || null}
+          onChange={(url) => onAvatar(url ?? "")}
+          variant="avatar"
+          hint="Profile photo · PNG, JPG or WEBP"
+        />
+        <div className="flex-1 space-y-1">
+          <Label>Profile photo</Label>
+          <p className="text-xs text-muted-foreground">
+            Shown on your profile and next to your activity.
+          </p>
+        </div>
+      </StepField>
+      <StepField className="mt-6 space-y-2">
         <Label>What best describes you?</Label>
         <Select value={selfRole} onValueChange={onSelfRole}>
           <SelectTrigger className="w-full"><SelectValue placeholder="Choose one" /></SelectTrigger>

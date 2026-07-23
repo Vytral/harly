@@ -14,9 +14,17 @@ import {
   SpinnerIcon,
   CopyIcon,
   CheckIcon,
+  DownloadDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
 
 type Step = "password" | "configure" | "done";
+
+/** Single-tenant deployments serve the app from the workspace's own domain, so
+ *  the browser hostname doubles as a stable authenticator issuer label. */
+function currentIssuer(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  return window.location.hostname || undefined;
+}
 
 export function Setup2FAForm() {
   const router = useRouter();
@@ -31,7 +39,10 @@ export function Setup2FAForm() {
   // Step 1: call enable({password}) → get URI + backup codes
   function handleEnable() {
     startTransition(async () => {
-      const res = await authClient.twoFactor.enable({ password });
+      const res = await authClient.twoFactor.enable({
+        password,
+        issuer: currentIssuer(),
+      });
       if (res.error) {
         toast.error(res.error.message ?? "Invalid password");
         return;
@@ -63,6 +74,21 @@ export function Setup2FAForm() {
   function copyBackupCodes() {
     navigator.clipboard.writeText(backupCodes.join("\n"));
     toast.success("Backup codes copied");
+  }
+
+  function downloadBackupCodes() {
+    const blob = new Blob(
+      [
+        `Harly two-factor backup codes\nEach code works once.\n\n${backupCodes.join("\n")}\n`,
+      ],
+      { type: "text/plain" },
+    );
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "harly-backup-codes.txt";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   // ── Done: show success + continue button ──────────────────────────────────
@@ -179,15 +205,26 @@ export function Setup2FAForm() {
               </span>
             ))}
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={copyBackupCodes}
-          >
-            <CopyIcon className="mr-1 size-3" />
-            Copy backup codes
-          </Button>
+          <div className="flex gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={copyBackupCodes}
+            >
+              <CopyIcon className="mr-1 size-3" />
+              Copy
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-7 text-xs"
+              onClick={downloadBackupCodes}
+            >
+              <DownloadDuotoneIcon className="mr-1 size-3" />
+              Download
+            </Button>
+          </div>
         </div>
       )}
 

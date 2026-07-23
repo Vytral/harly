@@ -5,13 +5,16 @@ import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 
 import { TwoFactorCard } from "@/features/security/TwoFactorCard";
+import { PasskeyQuickSetup } from "@/features/security/PasskeyQuickSetup";
 import {
   completeRecruiterOnboardingAction,
+  saveOnboardingAvatarAction,
   saveUserRoleAction,
 } from "@/features/onboarding/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FileDropzone } from "@/components/ui/FileDropzone";
 import {
   SealCheckDuotoneIcon,
   ShieldCheckDuotoneIcon,
@@ -35,11 +38,18 @@ export function RecruiterOnboarding({
   workspaceName,
   require2fa,
   twoFactorEnabled,
+  suggestedRole,
+  initialAvatar,
 }: {
   userName: string;
   workspaceName: string;
   require2fa: boolean;
   twoFactorEnabled: boolean;
+  /** Role assigned at invite time (e.g. "Recruiter", "Hiring Manager"), used
+   *  to pre-fill "Your role" below. Null for a custom role that has no name. */
+  suggestedRole?: string | null;
+  /** Existing profile photo (e.g. from an OAuth sign-in) to prefill. */
+  initialAvatar?: string | null;
 }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
@@ -47,7 +57,8 @@ export function RecruiterOnboarding({
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const [jobTitle, setJobTitle] = useState("");
+  const [jobTitle, setJobTitle] = useState(suggestedRole ?? "");
+  const [avatar, setAvatar] = useState(initialAvatar ?? "");
 
   const isLast = step === STEPS.length - 1;
 
@@ -59,6 +70,10 @@ export function RecruiterOnboarding({
         if (trimmed) {
           const res = await saveUserRoleAction(trimmed);
           if (!res.ok) return setError(res.error ?? "Couldn't save your role.");
+        }
+        const avatarRes = await saveOnboardingAvatarAction(avatar || null);
+        if (!avatarRes.ok) {
+          return setError(avatarRes.error ?? "Couldn't save your photo.");
         }
         setStep(1);
       });
@@ -106,6 +121,9 @@ export function RecruiterOnboarding({
   }
 
   const canSkipSecurity = isLast && !require2fa && !twoFactorEnabled;
+  // Mandatory 2FA not yet enabled: block navigation entirely rather than
+  // let the user hit Back/Enter workspace and bounce off a server error.
+  const blockedOnMandatory2fa = isLast && require2fa && !twoFactorEnabled;
 
   return (
     <OnboardingShell
@@ -113,7 +131,7 @@ export function RecruiterOnboarding({
       railFootnote="Less than a minute. You can update these in your account anytime."
       steps={STEPS}
       current={step}
-      onJump={(i) => { if (i < step) { setStep(i); setError(null); } }}
+      onJump={(i) => { if (i < step && !blockedOnMandatory2fa) { setStep(i); setError(null); } }}
       error={error}
       pending={pending}
       isLast={isLast}
@@ -122,6 +140,11 @@ export function RecruiterOnboarding({
       onSkip={canSkipSecurity ? finish : undefined}
       nextLabel={isLast ? "Enter workspace" : "Continue"}
       minHeight="min-h-[30rem]"
+      navHint={
+        blockedOnMandatory2fa
+          ? "Finish setting up two-factor authentication above to continue."
+          : undefined
+      }
     >
       {step === 0 && (
         <StepStagger>
@@ -132,7 +155,21 @@ export function RecruiterOnboarding({
               subtitle="A couple of quick things and you're hiring. First, what should teammates know you as?"
             />
           </StepField>
-          <StepField className="mt-7 max-w-md space-y-2">
+          <StepField className="mt-7 flex items-center gap-5">
+            <FileDropzone
+              value={avatar || null}
+              onChange={(url) => { setAvatar(url ?? ""); setError(null); }}
+              variant="avatar"
+              hint="Profile photo · PNG, JPG or WEBP"
+            />
+            <div className="flex-1 space-y-1">
+              <Label>Profile photo</Label>
+              <p className="text-xs text-muted-foreground">
+                Shown on your profile and next to your activity. Optional.
+              </p>
+            </div>
+          </StepField>
+          <StepField className="mt-6 max-w-md space-y-2">
             <Label htmlFor="rec-role">Your role</Label>
             <Input
               id="rec-role"
@@ -170,6 +207,20 @@ export function RecruiterOnboarding({
               <TwoFactorCard enabled={false} />
             )}
           </StepField>
+          {!twoFactorEnabled ? (
+            <StepField className="mt-4">
+              <div className="flex items-center gap-3 py-1">
+                <span className="h-px flex-1 bg-border" />
+                <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  or
+                </span>
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <div className="mt-4">
+                <PasskeyQuickSetup />
+              </div>
+            </StepField>
+          ) : null}
         </StepStagger>
       )}
     </OnboardingShell>

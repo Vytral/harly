@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MembersSettingsPage() {
   await requirePagePermission("members:read");
-  const [{ members, invitations, inviteLink }, roles, canInvite, canEditMembers, canRemoveMembers, canManageInviteLinks, canRoles] =
+  const [{ members, invitations, inviteLink, context }, roles, canInvite, canEditMembers, canRemoveMembers, canManageInviteLinks, canRoles] =
     await Promise.all([
       getWorkspaceSettingsData(),
       listWorkspaceRoles(),
@@ -26,6 +26,10 @@ export default async function MembersSettingsPage() {
     name: role.name,
   }));
 
+  // Managing another member's account (reset password / edit profile) is
+  // owner-only; never a grantable permission.
+  const canManageMemberAccounts = context.roleKey === "owner";
+
   return (
     <MembersAndRoles
       members={members}
@@ -38,6 +42,7 @@ export default async function MembersSettingsPage() {
       canRemoveMembers={canRemoveMembers}
       canManageInviteLinks={canManageInviteLinks}
       canManageRoles={canRoles}
+      canManageMemberAccounts={canManageMemberAccounts}
     />
   );
 }

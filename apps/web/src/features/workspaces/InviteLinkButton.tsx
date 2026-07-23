@@ -65,7 +65,16 @@ export function InviteLinkButton({
   const router = useRouter();
   const [pending, start] = useTransition();
   const [copied, setCopied] = useState(false);
-  const [role, setRole] = useState(inviteLink.role);
+  // Sacred rule: a shareable link never grants Owner. Promotion is a
+  // deliberate act from the members list.
+  const invitableRoles = assignableRoles.filter((r) => r.key !== "owner");
+  const defaultInvitableRole =
+    invitableRoles.find((r) => r.key === "recruiter")?.key ??
+    invitableRoles[0]?.key ??
+    "recruiter";
+  const [role, setRole] = useState(
+    inviteLink.role === "owner" ? defaultInvitableRole : inviteLink.role,
+  );
 
   const url =
     inviteLink.token && typeof window !== "undefined"
@@ -198,7 +207,7 @@ export function InviteLinkButton({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {assignableRoles.map((r) => (
+                {invitableRoles.map((r) => (
                   <SelectItem key={r.key} value={r.key}>
                     {r.name}
                   </SelectItem>

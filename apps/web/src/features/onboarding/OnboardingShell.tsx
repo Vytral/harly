@@ -90,6 +90,9 @@ type OnboardingShellProps = {
   onSkip?: () => void;
   nextLabel: string;
   minHeight?: string;
+  /** Hide Back/Skip/Next entirely (e.g. mandatory 2FA not yet enabled) and
+   *  show this hint in their place instead. */
+  navHint?: string;
 };
 
 export function OnboardingShell({
@@ -107,6 +110,7 @@ export function OnboardingShell({
   onSkip,
   nextLabel,
   minHeight = "min-h-[32rem]",
+  navHint,
 }: OnboardingShellProps) {
   const reduce = useReducedMotion();
 
@@ -166,39 +170,45 @@ export function OnboardingShell({
 
           {/* Footer */}
           <div className="mt-10 flex items-center justify-end gap-1.5 border-t border-border/60 pt-5">
-            {current > 0 && (
-              <Button variant="ghost" size="sm" disabled={pending} onClick={onBack}>
-                Back
-              </Button>
+            {navHint ? (
+              <p className="text-xs text-muted-foreground">{navHint}</p>
+            ) : (
+              <>
+                {current > 0 && (
+                  <Button variant="ghost" size="sm" disabled={pending} onClick={onBack}>
+                    Back
+                  </Button>
+                )}
+                {onSkip && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground"
+                    disabled={pending}
+                    onClick={onSkip}
+                  >
+                    Skip
+                  </Button>
+                )}
+                <Button
+                  size="sm"
+                  onClick={onNext}
+                  disabled={pending}
+                  className="transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
+                >
+                  {pending ? (
+                    <SpinnerIcon className="size-4" />
+                  ) : isLast ? (
+                    nextLabel
+                  ) : (
+                    <>
+                      {nextLabel}
+                      <CaretRightIcon className="size-4" />
+                    </>
+                  )}
+                </Button>
+              </>
             )}
-            {onSkip && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="text-muted-foreground"
-                disabled={pending}
-                onClick={onSkip}
-              >
-                Skip
-              </Button>
-            )}
-            <Button
-              size="sm"
-              onClick={onNext}
-              disabled={pending}
-              className="transition-transform active:scale-[0.98] motion-reduce:active:scale-100"
-            >
-              {pending ? (
-                <SpinnerIcon className="size-4" />
-              ) : isLast ? (
-                nextLabel
-              ) : (
-                <>
-                  {nextLabel}
-                  <CaretRightIcon className="size-4" />
-                </>
-              )}
-            </Button>
           </div>
         </div>
       </div>
@@ -226,7 +236,8 @@ function VerticalRail({
           <button
             key={s.key}
             type="button"
-            disabled={!reachable}
+            aria-disabled={!reachable || undefined}
+            tabIndex={!reachable ? -1 : undefined}
             onClick={() => onJump(i)}
             className={cn(
               "group relative flex w-full items-start gap-3 rounded-xl px-2.5 py-2.5 text-left transition-colors",
@@ -248,7 +259,7 @@ function VerticalRail({
             <span
               className={cn(
                 "relative z-10 flex size-8 shrink-0 items-center justify-center rounded-lg transition-colors",
-                doneStep && "bg-pine text-white",
+                doneStep && "bg-pine text-primary-foreground",
                 active && "bg-sage text-pine ring-1 ring-pine/15",
                 !doneStep && !active && "bg-muted text-muted-foreground",
               )}

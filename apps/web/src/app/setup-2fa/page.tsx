@@ -5,7 +5,7 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 
 import { auth } from "@/lib/auth";
-import { db, member as authMembers, organization } from "@harly/db";
+import { db, member as authMembers, organization, passkeys } from "@harly/db";
 import { Setup2FAForm } from "./_components/setup-2fa-form";
 
 export const dynamic = "force-dynamic";
@@ -23,8 +23,15 @@ export default async function Setup2FAPage() {
       ? session.user.twoFactorEnabled
       : false;
 
+  // A passkey is a valid second factor too, not just TOTP.
+  const [existingPasskey] = await db
+    .select({ id: passkeys.id })
+    .from(passkeys)
+    .where(eq(passkeys.userId, session.user.id))
+    .limit(1);
+
   // Already has 2FA , send to dashboard.
-  if (twoFactorEnabled) {
+  if (twoFactorEnabled || existingPasskey) {
     redirect("/dashboard");
   }
 

@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import { db, organization, user as userTable, workspaceSettings } from "@harly/db";
+import { db, organization, passkeys, user as userTable, workspaceSettings } from "@harly/db";
 
 import { auth } from "@/lib/auth";
 import { requirePermission } from "@/features/workspaces/permissions-server";
@@ -13,6 +13,8 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import { mustSetUp2fa } from "@/lib/two-factor";
 import { createLogger } from "@/lib/logger";
 import { logAuditEvent } from "@/lib/audit-log";
+import { storage } from "@/lib/storage";
+import { convertAndStoreLogo } from "@/lib/logo-convert";
 
 const log = createLogger("onboarding");
 
@@ -75,6 +77,20 @@ export async function saveOnboardingBrandingAction(input: {
       .update(organization)
       .set({ logo: parsed.data.logoUrl })
       .where(eq(organization.id, org.id));
+
+    // Convert to an email-safe raster (PNG/JPG/WebP) so invite/notification
+    // emails don't fall back to the raw SVG, which Gmail/Outlook won't render.
+    if (parsed.data.logoUrl) {
+      try {
+        await convertAndStoreLogo({
+          organizationId: org.id,
+          logoUrl: parsed.data.logoUrl,
+          storage,
+        });
+      } catch (error) {
+        log.error(error, "failed to convert onboarding logo for email");
+      }
+    }
     return { ok: true };
   } catch (error) {
     log.error(error, "onboarding action failed");
@@ -96,6 +112,41 @@ export async function saveUserRoleAction(
     await db
       .update(userTable)
       .set({ jobTitle: parsed.data })
+      .where(eq(userTable.id, session.user.id));
+    return { ok: true };
+  } catch (error) {
+    log.error(error, "onboarding action failed");
+    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+  }
+}
+
+const avatarSchema = z
+  .string()
+  .trim()
+  .max(2048)
+  .optional()
+  .transform((value) => (value && value.length > 0 ? value : null))
+  .refine(
+    (value) =>
+      value === null ||
+      value.startsWith("/uploads/") ||
+      /^https?:\/\//.test(value),
+    "Avatar must be a valid URL.",
+  );
+
+/** Persist the signed-in user's profile photo during onboarding. */
+export async function saveOnboardingAvatarAction(
+  imageUrl: string | null,
+): Promise<OnboardingResult> {
+  try {
+    const parsed = avatarSchema.safeParse(imageUrl ?? undefined);
+    if (!parsed.success) {
+      return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
+    }
+    const session = await requireSession();
+    await db
+      .update(userTable)
+      .set({ image: parsed.data })
       .where(eq(userTable.id, session.user.id));
     return { ok: true };
   } catch (error) {
@@ -189,17 +240,25 @@ export async function completeRecruiterOnboardingAction(): Promise<OnboardingRes
       .limit(1);
 
     if (settings?.require2fa) {
-      const [row] = await db
-        .select({ twoFactorEnabled: userTable.twoFactorEnabled })
-        .from(userTable)
-        .where(eq(userTable.id, user.id))
-        .limit(1);
-      // Owner is exempt from 2FA enforcement. Keep this consistent with the
-      // middleware policy via the shared helper.
+      const [[row], [existingPasskey]] = await Promise.all([
+        db
+          .select({ twoFactorEnabled: userTable.twoFactorEnabled })
+          .from(userTable)
+          .where(eq(userTable.id, user.id))
+          .limit(1),
+        db
+          .select({ id: passkeys.id })
+          .from(passkeys)
+          .where(eq(passkeys.userId, user.id))
+          .limit(1),
+      ]);
+      // A passkey is a valid second factor too, not just TOTP. Owner is exempt
+      // from 2FA enforcement , keep this consistent with the middleware policy
+      // via the shared helper.
       if (
         mustSetUp2fa({
           workspaceRequires2fa: settings.require2fa,
-          userHas2fa: row?.twoFactorEnabled ?? false,
+          userHas2fa: Boolean(row?.twoFactorEnabled) || Boolean(existingPasskey),
           roleKey,
         })
       ) {

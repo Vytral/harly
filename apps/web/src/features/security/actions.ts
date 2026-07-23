@@ -1,8 +1,17 @@
 "use server";
 
+import crypto from "node:crypto";
 import { headers } from "next/headers";
-import { and, eq } from "drizzle-orm";
-import { db, passkeys, workspaceSettings, oauthProviders } from "@harly/db";
+import { and, eq, ne } from "drizzle-orm";
+import {
+  db,
+  passkeys,
+  workspaceSettings,
+  oauthProviders,
+  account as authAccounts,
+  session as authSessions,
+  user as authUsers,
+} from "@harly/db";
 import { auth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceContext } from "@/features/workspaces/context";
@@ -346,4 +355,88 @@ export async function getOAuthProviderStatus(): Promise<
   }
 
   return result;
+}
+
+/**
+ * Complete an owner-forced password change. The member has an authenticated
+ * session (they just signed in with the temporary password) but no way to
+ * supply a "current" password meaningfully, so this sets the new hash directly,
+ * clears the `mustChangePassword` flag, and revokes every OTHER session.
+ */
+export async function completeForcedPasswordChangeAction(input: {
+  password: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session?.user) return { ok: false, error: "Not signed in." };
+
+    if (typeof input.password !== "string" || input.password.length < 8) {
+      return { ok: false, error: "Password must be at least 8 characters." };
+    }
+
+    const [userRow] = await db
+      .select({ mustChangePassword: authUsers.mustChangePassword })
+      .from(authUsers)
+      .where(eq(authUsers.id, session.user.id))
+      .limit(1);
+    if (!userRow?.mustChangePassword) {
+      return { ok: false, error: "No password change is required." };
+    }
+
+    const { hashPassword } = await import("better-auth/crypto");
+    const passwordHash = await hashPassword(input.password);
+
+    const [credential] = await db
+      .select({ id: authAccounts.id })
+      .from(authAccounts)
+      .where(
+        and(
+          eq(authAccounts.userId, session.user.id),
+          eq(authAccounts.providerId, "credential"),
+        ),
+      )
+      .limit(1);
+
+    if (credential) {
+      await db
+        .update(authAccounts)
+        .set({ password: passwordHash, updatedAt: new Date() })
+        .where(eq(authAccounts.id, credential.id));
+    } else {
+      await db.insert(authAccounts).values({
+        id: crypto.randomUUID(),
+        accountId: session.user.id,
+        providerId: "credential",
+        userId: session.user.id,
+        password: passwordHash,
+      });
+    }
+
+    await db
+      .update(authUsers)
+      .set({ mustChangePassword: false, updatedAt: new Date() })
+      .where(eq(authUsers.id, session.user.id));
+
+    // Revoke every OTHER session opened with the temporary password; keep the
+    // current one so the member stays signed in on this device.
+    await db
+      .delete(authSessions)
+      .where(
+        and(
+          eq(authSessions.userId, session.user.id),
+          ne(authSessions.token, session.session.token),
+        ),
+      );
+
+    await logAuditEvent({
+      actorId: session.user.id,
+      action: "member.forced_password_changed",
+      severity: "info",
+    });
+
+    return { ok: true };
+  } catch (error) {
+    log.error(error, "completeForcedPasswordChangeAction failed");
+    return { ok: false, error: "Unable to change password." };
+  }
 }

@@ -86,7 +86,13 @@ export function InviteTeammatesSheet({
   /** Keep the current flow in place after a successful invite batch. */
   refreshOnSuccess?: boolean;
 }) {
-  const defaultRole = assignableRoles[0]?.key ?? "recruiter";
+  // Sacred rule: nobody is invited straight to Owner. Promotion happens
+  // deliberately from the members list, never a fat-finger in a dropdown.
+  const invitableRoles = assignableRoles.filter((r) => r.key !== "owner");
+  const defaultRole =
+    invitableRoles.find((r) => r.key === "recruiter")?.key ??
+    invitableRoles[0]?.key ??
+    "recruiter";
   const shouldRefresh = refreshOnSuccess ?? true;
   const router = useRouter();
 
@@ -96,6 +102,7 @@ export function InviteTeammatesSheet({
     inviteWorkspaceMembersAction,
     bulkInitial,
   );
+  const [actionPending, startActionTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const lastState = useRef(state);
 
@@ -182,7 +189,7 @@ export function InviteTeammatesSheet({
     const start = hasHeader ? 1 : 0;
     const ecol = hasHeader ? emailCol : 0;
 
-    const roleKeys = new Set(assignableRoles.map((r) => r.key));
+    const roleKeys = new Set(invitableRoles.map((r) => r.key));
     const fresh: { email: string; role: string }[] = [];
     for (let i = start; i < grid.length; i++) {
       const cells = grid[i];
@@ -226,7 +233,9 @@ export function InviteTeammatesSheet({
         validRows.map((r) => ({ email: r.email.trim(), role: r.role })),
       ),
     );
-    formAction(fd);
+    startActionTransition(() => {
+      formAction(fd);
+    });
   }
 
   return (
@@ -273,7 +282,7 @@ export function InviteTeammatesSheet({
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {assignableRoles.map((r) => (
+                      {invitableRoles.map((r) => (
                         <SelectItem key={r.key} value={r.key}>
                           {r.name}
                         </SelectItem>
@@ -339,7 +348,7 @@ export function InviteTeammatesSheet({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {assignableRoles.map((r) => (
+                  {invitableRoles.map((r) => (
                     <SelectItem key={r.key} value={r.key}>
                       {r.name}
                     </SelectItem>

@@ -16,6 +16,7 @@ import { createLogger } from "@/lib/logger";
 import { db } from "@harly/db";
 import { convertAndStoreLogo } from "@/lib/logo-convert";
 import {
+  account as authAccounts,
   customRoles,
   invitation,
   member as authMembers,
@@ -26,6 +27,7 @@ import {
 } from "@harly/db";
 import { isBuiltinRole } from "@/features/workspaces/permissions";
 import {
+  WelcomeEmail,
   WorkspaceInvitation,
   workspaceInvitationSubject,
 } from "@harly/emails";
@@ -152,6 +154,12 @@ function isOwnerRole(role: string) {
   return role === "owner";
 }
 
+// Sacred rule: invitations and shareable links never mint owners. The Owner
+// role is only reachable by promoting an existing member (updateMemberRoles),
+// which an owner does deliberately , guarding against a fat-finger invite.
+const INVITE_OWNER_BLOCKED =
+  "The Owner role can't be assigned by invite. Invite as another role, then promote from the members list.";
+
 const log = createLogger("workspaces");
 
 export async function updateWorkspaceBoardBrandingAction(
@@ -178,6 +186,7 @@ export async function updateWorkspaceBoardBrandingAction(
         logoStyles.includes(rawLogoStyle as (typeof logoStyles)[number])
           ? rawLogoStyle
           : undefined,
+      hideHarlyBranding: formData.get("hideHarlyBranding") === "true",
     });
 
     if (!parsed.success) {
@@ -195,6 +204,7 @@ export async function updateWorkspaceBoardBrandingAction(
       heroImageUrl: parsed.data.heroImageUrl,
       boardStyle: parsed.data.boardStyle,
       logoStyle: parsed.data.logoStyle,
+      hideHarlyBranding: parsed.data.hideHarlyBranding,
     };
 
     await db
@@ -348,6 +358,21 @@ async function inviteOneMember(
   const authUser = await getAuthUserByEmail(email);
 
   if (authUser) {
+    // A `user` row surviving with no active membership means they were
+    // removed before , this workspace is the only org they could ever have
+    // belonged to. Re-adding them is silent by default; without an email
+    // they'd have no idea access came back.
+    const [existingMembership] = await db
+      .select({ id: authMembers.id })
+      .from(authMembers)
+      .where(
+        and(
+          eq(authMembers.organizationId, context.organization.id),
+          eq(authMembers.userId, authUser.id),
+        ),
+      )
+      .limit(1);
+
     await db
       .insert(authMembers)
       .values({
@@ -379,6 +404,23 @@ async function inviteOneMember(
           eq(invitation.status, "pending"),
         ),
       );
+
+    if (!existingMembership) {
+      const requestHeaders = await headers();
+      const host = requestHeaders.get("host") ?? "localhost:3000";
+      const protocol = host.startsWith("localhost") ? "http" : "https";
+      const branding = await getWorkspaceEmailBranding(context.organization.id);
+      void sendWorkspaceEmail(context.organization.id, {
+        to: email,
+        subject: `You've been added back to ${context.organization.name}`,
+        react: createElement(WelcomeEmail, {
+          userName: authUser.name,
+          workspaceName: context.organization.name,
+          dashboardUrl: `${protocol}://${host}/login`,
+          branding,
+        }),
+      });
+    }
 
     await logAuditEvent({
       workspaceId: context.organization.id,
@@ -469,6 +511,10 @@ export async function inviteWorkspaceMemberAction(
       };
     }
 
+    if (isOwnerRole(parsed.data.role)) {
+      return { success: false, error: INVITE_OWNER_BLOCKED };
+    }
+
     if (!(await isAssignableRole(context.organization.id, parsed.data.role))) {
       return { success: false, error: "Unknown role." };
     }
@@ -557,6 +603,10 @@ export async function inviteWorkspaceMembersAction(
     let added = 0;
 
     for (const [email, role] of byEmail) {
+      if (isOwnerRole(role)) {
+        skipped.push({ email, reason: INVITE_OWNER_BLOCKED });
+        continue;
+      }
       if (!(await isAssignableRole(context.organization.id, role))) {
         skipped.push({ email, reason: "Unknown role." });
         continue;
@@ -858,6 +908,76 @@ export async function removeWorkspaceMemberAction(
   }
 }
 
+/** Resend a pending invitation email and push its expiry out another 7 days. */
+export async function resendWorkspaceInvitationAction(
+  invitationId: string,
+): Promise<ActionResult> {
+  try {
+    const context = await requirePermission("members:invite");
+
+    const [invite] = await db
+      .select({
+        id: invitation.id,
+        email: invitation.email,
+        role: invitation.role,
+      })
+      .from(invitation)
+      .where(
+        and(
+          eq(invitation.id, invitationId),
+          eq(invitation.organizationId, context.organization.id),
+          eq(invitation.status, "pending"),
+        ),
+      )
+      .limit(1);
+
+    if (!invite) {
+      return { success: false, error: "Invitation not found." };
+    }
+
+    await db
+      .update(invitation)
+      .set({ expiresAt: addDays(new Date(), 7) })
+      .where(eq(invitation.id, invite.id));
+
+    const requestHeaders = await headers();
+    const host = requestHeaders.get("host") ?? "localhost:3000";
+    const protocol = host.startsWith("localhost") ? "http" : "https";
+    const acceptUrl = `${protocol}://${host}/invite/${invite.id}`;
+    const branding = await getWorkspaceEmailBranding(context.organization.id);
+
+    void sendWorkspaceEmail(context.organization.id, {
+      to: invite.email,
+      subject: workspaceInvitationSubject({
+        inviterName: context.user.name,
+        workspaceName: context.organization.name,
+      }),
+      react: createElement(WorkspaceInvitation, {
+        inviteeName: invite.email.split("@")[0],
+        inviterName: context.user.name,
+        workspaceName: context.organization.name,
+        role: invite.role ?? "recruiter",
+        acceptUrl,
+        branding,
+      }),
+    });
+
+    await logAuditEvent({
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      action: "member.invitation_resent",
+      severity: "info",
+      metadata: { invitationId: invite.id, email: invite.email },
+    });
+    revalidatePath("/settings");
+    return { success: true };
+  } catch (error) {
+    log.error(error, "resendWorkspaceInvitationAction failed");
+    return { success: false, error: "Unable to resend invitation." };
+  }
+}
+
 export async function cancelWorkspaceInvitationAction(
   invitationId: string,
 ): Promise<ActionResult> {
@@ -1081,6 +1201,9 @@ export async function enableInviteLinkAction(
     if (!parsed.success) {
       return { success: false, error: "Invalid role." };
     }
+    if (isOwnerRole(parsed.data.role)) {
+      return { success: false, error: INVITE_OWNER_BLOCKED };
+    }
     if (!(await isAssignableRole(context.organization.id, parsed.data.role))) {
       return { success: false, error: "Unknown role." };
     }
@@ -1239,5 +1362,345 @@ export async function joinViaInviteLinkAction(
   } catch (error) {
     log.error(error, "joinViaInviteLinkAction failed");
     return { success: false, error: "Unable to join workspace." };
+  }
+}
+
+// ─── Owner-only member account management ─────────────────────────────────────
+// Resetting a password or editing another person's profile is a high-trust
+// action, so it is gated strictly on the built-in owner role (never a grantable
+// permission) to avoid an admin or custom role escalating into account takeover.
+
+const setMemberPasswordSchema = z.object({
+  memberId: z.string().trim().min(1),
+  password: z.string().min(8, "Password must be at least 8 characters."),
+});
+
+const editMemberProfileSchema = z.object({
+  memberId: z.string().trim().min(1),
+  name: z.string().trim().min(1, "Name is required.").max(120),
+  jobTitle: z.string().trim().max(120).optional(),
+  phone: z.string().trim().max(60).optional(),
+  location: z.string().trim().max(120).optional(),
+  bio: z.string().trim().max(2000).optional(),
+  linkedinUrl: z.string().trim().max(2048).optional(),
+  githubUrl: z.string().trim().max(2048).optional(),
+  websiteUrl: z.string().trim().max(2048).optional(),
+  email: z.string().trim().email("Enter a valid email.").max(320),
+});
+
+/** Resolve the target member within the actor's workspace, enforcing that the
+ *  actor is an owner. Returns the member's userId or an error result. */
+async function requireOwnerActingOnMember(
+  memberId: string,
+): Promise<
+  | { ok: true; workspaceId: string; actorId: string; targetUserId: string; targetRole: string }
+  | { ok: false; error: string }
+> {
+  const context = await getWorkspaceContext();
+  if (!isOwnerRole(context.roleKey)) {
+    return { ok: false, error: "Only the workspace owner can do this." };
+  }
+
+  const [target] = await db
+    .select({ userId: authMembers.userId, role: authMembers.role })
+    .from(authMembers)
+    .where(
+      and(
+        eq(authMembers.id, memberId),
+        eq(authMembers.organizationId, context.organization.id),
+      ),
+    )
+    .limit(1);
+
+  if (!target) return { ok: false, error: "Member not found." };
+
+  return {
+    ok: true,
+    workspaceId: context.organization.id,
+    actorId: context.user.id,
+    targetUserId: target.userId,
+    targetRole: target.role,
+  };
+}
+
+export async function setMemberPasswordAction(input: {
+  memberId: string;
+  password: string;
+}): Promise<ActionResult> {
+  try {
+    const parsed = setMemberPasswordSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid password.",
+      };
+    }
+
+    const resolved = await requireOwnerActingOnMember(parsed.data.memberId);
+    if (!resolved.ok) return { success: false, error: resolved.error };
+
+    if (resolved.targetUserId === resolved.actorId) {
+      return {
+        success: false,
+        error: "Use your account settings to change your own password.",
+      };
+    }
+
+    const { hashPassword } = await import("better-auth/crypto");
+    const passwordHash = await hashPassword(parsed.data.password);
+
+    // Update the credential account, or create one if the member only ever
+    // signed in via OAuth/passkey and has no password yet.
+    const [credential] = await db
+      .select({ id: authAccounts.id })
+      .from(authAccounts)
+      .where(
+        and(
+          eq(authAccounts.userId, resolved.targetUserId),
+          eq(authAccounts.providerId, "credential"),
+        ),
+      )
+      .limit(1);
+
+    if (credential) {
+      await db
+        .update(authAccounts)
+        .set({ password: passwordHash, updatedAt: new Date() })
+        .where(eq(authAccounts.id, credential.id));
+    } else {
+      await db.insert(authAccounts).values({
+        id: crypto.randomUUID(),
+        accountId: resolved.targetUserId,
+        providerId: "credential",
+        userId: resolved.targetUserId,
+        password: passwordHash,
+      });
+    }
+
+    // Force re-authentication everywhere: existing sessions must not survive an
+    // owner-initiated password change.
+    await db
+      .delete(authSessions)
+      .where(eq(authSessions.userId, resolved.targetUserId));
+
+    await logAuditEvent({
+      workspaceId: resolved.workspaceId,
+      actorId: resolved.actorId,
+      action: "member.password_reset",
+      resourceType: "member",
+      resourceId: parsed.data.memberId,
+      severity: "warning",
+      metadata: { targetUserId: resolved.targetUserId },
+    });
+
+    revalidatePath("/settings/members");
+    return { success: true };
+  } catch (error) {
+    log.error(error, "setMemberPasswordAction failed");
+    return { success: false, error: "Unable to reset password." };
+  }
+}
+
+export async function editMemberProfileAction(input: {
+  memberId: string;
+  name: string;
+  jobTitle?: string;
+  phone?: string;
+  location?: string;
+  bio?: string;
+  linkedinUrl?: string;
+  githubUrl?: string;
+  websiteUrl?: string;
+  email: string;
+}): Promise<ActionResult> {
+  try {
+    const parsed = editMemberProfileSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid profile.",
+      };
+    }
+
+    const resolved = await requireOwnerActingOnMember(parsed.data.memberId);
+    if (!resolved.ok) return { success: false, error: resolved.error };
+
+    const nextEmail = parsed.data.email.toLowerCase();
+
+    // Email is a login credential: guard uniqueness before writing.
+    const [current] = await db
+      .select({ email: authUsers.email })
+      .from(authUsers)
+      .where(eq(authUsers.id, resolved.targetUserId))
+      .limit(1);
+
+    const emailChanged = Boolean(
+      current && current.email.toLowerCase() !== nextEmail,
+    );
+
+    if (emailChanged) {
+      const [clash] = await db
+        .select({ id: authUsers.id })
+        .from(authUsers)
+        .where(eq(authUsers.email, nextEmail))
+        .limit(1);
+      if (clash && clash.id !== resolved.targetUserId) {
+        return { success: false, error: "That email is already in use." };
+      }
+    }
+
+    await db
+      .update(authUsers)
+      .set({
+        name: parsed.data.name,
+        email: nextEmail,
+        // A new login email starts unverified.
+        ...(emailChanged ? { emailVerified: false } : {}),
+        jobTitle: parsed.data.jobTitle || null,
+        phone: parsed.data.phone || null,
+        location: parsed.data.location || null,
+        bio: parsed.data.bio || null,
+        linkedinUrl: parsed.data.linkedinUrl || null,
+        githubUrl: parsed.data.githubUrl || null,
+        websiteUrl: parsed.data.websiteUrl || null,
+        updatedAt: new Date(),
+      })
+      .where(eq(authUsers.id, resolved.targetUserId));
+
+    await logAuditEvent({
+      workspaceId: resolved.workspaceId,
+      actorId: resolved.actorId,
+      action: "member.profile_edited",
+      resourceType: "member",
+      resourceId: parsed.data.memberId,
+      severity: "info",
+      metadata: {
+        targetUserId: resolved.targetUserId,
+        emailChanged,
+      },
+    });
+
+    revalidatePath("/settings/members");
+    return { success: true };
+  } catch (error) {
+    log.error(error, "editMemberProfileAction failed");
+    return { success: false, error: "Unable to update profile." };
+  }
+}
+
+const createMemberSchema = z.object({
+  name: z.string().trim().min(1, "Name is required.").max(120),
+  email: z.string().trim().email("Enter a valid email.").max(320),
+  role: z.string().trim().min(1),
+  password: z.string().min(8, "Password must be at least 8 characters."),
+  image: z
+    .string()
+    .trim()
+    .max(2048)
+    .optional()
+    .transform((value) => (value && value.length > 0 ? value : null)),
+  jobTitle: z.string().trim().max(120).optional(),
+});
+
+/**
+ * Owner-only: provision a member account directly (no invite email). The owner
+ * sets a temporary password; `mustChangePassword` forces the member to pick a
+ * new one on first sign-in so the owner never retains a working credential.
+ * Gated on the built-in owner role, never a grantable permission.
+ */
+export async function createMemberAction(input: {
+  name: string;
+  email: string;
+  role: string;
+  password: string;
+  image?: string;
+  jobTitle?: string;
+}): Promise<ActionResult> {
+  try {
+    const context = await getWorkspaceContext();
+    if (!isOwnerRole(context.roleKey)) {
+      return { success: false, error: "Only the workspace owner can do this." };
+    }
+
+    const parsed = createMemberSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid member.",
+      };
+    }
+
+    const email = parsed.data.email.toLowerCase();
+
+    if (!(await isAssignableRole(context.organization.id, parsed.data.role))) {
+      return { success: false, error: "That role no longer exists." };
+    }
+    // Provisioning an owner would let an owner mint co-owners silently; keep the
+    // owner role invite/promote-only.
+    if (isOwnerRole(parsed.data.role)) {
+      return { success: false, error: "Owners can't be created here." };
+    }
+
+    if (await getAuthUserByEmail(email)) {
+      return {
+        success: false,
+        error: "A user with that email already exists. Invite them instead.",
+      };
+    }
+
+    const { hashPassword } = await import("better-auth/crypto");
+    const passwordHash = await hashPassword(parsed.data.password);
+
+    const userId = crypto.randomUUID();
+    const now = new Date();
+
+    await db.transaction(async (tx) => {
+      await tx.insert(authUsers).values({
+        id: userId,
+        name: parsed.data.name,
+        email,
+        emailVerified: true,
+        image: parsed.data.image,
+        jobTitle: parsed.data.jobTitle || null,
+        mustChangePassword: true,
+        // Owner-provisioned accounts skip the personal onboarding flow.
+        onboardingCompletedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await tx.insert(authAccounts).values({
+        id: crypto.randomUUID(),
+        accountId: userId,
+        providerId: "credential",
+        userId,
+        password: passwordHash,
+      });
+
+      await tx.insert(authMembers).values({
+        id: crypto.randomUUID(),
+        organizationId: context.organization.id,
+        userId,
+        role: parsed.data.role,
+        createdAt: now,
+      });
+    });
+
+    await logAuditEvent({
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      actorEmail: context.user.email,
+      action: "member.created",
+      resourceType: "member",
+      resourceId: userId,
+      severity: "warning",
+      metadata: { email, role: parsed.data.role },
+    });
+
+    revalidatePath("/settings/members");
+    return { success: true };
+  } catch (error) {
+    log.error(error, "createMemberAction failed");
+    return { success: false, error: "Unable to create member." };
   }
 }

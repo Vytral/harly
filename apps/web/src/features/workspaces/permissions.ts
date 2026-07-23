@@ -136,16 +136,6 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
       { key: "security:manage", label: "Manage workspace security", hint: "2FA enforcement, SSO, and security settings" },
     ],
   },
-  {
-    label: "Automations",
-    permissions: [
-      {
-        key: "automations:manage",
-        label: "Manage automations",
-        hint: "Create, edit, toggle, and delete workflow automations",
-      },
-    ],
-  },
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = Object.fromEntries(
@@ -181,7 +171,6 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "documents:read",
     "documents:manage",
     "documents:share",
-    "automations:manage",
   ],
   hiring_manager: [
     "candidates:move",

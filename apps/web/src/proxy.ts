@@ -36,6 +36,9 @@ const PUBLIC_PATHS = [
 
 const PROTECTED_PATH_PREFIXES = ["/dashboard", "/settings"];
 const SECURITY_EXEMPT_PREFIXES = ["/settings/security", "/account", "/api"];
+// Reachable while a forced password change is pending, so the member can
+// actually complete it (and sign out) without bouncing back here.
+const CHANGE_PASSWORD_EXEMPT = ["/change-password", "/api", "/setup-2fa"];
 
 // Portal protected paths , require portal session cookie (no DB needed)
 const PORTAL_PROTECTED = ["/portal/dashboard", "/portal/jobs", "/portal/profile", "/portal/notifications"];
@@ -96,7 +99,7 @@ export async function proxy(request: NextRequest) {
       const { db, workspaceSettings } = await import("@harly/db");
       const { and, eq } = await import("drizzle-orm");
 
-      const { member: authMembers, user: userTable } = await import("@harly/db");
+      const { member: authMembers, user: userTable, passkeys } = await import("@harly/db");
 
       // Resolve org: activeOrganizationId → first membership (same as workspace/context.ts)
       const activeOrgId = (session.session as Record<string, unknown>).activeOrganizationId as string | undefined;
@@ -111,7 +114,7 @@ export async function proxy(request: NextRequest) {
       }
 
       if (orgId) {
-        const [[wsRow], [memberRow], [userRow]] = await Promise.all([
+        const [[wsRow], [memberRow], [userRow], [existingPasskey]] = await Promise.all([
           db
             .select({ require2fa: workspaceSettings.require2fa })
             .from(workspaceSettings)
@@ -128,16 +131,36 @@ export async function proxy(request: NextRequest) {
             )
             .limit(1),
           db
-            .select({ twoFactorEnabled: userTable.twoFactorEnabled })
+            .select({
+              twoFactorEnabled: userTable.twoFactorEnabled,
+              mustChangePassword: userTable.mustChangePassword,
+            })
             .from(userTable)
             .where(eq(userTable.id, session.user.id))
             .limit(1),
+          db
+            .select({ id: passkeys.id })
+            .from(passkeys)
+            .where(eq(passkeys.userId, session.user.id))
+            .limit(1),
         ]);
 
+        // A forced password change takes priority over the 2FA gate: the member
+        // must replace the owner-set temporary password before anything else.
+        if (
+          userRow?.mustChangePassword &&
+          !CHANGE_PASSWORD_EXEMPT.some((p) => pathname.startsWith(p))
+        ) {
+          return NextResponse.redirect(
+            new URL("/change-password", request.url),
+          );
+        }
+
+        // A passkey is a valid second factor too, not just TOTP.
         if (
           mustSetUp2fa({
             workspaceRequires2fa: wsRow?.require2fa ?? false,
-            userHas2fa: userRow?.twoFactorEnabled ?? false,
+            userHas2fa: Boolean(userRow?.twoFactorEnabled) || Boolean(existingPasskey),
             roleKey: memberRow?.role,
           })
         ) {

@@ -1,12 +1,10 @@
 "use client";
 
 import {
-  useActionState,
-  useEffect,
   useMemo,
-  useRef,
   useState,
   useTransition,
+  type ComponentType,
   type ReactNode,
 } from "react";
 import { useRouter } from "next/navigation";
@@ -14,7 +12,11 @@ import { toast } from "sonner";
 
 import {
   cancelWorkspaceInvitationAction,
+  createMemberAction,
+  editMemberProfileAction,
   removeWorkspaceMemberAction,
+  resendWorkspaceInvitationAction,
+  setMemberPasswordAction,
   updateMemberRolesAction,
 } from "@/features/workspaces/actions";
 import type {
@@ -39,12 +41,38 @@ import {
   ShieldCheckDuotoneIcon,
   TrashIcon,
   UserPlusIcon,
+  GearSixIcon,
+  KeyDuotoneIcon,
+  ArrowsClockwiseIcon,
+  CopyIcon,
+  DotsThreeVerticalIcon,
 } from "@/components/ui/icons/phosphor";
 import { EnvelopeIcon, UsersThreeIcon } from "@/components/ui/icons/settings";
+import { GithubIcon } from "@/components/ui/icons/GithubIcon";
+import { LinkedinLogo } from "@/components/ui/icons/brands";
+import { GlobeIcon } from "@/components/ui/icons/phosphor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { FileDropzone } from "@/components/ui/FileDropzone";
 import {
   Select,
   SelectContent,
@@ -52,8 +80,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sheet, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
 
@@ -83,6 +112,7 @@ export function MembersAndRoles({
   canRemoveMembers,
   canManageInviteLinks,
   canManageRoles,
+  canManageMemberAccounts,
 }: {
   members: WorkspaceMemberItem[];
   invitations: WorkspaceInvitationItem[];
@@ -94,6 +124,7 @@ export function MembersAndRoles({
   canRemoveMembers: boolean;
   canManageInviteLinks: boolean;
   canManageRoles: boolean;
+  canManageMemberAccounts: boolean;
 }) {
   const [creatingRole, setCreatingRole] = useState(false);
   const [tab, setTab] = useState("members");
@@ -145,6 +176,7 @@ export function MembersAndRoles({
           canEditMembers={canEditMembers}
           canRemoveMembers={canRemoveMembers}
           canManageInviteLinks={canManageInviteLinks}
+          canManageMemberAccounts={canManageMemberAccounts}
         />
       </TabsContent>
 
@@ -159,6 +191,42 @@ export function MembersAndRoles({
 
 // Back-compat alias , the page may import either name.
 export const MembersSection = MembersAndRoles;
+
+function SocialLinkField({
+  icon: Icon,
+  label,
+  placeholder,
+  id,
+  value,
+  onChange,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+  placeholder: string;
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
+      <div className="relative">
+        <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/50">
+          <Icon className="size-4" />
+        </span>
+        <Input
+          id={id}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="pl-9 text-sm"
+        />
+      </div>
+    </div>
+  );
+}
 
 function CountChip({
   children,
@@ -188,6 +256,7 @@ function MembersPanel({
   canEditMembers,
   canRemoveMembers,
   canManageInviteLinks,
+  canManageMemberAccounts,
 }: {
   members: WorkspaceMemberItem[];
   invitations: WorkspaceInvitationItem[];
@@ -197,6 +266,7 @@ function MembersPanel({
   canEditMembers: boolean;
   canRemoveMembers: boolean;
   canManageInviteLinks: boolean;
+  canManageMemberAccounts: boolean;
 }) {
   const router = useRouter();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
@@ -290,6 +360,9 @@ function MembersPanel({
                   assignableRoles={assignableRoles}
                 />
               ) : null}
+              {canManageMemberAccounts ? (
+                <CreateMemberButton assignableRoles={assignableRoles} />
+              ) : null}
               {canInviteMembers ? (
                 <InviteTeammatesSheet
                   assignableRoles={assignableRoles}
@@ -376,10 +449,12 @@ function MembersPanel({
                           ))}
                         </SelectContent>
                       </Select>
-                      {!member.isCurrentUser && canRemoveMembers ? (
-                        <RemoveMemberButton
-                          memberId={member.id}
-                          name={member.name}
+                      {!member.isCurrentUser &&
+                      (canManageMemberAccounts || canRemoveMembers) ? (
+                        <MemberRowActions
+                          member={member}
+                          canManageMemberAccounts={canManageMemberAccounts}
+                          canRemoveMembers={canRemoveMembers}
                         />
                       ) : null}
                     </div>
@@ -419,7 +494,12 @@ function MembersPanel({
                       <EnvelopeIcon className="size-4" />
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{item.email}</p>
+                      <p className="flex items-center gap-2 truncate text-sm font-medium">
+                        <span className="truncate">{item.email}</span>
+                        <Badge variant="warning" className="shrink-0">
+                          Invited
+                        </Badge>
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {roleName(item.role)} · expires{" "}
                         {formatInvitationDate(item.expiresAt)}
@@ -427,7 +507,10 @@ function MembersPanel({
                     </div>
                   </div>
                   {canInviteMembers ? (
-                    <CancelInvitationButton invitationId={item.id} />
+                    <div className="flex items-center gap-2">
+                      <ResendInvitationButton invitationId={item.id} />
+                      <CancelInvitationButton invitationId={item.id} />
+                    </div>
                   ) : null}
                 </li>
               ))}
@@ -461,44 +544,153 @@ function MembersPanel({
   );
 }
 
-function RemoveMemberButton({
-  memberId,
-  name,
+// Per-row overflow menu. Collapses "manage account" and "remove" behind a
+// single ⋮ so neither is a one-click accident, and gates removal on a confirm.
+function MemberRowActions({
+  member,
+  canManageMemberAccounts,
+  canRemoveMembers,
 }: {
-  memberId: string;
-  name: string;
+  member: WorkspaceMemberItem;
+  canManageMemberAccounts: boolean;
+  canRemoveMembers: boolean;
 }) {
-  const router = useRouter();
-  const [state, formAction, isPending] = useActionState(
-    removeWorkspaceMemberAction,
-    initialActionState,
-  );
-  const previous = useRef(state);
-  useEffect(() => {
-    if (state === previous.current) return;
-    previous.current = state;
-    if (state.success) {
-      toast.success("Member removed.");
-      router.refresh();
-    } else if (state.error) {
-      toast.error(state.error);
-    }
-  }, [state, router]);
+  const [manageOpen, setManageOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
-    <form action={formAction}>
-      <input type="hidden" name="memberId" value={memberId} />
-      <Button
-        type="submit"
-        variant="ghost"
-        size="icon"
-        className="text-muted-foreground hover:text-destructive"
-        disabled={isPending}
-        aria-label={`Remove ${name}`}
-      >
-        <TrashIcon className="size-4" />
-      </Button>
-    </form>
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground hover:text-foreground"
+            aria-label={`Actions for ${member.name}`}
+          >
+            <DotsThreeVerticalIcon className="size-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-44">
+          {canManageMemberAccounts ? (
+            <DropdownMenuItem onSelect={() => setManageOpen(true)}>
+              <GearSixIcon className="size-4" />
+              Manage account
+            </DropdownMenuItem>
+          ) : null}
+          {canManageMemberAccounts && canRemoveMembers ? (
+            <DropdownMenuSeparator />
+          ) : null}
+          {canRemoveMembers ? (
+            <DropdownMenuItem
+              variant="destructive"
+              onSelect={() => setConfirmOpen(true)}
+            >
+              <TrashIcon className="size-4" />
+              Remove
+            </DropdownMenuItem>
+          ) : null}
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      {canManageMemberAccounts ? (
+        <ManageMemberAccountSheet
+          member={member}
+          open={manageOpen}
+          onOpenChange={setManageOpen}
+        />
+      ) : null}
+      {canRemoveMembers ? (
+        <RemoveMemberDialog
+          member={member}
+          open={confirmOpen}
+          onOpenChange={setConfirmOpen}
+        />
+      ) : null}
+    </>
+  );
+}
+
+function RemoveMemberDialog({
+  member,
+  open,
+  onOpenChange,
+}: {
+  member: WorkspaceMemberItem;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  function remove() {
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("memberId", member.id);
+      const result = await removeWorkspaceMemberAction(initialActionState, fd);
+      if (!result.success) {
+        toast.error(result.error ?? "Unable to remove member.");
+        return;
+      }
+      onOpenChange(false);
+      toast.success(`${member.name} removed.`);
+      router.refresh();
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Remove {member.name}?</DialogTitle>
+          <DialogDescription>
+            {member.name} ({member.email}) loses access to this workspace
+            immediately. Their candidate notes and activity stay. You can invite
+            them back later.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            disabled={isPending}
+          >
+            Cancel
+          </Button>
+          <Button variant="destructive" onClick={remove} disabled={isPending}>
+            {isPending ? "Removing…" : "Remove member"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ResendInvitationButton({ invitationId }: { invitationId: string }) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+
+  return (
+    <Button
+      type="button"
+      variant="ghost"
+      size="sm"
+      disabled={isPending}
+      onClick={() => {
+        startTransition(async () => {
+          const result = await resendWorkspaceInvitationAction(invitationId);
+          if (result.success) {
+            toast.success("Invitation resent.");
+            router.refresh();
+          } else {
+            toast.error(result.error ?? "Unable to resend invitation.");
+          }
+        });
+      }}
+    >
+      {isPending ? "Sending…" : "Resend"}
+    </Button>
   );
 }
 
@@ -526,5 +718,480 @@ function CancelInvitationButton({ invitationId }: { invitationId: string }) {
     >
       {isPending ? "Canceling…" : "Cancel"}
     </Button>
+  );
+}
+
+// ─── Owner-only: reset password / edit a teammate's profile ──────────────────
+
+function ManageMemberAccountSheet({
+  member,
+  open,
+  onOpenChange,
+}: {
+  member: WorkspaceMemberItem;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange} mobilePresentation="bottom-on-mobile">
+      <DrawerLayout
+        title={`Manage ${member.name}`}
+        className="sm:max-w-lg"
+        description="Update this member's profile or reset their password. Changes take effect immediately."
+      >
+        <Tabs defaultValue="profile" className="gap-5">
+          <TabsList className="w-full">
+            <TabsTrigger value="profile" className="flex-1 gap-2">
+              <GearSixIcon className="size-4" />
+              Profile
+            </TabsTrigger>
+            <TabsTrigger value="password" className="flex-1 gap-2">
+              <KeyDuotoneIcon className="size-4" />
+              Password
+            </TabsTrigger>
+          </TabsList>
+          <TabsContent value="profile">
+            <EditMemberProfileForm
+              member={member}
+              onDone={() => onOpenChange(false)}
+            />
+          </TabsContent>
+          <TabsContent value="password">
+            <ResetMemberPasswordForm
+              member={member}
+              onDone={() => onOpenChange(false)}
+            />
+          </TabsContent>
+        </Tabs>
+      </DrawerLayout>
+    </Sheet>
+  );
+}
+
+function EditMemberProfileForm({
+  member,
+  onDone,
+}: {
+  member: WorkspaceMemberItem;
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [saving, startSave] = useTransition();
+  const [form, setForm] = useState({
+    name: member.name,
+    email: member.email,
+    jobTitle: member.jobTitle ?? "",
+    phone: member.phone ?? "",
+    location: member.location ?? "",
+    bio: member.bio ?? "",
+    linkedinUrl: member.linkedinUrl ?? "",
+    githubUrl: member.githubUrl ?? "",
+    websiteUrl: member.websiteUrl ?? "",
+  });
+
+  const set = (key: keyof typeof form) => (value: string) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  function submit() {
+    startSave(async () => {
+      const result = await editMemberProfileAction({
+        memberId: member.id,
+        ...form,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Could not update profile.");
+        return;
+      }
+      toast.success("Profile updated.");
+      onDone();
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="mm-name">Name</Label>
+          <Input
+            id="mm-name"
+            value={form.name}
+            onChange={(e) => set("name")(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="mm-email">Login email</Label>
+          <Input
+            id="mm-email"
+            type="email"
+            value={form.email}
+            onChange={(e) => set("email")(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="mm-title">Job title</Label>
+          <Input
+            id="mm-title"
+            value={form.jobTitle}
+            onChange={(e) => set("jobTitle")(e.target.value)}
+            placeholder="Technical Recruiter"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="mm-phone">Phone</Label>
+          <Input
+            id="mm-phone"
+            value={form.phone}
+            onChange={(e) => set("phone")(e.target.value)}
+          />
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="mm-location">Location</Label>
+        <Input
+          id="mm-location"
+          value={form.location}
+          onChange={(e) => set("location")(e.target.value)}
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="mm-bio">Bio</Label>
+        <Textarea
+          id="mm-bio"
+          value={form.bio}
+          onChange={(e) => set("bio")(e.target.value)}
+          rows={3}
+        />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
+        <SocialLinkField
+          id="mm-linkedin"
+          icon={LinkedinLogo}
+          label="LinkedIn"
+          placeholder="https://linkedin.com/in/username"
+          value={form.linkedinUrl}
+          onChange={set("linkedinUrl")}
+        />
+        <SocialLinkField
+          id="mm-github"
+          icon={GithubIcon}
+          label="GitHub"
+          placeholder="https://github.com/username"
+          value={form.githubUrl}
+          onChange={set("githubUrl")}
+        />
+        <SocialLinkField
+          id="mm-website"
+          icon={GlobeIcon}
+          label="Website"
+          placeholder="https://yoursite.com"
+          value={form.websiteUrl}
+          onChange={set("websiteUrl")}
+        />
+      </div>
+
+      <div className="flex justify-end gap-2 border-t pt-4">
+        <SheetClose asChild>
+          <Button variant="ghost" disabled={saving}>
+            Cancel
+          </Button>
+        </SheetClose>
+        <Button onClick={submit} disabled={saving || !form.name || !form.email}>
+          {saving ? "Saving…" : "Save profile"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function ResetMemberPasswordForm({
+  member,
+  onDone,
+}: {
+  member: WorkspaceMemberItem;
+  onDone: () => void;
+}) {
+  const [saving, startSave] = useTransition();
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+
+  const mismatch = confirm.length > 0 && password !== confirm;
+  const tooShort = password.length > 0 && password.length < 8;
+
+  function submit() {
+    if (password !== confirm) {
+      toast.error("Passwords do not match.");
+      return;
+    }
+    startSave(async () => {
+      const result = await setMemberPasswordAction({
+        memberId: member.id,
+        password,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Could not reset password.");
+        return;
+      }
+      toast.success(`Password reset. ${member.name} must sign in again.`);
+      setPassword("");
+      setConfirm("");
+      onDone();
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-clay/25 bg-clay/5 px-3 py-2.5 text-xs text-muted-foreground">
+        Setting a new password signs {member.name} out of all sessions. Share
+        the new password with them over a secure channel.
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="mm-pw">New password</Label>
+        <Input
+          id="mm-pw"
+          type="password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          autoComplete="new-password"
+        />
+        {tooShort ? (
+          <p className="text-xs text-destructive">
+            Use at least 8 characters.
+          </p>
+        ) : null}
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="mm-pw2">Confirm password</Label>
+        <Input
+          id="mm-pw2"
+          type="password"
+          value={confirm}
+          onChange={(e) => setConfirm(e.target.value)}
+          autoComplete="new-password"
+        />
+        {mismatch ? (
+          <p className="text-xs text-destructive">Passwords do not match.</p>
+        ) : null}
+      </div>
+      <div className="flex justify-end gap-2 border-t pt-4">
+        <SheetClose asChild>
+          <Button variant="ghost" disabled={saving}>
+            Cancel
+          </Button>
+        </SheetClose>
+        <Button
+          variant="destructive"
+          onClick={submit}
+          disabled={saving || password.length < 8 || password !== confirm}
+        >
+          {saving ? "Resetting…" : "Reset password"}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Owner-only: create a member account directly (no invite email) ──────────
+
+function generatePassword(): string {
+  // Readable but strong: 16 chars from a set without ambiguous glyphs.
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => alphabet[b % alphabet.length]).join("");
+}
+
+function CreateMemberButton({
+  assignableRoles,
+}: {
+  assignableRoles: AssignableRole[];
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen} mobilePresentation="bottom-on-mobile">
+      <SheetTrigger asChild>
+        <Button variant="outline">
+          <PlusIcon className="size-4" />
+          Create member
+        </Button>
+      </SheetTrigger>
+      <DrawerLayout
+        title="Create a member"
+        className="sm:max-w-lg"
+        description="Provision an account directly. The member signs in with the password you set, then must choose a new one."
+      >
+        <CreateMemberForm
+          assignableRoles={assignableRoles}
+          onDone={() => setOpen(false)}
+        />
+      </DrawerLayout>
+    </Sheet>
+  );
+}
+
+function CreateMemberForm({
+  assignableRoles,
+  onDone,
+}: {
+  assignableRoles: AssignableRole[];
+  onDone: () => void;
+}) {
+  const router = useRouter();
+  const [saving, startSave] = useTransition();
+  const assignable = assignableRoles.filter((r) => r.key !== "owner");
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    role:
+      assignable.find((r) => r.key === "recruiter")?.key ??
+      assignable[0]?.key ??
+      "recruiter",
+    jobTitle: "",
+    image: "",
+    password: generatePassword(),
+  });
+
+  const set = (key: keyof typeof form) => (value: string) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  function copyPassword() {
+    navigator.clipboard.writeText(form.password);
+    toast.success("Password copied");
+  }
+
+  function submit() {
+    startSave(async () => {
+      const result = await createMemberAction({
+        name: form.name,
+        email: form.email,
+        role: form.role,
+        password: form.password,
+        image: form.image || undefined,
+        jobTitle: form.jobTitle || undefined,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Could not create member.");
+        return;
+      }
+      toast.success(`${form.name} added. Share their password securely.`);
+      onDone();
+      router.refresh();
+    });
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-4">
+        <FileDropzone
+          value={form.image || null}
+          onChange={(url) => set("image")(url ?? "")}
+          variant="avatar"
+          hint="Photo · optional"
+        />
+        <div className="flex-1 space-y-1.5">
+          <Label htmlFor="cm-name">Full name</Label>
+          <Input
+            id="cm-name"
+            value={form.name}
+            onChange={(e) => set("name")(e.target.value)}
+            placeholder="Jordan Rivera"
+          />
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="cm-email">Login email</Label>
+          <Input
+            id="cm-email"
+            type="email"
+            value={form.email}
+            onChange={(e) => set("email")(e.target.value)}
+            placeholder="jordan@company.com"
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="cm-role">Role</Label>
+          <Select value={form.role} onValueChange={set("role")}>
+            <SelectTrigger id="cm-role" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {assignable.map((r) => (
+                <SelectItem key={r.key} value={r.key}>
+                  {r.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="cm-title">Job title</Label>
+        <Input
+          id="cm-title"
+          value={form.jobTitle}
+          onChange={(e) => set("jobTitle")(e.target.value)}
+          placeholder="Technical Recruiter"
+        />
+      </div>
+
+      <div className="space-y-1.5">
+        <Label htmlFor="cm-pw">Temporary password</Label>
+        <div className="flex gap-2">
+          <Input
+            id="cm-pw"
+            value={form.password}
+            onChange={(e) => set("password")(e.target.value)}
+            className="font-mono"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={() => set("password")(generatePassword())}
+            aria-label="Regenerate password"
+          >
+            <ArrowsClockwiseIcon className="size-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={copyPassword}
+            aria-label="Copy password"
+          >
+            <CopyIcon className="size-4" />
+          </Button>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          The member is forced to set their own password on first sign-in.
+        </p>
+      </div>
+
+      <div className="flex justify-end gap-2 border-t pt-4">
+        <SheetClose asChild>
+          <Button variant="ghost" disabled={saving}>
+            Cancel
+          </Button>
+        </SheetClose>
+        <Button
+          onClick={submit}
+          disabled={
+            saving || !form.name || !form.email || form.password.length < 8
+          }
+        >
+          {saving ? "Creating…" : "Create member"}
+        </Button>
+      </div>
+    </div>
   );
 }

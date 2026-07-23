@@ -15,7 +15,7 @@ export default async function OnboardingLayout({
   const orgName = context?.organization.name;
 
   return (
-    <div className="light relative flex min-h-screen flex-col bg-paper text-foreground antialiased">
+    <div className="relative flex min-h-screen flex-col bg-paper text-foreground antialiased">
       {/* Soft on-brand wash, warm paper with a single evergreen tint. */}
       <div
         aria-hidden
