@@ -15,6 +15,8 @@ import { PortalShell } from "@/features/portal/PortalShellServer";
 import { PortalHorizontalPipeline } from "@/features/portal/PortalHorizontalPipeline";
 import { PortalInterviewCard } from "@/features/portal/PortalInterviewCard";
 import { PortalOfferSignCard } from "@/features/portal/PortalOfferSignCard";
+import { PortalDocumentRequestsCard } from "@/features/portal/PortalDocumentRequestsCard";
+import { listDocumentRequestsForPortal } from "@/features/documents/requests-data";
 import { PortalStatusBadge } from "@/features/portal/PortalStatusBadge";
 import { PortalEmptyState } from "@/features/portal/PortalEmptyState";
 import { PortalActivityTimeline, type ActivityItem } from "@/features/portal/PortalActivityTimeline";
@@ -141,10 +143,10 @@ export default async function ApplicationDetailPage({
   const interviewsList = await getPortalApplicationInterviews(appRow.id);
   const activities = synthesizeActivities(appRow, interviewsList);
 
-  // DocuSign e-signature offer, if the recruiter sent one via the docusign
-  // channel. `?signed=pending` is set as the DocuSign returnUrl after the
-  // signing ceremony — the Connect webhook flips the offer status async.
-  const docusignOffer = await getPortalApplicationOffer({
+  // E-signature offer, if the recruiter sent one via the e-signature channel.
+  // `?signed=pending` is set as the DocuSeal completed_redirect_url after the
+  // signing ceremony — the webhook flips the offer status async.
+  const esignOffer = await getPortalApplicationOffer({
     applicationId: appRow.id,
     candidateId: session.candidateId,
     workspaceId: session.workspaceId,
@@ -152,7 +154,14 @@ export default async function ApplicationDetailPage({
   const signedParam = searchParamsMap["signed"];
   const signedPending =
     (Array.isArray(signedParam) ? signedParam[0] : signedParam) === "pending" &&
-    docusignOffer?.status === "sent";
+    esignOffer?.status === "sent";
+
+  // Documents the recruiter asked this candidate to upload for this application.
+  const documentRequests = await listDocumentRequestsForPortal({
+    workspaceId: session.workspaceId,
+    candidateId: session.candidateId,
+    applicationId: appRow.id,
+  });
 
   const now = new Date();
   const upcomingInterviews = interviewsList.filter(
@@ -199,22 +208,25 @@ export default async function ApplicationDetailPage({
           <PortalStatusBadge status={appRow.status} />
         </div>
 
-        {/* DocuSign offer — review & sign / pending / accepted / declined */}
-        {docusignOffer && (
+        {/* E-signature offer — review & sign / pending / accepted / declined */}
+        {esignOffer && (
           <PortalOfferSignCard
             applicationId={appRow.id}
             offer={{
-              id: docusignOffer.id,
+              id: esignOffer.id,
               // The query filters status to sent/accepted/declined (inArray);
               // drizzle still infers the full enum, so narrow here.
-              status: docusignOffer.status as "sent" | "accepted" | "declined",
-              title: docusignOffer.title,
-              docusignEnvelopeId: docusignOffer.docusignEnvelopeId,
-              expiresAt: docusignOffer.expiresAt,
+              status: esignOffer.status as "sent" | "accepted" | "declined",
+              title: esignOffer.title,
+              esignSubmissionId: esignOffer.esignSubmissionId,
+              expiresAt: esignOffer.expiresAt,
             }}
             signedPending={signedPending}
           />
         )}
+
+        {/* Documents the recruiter requested — upload / status per item */}
+        <PortalDocumentRequestsCard requests={documentRequests} />
 
         {/* Horizontal pipeline */}
         {showStatus && stages.length > 0 && (

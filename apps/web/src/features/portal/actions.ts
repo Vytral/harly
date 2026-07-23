@@ -14,6 +14,7 @@ import {
   jobs,
   jobStages,
   offers,
+  signatureRecipients,
   workspaceSettings,
   consentRecords,
   candidatePortalMagicLinks,
@@ -294,11 +295,11 @@ export async function applyToJobAction(
 }
 
 /**
- * Generate the DocuSign embedded-signing URL for an offer the candidate was
- * sent via e-signature. Auth is the candidate portal session (JWT), not a
- * dashboard session. The URL is single-use + short-lived (~5 min), so it is
- * generated on demand and never persisted. `returnUrl` sends the candidate back
- * to the portal application page after the signing ceremony.
+ * Return the DocuSeal hosted signing URL for an offer the candidate was sent via
+ * e-signature. Auth is the candidate portal session (JWT), not a dashboard
+ * session. The signing URL was captured on the recipient row when the submission
+ * was created, so no provider round-trip is needed. `completed_redirect_url` was
+ * baked into the submission and returns the candidate to the portal after signing.
  */
 export async function createOfferSigningViewAction(input: {
   applicationId: string;
@@ -310,14 +311,14 @@ export async function createOfferSigningViewAction(input: {
   if (!session) return { ok: false, error: "Your session has expired." };
 
   // The offer must belong to this candidate's application in this workspace and
-  // be a DocuSign offer still awaiting decision.
+  // be an e-signature offer still awaiting decision.
   const [offer] = await db
     .select({
       id: offers.id,
       status: offers.status,
-      docusignEnvelopeId: offers.docusignEnvelopeId,
+      esignSubmissionId: offers.esignSubmissionId,
+      signatureEnvelopeRefId: offers.signatureEnvelopeRefId,
       candidateId: offers.candidateId,
-      applicationId: offers.applicationId,
     })
     .from(offers)
     .where(
@@ -330,51 +331,24 @@ export async function createOfferSigningViewAction(input: {
     )
     .limit(1);
 
-  if (!offer || !offer.docusignEnvelopeId) {
+  if (!offer || !offer.esignSubmissionId || !offer.signatureEnvelopeRefId) {
     return { ok: false, error: "No offer is waiting for your signature." };
   }
 
-  const { freshDocuSignContext, createRecipientView } = await import(
-    "@/lib/docusign/client"
-  );
-  const { getOfferRecipient } = await import("@/features/offers/core");
+  const [recipient] = await db
+    .select({ signingUrl: signatureRecipients.signingUrl })
+    .from(signatureRecipients)
+    .where(
+      and(
+        eq(signatureRecipients.workspaceId, session.workspaceId),
+        eq(signatureRecipients.envelopeId, offer.signatureEnvelopeRefId),
+      ),
+    )
+    .orderBy(asc(signatureRecipients.routingOrder))
+    .limit(1);
 
-  const ctx = await freshDocuSignContext(session.workspaceId);
-  if (!ctx) {
-    return { ok: false, error: "Electronic signing is not available." };
+  if (!recipient?.signingUrl) {
+    return { ok: false, error: "Electronic signing is not available for this offer." };
   }
-
-  const recipient = await getOfferRecipient(session.workspaceId, offer.candidateId);
-  if (!recipient?.email) {
-    return { ok: false, error: "Your contact details are missing." };
-  }
-  const userName =
-    [recipient.firstName, recipient.lastName].filter(Boolean).join(" ") ||
-    recipient.email;
-
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
-  const returnUrl = `${appUrl}/portal/applications/${input.applicationId}?signed=pending`;
-
-  try {
-    const view = await createRecipientView(
-      ctx.baseUrl,
-      ctx.accessToken,
-      ctx.accountId,
-      offer.docusignEnvelopeId,
-      {
-        returnUrl,
-        authenticationMethod: "none",
-        email: recipient.email,
-        userName,
-        // Must match the clientUserId set on the signer at envelope creation.
-        clientUserId: `harly-${offer.candidateId}`,
-      },
-    );
-    return { ok: true, signingUrl: view.url };
-  } catch (error) {
-    log.error({ error, offerId: offer.id }, "createOfferSigningViewAction failed");
-    return { ok: false, error: "Could not start the signing session." };
-  }
+  return { ok: true, signingUrl: recipient.signingUrl };
 }

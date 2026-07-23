@@ -15,7 +15,7 @@ type PortalOffer = {
   id: string;
   status: "sent" | "accepted" | "declined";
   title: string;
-  docusignEnvelopeId: string | null;
+  esignSubmissionId: string | null;
   expiresAt: Date | null;
 };
 
@@ -23,9 +23,9 @@ type Props = {
   applicationId: string;
   offer: PortalOffer;
   /**
-   * True when the URL carries ?signed=pending — DocuSign redirected the
-   * candidate back here after the signing ceremony, but the Connect webhook
-   * may not have flipped the offer status yet. Surface a "verifying" state.
+   * True when the URL carries ?signed=pending — DocuSeal redirected the
+   * candidate back here after the signing ceremony, but the webhook may not
+   * have flipped the offer status yet. Surface a "verifying" state.
    */
   signedPending: boolean;
 };
@@ -127,7 +127,7 @@ export function PortalOfferSignCard({ applicationId, offer, signedPending }: Pro
       {signedPending && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-pine/20 bg-pine/5 px-3.5 py-2.5 text-sm text-pine-strong">
           <span className="size-2 shrink-0 animate-pulse rounded-full bg-pine" />
-          Signature submitted — verifying with DocuSign. This page will update
+          Signature submitted — verifying with DocuSeal. This page will update
           shortly.
         </div>
       )}

@@ -200,23 +200,42 @@ const WIDGET = String.raw`(function () {
     return wrap;
   }
 
-  // Load the Cloudflare Turnstile script once and resolve when window.turnstile
-  // is ready. The embed renders the apply form on the host's page, so the
-  // challenge MUST run here or the public intake endpoint rejects the submit.
-  var turnstileReady = null;
-  function loadTurnstile() {
-    if (turnstileReady) return turnstileReady;
-    turnstileReady = new Promise(function (resolve) {
-      if (window.turnstile) { resolve(window.turnstile); return; }
+  // Load the active provider's CAPTCHA script once and resolve with the vendor
+  // global (window.turnstile / grecaptcha / hcaptcha) when ready. The embed
+  // renders the apply form on the host's page, so the challenge MUST run here
+  // or the public intake endpoint rejects the submit. All three expose the same
+  // explicit-render API: .render(box, { sitekey, callback, 'expired-callback',
+  // 'error-callback' }).
+  var CAPTCHA_SCRIPTS = {
+    turnstile: {
+      src: "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit",
+      global: "turnstile",
+    },
+    recaptcha: {
+      src: "https://www.google.com/recaptcha/api.js?render=explicit",
+      global: "grecaptcha",
+    },
+    hcaptcha: {
+      src: "https://js.hcaptcha.com/1/api.js?render=explicit",
+      global: "hcaptcha",
+    },
+  };
+  var captchaReady = null;
+  function loadCaptcha(provider) {
+    var spec = CAPTCHA_SCRIPTS[provider];
+    if (!spec) return Promise.resolve(null);
+    if (captchaReady) return captchaReady;
+    captchaReady = new Promise(function (resolve) {
+      if (window[spec.global]) { resolve(window[spec.global]); return; }
       var s = document.createElement("script");
-      s.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit";
+      s.src = spec.src;
       s.async = true;
       s.defer = true;
-      s.onload = function () { resolve(window.turnstile || null); };
+      s.onload = function () { resolve(window[spec.global] || null); };
       s.onerror = function () { resolve(null); };
       document.head.appendChild(s);
     });
-    return turnstileReady;
+    return captchaReady;
   }
 
   function openApply(container, job, board, allJobs) {
@@ -243,7 +262,7 @@ const WIDGET = String.raw`(function () {
                   linkedinUrl: null, githubUrl: null, websiteUrl: null };
     var resume = null;
     var questionInputs = [];
-    var turnstileToken = null;
+    var captchaToken = null;
 
     var submitWrap = el("div");
     var submit = el("button", "oh-btn", "Submit application");
@@ -255,8 +274,8 @@ const WIDGET = String.raw`(function () {
     hosted.style.marginLeft = "8px";
     submitWrap.appendChild(hosted);
 
-    var turnstileBox = el("div", "oh-turnstile");
-    form.appendChild(turnstileBox);
+    var captchaBox = el("div", "oh-turnstile");
+    form.appendChild(captchaBox);
     form.appendChild(submitWrap);
 
     var status = el("div", "oh-note");
@@ -274,7 +293,7 @@ const WIDGET = String.raw`(function () {
       var input = textInput(type);
       if (required) input.required = true;
       extra[key] = input;
-      form.insertBefore(field(labelText, input, required), turnstileBox);
+      form.insertBefore(field(labelText, input, required), captchaBox);
     }
 
     fetch(api("/api/public/v1/jobs/" + encodeURIComponent(job.slug)))
@@ -294,7 +313,7 @@ const WIDGET = String.raw`(function () {
             resume = el("input", "oh-input");
             resume.type = "file";
             resume.accept = ".pdf,.doc,.docx";
-            form.insertBefore(field("Resume", resume, pr.resume.visibility === "required"), turnstileBox);
+            form.insertBefore(field("Resume", resume, pr.resume.visibility === "required"), captchaBox);
           }
           addField("linkedinUrl", "LinkedIn", pr.linkedinUrl, "url");
           addField("githubUrl", "GitHub", pr.githubUrl, "url");
@@ -305,7 +324,7 @@ const WIDGET = String.raw`(function () {
           resume = el("input", "oh-input");
           resume.type = "file";
           resume.accept = ".pdf,.doc,.docx";
-          form.insertBefore(field("Resume", resume, false), turnstileBox);
+          form.insertBefore(field("Resume", resume, false), captchaBox);
         }
 
         var questions = (cfg && cfg.questions) || [];
@@ -313,19 +332,22 @@ const WIDGET = String.raw`(function () {
           var input = textInput(qn.type === "textarea" ? "textarea" : (qn.type === "url" ? "url" : "text"));
           if (qn.required) input.required = true;
           questionInputs.push({ id: qn.id, input: input });
-          form.insertBefore(field(qn.label, input, qn.required), turnstileBox);
+          form.insertBefore(field(qn.label, input, qn.required), captchaBox);
         });
 
-        // Render Turnstile if the workspace requires it.
-        if (data.turnstileSiteKey) {
+        // Render the active CAPTCHA provider if the workspace requires it.
+        // Falls back to the legacy turnstileSiteKey field for older API shapes.
+        var captchaProvider = data.captchaProvider || (data.turnstileSiteKey ? "turnstile" : null);
+        var captchaSiteKey = data.captchaSiteKey || data.turnstileSiteKey;
+        if (captchaProvider && captchaSiteKey) {
           submit.disabled = true;
-          loadTurnstile().then(function (ts) {
-            if (!ts) { submit.disabled = false; return; }
-            ts.render(turnstileBox, {
-              sitekey: data.turnstileSiteKey,
-              callback: function (token) { turnstileToken = token; submit.disabled = false; },
-              "expired-callback": function () { turnstileToken = null; submit.disabled = true; },
-              "error-callback": function () { turnstileToken = null; submit.disabled = true; }
+          loadCaptcha(captchaProvider).then(function (cap) {
+            if (!cap) { submit.disabled = false; return; }
+            cap.render(captchaBox, {
+              sitekey: captchaSiteKey,
+              callback: function (token) { captchaToken = token; submit.disabled = false; },
+              "expired-callback": function () { captchaToken = null; submit.disabled = true; },
+              "error-callback": function () { captchaToken = null; submit.disabled = true; }
             });
           });
         }
@@ -345,7 +367,7 @@ const WIDGET = String.raw`(function () {
       Object.keys(extra).forEach(function (k) {
         if (extra[k] && extra[k].value) payload[k] = extra[k].value;
       });
-      if (turnstileToken) payload.turnstileToken = turnstileToken;
+      if (captchaToken) payload.captchaToken = captchaToken;
 
       uploadResume(resume && resume.files && resume.files[0]).then(function (resumeFields) {
         if (resumeFields) Object.assign(payload, resumeFields);

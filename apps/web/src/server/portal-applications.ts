@@ -88,9 +88,9 @@ export async function getPortalOrganizationName(workspaceId: string) {
 }
 
 /**
- * The DocuSign offer the candidate can sign from the portal, if any. Scoped to
- * the candidate's application in the workspace and limited to e-signature
- * offers (docusignEnvelopeId set) that are still awaiting or just received a
+ * The e-signature offer the candidate can sign from the portal, if any. Scoped
+ * to the candidate's application in the workspace and limited to e-signature
+ * offers (esignSubmissionId set) that are still awaiting or just received a
  * decision. `sent` = actionable (show the "Review & sign" CTA); `accepted`/
  * `declined` = terminal confirmation surfaced after the signing ceremony.
  */
@@ -104,7 +104,7 @@ export async function getPortalApplicationOffer(input: {
       id: offers.id,
       status: offers.status,
       title: offers.title,
-      docusignEnvelopeId: offers.docusignEnvelopeId,
+      esignSubmissionId: offers.esignSubmissionId,
       expiresAt: offers.expiresAt,
       decidedAt: offers.decidedAt,
       createdAt: offers.createdAt,
@@ -115,8 +115,8 @@ export async function getPortalApplicationOffer(input: {
         eq(offers.workspaceId, input.workspaceId),
         eq(offers.applicationId, input.applicationId),
         eq(offers.candidateId, input.candidateId),
-        // E-signature offers only: envelopeId must be present.
-        isNotNull(offers.docusignEnvelopeId),
+        // E-signature offers only: submission id must be present.
+        isNotNull(offers.esignSubmissionId),
         // Actionable (sent) or just-decided (the webhook flips these after the
         // signing ceremony). Draft/withdrawn offers are never surfaced here.
         inArray(offers.status, ["sent", "accepted", "declined"]),
