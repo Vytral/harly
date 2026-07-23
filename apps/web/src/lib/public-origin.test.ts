@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { getDocuSignRedirectUri, getDocuSignWebhookBaseUrl, getHarlyPublicOrigin } from "./public-origin";
+import { getEsignWebhookBaseUrl, getHarlyPublicOrigin } from "./public-origin";
 
 describe("public provider origin", () => {
   it("uses HARLY_URL and returns the origin only", () => {
@@ -9,11 +9,8 @@ describe("public provider origin", () => {
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://legacy.example.com");
 
     expect(getHarlyPublicOrigin()).toBe("https://harly.example.com");
-    expect(getDocuSignRedirectUri()).toBe(
-      "https://harly.example.com/api/integrations/docusign/callback",
-    );
-    expect(getDocuSignWebhookBaseUrl()).toBe(
-      "https://harly.example.com/api/integrations/docusign/webhook",
+    expect(getEsignWebhookBaseUrl()).toBe(
+      "https://harly.example.com/api/integrations/docuseal/webhook",
     );
   });
 

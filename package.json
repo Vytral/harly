@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "description": "Open-source applicant tracking system for modern teams.",
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "engines": {
     "node": ">=22"
   },

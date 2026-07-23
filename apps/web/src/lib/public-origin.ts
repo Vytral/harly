@@ -34,10 +34,7 @@ export function getHarlyPublicOrigin(): string {
   return url.origin;
 }
 
-export function getDocuSignRedirectUri(): string {
-  return `${getHarlyPublicOrigin()}/api/integrations/docusign/callback`;
-}
-
-export function getDocuSignWebhookBaseUrl(): string {
-  return `${getHarlyPublicOrigin()}/api/integrations/docusign/webhook`;
+/** Inbound DocuSeal webhook base. `?ws=` + `?secret=` are appended per workspace. */
+export function getEsignWebhookBaseUrl(): string {
+  return `${getHarlyPublicOrigin()}/api/integrations/docuseal/webhook`;
 }

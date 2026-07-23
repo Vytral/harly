@@ -7,6 +7,20 @@ import { safeFetchImage } from "@/lib/ssrf";
 export type ImageFormat = "png" | "jpeg" | "webp";
 const MAX_LOGO_DOWNLOAD_BYTES = 5 * 1024 * 1024;
 
+const EXTENSION_MIME_TYPES: Record<string, string> = {
+  svg: "image/svg+xml",
+  png: "image/png",
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  webp: "image/webp",
+  gif: "image/gif",
+};
+
+function guessMimeTypeFromExtension(url: string): string {
+  const extension = url.split(".").pop()?.toLowerCase() ?? "";
+  return EXTENSION_MIME_TYPES[extension] ?? "image/png";
+}
+
 async function readLogoBody(response: Response): Promise<Buffer> {
   const declaredLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_LOGO_DOWNLOAD_BYTES) {
@@ -56,12 +70,22 @@ export async function convertLogoForEmail(
     quality = 90,
   } = options;
 
+  // Trim uniform-colour/transparent padding baked into the source artwork
+  // (common with exported logos) before resizing. Falls back to the
+  // untrimmed buffer if the image is a single flat colour (sharp throws).
+  let trimmed = inputBuffer;
+  try {
+    trimmed = await sharp(inputBuffer).trim().toBuffer();
+  } catch {
+    // Nothing to trim (e.g. solid-colour image) — keep original.
+  }
+
   // If input is already a raster format and matches target, just optimize
   if (
     inputMimeType === `image/${format}` &&
     !inputMimeType.includes("svg")
   ) {
-    const optimized = await sharp(inputBuffer)
+    const optimized = await sharp(trimmed)
       .resize(width, height, { fit: "inside", withoutEnlargement: true })
       .toFormat(format, { quality })
       .toBuffer();
@@ -73,7 +97,7 @@ export async function convertLogoForEmail(
   }
 
   // Convert SVG or other formats to target format
-  let pipeline = sharp(inputBuffer).resize(width, height, {
+  let pipeline = sharp(trimmed).resize(width, height, {
     fit: "inside",
     withoutEnlargement: true,
   });
@@ -114,18 +138,29 @@ export async function convertAndStoreLogo(input: {
       contentType: string;
       contentLength: number;
     }): Promise<{ uploadUrl: string; fileUrl: string }>;
+    read(key: string): Promise<Buffer>;
+    put(key: string, content: Buffer, contentType: string): Promise<void>;
   };
 }): Promise<{ success: boolean; logoEmailUrl?: string; format?: string }> {
   const { organizationId, logoUrl, storage } = input;
 
-  const response = await safeFetchImage(logoUrl);
-  if (!response.ok) {
-    throw new Error("Failed to fetch logo.");
+  // Local-storage uploads produce a relative /uploads/... path, not a
+  // fetchable URL — safeFetchImage would reject it (not absolute) or, once
+  // resolved against our own origin, reject it again as a loopback/internal
+  // host. Read those bytes straight from the storage adapter instead.
+  let buffer: Buffer;
+  let contentType: string;
+  if (logoUrl.startsWith("/uploads/")) {
+    buffer = await storage.read(logoUrl.slice("/uploads/".length));
+    contentType = guessMimeTypeFromExtension(logoUrl);
+  } else {
+    const response = await safeFetchImage(logoUrl);
+    if (!response.ok) {
+      throw new Error("Failed to fetch logo.");
+    }
+    contentType = response.headers.get("content-type") || "image/png";
+    buffer = await readLogoBody(response);
   }
-
-  const contentType =
-    response.headers.get("content-type") || "image/png";
-  const buffer = await readLogoBody(response);
 
   if (!needsEmailConversion(contentType)) {
     const format = getRecommendedEmailFormat(contentType);
@@ -137,21 +172,17 @@ export async function convertAndStoreLogo(input: {
     });
 
     const emailKey = `logos/${organizationId}/email.${converted.extension}`;
+    // getPresignedUploadUrl is only consulted for its fileUrl shape here — the
+    // actual write goes through the trusted server-side storage.put(), not the
+    // intent-gated /api/storage/upload endpoint (that's scoped to browser
+    // uploads under workspaces/{id}/{resumes,images,documents}/... and would
+    // reject a logos/... key outright).
     const uploadResult = await storage.getPresignedUploadUrl({
       key: emailKey,
       contentType: converted.mimeType,
       contentLength: converted.buffer.length,
     });
-
-    const putResponse = await fetch(uploadResult.uploadUrl, {
-      method: "PUT",
-      headers: { "Content-Type": converted.mimeType },
-      body: new Uint8Array(converted.buffer).buffer,
-    });
-
-    if (!putResponse.ok) {
-      throw new Error("Failed to upload converted logo.");
-    }
+    await storage.put(emailKey, converted.buffer, converted.mimeType);
 
     await db
       .update(organizationTable)
@@ -177,16 +208,7 @@ export async function convertAndStoreLogo(input: {
     contentType: "image/png",
     contentLength: converted.buffer.length,
   });
-
-  const putResponse = await fetch(uploadResult.uploadUrl, {
-    method: "PUT",
-    headers: { "Content-Type": "image/png" },
-    body: new Uint8Array(converted.buffer).buffer,
-  });
-
-  if (!putResponse.ok) {
-    throw new Error("Failed to upload converted logo.");
-  }
+  await storage.put(emailKey, converted.buffer, "image/png");
 
   await db
     .update(organizationTable)

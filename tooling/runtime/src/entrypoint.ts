@@ -81,9 +81,11 @@ type Job = { name: string; path: string; intervalMs: number };
 const jobs: Job[] = [
   { name: "email-outbox", path: "/api/cron/email-outbox", intervalMs: 60_000 },
   { name: "webhooks-dispatch", path: "/api/cron/webhooks/dispatch", intervalMs: 60_000 },
-  { name: "docusign-reconciliation", path: "/api/cron/docusign-reconciliation", intervalMs: 60_000 },
+  { name: "esign-reconciliation", path: "/api/cron/esign-reconciliation", intervalMs: 60_000 },
   { name: "interview-sync", path: "/api/cron/interview-sync", intervalMs: 60_000 },
   { name: "mailbox-sync", path: "/api/cron/mailbox-sync", intervalMs: 120_000 },
+  { name: "document-expiry", path: "/api/cron/document-expiry", intervalMs: 60_000 },
+  { name: "retention-enforcement", path: "/api/cron/retention-enforcement", intervalMs: 60_000 },
 ];
 
 const schedulerStaleAfterMs = Math.max(
@@ -200,7 +202,7 @@ async function doctor() {
           from (
             select job, max(created_at) filter (where status in ('success', 'skipped')) as last_run
             from cron_runs
-            where job in ('email-outbox', 'webhooks-dispatch', 'docusign-reconciliation', 'interview-sync', 'mailbox-sync')
+            where job in ('email-outbox', 'webhooks-dispatch', 'esign-reconciliation', 'interview-sync', 'mailbox-sync', 'document-expiry', 'retention-enforcement')
             group by job
           ) scheduler_runs
         ) as scheduler_runs,

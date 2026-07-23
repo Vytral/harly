@@ -32,6 +32,11 @@ x-harly-env: &harly-env
   EMAIL_FROM: ${EMAIL_FROM:-}
   HARLY_CACHE_MAX_MB: ${HARLY_CACHE_MAX_MB:-512}
   HARLY_CACHE_MAX_AGE_DAYS: ${HARLY_CACHE_MAX_AGE_DAYS:-7}
+  # DocuSeal (self-hosted e-signature). Optional global fallback for single-tenant
+  # installs; per-workspace URL + token entered in Settings → Integrations override
+  # these. When the bundled `docuseal` service is used, DOCUSEAL_URL is http://docuseal:3000.
+  DOCUSEAL_URL: ${DOCUSEAL_URL:-}
+  DOCUSEAL_API_TOKEN: ${DOCUSEAL_API_TOKEN:-}
 
 services:
   postgres:
@@ -139,9 +144,34 @@ services:
       app:
         condition: service_healthy
 
+  # Self-hosted DocuSeal e-signature. Opt-in via `--profile esign`. Shares the
+  # bundled Postgres (separate database `docuseal`, which you must create once:
+  #   docker compose exec postgres createdb -U "$POSTGRES_USER" docuseal
+  # ). After first boot, create an API token in the DocuSeal UI and paste it, plus
+  # the instance URL (http://docuseal:3000 from the app network, or your public
+  # URL), into Harly → Settings → Integrations → DocuSeal.
+  docuseal:
+    image: docuseal/docuseal:latest
+    profiles: ["esign"]
+    restart: unless-stopped
+    mem_limit: ${HARLY_DOCUSEAL_MEMORY:-1024m}
+    cpus: ${HARLY_DOCUSEAL_CPUS:-1.0}
+    logging: *harly-logging
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${DOCUSEAL_DB:-docuseal}
+      SECRET_KEY_BASE: ${DOCUSEAL_SECRET_KEY_BASE:?Set DOCUSEAL_SECRET_KEY_BASE}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${DOCUSEAL_PORT:-3200}:3000"
+    volumes:
+      - docuseal-data:/data
+
 volumes:
   postgres-data:
   uploads:
   next-cache:
   caddy-data:
   caddy-config:
+  docuseal-data:
