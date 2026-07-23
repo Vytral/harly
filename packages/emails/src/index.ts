@@ -9,6 +9,7 @@ export * from "./templates/CandidateRejected";
 export * from "./templates/CandidateStageUpdate";
 export * from "./templates/CustomTemplateEmail";
 export * from "./templates/DetailTable";
+export * from "./templates/EmailFallbackLink";
 export * from "./templates/EmailLogo";
 export * from "./templates/HarlyLayout";
 export * from "./templates/InterviewCanceled";

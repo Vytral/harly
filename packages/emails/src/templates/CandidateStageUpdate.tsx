@@ -11,6 +11,7 @@ export type CandidateStageUpdateProps = {
   companyLogoUrl?: string;
   accentColor?: string;
   socialLinks?: SocialLink[];
+  hideBranding?: boolean;
   nextStepMessage?: string;
 };
 
@@ -29,6 +30,7 @@ export function CandidateStageUpdate({
   companyLogoUrl,
   accentColor,
   socialLinks,
+  hideBranding,
   nextStepMessage,
 }: CandidateStageUpdateProps) {
   return (
@@ -38,6 +40,7 @@ export function CandidateStageUpdate({
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
       socialLinks={socialLinks}
+      hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         You&apos;re moving forward

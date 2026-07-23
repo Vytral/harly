@@ -20,6 +20,8 @@ type WorkspaceLayoutProps = {
   companyLogoUrl?: string;
   accentColor?: string;
   socialLinks?: SocialLink[];
+  /** When true, omit the "Powered by Harly" footer credit. */
+  hideBranding?: boolean;
   children: React.ReactNode;
 };
 
@@ -41,6 +43,7 @@ export function WorkspaceLayout({
   // lives in the logo + per-template CTA color, not the chrome.
   accentColor: _accentColor,
   socialLinks: _socialLinks,
+  hideBranding,
   children,
 }: WorkspaceLayoutProps) {
   return (
@@ -71,7 +74,13 @@ export function WorkspaceLayout({
                 {/* Footer */}
                 <Section className="border-stroke border-t px-10 py-8">
                   <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">
-                    Sent by {companyName} · {poweredByHarlyInline()}
+                    {hideBranding ? (
+                      `Sent by ${companyName}`
+                    ) : (
+                      <>
+                        Sent by {companyName} · {poweredByHarlyInline()}
+                      </>
+                    )}
                   </Text>
                 </Section>
               </Section>

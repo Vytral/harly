@@ -1,6 +1,7 @@
 import { Button, Section, Text } from "@react-email/components";
 
 import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
+import { EmailFallbackLink } from "./EmailFallbackLink";
 
 export type WelcomeEmailProps = {
   userName: string;
@@ -38,6 +39,7 @@ export function WelcomeEmail({
         >
           Open dashboard
         </Button>
+        <EmailFallbackLink url={dashboardUrl} />
       </Section>
     </HarlyLayout>
   );

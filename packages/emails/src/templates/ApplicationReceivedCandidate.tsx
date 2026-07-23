@@ -1,6 +1,7 @@
 import { Button, Section, Text } from "@react-email/components";
 
 import { WorkspaceLayout } from "./WorkspaceLayout";
+import { EmailFallbackLink } from "./EmailFallbackLink";
 import type { SocialLink } from "./HarlyLayout";
 
 export type ApplicationReceivedCandidateProps = {
@@ -10,6 +11,7 @@ export type ApplicationReceivedCandidateProps = {
   companyLogoUrl?: string;
   accentColor?: string;
   socialLinks?: SocialLink[];
+  hideBranding?: boolean;
   jobBoardUrl?: string;
 };
 
@@ -27,6 +29,7 @@ export function ApplicationReceivedCandidate({
   companyLogoUrl,
   accentColor,
   socialLinks,
+  hideBranding,
   jobBoardUrl,
 }: ApplicationReceivedCandidateProps) {
   return (
@@ -36,6 +39,7 @@ export function ApplicationReceivedCandidate({
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
       socialLinks={socialLinks}
+      hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         Application received
@@ -57,6 +61,7 @@ export function ApplicationReceivedCandidate({
           >
             See other open roles
           </Button>
+          <EmailFallbackLink url={jobBoardUrl} />
         </Section>
       ) : null}
     </WorkspaceLayout>

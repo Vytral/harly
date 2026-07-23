@@ -10,6 +10,7 @@ export type OfferExtendedProps = {
   companyLogoUrl?: string;
   accentColor?: string;
   socialLinks?: SocialLink[];
+  hideBranding?: boolean;
   jobTitle: string;
   salary?: string;
   startDate?: string;
@@ -30,6 +31,7 @@ export function OfferExtended({
   companyLogoUrl,
   accentColor,
   socialLinks,
+  hideBranding,
   jobTitle,
   salary,
   startDate,
@@ -51,6 +53,7 @@ export function OfferExtended({
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
       socialLinks={socialLinks}
+      hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         You have an offer

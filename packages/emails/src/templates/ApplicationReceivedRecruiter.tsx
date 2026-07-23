@@ -1,6 +1,7 @@
 import { Button, Link, Section, Text } from "@react-email/components";
 
 import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
+import { EmailFallbackLink } from "./EmailFallbackLink";
 
 export type ApplicationReceivedRecruiterProps = {
   candidateName: string;
@@ -48,6 +49,7 @@ export function ApplicationReceivedRecruiter({
         >
           Review application
         </Button>
+        <EmailFallbackLink url={dashboardUrl} />
       </Section>
     </HarlyLayout>
   );

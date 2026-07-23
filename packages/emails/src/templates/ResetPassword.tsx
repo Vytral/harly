@@ -1,6 +1,7 @@
 import { Button, Text } from "@react-email/components";
 
 import { HarlyLayout } from "./HarlyLayout";
+import { EmailFallbackLink } from "./EmailFallbackLink";
 
 export type ResetPasswordEmailProps = {
   userName: string;
@@ -28,6 +29,7 @@ export function ResetPasswordEmail({ userName, resetUrl }: ResetPasswordEmailPro
       >
         Change password
       </Button>
+      <EmailFallbackLink url={resetUrl} />
       <Text className="text-[11px] leading-[1.5] tracking-[-0.033px] font-inter text-fg-3 m-0 mt-8 max-w-[310px]">
         If you didn&apos;t request this, please ignore this email. Your password
         won&apos;t change until you access the link above and create a new one.

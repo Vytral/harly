@@ -24,6 +24,8 @@ export type WorkspaceEmailBranding = {
   primaryColor?: string | null;
   websiteUrl?: string | null;
   socialLinks?: SocialLink[];
+  /** When true, omit the "Powered by Harly" footer credit for this workspace. */
+  hideBranding?: boolean;
 };
 
 type HarlyLayoutProps = {
@@ -80,9 +82,13 @@ export function HarlyLayout({
                 <Section className="border-stroke border-t px-10 py-8">
                   <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">
                     {workspaceName !== "Harly" ? (
-                      <>
-                        Sent by {workspaceName} · {poweredByHarlyInline()}
-                      </>
+                      branding?.hideBranding ? (
+                        `Sent by ${workspaceName}`
+                      ) : (
+                        <>
+                          Sent by {workspaceName} · {poweredByHarlyInline()}
+                        </>
+                      )
                     ) : (
                       poweredByHarlyInline()
                     )}

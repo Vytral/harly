@@ -10,6 +10,7 @@ export type CandidateRejectedProps = {
   companyLogoUrl?: string;
   accentColor?: string;
   socialLinks?: SocialLink[];
+  hideBranding?: boolean;
   customMessage?: string;
 };
 
@@ -27,6 +28,7 @@ export function CandidateRejected({
   companyLogoUrl,
   accentColor,
   socialLinks,
+  hideBranding,
   customMessage,
 }: CandidateRejectedProps) {
   return (
@@ -36,6 +38,7 @@ export function CandidateRejected({
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
       socialLinks={socialLinks}
+      hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         Update on your application

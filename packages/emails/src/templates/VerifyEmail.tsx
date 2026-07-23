@@ -1,6 +1,7 @@
 import { Button, Hr, Section, Text } from "@react-email/components";
 
 import { HarlyLayout } from "./HarlyLayout";
+import { EmailFallbackLink } from "./EmailFallbackLink";
 
 export type VerifyEmailProps = {
   userName: string;
@@ -29,6 +30,7 @@ export function VerifyEmail({ userName, verifyUrl }: VerifyEmailProps) {
         >
           Verify email
         </Button>
+        <EmailFallbackLink url={verifyUrl} />
       </Section>
       <Hr className="border-stroke border-t my-7" />
       <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">

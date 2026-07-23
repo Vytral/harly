@@ -9,6 +9,7 @@ export type OfferWithdrawnProps = {
   companyLogoUrl?: string;
   accentColor?: string;
   socialLinks?: SocialLink[];
+  hideBranding?: boolean;
   jobTitle: string;
   reason?: string;
 };
@@ -26,6 +27,7 @@ export function OfferWithdrawn({
   companyLogoUrl,
   accentColor,
   socialLinks,
+  hideBranding,
   jobTitle,
   reason,
 }: OfferWithdrawnProps) {
@@ -36,6 +38,7 @@ export function OfferWithdrawn({
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
       socialLinks={socialLinks}
+      hideBranding={hideBranding}
     >
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         Offer update

@@ -8,6 +8,7 @@ export type CustomTemplateEmailProps = {
   companyLogoUrl?: string;
   accentColor?: string;
   socialLinks?: SocialLink[];
+  hideBranding?: boolean;
 };
 
 /**
@@ -22,6 +23,7 @@ export function CustomTemplateEmail({
   companyLogoUrl,
   accentColor,
   socialLinks,
+  hideBranding,
 }: CustomTemplateEmailProps) {
   return (
     <WorkspaceLayout
@@ -30,6 +32,7 @@ export function CustomTemplateEmail({
       companyLogoUrl={companyLogoUrl}
       accentColor={accentColor}
       socialLinks={socialLinks}
+      hideBranding={hideBranding}
     >
       {/* eslint-disable-next-line react/no-danger -- bodyHtml is sanitized upstream in renderActiveEmailTemplate() */}
       <div dangerouslySetInnerHTML={{ __html: bodyHtml }} />

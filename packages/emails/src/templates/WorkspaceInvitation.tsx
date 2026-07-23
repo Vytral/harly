@@ -1,6 +1,7 @@
 import { Button, Hr, Section, Text } from "@react-email/components";
 
 import { HarlyLayout, type WorkspaceEmailBranding } from "./HarlyLayout";
+import { EmailFallbackLink } from "./EmailFallbackLink";
 
 export type WorkspaceInvitationProps = {
   inviteeName: string;
@@ -56,6 +57,7 @@ export function WorkspaceInvitation({
         >
           Accept invitation
         </Button>
+        <EmailFallbackLink url={acceptUrl} />
       </Section>
       <Hr className="border-stroke border-t my-7" />
       <Text className="text-[13px] leading-[1.5] tracking-[-0.039px] font-inter text-fg-3 m-0">
