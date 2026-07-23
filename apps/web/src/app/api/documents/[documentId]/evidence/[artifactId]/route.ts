@@ -45,7 +45,7 @@ export async function GET(
           and(
             eq(signatureEnvelopes.id, artifact.envelopeId),
             eq(signatureEnvelopes.workspaceId, context.organization.id),
-            eq(signatureEnvelopes.provider, access.document.signatureProvider ?? "docusign"),
+            eq(signatureEnvelopes.provider, access.document.signatureProvider ?? "docuseal"),
             eq(signatureEnvelopes.providerEnvelopeId, access.document.signatureEnvelopeId),
           ),
         )

@@ -1,7 +1,5 @@
 "use server";
 
-import { createHash } from "node:crypto";
-
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
@@ -22,15 +20,19 @@ import {
   jobs,
   member as authMembers,
   offers,
+  signatureEnvelopes,
 } from "@harly/db";
 
 import { getDocumentAccessForUser } from "./access";
 import { slugifyDocumentCategory } from "./shared";
+import { verifyUploadedDocument as verifyUploadedDocumentShared } from "./verify";
 import { requirePermission } from "@/features/workspaces/permissions-server";
-import { isWorkspaceStorageKey } from "@/lib/storage-validation";
-import { documentExtensionMatches, maxDocumentFileSize } from "@/lib/storage-validation";
-import { storage } from "@/lib/storage";
-import { isExternallyManagedSignatureProvider } from "@/lib/docusign/signature-state";
+import { isExternallyManagedSignatureProvider } from "@/lib/esign/signature-state";
+import { sendDocumentForEnvelope } from "@/lib/esign/document-signing";
+import { archiveSubmission, freshEsignContext } from "@/lib/esign/client";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("documents-actions");
 
 const documentIdSchema = z.object({ documentId: z.uuid() });
 const associationSchema = z.object({
@@ -98,25 +100,7 @@ async function verifyUploadedDocument(input: {
   sizeBytes: number;
   checksum: string;
 }) {
-  if (!isWorkspaceStorageKey(input.workspaceId, input.storageKey, "documents")) {
-    return { error: "The upload does not belong to this workspace." };
-  }
-  if (input.sizeBytes <= 0 || input.sizeBytes > maxDocumentFileSize) {
-    return { error: "Document is empty or exceeds the 25 MB limit." };
-  }
-  if (!documentExtensionMatches(input.name, input.mimeType)) {
-    return { error: "The file extension does not match its content type." };
-  }
-  let buffer: Buffer;
-  try {
-    buffer = await storage.read(input.storageKey);
-  } catch {
-    return { error: "The uploaded file could not be read." };
-  }
-  if (buffer.byteLength !== input.sizeBytes) return { error: "Uploaded file size could not be verified." };
-  const checksum = createHash("sha256").update(buffer).digest("hex");
-  if (checksum !== input.checksum.toLowerCase()) return { error: "Uploaded file checksum could not be verified." };
-  return { buffer, checksum };
+  return verifyUploadedDocumentShared(input);
 }
 
 export async function createDocument(input: {
@@ -443,11 +427,11 @@ export async function assignDocument(input: { documentId: string; userId: string
   return { ok: true };
 }
 
-export async function saveDocumentSignature(input: { documentId: string; status: "unsigned" | "pending" | "signed" | "declined" | "expired"; provider?: string | null; envelopeId?: string | null; url?: string | null; expiresAt?: string | null }): Promise<DocumentActionResult> {
+export async function saveDocumentSignature(input: { documentId: string; status: "unsigned" | "pending" | "signed" | "declined" | "expired"; provider?: string | null; envelopeId?: string | null; url?: string | null; expiresAt?: string | null; attestationNote?: string | null }): Promise<DocumentActionResult> {
   const permission = await documentContext("documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
   const { context } = permission;
-  const parsed = documentIdSchema.extend({ status: z.enum(["unsigned", "pending", "signed", "declined", "expired"]), provider: z.string().max(80).nullable().optional(), envelopeId: z.string().max(255).nullable().optional(), url: z.url().nullable().optional(), expiresAt: z.iso.datetime().nullable().optional() }).safeParse(input);
+  const parsed = documentIdSchema.extend({ status: z.enum(["unsigned", "pending", "signed", "declined", "expired"]), provider: z.string().max(80).nullable().optional(), envelopeId: z.string().max(255).nullable().optional(), url: z.url().nullable().optional(), expiresAt: z.iso.datetime().nullable().optional(), attestationNote: z.string().trim().max(2000).nullable().optional() }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid signature details." };
   const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot update this document." };
@@ -457,15 +441,26 @@ export async function saveDocumentSignature(input: { documentId: string; status:
   ) {
     return {
       ok: false,
-      error: "DocuSign signature status is controlled by verified Connect events.",
+      error: "DocuSeal signature status is controlled by verified signing events.",
     };
   }
   if (access.document.signatureStatus === "signed" && parsed.data.status !== "signed") {
     return { ok: false, error: "Signed documents are immutable. Create a new document for another signature cycle." };
   }
+  // Marking a document "signed" outside DocuSeal is an attestation, not verified
+  // evidence — require the manager to record how/when it was actually signed
+  // so the status isn't just a trust-me flag.
+  const attestationNote = parsed.data.attestationNote?.trim() || "";
+  if (parsed.data.status === "signed" && attestationNote.length < 3) {
+    return { ok: false, error: "Describe how this document was signed (e.g. \"signed in person, scan on file\")." };
+  }
+  const manualAttestation =
+    parsed.data.status === "signed"
+      ? { manualSignedById: context.user.id, manualSignedAt: new Date(), manualSignatureNote: attestationNote }
+      : { manualSignedById: null, manualSignedAt: null, manualSignatureNote: null };
   await db.transaction(async (tx) => {
-    await tx.update(documents).set({ signatureStatus: parsed.data.status, signatureProvider: parsed.data.provider ?? null, signatureEnvelopeId: parsed.data.envelopeId ?? null, signatureUrl: parsed.data.url ?? null, expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
-    await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.signature_changed", metadata: { status: parsed.data.status, provider: parsed.data.provider ?? null, envelopeId: parsed.data.envelopeId ?? null } });
+    await tx.update(documents).set({ signatureStatus: parsed.data.status, signatureProvider: parsed.data.provider ?? null, signatureEnvelopeId: parsed.data.envelopeId ?? null, signatureUrl: parsed.data.url ?? null, expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null, ...manualAttestation }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
+    await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.signature_changed", metadata: { status: parsed.data.status, provider: parsed.data.provider ?? null, envelopeId: parsed.data.envelopeId ?? null, attestationNote: manualAttestation.manualSignatureNote } });
   });
   revalidatePath("/dashboard/documents");
   return { ok: true };
@@ -494,6 +489,227 @@ export async function updateDocumentCategory(input: { categoryId: string; name: 
   const parsed = z.object({ categoryId: z.uuid(), name: z.string().trim().min(1).max(80), accent: z.string().trim().max(30).optional(), active: z.boolean() }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid category." };
   await db.update(documentCategories).set({ name: parsed.data.name, slug: slugifyDocumentCategory(parsed.data.name), accent: parsed.data.accent || "pine", active: parsed.data.active }).where(and(eq(documentCategories.id, input.categoryId), eq(documentCategories.workspaceId, context.organization.id)));
+  revalidatePath("/dashboard/documents");
+  return { ok: true };
+}
+
+const sendSignatureSchema = z.object({
+  documentId: z.uuid(),
+  recipientEmail: z.email(),
+  recipientName: z.string().trim().min(1).max(160),
+  subject: z.string().trim().min(1).max(200),
+  message: z.string().trim().max(2000).optional(),
+});
+
+/**
+ * Send a Documents-hub file for remote e-signature via DocuSeal. Creates a
+ * `kind: "document"` submission, marks the document pending, and relies on the
+ * DocuSeal webhook + reconciliation cron to flip the status to signed and
+ * persist the combined signed PDF + audit log.
+ */
+export async function sendDocumentForSignature(input: {
+  documentId: string;
+  recipientEmail: string;
+  recipientName: string;
+  subject: string;
+  message?: string | null;
+}): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const parsed = sendSignatureSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Enter a valid recipient email, name, and subject." };
+  const access = await getDocumentAccessForUser({
+    documentId: input.documentId,
+    workspaceId: context.organization.id,
+    userId: context.user.id,
+    roleKey: context.roleKey,
+  });
+  if (!access || access.level !== "manage") return { ok: false, error: "You cannot send this document for signature." };
+
+  const result = await sendDocumentForEnvelope({
+    workspaceId: context.organization.id,
+    documentId: input.documentId,
+    actorId: context.user.id,
+    recipientEmail: parsed.data.recipientEmail,
+    recipientName: parsed.data.recipientName,
+    subject: parsed.data.subject,
+    message: parsed.data.message ?? null,
+  });
+  if (!result.ok) return { ok: false, error: result.error };
+  revalidatePath("/dashboard/documents");
+  return { ok: true, documentId: input.documentId };
+}
+
+/**
+ * Void an in-flight DocuSeal signature request. Archives the submission and
+ * marks the document declined immediately for UX; the reconciliation cron
+ * confirms the terminal state out of band.
+ */
+export async function voidDocumentSignature(input: {
+  documentId: string;
+  reason: string;
+}): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const parsed = z
+    .object({ documentId: z.uuid(), reason: z.string().trim().min(3).max(400) })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Enter a short reason for voiding the request." };
+  const access = await getDocumentAccessForUser({
+    documentId: input.documentId,
+    workspaceId: context.organization.id,
+    userId: context.user.id,
+    roleKey: context.roleKey,
+  });
+  if (!access || access.level !== "manage") return { ok: false, error: "You cannot void this request." };
+  const document = access.document;
+  if (!isExternallyManagedSignatureProvider(document.signatureProvider)) {
+    return { ok: false, error: "This document is not part of a DocuSeal submission." };
+  }
+  if (document.signatureStatus === "signed") {
+    return { ok: false, error: "Signed documents are immutable and cannot be voided." };
+  }
+  if (!document.signatureEnvelopeRefId && !document.signatureEnvelopeId) {
+    return { ok: false, error: "Could not resolve the DocuSeal submission for this document." };
+  }
+
+  const ctx = await freshEsignContext(context.organization.id);
+  if (!ctx) return { ok: false, error: "DocuSeal is not connected. Reconnect it in Settings → Integrations." };
+
+  // Resolve the provider submission id: prefer the stored envelope row, fall back
+  // to the denormalised id on the document for envelopes created before the
+  // refId was wired.
+  let submissionId = document.signatureEnvelopeId;
+  if (document.signatureEnvelopeRefId) {
+    const [envelope] = await db
+      .select({ providerEnvelopeId: signatureEnvelopes.providerEnvelopeId, status: signatureEnvelopes.status })
+      .from(signatureEnvelopes)
+      .where(and(eq(signatureEnvelopes.workspaceId, context.organization.id), eq(signatureEnvelopes.id, document.signatureEnvelopeRefId)))
+      .limit(1);
+    if (!envelope) return { ok: false, error: "Signature envelope record not found." };
+    if (envelope.status === "completed" || envelope.status === "declined" || envelope.status === "voided") {
+      return { ok: false, error: "This signature request is already complete." };
+    }
+    submissionId = envelope.providerEnvelopeId;
+  }
+  if (!submissionId) return { ok: false, error: "Could not resolve the DocuSeal submission id." };
+
+  try {
+    await archiveSubmission(ctx, submissionId);
+  } catch (error) {
+    log.error({ error, documentId: input.documentId }, "voidDocumentSignature: archiveSubmission failed");
+    return {
+      ok: false,
+      error: error instanceof Error
+        ? `DocuSeal could not void the submission: ${error.message}`
+        : "DocuSeal could not void the submission. Try again in a moment.",
+    };
+  }
+
+  await db.transaction(async (tx) => {
+    await tx
+      .update(documents)
+      .set({ signatureStatus: "declined", updatedAt: new Date() })
+      .where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
+    await logDocumentActivity(tx, {
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      documentId: input.documentId,
+      type: "document.signature_voided",
+      metadata: { provider: "docuseal", submissionId, reason: parsed.data.reason },
+    });
+  });
+  revalidatePath("/dashboard/documents");
+  return { ok: true };
+}
+
+const bulkIdsSchema = z.object({ documentIds: z.array(z.uuid()).min(1).max(200) });
+
+/** Resolve ACL for every id; return the subset the caller can manage. */
+async function resolveManageableIds(
+  workspaceId: string,
+  userId: string,
+  roleKey: string,
+  documentIds: string[],
+): Promise<string[]> {
+  const accessible: string[] = [];
+  for (const documentId of documentIds) {
+    const access = await getDocumentAccessForUser({ documentId, workspaceId, userId, roleKey });
+    if (access?.level === "manage") accessible.push(documentId);
+  }
+  return accessible;
+}
+
+/** Archive or restore many documents at once. Skips ids under legal hold. */
+export async function bulkSetDocumentStatus(input: {
+  documentIds: string[];
+  status: "active" | "archived";
+}): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const parsed = bulkIdsSchema.extend({ status: z.enum(["active", "archived"]) }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid bulk status request." };
+  const ids = await resolveManageableIds(context.organization.id, context.user.id, context.roleKey, parsed.data.documentIds);
+  if (ids.length === 0) return { ok: false, error: "You cannot manage any of the selected documents." };
+
+  if (parsed.data.status === "archived") {
+    const held = await db
+      .select({ documentId: documentLegalHolds.documentId })
+      .from(documentLegalHolds)
+      .where(
+        and(
+          eq(documentLegalHolds.workspaceId, context.organization.id),
+          inArray(documentLegalHolds.documentId, ids),
+          isNull(documentLegalHolds.releasedAt),
+        ),
+      );
+    const heldIds = new Set(held.map((row) => row.documentId));
+    const archivable = ids.filter((id) => !heldIds.has(id));
+    if (archivable.length === 0) {
+      return { ok: false, error: "Every selected document is under legal hold and cannot be archived." };
+    }
+    await db.transaction(async (tx) => {
+      await tx.update(documents).set({ status: "archived" }).where(and(eq(documents.workspaceId, context.organization.id), inArray(documents.id, archivable)));
+      await tx.insert(activityEvents).values(archivable.map((documentId) => ({ workspaceId: context.organization.id, actorId: context.user.id, entityType: "document" as const, entityId: documentId, type: "document.archived", metadata: { bulk: true } })));
+    });
+    revalidatePath("/dashboard/documents");
+    if (heldIds.size > 0) {
+      return { ok: true, error: `${archivable.length} archived. ${heldIds.size} under legal hold were skipped.` };
+    }
+    return { ok: true };
+  }
+
+  await db.transaction(async (tx) => {
+    await tx.update(documents).set({ status: "active" }).where(and(eq(documents.workspaceId, context.organization.id), inArray(documents.id, ids)));
+    await tx.insert(activityEvents).values(ids.map((documentId) => ({ workspaceId: context.organization.id, actorId: context.user.id, entityType: "document" as const, entityId: documentId, type: "document.restored", metadata: { bulk: true } })));
+  });
+  revalidatePath("/dashboard/documents");
+  return { ok: true };
+}
+
+/** Assign the same category to many documents at once. */
+export async function bulkSetDocumentCategory(input: {
+  documentIds: string[];
+  categoryId: string | null;
+}): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const parsed = bulkIdsSchema.extend({ categoryId: z.uuid().nullable() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid bulk category request." };
+  if (parsed.data.categoryId) {
+    const [category] = await db.select({ id: documentCategories.id }).from(documentCategories).where(and(eq(documentCategories.id, parsed.data.categoryId), eq(documentCategories.workspaceId, context.organization.id), eq(documentCategories.active, true))).limit(1);
+    if (!category) return { ok: false, error: "Category not found." };
+  }
+  const ids = await resolveManageableIds(context.organization.id, context.user.id, context.roleKey, parsed.data.documentIds);
+  if (ids.length === 0) return { ok: false, error: "You cannot manage any of the selected documents." };
+  await db.transaction(async (tx) => {
+    await tx.update(documents).set({ categoryId: parsed.data.categoryId }).where(and(eq(documents.workspaceId, context.organization.id), inArray(documents.id, ids)));
+    await tx.insert(activityEvents).values(ids.map((documentId) => ({ workspaceId: context.organization.id, actorId: context.user.id, entityType: "document" as const, entityId: documentId, type: "document.category_changed", metadata: { categoryId: parsed.data.categoryId, bulk: true } })));
+  });
   revalidatePath("/dashboard/documents");
   return { ok: true };
 }

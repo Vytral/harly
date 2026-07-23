@@ -59,6 +59,10 @@ export type DocumentListItem = {
   signatureProvider: string | null;
   signatureEnvelopeId: string | null;
   signatureUrl: string | null;
+  manualSignedById: string | null;
+  manualSignedByName: string | null;
+  manualSignedAt: string | null;
+  manualSignatureNote: string | null;
   expiresAt: string | null;
   ownerId: string | null;
   ownerName: string | null;
@@ -90,6 +94,7 @@ export type DocumentHubData = {
   canManage: boolean;
   canShare: boolean;
   associationOptions: Array<{ type: "candidate" | "job"; id: string; label: string }>;
+  esign: { connected: boolean; hasWebhookSecret: boolean };
 };
 
 export function formatDocumentSize(bytes: number) {

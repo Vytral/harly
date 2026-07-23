@@ -1,6 +1,7 @@
 import "server-only";
 
 import { and, desc, eq, inArray } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import {
   db,
@@ -21,6 +22,7 @@ import {
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { can, getRolePermissions } from "@/features/workspaces/permissions-server";
+import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { getDocumentAccessForUser, type DocumentAccess } from "./access";
 import type {
   DocumentCategoryItem,
@@ -107,7 +109,8 @@ export async function listDocumentsForCandidate(candidateId: string) {
 
 export async function getDocumentHubData(): Promise<DocumentHubData> {
   const { organization, user, roleKey } = await getWorkspaceContext();
-  const [rows, categories, members, rolePermissions, candidateOptions, jobOptions, versionRows] = await Promise.all([
+  const manualSigners = alias(authUsers, "manual_signers");
+  const [rows, categories, members, rolePermissions, candidateOptions, jobOptions, versionRows, esignStatus] = await Promise.all([
     db
       .select({
         id: documents.id,
@@ -121,6 +124,10 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
         signatureProvider: documents.signatureProvider,
         signatureEnvelopeId: documents.signatureEnvelopeId,
         signatureUrl: documents.signatureUrl,
+        manualSignedById: documents.manualSignedById,
+        manualSignedByName: manualSigners.name,
+        manualSignedAt: documents.manualSignedAt,
+        manualSignatureNote: documents.manualSignatureNote,
         expiresAt: documents.expiresAt,
         ownerId: documents.ownerId,
         ownerName: authUsers.name,
@@ -131,6 +138,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
       })
       .from(documents)
       .leftJoin(authUsers, eq(authUsers.id, documents.ownerId))
+      .leftJoin(manualSigners, eq(manualSigners.id, documents.manualSignedById))
       .where(eq(documents.workspaceId, organization.id))
       .orderBy(desc(documents.updatedAt)),
     listDocumentCategories(),
@@ -139,6 +147,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
     db.select({ id: candidates.id, label: candidates.firstName, lastName: candidates.lastName }).from(candidates).where(eq(candidates.workspaceId, organization.id)).orderBy(candidates.lastName, candidates.firstName),
     db.select({ id: jobs.id, label: jobs.title }).from(jobs).where(eq(jobs.workspaceId, organization.id)).orderBy(jobs.title),
     db.select({ documentId: documentVersions.documentId, versionNumber: documentVersions.versionNumber, isCurrent: documentVersions.isCurrent }).from(documentVersions).where(eq(documentVersions.workspaceId, organization.id)),
+    getWorkspaceEsignStatus(organization.id),
   ]);
   const [associationRows, accessRoleRows, accessMemberRows, assignmentRows, activityRows, legalHoldRows] = rows.length
     ? await Promise.all([
@@ -228,6 +237,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
         versionCount: versionsByDocument.get(row.id)?.length ?? 1,
         currentVersion: versionsByDocument.get(row.id)?.find((version) => version.isCurrent)?.versionNumber ?? 1,
         legalHolds: legalHoldsByDocument.get(row.id) ?? [],
+        manualSignedAt: row.manualSignedAt?.toISOString() ?? null,
         expiresAt: row.expiresAt?.toISOString() ?? null,
         updatedAt: row.updatedAt.toISOString(),
         createdAt: row.createdAt.toISOString(),
@@ -246,5 +256,9 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
       ...candidateOptions.map((candidate) => ({ type: "candidate" as const, id: candidate.id, label: `${candidate.label} ${candidate.lastName}` })),
       ...jobOptions.map((job) => ({ type: "job" as const, id: job.id, label: job.label })),
     ],
+    esign: {
+      connected: Boolean(esignStatus.hasToken),
+      hasWebhookSecret: esignStatus.hasWebhookSecret,
+    },
   };
 }

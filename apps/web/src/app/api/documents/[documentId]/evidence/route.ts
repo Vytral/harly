@@ -119,7 +119,7 @@ export async function GET(
               .where(
                 and(
                   eq(signatureEnvelopes.workspaceId, context.organization.id),
-                  eq(signatureEnvelopes.provider, access.document.signatureProvider ?? "docusign"),
+                  eq(signatureEnvelopes.provider, access.document.signatureProvider ?? "docuseal"),
                   eq(signatureEnvelopes.providerEnvelopeId, access.document.signatureEnvelopeId),
                 ),
               )
