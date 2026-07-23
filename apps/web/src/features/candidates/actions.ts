@@ -20,15 +20,20 @@ import {
   member as authMembers,
   notifications,
   scorecards,
+  mailMessages,
+  mailThreads,
 } from "@harly/db";
 import type { ResumeEducationItem, ResumeExperienceItem } from "@harly/db";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { parseResumeStructured } from "@/lib/ai/surfaces/parse-resume";
+import { composerAttachmentsSchema, decodeComposerAttachments, richBodyReact } from "@/features/mailbox/compose-shared";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceEmailSender } from "@/lib/email";
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
 import { insertCanonicalMessage } from "@/lib/mail/canonical";
+import { sendCanonicalEmail } from "@/lib/mail/send-canonical-email";
+import { isMailUnificationEnabled } from "@/lib/mail/feature-flag";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
 import {
@@ -126,6 +131,7 @@ const candidateUpdateSchema = z.object({
   linkedinUrl: optionalHttpsUrl,
   githubUrl: optionalHttpsUrl,
   websiteUrl: optionalHttpsUrl,
+  avatarUrl: optionalText,
   headline: optionalText,
   summary: optionalText,
 });
@@ -436,6 +442,7 @@ export async function updateCandidateProfile(input: {
   linkedinUrl: string;
   githubUrl: string;
   websiteUrl: string;
+  avatarUrl: string;
   headline: string;
   summary: string;
 }): Promise<{ success: boolean; error?: string }> {
@@ -469,6 +476,7 @@ export async function updateCandidateProfile(input: {
           linkedinUrl: parsed.data.linkedinUrl,
           githubUrl: parsed.data.githubUrl,
           websiteUrl: parsed.data.websiteUrl,
+          avatarUrl: parsed.data.avatarUrl,
           headline: parsed.data.headline,
           summary: parsed.data.summary,
           updatedAt: new Date(),
@@ -946,6 +954,10 @@ const messageSchema = z.object({
   toEmail: z.string().email(),
   subject: z.string().trim().min(1).max(200),
   body: z.string().trim().min(1).max(20000),
+  html: z.string().max(500_000).optional(),
+  attachments: composerAttachmentsSchema,
+  idempotencyKey: z.string().trim().min(1).max(200).optional(),
+  threadId: z.string().uuid().nullable().optional(),
 });
 
 const bulkEmailSchema = z.object({
@@ -1043,8 +1055,9 @@ export async function sendBulkCandidateEmail(input: {
     }
   }
 
-  const sender = await getWorkspaceEmailSender(workspace.id);
-  if (!sender) {
+  const canonicalEnabled = await isMailUnificationEnabled(workspace.id);
+  const sender = canonicalEnabled ? null : await getWorkspaceEmailSender(workspace.id);
+  if (!sender && !canonicalEnabled) {
     return {
       success: false,
       error:
@@ -1073,8 +1086,24 @@ export async function sendBulkCandidateEmail(input: {
       : undefined;
     const messageId = `<${randomUUID()}@harly.local>`;
 
-    let status: "sent" | "queued" | "failed" = sender ? "sent" : "queued";
-    if (sender) {
+    let status: "sent" | "queued" | "failed" = "sent";
+    if (canonicalEnabled) {
+      try {
+        await sendCanonicalEmail({
+          workspaceId: workspace.id,
+          idempotencyKey: `bulk-candidate:${candidate.id}:${subject}:${body}`,
+          candidateId: candidate.id,
+          applicationId: applicationId ?? null,
+          toEmail: candidate.email,
+          subject,
+          textBody: body,
+          replyTo,
+        });
+      } catch (sendError) {
+        emailLog.error({ err: sendError, workspaceId: workspace.id, candidateId: candidate.id }, "bulk canonical email failed");
+        status = "failed";
+      }
+    } else if (sender) {
       try {
         await sender.send({
           to: candidate.email,
@@ -1100,7 +1129,7 @@ export async function sendBulkCandidateEmail(input: {
       }
     }
 
-    await insertCanonicalMessage({
+    if (!canonicalEnabled) await insertCanonicalMessage({
       workspaceId: workspace.id,
       source: "provider",
       candidateId: candidate.id,
@@ -1127,6 +1156,8 @@ export async function sendBulkCandidateEmail(input: {
 
 const draftEmailSchema = z.object({
   candidateId: z.string().min(1),
+  threadId: z.string().uuid().nullable().optional(),
+  applicationId: z.string().uuid().nullable().optional(),
   type: z.enum([
     "screening",
     "interview_invite",
@@ -1143,6 +1174,8 @@ export type GenerateEmailDraftResult =
 
 export async function generateEmailDraftAction(input: {
   candidateId: string;
+  threadId?: string | null;
+  applicationId?: string | null;
   type: "screening" | "interview_invite" | "rejection" | "offer" | "followup";
   additionalInstructions?: string | null;
 }): Promise<GenerateEmailDraftResult> {
@@ -1165,8 +1198,9 @@ export async function generateEmailDraftAction(input: {
   }
 
   // Load candidate + their most recent application context.
-  const [row] = await db
+  const rows = await db
     .select({
+      applicationId: applications.id,
       firstName: candidates.firstName,
       lastName: candidates.lastName,
       jobTitle: jobs.title,
@@ -1192,7 +1226,11 @@ export async function generateEmailDraftAction(input: {
       ),
     )
     .orderBy(desc(applications.appliedAt))
-    .limit(1);
+    .limit(20);
+
+  const row = parsed.data.applicationId
+    ? rows.find((candidate) => candidate.applicationId === parsed.data.applicationId)
+    : rows[0];
 
   if (!row) {
     return { ok: false, error: "Candidate not found." };
@@ -1204,6 +1242,7 @@ export async function generateEmailDraftAction(input: {
     .select({
       score: aiEvaluations.score,
       recommendation: aiEvaluations.recommendation,
+      summary: aiEvaluations.summary,
     })
     .from(aiEvaluations)
     .where(
@@ -1215,6 +1254,28 @@ export async function generateEmailDraftAction(input: {
     .orderBy(desc(aiEvaluations.updatedAt))
     .limit(1);
 
+  let threadSubject: string | null = null;
+  let threadContext: Array<{ direction: "inbound" | "outbound"; fromEmail: string; toEmails: string[]; body: string; receivedAt: string; read: boolean }> = [];
+  if (parsed.data.threadId) {
+    const [thread] = await db.select({ id: mailThreads.id, subject: mailThreads.subject, candidateId: mailThreads.candidateId })
+      .from(mailThreads)
+      .where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, workspace.id)))
+      .limit(1);
+    if (!thread || (thread.candidateId && thread.candidateId !== parsed.data.candidateId)) return { ok: false, error: "Thread not found." };
+    threadSubject = thread.subject;
+    const threadMessages = await db.select().from(mailMessages)
+      .where(and(eq(mailMessages.workspaceId, workspace.id), eq(mailMessages.threadId, thread.id)))
+      .orderBy(desc(mailMessages.receivedAt)).limit(50);
+    threadContext = threadMessages.reverse().map((message) => ({
+      direction: message.direction,
+      fromEmail: message.fromEmail,
+      toEmails: Array.isArray(message.toEmails) ? message.toEmails.filter((value): value is string => typeof value === "string") : [],
+      body: message.textBody,
+      receivedAt: message.receivedAt.toISOString(),
+      read: Boolean(message.readAt),
+    }));
+  }
+
   try {
     const { draftEmailWithAI } = await import("@/lib/ai/surfaces/draft-email");
     const draft = await draftEmailWithAI(config, {
@@ -1225,7 +1286,11 @@ export async function generateEmailDraftAction(input: {
       senderName: user.name,
       aiScore: evalRow?.score ?? null,
       aiRecommendation: evalRow?.recommendation ?? null,
+      aiEvaluationSummary: evalRow?.summary ?? null,
       additionalInstructions: parsed.data.additionalInstructions ?? null,
+      threadSubject,
+      messages: threadContext,
+      latestInboundIntentHint: threadContext.some((message) => message.direction === "inbound") ? "available" : null,
     });
     return { ok: true, subject: draft.subject, body: draft.body };
   } catch (error) {
@@ -1243,6 +1308,9 @@ export async function sendCandidateMessage(input: {
   toEmail: string;
   subject: string;
   body: string;
+  html?: string;
+  attachments?: Array<{ filename: string; contentType: string; base64: string }>;
+  threadId?: string | null;
 }): Promise<{ success: boolean; error?: string; delivered?: boolean }> {
   try {
     const parsed = messageSchema.safeParse(input);
@@ -1274,9 +1342,41 @@ export async function sendCandidateMessage(input: {
       )
       .orderBy(desc(applications.appliedAt))
       .limit(1);
+    const explicitThread = parsed.data.threadId
+      ? (await db.select({ id: mailThreads.id, candidateId: mailThreads.candidateId, applicationId: mailThreads.applicationId })
+          .from(mailThreads)
+          .where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, input.workspaceId)))
+          .limit(1))[0]
+      : null;
+    if (parsed.data.threadId && (!explicitThread || explicitThread.candidateId !== input.candidateId)) {
+      return { success: false, error: "Thread not found." };
+    }
     const replyTo = latestApplication
       ? await getInboundReplyTo(workspace.id, latestApplication.id)
       : undefined;
+    if (await isMailUnificationEnabled(input.workspaceId)) {
+      const canonical = await sendCanonicalEmail({
+        workspaceId: input.workspaceId,
+        idempotencyKey: parsed.data.idempotencyKey ?? `candidate-message:${input.candidateId}:${parsed.data.subject}:${parsed.data.body}`,
+        candidateId: input.candidateId,
+        applicationId: explicitThread?.applicationId ?? latestApplication?.id ?? null,
+        threadId: explicitThread?.id ?? null,
+        toEmail: parsed.data.toEmail,
+        subject: parsed.data.subject,
+        textBody: parsed.data.body,
+        htmlBody: parsed.data.html ?? null,
+        replyTo,
+        attachments: (decodeComposerAttachments(parsed.data.attachments) ?? []).map((attachment) => ({
+          filename: attachment.filename,
+          contentType: attachment.contentType ?? "application/octet-stream",
+          content: attachment.content!,
+        })),
+      });
+      revalidatePath(`/dashboard/candidates/${input.candidateId}`);
+      revalidatePath("/dashboard/candidates");
+      revalidatePath("/dashboard/inbox");
+      return { success: true, delivered: canonical.delivered, ...(canonical.legacyWriteWarning ? { error: canonical.legacyWriteWarning } : {}) };
+    }
     const messageId = `<${randomUUID()}@harly.local>`;
 
     // Send via the workspace's configured provider (or platform default);
@@ -1290,11 +1390,8 @@ export async function sendCandidateMessage(input: {
           subject: parsed.data.subject,
           replyTo,
           messageId,
-          react: createElement(
-            "div",
-            { style: { whiteSpace: "pre-wrap", fontFamily: "sans-serif" } },
-            parsed.data.body,
-          ),
+          react: richBodyReact(parsed.data.body, parsed.data.html),
+          attachments: decodeComposerAttachments(parsed.data.attachments),
         });
       } catch (sendError) {
         emailLog.error(

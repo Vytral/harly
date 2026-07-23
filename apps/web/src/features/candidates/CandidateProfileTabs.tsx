@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   AlertTriangle,
-  ArrowDownLeft,
   BrainCircuit,
   CalendarClock,
   Check,
@@ -31,6 +30,9 @@ import { toast } from "sonner";
 
 import { AiScoreCard } from "@/features/candidates/AiScoreCard";
 import { CandidateDetailsPanel } from "@/features/candidates/CandidateDetailsPanel";
+import { CandidateDocumentUploadButton } from "@/features/candidates/CandidateDocumentUpload";
+import { DocumentRequestsPanel } from "@/features/candidates/DocumentRequestsPanel";
+import type { DocumentRequestItem } from "@/features/documents/requests-shared";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { EnvelopeSimpleDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { EditInterviewDialog } from "@/features/candidates/EditInterviewDialog";
@@ -143,13 +145,16 @@ type Scorecard = {
 
 type CandidateMessage = {
   id: string;
+  threadId: string | null;
+  applicationId: string | null;
   direction: "outbound" | "inbound";
-  transport: "imap" | "legacy-webhook" | "provider";
+  transport: "imap" | "legacy-webhook" | "provider" | "smtp";
   subject: string;
   body: string;
   toEmail: string;
   fromEmail: string | null;
   status: "queued" | "sent" | "failed";
+  read: boolean;
   authorName: string | null;
   attachments: Array<{
     filename: string;
@@ -178,6 +183,8 @@ type CandidateProfileTabsProps = {
   notes: CandidateNoteItem[];
   files: CandidateFile[];
   relatedDocuments: Array<{ id: string; name: string; mimeType: string }>;
+  documentRequests: DocumentRequestItem[];
+  canManageDocuments: boolean;
   activity: Array<
     Omit<CandidateActivityItem, "createdAt"> & { createdAt: string }
   >;
@@ -243,12 +250,6 @@ const RATING_META = {
   weak: { label: "Weak", icon: ThumbsDown, className: "text-destructive" },
 } as const;
 
-const MESSAGE_STATUS_LABEL: Record<CandidateMessage["status"], string> = {
-  sent: "Sent",
-  queued: "Queued",
-  failed: "Failed",
-};
-
 function TabCount({ value }: { value: number }) {
   if (value <= 0) return null;
   return (
@@ -276,6 +277,8 @@ export function CandidateProfileTabs({
   notes,
   files,
   relatedDocuments,
+  documentRequests,
+  canManageDocuments,
   activity,
   scorecards,
   messages,
@@ -294,6 +297,15 @@ export function CandidateProfileTabs({
   canFulfilErasure = false,
 }: CandidateProfileTabsProps) {
   const [tab, setTab] = useState("profile");
+  const conversations = Array.from(
+    messages.reduce((groups, message) => {
+      const key = message.threadId ?? `legacy:${message.id}`;
+      const group = groups.get(key) ?? [];
+      group.push(message);
+      groups.set(key, group);
+      return groups;
+    }, new Map<string, CandidateMessage[]>()).values(),
+  ).map((group) => group.sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
 
   return (
     <Tabs value={tab} onValueChange={setTab}>
@@ -521,58 +533,42 @@ export function CandidateProfileTabs({
             </p>
           </div>
         ) : (
-          messages.map((message) => (
-            <Card
-              key={message.id}
-              className={cn(
-                message.direction === "inbound" &&
-                  "border-l-4 border-l-slate-info",
-              )}
-            >
-              <CardContent className="space-y-1.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    {message.direction === "inbound" ? (
-                      <Badge variant="secondary" className="gap-1">
-                        <ArrowDownLeft className="size-3" />
-                        Reply
-                      </Badge>
-                    ) : null}
-                    <p className="font-medium">{message.subject}</p>
+          conversations.map((conversation) => {
+            const first = conversation[0]!;
+            const last = conversation[conversation.length - 1]!;
+            const threadId = first.threadId;
+            return (
+              <Card key={threadId ?? `legacy:${first.id}`} className={cn(last.direction === "inbound" && "border-l-4 border-l-slate-info")}>
+                <CardContent className="space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-medium">{first.subject}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">{candidateName} · {conversation.length} {conversation.length === 1 ? "message" : "messages"}</p>
+                    </div>
+                    <Badge variant={last.status === "failed" ? "danger" : last.read ? "neutral" : "secondary"}>{last.status === "failed" ? "Failed" : last.read ? "Read" : "Unread"}</Badge>
                   </div>
-                  <Badge
-                    variant={message.status === "failed" ? "danger" : "neutral"}
-                  >
-                    {MESSAGE_STATUS_LABEL[message.status]}
-                  </Badge>
-                </div>
-                <p className="whitespace-pre-line text-sm text-muted-foreground">
-                  {message.body}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {message.direction === "inbound"
-                    ? `From ${message.fromEmail ?? "candidate"}`
-                    : `To ${message.toEmail}`}
-                  {message.authorName ? ` · ${message.authorName}` : ""} ·{" "}
-                  <RelativeTime value={message.createdAt} />
-                </p>
-                {message.attachments.length > 0 ? (
-                  <div className="flex flex-wrap gap-2 pt-1">
-                    {message.attachments.map((attachment, index) => (
-                      <a
-                        key={`${attachment.storageKey}-${index}`}
-                        href={`/api/inbound-email/attachments/${message.id}/${index}`}
-                        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <Paperclip className="size-3" />
-                        {attachment.filename}
-                      </a>
+                  <p className="line-clamp-2 text-sm text-muted-foreground">{last.body}</p>
+                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
+                    <span><RelativeTime value={last.createdAt} /> · {last.direction === "inbound" ? "Candidate" : "You"}</span>
+                    {threadId ? <Link href={`/dashboard/inbox?thread=${encodeURIComponent(threadId)}`} className="font-semibold text-foreground underline underline-offset-4">Open in Inbox</Link> : null}
+                  </div>
+                  <div className="space-y-2 border-t pt-3">
+                    {conversation.map((message) => (
+                      <div key={message.id} className="rounded-lg bg-muted/35 p-3">
+                        <div className="flex items-center justify-between gap-2 text-xs">
+                          <span className="font-medium">{message.direction === "inbound" ? message.fromEmail ?? "Candidate" : "You"}</span>
+                          <span className="text-muted-foreground"><RelativeTime value={message.createdAt} /> · {message.read ? "Read" : "Unread"}</span>
+                        </div>
+                        <p className="mt-2 whitespace-pre-line text-sm">{message.body}</p>
+                        {message.attachments.length > 0 ? <div className="mt-2 flex flex-wrap gap-2">{message.attachments.map((attachment, index) => <a key={`${attachment.storageKey}-${index}`} href={`/api/inbound-email/attachments/${message.id}/${index}`} className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground"><Paperclip className="size-3" />{attachment.filename}</a>)}</div> : null}
+                      </div>
                     ))}
                   </div>
-                ) : null}
-              </CardContent>
-            </Card>
-          ))
+                  {threadId ? <div className="flex justify-end"><EmailDrawer candidateId={candidateId} threadId={threadId} workspaceId={workspaceId} email={candidateEmail} name={candidateName} aiConfigured={aiConfigured} trigger={<Button size="sm" variant="outline"><Mail className="size-4" />Reply</Button>} /></div> : null}
+                </CardContent>
+              </Card>
+            );
+          })
         )}
       </TabsContent>
 
@@ -664,9 +660,18 @@ export function CandidateProfileTabs({
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><NotebookTabs className="size-4" /></span>
             <div><p className="text-sm font-medium">Candidate documents</p><p className="mt-1 text-xs leading-5 text-muted-foreground">CVs and documents linked to this candidate stay visible here while the Documents hub remains the source of truth.</p></div>
           </div>
-          <Button asChild size="sm" variant="outline"><Link href={{ pathname: "/dashboard/documents", query: { candidateId } }}>Open hub</Link></Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {canManageDocuments ? <CandidateDocumentUploadButton candidateId={candidateId} /> : null}
+            <Button asChild size="sm" variant="outline"><Link href={{ pathname: "/dashboard/documents", query: { candidateId } }}>Open hub</Link></Button>
+          </div>
         </div>
         {relatedDocuments.length === 0 ? <div className="rounded-xl border border-dashed px-6 py-12 text-center"><NotebookTabs className="mx-auto size-6 text-muted-foreground" /><p className="mt-3 text-sm font-medium">No linked documents yet</p><p className="mt-1 text-sm text-muted-foreground">Upload a document in the hub and associate it with this candidate.</p></div> : <div className="divide-y rounded-xl border">{relatedDocuments.map((document) => <Link key={document.id} href={{ pathname: "/dashboard/documents", query: { documentId: document.id } }} className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/30"><FileText className="size-4 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{document.name}</span><span className="text-xs text-muted-foreground">{document.mimeType === "application/pdf" ? "PDF" : "Document"}</span><ExternalLink className="size-3.5 text-muted-foreground" /></Link>)}</div>}
+
+        <DocumentRequestsPanel
+          requests={documentRequests}
+          applications={applications.map((application) => ({ id: application.id, jobTitle: application.jobTitle }))}
+          canManage={canManageDocuments}
+        />
       </TabsContent>
     </Tabs>
   );

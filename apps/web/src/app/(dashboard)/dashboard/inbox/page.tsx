@@ -18,18 +18,17 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
   });
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5">
-      <RecruitingInbox
-        threads={threads}
-        messages={messages}
-        initialFilter={normalizeInboxFilter(filter)}
-        page={page}
-        hasMore={hasMore}
-        members={members}
-        candidates={candidates}
-        applications={applications}
-        mailboxStatus={mailboxStatus}
-      />
-    </div>
+    <RecruitingInbox
+      threads={threads}
+      messages={messages}
+      selectedThreadId={query.thread}
+      initialFilter={normalizeInboxFilter(filter)}
+      page={page}
+      hasMore={hasMore}
+      members={members}
+      candidates={candidates}
+      applications={applications}
+      mailboxStatus={mailboxStatus}
+    />
   );
 }

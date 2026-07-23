@@ -13,6 +13,7 @@ import {
   candidateFiles,
   candidateNotes,
   candidateTags,
+  candidateMessages,
   dsarRequests,
   interviews,
   jobs,
@@ -39,6 +40,7 @@ import { cancelInterviewGCalEvent } from "@/lib/gcal/sync";
 import { storage } from "@/lib/storage";
 import { isWorkspaceStorageKey } from "@/lib/storage-validation";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
+import { isMailUnificationEnabled } from "@/lib/mail/feature-flag";
 
 export type CandidateApplicationStatus =
   | "active"
@@ -141,7 +143,7 @@ function textFromMetadata(value: unknown, key: string) {
   return typeof entry === "string" ? entry : null;
 }
 
-function workspaceStorageKeyFromUrl(workspaceId: string, fileUrl: string) {
+export function workspaceStorageKeyFromUrl(workspaceId: string, fileUrl: string) {
   const resumeKey = resumeKeyFromUrl(fileUrl);
   if (resumeKey && isWorkspaceStorageKey(workspaceId, resumeKey, "resumes")) {
     return resumeKey;
@@ -511,7 +513,8 @@ export async function getCandidateProfile(candidateId: string) {
     )
     .orderBy(candidateTags.label);
 
-  const messageRows = await db
+  const mailUnificationEnabled = await isMailUnificationEnabled(workspace.id);
+  const canonicalMessageRows = await db
     .select({
       id: mailMessages.id,
       direction: mailMessages.direction,
@@ -521,6 +524,9 @@ export async function getCandidateProfile(candidateId: string) {
       fromEmail: mailMessages.fromEmail,
       source: mailThreads.source,
       createdAt: mailMessages.receivedAt,
+      threadId: mailMessages.threadId,
+      applicationId: mailMessages.applicationId,
+      readAt: mailMessages.readAt,
     })
     .from(mailMessages)
     .innerJoin(mailThreads, eq(mailThreads.id, mailMessages.threadId))
@@ -532,7 +538,7 @@ export async function getCandidateProfile(candidateId: string) {
     )
     .orderBy(desc(mailMessages.receivedAt));
 
-  const messageAttachments = messageRows.length
+  const messageAttachments = canonicalMessageRows.length
     ? await db
         .select({
           messageId: mailAttachments.messageId,
@@ -545,7 +551,7 @@ export async function getCandidateProfile(candidateId: string) {
         .where(
           and(
             eq(mailAttachments.workspaceId, workspace.id),
-            inArray(mailAttachments.messageId, messageRows.map((message) => message.id)),
+            inArray(mailAttachments.messageId, canonicalMessageRows.map((message) => message.id)),
           ),
         )
     : [];
@@ -555,6 +561,27 @@ export async function getCandidateProfile(candidateId: string) {
     list.push(attachment);
     attachmentsByMessage.set(attachment.messageId, list);
   }
+  const legacyMessageRows = !mailUnificationEnabled
+    ? await db.select().from(candidateMessages)
+        .where(and(eq(candidateMessages.workspaceId, workspace.id), eq(candidateMessages.candidateId, candidate.id)))
+        .orderBy(desc(candidateMessages.createdAt))
+    : [];
+  const messageRows = mailUnificationEnabled
+    ? canonicalMessageRows
+    : legacyMessageRows.map((message) => ({
+        id: message.id,
+        direction: message.direction,
+        subject: message.subject,
+        body: message.body,
+        toEmails: [message.toEmail],
+        fromEmail: message.fromEmail,
+        source: "provider" as const,
+        createdAt: message.createdAt,
+        threadId: null,
+        applicationId: message.applicationId,
+        readAt: message.readAt,
+        legacyAttachments: Array.isArray(message.attachments) ? message.attachments : [],
+      }));
 
   const applicationIds = candidateApplications.map(
     (application) => application.id,
@@ -779,6 +806,36 @@ export async function getCandidateProfile(candidateId: string) {
       };
     }
 
+    if (event.type.startsWith("document.")) {
+      const documentLabels: Record<string, string> = {
+        "document.requested": "Documents requested",
+        "document.submitted": "Document submitted",
+        "document.uploaded": "Document added",
+        "document.signature_sent": "Sent for signature",
+        "document.signature_changed": "Signature status changed",
+        "document.signature_voided": "Signature request voided",
+        "document.expired": "Document expired",
+      };
+      const title = textFromMetadata(event.metadata, "title");
+      return {
+        id: event.id,
+        type: event.type,
+        label: `${documentLabels[event.type] ?? "Document activity"}${title ? `, ${title}` : ""}`,
+        actorName: event.actorName,
+        createdAt: event.createdAt,
+      };
+    }
+
+    if (event.type === "candidate.anonymized") {
+      return {
+        id: event.id,
+        type: event.type,
+        label: "Candidate data anonymized (retention policy)",
+        actorName: event.actorName,
+        createdAt: event.createdAt,
+      };
+    }
+
     return {
       id: event.id,
       type: event.type,
@@ -876,6 +933,8 @@ export async function getCandidateProfile(candidateId: string) {
     privacyRequests,
     messages: messageRows.map((row) => ({
       id: row.id,
+      threadId: row.threadId,
+      applicationId: row.applicationId,
       direction: row.direction,
       transport: row.source,
       subject: row.subject,
@@ -883,8 +942,9 @@ export async function getCandidateProfile(candidateId: string) {
       toEmail: Array.isArray(row.toEmails) ? String(row.toEmails[0] ?? "") : "",
       fromEmail: row.fromEmail,
       status: "sent" as const,
+      read: row.readAt !== null,
       authorName: null,
-      attachments: attachmentsByMessage.get(row.id) ?? [],
+      attachments: ("legacyAttachments" in row ? row.legacyAttachments : attachmentsByMessage.get(row.id) ?? []) as Array<{ filename: string; contentType: string; size: number; storageKey: string }>,
       createdAt: row.createdAt.toISOString(),
     })),
   };

@@ -1,6 +1,8 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
+import { composerAttachmentsSchema, decodeComposerAttachments, richBodyReact } from "@/features/mailbox/compose-shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { applications, candidates, db, mailMessages, mailThreads, member } from "@harly/db";
@@ -13,6 +15,11 @@ import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { enforceRateLimit } from "@/server/api/ratelimit";
 import { generateMailboxReplyWithAI, generateMailboxSummaryWithAI } from "@/lib/ai/surfaces/mailbox-assistance";
 import { logAuditEvent } from "@/lib/audit-log";
+import { getWorkspaceEmailSender } from "@/lib/email";
+import { getInboundReplyTo } from "@/lib/email/inbound-token";
+import { insertCanonicalMessage } from "@/lib/mail/canonical";
+import { sendCanonicalEmail } from "@/lib/mail/send-canonical-email";
+import { isMailUnificationEnabled } from "@/lib/mail/feature-flag";
 
 const log = createLogger("mailbox");
 
@@ -130,31 +137,137 @@ export async function markInboxThreadReadAction(input: {
   return markMailboxThreadReadAction({ threadId: parsed.data.threadId });
 }
 
-export async function replyMailboxThreadAction(input: { threadId: string; body: string }) {
-  const parsed = z.object({ threadId: z.string().uuid(), body: z.string().trim().min(1).max(100_000) }).safeParse(input);
-  if (!parsed.success) return { ok: false, error: "Enter a reply." };
+export async function replyMailboxThreadAction(input: {
+  threadId: string;
+  body: string;
+  html?: string;
+  subject?: string;
+  attachments?: Array<{ filename: string; contentType: string; base64: string }>;
+  idempotencyKey?: string;
+}) {
+  const parsed = z
+    .object({
+      threadId: z.string().uuid(),
+      body: z.string().trim().min(1).max(100_000),
+      html: z.string().max(500_000).optional(),
+      subject: z.string().trim().min(1).max(300).optional(),
+      attachments: composerAttachmentsSchema,
+      idempotencyKey: z.string().trim().min(1).max(200).optional(),
+    })
+    .safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter a reply." };
   await requirePermission("collab:write");
   const { organization, user } = await getWorkspaceContext();
-  const config = await getMailboxConfig(organization.id);
-  if (!config) return { ok: false, error: "The recruiting mailbox is not enabled." };
+
   const [thread] = await db.select().from(mailThreads).where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, organization.id))).limit(1);
-  if (!thread?.participantEmail) return { ok: false, error: "This thread has no reply address." };
+  if (!thread) return { ok: false, error: "Thread not found." };
+  if (!thread.participantEmail) return { ok: false, error: "This thread has no reply address." };
+
   const [lastMessage] = await db.select().from(mailMessages).where(and(eq(mailMessages.threadId, thread.id), eq(mailMessages.workspaceId, organization.id))).orderBy(desc(mailMessages.receivedAt)).limit(1);
-  try {
-    const { default: nodemailer } = await import("nodemailer");
-    const transport = nodemailer.createTransport({ host: config.smtp.host, port: config.smtp.port, secure: config.smtp.tls, auth: { user: config.smtp.user, pass: config.smtp.password } });
-    const subject = /^re:/i.test(thread.subject) ? thread.subject : `Re: ${thread.subject}`;
-    const info = await transport.sendMail({ from: config.address, to: thread.participantEmail, subject, text: parsed.data.body, inReplyTo: lastMessage?.messageId ?? undefined, references: lastMessage?.messageId ?? undefined });
-    const now = new Date();
-    await db.insert(mailMessages).values({ workspaceId: organization.id, threadId: thread.id, candidateId: thread.candidateId, applicationId: thread.applicationId, messageId: info.messageId || null, inReplyTo: lastMessage?.messageId ?? null, references: lastMessage?.messageId ?? null, direction: "outbound", fromEmail: config.address, toEmails: [thread.participantEmail], subject, textBody: parsed.data.body, receivedAt: now, readAt: now });
-    let sentCopySaved = true;
-    if (config.smtp.sentFolder) {
-      const { ImapFlow } = await import("imapflow");
-      const client = new ImapFlow({ host: config.imap.host, port: config.imap.port, secure: config.imap.tls, auth: { user: config.imap.user, pass: config.imap.password }, logger: false });
-      const raw = Buffer.from([`From: ${config.address}`, `To: ${thread.participantEmail}`, `Subject: ${subject}`, `Message-ID: ${info.messageId}`, lastMessage?.messageId ? `In-Reply-To: ${lastMessage.messageId}` : "", "Content-Type: text/plain; charset=utf-8", "", parsed.data.body].filter(Boolean).join("\r\n"));
-      try { await client.connect(); await client.append(config.smtp.sentFolder, raw); } catch { sentCopySaved = false; } finally { await client.logout().catch(() => undefined); }
+  const baseSubject = parsed.data.subject ?? thread.subject;
+  const subject = /^re:/i.test(baseSubject) ? baseSubject : `Re: ${baseSubject}`;
+  const messageId = `<${randomUUID()}@harly.local>`;
+  const now = new Date();
+  const attachments = decodeComposerAttachments(parsed.data.attachments);
+
+  if (await isMailUnificationEnabled(organization.id)) {
+    const canonical = await sendCanonicalEmail({
+      workspaceId: organization.id,
+      idempotencyKey: parsed.data.idempotencyKey ?? `mailbox-reply:${thread.id}:${messageId}`,
+      threadId: thread.id,
+      candidateId: thread.candidateId,
+      applicationId: thread.applicationId,
+      toEmail: thread.participantEmail,
+      subject,
+      textBody: parsed.data.body,
+      htmlBody: parsed.data.html ?? null,
+      inReplyTo: lastMessage?.messageId ?? null,
+      references: lastMessage?.references ? `${lastMessage.references} ${lastMessage.messageId ?? ""}`.trim() : lastMessage?.messageId ?? null,
+      attachments: (attachments ?? []).map((attachment) => ({ filename: attachment.filename, contentType: attachment.contentType ?? "application/octet-stream", content: attachment.content! })),
+      sourceHint: "smtp",
+    });
+    revalidatePath("/dashboard/inbox");
+    return { ok: true, threadId: canonical.threadId, idempotentReplay: canonical.idempotentReplay, legacyWriteWarning: canonical.legacyWriteWarning };
+  }
+
+  const mailboxConfig = await getMailboxConfig(organization.id);
+
+  if (mailboxConfig) {
+    try {
+      const { default: nodemailer } = await import("nodemailer");
+      const transport = nodemailer.createTransport({ host: mailboxConfig.smtp.host, port: mailboxConfig.smtp.port, secure: mailboxConfig.smtp.tls, auth: { user: mailboxConfig.smtp.user, pass: mailboxConfig.smtp.password } });
+      const info = await transport.sendMail({
+        from: mailboxConfig.address,
+        to: thread.participantEmail,
+        subject,
+        text: parsed.data.body,
+        html: parsed.data.html?.trim() || undefined,
+        attachments: attachments?.map((file) => ({ filename: file.filename, content: file.content, contentType: file.contentType })),
+        inReplyTo: lastMessage?.messageId ?? undefined,
+        references: lastMessage?.messageId ?? undefined,
+        messageId,
+      });
+      await db.insert(mailMessages).values({ workspaceId: organization.id, threadId: thread.id, candidateId: thread.candidateId, applicationId: thread.applicationId, messageId: info.messageId || messageId, inReplyTo: lastMessage?.messageId ?? null, references: lastMessage?.messageId ?? null, direction: "outbound", fromEmail: mailboxConfig.address, toEmails: [thread.participantEmail], subject, textBody: parsed.data.body, receivedAt: now, readAt: now });
+      let sentCopySaved = true;
+      if (mailboxConfig.smtp.sentFolder) {
+        const { ImapFlow } = await import("imapflow");
+        const client = new ImapFlow({ host: mailboxConfig.imap.host, port: mailboxConfig.imap.port, secure: mailboxConfig.imap.tls, auth: { user: mailboxConfig.imap.user, pass: mailboxConfig.imap.password }, logger: false });
+        const raw = Buffer.from([`From: ${mailboxConfig.address}`, `To: ${thread.participantEmail}`, `Subject: ${subject}`, `Message-ID: ${info.messageId || messageId}`, lastMessage?.messageId ? `In-Reply-To: ${lastMessage.messageId}` : "", "Content-Type: text/plain; charset=utf-8", "", parsed.data.body].filter(Boolean).join("\r\n"));
+        try { await client.connect(); await client.append(mailboxConfig.smtp.sentFolder, raw); } catch { sentCopySaved = false; } finally { await client.logout().catch(() => undefined); }
+      }
+      await db.update(mailThreads).set({ lastMessageAt: now }).where(eq(mailThreads.id, thread.id));
+      await logAuditEvent({
+        workspaceId: organization.id,
+        actorId: user.id,
+        actorEmail: user.email,
+        action: "mailbox.reply.sent",
+        resourceType: "mail_thread",
+        resourceId: thread.id,
+        metadata: { sentCopySaved, transport: "imap" },
+      });
+      revalidatePath("/dashboard/inbox"); return { ok: true, sentCopySaved };
+    } catch (error) {
+      log.error(error, "reply send failed via IMAP");
+      return { ok: false, error: "Unable to send reply. Please try again." };
     }
+  }
+
+  const sender = await getWorkspaceEmailSender(organization.id);
+  if (!sender) return { ok: false, error: "Email sending is not configured. Go to Settings → Email to set up your sender." };
+
+  const replyTo = thread.applicationId
+    ? await getInboundReplyTo(organization.id, thread.applicationId)
+    : undefined;
+
+  try {
+    const result = await sender.send({
+      to: thread.participantEmail,
+      subject,
+      messageId,
+      replyTo,
+      react: richBodyReact(parsed.data.body, parsed.data.html),
+      attachments,
+    });
+
+    await db.insert(mailMessages).values({
+      workspaceId: organization.id,
+      threadId: thread.id,
+      candidateId: thread.candidateId,
+      applicationId: thread.applicationId,
+      messageId: result.messageId || messageId,
+      inReplyTo: lastMessage?.messageId ?? null,
+      references: lastMessage?.messageId ?? null,
+      direction: "outbound",
+      fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
+      toEmails: [thread.participantEmail],
+      subject,
+      textBody: parsed.data.body,
+      receivedAt: now,
+      readAt: now,
+    });
+
     await db.update(mailThreads).set({ lastMessageAt: now }).where(eq(mailThreads.id, thread.id));
+
     await logAuditEvent({
       workspaceId: organization.id,
       actorId: user.id,
@@ -162,13 +275,109 @@ export async function replyMailboxThreadAction(input: { threadId: string; body: 
       action: "mailbox.reply.sent",
       resourceType: "mail_thread",
       resourceId: thread.id,
-      metadata: { sentCopySaved },
+      metadata: { transport: "provider" },
     });
-    revalidatePath("/dashboard/inbox"); return { ok: true, sentCopySaved };
+
+    revalidatePath("/dashboard/inbox");
+    return { ok: true };
   } catch (error) {
-    log.error(error, "reply send failed");
+    log.error(error, "reply send failed via provider");
     return { ok: false, error: "Unable to send reply. Please try again." };
   }
+}
+
+export async function createMailboxThreadAction(input: {
+  candidateId?: string | null;
+  toEmail: string;
+  subject: string;
+  body: string;
+  html?: string;
+  attachments?: Array<{ filename: string; contentType: string; base64: string }>;
+}) {
+  const parsed = z.object({
+    candidateId: z.string().uuid().nullable().optional(),
+    toEmail: z.string().email(),
+    subject: z.string().trim().min(1).max(300),
+    body: z.string().trim().min(1).max(100_000),
+    html: z.string().max(500_000).optional(),
+    attachments: composerAttachmentsSchema,
+  }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter a subject and message." };
+
+  await requirePermission("collab:write");
+  const { organization } = await getWorkspaceContext();
+  const [candidate] = parsed.data.candidateId
+    ? await db
+        .select({ id: candidates.id, email: candidates.email })
+        .from(candidates)
+        .where(and(eq(candidates.id, parsed.data.candidateId), eq(candidates.workspaceId, organization.id), isNull(candidates.deletedAt)))
+        .limit(1)
+    : [];
+  if (parsed.data.candidateId && (!candidate || candidate.email !== parsed.data.toEmail)) return { ok: false, error: "Candidate not found." };
+
+  const [application] = candidate
+    ? await db
+        .select({ id: applications.id })
+        .from(applications)
+        .where(and(eq(applications.workspaceId, organization.id), eq(applications.candidateId, candidate.id)))
+        .orderBy(desc(applications.appliedAt))
+        .limit(1)
+    : [];
+  const messageId = `<${randomUUID()}@harly.local>`;
+  const attachments = decodeComposerAttachments(parsed.data.attachments);
+
+  if (await isMailUnificationEnabled(organization.id)) {
+    const canonical = await sendCanonicalEmail({
+      workspaceId: organization.id,
+      idempotencyKey: `mailbox-new:${candidate?.id ?? parsed.data.toEmail}:${parsed.data.subject}:${parsed.data.body}`,
+      candidateId: candidate?.id ?? null,
+      applicationId: application?.id ?? null,
+      toEmail: parsed.data.toEmail,
+      subject: parsed.data.subject,
+      textBody: parsed.data.body,
+      htmlBody: parsed.data.html ?? null,
+      attachments: (attachments ?? []).map((attachment) => ({ filename: attachment.filename, contentType: attachment.contentType ?? "application/octet-stream", content: attachment.content! })),
+    });
+    revalidatePath("/dashboard/inbox");
+    return { ok: true, threadId: canonical.threadId, delivered: canonical.delivered, legacyWriteWarning: canonical.legacyWriteWarning };
+  }
+
+  const sender = await getWorkspaceEmailSender(organization.id);
+  if (!sender) {
+    return { ok: false, error: "Email sending is not configured. Go to Settings → Email to set up your sender." };
+  }
+
+  try {
+    await sender.send({
+      to: parsed.data.toEmail,
+      subject: parsed.data.subject,
+      messageId,
+      replyTo: application ? await getInboundReplyTo(organization.id, application.id) : undefined,
+      react: richBodyReact(parsed.data.body, parsed.data.html),
+      attachments,
+    });
+  } catch {
+    return { ok: false, error: "Unable to send the email. Please try again." };
+  }
+
+  const created = await insertCanonicalMessage({
+    workspaceId: organization.id,
+    source: "provider",
+    candidateId: candidate?.id ?? null,
+    applicationId: application?.id ?? null,
+    participantEmail: parsed.data.toEmail,
+    subject: parsed.data.subject,
+    receivedAt: new Date(),
+    messageId,
+    direction: "outbound",
+    fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
+    toEmails: [parsed.data.toEmail],
+    textBody: parsed.data.body,
+    htmlBody: parsed.data.html,
+    readAt: new Date(),
+  });
+  revalidatePath("/dashboard/inbox");
+  return { ok: true, threadId: created.threadId, delivered: true };
 }
 
 export async function retryMailboxSyncAction() {

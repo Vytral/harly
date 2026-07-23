@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => {
     sendWorkspaceEmail: vi.fn(),
     renderActiveEmailTemplate: vi.fn(),
     getWorkspaceEmailBranding: vi.fn(),
+    insertCanonicalMessage: vi.fn(),
+    getWorkspaceEmailConfig: vi.fn(),
   };
 });
 
@@ -58,6 +60,8 @@ vi.mock("@harly/db", () => {
 
 vi.mock("@/lib/email", () => ({ sendWorkspaceEmail: mocks.sendWorkspaceEmail }));
 vi.mock("@/lib/email/branding", () => ({ getWorkspaceEmailBranding: mocks.getWorkspaceEmailBranding }));
+vi.mock("@/lib/email/config", () => ({ getWorkspaceEmailConfig: mocks.getWorkspaceEmailConfig }));
+vi.mock("@/lib/mail/canonical", () => ({ insertCanonicalMessage: mocks.insertCanonicalMessage }));
 vi.mock("@/features/email-templates/data", () => ({
   renderActiveEmailTemplate: mocks.renderActiveEmailTemplate,
 }));
@@ -90,6 +94,10 @@ function reset() {
   mocks.sendWorkspaceEmail.mockReset();
   mocks.renderActiveEmailTemplate.mockResolvedValue(null);
   mocks.getWorkspaceEmailBranding.mockResolvedValue({});
+  mocks.insertCanonicalMessage.mockReset();
+  mocks.insertCanonicalMessage.mockResolvedValue({ messageId: "mm-1", threadId: "mt-1", duplicate: false });
+  mocks.getWorkspaceEmailConfig.mockReset();
+  mocks.getWorkspaceEmailConfig.mockResolvedValue(null);
   mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
     const tx = {
       update: () => ({
@@ -139,5 +147,24 @@ describe("email_outbox worker", () => {
     const failedUpdate = mocks.updateCalls.find((c) => c.set.lastError !== undefined);
     expect(failedUpdate?.set.lastError).toMatch(/did not accept/i);
     expect(failedUpdate?.set).toHaveProperty("attempts");
+  });
+
+  it("records the sent offer in the canonical conversation model", async () => {
+    const offerWithCandidate = { ...OFFER_DRAFT, candidateId: "cand-1" };
+    mocks.selectQueue.push([PENDING], [offerWithCandidate], [RECIPIENT]);
+    mocks.sendWorkspaceEmail.mockResolvedValue(true);
+
+    const result = await processEmailOutbox();
+
+    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+    expect(mocks.insertCanonicalMessage).toHaveBeenCalledTimes(1);
+    const call = mocks.insertCanonicalMessage.mock.calls[0][0] as Record<string, unknown>;
+    expect(call).toMatchObject({
+      workspaceId: "ws-1",
+      candidateId: "cand-1",
+      applicationId: "app-1",
+      direction: "outbound",
+      source: "provider",
+    });
   });
 });

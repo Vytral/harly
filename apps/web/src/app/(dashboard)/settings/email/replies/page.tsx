@@ -18,7 +18,7 @@ export default async function ConfigureReplyHandlingPage() {
     getWorkspaceInboundEmailStatus(organization.id),
   ]);
 
-  const initialMode = mailboxStatus.enabled || mailboxStatus.configured
+  const initialMode = mailboxStatus.enabled || (!inboundStatus.enabled && mailboxStatus.configured)
     ? "mailbox"
     : "threaded";
 

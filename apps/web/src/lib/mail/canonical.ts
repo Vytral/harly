@@ -5,15 +5,25 @@ import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
   db,
+  mailAttachments,
   mailMessages,
   mailThreads,
   type NewMailMessage,
 } from "@harly/db";
 
-export type MailSource = "imap" | "legacy-webhook" | "provider";
+export type MailSource = "imap" | "legacy-webhook" | "provider" | "smtp";
+
+export type CanonicalAttachment = {
+  filename: string;
+  contentType: string;
+  content: Buffer;
+  size?: number;
+  storageKey?: string;
+};
 
 export type CanonicalThreadInput = {
   workspaceId: string;
+  threadId?: string | null;
   source: MailSource;
   mailboxId?: string | null;
   subject: string;
@@ -34,6 +44,7 @@ export type CanonicalMessageInput = CanonicalThreadInput & {
   textBody: string;
   htmlBody?: string | null;
   readAt?: Date | null;
+  attachments?: CanonicalAttachment[];
 };
 
 export function normalizeMailSubject(subject: string) {
@@ -84,28 +95,38 @@ function referenceIds(input: Pick<CanonicalThreadInput, "inReplyTo" | "reference
     .filter((value): value is string => Boolean(value));
 }
 
-async function conversationIdForReferences(
+async function threadIdForReferences(
   workspaceId: string,
   input: Pick<CanonicalThreadInput, "inReplyTo" | "references">,
 ) {
   const ids = referenceIds(input);
   if (ids.length === 0) return null;
   const [row] = await db
-    .select({ conversationId: mailThreads.conversationId })
+    .select({ id: mailThreads.id })
     .from(mailMessages)
     .innerJoin(mailThreads, eq(mailThreads.id, mailMessages.threadId))
     .where(and(eq(mailMessages.workspaceId, workspaceId), inArray(mailMessages.messageId, ids)))
     .orderBy(desc(mailMessages.createdAt))
     .limit(1);
-  return row?.conversationId ?? null;
+  return row?.id ?? null;
 }
 
 export async function findOrCreateCanonicalThread(input: CanonicalThreadInput) {
-  const conversationId =
-    (await conversationIdForReferences(input.workspaceId, input)) ?? randomUUID();
-  const mailboxPredicate = input.mailboxId
-    ? eq(mailThreads.mailboxId, input.mailboxId)
-    : isNull(mailThreads.mailboxId);
+  if (input.threadId) {
+    const [thread] = await db.select({ id: mailThreads.id, conversationId: mailThreads.conversationId })
+      .from(mailThreads)
+      .where(and(eq(mailThreads.id, input.threadId), eq(mailThreads.workspaceId, input.workspaceId)))
+      .limit(1);
+    if (!thread) throw new Error("Mail thread does not belong to this workspace.");
+    return thread;
+  }
+
+  const relatedThreadId = await threadIdForReferences(input.workspaceId, input);
+  if (relatedThreadId) {
+    const [thread] = await db.select({ id: mailThreads.id, conversationId: mailThreads.conversationId })
+      .from(mailThreads).where(eq(mailThreads.id, relatedThreadId)).limit(1);
+    if (thread) return thread;
+  }
 
   const [existing] = await db
     .select({ id: mailThreads.id, conversationId: mailThreads.conversationId })
@@ -113,14 +134,9 @@ export async function findOrCreateCanonicalThread(input: CanonicalThreadInput) {
     .where(
       and(
         eq(mailThreads.workspaceId, input.workspaceId),
-        eq(mailThreads.source, input.source),
-        mailboxPredicate,
-        input.candidateId ? eq(mailThreads.candidateId, input.candidateId) : undefined,
-        input.applicationId ? eq(mailThreads.applicationId, input.applicationId) : undefined,
+        input.candidateId && input.applicationId ? eq(mailThreads.candidateId, input.candidateId) : sql`false`,
+        input.applicationId ? eq(mailThreads.applicationId, input.applicationId) : sql`false`,
         eq(mailThreads.normalizedSubject, normalizeMailSubject(input.subject)),
-        input.participantEmail
-          ? eq(mailThreads.participantEmail, input.participantEmail)
-          : isNull(mailThreads.participantEmail),
         eq(mailThreads.status, "open"),
       ),
     )
@@ -134,7 +150,7 @@ export async function findOrCreateCanonicalThread(input: CanonicalThreadInput) {
       workspaceId: input.workspaceId,
       mailboxId: input.mailboxId ?? null,
       source: input.source,
-      conversationId,
+      conversationId: randomUUID(),
       subject: input.subject || "(No subject)",
       normalizedSubject: normalizeMailSubject(input.subject),
       participantEmail: input.participantEmail ?? null,
@@ -147,6 +163,14 @@ export async function findOrCreateCanonicalThread(input: CanonicalThreadInput) {
 }
 
 export async function insertCanonicalMessage(input: CanonicalMessageInput) {
+  const existing = input.messageId
+    ? (await db.select({ id: mailMessages.id, threadId: mailMessages.threadId })
+        .from(mailMessages)
+        .where(and(eq(mailMessages.workspaceId, input.workspaceId), eq(mailMessages.messageId, input.messageId)))
+        .limit(1))[0]
+    : undefined;
+  if (existing) return { messageId: existing.id, threadId: existing.threadId, duplicate: true };
+
   const thread = await findOrCreateCanonicalThread(input);
   const values: NewMailMessage = {
     workspaceId: input.workspaceId,
@@ -167,15 +191,6 @@ export async function insertCanonicalMessage(input: CanonicalMessageInput) {
     readAt: input.readAt ?? null,
   };
 
-  const [existing] = input.messageId
-    ? await db
-        .select({ id: mailMessages.id, threadId: mailMessages.threadId })
-        .from(mailMessages)
-        .where(and(eq(mailMessages.workspaceId, input.workspaceId), eq(mailMessages.messageId, input.messageId)))
-        .limit(1)
-    : [];
-  if (existing) return { messageId: existing.id, threadId: existing.threadId, duplicate: true };
-
   const insert = db.insert(mailMessages).values(values);
   const createdRows = input.messageId
     ? await insert
@@ -187,6 +202,16 @@ export async function insertCanonicalMessage(input: CanonicalMessageInput) {
   const [created] = createdRows;
   if (!created) {
     return { messageId: input.messageId ?? "", threadId: thread.id, duplicate: true };
+  }
+  if (input.attachments?.length) {
+    await db.insert(mailAttachments).values(input.attachments.map((attachment) => ({
+      workspaceId: input.workspaceId,
+      messageId: created.id,
+      filename: attachment.filename,
+      contentType: attachment.contentType,
+      size: attachment.size ?? attachment.content.byteLength,
+      storageKey: attachment.storageKey ?? `mail-inline:${created.id}:${attachment.filename}`,
+    })));
   }
   await db
     .update(mailThreads)

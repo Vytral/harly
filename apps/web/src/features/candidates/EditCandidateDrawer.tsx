@@ -10,6 +10,7 @@ import { LinkedinLogo } from "@/components/ui/icons/brands";
 import { updateCandidateProfile } from "@/features/candidates/actions";
 import { withKeyLock } from "@/lib/client-mutex";
 import { Button } from "@/components/ui/button";
+import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { SidePanel } from "@/components/ui/side-panel";
@@ -27,6 +28,7 @@ export type EditableCandidate = {
   linkedinUrl: string | null;
   githubUrl: string | null;
   websiteUrl: string | null;
+  avatarUrl: string | null;
   headline: string | null;
   summary: string | null;
 };
@@ -41,6 +43,7 @@ export function EditCandidateDrawer({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [avatarUrl, setAvatarUrl] = useState(candidate.avatarUrl ?? "");
 
   return (
     <SidePanel
@@ -77,6 +80,7 @@ export function EditCandidateDrawer({
                   linkedinUrl: String(formData.get("linkedinUrl") ?? ""),
                   githubUrl: String(formData.get("githubUrl") ?? ""),
                   websiteUrl: String(formData.get("websiteUrl") ?? ""),
+                  avatarUrl: String(formData.get("avatarUrl") ?? ""),
                   headline: String(formData.get("headline") ?? ""),
                   summary: String(formData.get("summary") ?? ""),
                 }),
@@ -91,9 +95,18 @@ export function EditCandidateDrawer({
             });
           }}
       >
-          <div className="grid grid-cols-2 gap-3">
-            <Field name="firstName" label="First name" defaultValue={candidate.firstName} />
-            <Field name="lastName" label="Last name" defaultValue={candidate.lastName} />
+          <input type="hidden" name="avatarUrl" value={avatarUrl} />
+          <div className="flex items-center gap-4">
+            <FileDropzone
+              value={avatarUrl || null}
+              onChange={(url) => setAvatarUrl(url ?? "")}
+              variant="avatar"
+              hint="Photo · optional"
+            />
+            <div className="grid flex-1 grid-cols-2 gap-3">
+              <Field name="firstName" label="First name" defaultValue={candidate.firstName} />
+              <Field name="lastName" label="Last name" defaultValue={candidate.lastName} />
+            </div>
           </div>
           <Field name="email" label="Email" type="email" defaultValue={candidate.email} />
           <Field name="headline" label="Headline" defaultValue={candidate.headline ?? ""} />
@@ -112,7 +125,7 @@ export function EditCandidateDrawer({
           </div>
           <Field name="linkedinUrl" label="LinkedIn" type="url" defaultValue={candidate.linkedinUrl ?? ""} placeholder="https://linkedin.com/in/…" icon={<LinkedinLogo className="size-3.5" />} />
           <Field name="githubUrl" label="GitHub" type="url" defaultValue={candidate.githubUrl ?? ""} placeholder="https://github.com/…" icon={<GithubIcon className="size-3.5" />} />
-          <Field name="websiteUrl" label="Website" type="url" defaultValue={candidate.websiteUrl ?? ""} placeholder="https://…" icon={<Globe className="size-3.5" />} />
+          <Field name="websiteUrl" label="Website" type="url" defaultValue={candidate.websiteUrl ?? ""} placeholder="https://yoursite.com" icon={<Globe className="size-3.5" />} />
       </form>
     </SidePanel>
   );

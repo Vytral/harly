@@ -1,18 +1,16 @@
 "use client";
 
-import { Mail } from "lucide-react";
-
 import { EmptyState } from "@/components/ui/EmptyState";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { EnvelopeSimpleDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
-import type { InboxThread } from "@/features/mailbox/data";
-
-import type { InboxFilter } from "@/features/mailbox/data";
+import type { InboxFilter, InboxThread } from "@/features/mailbox/data";
 
 export const inboxFilters: ReadonlyArray<[InboxFilter, string]> = [
   ["all", "All"],
+  ["needs-reply", "Needs reply"],
   ["replies", "Replies"],
   ["unassigned", "Unassigned"],
   ["unread", "Unread"],
@@ -26,6 +24,8 @@ export function matchesInboxFilter(thread: InboxThread, filter: InboxFilter) {
   switch (filter) {
     case "all":
       return thread.status === "open";
+    case "needs-reply":
+      return thread.status === "open" && thread.needsReply !== false;
     case "replies":
       return thread.status === "open" && thread.hasInboundReply !== false;
     case "unassigned":
@@ -36,6 +36,8 @@ export function matchesInboxFilter(thread: InboxThread, filter: InboxFilter) {
       return Boolean(thread.candidateId);
     case "assigned":
       return Boolean(thread.ownerName);
+    case "assigned-to-me":
+      return Boolean(thread.ownerId);
     case "archived":
       return thread.status === "archived";
   }
@@ -44,110 +46,79 @@ export function matchesInboxFilter(thread: InboxThread, filter: InboxFilter) {
 export function InboxThreadList({
   threads,
   previews,
-  filter,
+  query,
+  filterLabel,
   selectedId,
-  onFilterChange,
   onSelect,
 }: {
   threads: InboxThread[];
   previews: Record<string, string | null>;
-  filter: InboxFilter;
+  query: string;
+  filterLabel: string;
   selectedId: string | undefined;
-  onFilterChange: (filter: InboxFilter) => void;
   onSelect: (thread: InboxThread) => void;
 }) {
-  const visible = threads.filter((thread) => matchesInboxFilter(thread, filter));
-
   return (
-    <div className="flex h-full min-h-0 flex-col">
-      <div
-        role="tablist"
-        aria-label="Inbox filters"
-        className="flex gap-1 overflow-x-auto border-b border-border/80 p-2"
-      >
-        {inboxFilters.map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            role="tab"
-            aria-selected={filter === value}
-            onClick={() => onFilterChange(value)}
-            className={cn(
-              "shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-[background-color,color] active:scale-[0.98]",
-              filter === value
-                ? "bg-secondary text-secondary-foreground"
-                : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
-            )}
-          >
-            {label}
-          </button>
-        ))}
+    <section className="flex h-full min-h-0 flex-col" aria-label="Inbox conversations">
+      <div className="flex items-center justify-between gap-2 border-b border-border/60 px-4 py-2">
+        <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted-foreground">{filterLabel}</span>
+        <span className="text-[11px] tabular-nums text-muted-foreground/70">
+          {threads.length} {threads.length === 1 ? "thread" : "threads"}
+        </span>
       </div>
 
-      {visible.length === 0 ? (
-        <div className="flex flex-1 items-center p-4">
+      {threads.length === 0 ? (
+        <div className="flex min-h-0 flex-1 items-center p-4">
           <EmptyState
-            title="No messages here"
-            description="Nothing matches this filter right now. Try another filter or check back after your next sync."
-            icon={Mail}
-            className="min-h-0 w-full py-10"
+            title={query ? "No matching conversations" : "No messages here"}
+            description={query ? "Try a different sender, subject, or keyword." : "Nothing matches this filter right now."}
+            icon={EnvelopeSimpleDuotoneIcon}
+            className="min-h-0 w-full border-0 bg-transparent py-10"
           />
         </div>
       ) : (
-        <ul role="list" className="min-h-0 flex-1 overflow-y-auto">
-          {visible.map((item) => {
+        <ul role="list" className="min-h-0 flex-1 divide-y divide-border/50 overflow-y-auto">
+          {threads.map((item) => {
             const isSelected = selectedId === item.id;
+            const isUnread = item.unreadCount > 0;
             const senderName = item.candidateName ?? item.participantEmail ?? "Unknown sender";
+            const preview = previews[item.id] || "No preview available.";
             return (
-              <li key={item.id}>
+              <li key={item.id} data-thread-row={item.id} className="relative">
                 <button
                   type="button"
                   aria-current={isSelected ? "true" : undefined}
                   onClick={() => onSelect(item)}
                   className={cn(
-                    "flex w-full items-start gap-3 border-b border-border/60 px-3 py-3 text-left transition-colors active:scale-[0.99]",
-                    isSelected ? "bg-accent" : "hover:bg-accent/50",
+                    "group relative flex w-full items-start gap-2.5 px-4 py-3 text-left transition-colors duration-100 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring/50",
+                    isSelected ? "bg-accent/60" : "hover:bg-muted/50",
                   )}
                 >
-                  <UserAvatar name={senderName} size="md" className="mt-0.5 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={cn(
-                          "truncate text-sm",
-                          item.unreadCount ? "font-semibold text-foreground" : "text-foreground/90",
-                        )}
-                      >
+                  {isSelected ? <span className="absolute inset-y-1.5 left-0 w-0.5 rounded-r-full bg-primary" aria-hidden="true" /> : null}
+                  <span className="relative mt-0.5 shrink-0">
+                    <UserAvatar name={senderName} src={item.candidateAvatarUrl} size="sm" />
+                    {isUnread ? <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full border-2 border-card bg-primary" aria-label={`${item.unreadCount} unread`} /> : null}
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-baseline justify-between gap-2">
+                      <span className={cn("min-w-0 truncate text-[13px]", isUnread ? "font-semibold text-foreground" : "font-medium text-foreground/80")}>
                         {senderName}
                       </span>
-                      <span className="shrink-0 text-xs text-muted-foreground">
+                      <span className="shrink-0 font-mono text-[10px] tabular-nums text-muted-foreground/70">
                         <RelativeTime value={item.lastMessageAt} />
                       </span>
-                    </div>
-                    <p
-                      className={cn(
-                        "mt-0.5 truncate text-sm",
-                        item.unreadCount ? "font-medium text-foreground" : "text-muted-foreground",
-                      )}
-                    >
+                    </span>
+                    <span className={cn("mt-0.5 block truncate text-[13px]", isUnread ? "font-medium text-foreground/90" : "text-foreground/70")}>
                       {item.subject}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground">
-                      {previews[item.id] || "No preview available."}
-                    </p>
-                  </div>
-                  {item.unreadCount ? (
-                    <span
-                      aria-hidden="true"
-                      className="mt-1.5 size-2 shrink-0 rounded-full bg-sky-500"
-                    />
-                  ) : null}
+                    </span>
+                    <span className="mt-0.5 block truncate text-xs leading-5 text-muted-foreground">{preview}</span>
+                  </span>
                 </button>
               </li>
             );
           })}
         </ul>
       )}
-    </div>
+    </section>
   );
 }

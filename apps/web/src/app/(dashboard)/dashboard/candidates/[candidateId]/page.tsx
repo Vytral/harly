@@ -37,6 +37,7 @@ import { listCandidateInterviews } from "@/features/interviews/data";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listOffersForCandidate } from "@/features/offers/data";
 import { listDocumentsForCandidate } from "@/features/documents/data";
+import { listDocumentRequestsForCandidate } from "@/features/documents/requests-data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { can } from "@/features/workspaces/permissions-server";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
@@ -82,7 +83,7 @@ export default async function CandidateDetailPage({
   params,
 }: CandidateDetailPageProps) {
   const { candidateId } = await params;
-  const [profile, allCandidates, members, interviews, offers, emailTemplates, relatedDocuments] =
+  const [profile, allCandidates, members, interviews, offers, emailTemplates, relatedDocuments, documentRequests] =
     await Promise.all([
       getCandidateProfile(candidateId),
       listCandidates(),
@@ -91,6 +92,7 @@ export default async function CandidateDetailPage({
       listOffersForCandidate(candidateId),
       listEmailTemplates(),
       listDocumentsForCandidate(candidateId),
+      listDocumentRequestsForCandidate(candidateId),
     ]);
 
   if (!profile) {
@@ -100,12 +102,13 @@ export default async function CandidateDetailPage({
   const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags, aiEvaluations, inPool, privacyRequests } =
     profile;
   const isHired = applications.some((application) => application.status === "hired");
-  const [calStatus, aiStatus, workspaceContext, canManageDsar, canDeleteCandidates] = await Promise.all([
+  const [calStatus, aiStatus, workspaceContext, canManageDsar, canDeleteCandidates, canManageDocuments] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
     getWorkspaceAiStatus(workspaceId),
     getWorkspaceContext(),
     can("dsar:manage"),
     can("candidates:delete"),
+    can("documents:manage"),
   ]);
   const workspaceName = workspaceContext.organization.name;
   const currentUserName = workspaceContext.user.name;
@@ -164,6 +167,7 @@ export default async function CandidateDetailPage({
     linkedinUrl: candidate.linkedinUrl,
     githubUrl: candidate.githubUrl,
     websiteUrl: candidate.websiteUrl,
+    avatarUrl: candidate.avatarUrl,
     headline: candidate.headline,
     summary: candidate.summary,
   };
@@ -425,6 +429,8 @@ export default async function CandidateDetailPage({
               createdAt: file.createdAt.toISOString(),
             }))}
             relatedDocuments={relatedDocuments}
+            documentRequests={documentRequests}
+            canManageDocuments={canManageDocuments}
             activity={serializedActivity}
             scorecards={scorecards}
             messages={messages}

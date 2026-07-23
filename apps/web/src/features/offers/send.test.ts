@@ -95,6 +95,11 @@ vi.mock("@/lib/logger", () => ({
   }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+// The offer-signing envelope creation is exercised in its own tests; here it is
+// a no-op so sendOffer's outbox delivery path is what's under test.
+vi.mock("@/lib/esign/offer-signing", () => ({
+  createOfferEnvelope: vi.fn(async () => null),
+}));
 
 import { sendOffer } from "./actions";
 

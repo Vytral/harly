@@ -288,8 +288,8 @@ export function ReplyHandlingSettingsForm({
 
   return (
     <DrawerLayout
-      title="Configure reply handling"
-      description="Choose one reply route. Secrets are encrypted at rest and never shown again."
+      title="Set up incoming candidate email"
+      description="Choose how Harly receives replies. A shared mailbox lets you read and send from Inbox; threaded replies import new messages through Resend or Postmark."
       surface="page"
       footer={
         <Button
@@ -312,14 +312,14 @@ export function ReplyHandlingSettingsForm({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="mailbox">Shared mailbox</SelectItem>
+              <SelectItem value="mailbox">Shared mailbox (IMAP + SMTP)</SelectItem>
               <SelectItem value="threaded">
-                Threaded replies via webhook
+                Threaded replies (Resend/Postmark webhook)
               </SelectItem>
             </SelectContent>
           </Select>
           <p className="text-xs text-muted-foreground">
-            Only one route is active at a time. You can change it later without
+            Only one route is active at a time. You can switch later without
             losing the saved configuration for the other route.
           </p>
         </div>
@@ -627,9 +627,9 @@ function ThreadedReplyFields({
           placeholder="reply.yourcompany.com"
           className="font-mono text-xs"
         />
-        <p className="text-xs text-muted-foreground">
-          Point an MX record here at your provider. Candidate replies use a
-          per-application address under this domain.
+          <p className="text-xs text-muted-foreground">
+          Point an MX record here at your provider. Harly gives each application
+          its own reply address under this domain.
         </p>
       </Field>
 
@@ -709,7 +709,7 @@ function ThreadedReplyFields({
 
       <div className="flex items-center justify-between rounded-xl border px-3 py-2.5">
         <div>
-          <p className="text-sm font-medium">Enable threaded replies</p>
+          <p className="text-sm font-medium">Receive candidate replies automatically</p>
           <p className="text-xs text-muted-foreground">
             Replies are routed directly to the candidate timeline.
           </p>

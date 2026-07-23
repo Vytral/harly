@@ -25,7 +25,7 @@ import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
-import { createOfferEnvelope } from "@/lib/docusign/offer-document";
+import { createOfferEnvelope } from "@/lib/esign/offer-signing";
 import {
   assertOfferTerms,
   getOfferRecipient,
@@ -352,17 +352,17 @@ export async function sendOffer(input: {
     };
   }
 
-  // DocuSign offer-signature channel: when the workspace opted into e-signature,
-  // create the DocuSign envelope BEFORE the email. The email still notifies the
-  // candidate (and points them to the portal to sign); the envelopeId is the
-  // primary correlation key for the Connect webhook to flip the offer status.
+  // E-signature offer channel: when the workspace opted into e-signature, create
+  // the DocuSeal submission BEFORE the email. The email still notifies the
+  // candidate (and points them to the portal to sign); the submission id is the
+  // primary correlation key for the webhook to flip the offer status.
   try {
     await createOfferEnvelope({ workspaceId, offer });
   } catch (error) {
-    log.error({ error, offerId: offer.id }, "sendOffer: DocuSign envelope creation failed");
+    log.error({ error, offerId: offer.id }, "sendOffer: DocuSeal submission creation failed");
     return {
       success: false,
-      error: "Could not create the DocuSign envelope. Check the connection and Connect HMAC key, then try again.",
+      error: "Could not create the signature request. Check the DocuSeal connection and try again.",
     };
   }
 

@@ -29,6 +29,11 @@ vi.mock("@harly/db", () => ({
     inboundToken: "applications.inboundToken",
     workspaceId: "applications.workspaceId",
   },
+  candidates: {
+    id: "candidates.id",
+    firstName: "candidates.firstName",
+    lastName: "candidates.lastName",
+  },
   candidateMessages: {
     id: "candidateMessages.id",
     workspaceId: "candidateMessages.workspaceId",
@@ -63,9 +68,9 @@ vi.mock("@harly/db", () => ({
         mocks.values(...args);
         return {
           onConflictDoNothing: () => ({
-            returning: async () => [{ id: "message-1" }],
+            returning: async () => [{ id: "message-1", threadId: "thread-existing" }],
           }),
-          returning: async () => [{ id: "message-1" }],
+          returning: async () => [{ id: "message-1", threadId: "thread-existing" }],
         };
       },
     })),
@@ -156,14 +161,43 @@ describe("processInboundEmail", () => {
   it("does not duplicate a provider retry already recorded for the workspace", async () => {
     mocks.selectResults.push(
       [{ id: "application-1", candidateId: "candidate-1", jobId: "job-1" }],
-      [],
-      [{ id: "thread-1", conversationId: "conversation-1" }],
-      [{ id: "message-1" }],
+      [{ id: "message-1", threadId: "thread-1" }],
     );
 
     await processInboundEmail(email, "workspace-1");
 
     expect(mocks.notifyInboundEmail).not.toHaveBeenCalled();
+  });
+
+  it("resolves the existing canonical thread when messageId is new", async () => {
+    mocks.selectResults.push(
+      // Application routed by the plus-address token.
+      [{ id: "application-1", candidateId: "candidate-1", jobId: "job-1" }],
+      // No message with this provider messageId exists yet.
+      [],
+      // Contextual canonical-thread lookup: same candidate, application,
+      // normalized subject and open status.
+      [{ id: "thread-existing", conversationId: "conversation-existing" }],
+    );
+
+    await processInboundEmail(email, "workspace-1");
+
+    expect(mocks.values).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "workspace-1",
+        threadId: "thread-existing",
+        candidateId: "candidate-1",
+        applicationId: "application-1",
+        messageId: "provider-message-1",
+      }),
+    );
+    expect(mocks.notifyInboundEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        workspaceId: "workspace-1",
+        candidateId: "candidate-1",
+        threadId: "thread-existing",
+      }),
+    );
   });
 
   it("rejects untrusted inbound attachments (size/type/filename) and stores only valid ones", async () => {

@@ -91,6 +91,7 @@ export async function notifyInboundEmail(params: {
   candidateName: string;
   subject: string;
   messageId?: string;
+  threadId?: string;
 }): Promise<void> {
   try {
     let recipientIds = await getJobTeamMemberIds(params.workspaceId, params.jobId);
@@ -104,8 +105,14 @@ export async function notifyInboundEmail(params: {
       type: "email.received",
       title: `${params.candidateName} replied`,
       body: params.subject || "New candidate reply",
-      href: `/dashboard/candidates/${params.candidateId}`,
-      metadata: { candidateId: params.candidateId, jobId: params.jobId },
+      href: params.threadId
+        ? `/dashboard/inbox?thread=${params.threadId}`
+        : `/dashboard/candidates/${params.candidateId}`,
+      metadata: {
+        candidateId: params.candidateId,
+        jobId: params.jobId,
+        threadId: params.threadId ?? null,
+      },
       dedupeKey: params.messageId ? `email:${params.messageId}` : undefined,
     });
   } catch (error) {

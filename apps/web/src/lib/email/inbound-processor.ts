@@ -3,7 +3,7 @@ import "server-only";
 import { and, eq } from "drizzle-orm";
 import type { CanonicalInboundEmail } from "@harly/emails";
 
-import { applications, db, mailAttachments } from "@harly/db";
+import { applications, candidates, db, mailAttachments } from "@harly/db";
 
 import { createLogger } from "@/lib/logger";
 import { validateMailboxAttachment } from "@/lib/mailbox/attachments";
@@ -117,8 +117,11 @@ export async function processInboundEmail(
       id: applications.id,
       candidateId: applications.candidateId,
       jobId: applications.jobId,
+      candidateFirstName: candidates.firstName,
+      candidateLastName: candidates.lastName,
     })
     .from(applications)
+    .innerJoin(candidates, eq(candidates.id, applications.candidateId))
     .where(
       and(
         eq(applications.inboundToken, token),
@@ -185,13 +188,19 @@ export async function processInboundEmail(
 
   // A notification failure must never make a verified provider retry the
   // inbound message. The reply is already durable at this point.
+  const candidateName = [application.candidateFirstName, application.candidateLastName]
+    .filter((part): part is string => Boolean(part))
+    .join(" ")
+    .trim() || email.from;
+
   void notifyInboundEmail({
     workspaceId,
     jobId: application.jobId,
     candidateId: application.candidateId,
-    candidateName: email.from,
+    candidateName,
     subject: email.subject,
     messageId,
+    threadId: inserted.threadId,
   });
 
   const { revalidatePath } = await import("next/cache");

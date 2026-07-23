@@ -1,11 +1,12 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import {
   applications,
   candidates,
   db,
   jobs,
+  jobStages,
   mailAttachments,
   mailMessages,
   mailThreads,
@@ -15,11 +16,14 @@ import {
 } from "@harly/db";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { getWorkspaceInboundEmailStatus } from "@/lib/email/config";
+import { getWorkspaceEmailSender } from "@/lib/email";
 
 export type InboxSource = "mailbox";
-export type InboxTransport = "imap" | "legacy-webhook" | "provider";
+export type InboxTransport = "imap" | "legacy-webhook" | "provider" | "smtp";
 export type InboxFilter =
   | "all"
+  | "needs-reply"
   | "replies"
   | "unassigned"
   | "unread"
@@ -39,6 +43,7 @@ export type InboxThread = {
   lastMessageAt: string;
   candidateId: string | null;
   candidateName: string | null;
+  candidateAvatarUrl: string | null;
   ownerName: string | null;
   ownerId?: string | null;
   ownerImage?: string | null;
@@ -46,8 +51,11 @@ export type InboxThread = {
   jobId?: string | null;
   jobTitle?: string | null;
   applicationStatus?: string | null;
+  applicationStageName?: string | null;
   hasInboundReply?: boolean;
+  needsReply?: boolean;
   preview: string | null;
+  searchText?: string | null;
 };
 
 export type InboxMessage = {
@@ -69,9 +77,14 @@ export type InboxApplication = { id: string; candidateId: string; jobId: string;
 export type InboxMailboxStatus = {
   configured: boolean;
   enabled: boolean;
+  route: "mailbox" | "webhook" | "none" | "conflict";
+  provider: "resend" | "postmark" | null;
+  address: string | null;
+  replyDomain: string | null;
   lastSyncedAt: string | null;
   lastHealthyAt: string | null;
   lastError: string | null;
+  canReply: boolean;
 };
 
 const PAGE_SIZE = 40;
@@ -79,6 +92,7 @@ const PAGE_SIZE = 40;
 export function normalizeInboxFilter(value: string | undefined): InboxFilter {
   return [
     "all",
+    "needs-reply",
     "replies",
     "unassigned",
     "unread",
@@ -107,7 +121,10 @@ export async function getInboxData(input: {
   const { organization, user: currentUser } = await getWorkspaceContext();
   const filter = normalizeInboxFilter(input.filter);
   const page = Math.max(0, Math.floor(input.page ?? 0));
-  const offset = page * PAGE_SIZE;
+  // `page` is the number of the last loaded page in the client. Return all
+  // pages up to it so "Load more" appends from the user's perspective instead
+  // of replacing the current list with only the next slice.
+  const limit = (page + 1) * PAGE_SIZE + 1;
   const threadWhere = and(
     eq(mailThreads.workspaceId, organization.id),
     filter === "archived"
@@ -122,9 +139,16 @@ export async function getInboxData(input: {
     filter === "replies"
       ? sql`exists (select 1 from mail_messages reply where reply.thread_id = ${mailThreads.id} and reply.direction = 'inbound')`
       : undefined,
+    filter === "needs-reply"
+      ? sql`(
+        select mm.direction from mail_messages mm
+        where mm.thread_id = ${mailThreads.id}
+        order by mm.received_at desc limit 1
+      ) = 'inbound'`
+      : undefined,
   );
 
-  const [threadRows, memberRows, candidateRows, applicationRows, mailboxRows] = await Promise.all([
+  const [threadRows, memberRows, candidateRows, applicationRows, mailboxRows, inboundStatus, sender] = await Promise.all([
     db
       .select({
         id: mailThreads.id,
@@ -137,6 +161,7 @@ export async function getInboxData(input: {
         candidateId: mailThreads.candidateId,
         candidateFirstName: candidates.firstName,
         candidateLastName: candidates.lastName,
+        candidateAvatarUrl: candidates.avatarUrl,
         ownerId: mailThreads.ownerId,
         ownerName: user.name,
         ownerImage: user.image,
@@ -144,11 +169,22 @@ export async function getInboxData(input: {
         jobId: jobs.id,
         jobTitle: jobs.title,
         applicationStatus: applications.status,
+        applicationStageName: jobStages.name,
         hasInboundReply: sql<boolean>`exists (select 1 from mail_messages reply where reply.thread_id = ${mailThreads.id} and reply.direction = 'inbound')`,
+        needsReply: sql<boolean>`(
+          select mm.direction from mail_messages mm
+          where mm.thread_id = ${mailThreads.id}
+          order by mm.received_at desc limit 1
+        ) = 'inbound'`,
         preview: sql<string | null>`(
           select mm.text_body from mail_messages mm
           where mm.thread_id = ${mailThreads.id}
           order by mm.received_at desc limit 1
+        )`,
+        searchText: sql<string | null>`(
+          select string_agg(mm.text_body, ' ' order by mm.received_at desc)
+          from mail_messages mm
+          where mm.thread_id = ${mailThreads.id}
         )`,
       })
       .from(mailThreads)
@@ -157,10 +193,14 @@ export async function getInboxData(input: {
       .leftJoin(workspaceMember, and(eq(workspaceMember.userId, user.id), eq(workspaceMember.organizationId, organization.id)))
       .leftJoin(applications, and(eq(applications.id, mailThreads.applicationId), eq(applications.workspaceId, organization.id)))
       .leftJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, organization.id)))
-      .where(threadWhere)
+      .leftJoin(jobStages, and(eq(jobStages.id, applications.currentStageId), eq(jobStages.workspaceId, organization.id)))
+      .where(
+        input.threadId
+          ? or(threadWhere, and(eq(mailThreads.workspaceId, organization.id), eq(mailThreads.id, input.threadId)))
+          : threadWhere,
+      )
       .orderBy(desc(mailThreads.lastMessageAt))
-      .limit(PAGE_SIZE + 1)
-      .offset(offset),
+      .limit(limit),
     db
       .select({ id: user.id, name: user.name, image: user.image })
       .from(workspaceMember)
@@ -179,10 +219,12 @@ export async function getInboxData(input: {
       .where(and(eq(applications.workspaceId, organization.id), isNull(jobs.deletedAt)))
       .orderBy(jobs.title),
     db
-      .select({ configured: sql<boolean>`true`, enabled: mailboxes.enabled, lastSyncedAt: mailboxes.lastSyncedAt, lastHealthyAt: mailboxes.lastHealthyAt, lastError: mailboxes.lastError })
+      .select({ configured: sql<boolean>`true`, enabled: mailboxes.enabled, address: mailboxes.address, lastSyncedAt: mailboxes.lastSyncedAt, lastHealthyAt: mailboxes.lastHealthyAt, lastError: mailboxes.lastError })
       .from(mailboxes)
       .where(eq(mailboxes.workspaceId, organization.id))
       .limit(1),
+    getWorkspaceInboundEmailStatus(organization.id),
+    getWorkspaceEmailSender(organization.id),
   ]);
 
   const hasMore = threadRows.length > PAGE_SIZE;
@@ -199,6 +241,7 @@ export async function getInboxData(input: {
     candidateName: row.candidateFirstName
       ? `${row.candidateFirstName} ${row.candidateLastName}`.trim()
       : null,
+    candidateAvatarUrl: row.candidateAvatarUrl,
     ownerId: row.ownerId,
     ownerName: row.ownerName,
     ownerImage: row.ownerImage,
@@ -206,13 +249,14 @@ export async function getInboxData(input: {
     jobId: row.jobId,
     jobTitle: row.jobTitle,
     applicationStatus: row.applicationStatus,
+    applicationStageName: row.applicationStageName,
     hasInboundReply: Boolean(row.hasInboundReply),
+    needsReply: Boolean(row.needsReply),
     preview: row.preview,
+    searchText: row.searchText,
   }));
 
-  const selectedThread = input.threadId
-    ? threads.find((thread) => thread.id === input.threadId)
-    : threads[0];
+  const selectedThread = input.threadId ? threads.find((thread) => thread.id === input.threadId) : undefined;
   const selectedMessages = selectedThread
     ? await db
         .select()
@@ -260,6 +304,30 @@ export async function getInboxData(input: {
     }));
   }
 
+  const mailbox = mailboxRows[0];
+  const mailboxEnabled = Boolean(mailbox?.enabled);
+  const hasOutboundSender = sender !== null;
+  const canReply = mailboxEnabled || hasOutboundSender;
+  const webhookConfigured = Boolean(
+    inboundStatus.provider &&
+      inboundStatus.replyDomain &&
+      inboundStatus.hasWebhookSecret &&
+      inboundStatus.encryptionReady &&
+      (inboundStatus.provider !== "resend" || inboundStatus.hasResendApiKey),
+  );
+  const webhookEnabled = inboundStatus.enabled && webhookConfigured;
+  const route = mailboxEnabled && webhookEnabled
+    ? "conflict"
+    : mailboxEnabled
+      ? "mailbox"
+      : webhookEnabled
+        ? "webhook"
+        : mailbox
+          ? "mailbox"
+          : inboundStatus.provider || inboundStatus.hasWebhookSecret
+            ? "webhook"
+            : "none";
+
   return {
     threads,
     messages,
@@ -272,14 +340,49 @@ export async function getInboxData(input: {
       avatarUrl: row.avatarUrl,
     })),
     applications: applicationRows,
-    mailboxStatus: mailboxRows[0]
+    mailboxStatus: mailbox
       ? {
           configured: true,
-          enabled: mailboxRows[0].enabled,
-          lastSyncedAt: mailboxRows[0].lastSyncedAt?.toISOString() ?? null,
-          lastHealthyAt: mailboxRows[0].lastHealthyAt?.toISOString() ?? null,
-          lastError: mailboxRows[0].lastError,
+          enabled: route === "mailbox"
+            ? mailboxEnabled
+            : route === "webhook"
+              ? webhookEnabled
+              : false,
+          route,
+          provider: inboundStatus.provider,
+          address: mailbox.address,
+          replyDomain: inboundStatus.replyDomain,
+          lastSyncedAt: mailbox.lastSyncedAt?.toISOString() ?? null,
+          lastHealthyAt: mailbox.lastHealthyAt?.toISOString() ?? null,
+          lastError: mailbox.lastError,
+          canReply,
         }
-      : { configured: false, enabled: false, lastSyncedAt: null, lastHealthyAt: null, lastError: null },
+      : {
+          configured: webhookConfigured,
+          enabled: webhookEnabled,
+          route,
+          provider: inboundStatus.provider,
+          address: null,
+          replyDomain: inboundStatus.replyDomain,
+          lastSyncedAt: null,
+          lastHealthyAt: null,
+          lastError: null,
+          canReply,
+        },
   };
+}
+
+export async function getUnreadInboxThreadCount(): Promise<number> {
+  const { organization } = await getWorkspaceContext();
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(mailThreads)
+    .where(
+      and(
+        eq(mailThreads.workspaceId, organization.id),
+        eq(mailThreads.status, "open"),
+        sql`${mailThreads.unreadCount} > 0`,
+      ),
+    );
+  return row?.count ?? 0;
 }

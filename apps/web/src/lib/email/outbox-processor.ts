@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { createElement } from "react";
 import { createHash, randomUUID } from "node:crypto";
 
@@ -37,6 +37,8 @@ import {
 import { renderActiveEmailTemplate } from "@/features/email-templates/data";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
+import { getWorkspaceEmailConfig } from "@/lib/email/config";
+import { insertCanonicalMessage } from "@/lib/mail/canonical";
 import { createLogger } from "@/lib/logger";
 import { storage } from "@/lib/storage";
 
@@ -239,6 +241,66 @@ function deliveryOptions(row: OutboxRow) {
   };
 }
 
+/**
+ * Best-effort: record a candidate-facing outbound email in the canonical
+ * conversation model (mail_threads/mail_messages) so it appears in the Inbox
+ * and the candidate timeline, and so inbound replies thread onto it. Never
+ * throws — the email was already sent; the conversation record is secondary
+ * and must not roll back a successful delivery.
+ */
+async function recordOutboundConversation(input: {
+  workspaceId: string;
+  toEmail: string;
+  subject: string;
+  textBody: string;
+  outboxRowId: string;
+  candidateId?: string | null;
+  applicationId?: string | null;
+}): Promise<void> {
+  try {
+    let candidateId = input.candidateId ?? null;
+    if (!candidateId) {
+      const [found] = await db
+        .select({ id: candidates.id })
+        .from(candidates)
+        .where(
+          and(
+            eq(candidates.workspaceId, input.workspaceId),
+            eq(candidates.email, input.toEmail),
+            isNull(candidates.deletedAt),
+          ),
+        )
+        .limit(1);
+      candidateId = found?.id ?? null;
+    }
+    if (!candidateId) return; // No candidate to thread onto; skip silently.
+
+    const config = await getWorkspaceEmailConfig(input.workspaceId);
+    const fromEmail = config?.from ?? process.env.EMAIL_FROM ?? "noreply@harly.local";
+    await insertCanonicalMessage({
+      workspaceId: input.workspaceId,
+      source: "provider",
+      mailboxId: null,
+      subject: input.subject,
+      participantEmail: input.toEmail,
+      candidateId,
+      applicationId: input.applicationId ?? null,
+      direction: "outbound",
+      fromEmail,
+      toEmails: [input.toEmail],
+      textBody: input.textBody,
+      messageId: `<${input.outboxRowId}@harly.local>`,
+      receivedAt: new Date(),
+      readAt: new Date(),
+    });
+  } catch (error) {
+    log.warn(
+      { error, outboxRowId: input.outboxRowId },
+      "failed to record outbound conversation in canonical model",
+    );
+  }
+}
+
 async function deliverOffer(row: OutboxRow): Promise<boolean> {
   const offerId = (row.payload as { offerId?: string } | null)?.offerId;
   if (!offerId) {
@@ -298,19 +360,20 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
   }
 
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
+  let offerSubject = "";
+  const startDate = formatOfferDate(offer.startDate);
+  const expiresAt = formatOfferDate(offer.expiresAt);
+  const salary = formatOfferSalary(
+    offer.salaryAmount,
+    offer.currency,
+    offer.salaryPeriod,
+  );
   try {
     const branding = await getWorkspaceEmailBranding(row.workspaceId);
-    const startDate = formatOfferDate(offer.startDate);
-    const expiresAt = formatOfferDate(offer.expiresAt);
-    const salary = formatOfferSalary(
-      offer.salaryAmount,
-      offer.currency,
-      offer.salaryPeriod,
-    );
-    // DocuSign envelopes already contain the selected ATS documents. Do not
+    // DocuSeal submissions already contain the selected ATS documents. Do not
     // leak a second copy through the notification email or exceed Resend's
     // attachment limits.
-    const offerDocuments = offer.docusignEnvelopeId
+    const offerDocuments = offer.esignSubmissionId
       ? []
       : await db
           .select({
@@ -351,16 +414,25 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
       offer_start_date: startDate ?? undefined,
     });
 
+    const offerSubjectValue = custom
+      ? custom.subject
+      : offerExtendedSubject({
+          companyName: recipient.companyName,
+          jobTitle: offer.title,
+        });
+    offerSubject = offerSubjectValue;
+
     delivered = await sendWorkspaceEmail(
       row.workspaceId,
       custom
         ? {
             to: recipient.email,
-            subject: custom.subject,
+            subject: offerSubject,
             react: createElement(CustomTemplateEmail, {
               bodyHtml: custom.bodyHtml,
               companyName: recipient.companyName,
               companyLogoUrl: branding.logoUrl ?? undefined,
+              hideBranding: branding.hideBranding,
               accentColor: branding.primaryColor ?? undefined,
               socialLinks: branding.socialLinks,
             }),
@@ -369,14 +441,12 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
           }
         : {
             to: recipient.email,
-            subject: offerExtendedSubject({
-              companyName: recipient.companyName,
-              jobTitle: offer.title,
-            }),
+            subject: offerSubject,
             react: createElement(OfferExtended, {
               candidateName: recipient.firstName,
               companyName: recipient.companyName,
               companyLogoUrl: branding.logoUrl ?? undefined,
+              hideBranding: branding.hideBranding,
               accentColor: branding.primaryColor ?? undefined,
               socialLinks: branding.socialLinks,
               jobTitle: offer.title,
@@ -430,6 +500,16 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
     });
   }
 
+  await recordOutboundConversation({
+    workspaceId: row.workspaceId,
+    toEmail: recipient.email,
+    subject: offerSubject,
+    outboxRowId: row.id,
+    candidateId: offer.candidateId,
+    applicationId: offer.applicationId,
+    textBody: `Offer extended for ${offer.title} at ${recipient.companyName}.${startDate ? `\nStart date: ${startDate}.` : ""}${expiresAt ? `\nExpires: ${expiresAt}.` : ""}${salary ? `\nSalary: ${salary}.` : ""}`,
+  });
+
   return true;
 }
 
@@ -464,6 +544,7 @@ async function deliverApplicationReceived(
 
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
+  let candidateSubject: string | null = null;
 
   if (variant === "candidate") {
     if (!p?.candidateEmail) {
@@ -471,17 +552,19 @@ async function deliverApplicationReceived(
       return false;
     }
     const jobBoardUrl = `${appBaseUrl()}/board/${p.workspaceSlug ?? ""}`;
+    candidateSubject = applicationReceivedCandidateSubject({
+      jobTitle: p.jobTitle ?? "",
+      companyName: p.workspaceName ?? "",
+    });
     delivered = await sendWorkspaceEmail(row.workspaceId, {
       to: p.candidateEmail,
-      subject: applicationReceivedCandidateSubject({
-        jobTitle: p.jobTitle ?? "",
-        companyName: p.workspaceName ?? "",
-      }),
+      subject: candidateSubject,
       react: createElement(ApplicationReceivedCandidate, {
         candidateName: p.candidateFirstName ?? "",
         jobTitle: p.jobTitle ?? "",
         companyName: p.workspaceName ?? "",
         companyLogoUrl: branding.logoUrl ?? undefined,
+        hideBranding: branding.hideBranding,
         accentColor: branding.primaryColor ?? undefined,
         socialLinks: branding.socialLinks,
         jobBoardUrl,
@@ -526,6 +609,15 @@ async function deliverApplicationReceived(
   }
 
   await markSent(row.id, delivered);
+  if (variant === "candidate" && candidateSubject && p?.candidateEmail) {
+    await recordOutboundConversation({
+      workspaceId: row.workspaceId,
+      toEmail: p.candidateEmail,
+      subject: candidateSubject,
+      outboxRowId: row.id,
+      textBody: `Application received for ${p.jobTitle ?? "the role"} at ${p.workspaceName ?? "the company"}.`,
+    });
+  }
   return true;
 }
 
@@ -562,16 +654,29 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
     },
   );
 
+  const pipelineSubject = custom
+    ? custom.subject
+    : isStage
+      ? candidateStageUpdateSubject({
+          jobTitle: p.jobTitle ?? "",
+          stageName: p.stageName ?? "",
+        })
+      : candidateRejectedSubject({
+          jobTitle: p.jobTitle ?? "",
+          companyName: p.workspaceName ?? "",
+        });
+
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
   try {
     if (custom) {
       delivered = await sendWorkspaceEmail(row.workspaceId, {
         to: p.candidateEmail,
-        subject: custom.subject,
+        subject: pipelineSubject,
         react: createElement(CustomTemplateEmail, {
           bodyHtml: custom.bodyHtml,
           companyName: p.workspaceName ?? "",
           companyLogoUrl: branding.logoUrl ?? undefined,
+          hideBranding: branding.hideBranding,
           accentColor: branding.primaryColor ?? undefined,
           socialLinks: branding.socialLinks,
         }),
@@ -580,16 +685,14 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
     } else if (isStage) {
       delivered = await sendWorkspaceEmail(row.workspaceId, {
         to: p.candidateEmail,
-        subject: candidateStageUpdateSubject({
-          jobTitle: p.jobTitle ?? "",
-          stageName: p.stageName ?? "",
-        }),
+        subject: pipelineSubject,
         react: createElement(CandidateStageUpdate, {
           candidateName: p.candidateName ?? "",
           jobTitle: p.jobTitle ?? "",
           stageName: p.stageName ?? "",
           companyName: p.workspaceName ?? "",
           companyLogoUrl: branding.logoUrl ?? undefined,
+          hideBranding: branding.hideBranding,
           accentColor: branding.primaryColor ?? undefined,
           socialLinks: branding.socialLinks,
         }),
@@ -598,15 +701,13 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
     } else {
       delivered = await sendWorkspaceEmail(row.workspaceId, {
         to: p.candidateEmail,
-        subject: candidateRejectedSubject({
-          jobTitle: p.jobTitle ?? "",
-          companyName: p.workspaceName ?? "",
-        }),
+        subject: pipelineSubject,
         react: createElement(CandidateRejected, {
           candidateName: p.candidateName ?? "",
           jobTitle: p.jobTitle ?? "",
           companyName: p.workspaceName ?? "",
           companyLogoUrl: branding.logoUrl ?? undefined,
+          hideBranding: branding.hideBranding,
           accentColor: branding.primaryColor ?? undefined,
           socialLinks: branding.socialLinks,
         }),
@@ -626,6 +727,15 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
   }
 
   await markSent(row.id, delivered);
+  await recordOutboundConversation({
+    workspaceId: row.workspaceId,
+    toEmail: p.candidateEmail,
+    subject: pipelineSubject,
+    outboxRowId: row.id,
+    textBody: isStage
+      ? `Application update for ${p.jobTitle ?? "the role"}: now in ${p.stageName ?? "a new stage"}.`
+      : `Application update for ${p.jobTitle ?? "the role"} at ${p.workspaceName ?? "the company"}: not moving forward.`,
+  });
   return true;
 }
 
@@ -665,6 +775,7 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
     candidateName: firstName ?? "",
     companyName: payload.companyName,
     companyLogoUrl: branding.logoUrl ?? undefined,
+    hideBranding: branding.hideBranding,
     accentColor: branding.primaryColor ?? undefined,
     socialLinks: branding.socialLinks,
     jobTitle: payload.jobTitle,
@@ -673,6 +784,7 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
     ? `${payload.durationMins} min`
     : undefined;
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
+  let interviewSubject = "";
 
   try {
     if (row.kind === "interview.scheduled") {
@@ -692,17 +804,24 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
           interviewer_name: payload.interviewerName,
         },
       );
+      interviewSubject = custom
+        ? custom.subject
+        : interviewScheduledSubject({
+            companyName: payload.companyName,
+            jobTitle: payload.jobTitle,
+          });
       delivered = await sendWorkspaceEmail(
         row.workspaceId,
         custom
           ? {
               to: payload.candidateEmail,
-              subject: custom.subject,
+              subject: interviewSubject,
               replyTo: payload.replyTo ?? undefined,
               react: createElement(CustomTemplateEmail, {
                 bodyHtml: custom.bodyHtml,
                 companyName: payload.companyName,
                 companyLogoUrl: branding.logoUrl ?? undefined,
+                hideBranding: branding.hideBranding,
                 accentColor: branding.primaryColor ?? undefined,
                 socialLinks: branding.socialLinks,
               }),
@@ -710,10 +829,7 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
             }
           : {
               to: payload.candidateEmail,
-              subject: interviewScheduledSubject({
-                companyName: payload.companyName,
-                jobTitle: payload.jobTitle,
-              }),
+              subject: interviewSubject,
               replyTo: payload.replyTo ?? undefined,
               react: createElement(InterviewScheduled, {
                 ...common,
@@ -730,12 +846,13 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
             },
       );
     } else if (row.kind === "interview.rescheduled") {
+      interviewSubject = interviewRescheduledSubject({
+        companyName: payload.companyName,
+        jobTitle: payload.jobTitle,
+      });
       delivered = await sendWorkspaceEmail(row.workspaceId, {
         to: payload.candidateEmail,
-        subject: interviewRescheduledSubject({
-          companyName: payload.companyName,
-          jobTitle: payload.jobTitle,
-        }),
+        subject: interviewSubject,
         replyTo: payload.replyTo ?? undefined,
         react: createElement(InterviewRescheduled, {
           ...common,
@@ -750,12 +867,13 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
         ...deliveryOptions(row),
       });
     } else {
+      interviewSubject = interviewCanceledSubject({
+        companyName: payload.companyName,
+        jobTitle: payload.jobTitle,
+      });
       delivered = await sendWorkspaceEmail(row.workspaceId, {
         to: payload.candidateEmail,
-        subject: interviewCanceledSubject({
-          companyName: payload.companyName,
-          jobTitle: payload.jobTitle,
-        }),
+        subject: interviewSubject,
         replyTo: payload.replyTo ?? undefined,
         react: createElement(InterviewCanceled, {
           ...common,
@@ -777,6 +895,20 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
     return false;
   }
   await markSent(row.id, delivered);
+  const whenLabel = interviewWhenFormatter.format(when);
+  const summary =
+    row.kind === "interview.scheduled"
+      ? `Interview scheduled — ${whenLabel}.\nType: ${payload.interviewType ?? "Interview"}\nMode: ${payload.mode ?? "Video call"}${payload.location ? `\nLocation: ${payload.location}` : ""}`
+      : row.kind === "interview.rescheduled"
+        ? `Interview rescheduled — ${whenLabel}.`
+        : `Interview canceled — ${whenLabel}.`;
+  await recordOutboundConversation({
+    workspaceId: row.workspaceId,
+    toEmail: payload.candidateEmail,
+    subject: interviewSubject,
+    outboxRowId: row.id,
+    textBody: summary,
+  });
   return true;
 }
 
@@ -795,16 +927,18 @@ async function deliverOfferWithdrawn(row: OutboxRow): Promise<boolean> {
     return false;
   }
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
+  const withdrawnSubject = offerWithdrawnSubject({
+    companyName: payload.companyName,
+    jobTitle: payload.jobTitle,
+  });
   const delivered = await sendWorkspaceEmail(row.workspaceId, {
     to: payload.candidateEmail,
-    subject: offerWithdrawnSubject({
-      companyName: payload.companyName,
-      jobTitle: payload.jobTitle,
-    }),
+    subject: withdrawnSubject,
     react: createElement(OfferWithdrawn, {
       candidateName: payload.candidateName ?? "",
       companyName: payload.companyName,
       companyLogoUrl: branding.logoUrl ?? undefined,
+      hideBranding: branding.hideBranding,
       accentColor: branding.primaryColor ?? undefined,
       socialLinks: branding.socialLinks,
       jobTitle: payload.jobTitle,
@@ -819,6 +953,13 @@ async function deliverOfferWithdrawn(row: OutboxRow): Promise<boolean> {
     return false;
   }
   await markSent(row.id, delivered);
+  await recordOutboundConversation({
+    workspaceId: row.workspaceId,
+    toEmail: payload.candidateEmail,
+    subject: withdrawnSubject,
+    outboxRowId: row.id,
+    textBody: `The offer for ${payload.jobTitle} at ${payload.companyName} has been withdrawn.`,
+  });
   return true;
 }
 

@@ -15,6 +15,7 @@ describe("canonical inbox replies", () => {
       lastMessageAt: "2026-01-01T00:00:00.000Z",
       candidateId: "candidate-1",
       candidateName: "Candidate",
+      candidateAvatarUrl: null,
       ownerName: null,
       preview: "Hello",
     }, "replies")).toBe(true);
