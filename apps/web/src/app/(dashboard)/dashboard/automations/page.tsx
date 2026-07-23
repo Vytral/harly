@@ -1,17 +1,11 @@
-import { listWorkflows, serializeWorkflow } from "@/features/automations/data";
-import { AutomationsManager } from "@/features/automations/AutomationsManager";
-import { requirePagePermission } from "@/features/workspaces/permissions-server";
+// The visual automations builder (WHEN → IF → DO) is paused for launch.
+// The implementation under /features/automations/* is preserved verbatim
+// so the feature can be re-enabled without rebuilding. See AGENTS.md in
+// this directory for the full context and the re-enablement steps.
+import { notFound } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
-/**
- * Automations index. Gated by automations:manage (defense in depth on top of
- * the per-action requirePermission checks). Loads the workspace's workflows
- * server-side and hands the serialized list to the client manager.
- */
-export default async function AutomationsPage() {
-  const { organization } = await requirePagePermission("automations:manage");
-  const workflows = await listWorkflows(organization.id);
-
-  return <AutomationsManager initialWorkflows={workflows.map(serializeWorkflow)} />;
+export default function AutomationsPage() {
+  notFound();
 }

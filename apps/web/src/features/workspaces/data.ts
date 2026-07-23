@@ -46,6 +46,7 @@ export type WorkspaceBranding = {
   sidebarLogoStyle: LogoStyle;
   sidebarLogoUrl?: string | null;
   sidebarLogoDarkUrl?: string | null;
+  hideHarlyBranding: boolean;
 };
 
 export type SidebarBranding = {
@@ -62,6 +63,13 @@ export type WorkspaceMemberItem = {
   role: string;
   email: string;
   image?: string | null;
+  jobTitle?: string | null;
+  phone?: string | null;
+  location?: string | null;
+  bio?: string | null;
+  linkedinUrl?: string | null;
+  githubUrl?: string | null;
+  websiteUrl?: string | null;
   isCurrentUser: boolean;
   createdAt: Date;
 };
@@ -128,6 +136,7 @@ async function getWorkspaceBranding(
     sidebarLogoStyle: normalizeLogoStyle(settings?.sidebarLogoStyle),
     sidebarLogoUrl: settings?.sidebarLogoUrl ?? null,
     sidebarLogoDarkUrl: settings?.sidebarLogoDarkUrl ?? null,
+    hideHarlyBranding: settings?.hideHarlyBranding ?? false,
   };
 }
 
@@ -165,6 +174,13 @@ export async function getWorkspaceSettingsData() {
           name: authUsers.name,
           email: authUsers.email,
           image: authUsers.image,
+          jobTitle: authUsers.jobTitle,
+          phone: authUsers.phone,
+          location: authUsers.location,
+          bio: authUsers.bio,
+          linkedinUrl: authUsers.linkedinUrl,
+          githubUrl: authUsers.githubUrl,
+          websiteUrl: authUsers.websiteUrl,
           role: authMembers.role,
           createdAt: authMembers.createdAt,
         })

@@ -17,6 +17,7 @@ import { StatCell } from "@/features/workspaces/settings-ui";
 import { ZoomLogo } from "@/components/ui/icons/brands";
 import {
   ArrowUpRightIcon,
+  GearSixIcon,
   SpinnerIcon,
   WarningCircleIcon,
 } from "@/components/ui/icons/phosphor";
@@ -44,10 +45,10 @@ export function ZoomConnectPanel({
   const [open, setOpen] = useState(!config.configured && !isConnected);
   const [disconnecting, startDisconnect] = useTransition();
 
+  const installUrl = `/api/integrations/zoom/install?ws=${workspaceId}`;
+
   const statusTone = isConnected ? "on" : "neutral";
   const statusLabel = isConnected ? "Connected" : "Not connected";
-
-  const installUrl = `/api/integrations/zoom/install?ws=${workspaceId}`;
 
   function disconnect() {
     startDisconnect(async () => {
@@ -72,21 +73,22 @@ export function ZoomConnectPanel({
         statusTone={statusTone}
         action={
           canEdit ? (
-            isConnected ? null : config.configured ? (
-              <Button asChild>
-                <a href={installUrl}>
-                  <ZoomLogo className="size-4" />
-                  Connect Zoom
-                </a>
-              </Button>
-            ) : (
+            isConnected ? null : (
               <Button
                 onClick={() => setOpen((v) => !v)}
                 disabled={!config.encryptionReady}
                 aria-expanded={open}
               >
-                <ZoomLogo className="size-4" />
-                Set up Zoom
+                {config.configured ? (
+                  <GearSixIcon className="size-4" />
+                ) : (
+                  <ZoomLogo className="size-4" />
+                )}
+                {config.configured
+                  ? open
+                    ? "Hide settings"
+                    : "Manage"
+                  : "Set up Zoom"}
               </Button>
             )
           ) : null
@@ -140,31 +142,53 @@ export function ZoomConnectPanel({
         </div>
       ) : null}
 
-      {canEdit && !isConnected && !config.configured ? (
+      {canEdit && !isConnected ? (
         <InlineReveal open={open}>
-          <ZoomCredentialsForm onSaved={() => router.refresh()} />
+          <ZoomCredentialsForm
+            installUrl={installUrl}
+            configured={config.configured}
+          />
         </InlineReveal>
       ) : null}
     </div>
   );
 }
 
-function ZoomCredentialsForm({ onSaved }: { onSaved: () => void }) {
+function ZoomCredentialsForm({
+  installUrl,
+  configured,
+}: {
+  installUrl: string;
+  configured: boolean;
+}) {
   const [clientId, setClientId] = useState("");
   const [clientSecret, setClientSecret] = useState("");
   const [saving, startSave] = useTransition();
 
-  function save() {
+  // Save credentials, then go straight to OAuth. On return the workspace is
+  // connected — no second click. A hard redirect (not router.push) so the
+  // server-side install route runs. When already configured and the fields are
+  // left blank, skip the save and connect with the stored credentials.
+  function saveAndConnect() {
     startSave(async () => {
-      const result = await saveZoomCredentialsAction({ clientId, clientSecret });
-      if (!result.success) {
-        toast.error(result.error ?? "Could not save.");
-        return;
+      const hasNewCreds = Boolean(clientId.trim() && clientSecret.trim());
+      if (hasNewCreds) {
+        const result = await saveZoomCredentialsAction({ clientId, clientSecret });
+        if (!result.success) {
+          toast.error(result.error ?? "Could not save.");
+          return;
+        }
       }
-      toast.success("Zoom credentials saved. You can now connect.");
-      onSaved();
+      window.location.href = installUrl;
     });
   }
+
+  const bothFilled = Boolean(clientId.trim() && clientSecret.trim());
+  const partiallyFilled =
+    Boolean(clientId.trim()) !== Boolean(clientSecret.trim());
+  // Connect is allowed when new creds are complete, or when already configured
+  // and both fields are untouched (reuse the stored secret).
+  const canConnect = bothFilled || (configured && !clientId && !clientSecret);
 
   const redirectUrl =
     typeof window !== "undefined"
@@ -176,11 +200,12 @@ function ZoomCredentialsForm({ onSaved }: { onSaved: () => void }) {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="space-y-0.5">
           <h2 className="font-display text-base font-semibold tracking-tight">
-            Set up Zoom
+            {configured ? "Manage Zoom" : "Set up Zoom"}
           </h2>
           <p className="text-sm text-muted-foreground">
-            Create an OAuth app on the Zoom Marketplace, then paste the
-            credentials. Your Client Secret is encrypted at rest.
+            {configured
+              ? "Your credentials are saved. Click Connect to authorize Zoom, or paste new credentials to replace them."
+              : "Create an OAuth app on the Zoom Marketplace, then paste the credentials and connect. Your Client Secret is encrypted at rest."}
           </p>
         </div>
         <a
@@ -196,10 +221,12 @@ function ZoomCredentialsForm({ onSaved }: { onSaved: () => void }) {
 
       <div className="space-y-4">
         <div className="rounded-lg border bg-muted/30 px-3 py-2.5 text-xs text-muted-foreground space-y-1.5">
-          <p className="font-medium text-foreground">How to get credentials:</p>
+          <p className="font-medium text-foreground">
+            How to get your credentials:
+          </p>
           <ol className="list-decimal space-y-1 pl-4">
             <li>
-              Go to{" "}
+              Open{" "}
               <a
                 href="https://marketplace.zoom.us/user/build"
                 target="_blank"
@@ -208,15 +235,33 @@ function ZoomCredentialsForm({ onSaved }: { onSaved: () => void }) {
               >
                 marketplace.zoom.us
               </a>{" "}
-              and build a General App (OAuth)
+              → Develop → Build App, and create a{" "}
+              <span className="font-medium text-foreground">
+                General App (User-managed OAuth)
+              </span>
+              .
             </li>
             <li>
-              Set the Redirect URL to: <code>{redirectUrl}</code>
+              In <span className="font-medium text-foreground">OAuth</span>, set
+              the Redirect URL <em>and</em> add it to the OAuth allow list:
+              <br />
+              <code className="break-all">{redirectUrl}</code>
             </li>
             <li>
-              Add the scope: <code>meeting:write</code>
+              Under <span className="font-medium text-foreground">Scopes</span>,
+              add <code>meeting:write</code>.
             </li>
-            <li>Copy Client ID and Client Secret from the App Credentials tab</li>
+            <li>
+              Copy the{" "}
+              <span className="font-medium text-foreground">Client ID</span> and{" "}
+              <span className="font-medium text-foreground">Client Secret</span>{" "}
+              from the App Credentials tab and paste them below.
+            </li>
+            <li>
+              Click{" "}
+              <span className="font-medium text-foreground">Connect Zoom</span> —
+              you&apos;ll authorize on Zoom and land back here connected.
+            </li>
           </ol>
         </div>
 
@@ -226,7 +271,9 @@ function ZoomCredentialsForm({ onSaved }: { onSaved: () => void }) {
             id="zoom-client-id"
             value={clientId}
             onChange={(e) => setClientId(e.target.value)}
-            placeholder="e.g. AbCdEfGhIjKlMnOp"
+            placeholder={
+              configured ? "Saved · enter a new ID to replace" : "e.g. AbCdEfGhIjKlMnOp"
+            }
             autoComplete="off"
             className="font-mono text-xs"
           />
@@ -239,7 +286,11 @@ function ZoomCredentialsForm({ onSaved }: { onSaved: () => void }) {
             type="password"
             value={clientSecret}
             onChange={(e) => setClientSecret(e.target.value)}
-            placeholder="e.g. abcdef1234567890abcdef1234567890"
+            placeholder={
+              configured
+                ? "Saved · enter a new secret to replace"
+                : "e.g. abcdef1234567890abcdef1234567890"
+            }
             autoComplete="off"
             className="font-mono text-xs"
           />
@@ -247,15 +298,19 @@ function ZoomCredentialsForm({ onSaved }: { onSaved: () => void }) {
             Encrypted at rest. Never visible again after saving.
           </p>
         </div>
+
+        {partiallyFilled ? (
+          <p className="text-xs text-clay">
+            Enter both Client ID and Client Secret to replace the saved
+            credentials.
+          </p>
+        ) : null}
       </div>
 
       <div className="mt-6 flex justify-end">
-        <Button
-          onClick={save}
-          disabled={saving || !clientId.trim() || !clientSecret.trim()}
-        >
-          {saving ? <SpinnerIcon className="size-4" /> : null}
-          Save credentials
+        <Button onClick={saveAndConnect} disabled={saving || !canConnect}>
+          {saving ? <SpinnerIcon className="size-4" /> : <ZoomLogo className="size-4" />}
+          Connect Zoom
         </Button>
       </div>
     </Card>

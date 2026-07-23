@@ -26,6 +26,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -196,6 +197,7 @@ export function LegalSettings({
   const [dpoEmail, setDpoEmail] = useState(settings.dpoEmail ?? "");
   const [retentionApplicants, setRetentionApplicants] = useState(settings.dataRetentionApplicantsMonths);
   const [retentionTalentPool, setRetentionTalentPool] = useState(settings.dataRetentionTalentPoolMonths);
+  const [retentionEnabled, setRetentionEnabled] = useState(settings.dataRetentionEnabled);
   const [consentText, setConsentText] = useState(settings.consentCheckboxText ?? "");
 
   // Legal pages , initialize from saved or draft
@@ -288,6 +290,7 @@ export function LegalSettings({
         dpoEmail: dpoEmail || undefined,
         dataRetentionApplicantsMonths: retentionApplicants,
         dataRetentionTalentPoolMonths: retentionTalentPool,
+        dataRetentionEnabled: retentionEnabled,
         consentCheckboxText: consentText || undefined,
         legalPages: pages as LegalPages,
       });
@@ -446,6 +449,23 @@ export function LegalSettings({
           How long candidate data is kept after the hiring process concludes.
         </p>
 
+        <div className="mt-4 flex items-start justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+          <div>
+            <p className="text-sm font-medium text-foreground">Enforce automatically</p>
+            <p className="mt-1 text-xs leading-5 text-muted-foreground">
+              When on, a nightly job anonymizes candidates past their retention window (name,
+              contact info, and résumé data redacted; documents deleted). Hired candidates and
+              anything under legal hold are always skipped. Pipeline history is kept for metrics.
+              Off by default — the months below are advisory until you turn this on.
+            </p>
+          </div>
+          <Switch
+            checked={retentionEnabled}
+            onCheckedChange={setRetentionEnabled}
+            aria-label="Enforce data retention automatically"
+          />
+        </div>
+
         <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field>
             <Label htmlFor="retention-applicants">Applicants (months)</Label>
@@ -458,7 +478,7 @@ export function LegalSettings({
               onChange={(e) => setRetentionApplicants(Number(e.target.value) || 6)}
             />
             <p className="text-xs text-muted-foreground">
-              Data of unsuccessful candidates is auto-deleted after this period.
+              Unsuccessful candidates are anonymized after this period{retentionEnabled ? "" : " once enforcement is on"}.
             </p>
           </Field>
           <Field>

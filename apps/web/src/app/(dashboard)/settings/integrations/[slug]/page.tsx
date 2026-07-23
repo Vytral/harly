@@ -4,11 +4,17 @@ import type { Metadata, Route } from "next";
 import type { ComponentType, ReactNode } from "react";
 
 import { TheSvgLogo } from "@/components/ui/icons/brands";
+import {
+  CloudflareLogo,
+  DocuSealLogo,
+  HCaptchaLogo,
+  ReCaptchaLogo,
+} from "@/components/ui/icons/brands";
 import { CaretLeftIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
 import { CalConnectPanel } from "@/features/workspaces/CalConnectPanel";
 import { DiscordConnectPanel } from "@/features/workspaces/DiscordConnectPanel";
-import { DocuSignConnectPanel } from "@/features/workspaces/DocuSignConnectPanel";
+import { EsignConnectPanel } from "@/features/workspaces/EsignConnectPanel";
 import { GCalConnectPanel } from "@/features/workspaces/GCalConnectPanel";
 import { GoogleMeetConnectPanel } from "@/features/workspaces/GoogleMeetConnectPanel";
 import { JitsiConnectPanel } from "@/features/workspaces/JitsiConnectPanel";
@@ -16,6 +22,7 @@ import { MicrosoftTeamsConnectPanel } from "@/features/workspaces/MicrosoftTeams
 import { OutlookConnectPanel } from "@/features/workspaces/OutlookConnectPanel";
 import { SlackConnectPanel } from "@/features/workspaces/SlackConnectPanel";
 import { TelegramConnectPanel } from "@/features/workspaces/TelegramConnectPanel";
+import { CaptchaConnectPanel } from "@/features/workspaces/CaptchaConnectPanel";
 import { ZoomConnectPanel } from "@/features/workspaces/ZoomConnectPanel";
 import {
   getIntegration,
@@ -25,16 +32,17 @@ import {
 } from "@/features/workspaces/integrations-registry";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
-import { getWorkspaceDocuSignStatus } from "@/lib/docusign/config";
+import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
 import { getWorkspaceJitsiStatus } from "@/lib/jitsi/config";
 import { getWorkspaceChatStatus } from "@/lib/notify/config";
 import { getWorkspaceOutlookStatus } from "@/lib/outlook/config";
 import { getWorkspaceSlackStatus } from "@/lib/slack/config";
 import { getWorkspaceTelegramStatus } from "@/lib/telegram/config";
+import { getWorkspaceCaptchaStatus } from "@/lib/captcha";
 import { getZoomConfig } from "@/lib/zoom/config";
 import {
-  getDocuSignRedirectUri,
+  getEsignWebhookBaseUrl,
   getHarlyPublicOrigin,
 } from "@/lib/public-origin";
 import {
@@ -70,7 +78,10 @@ const DETAIL_LOGOS: Record<IntegrationSlug, Logo> = {
   linkedin: svgBrand("linkedin", "LinkedIn"),
   zapier: svgBrand("zapier", "Zapier"),
   webhooks: svgBrand("zapier", "Webhooks"),
-  docusign: svgBrand("docusign", "DocuSign"),
+  docuseal: DocuSealLogo,
+  turnstile: CloudflareLogo,
+  recaptcha: ReCaptchaLogo,
+  hcaptcha: HCaptchaLogo,
 };
 
 type DetailPageProps = {
@@ -298,14 +309,30 @@ async function renderPanel(
         />
       );
     }
-    case "docusign": {
-      const status = await getWorkspaceDocuSignStatus(ctx.organizationId);
+    case "docuseal": {
+      const status = await getWorkspaceEsignStatus(ctx.organizationId);
+      const webhookUrl = status.webhookSecret
+        ? `${getEsignWebhookBaseUrl()}?ws=${encodeURIComponent(ctx.organizationId)}&secret=${encodeURIComponent(status.webhookSecret)}`
+        : null;
       return (
-        <DocuSignConnectPanel
+        <EsignConnectPanel
           status={status}
           canEdit={ctx.canEdit}
-          workspaceId={ctx.organizationId}
-          redirectUri={getDocuSignRedirectUri()}
+          webhookUrl={webhookUrl}
+          tileClassName={integration.tileClassName}
+          description={integration.detail}
+        />
+      );
+    }
+    case "turnstile":
+    case "recaptcha":
+    case "hcaptcha": {
+      const status = await getWorkspaceCaptchaStatus(ctx.organizationId);
+      return (
+        <CaptchaConnectPanel
+          provider={integration.slug}
+          status={status}
+          canEdit={ctx.canEdit}
           tileClassName={integration.tileClassName}
           description={integration.detail}
         />

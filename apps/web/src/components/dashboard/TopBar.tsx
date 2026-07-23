@@ -34,6 +34,7 @@ type TopBarProps = {
   workspace: { id: string; name: string; logoUrl: string | null };
   workspaceOptions: WorkspaceOption[];
   notifications: NotificationItem[];
+  unreadNotificationCount: number;
   userPermissions: Permission[];
 };
 
@@ -43,6 +44,7 @@ export function TopBar({
   workspace,
   workspaceOptions,
   notifications,
+  unreadNotificationCount,
   userPermissions,
 }: TopBarProps) {
   const [commandOpen, setCommandOpen] = useState(false);
@@ -115,7 +117,7 @@ export function TopBar({
       <div className="flex items-center gap-1 sm:ml-0">
         <QuickCreateMenu />
         <ComingSoonButton icon={Activity} label="Activity" />
-        <NotificationsBell notifications={notifications} />
+        <NotificationsBell notifications={notifications} unreadCount={unreadNotificationCount} />
         <ThemeToggle />
         <div className="ml-1.5 pl-1.5">
           <UserMenu

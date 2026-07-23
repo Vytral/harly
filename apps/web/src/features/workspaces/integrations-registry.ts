@@ -2,12 +2,13 @@ import "server-only";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
-import { getWorkspaceDocuSignStatus } from "@/lib/docusign/config";
+import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
 import { getWorkspaceJitsiStatus } from "@/lib/jitsi/config";
 import { getWorkspaceChatStatus } from "@/lib/notify/config";
 import { getWorkspaceOutlookStatus } from "@/lib/outlook/config";
 import { getWorkspaceSlackStatus } from "@/lib/slack/config";
+import { getWorkspaceCaptchaStatus } from "@/lib/captcha";
 import { getWorkspaceTelegramStatus } from "@/lib/telegram/config";
 import { getZoomConfig } from "@/lib/zoom/config";
 
@@ -24,7 +25,8 @@ export type IntegrationCategory =
   | "calendar"
   | "communication"
   | "automation"
-  | "signing";
+  | "signing"
+  | "security";
 
 export type IntegrationSlug =
   | "cal"
@@ -40,7 +42,10 @@ export type IntegrationSlug =
   | "telegram"
   | "gmail"
   | "linkedin"
-  | "docusign"
+  | "docuseal"
+  | "turnstile"
+  | "recaptcha"
+  | "hcaptcha"
   | "zapier"
   | "webhooks";
 
@@ -67,6 +72,7 @@ export const CATEGORY_LABELS: Record<IntegrationCategory, string> = {
   communication: "Communication",
   automation: "Automation",
   signing: "Signature",
+  security: "Security",
 };
 
 export const CATEGORY_ORDER: IntegrationCategory[] = [
@@ -74,6 +80,7 @@ export const CATEGORY_ORDER: IntegrationCategory[] = [
   "communication",
   "automation",
   "signing",
+  "security",
 ];
 
 export const INTEGRATIONS: IntegrationDefinition[] = [
@@ -214,15 +221,51 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     comingSoon: true,
   },
   {
-    slug: "docusign",
-    name: "DocuSign",
+    slug: "docuseal",
+    name: "DocuSeal",
     category: "signing",
-    description: "Send offers for legally-binding e-signatures.",
+    description: "Send offers for e-signatures with self-hosted DocuSeal.",
     detail:
-      "Connect DocuSign so candidates sign their offer inside the candidate portal. When you send an offer, Harly creates a DocuSign envelope and the candidate signs on DocuSign's hosted page. The signed PDF lands back on the offer and the status flips automatically.",
-    // Yellow DocuSign mark on light neutral so the yellow reads (saturated mark
-    // -> light bg per the contrast rule).
-    tileClassName: "bg-gradient-to-br from-white via-yellow-50 to-amber-100",
+      "Connect your self-hosted DocuSeal instance so candidates sign their offer inside the candidate portal. When you send an offer, Harly creates a DocuSeal submission and the candidate signs on DocuSeal's hosted page. The signed PDF and audit log land back on the offer and the status flips automatically. Bring your own instance URL and API token — no data leaves your infrastructure.",
+    // DocuSeal mark is indigo on white — light neutral surface so it reads
+    // (saturated mark -> light bg per the contrast rule).
+    tileClassName: "bg-gradient-to-br from-white via-indigo-50 to-blue-100",
+  },
+  {
+    slug: "turnstile",
+    name: "Cloudflare Turnstile",
+    category: "security",
+    description: "Block bots on your public application form.",
+    detail:
+      "Add Cloudflare Turnstile , a privacy-friendly CAPTCHA alternative , to your public application form. Bring your own site and secret keys; every submission is verified server-side before a candidate is created. No env vars needed.",
+    // Orange Turnstile mark (currentColor) , light cream surface with the brand
+    // orange forced via text color so the mono logo reads (saturated mark -> light
+    // bg per the contrast rule). Amber stops keep it distinct from Zapier's orange.
+    tileClassName:
+      "bg-gradient-to-br from-white via-amber-50 to-orange-100 text-[#f38020]",
+  },
+  {
+    slug: "recaptcha",
+    name: "Google reCAPTCHA",
+    category: "security",
+    description: "Block bots with Google's reCAPTCHA v2.",
+    detail:
+      "Add Google reCAPTCHA v2 to your public application form. Bring your own site and secret keys from the reCAPTCHA admin console; every submission is verified server-side before a candidate is created. Enabling reCAPTCHA turns off any other active CAPTCHA.",
+    // Multicolor reCAPTCHA mark (blue swirl) , light blue-tinted surface so the
+    // blue reads (multicolor mark -> light neutral per the contrast rule).
+    tileClassName: "bg-gradient-to-br from-white via-sky-50 to-blue-100",
+  },
+  {
+    slug: "hcaptcha",
+    name: "hCaptcha",
+    category: "security",
+    description: "Privacy-first bot protection for your form.",
+    detail:
+      "Add hCaptcha , a privacy-first CAPTCHA , to your public application form. Bring your own site and secret keys; every submission is verified server-side before a candidate is created. Enabling hCaptcha turns off any other active CAPTCHA.",
+    // Solid-blue hCaptcha mark , light bg so the blue pops (saturated mark ->
+    // light bg per the contrast rule). Indigo stops keep it distinct from the
+    // reCAPTCHA sky tile.
+    tileClassName: "bg-gradient-to-br from-white via-indigo-50 to-indigo-100",
   },
   {
     slug: "zapier",
@@ -264,14 +307,15 @@ export type IntegrationStatuses = {
   chat: Awaited<ReturnType<typeof getWorkspaceChatStatus>>;
   telegram: Awaited<ReturnType<typeof getWorkspaceTelegramStatus>>;
   jitsi: Awaited<ReturnType<typeof getWorkspaceJitsiStatus>>;
-  docusign: Awaited<ReturnType<typeof getWorkspaceDocuSignStatus>>;
+  docuseal: Awaited<ReturnType<typeof getWorkspaceEsignStatus>>;
+  captcha: Awaited<ReturnType<typeof getWorkspaceCaptchaStatus>>;
 };
 
 /** Fetch every connectable integration's status for a workspace in parallel. */
 export async function getIntegrationStatuses(
   workspaceId: string,
 ): Promise<IntegrationStatuses> {
-  const [cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docusign] =
+  const [cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha] =
     await Promise.all([
       getWorkspaceCalStatus(workspaceId),
       getWorkspaceGCalStatus(workspaceId),
@@ -281,9 +325,10 @@ export async function getIntegrationStatuses(
       getWorkspaceChatStatus(workspaceId),
       getWorkspaceTelegramStatus(workspaceId),
       getWorkspaceJitsiStatus(workspaceId),
-      getWorkspaceDocuSignStatus(workspaceId),
+      getWorkspaceEsignStatus(workspaceId),
+      getWorkspaceCaptchaStatus(workspaceId),
     ]);
-  return { cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docusign };
+  return { cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha };
 }
 
 /** Resolve whether a given integration slug is currently connected. */
@@ -313,8 +358,17 @@ export function isConnected(
       return statuses.telegram.hasToken;
     case "jitsi":
       return statuses.jitsi.enabled && Boolean(statuses.jitsi.baseUrl);
-    case "docusign":
-      return statuses.docusign.enabled && statuses.docusign.hasToken;
+    case "docuseal":
+      return statuses.docuseal.enabled && statuses.docuseal.hasToken;
+    case "turnstile":
+    case "recaptcha":
+    case "hcaptcha":
+      return (
+        statuses.captcha.enabled &&
+        statuses.captcha.provider === slug &&
+        statuses.captcha.providers[slug].hasSecretKey &&
+        Boolean(statuses.captcha.providers[slug].siteKey)
+      );
     default:
       return false;
   }

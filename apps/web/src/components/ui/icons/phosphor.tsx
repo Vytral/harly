@@ -798,6 +798,14 @@ export function FileTextIcon(props: IconProps) {
   );
 }
 
+export function FileArrowUpIcon(props: IconProps) {
+  return (
+    <Svg {...props}>
+      <path fill="currentColor" d="m213.66 82.34l-56-56A8 8 0 0 0 152 24H56a16 16 0 0 0-16 16v176a16 16 0 0 0 16 16h144a16 16 0 0 0 16-16V88a8 8 0 0 0-2.34-5.66M160 51.31L188.69 80H160ZM200 216H56V40h88v48a8 8 0 0 0 8 8h48zm-58.34-61.66a8 8 0 0 1-11.32 11.32L136 159.31V184a8 8 0 0 1-16 0v-24.69l-5.66 5.66a8 8 0 0 1-11.32-11.32l19.32-19.31a8 8 0 0 1 11.31 0Z" />
+    </Svg>
+  );
+}
+
 /** "Active for auto-emails" indicator on an email template card. */
 export function StarFillIcon(props: IconProps) {
   return (

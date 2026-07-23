@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { cn } from "@/lib/utils";
 
 const initialActionState = { success: false } as {
@@ -100,8 +101,21 @@ export function CompanyBrandingSection({
   useActionToast(profileState, "Identity saved.");
   useActionToast(brandingState, "Brand settings saved.");
 
+  const identityFormRef = useRef<HTMLFormElement>(null);
+  const isFirstLogoRender = useRef(true);
+
   const [name, setName] = useState(workspace.name);
   const [logoUrl, setLogoUrl] = useState(workspace.logoUrl ?? "");
+
+  // Auto-save the identity form the moment the logo changes, so the user
+  // doesn't have to separately hit "Save identity" after uploading one.
+  useEffect(() => {
+    if (isFirstLogoRender.current) {
+      isFirstLogoRender.current = false;
+      return;
+    }
+    identityFormRef.current?.requestSubmit();
+  }, [logoUrl]);
   const [tagline, setTagline] = useState(workspace.tagline ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(workspace.websiteUrl ?? "");
   const [heroImageUrl, setHeroImageUrl] = useState(workspace.heroImageUrl ?? "");
@@ -117,13 +131,16 @@ export function CompanyBrandingSection({
   const [sidebarLogoDarkUrl, setSidebarLogoDarkUrl] = useState(
     workspace.sidebarLogoDarkUrl ?? "",
   );
+  const [hideHarlyBranding, setHideHarlyBranding] = useState(
+    workspace.hideHarlyBranding,
+  );
 
   const previewColor = /^#[0-9a-fA-F]{6}$/.test(primaryColor)
     ? primaryColor
     : DEFAULT_BOARD_PRIMARY_COLOR;
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="grid w-full gap-6 lg:grid-cols-2 items-start">
       {/* ── Identity ─────────────────────────────────────────────────── */}
       <Card className="gap-6 p-6 sm:p-8">
         <SectionHeader
@@ -132,7 +149,11 @@ export function CompanyBrandingSection({
           description="Logo and name shown across Harly and your careers page."
         />
 
-        <form action={profileAction} className="space-y-6">
+        <form
+          ref={identityFormRef}
+          action={profileAction}
+          className="space-y-6"
+        >
           <input type="hidden" name="logoUrl" value={logoUrl} />
           <input type="hidden" name="sidebarLogoStyle" value={sidebarLogoStyle} />
           <input type="hidden" name="sidebarLogoUrl" value={sidebarLogoUrl} />
@@ -148,7 +169,7 @@ export function CompanyBrandingSection({
               value={logoUrl || null}
               onChange={(url) => setLogoUrl(url ?? "")}
               variant="avatar"
-              disabled={!canEdit}
+              disabled={!canEdit || savingProfile}
               hint="Square logo · PNG, JPG, SVG or WEBP"
             />
             <div className="flex-1 space-y-2">
@@ -186,7 +207,7 @@ export function CompanyBrandingSection({
             />
 
             {sidebarLogoStyle === "full" ? (
-              <div className="grid gap-4 pt-1 sm:grid-cols-2">
+              <div className="grid gap-4 pt-1 lg:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium text-muted-foreground">
                     Light mode
@@ -254,8 +275,13 @@ export function CompanyBrandingSection({
           />
           <input type="hidden" name="boardStyle" value={workspace.boardStyle} />
           <input type="hidden" name="logoStyle" value={workspace.logoStyle} />
+          <input
+            type="hidden"
+            name="hideHarlyBranding"
+            value={hideHarlyBranding ? "true" : "false"}
+          />
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 lg:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="ws-website">Website</Label>
               <Input
@@ -323,6 +349,24 @@ export function CompanyBrandingSection({
               hint="Fallback banner for your careers page · 1500×500"
             />
           </div>
+
+          <label className="flex items-start justify-between gap-4 rounded-xl border bg-card px-4 py-3.5">
+            <span>
+              <span className="block text-sm font-medium text-foreground">
+                Remove Harly branding from emails
+              </span>
+              <span className="mt-0.5 block text-xs text-muted-foreground">
+                Hides the &quot;Powered by Harly&quot; footer credit on invite,
+                notification and candidate emails.
+              </span>
+            </span>
+            <Switch
+              checked={hideHarlyBranding}
+              onCheckedChange={setHideHarlyBranding}
+              disabled={!canEdit || savingBranding}
+              aria-label="Remove Harly branding from emails"
+            />
+          </label>
 
           <div className="flex justify-end border-t pt-6">
             <Button type="submit" disabled={!canEdit || savingBranding}>

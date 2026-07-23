@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import { db, notifications, user as authUsers } from "@harly/db";
 
@@ -61,8 +61,8 @@ export async function listNotifications(limit = 50): Promise<NotificationItem[]>
 export async function getUnreadNotificationCount(): Promise<number> {
   const { organization: workspace, user } = await getWorkspaceContext();
 
-  const rows = await db
-    .select({ id: notifications.id })
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
     .from(notifications)
     .where(
       and(
@@ -70,8 +70,6 @@ export async function getUnreadNotificationCount(): Promise<number> {
         eq(notifications.userId, user.id),
         isNull(notifications.readAt),
       ),
-    )
-    .limit(100);
-
-  return rows.length;
+    );
+  return row?.count ?? 0;
 }

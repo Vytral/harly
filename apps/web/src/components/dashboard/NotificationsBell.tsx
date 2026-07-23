@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { CheckCheck, Eye, EyeOff, Trash2 } from "lucide-react";
@@ -32,14 +32,24 @@ import { cn } from "@/lib/utils";
 /** Top-bar bell with unread badge and a quick peek at recent notifications. */
 export function NotificationsBell({
   notifications,
+  unreadCount,
 }: {
   notifications: NotificationItem[];
+  unreadCount: number;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const unread = notifications.filter((n) => !n.read).length;
+  const unread = unreadCount;
+
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState === "visible") router.refresh();
+    };
+    const interval = window.setInterval(refresh, 30_000);
+    return () => window.clearInterval(interval);
+  }, [router]);
 
   function openItem(item: NotificationItem) {
     setOpen(false);

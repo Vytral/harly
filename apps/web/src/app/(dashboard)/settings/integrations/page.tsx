@@ -3,7 +3,11 @@ import type { ComponentType } from "react";
 
 import {
   AshbyLogo,
+  CloudflareLogo,
+  DocuSealLogo,
+  HCaptchaLogo,
   LeverLogo,
+  ReCaptchaLogo,
   TheSvgLogo,
   WorkableLogo,
 } from "@/components/ui/icons/brands";
@@ -62,7 +66,10 @@ const INTEGRATION_LOGOS: Record<IntegrationSlug, Logo> = {
   linkedin: svgBrand("linkedin", "LinkedIn"),
   zapier: svgBrand("zapier", "Zapier"),
   webhooks: svgBrand("zapier", "Webhooks"),
-  docusign: svgBrand("docusign", "DocuSign"),
+  docuseal: DocuSealLogo,
+  turnstile: CloudflareLogo,
+  recaptcha: ReCaptchaLogo,
+  hcaptcha: HCaptchaLogo,
 };
 
 const GreenhouseImportLogo = svgBrand("greenhouse", "Greenhouse");

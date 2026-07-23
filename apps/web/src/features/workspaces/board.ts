@@ -82,6 +82,7 @@ export const boardBrandingSchema = z.object({
   heroImageUrl: optionalUrl,
   boardStyle: z.enum(boardStyles).default("hero"),
   logoStyle: z.enum(logoStyles).default("bordered"),
+  hideHarlyBranding: z.boolean().default(false),
 });
 
 export type BoardBrandingInput = z.input<typeof boardBrandingSchema>;
