@@ -14,7 +14,7 @@ import {
 } from "@/lib/validations/applications";
 import { resolvePublicWorkspace } from "@/server/api/public";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import { verifyCaptchaToken } from "@/lib/captcha";
 import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
@@ -48,18 +48,20 @@ export const POST = withApi(
     }
 
     // Anti-bot: the public apply API is the documented custom-form / embed
-    // entrypoint, so the Turnstile challenge MUST be enforced here too (not
+    // entrypoint, so the CAPTCHA challenge MUST be enforced here too (not
     // only in the Server Action). When a global secret is configured this is
     // mandatory for every workspace; the token is supplied by the embed widget.
-    const token = body.turnstileToken;
+    // `captchaToken` is the current key; `turnstileToken` stays accepted so
+    // older embedded widgets keep working.
+    const token = body.captchaToken ?? body.turnstileToken;
     const tokenStr =
       typeof token === "string" && token.length > 0 ? token : null;
-    const turnstileOk = await verifyTurnstileToken(
+    const captchaOk = await verifyCaptchaToken(
       tokenStr,
       workspace.workspaceId,
       clientIp(request),
     );
-    if (!turnstileOk) {
+    if (!captchaOk) {
       throw ApiError.forbidden(
         "Verification failed. Complete the challenge and try again.",
       );

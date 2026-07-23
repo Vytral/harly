@@ -5,7 +5,7 @@ import { ApiError } from "@harly/api";
 import { resolvePublicWorkspace } from "@/server/api/public";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
-import { resolveTurnstileSiteKey } from "@/lib/turnstile";
+import { resolveCaptchaSiteKey } from "@/lib/captcha";
 
 export const runtime = "nodejs";
 
@@ -33,15 +33,18 @@ export const GET = withApi(async (request, context) => {
   });
 
   // The embed widget renders the apply form on the host's own page, so the
-  // Turnstile challenge (when configured) must render there too. The site key
-  // is public by design; the secret never leaves the server.
-  const turnstileSiteKey = await resolveTurnstileSiteKey(workspace.workspaceId);
+  // CAPTCHA challenge (when configured) must render there too. The site key is
+  // public by design; the secret never leaves the server. `turnstileSiteKey`
+  // is kept as an alias so older embedded widgets keep rendering.
+  const captcha = await resolveCaptchaSiteKey(workspace.workspaceId);
 
   return apiOk(
     {
       job: serializePublicJob(detail.job, workspace.slug),
       applicationConfig: applicationContext?.applicationConfig ?? null,
-      turnstileSiteKey,
+      captchaProvider: captcha?.provider ?? null,
+      captchaSiteKey: captcha?.siteKey ?? null,
+      turnstileSiteKey: captcha?.provider === "turnstile" ? captcha.siteKey : null,
     },
     { cors: true },
   );
