@@ -1,25 +1,16 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { and, desc, eq, inArray, isNull, lt, lte, or } from "drizzle-orm";
 
-import {
-  db,
-  offers,
-  signatureEnvelopes,
-  signatureEvents,
-} from "@harly/db";
+import { db, offers, signatureEnvelopes, signatureEvents } from "@harly/db";
 
-import {
-  getEnvelope,
-  freshDocuSignContext,
-} from "@/lib/docusign/client";
+import { freshEsignContext, getSubmission } from "@/lib/esign/client";
 import {
   canAdvanceSignatureEnvelope,
   signatureEnvelopeStatusForEvent,
   signatureEventForProviderStatus,
   signatureReconcileDelayMs,
-} from "@/lib/docusign/signature-state";
-import { syncEnvelopeRecipients } from "@/lib/docusign/recipient-sync";
-import { syncDocumentsForEnvelope } from "@/lib/docusign/webhook-sync";
+} from "@/lib/esign/signature-state";
+import { syncDocumentsForEnvelope } from "@/lib/esign/webhook-sync";
 import { decideOfferForApi } from "@/features/offers/service";
 import { createLogger } from "@/lib/logger";
 import { authorizeCron } from "@/server/cron-auth";
@@ -27,14 +18,14 @@ import { authorizeCron } from "@/server/cron-auth";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const CRON_KEY = "docusign-reconciliation";
+const CRON_KEY = "esign-reconciliation";
 const BATCH_SIZE = 50;
 const LOCK_MS = 2 * 60 * 1000;
 const FAILURE_RETRY_MS = 60 * 1000;
 
-const log = createLogger("cron-docusign-reconciliation");
+const log = createLogger("cron-esign-reconciliation");
 
-function toDateOrNull(value: string | undefined) {
+function toDateOrNull(value: string | undefined | null) {
   if (!value) return null;
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? null : date;
@@ -42,7 +33,7 @@ function toDateOrNull(value: string | undefined) {
 
 function dueEnvelopeCondition(now: Date) {
   return and(
-    eq(signatureEnvelopes.provider, "docusign"),
+    eq(signatureEnvelopes.provider, "docuseal"),
     inArray(signatureEnvelopes.status, [
       "sent",
       "delivered",
@@ -67,16 +58,8 @@ async function claimEnvelope(
 ) {
   const [claimed] = await db
     .update(signatureEnvelopes)
-    .set({
-      reconcileLockedUntil: new Date(now.getTime() + LOCK_MS),
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(signatureEnvelopes.id, envelope.id),
-        dueEnvelopeCondition(now),
-      ),
-    )
+    .set({ reconcileLockedUntil: new Date(now.getTime() + LOCK_MS), updatedAt: now })
+    .where(and(eq(signatureEnvelopes.id, envelope.id), dueEnvelopeCondition(now)))
     .returning({ id: signatureEnvelopes.id });
   return Boolean(claimed);
 }
@@ -105,32 +88,14 @@ async function reconcileEnvelope(envelope: typeof signatureEnvelopes.$inferSelec
   const now = new Date();
   const attempts = envelope.reconcileAttempts + 1;
   try {
-    const context = await freshDocuSignContext(envelope.workspaceId);
-    if (!context) throw new Error("DocuSign connection is unavailable.");
-    const remote = await getEnvelope(
-      context.baseUrl,
-      context.accessToken,
-      context.accountId,
-      envelope.providerEnvelopeId,
-    );
-    await syncEnvelopeRecipients({
-      workspaceId: envelope.workspaceId,
-      signatureEnvelopeId: envelope.id,
-      baseUrl: context.baseUrl,
-      accessToken: context.accessToken,
-      accountId: context.accountId,
-      providerEnvelopeId: envelope.providerEnvelopeId,
-    });
+    const ctx = await freshEsignContext(envelope.workspaceId);
+    if (!ctx) throw new Error("DocuSeal connection is unavailable.");
+    const remote = await getSubmission(ctx, envelope.providerEnvelopeId);
+
     const eventName = signatureEventForProviderStatus(remote.status);
     const nextStatus = signatureEnvelopeStatusForEvent(eventName ?? "");
-    const generatedAt =
-      toDateOrNull(remote.completedDateTime ?? remote.declinedDateTime) ?? now;
-    const eventKey = [
-      "reconcile",
-      envelope.id,
-      remote.status ?? "unknown",
-      remote.completedDateTime ?? remote.declinedDateTime ?? "",
-    ].join(":");
+    const generatedAt = toDateOrNull(remote.completed_at) ?? now;
+    const eventKey = ["reconcile", envelope.id, remote.status ?? "unknown", remote.completed_at ?? ""].join(":");
 
     const [recorded] = await db
       .insert(signatureEvents)
@@ -142,13 +107,11 @@ async function reconcileEnvelope(envelope: typeof signatureEnvelopes.$inferSelec
         generatedAt,
         retryCount: attempts,
         payload: {
-          source: "docusign-reconciliation",
+          source: "esign-reconciliation",
           provider: envelope.provider,
           providerEnvelopeId: envelope.providerEnvelopeId,
           status: remote.status ?? null,
-          completedDateTime: remote.completedDateTime ?? null,
-          declinedDateTime: remote.declinedDateTime ?? null,
-          declinedReason: remote.declinedReason ?? null,
+          completedAt: remote.completed_at ?? null,
         },
       })
       .onConflictDoNothing()
@@ -158,12 +121,7 @@ async function reconcileEnvelope(envelope: typeof signatureEnvelopes.$inferSelec
       const [existingEvent] = await db
         .select({ id: signatureEvents.id })
         .from(signatureEvents)
-        .where(
-          and(
-            eq(signatureEvents.workspaceId, envelope.workspaceId),
-            eq(signatureEvents.eventKey, eventKey),
-          ),
-        )
+        .where(and(eq(signatureEvents.workspaceId, envelope.workspaceId), eq(signatureEvents.eventKey, eventKey)))
         .limit(1);
       reconciliationEventId = existingEvent?.id ?? null;
     }
@@ -189,10 +147,7 @@ async function reconcileEnvelope(envelope: typeof signatureEnvelopes.$inferSelec
           if (nextStatus === "declined") values.declinedAt = generatedAt;
           if (nextStatus === "voided") values.voidedAt = generatedAt;
         }
-        await tx
-          .update(signatureEnvelopes)
-          .set(values)
-          .where(eq(signatureEnvelopes.id, envelope.id));
+        await tx.update(signatureEnvelopes).set(values).where(eq(signatureEnvelopes.id, envelope.id));
       });
 
       const signatureStatus =
@@ -212,18 +167,14 @@ async function reconcileEnvelope(envelope: typeof signatureEnvelopes.$inferSelec
 
       if (nextStatus === "completed" || nextStatus === "declined") {
         const [offer] = await db
-          .select({
-            id: offers.id,
-            status: offers.status,
-            createdById: offers.createdById,
-          })
+          .select({ id: offers.id, status: offers.status, createdById: offers.createdById })
           .from(offers)
           .where(
             and(
               eq(offers.workspaceId, envelope.workspaceId),
               or(
                 eq(offers.signatureEnvelopeRefId, envelope.id),
-                eq(offers.docusignEnvelopeId, envelope.providerEnvelopeId),
+                eq(offers.esignSubmissionId, envelope.providerEnvelopeId),
               ),
             ),
           )
@@ -261,7 +212,7 @@ async function reconcileEnvelope(envelope: typeof signatureEnvelopes.$inferSelec
       nextAt: new Date(now.getTime() + FAILURE_RETRY_MS),
       error: message,
     });
-    log.error({ error, envelopeId: envelope.providerEnvelopeId }, "DocuSign reconciliation failed");
+    log.error({ error, submissionId: envelope.providerEnvelopeId }, "DocuSeal reconciliation failed");
     return "failed" as const;
   }
 }
@@ -288,8 +239,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       ok: true,
       claimed: claimed.length,
-      succeeded: results.filter((result) => result === "succeeded").length,
-      failed: results.filter((result) => result === "failed").length,
+      succeeded: results.filter((r) => r === "succeeded").length,
+      failed: results.filter((r) => r === "failed").length,
     });
   } finally {
     await auth.release();

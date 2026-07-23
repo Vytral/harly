@@ -2,14 +2,15 @@ import "server-only";
 
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 
-import {
-  activityEvents,
-  db,
-  documents,
-} from "@harly/db";
+import { activityEvents, db, documents } from "@harly/db";
 
-import { persistSignedDocumentForEnvelope } from "@/lib/docusign/signed-artifact";
+import { persistSignedDocumentForEnvelope } from "@/lib/esign/signed-artifact";
 
+/**
+ * Propagate a submission's terminal state to every ATS document attached to its
+ * envelope, and (on completion) persist the signed artifact. Idempotent and
+ * monotonic — safe to call from both the webhook and the reconciliation cron.
+ */
 export async function syncDocumentsForEnvelope(input: {
   workspaceId: string;
   envelopeId: string;
@@ -29,9 +30,7 @@ export async function syncDocumentsForEnvelope(input: {
     db
       .select({ id: documents.id })
       .from(documents)
-      .where(
-        and(eq(documents.workspaceId, input.workspaceId), envelopeDocumentCondition),
-      ),
+      .where(and(eq(documents.workspaceId, input.workspaceId), envelopeDocumentCondition)),
     input.signatureStatus === "signed"
       ? persistSignedDocumentForEnvelope(
           input.workspaceId,
@@ -48,9 +47,7 @@ export async function syncDocumentsForEnvelope(input: {
     const current = await tx
       .select({ id: documents.id, signatureStatus: documents.signatureStatus })
       .from(documents)
-      .where(
-        and(eq(documents.workspaceId, input.workspaceId), envelopeDocumentCondition),
-      );
+      .where(and(eq(documents.workspaceId, input.workspaceId), envelopeDocumentCondition));
     const changed = current.filter((document) => {
       if (input.signatureStatus === "signed") return document.signatureStatus !== "signed";
       if (input.signatureStatus === "declined") {
@@ -63,7 +60,7 @@ export async function syncDocumentsForEnvelope(input: {
       .update(documents)
       .set({
         signatureStatus: input.signatureStatus,
-        signatureProvider: "docusign",
+        signatureProvider: "docuseal",
         signatureEnvelopeRefId: input.signatureEnvelopeId,
         updatedAt: new Date(),
       })
@@ -82,8 +79,8 @@ export async function syncDocumentsForEnvelope(input: {
         type: "document.signature_changed",
         metadata: {
           status: input.signatureStatus,
-          provider: "docusign",
-          envelopeId: input.envelopeId,
+          provider: "docuseal",
+          submissionId: input.envelopeId,
         },
       })),
     );
