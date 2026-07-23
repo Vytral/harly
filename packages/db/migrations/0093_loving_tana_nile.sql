@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "hide_harly_branding" boolean DEFAULT false NOT NULL;

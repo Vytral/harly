@@ -75,6 +75,15 @@ export const mailSourceEnum = pgEnum("mail_source", [
   "imap",
   "legacy-webhook",
   "provider",
+  "smtp",
+]);
+
+export const mailIdempotencyStatusEnum = pgEnum("mail_idempotency_status", [
+  "pending",
+  "sending",
+  "sent",
+  "failed",
+  "unknown",
 ]);
 
 export const messageStatusEnum = pgEnum("message_status", [
@@ -175,6 +184,10 @@ export const user = pgTable("user", {
   githubUrl: text("github_url"),
   websiteUrl: text("website_url"),
   twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+  // Set when an owner provisions the account with a temporary password; the
+  // member is forced through /change-password on next sign-in, after which it
+  // clears. Keeps the provisioning owner from retaining a working credential.
+  mustChangePassword: boolean("must_change_password").default(false).notNull(),
   onboardingCompletedAt: timestamp("onboarding_completed_at", {
     withTimezone: true,
   }),
@@ -244,6 +257,27 @@ export const verification = pgTable(
       .notNull(),
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
+);
+
+// Better Auth twoFactor plugin storage. Keep the exported model name in
+// camelCase: Better Auth resolves this exact key from the schema object
+// passed to the Drizzle adapter.
+export const twoFactor = pgTable(
+  "two_factor",
+  {
+    id: text("id").primaryKey(),
+    secret: text("secret").notNull(),
+    backupCodes: text("backup_codes").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    verified: boolean("verified").default(true).notNull(),
+    failedVerificationCount: integer("failed_verification_count")
+      .default(0)
+      .notNull(),
+    lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  },
+  (table) => [index("two_factor_userId_idx").on(table.userId)],
 );
 
 export const organization = pgTable(
@@ -363,6 +397,7 @@ export const deploymentBootstrap = pgTable(
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
   accounts: many(account),
+  twoFactors: many(twoFactor),
   members: many(member),
   invitations: many(invitation),
 }));
@@ -377,6 +412,13 @@ export const sessionRelations = relations(session, ({ one }) => ({
 export const accountRelations = relations(account, ({ one }) => ({
   user: one(user, {
     fields: [account.userId],
+    references: [user.id],
+  }),
+}));
+
+export const twoFactorRelations = relations(twoFactor, ({ one }) => ({
+  user: one(user, {
+    fields: [twoFactor.userId],
     references: [user.id],
   }),
 }));
@@ -413,6 +455,7 @@ export const workspaceSettings = pgTable("workspace_settings", {
   organizationId: text("organization_id")
     .primaryKey()
     .references(() => organization.id, { onDelete: "cascade" }),
+  mailUnificationEnabled: boolean("mail_unification_enabled").default(false).notNull(),
   tagline: text("tagline"),
   description: text("description"),
   websiteUrl: text("website_url"),
@@ -428,6 +471,9 @@ export const workspaceSettings = pgTable("workspace_settings", {
   // sidebar theme; dark falls back to light when unset.
   sidebarLogoUrl: text("sidebar_logo_url"),
   sidebarLogoDarkUrl: text("sidebar_logo_dark_url"),
+  // When true, product emails omit the "Powered by Harly" footer credit and
+  // system emails (invites, welcome) show the workspace name instead of Harly.
+  hideHarlyBranding: boolean("hide_harly_branding").default(false).notNull(),
   // AI provider config (bring-your-own-key). The API key is encrypted at rest
   // (AES-256-GCM) — never stored or returned in plaintext.
   aiEnabled: boolean("ai_enabled").default(false).notNull(),
@@ -516,6 +562,21 @@ export const workspaceSettings = pgTable("workspace_settings", {
   turnstileSecretCiphertext: text("turnstile_secret_ciphertext"),
   turnstileSecretIv: text("turnstile_secret_iv"),
   turnstileSecretTag: text("turnstile_secret_tag"),
+  // Active CAPTCHA provider selector (mirror of chatProvider / chatEnabled).
+  // One provider active per workspace; keys per provider are kept so switching
+  // doesn't lose them. Turnstile keys reuse the turnstile* columns above.
+  captchaEnabled: boolean("captcha_enabled").default(false).notNull(),
+  captchaProvider: text("captcha_provider"), // 'turnstile' | 'recaptcha' | 'hcaptcha'
+  // Google reCAPTCHA v2 keys. Secret AES-256-GCM encrypted at rest.
+  recaptchaSiteKey: text("recaptcha_site_key"),
+  recaptchaSecretCiphertext: text("recaptcha_secret_ciphertext"),
+  recaptchaSecretIv: text("recaptcha_secret_iv"),
+  recaptchaSecretTag: text("recaptcha_secret_tag"),
+  // hCaptcha keys. Secret AES-256-GCM encrypted at rest.
+  hcaptchaSiteKey: text("hcaptcha_site_key"),
+  hcaptchaSecretCiphertext: text("hcaptcha_secret_ciphertext"),
+  hcaptchaSecretIv: text("hcaptcha_secret_iv"),
+  hcaptchaSecretTag: text("hcaptcha_secret_tag"),
   // Chat notifications (Slack / Discord incoming-webhook). The webhook URL
   // is the only secret — encrypted at rest (AES-256-GCM).
   chatEnabled: boolean("chat_enabled").default(false).notNull(),
@@ -562,6 +623,12 @@ export const workspaceSettings = pgTable("workspace_settings", {
     .notNull(),
   dataRetentionTalentPoolMonths: integer("data_retention_talent_pool_months")
     .default(24)
+    .notNull(),
+  // Opt-in switch for the retention-enforcement cron. Off by default: the
+  // months above are advisory until a workspace explicitly turns on
+  // automatic anonymization, so no one loses data they didn't ask to purge.
+  dataRetentionEnabled: boolean("data_retention_enabled")
+    .default(false)
     .notNull(),
   consentCheckboxText: text("consent_checkbox_text"),
   // JSONB storing legal page content keyed by page type:
@@ -655,34 +722,18 @@ export const workspaceSettings = pgTable("workspace_settings", {
   // URL is the only config; rooms are random slugs composed per interview.
   jitsiEnabled: boolean("jitsi_enabled").default(false).notNull(),
   jitsiBaseUrl: text("jitsi_base_url"),
-  // DocuSign OAuth (per-workspace credentials). Tokens + client secret encrypted
-  // at rest (AES-256-GCM). accountId + baseUrl resolve from getUserInfo on
-  // callback and are needed for every eSignature REST call.
-  docusignEnabled: boolean("docusign_enabled").default(false).notNull(),
-  docusignAccountEmail: text("docusign_account_email"),
-  docusignAccountId: text("docusign_account_id"),
-  // OAuth authorization host (account-d/account). Kept separate from the
-  // regional REST base URL resolved from getUserInfo.
-  docusignAuthBaseUrl: text("docusign_auth_base_url"),
-  docusignBaseUrl: text("docusign_base_url"),
-  docusignClientId: text("docusign_client_id"),
-  docusignClientSecretCiphertext: text("docusign_client_secret_ciphertext"),
-  docusignClientSecretIv: text("docusign_client_secret_iv"),
-  docusignClientSecretTag: text("docusign_client_secret_tag"),
-  docusignAccessTokenCiphertext: text("docusign_access_token_ciphertext"),
-  docusignAccessTokenIv: text("docusign_access_token_iv"),
-  docusignAccessTokenTag: text("docusign_access_token_tag"),
-  docusignAccessTokenExpiresAt: timestamp("docusign_access_token_expires_at", {
-    withTimezone: true,
-  }),
-  docusignRefreshTokenCiphertext: text("docusign_refresh_token_ciphertext"),
-  docusignRefreshTokenIv: text("docusign_refresh_token_iv"),
-  docusignRefreshTokenTag: text("docusign_refresh_token_tag"),
-  // DocuSign Connect webhook HMAC key used to verify inbound envelope status
-  // posts. Plaintext — same class as calWebhookSecret, not a bearer credential.
-  docusignConnectSecret: text("docusign_connect_secret"),
-  // Offer delivery channel: "email" (default) or "docusign" (collect signature
-  // via embedded signing inside the candidate portal, email notifies instead).
+  // DocuSeal (self-hosted e-signature). Base instance URL + an API token
+  // (X-Auth-Token, encrypted at rest) is all that's needed — no OAuth. The
+  // webhook secret is a plaintext shared token appended to the callback URL and
+  // checked on inbound submission events (same class as calWebhookSecret).
+  docusealEnabled: boolean("docuseal_enabled").default(false).notNull(),
+  docusealUrl: text("docuseal_url"),
+  docusealApiTokenCiphertext: text("docuseal_api_token_ciphertext"),
+  docusealApiTokenIv: text("docuseal_api_token_iv"),
+  docusealApiTokenTag: text("docuseal_api_token_tag"),
+  docusealWebhookSecret: text("docuseal_webhook_secret"),
+  // Offer delivery channel: "email" (default) or "esign" (collect signature via
+  // embedded signing inside the candidate portal, email notifies instead).
   offerSignatureChannel: text("offer_signature_channel").default("email").notNull(),
   ...timestamps(),
 });
@@ -780,7 +831,7 @@ export const mailThreads = pgTable(
     ),
     check(
       "mail_threads_source_mailbox_check",
-      sql`(${table.source} = 'imap' AND ${table.mailboxId} IS NOT NULL) OR (${table.source} IN ('legacy-webhook', 'provider') AND ${table.mailboxId} IS NULL)`,
+      sql`(${table.source} = 'imap' AND ${table.mailboxId} IS NOT NULL) OR (${table.source} IN ('legacy-webhook', 'provider', 'smtp') AND ${table.mailboxId} IS NULL)`,
     ),
   ],
 );
@@ -1049,6 +1100,10 @@ export const candidates = pgTable(
       .default(sql`'[]'::jsonb`)
       .notNull(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // Set by the data-retention cron when this candidate's PII was redacted
+    // (see anonymize.ts). Distinct from deletedAt: an anonymized candidate's
+    // row + pipeline history stay for metrics, only identity fields are wiped.
+    anonymizedAt: timestamp("anonymized_at", { withTimezone: true }),
     ...timestamps(),
   },
   (table) => [
@@ -1068,6 +1123,10 @@ export const candidates = pgTable(
     index("candidates_workspace_deleted_idx").on(
       table.workspaceId,
       table.deletedAt,
+    ),
+    index("candidates_workspace_anonymized_idx").on(
+      table.workspaceId,
+      table.anonymizedAt,
     ),
     index("candidates_skills_idx").using("gin", table.skills),
   ],
@@ -1345,6 +1404,16 @@ export const documents = pgTable(
       { onDelete: "set null" },
     ),
     signatureUrl: text("signature_url"),
+    // Manual "signed offline" attestation. Only set for non-externally-managed
+    // providers when a manager marks a document signed by hand: who attested,
+    // when, and a mandatory note (e.g. "signed in person 2026-07-22, scan on
+    // file"). Externally-managed providers (DocuSeal) leave these null — their
+    // evidence is the combined PDF + audit-log artifacts.
+    manualSignedById: text("manual_signed_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    manualSignedAt: timestamp("manual_signed_at", { withTimezone: true }),
+    manualSignatureNote: text("manual_signature_note"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
     ownerId: text("owner_id").references(() => user.id, {
       onDelete: "set null",
@@ -1624,31 +1693,55 @@ export const documentLegalHolds = pgTable(
   ],
 );
 
-// Idempotency record for DocuSign Connect deliveries. Connect retries and can
-// deliver events out of order; the composite key is stable across retries.
-export const docusignWebhookEvents = pgTable(
-  "docusign_webhook_events",
+// Document requests: a recruiter asks a candidate to provide a document (ID,
+// signed NDA, tax form, …) through the candidate portal. Scoped to an
+// application; candidateId is denormalized for the candidate-profile view. When
+// the candidate uploads, `documentId` links the resulting Documents-hub file and
+// status advances to `submitted`, then a reviewer accepts/declines/waives it.
+export const documentRequests = pgTable(
+  "document_requests",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    eventKey: text("event_key").notNull(),
-    envelopeId: text("envelope_id").notNull(),
-    eventType: text("event_type").notNull(),
-    createdAt: timestamp("created_at", { withTimezone: true })
-      .defaultNow()
-      .notNull(),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    instructions: text("instructions"),
+    // pending → submitted → accepted | declined ; or waived from pending/submitted.
+    status: text("status").default("pending").notNull(),
+    dueAt: timestamp("due_at", { withTimezone: true }),
+    // The uploaded Documents-hub file fulfilling this request (null until submitted).
+    documentId: uuid("document_id").references(() => documents.id, {
+      onDelete: "set null",
+    }),
+    requestedById: text("requested_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    submittedAt: timestamp("submitted_at", { withTimezone: true }),
+    reviewedById: text("reviewed_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewNote: text("review_note"),
+    ...timestamps(),
   },
   (table) => [
-    uniqueIndex("docusign_webhook_events_workspace_key_idx").on(
+    index("document_requests_workspace_candidate_idx").on(
       table.workspaceId,
-      table.eventKey,
+      table.candidateId,
     ),
-    index("docusign_webhook_events_workspace_envelope_idx").on(
+    index("document_requests_workspace_application_status_idx").on(
       table.workspaceId,
-      table.envelopeId,
+      table.applicationId,
+      table.status,
     ),
+    index("document_requests_document_idx").on(table.documentId),
   ],
 );
 
@@ -1657,6 +1750,8 @@ export type NewDocument = typeof documents.$inferInsert;
 export type DocumentCategory = typeof documentCategories.$inferSelect;
 export type DocumentVersion = typeof documentVersions.$inferSelect;
 export type DocumentLegalHold = typeof documentLegalHolds.$inferSelect;
+export type DocumentRequest = typeof documentRequests.$inferSelect;
+export type NewDocumentRequest = typeof documentRequests.$inferInsert;
 
 // Audit trail
 export const activityEvents = pgTable(
@@ -1760,10 +1855,9 @@ export const offers = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "restrict" }),
     decidedAt: timestamp("decided_at", { withTimezone: true }),
-    // DocuSign envelope id when the offer was sent via e-signature (channel =
-    // "docusign"). The Connect webhook maps this back to the offer to flip
-    // status to accepted/declined and attach the signed PDF. Null for email-only offers.
-    docusignEnvelopeId: text("docusign_envelope_id"),
+    // DocuSeal submission id (provider-neutral e-signature). Correlates the
+    // inbound submission webhook back to the offer. Null for email-only offers.
+    esignSubmissionId: text("esign_submission_id"),
     signatureEnvelopeRefId: uuid("signature_envelope_ref_id").references(
       () => signatureEnvelopes.id,
       { onDelete: "set null" },
@@ -1788,8 +1882,8 @@ export const offers = pgTable(
 export type Offer = typeof offers.$inferSelect;
 export type NewOffer = typeof offers.$inferInsert;
 
-// Provider-independent signing domain. DocuSign identifiers remain stored for
-// reconciliation, while Harly owns the lifecycle, recipients, evidence, and
+// Provider-independent signing domain. The provider's identifiers are stored
+// for reconciliation, while Harly owns the lifecycle, recipients, evidence, and
 // document relationships. This lets another provider be added without adding
 // more provider-specific columns to documents or offers.
 export const signatureEnvelopes = pgTable(
@@ -1799,7 +1893,7 @@ export const signatureEnvelopes = pgTable(
     workspaceId: text("workspace_id")
       .notNull()
       .references(() => organization.id, { onDelete: "cascade" }),
-    provider: text("provider").default("docusign").notNull(),
+    provider: text("provider").default("docuseal").notNull(),
     providerEnvelopeId: text("provider_envelope_id").notNull(),
     kind: text("kind").default("document").notNull(),
     status: text("status").default("created").notNull(),
@@ -1864,6 +1958,10 @@ export const signatureRecipients = pgTable(
     name: text("name").notNull(),
     routingOrder: integer("routing_order").default(1).notNull(),
     clientUserId: text("client_user_id"),
+    // Provider hosted signing URL for this recipient (DocuSeal embed_src /
+    // `${url}/s/{slug}`). Lets the portal redirect the candidate to sign without
+    // a second provider round-trip. Null for remote (email-driven) signers.
+    signingUrl: text("signing_url"),
     status: text("status").default("created").notNull(),
     signedAt: timestamp("signed_at", { withTimezone: true }),
     declinedAt: timestamp("declined_at", { withTimezone: true }),
@@ -2412,6 +2510,27 @@ export const mailUnificationMigrations = pgTable(
   ],
 );
 
+export const mailIdempotencyKeys = pgTable(
+  "mail_idempotency_keys",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    messageId: text("message_id").notNull(),
+    status: mailIdempotencyStatusEnum("status").default("pending").notNull(),
+    threadId: uuid("thread_id").references(() => mailThreads.id, { onDelete: "set null" }),
+    mailMessageId: uuid("mail_message_id").references(() => mailMessages.id, { onDelete: "set null" }),
+    providerMessageId: text("provider_message_id"),
+    payloadHash: text("payload_hash").notNull(),
+    error: text("error"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("mail_idempotency_workspace_key_unique").on(table.workspaceId, table.idempotencyKey),
+    index("mail_idempotency_workspace_status_idx").on(table.workspaceId, table.status),
+  ],
+);
+
 // Scheduled interviews — power the dashboard agenda and hiring-velocity metrics.
 export const interviews = pgTable(
   "interviews",
@@ -2565,6 +2684,8 @@ export type MailUnificationMigration =
   typeof mailUnificationMigrations.$inferSelect;
 export type NewMailUnificationMigration =
   typeof mailUnificationMigrations.$inferInsert;
+export type MailIdempotencyKey = typeof mailIdempotencyKeys.$inferSelect;
+export type NewMailIdempotencyKey = typeof mailIdempotencyKeys.$inferInsert;
 export type Interview = typeof interviews.$inferSelect;
 export type NewInterview = typeof interviews.$inferInsert;
 export type InterviewSync = typeof interviewSyncs.$inferSelect;
