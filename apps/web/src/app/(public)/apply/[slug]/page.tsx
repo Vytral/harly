@@ -5,7 +5,7 @@ import { ApplyForm } from "@/features/applications/ApplyForm";
 import { getPublicJobDetail } from "@/features/jobs/data";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { JobChrome } from "@/features/career-page/job/JobChrome";
-import { resolveTurnstileSiteKey } from "@/lib/turnstile";
+import { resolveCaptchaSiteKey } from "@/lib/captcha";
 import { isPortalEnabled } from "@/lib/portal-auth";
 import { getPublicWorkspaceSlug } from "@/lib/public-workspace";
 
@@ -27,8 +27,8 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
 
   const { job, workspace, config } = detail;
   const applicationConfig = normalizeJobApplicationConfig(job.applicationConfig);
-  const [turnstileSiteKey, portalEnabled] = await Promise.all([
-    resolveTurnstileSiteKey(workspace.id),
+  const [captcha, portalEnabled] = await Promise.all([
+    resolveCaptchaSiteKey(workspace.id),
     isPortalEnabled(),
   ]);
 
@@ -46,7 +46,8 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
         workspaceSlug={workspace.slug}
         applicationConfig={applicationConfig}
         variant={config.template === "ashby" ? "ashby" : "default"}
-        turnstileSiteKey={turnstileSiteKey}
+        captchaProvider={captcha?.provider ?? null}
+        captchaSiteKey={captcha?.siteKey ?? null}
         legalConfigured={workspace.legalConfigured}
         consentCheckboxText={workspace.consentCheckboxText}
         legalPages={workspace.legalPages}

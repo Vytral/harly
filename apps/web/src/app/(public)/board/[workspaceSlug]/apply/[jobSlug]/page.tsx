@@ -4,7 +4,7 @@ import { ApplyForm } from "@/features/applications/ApplyForm";
 import { JobChrome } from "@/features/career-page/job/JobChrome";
 import { getPublicJobDetail } from "@/features/jobs/data";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
-import { resolveTurnstileSiteKey } from "@/lib/turnstile";
+import { resolveCaptchaSiteKey } from "@/lib/captcha";
 import { isPortalEnabled } from "@/lib/portal-auth";
 import type { Metadata } from "next";
 
@@ -19,8 +19,8 @@ export default async function BoardApplyPage({
   const detail = await getPublicJobDetail({ workspaceSlug, jobSlug });
   if (!detail) notFound();
   const { job, workspace, config } = detail;
-  const [turnstileSiteKey, portalEnabled] = await Promise.all([
-    resolveTurnstileSiteKey(workspace.id),
+  const [captcha, portalEnabled] = await Promise.all([
+    resolveCaptchaSiteKey(workspace.id),
     isPortalEnabled(),
   ]);
   const form = (
@@ -28,7 +28,8 @@ export default async function BoardApplyPage({
       jobSlug={job.slug}
       workspaceSlug={workspace.slug}
       applicationConfig={normalizeJobApplicationConfig(job.applicationConfig)}
-      turnstileSiteKey={turnstileSiteKey}
+      captchaProvider={captcha?.provider ?? null}
+      captchaSiteKey={captcha?.siteKey ?? null}
       legalConfigured={workspace.legalConfigured}
       consentCheckboxText={workspace.consentCheckboxText}
       legalPages={workspace.legalPages}

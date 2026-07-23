@@ -49,7 +49,8 @@ import {
 } from "@/lib/storage-presign-response";
 import { PhoneInput } from "@/components/ui/PhoneInput";
 import { Button } from "@/components/ui/button";
-import { TurnstileWidget } from "@/components/TurnstileWidget";
+import { CaptchaWidget } from "@/components/CaptchaWidget";
+import type { CaptchaProvider } from "@/lib/captcha";
 
 const initialState: ApplyJobActionState = {
   status: "idle",
@@ -66,7 +67,8 @@ type ApplyFormProps = {
   applicationConfig: JobApplicationConfig;
   variant?: ApplyFormVariant;
   /** Resolved server-side (workspace key → env fallback). Null hides the widget. */
-  turnstileSiteKey?: string | null;
+  captchaProvider?: CaptchaProvider | null;
+  captchaSiteKey?: string | null;
   /** Legal settings from workspace. When legalConfigured is true, consent checkbox is shown. */
   legalConfigured?: boolean;
   consentCheckboxText?: string | null;
@@ -668,7 +670,8 @@ export function ApplyForm({
   workspaceSlug,
   applicationConfig,
   variant = "default",
-  turnstileSiteKey = null,
+  captchaProvider = null,
+  captchaSiteKey = null,
   legalConfigured = false,
   consentCheckboxText = null,
   legalPages = null,
@@ -2429,9 +2432,9 @@ export function ApplyForm({
             </section>
           ) : null}
 
-          {turnstileSiteKey ? (
+          {captchaSiteKey ? (
             <div className="flex justify-center">
-              <TurnstileWidget siteKey={turnstileSiteKey} />
+              <CaptchaWidget provider={captchaProvider} siteKey={captchaSiteKey} />
             </div>
           ) : null}
 
@@ -3033,9 +3036,9 @@ export function ApplyForm({
             </section>
           ) : null}
 
-          {turnstileSiteKey ? (
+          {captchaSiteKey ? (
             <div className="flex justify-center">
-              <TurnstileWidget siteKey={turnstileSiteKey} />
+              <CaptchaWidget provider={captchaProvider} siteKey={captchaSiteKey} />
             </div>
           ) : null}
 

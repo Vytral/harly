@@ -7,7 +7,10 @@ import { after } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
 import { createPublicApplication } from "@/features/applications/data";
-import { verifyTurnstileToken } from "@/lib/turnstile";
+import {
+  CAPTCHA_RESPONSE_FIELDS,
+  verifyCaptchaToken,
+} from "@/lib/captcha";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import {
   candidateEducationEntrySchema,
@@ -238,10 +241,15 @@ export async function submitApplicationAction(
     };
   }
 
-  // Bot protection , verified against the workspace's Turnstile secret (or the
-  // env fallback). A global TURNSTILE_SECRET_KEY makes verification mandatory
-  // for every workspace (enforced), consistent with the public apply API.
-  const turnstileToken = formData.get("cf-turnstile-response") as string | null;
+  // Bot protection , verified against the workspace's active CAPTCHA secret (or
+  // the env fallback). A global provider secret makes verification mandatory
+  // for every workspace (enforced), consistent with the public apply API. Each
+  // vendor widget injects its own hidden response field, so read whichever is
+  // present.
+  const captchaToken =
+    CAPTCHA_RESPONSE_FIELDS.map(
+      (field) => formData.get(field) as string | null,
+    ).find((value) => value && value.length > 0) ?? null;
   const requestHeaders = await headers();
   const remoteIp = clientIp({
     headers: new Headers({
@@ -250,13 +258,13 @@ export async function submitApplicationAction(
       "cf-connecting-ip": requestHeaders.get("cf-connecting-ip") ?? "",
     }),
   } as Request);
-  const turnstileValid = await verifyTurnstileToken(
-    turnstileToken,
+  const captchaValid = await verifyCaptchaToken(
+    captchaToken,
     jobContext.workspaceId,
     remoteIp,
     true,
   );
-  if (!turnstileValid) {
+  if (!captchaValid) {
     return {
       status: "error",
       message: "Bot verification failed. Please try again.",
