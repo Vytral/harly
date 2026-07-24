@@ -16,6 +16,7 @@ env:
   DATABASE_URL: postgresql://harly:harly@localhost:5432/harly
   NEXT_PUBLIC_APP_URL: http://localhost:3000
   HARLY_URL: http://localhost:3000
+  DOCUSEAL_SECRET_KEY_BASE: ci-docuseal-secret-key-base-do-not-use-in-production
   BETTER_AUTH_SECRET: ci-test-secret-do-not-use-in-production
   NODE_ENV: test
 
