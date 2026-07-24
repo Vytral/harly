@@ -78,6 +78,12 @@ const sections: SettingsSection[] = [
     icon: SealCheckDuotoneIcon,
   },
   {
+    href: "/settings/signature" as Route,
+    label: "Harly Signature",
+    hint: "Native signing, remote links, OTP security, and evidence settings.",
+    icon: SealCheckDuotoneIcon,
+  },
+  {
     href: "/settings/developers" as Route,
     label: "Developers & API",
     hint: "API keys, webhooks, and developer tools.",

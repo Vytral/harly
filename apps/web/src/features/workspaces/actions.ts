@@ -26,6 +26,7 @@ import {
   workspaceSettings,
 } from "@harly/db";
 import { isBuiltinRole } from "@/features/workspaces/permissions";
+import { provisionMemberSenderIdentity } from "@/features/workspaces/sender-identity";
 import {
   WelcomeEmail,
   WorkspaceInvitation,
@@ -373,10 +374,11 @@ async function inviteOneMember(
       )
       .limit(1);
 
+    const memberId = crypto.randomUUID();
     await db
       .insert(authMembers)
       .values({
-        id: crypto.randomUUID(),
+        id: memberId,
         organizationId: context.organization.id,
         userId: authUser.id,
         role,
@@ -393,6 +395,13 @@ async function inviteOneMember(
           eq(authMembers.userId, authUser.id),
         ),
       );
+
+    await provisionMemberSenderIdentity(db, {
+      organizationId: context.organization.id,
+      memberId: existingMembership?.id ?? memberId,
+      userId: authUser.id,
+      name: authUser.name,
+    });
 
     await db
       .update(invitation)
@@ -1067,10 +1076,11 @@ export async function acceptWorkspaceInvitationAction(
         return { success: false, error: "This invitation points to a role that no longer exists." };
       }
 
+      const memberId = crypto.randomUUID();
       await tx
         .insert(authMembers)
         .values({
-          id: crypto.randomUUID(),
+          id: memberId,
           organizationId: targetInvitation.organizationId,
           userId: session.user.id,
           role,
@@ -1087,6 +1097,24 @@ export async function acceptWorkspaceInvitationAction(
             eq(authMembers.userId, session.user.id),
           ),
         );
+
+      const [acceptedMember] = await tx
+        .select({ id: authMembers.id })
+        .from(authMembers)
+        .where(
+          and(
+            eq(authMembers.organizationId, targetInvitation.organizationId),
+            eq(authMembers.userId, session.user.id),
+          ),
+        )
+        .limit(1);
+
+      await provisionMemberSenderIdentity(tx, {
+        organizationId: targetInvitation.organizationId,
+        memberId: acceptedMember?.id ?? memberId,
+        userId: session.user.id,
+        name: session.user.name,
+      });
 
       await tx
         .update(invitation)
@@ -1338,16 +1366,35 @@ export async function joinViaInviteLinkAction(
       return { success: false, error: "This invite link points to a role that no longer exists." };
     }
 
+    const joinedMemberId = crypto.randomUUID();
     await db
       .insert(authMembers)
       .values({
-        id: crypto.randomUUID(),
+        id: joinedMemberId,
         organizationId: ws.organizationId,
         userId: session.user.id,
         role,
         createdAt: new Date(),
       })
       .onConflictDoNothing();
+
+    const [joinedMember] = await db
+      .select({ id: authMembers.id })
+      .from(authMembers)
+      .where(
+        and(
+          eq(authMembers.organizationId, ws.organizationId),
+          eq(authMembers.userId, session.user.id),
+        ),
+      )
+      .limit(1);
+
+    await provisionMemberSenderIdentity(db, {
+      organizationId: ws.organizationId,
+      memberId: joinedMember?.id ?? joinedMemberId,
+      userId: session.user.id,
+      name: session.user.name,
+    });
 
     await logAuditEvent({
       workspaceId: ws.organizationId,
@@ -1677,12 +1724,20 @@ export async function createMemberAction(input: {
         password: passwordHash,
       });
 
+      const memberId = crypto.randomUUID();
       await tx.insert(authMembers).values({
-        id: crypto.randomUUID(),
+        id: memberId,
         organizationId: context.organization.id,
         userId,
         role: parsed.data.role,
         createdAt: now,
+      });
+
+      await provisionMemberSenderIdentity(tx, {
+        organizationId: context.organization.id,
+        memberId,
+        userId,
+        name: parsed.data.name,
       });
     });
 

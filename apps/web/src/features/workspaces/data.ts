@@ -6,11 +6,17 @@ import { db } from "@harly/db";
 import {
   invitation,
   member as authMembers,
+  memberSenderIdentity,
   organization as authOrganizations,
   user as authUsers,
   workspaceSettings,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { getWorkspaceEmailStatus } from "@/lib/email/config";
+import {
+  extractDomain,
+  hasCustomSendingDomain,
+} from "@/lib/email/sender-identity";
 import {
   normalizeWorkspaceRole,
   type WorkspaceRole,
@@ -72,6 +78,15 @@ export type WorkspaceMemberItem = {
   websiteUrl?: string | null;
   isCurrentUser: boolean;
   createdAt: Date;
+  senderLocalPart: string | null;
+  senderDisplayName: string | null;
+};
+
+/** Whether/where per-recruiter virtual sender identities are active for this
+ * workspace , gated on a custom sending domain being configured. */
+export type WorkspaceEmailIdentityStatus = {
+  enabled: boolean;
+  domain: string | null;
 };
 
 export type WorkspaceInvitationItem = {
@@ -163,7 +178,7 @@ export async function getSidebarBranding(
 
 export async function getWorkspaceSettingsData() {
   const context = await getWorkspaceContext();
-  const [branding, workspaceOptions, memberRows, invitationRows, settingsRow] =
+  const [branding, workspaceOptions, memberRows, invitationRows, settingsRow, emailStatus] =
     await Promise.all([
       getWorkspaceBranding(context.organization.id, context.organization),
       listUserWorkspaceOptions(),
@@ -183,9 +198,15 @@ export async function getWorkspaceSettingsData() {
           websiteUrl: authUsers.websiteUrl,
           role: authMembers.role,
           createdAt: authMembers.createdAt,
+          senderLocalPart: memberSenderIdentity.localPart,
+          senderDisplayName: memberSenderIdentity.displayName,
         })
         .from(authMembers)
         .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
+        .leftJoin(
+          memberSenderIdentity,
+          eq(memberSenderIdentity.memberId, authMembers.id),
+        )
         .where(eq(authMembers.organizationId, context.organization.id))
         .orderBy(
           sql`case ${authMembers.role} when 'owner' then 0 when 'admin' then 1 when 'recruiter' then 2 else 3 end`,
@@ -212,12 +233,19 @@ export async function getWorkspaceSettingsData() {
         .from(workspaceSettings)
         .where(eq(workspaceSettings.organizationId, context.organization.id))
         .limit(1),
+      getWorkspaceEmailStatus(context.organization.id),
     ]);
+
+  const emailIdentity: WorkspaceEmailIdentityStatus = {
+    enabled: hasCustomSendingDomain(emailStatus),
+    domain: extractDomain(emailStatus.from),
+  };
 
   return {
     context,
     branding,
     workspaceOptions,
+    emailIdentity,
     inviteLink: {
       token: settingsRow[0]?.token ?? null,
       role: settingsRow[0]?.role ?? "recruiter",

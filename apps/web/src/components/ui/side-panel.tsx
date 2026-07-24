@@ -53,7 +53,11 @@ function DesktopSidePanel({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       {trigger ? <SheetTrigger asChild>{trigger}</SheetTrigger> : null}
-      <SheetContent side="right" className={cn("flex w-full flex-col gap-0 p-0 sm:max-w-md", className)}>
+      <SheetContent
+        side="right"
+        showCloseButton={false}
+        className={cn("flex w-full flex-col gap-0 p-0 sm:max-w-md", className)}
+      >
         <PanelHeader
           title={<SheetTitle>{title}</SheetTitle>}
           description={description ? <SheetDescription>{description}</SheetDescription> : undefined}

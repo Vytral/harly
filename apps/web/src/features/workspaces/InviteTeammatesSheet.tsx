@@ -102,7 +102,7 @@ export function InviteTeammatesSheet({
     inviteWorkspaceMembersAction,
     bulkInitial,
   );
-  const [actionPending, startActionTransition] = useTransition();
+  const [, startActionTransition] = useTransition();
   const fileRef = useRef<HTMLInputElement>(null);
   const lastState = useRef(state);
 

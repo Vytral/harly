@@ -19,7 +19,12 @@ import {
   setMemberPasswordAction,
   updateMemberRolesAction,
 } from "@/features/workspaces/actions";
+import {
+  generateMemberSenderIdentityAction,
+  updateMemberSenderIdentityAction,
+} from "@/features/workspaces/sender-identity-actions";
 import type {
+  WorkspaceEmailIdentityStatus,
   WorkspaceInvitationItem,
   WorkspaceMemberItem,
 } from "@/features/workspaces/data";
@@ -50,7 +55,7 @@ import {
 import { EnvelopeIcon, UsersThreeIcon } from "@/components/ui/icons/settings";
 import { GithubIcon } from "@/components/ui/icons/GithubIcon";
 import { LinkedinLogo } from "@/components/ui/icons/brands";
-import { GlobeIcon } from "@/components/ui/icons/phosphor";
+import { GlobeIcon, PencilIcon } from "@/components/ui/icons/phosphor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -113,6 +118,7 @@ export function MembersAndRoles({
   canManageInviteLinks,
   canManageRoles,
   canManageMemberAccounts,
+  emailIdentity,
 }: {
   members: WorkspaceMemberItem[];
   invitations: WorkspaceInvitationItem[];
@@ -125,6 +131,7 @@ export function MembersAndRoles({
   canManageInviteLinks: boolean;
   canManageRoles: boolean;
   canManageMemberAccounts: boolean;
+  emailIdentity: WorkspaceEmailIdentityStatus;
 }) {
   const [creatingRole, setCreatingRole] = useState(false);
   const [tab, setTab] = useState("members");
@@ -177,6 +184,7 @@ export function MembersAndRoles({
           canRemoveMembers={canRemoveMembers}
           canManageInviteLinks={canManageInviteLinks}
           canManageMemberAccounts={canManageMemberAccounts}
+          emailIdentity={emailIdentity}
         />
       </TabsContent>
 
@@ -257,6 +265,7 @@ function MembersPanel({
   canRemoveMembers,
   canManageInviteLinks,
   canManageMemberAccounts,
+  emailIdentity,
 }: {
   members: WorkspaceMemberItem[];
   invitations: WorkspaceInvitationItem[];
@@ -267,12 +276,16 @@ function MembersPanel({
   canRemoveMembers: boolean;
   canManageInviteLinks: boolean;
   canManageMemberAccounts: boolean;
+  emailIdentity: WorkspaceEmailIdentityStatus;
 }) {
   const router = useRouter();
   const [overrides, setOverrides] = useState<Record<string, string>>({});
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [saving, startSave] = useTransition();
+  const [editingIdentity, setEditingIdentity] = useState<WorkspaceMemberItem | null>(
+    null,
+  );
 
   const roleName = (key: string) =>
     assignableRoles.find((r) => r.key === key)?.name ?? roleLabel(key);
@@ -417,6 +430,50 @@ function MembersPanel({
                     <p className="truncate text-xs text-muted-foreground">
                       {member.email}
                     </p>
+                    {emailIdentity.enabled ? (
+                      member.senderLocalPart ? (
+                        <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
+                          <span className="truncate">
+                            {member.senderLocalPart}@{emailIdentity.domain}
+                          </span>
+                          {canManageMemberAccounts ? (
+                            <button
+                              type="button"
+                              onClick={() => setEditingIdentity(member)}
+                              className="shrink-0 text-muted-foreground/70 hover:text-foreground"
+                              title="Edit sender address"
+                            >
+                              <PencilIcon className="size-3" />
+                            </button>
+                          ) : null}
+                        </p>
+                      ) : canManageMemberAccounts ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            startSave(async () => {
+                              const result = await generateMemberSenderIdentityAction({
+                                memberId: member.id,
+                              });
+                              if (!result.success) {
+                                toast.error(
+                                  result.error ?? "Could not generate a sender address.",
+                                );
+                                return;
+                              }
+                              router.refresh();
+                            })
+                          }
+                          className="text-[11px] text-muted-foreground underline-offset-2 hover:underline"
+                        >
+                          Not set — generate
+                        </button>
+                      ) : null
+                    ) : (
+                      <p className="truncate text-[11px] text-muted-foreground/70">
+                        Uses workspace default sender
+                      </p>
+                    )}
                   </div>
 
                   {!canEditMembers || isLockedOwner ? (
@@ -540,7 +597,105 @@ function MembersPanel({
           </div>
         </div>
       ) : null}
+
+      <SenderIdentityDialog
+        member={editingIdentity}
+        onClose={() => setEditingIdentity(null)}
+        onSaved={() => {
+          setEditingIdentity(null);
+          router.refresh();
+        }}
+      />
     </div>
+  );
+}
+
+// Owner-only edit of a recruiter's virtual sender local-part/display name.
+function SenderIdentityDialog({
+  member,
+  onClose,
+  onSaved,
+}: {
+  member: WorkspaceMemberItem | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [localPart, setLocalPart] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [saving, startSaving] = useTransition();
+
+  const open = member !== null;
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next) onClose();
+      }}
+    >
+      {member ? (
+        <DialogContent
+          key={member.id}
+          onOpenAutoFocus={() => {
+            setLocalPart(member.senderLocalPart ?? "");
+            setDisplayName(member.senderDisplayName ?? member.name);
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>Sender address for {member.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="sender-local-part" className="text-xs text-muted-foreground">
+                Local-part
+              </Label>
+              <Input
+                id="sender-local-part"
+                value={localPart}
+                onChange={(e) => setLocalPart(e.target.value)}
+                placeholder="benjamin.gonzalez"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="sender-display-name" className="text-xs text-muted-foreground">
+                Display name
+              </Label>
+              <Input
+                id="sender-display-name"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder={member.name}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button
+              disabled={saving}
+              onClick={() =>
+                startSaving(async () => {
+                  const result = await updateMemberSenderIdentityAction({
+                    memberId: member.id,
+                    localPart,
+                    displayName,
+                  });
+                  if (!result.success) {
+                    toast.error(result.error ?? "Could not update the sender address.");
+                    return;
+                  }
+                  toast.success("Sender address updated.");
+                  onSaved();
+                })
+              }
+            >
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      ) : null}
+    </Dialog>
   );
 }
 

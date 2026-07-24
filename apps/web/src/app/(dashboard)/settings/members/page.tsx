@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function MembersSettingsPage() {
   await requirePagePermission("members:read");
-  const [{ members, invitations, inviteLink, context }, roles, canInvite, canEditMembers, canRemoveMembers, canManageInviteLinks, canRoles] =
+  const [{ members, invitations, inviteLink, context, emailIdentity }, roles, canInvite, canEditMembers, canRemoveMembers, canManageInviteLinks, canRoles] =
     await Promise.all([
       getWorkspaceSettingsData(),
       listWorkspaceRoles(),
@@ -43,6 +43,7 @@ export default async function MembersSettingsPage() {
       canManageInviteLinks={canManageInviteLinks}
       canManageRoles={canRoles}
       canManageMemberAccounts={canManageMemberAccounts}
+      emailIdentity={emailIdentity}
     />
   );
 }
