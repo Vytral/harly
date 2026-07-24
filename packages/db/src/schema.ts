@@ -313,6 +313,39 @@ export const member = pgTable(
   ],
 );
 
+/** Virtual per-recruiter sender identity (From display only). Never a real
+ * mailbox — inbound routing stays on the per-application reply-token system. */
+export const memberSenderIdentity = pgTable(
+  "member_sender_identity",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => member.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    localPart: text("local_part").notNull(),
+    displayName: text("display_name"),
+    isManuallyEdited: boolean("is_manually_edited").default(false).notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("member_sender_identity_member_uidx").on(table.memberId),
+    uniqueIndex("member_sender_identity_org_localpart_uidx").on(
+      table.organizationId,
+      table.localPart,
+    ),
+    index("member_sender_identity_org_idx").on(table.organizationId),
+  ],
+);
+
+export type MemberSenderIdentity = typeof memberSenderIdentity.$inferSelect;
+export type NewMemberSenderIdentity = typeof memberSenderIdentity.$inferInsert;
+
 export const invitation = pgTable(
   "invitation",
   {
@@ -732,6 +765,15 @@ export const workspaceSettings = pgTable("workspace_settings", {
   docusealApiTokenIv: text("docuseal_api_token_iv"),
   docusealApiTokenTag: text("docuseal_api_token_tag"),
   docusealWebhookSecret: text("docuseal_webhook_secret"),
+  // Native signing rollout and workspace policy. Native is deliberately off
+  // by default so each workspace can be enabled progressively.
+  nativeSignEnabled: boolean("native_sign_enabled").default(true).notNull(),
+  remoteSignEnabled: boolean("remote_sign_enabled").default(false).notNull(),
+  savedSignaturesEnabled: boolean("saved_signatures_enabled").default(false).notNull(),
+  signatureOtpEnabled: boolean("signature_otp_enabled").default(false).notNull(),
+  signatureTimelineEnabled: boolean("signature_timeline_enabled").default(false).notNull(),
+  signatureSecurityMode: text("signature_security_mode").default("link_only").notNull(),
+  signatureExpirationDays: integer("signature_expiration_days").default(30).notNull(),
   // Offer delivery channel: "email" (default) or "esign" (collect signature via
   // embedded signing inside the candidate portal, email notifies instead).
   offerSignatureChannel: text("offer_signature_channel").default("email").notNull(),
@@ -1962,6 +2004,7 @@ export const signatureRecipients = pgTable(
     // `${url}/s/{slug}`). Lets the portal redirect the candidate to sign without
     // a second provider round-trip. Null for remote (email-driven) signers.
     signingUrl: text("signing_url"),
+    linkExpiresAt: timestamp("link_expires_at", { withTimezone: true }),
     status: text("status").default("created").notNull(),
     signedAt: timestamp("signed_at", { withTimezone: true }),
     declinedAt: timestamp("declined_at", { withTimezone: true }),
@@ -2035,6 +2078,8 @@ export const signatureArtifacts = pgTable(
     mimeType: text("mime_type").notNull(),
     sizeBytes: integer("size_bytes").notNull(),
     checksum: text("checksum").notNull(),
+    certificateVersion: integer("certificate_version"),
+    metadata: jsonb("metadata").default(sql`'{}'::jsonb`).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -2055,6 +2100,100 @@ export type SignatureEnvelope = typeof signatureEnvelopes.$inferSelect;
 export type SignatureRecipient = typeof signatureRecipients.$inferSelect;
 export type SignatureEvent = typeof signatureEvents.$inferSelect;
 export type SignatureArtifact = typeof signatureArtifacts.$inferSelect;
+
+// Private, reusable signature images. ownerId intentionally has no foreign key:
+// dashboard users and portal candidates are different identity tables.
+export const savedSignatures = pgTable(
+  "saved_signatures",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    ownerType: text("owner_type").notNull(),
+    ownerId: text("owner_id").notNull(),
+    storageKey: text("storage_key").notNull(),
+    mimeType: text("mime_type").notNull(),
+    sizeBytes: integer("size_bytes").notNull(),
+    checksum: text("checksum").notNull(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("saved_signatures_workspace_owner_idx").on(
+      table.workspaceId,
+      table.ownerType,
+      table.ownerId,
+    ),
+  ],
+);
+
+export const nativeSignatureOtpChallenges = pgTable(
+  "native_signature_otp_challenges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    recipientId: uuid("recipient_id")
+      .notNull()
+      .references(() => signatureRecipients.id, { onDelete: "cascade" }),
+    codeHash: text("code_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    verifiedAt: timestamp("verified_at", { withTimezone: true }),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("native_signature_otp_recipient_idx").on(table.recipientId),
+    index("native_signature_otp_expiry_idx").on(table.expiresAt),
+  ],
+);
+
+export const signatureEvidenceEvents = pgTable(
+  "signature_evidence_events",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    envelopeId: uuid("envelope_id")
+      .notNull()
+      .references(() => signatureEnvelopes.id, { onDelete: "cascade" }),
+    recipientId: uuid("recipient_id").references(() => signatureRecipients.id, {
+      onDelete: "set null",
+    }),
+    eventType: text("event_type").notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    payload: jsonb("payload").default(sql`'{}'::jsonb`).notNull(),
+    previousHash: text("previous_hash"),
+    currentHash: text("current_hash").notNull(),
+    retentionExpiresAt: timestamp("retention_expires_at", {
+      withTimezone: true,
+    }),
+    legalHold: boolean("legal_hold").default(false).notNull(),
+    redactedAt: timestamp("redacted_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("signature_evidence_event_hash_idx").on(table.currentHash),
+    index("signature_evidence_workspace_envelope_idx").on(
+      table.workspaceId,
+      table.envelopeId,
+      table.occurredAt,
+    ),
+  ],
+);
+
+export type SavedSignature = typeof savedSignatures.$inferSelect;
+export type NativeSignatureOtpChallenge = typeof nativeSignatureOtpChallenges.$inferSelect;
+export type SignatureEvidenceEvent = typeof signatureEvidenceEvents.$inferSelect;
 
 /** Durable queue for outbound candidate communications. Workers may retry a
  * pending row safely; application mutations never depend on a dropped promise. */
@@ -2078,6 +2217,9 @@ export const emailOutbox = pgTable(
       .notNull(),
     providerMessageId: text("provider_message_id"),
     sentAt: timestamp("sent_at", { withTimezone: true }),
+    actorId: text("actor_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
     ...timestamps(),
   },
   (table) => [

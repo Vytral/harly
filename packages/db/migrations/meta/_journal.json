@@ -736,6 +736,34 @@
       "when": 1784789465300,
       "tag": "0104_purple_lethal_legion",
       "breakpoints": true
+    },
+    {
+      "idx": 105,
+      "version": "7",
+      "when": 1784793802304,
+      "tag": "0105_daily_krista_starr",
+      "breakpoints": true
+    },
+    {
+      "idx": 106,
+      "version": "7",
+      "when": 1784803660230,
+      "tag": "0106_omniscient_spencer_smythe",
+      "breakpoints": true
+    },
+    {
+      "idx": 107,
+      "version": "7",
+      "when": 1784805821139,
+      "tag": "0107_flowery_jean_grey",
+      "breakpoints": true
+    },
+    {
+      "idx": 108,
+      "version": "7",
+      "when": 1784862401180,
+      "tag": "0108_tiny_proemial_gods",
+      "breakpoints": true
     }
   ]
 }
