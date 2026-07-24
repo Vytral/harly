@@ -10,6 +10,7 @@ import {
 } from "@harly/emails";
 
 import { getWorkspaceEmailConfig } from "./config";
+import { resolveSenderFromOverride } from "./sender-identity";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("email");
@@ -43,12 +44,19 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
  * Resolve the email sender for a workspace: its own configured provider
  * (Resend or SMTP) when enabled, falling back to the platform's
  * RESEND_API_KEY/EMAIL_FROM env vars. Returns null when neither is available.
+ *
+ * `actorUserId`, when given, swaps the "From" for that recruiter's personal
+ * virtual sender identity , but only once the workspace has configured its
+ * own sending domain and that member has an identity provisioned. Otherwise
+ * this is a no-op and behaves exactly as before.
  */
 export async function getWorkspaceEmailSender(
   workspaceId: string,
+  actorUserId?: string | null,
 ): Promise<EmailSender | null> {
   const config = await getWorkspaceEmailConfig(workspaceId);
-  return createEmailSender(config);
+  const resolved = await resolveSenderFromOverride(workspaceId, actorUserId, config);
+  return createEmailSender(resolved);
 }
 
 /**
@@ -59,8 +67,9 @@ export async function getWorkspaceEmailSender(
 export async function sendWorkspaceEmail(
   workspaceId: string,
   options: SendEmailOptions,
+  actorUserId?: string | null,
 ): Promise<SendEmailResult | false> {
-  const sender = await getWorkspaceEmailSender(workspaceId);
+  const sender = await getWorkspaceEmailSender(workspaceId, actorUserId);
   if (!sender) {
     return false;
   }

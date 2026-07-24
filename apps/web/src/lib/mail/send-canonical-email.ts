@@ -145,7 +145,7 @@ export async function sendCanonicalEmail(input: SendCanonicalEmailInput): Promis
         .where(and(eq(mailIdempotencyKeys.id, row.id), eq(mailIdempotencyKeys.status, "pending"))).returning();
       if (!sending) throw new Error("Mail delivery is already being processed.");
     }
-    const sender = await getWorkspaceEmailSender(input.workspaceId);
+    const sender = await getWorkspaceEmailSender(input.workspaceId, input.authorId);
     if (!sender) throw new Error("Email sending is not configured.");
     const provider = await sender.send({
       to: input.toEmail,

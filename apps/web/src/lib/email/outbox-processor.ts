@@ -38,6 +38,7 @@ import { renderActiveEmailTemplate } from "@/features/email-templates/data";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { getWorkspaceEmailConfig } from "@/lib/email/config";
+import { decryptSecret } from "@/lib/crypto";
 import { insertCanonicalMessage } from "@/lib/mail/canonical";
 import { createLogger } from "@/lib/logger";
 import { storage } from "@/lib/storage";
@@ -174,6 +175,10 @@ async function deliverRow(row: OutboxRow): Promise<boolean> {
         return await deliverInterviewEmail(row);
       case "offer.withdrawn":
         return await deliverOfferWithdrawn(row);
+      case "native.signature.invitation":
+        return await deliverNativeSignatureInvitation(row);
+      case "native.signature.otp":
+        return await deliverNativeSignatureOtp(row);
       default:
         log.warn({ kind: row.kind }, "unknown email_outbox kind");
         await db
@@ -198,6 +203,54 @@ async function deliverRow(row: OutboxRow): Promise<boolean> {
   }
 }
 
+async function deliverNativeSignatureInvitation(row: OutboxRow): Promise<boolean> {
+  const payload = row.payload as { token?: { ciphertext: string; iv: string; tag: string }; recipientEmail?: string; recipientName?: string; documentName?: string; subject?: string; message?: string; expiresAt?: string } | null;
+  if (!payload?.token || !payload.recipientEmail || !payload.documentName) {
+    await markFailed(row.id, "Invalid native signature invitation payload.");
+    return false;
+  }
+  const token = decryptSecret(payload.token);
+  const link = `${appBaseUrl()}/sign/${token}`;
+  const delivered = await sendWorkspaceEmail(
+    row.workspaceId,
+    {
+      to: payload.recipientEmail,
+      subject: payload.subject ?? `Please sign: ${payload.documentName}`,
+      react: createElement("div", null,
+        createElement("p", null, `Hello ${payload.recipientName ?? "there"},`),
+        createElement("p", null, payload.message ?? "Please review and sign this document."),
+        createElement("p", null, createElement("a", { href: link }, "Review and sign document")),
+        createElement("p", null, `This link expires on ${payload.expiresAt ?? "the configured date"}.`),
+      ),
+      ...deliveryOptions(row),
+    },
+    row.actorId,
+  );
+  if (!delivered) { await markFailed(row.id, "Email provider did not accept the native signature invitation."); return false; }
+  await markSent(row.id, delivered);
+  return true;
+}
+
+async function deliverNativeSignatureOtp(row: OutboxRow): Promise<boolean> {
+  const payload = row.payload as { code?: { ciphertext: string; iv: string; tag: string }; recipientEmail?: string; recipientName?: string } | null;
+  if (!payload?.code || !payload.recipientEmail) { await markFailed(row.id, "Invalid native signature OTP payload."); return false; }
+  const code = decryptSecret(payload.code);
+  const delivered = await sendWorkspaceEmail(row.workspaceId, {
+    to: payload.recipientEmail,
+    subject: "Your Harly Signature verification code",
+    react: createElement("div", null,
+      createElement("p", null, `Hello ${payload.recipientName ?? "there"},`),
+      createElement("p", null, "Use this one-time code to continue signing:"),
+      createElement("p", { style: { fontSize: "24px", fontWeight: 700, letterSpacing: "0.2em" } }, code),
+      createElement("p", null, "This code expires in 10 minutes and can only be used once."),
+    ),
+    ...deliveryOptions(row),
+  });
+  if (!delivered) { await markFailed(row.id, "Email provider did not accept the native signature OTP."); return false; }
+  await markSent(row.id, delivered);
+  return true;
+}
+
 /** Insert a durable outbox row and return its id. The caller is expected to
  *  invoke `processEmailOutbox({ ids })` to attempt immediate delivery; any row
  *  left `pending`/`failed` is retried by the scheduler (F4-03). */
@@ -206,6 +259,7 @@ export async function enqueueEmailOutbox(
   kind: string,
   payload: Record<string, unknown>,
   dedupeKey?: string,
+  actorId?: string,
 ): Promise<string> {
   const resolvedDedupeKey =
     dedupeKey ??
@@ -214,7 +268,13 @@ export async function enqueueEmailOutbox(
       .digest("hex");
   const [row] = await db
     .insert(emailOutbox)
-    .values({ workspaceId, kind, payload, dedupeKey: resolvedDedupeKey })
+    .values({
+      workspaceId,
+      kind,
+      payload,
+      dedupeKey: resolvedDedupeKey,
+      actorId: actorId ?? null,
+    })
     .onConflictDoNothing({
       target: [emailOutbox.workspaceId, emailOutbox.dedupeKey],
     })
@@ -458,6 +518,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
             ...deliveryOptions(row),
             attachments,
           },
+      row.actorId,
     );
   } catch (error) {
     log.error(error, "offer email render/send failed");
@@ -488,11 +549,10 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
       .where(eq(emailOutbox.id, row.id));
   });
 
-  const actorId = (row.payload as { actorId?: string } | null)?.actorId;
-  if (actorId) {
+  if (row.actorId) {
     await db.insert(activityEvents).values({
       workspaceId: row.workspaceId,
-      actorId,
+      actorId: row.actorId,
       entityType: "application",
       entityId: offer.applicationId,
       type: "offer.sent",
@@ -669,50 +729,62 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
   try {
     if (custom) {
-      delivered = await sendWorkspaceEmail(row.workspaceId, {
-        to: p.candidateEmail,
-        subject: pipelineSubject,
-        react: createElement(CustomTemplateEmail, {
-          bodyHtml: custom.bodyHtml,
-          companyName: p.workspaceName ?? "",
-          companyLogoUrl: branding.logoUrl ?? undefined,
-          hideBranding: branding.hideBranding,
-          accentColor: branding.primaryColor ?? undefined,
-          socialLinks: branding.socialLinks,
-        }),
-        ...deliveryOptions(row),
-      });
+      delivered = await sendWorkspaceEmail(
+        row.workspaceId,
+        {
+          to: p.candidateEmail,
+          subject: pipelineSubject,
+          react: createElement(CustomTemplateEmail, {
+            bodyHtml: custom.bodyHtml,
+            companyName: p.workspaceName ?? "",
+            companyLogoUrl: branding.logoUrl ?? undefined,
+            hideBranding: branding.hideBranding,
+            accentColor: branding.primaryColor ?? undefined,
+            socialLinks: branding.socialLinks,
+          }),
+          ...deliveryOptions(row),
+        },
+        row.actorId,
+      );
     } else if (isStage) {
-      delivered = await sendWorkspaceEmail(row.workspaceId, {
-        to: p.candidateEmail,
-        subject: pipelineSubject,
-        react: createElement(CandidateStageUpdate, {
-          candidateName: p.candidateName ?? "",
-          jobTitle: p.jobTitle ?? "",
-          stageName: p.stageName ?? "",
-          companyName: p.workspaceName ?? "",
-          companyLogoUrl: branding.logoUrl ?? undefined,
-          hideBranding: branding.hideBranding,
-          accentColor: branding.primaryColor ?? undefined,
-          socialLinks: branding.socialLinks,
-        }),
-        ...deliveryOptions(row),
-      });
+      delivered = await sendWorkspaceEmail(
+        row.workspaceId,
+        {
+          to: p.candidateEmail,
+          subject: pipelineSubject,
+          react: createElement(CandidateStageUpdate, {
+            candidateName: p.candidateName ?? "",
+            jobTitle: p.jobTitle ?? "",
+            stageName: p.stageName ?? "",
+            companyName: p.workspaceName ?? "",
+            companyLogoUrl: branding.logoUrl ?? undefined,
+            hideBranding: branding.hideBranding,
+            accentColor: branding.primaryColor ?? undefined,
+            socialLinks: branding.socialLinks,
+          }),
+          ...deliveryOptions(row),
+        },
+        row.actorId,
+      );
     } else {
-      delivered = await sendWorkspaceEmail(row.workspaceId, {
-        to: p.candidateEmail,
-        subject: pipelineSubject,
-        react: createElement(CandidateRejected, {
-          candidateName: p.candidateName ?? "",
-          jobTitle: p.jobTitle ?? "",
-          companyName: p.workspaceName ?? "",
-          companyLogoUrl: branding.logoUrl ?? undefined,
-          hideBranding: branding.hideBranding,
-          accentColor: branding.primaryColor ?? undefined,
-          socialLinks: branding.socialLinks,
-        }),
-        ...deliveryOptions(row),
-      });
+      delivered = await sendWorkspaceEmail(
+        row.workspaceId,
+        {
+          to: p.candidateEmail,
+          subject: pipelineSubject,
+          react: createElement(CandidateRejected, {
+            candidateName: p.candidateName ?? "",
+            jobTitle: p.jobTitle ?? "",
+            companyName: p.workspaceName ?? "",
+            companyLogoUrl: branding.logoUrl ?? undefined,
+            hideBranding: branding.hideBranding,
+            accentColor: branding.primaryColor ?? undefined,
+            socialLinks: branding.socialLinks,
+          }),
+          ...deliveryOptions(row),
+        },
+        row.actorId,
+      );
     }
   } catch (error) {
     log.error(error, "pipeline email render/send failed");
@@ -844,44 +916,53 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
               }),
               ...deliveryOptions(row),
             },
+        row.actorId,
       );
     } else if (row.kind === "interview.rescheduled") {
       interviewSubject = interviewRescheduledSubject({
         companyName: payload.companyName,
         jobTitle: payload.jobTitle,
       });
-      delivered = await sendWorkspaceEmail(row.workspaceId, {
-        to: payload.candidateEmail,
-        subject: interviewSubject,
-        replyTo: payload.replyTo ?? undefined,
-        react: createElement(InterviewRescheduled, {
-          ...common,
-          interviewType: payload.interviewType ?? "Interview",
-          when: interviewWhenFormatter.format(when),
-          mode: payload.mode ?? "Video call",
-          location: payload.location,
-          duration,
-          startIso: when.toISOString(),
-          durationMins: payload.durationMins,
-        }),
-        ...deliveryOptions(row),
-      });
+      delivered = await sendWorkspaceEmail(
+        row.workspaceId,
+        {
+          to: payload.candidateEmail,
+          subject: interviewSubject,
+          replyTo: payload.replyTo ?? undefined,
+          react: createElement(InterviewRescheduled, {
+            ...common,
+            interviewType: payload.interviewType ?? "Interview",
+            when: interviewWhenFormatter.format(when),
+            mode: payload.mode ?? "Video call",
+            location: payload.location,
+            duration,
+            startIso: when.toISOString(),
+            durationMins: payload.durationMins,
+          }),
+          ...deliveryOptions(row),
+        },
+        row.actorId,
+      );
     } else {
       interviewSubject = interviewCanceledSubject({
         companyName: payload.companyName,
         jobTitle: payload.jobTitle,
       });
-      delivered = await sendWorkspaceEmail(row.workspaceId, {
-        to: payload.candidateEmail,
-        subject: interviewSubject,
-        replyTo: payload.replyTo ?? undefined,
-        react: createElement(InterviewCanceled, {
-          ...common,
-          interviewType: payload.interviewType ?? "Interview",
-          when: interviewWhenFormatter.format(when),
-        }),
-        ...deliveryOptions(row),
-      });
+      delivered = await sendWorkspaceEmail(
+        row.workspaceId,
+        {
+          to: payload.candidateEmail,
+          subject: interviewSubject,
+          replyTo: payload.replyTo ?? undefined,
+          react: createElement(InterviewCanceled, {
+            ...common,
+            interviewType: payload.interviewType ?? "Interview",
+            when: interviewWhenFormatter.format(when),
+          }),
+          ...deliveryOptions(row),
+        },
+        row.actorId,
+      );
     }
   } catch (error) {
     log.error(error, "interview email render/send failed");
@@ -931,20 +1012,24 @@ async function deliverOfferWithdrawn(row: OutboxRow): Promise<boolean> {
     companyName: payload.companyName,
     jobTitle: payload.jobTitle,
   });
-  const delivered = await sendWorkspaceEmail(row.workspaceId, {
-    to: payload.candidateEmail,
-    subject: withdrawnSubject,
-    react: createElement(OfferWithdrawn, {
-      candidateName: payload.candidateName ?? "",
-      companyName: payload.companyName,
-      companyLogoUrl: branding.logoUrl ?? undefined,
-      hideBranding: branding.hideBranding,
-      accentColor: branding.primaryColor ?? undefined,
-      socialLinks: branding.socialLinks,
-      jobTitle: payload.jobTitle,
-    }),
-    ...deliveryOptions(row),
-  });
+  const delivered = await sendWorkspaceEmail(
+    row.workspaceId,
+    {
+      to: payload.candidateEmail,
+      subject: withdrawnSubject,
+      react: createElement(OfferWithdrawn, {
+        candidateName: payload.candidateName ?? "",
+        companyName: payload.companyName,
+        companyLogoUrl: branding.logoUrl ?? undefined,
+        hideBranding: branding.hideBranding,
+        accentColor: branding.primaryColor ?? undefined,
+        socialLinks: branding.socialLinks,
+        jobTitle: payload.jobTitle,
+      }),
+      ...deliveryOptions(row),
+    },
+    row.actorId,
+  );
   if (!delivered) {
     await markFailed(
       row.id,
