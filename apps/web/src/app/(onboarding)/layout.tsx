@@ -35,8 +35,20 @@ export default async function OnboardingLayout({
             unoptimized
           />
         ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src="/harly-full-black.svg" alt="Harly" className="h-8 w-auto" />
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/harly-full-black.svg"
+              alt="Harly"
+              className="h-12 w-auto dark:hidden"
+            />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/harly-full-white.svg"
+              alt="Harly"
+              className="hidden h-12 w-auto dark:block"
+            />
+          </>
         )}
       </header>
 
