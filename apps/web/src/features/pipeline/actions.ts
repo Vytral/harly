@@ -91,7 +91,11 @@ import {
 
 const log = createLogger("pipeline");
 
-async function sendPipelineEmails(workspaceId: string, emails: PipelineEmail[]) {
+async function sendPipelineEmails(
+  workspaceId: string,
+  emails: PipelineEmail[],
+  actorId?: string,
+) {
   if (emails.length === 0) return;
 
   const ids: string[] = [];
@@ -108,6 +112,8 @@ async function sendPipelineEmails(workspaceId: string, emails: PipelineEmail[]) 
           workspaceName: email.workspaceName,
           type: email.type,
         },
+        undefined,
+        actorId,
       ),
     );
   }
@@ -416,7 +422,7 @@ export async function moveApplicationInPipeline(
     );
 
     revalidatePath("/dashboard/pipeline");
-    void sendPipelineEmails(input.workspaceId, emails);
+    void sendPipelineEmails(input.workspaceId, emails, user.id);
 
     for (const event of stageEvents) {
       await emitWebhookEvent(input.workspaceId, "application.stage_changed", {
@@ -733,7 +739,7 @@ export async function bulkMoveApplications(
     );
 
     revalidatePath("/dashboard/pipeline");
-    void sendPipelineEmails(input.workspaceId, emails);
+    void sendPipelineEmails(input.workspaceId, emails, user.id);
 
     for (const evt of stageEvents) {
       void emitWebhookEvent(input.workspaceId, "application.stage_changed", {
@@ -1058,7 +1064,7 @@ export async function updateApplicationStatus(
         status: event.status,
       }, { actorId: user.id });
     }
-    void sendPipelineEmails(input.workspaceId, emails);
+    void sendPipelineEmails(input.workspaceId, emails, user.id);
 
     return { success: true };
   } catch (error) {

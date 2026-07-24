@@ -375,7 +375,9 @@ export async function sendOffer(input: {
   const outboxId = await enqueueEmailOutbox(
     workspaceId,
     "offer.extended",
-    { offerId: offer.id, actorId: context.user.id },
+    { offerId: offer.id },
+    undefined,
+    context.user.id,
   );
 
   await processEmailOutbox({ ids: [outboxId] });
@@ -648,6 +650,8 @@ export async function withdrawOffer(input: {
           companyName: recipient.companyName,
           jobTitle: offer.title,
         },
+        undefined,
+        context.user.id,
       );
       await processEmailOutbox({ ids: [outboxId], workspaceId });
     }

@@ -87,9 +87,10 @@ async function queueInterviewEmail(
   workspaceId: string,
   kind: "interview.scheduled" | "interview.rescheduled" | "interview.canceled",
   payload: Record<string, unknown>,
+  actorId?: string,
 ): Promise<"sent" | "failed"> {
   try {
-    const id = await enqueueEmailOutbox(workspaceId, kind, payload);
+    const id = await enqueueEmailOutbox(workspaceId, kind, payload, undefined, actorId);
     const result = await processEmailOutbox({ ids: [id], workspaceId });
     return result.sent > 0 && result.failed === 0 ? "sent" : "failed";
   } catch (error) {
@@ -667,20 +668,25 @@ export async function scheduleInterview(
           workspace.id,
           data.applicationId,
         );
-        emailStatus = await queueInterviewEmail(workspace.id, "interview.scheduled", {
-          candidateEmail: recipient.email,
-          candidateName: `${recipient.firstName} ${recipient.lastName}`,
-          companyName: recipient.companyName,
-          jobTitle: recipient.jobTitle,
-          interviewType: INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
-          scheduledAt: when.toISOString(),
-          mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
-          location: deliveryLocation,
-          durationMins: data.durationMins,
-          notes: data.notes ?? undefined,
-          replyTo,
-          interviewerName,
-        });
+        emailStatus = await queueInterviewEmail(
+          workspace.id,
+          "interview.scheduled",
+          {
+            candidateEmail: recipient.email,
+            candidateName: `${recipient.firstName} ${recipient.lastName}`,
+            companyName: recipient.companyName,
+            jobTitle: recipient.jobTitle,
+            interviewType: INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
+            scheduledAt: when.toISOString(),
+            mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
+            location: deliveryLocation,
+            durationMins: data.durationMins,
+            notes: data.notes ?? undefined,
+            replyTo,
+            interviewerName,
+          },
+          user.id,
+        );
         if (emailStatus === "failed") {
           warnings.push(
             "The interview was scheduled, but the invitation email could not be sent.",
@@ -743,7 +749,7 @@ export async function setInterviewStatus(input: {
     if (!parsed.success) {
       return { success: false, error: "Invalid request." };
     }
-    const { organization: workspace } = await getWorkspaceContext();
+    const { organization: workspace, user } = await getWorkspaceContext();
 
     await requirePermission("collab:write");
 
@@ -892,15 +898,20 @@ export async function setInterviewStatus(input: {
           workspace.id,
           info.applicationId,
         );
-        await queueInterviewEmail(workspace.id, "interview.canceled", {
-          candidateEmail: info.email,
-          candidateName: info.firstName,
-          companyName: info.companyName,
-          jobTitle: info.jobTitle,
-          interviewType: INTERVIEW_TYPE_LABEL[info.type] ?? "Interview",
-          scheduledAt: info.scheduledAt.toISOString(),
-          replyTo,
-        });
+        await queueInterviewEmail(
+          workspace.id,
+          "interview.canceled",
+          {
+            candidateEmail: info.email,
+            candidateName: info.firstName,
+            companyName: info.companyName,
+            jobTitle: info.jobTitle,
+            interviewType: INTERVIEW_TYPE_LABEL[info.type] ?? "Interview",
+            scheduledAt: info.scheduledAt.toISOString(),
+            replyTo,
+          },
+          user.id,
+        );
       }
     }
 
@@ -986,7 +997,7 @@ export async function rescheduleInterview(input: {
       };
     }
 
-    const { organization: workspace } = await getWorkspaceContext();
+    const { organization: workspace, user } = await getWorkspaceContext();
     const data = parsed.data;
     const when = parseScheduledAt(data.scheduledAt, data.timeZone);
 
@@ -1214,18 +1225,23 @@ export async function rescheduleInterview(input: {
 
     if (info?.email) {
       const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
-      await queueInterviewEmail(workspace.id, "interview.rescheduled", {
-        candidateEmail: info.email,
-        candidateName: info.firstName,
-        companyName: info.companyName,
-        jobTitle: info.jobTitle,
-        interviewType: INTERVIEW_TYPE_LABEL[info.type] ?? "Interview",
-        scheduledAt: when.toISOString(),
-        mode: INTERVIEW_MODE_LABEL[info.mode] ?? info.mode,
-        location: deliveryLocation,
-        durationMins: data.durationMins,
-        replyTo,
-      });
+      await queueInterviewEmail(
+        workspace.id,
+        "interview.rescheduled",
+        {
+          candidateEmail: info.email,
+          candidateName: info.firstName,
+          companyName: info.companyName,
+          jobTitle: info.jobTitle,
+          interviewType: INTERVIEW_TYPE_LABEL[info.type] ?? "Interview",
+          scheduledAt: when.toISOString(),
+          mode: INTERVIEW_MODE_LABEL[info.mode] ?? info.mode,
+          location: deliveryLocation,
+          durationMins: data.durationMins,
+          replyTo,
+        },
+        user.id,
+      );
     }
 
     revalidatePath(`/dashboard/candidates/${data.candidateId}`);
@@ -1337,7 +1353,7 @@ export async function updateInterview(input: {
       };
     }
 
-    const { organization: workspace } = await getWorkspaceContext();
+    const { organization: workspace, user } = await getWorkspaceContext();
     const data = parsed.data;
 
     await requirePermission("collab:write");
@@ -1637,19 +1653,24 @@ export async function updateInterview(input: {
     if (data.scheduledAt && data.scheduledAt !== "" && info?.email) {
       const when = new Date(data.scheduledAt);
       const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
-      await queueInterviewEmail(workspace.id, "interview.rescheduled", {
-        candidateEmail: info.email,
-        candidateName: info.firstName,
-        companyName: info.companyName,
-        jobTitle: info.jobTitle,
-        interviewType:
-          INTERVIEW_TYPE_LABEL[data.type ?? row.type] ?? "Interview",
-        scheduledAt: when.toISOString(),
-        mode: INTERVIEW_MODE_LABEL[effectiveMode] ?? effectiveMode,
-        location: data.location ?? undefined,
-        durationMins: effectiveDurationMins,
-        replyTo,
-      });
+      await queueInterviewEmail(
+        workspace.id,
+        "interview.rescheduled",
+        {
+          candidateEmail: info.email,
+          candidateName: info.firstName,
+          companyName: info.companyName,
+          jobTitle: info.jobTitle,
+          interviewType:
+            INTERVIEW_TYPE_LABEL[data.type ?? row.type] ?? "Interview",
+          scheduledAt: when.toISOString(),
+          mode: INTERVIEW_MODE_LABEL[effectiveMode] ?? effectiveMode,
+          location: data.location ?? undefined,
+          durationMins: effectiveDurationMins,
+          replyTo,
+        },
+        user.id,
+      );
     }
 
     revalidatePath(`/dashboard/candidates/${data.candidateId}`);

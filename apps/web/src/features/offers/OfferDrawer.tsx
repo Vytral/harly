@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Search } from "lucide-react";
 import { toast } from "sonner";
 
 import { createOffer, updateOffer } from "@/features/offers/actions";
@@ -60,6 +61,7 @@ export function OfferDrawer({
   const [expiresAt, setExpiresAt] = useState("");
   const [notes, setNotes] = useState("");
   const [documentIds, setDocumentIds] = useState<string[]>([]);
+  const [documentQuery, setDocumentQuery] = useState("");
 
   // Hydrate fields when switching into edit mode (or reset for create). Done as
   // a render-time sync keyed on the drawer target , the React-recommended
@@ -79,6 +81,7 @@ export function OfferDrawer({
       setExpiresAt(offer ? isoToDateInput(offer.expiresAt) : "");
       setNotes(offer?.notes ?? "");
       setDocumentIds([]);
+      setDocumentQuery("");
     }
   }
 
@@ -118,6 +121,10 @@ export function OfferDrawer({
       router.refresh();
     });
   }
+
+  const matchingDocuments = documents.filter((document) =>
+    document.name.toLowerCase().includes(documentQuery.trim().toLowerCase()),
+  );
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange} mobilePresentation="bottom-on-mobile">
@@ -173,8 +180,9 @@ export function OfferDrawer({
           {!offer && documents.length > 0 ? (
             <div className="space-y-2">
               <Label>Attach documents</Label>
-              <div className="max-h-36 divide-y overflow-y-auto rounded-lg border">
-                {documents.map((document) => {
+              <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={documentQuery} onChange={(event) => setDocumentQuery(event.target.value)} placeholder="Search documents…" className="pl-9" aria-label="Search documents to attach" /></div>
+              <div className="max-h-48 divide-y overflow-y-auto rounded-lg border">
+                {matchingDocuments.length === 0 ? <p className="px-3 py-4 text-xs text-muted-foreground">No documents match that search.</p> : matchingDocuments.map((document) => {
                   const checked = documentIds.includes(document.id);
                   return (
                     <label key={document.id} className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm hover:bg-muted/30">
