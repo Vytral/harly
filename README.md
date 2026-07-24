@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://github.com/Vytral/harly/actions/workflows/ci.yml"><img src="https://github.com/Vytral/harly/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-blue.svg" alt="AGPL-3.0 license" /></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="MIT license" /></a>
   <a href="https://github.com/Vytral/harly"><img src="https://img.shields.io/github/stars/Vytral/harly?style=flat" alt="GitHub stars" /></a>
 </p>
 
@@ -38,7 +38,7 @@ Harly is a self-hostable ATS for startups, agencies, and technical teams — rec
 ## Why self-host Harly?
 
 - **Own your data.** Run Harly on infrastructure you control, with PostgreSQL and local or S3-compatible storage — no per-seat ATS pricing.
-- **Adapt the workflow.** Harly is AGPL-3.0-only open source: inspect it, contribute to it, or modify it for your team.
+- **Adapt the workflow.** Harly is MIT-licensed open source: inspect it, contribute to it, or modify it for your team.
 - **Keep AI optional.** AI features use a workspace-configured provider key encrypted at rest; core recruiting workflows do not require an AI provider.
 
 ## GDPR-ready by design
@@ -155,6 +155,6 @@ For feature work and bugs, use GitHub Issues.
 
 ## License
 
-Harly is licensed under the [GNU Affero General Public License v3.0 only](LICENSE). If you run a modified Harly instance over a network, AGPLv3 requires you to offer users access to the corresponding source of that modified version. This repository's current notice uses `Harly contributors`; confirm the legal copyright holder and update the notice before a formal release.
+Harly is licensed under the [MIT License](LICENSE).
 
-The Harly name and logo are trademarks or brand assets of their respective owner and are not automatically licensed under AGPLv3.
+The Harly name and logo are trademarks or brand assets of their respective owner and are not automatically licensed under the MIT License.

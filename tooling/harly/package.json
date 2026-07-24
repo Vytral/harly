@@ -4,7 +4,7 @@
   "private": false,
   "type": "module",
   "description": "Official operations CLI for self-hosted Harly.",
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
   "keywords": ["harly", "ats", "recruiting", "self-hosted", "docker"],
   "homepage": "https://github.com/Vytral/harly#readme",
   "repository": { "type": "git", "url": "git+https://github.com/Vytral/harly.git", "directory": "tooling/harly" },
