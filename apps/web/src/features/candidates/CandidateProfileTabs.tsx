@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
@@ -9,6 +10,7 @@ import {
   CalendarClock,
   Check,
   ClipboardCheck,
+  Download,
   ExternalLink,
   FileText,
   Mail,
@@ -21,8 +23,12 @@ import {
   Phone,
   Plus,
   RotateCcw,
+  Search,
+  Send,
+  ShieldCheck,
   ThumbsDown,
   ThumbsUp,
+  Trash2,
   Video,
   X,
 } from "lucide-react";
@@ -85,7 +91,6 @@ import type {
 import { AiButton } from "@/components/ui/AiButton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogClose,
@@ -103,6 +108,8 @@ import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { RelativeTime, ShortDate } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
+import { SidePanel } from "@/components/ui/side-panel";
+import { sendDocumentForNativeSignature } from "@/features/documents/native-sign-actions";
 
 type CandidateProfileApplication = {
   id: string;
@@ -183,6 +190,7 @@ type CandidateProfileTabsProps = {
   notes: CandidateNoteItem[];
   files: CandidateFile[];
   relatedDocuments: Array<{ id: string; name: string; mimeType: string }>;
+  signableDocuments: Array<{ id: string; name: string; mimeType: string; sizeBytes: number; updatedAt: Date }>;
   documentRequests: DocumentRequestItem[];
   canManageDocuments: boolean;
   activity: Array<
@@ -217,9 +225,9 @@ const INTERVIEW_MODE_ICON = {
 } as const;
 
 const INTERVIEW_STATUS_META = {
-  scheduled: { label: "Scheduled", variant: "neutral" as const },
-  completed: { label: "Completed", variant: "secondary" as const },
-  canceled: { label: "Canceled", variant: "danger" as const },
+  scheduled: { label: "Scheduled", variant: "neutral" as const, accent: "bg-slate-info" },
+  completed: { label: "Completed", variant: "secondary" as const, accent: "bg-lime" },
+  canceled: { label: "Canceled", variant: "danger" as const, accent: "bg-destructive" },
 };
 
 const interviewDateFmt = new Intl.DateTimeFormat("en", {
@@ -245,9 +253,9 @@ const activityDotStyles: Record<string, string> = {
 };
 
 const RATING_META = {
-  strong: { label: "Strong", icon: ThumbsUp, className: "text-primary" },
-  mixed: { label: "Mixed", icon: Minus, className: "text-clay" },
-  weak: { label: "Weak", icon: ThumbsDown, className: "text-destructive" },
+  strong: { label: "Strong", icon: ThumbsUp, className: "text-primary", accent: "bg-lime" },
+  mixed: { label: "Mixed", icon: Minus, className: "text-clay", accent: "bg-clay" },
+  weak: { label: "Weak", icon: ThumbsDown, className: "text-destructive", accent: "bg-destructive" },
 } as const;
 
 function TabCount({ value }: { value: number }) {
@@ -277,6 +285,7 @@ export function CandidateProfileTabs({
   notes,
   files,
   relatedDocuments,
+  signableDocuments,
   documentRequests,
   canManageDocuments,
   activity,
@@ -297,6 +306,7 @@ export function CandidateProfileTabs({
   canFulfilErasure = false,
 }: CandidateProfileTabsProps) {
   const [tab, setTab] = useState("profile");
+  const [signatureOpen, setSignatureOpen] = useState(false);
   const conversations = Array.from(
     messages.reduce((groups, message) => {
       const key = message.threadId ?? `legacy:${message.id}`;
@@ -398,17 +408,19 @@ export function CandidateProfileTabs({
         {interviews.length === 0 ? (
           <EmptyTab icon={CalendarClock} text="No interviews scheduled yet." />
         ) : (
-          interviews.map((interview) => (
-            <InterviewCard
-              key={interview.id}
-              interview={interview}
-              candidateId={candidateId}
-              workspaceId={workspaceId}
-              members={scheduleMembers}
-              currentUserId={currentUserId}
-              aiConfigured={aiConfigured}
-            />
-          ))
+          <div className="space-y-3 duration-300 animate-in fade-in slide-in-from-bottom-1">
+            {interviews.map((interview) => (
+              <InterviewCard
+                key={interview.id}
+                interview={interview}
+                candidateId={candidateId}
+                workspaceId={workspaceId}
+                members={scheduleMembers}
+                currentUserId={currentUserId}
+                aiConfigured={aiConfigured}
+              />
+            ))}
+          </div>
         )}
       </TabsContent>
 
@@ -481,26 +493,28 @@ export function CandidateProfileTabs({
             View activity
           </Button>
         </div>
-        {privacyRequests.map((request) => (
-          <PrivacyRequestCard
-            key={request.id}
-            request={request}
-            candidateId={candidateId}
-            candidateEmail={candidateEmail}
-            canFulfilErasure={canFulfilErasure}
-            inventory={{
-              applications: applications.length,
-              interviews: interviews.length,
-              messages: messages.length,
-              files: files.length,
-              notes: notes.length,
-              scorecards: scorecards.length,
-              aiEvaluations: aiEvaluations.length,
-              offers: offers.length,
-              activity: activity.length,
-            }}
-          />
-        ))}
+        <div className="space-y-4 duration-300 animate-in fade-in slide-in-from-bottom-1">
+          {privacyRequests.map((request) => (
+            <PrivacyRequestCard
+              key={request.id}
+              request={request}
+              candidateId={candidateId}
+              candidateEmail={candidateEmail}
+              canFulfilErasure={canFulfilErasure}
+              inventory={{
+                applications: applications.length,
+                interviews: interviews.length,
+                messages: messages.length,
+                files: files.length,
+                notes: notes.length,
+                scorecards: scorecards.length,
+                aiEvaluations: aiEvaluations.length,
+                offers: offers.length,
+                activity: activity.length,
+              }}
+            />
+          ))}
+        </div>
       </TabsContent>
 
       {/* ── Communication ── */}
@@ -533,42 +547,19 @@ export function CandidateProfileTabs({
             </p>
           </div>
         ) : (
-          conversations.map((conversation) => {
-            const first = conversation[0]!;
-            const last = conversation[conversation.length - 1]!;
-            const threadId = first.threadId;
-            return (
-              <Card key={threadId ?? `legacy:${first.id}`} className={cn(last.direction === "inbound" && "border-l-4 border-l-slate-info")}>
-                <CardContent className="space-y-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium">{first.subject}</p>
-                      <p className="mt-1 text-xs text-muted-foreground">{candidateName} · {conversation.length} {conversation.length === 1 ? "message" : "messages"}</p>
-                    </div>
-                    <Badge variant={last.status === "failed" ? "danger" : last.read ? "neutral" : "secondary"}>{last.status === "failed" ? "Failed" : last.read ? "Read" : "Unread"}</Badge>
-                  </div>
-                  <p className="line-clamp-2 text-sm text-muted-foreground">{last.body}</p>
-                  <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground">
-                    <span><RelativeTime value={last.createdAt} /> · {last.direction === "inbound" ? "Candidate" : "You"}</span>
-                    {threadId ? <Link href={`/dashboard/inbox?thread=${encodeURIComponent(threadId)}`} className="font-semibold text-foreground underline underline-offset-4">Open in Inbox</Link> : null}
-                  </div>
-                  <div className="space-y-2 border-t pt-3">
-                    {conversation.map((message) => (
-                      <div key={message.id} className="rounded-lg bg-muted/35 p-3">
-                        <div className="flex items-center justify-between gap-2 text-xs">
-                          <span className="font-medium">{message.direction === "inbound" ? message.fromEmail ?? "Candidate" : "You"}</span>
-                          <span className="text-muted-foreground"><RelativeTime value={message.createdAt} /> · {message.read ? "Read" : "Unread"}</span>
-                        </div>
-                        <p className="mt-2 whitespace-pre-line text-sm">{message.body}</p>
-                        {message.attachments.length > 0 ? <div className="mt-2 flex flex-wrap gap-2">{message.attachments.map((attachment, index) => <a key={`${attachment.storageKey}-${index}`} href={`/api/inbound-email/attachments/${message.id}/${index}`} className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground"><Paperclip className="size-3" />{attachment.filename}</a>)}</div> : null}
-                      </div>
-                    ))}
-                  </div>
-                  {threadId ? <div className="flex justify-end"><EmailDrawer candidateId={candidateId} threadId={threadId} workspaceId={workspaceId} email={candidateEmail} name={candidateName} aiConfigured={aiConfigured} trigger={<Button size="sm" variant="outline"><Mail className="size-4" />Reply</Button>} /></div> : null}
-                </CardContent>
-              </Card>
-            );
-          })
+          <div className="space-y-4 duration-300 animate-in fade-in slide-in-from-bottom-1">
+            {conversations.map((conversation) => (
+              <ConversationThread
+                key={conversation[0]!.threadId ?? `legacy:${conversation[0]!.id}`}
+                conversation={conversation}
+                candidateId={candidateId}
+                candidateName={candidateName}
+                candidateEmail={candidateEmail}
+                workspaceId={workspaceId}
+                aiConfigured={aiConfigured}
+              />
+            ))}
+          </div>
         )}
       </TabsContent>
 
@@ -608,38 +599,44 @@ export function CandidateProfileTabs({
             </Button>
           )}
         </div>
-        {scorecards.map((scorecard) => {
-          const meta = RATING_META[scorecard.rating];
-          return (
-            <Card key={scorecard.id}>
-              <CardContent className="space-y-2">
-                <div className="flex items-center justify-between gap-3">
-                  <span
-                    className={cn(
-                      "flex items-center gap-1.5 text-sm font-semibold",
-                      meta.className,
-                    )}
-                  >
-                    <meta.icon className="size-4" strokeWidth={2} />
-                    {meta.label}
-                  </span>
-                  {scorecard.stageName ? (
-                    <Badge variant="neutral">{scorecard.stageName}</Badge>
+        <div className="space-y-3 duration-300 animate-in fade-in slide-in-from-bottom-1">
+          {scorecards.map((scorecard) => {
+            const meta = RATING_META[scorecard.rating];
+            return (
+              <div
+                key={scorecard.id}
+                className="relative overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm"
+              >
+                <span aria-hidden className={cn("absolute inset-y-0 left-0 w-1", meta.accent)} />
+                <div className="space-y-2 p-5 pl-6">
+                  <div className="flex items-center justify-between gap-3">
+                    <span
+                      className={cn(
+                        "flex items-center gap-1.5 text-sm font-semibold",
+                        meta.className,
+                      )}
+                    >
+                      <meta.icon className="size-4" strokeWidth={2} />
+                      {meta.label}
+                    </span>
+                    {scorecard.stageName ? (
+                      <Badge variant="neutral">{scorecard.stageName}</Badge>
+                    ) : null}
+                  </div>
+                  {scorecard.comment ? (
+                    <p className="whitespace-pre-line text-sm">
+                      {scorecard.comment}
+                    </p>
                   ) : null}
-                </div>
-                {scorecard.comment ? (
-                  <p className="whitespace-pre-line text-sm">
-                    {scorecard.comment}
+                  <p className="text-xs text-muted-foreground">
+                    {scorecard.authorName ?? "Someone"} ·{" "}
+                    <RelativeTime value={scorecard.createdAt} />
                   </p>
-                ) : null}
-                <p className="text-xs text-muted-foreground">
-                  {scorecard.authorName ?? "Someone"} ·{" "}
-                  <RelativeTime value={scorecard.createdAt} />
-                </p>
-              </CardContent>
-            </Card>
-          );
-        })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </TabsContent>
 
       {/* ── Offers ── */}
@@ -662,18 +659,96 @@ export function CandidateProfileTabs({
           </div>
           <div className="flex shrink-0 items-center gap-2">
             {canManageDocuments ? <CandidateDocumentUploadButton candidateId={candidateId} /> : null}
+            {canManageDocuments ? <Button size="sm" onClick={() => setSignatureOpen(true)} disabled={signableDocuments.length === 0}><Send className="size-4" />Request signature</Button> : null}
             <Button asChild size="sm" variant="outline"><Link href={{ pathname: "/dashboard/documents", query: { candidateId } }}>Open hub</Link></Button>
           </div>
         </div>
-        {relatedDocuments.length === 0 ? <div className="rounded-xl border border-dashed px-6 py-12 text-center"><NotebookTabs className="mx-auto size-6 text-muted-foreground" /><p className="mt-3 text-sm font-medium">No linked documents yet</p><p className="mt-1 text-sm text-muted-foreground">Upload a document in the hub and associate it with this candidate.</p></div> : <div className="divide-y rounded-xl border">{relatedDocuments.map((document) => <Link key={document.id} href={{ pathname: "/dashboard/documents", query: { documentId: document.id } }} className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/30"><FileText className="size-4 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{document.name}</span><span className="text-xs text-muted-foreground">{document.mimeType === "application/pdf" ? "PDF" : "Document"}</span><ExternalLink className="size-3.5 text-muted-foreground" /></Link>)}</div>}
+        {relatedDocuments.length === 0 ? <div className="rounded-xl border border-dashed px-6 py-12 text-center"><NotebookTabs className="mx-auto size-6 text-muted-foreground" /><p className="mt-3 text-sm font-medium">No linked documents yet</p><p className="mt-1 text-sm text-muted-foreground">Upload a document in the hub and associate it with this candidate.</p></div> : <div className="divide-y rounded-xl border">{relatedDocuments.map((document) => <Link key={document.id} href={`/dashboard/documents/${document.id}` as Route} className="flex items-center gap-3 px-4 py-3 text-sm transition-colors hover:bg-muted/30"><FileText className="size-4 text-muted-foreground" /><span className="min-w-0 flex-1 truncate">{document.name}</span><span className="text-xs text-muted-foreground">{document.mimeType === "application/pdf" ? "PDF" : "Document"}</span><ExternalLink className="size-3.5 text-muted-foreground" /></Link>)}</div>}
 
         <DocumentRequestsPanel
           requests={documentRequests}
           applications={applications.map((application) => ({ id: application.id, jobTitle: application.jobTitle }))}
           canManage={canManageDocuments}
         />
+        <CandidateSignaturePanel
+          open={signatureOpen}
+          onOpenChange={setSignatureOpen}
+          candidateName={candidateName}
+          candidateEmail={candidateEmail}
+          documents={signableDocuments}
+        />
       </TabsContent>
     </Tabs>
+  );
+}
+
+function CandidateSignaturePanel({
+  open,
+  onOpenChange,
+  candidateName,
+  candidateEmail,
+  documents,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  candidateName: string;
+  candidateEmail: string;
+  documents: Array<{ id: string; name: string; mimeType: string; sizeBytes: number; updatedAt: Date | string }>;
+}) {
+  const router = useRouter();
+  const [query, setQuery] = useState("");
+  const [selectedId, setSelectedId] = useState("");
+  const [pending, startTransition] = useTransition();
+  const normalizedQuery = query.trim().toLowerCase();
+  const filtered = documents.filter((document) => document.name.toLowerCase().includes(normalizedQuery));
+  const selected = documents.find((document) => document.id === selectedId) ?? null;
+
+  function reset() {
+    setQuery("");
+    setSelectedId("");
+  }
+
+  function submit() {
+    if (!selected) {
+      toast.error("Choose a PDF document first.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await sendDocumentForNativeSignature({ documentId: selected.id, recipientEmail: candidateEmail, recipientName: candidateName });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(`Signing link sent to ${candidateName}`);
+      reset();
+      onOpenChange(false);
+      router.refresh();
+    });
+  }
+
+  return (
+    <SidePanel
+      open={open}
+      onOpenChange={(value) => { if (!value) reset(); onOpenChange(value); }}
+      title="Request a signature"
+      description={`Choose a PDF from the workspace library for ${candidateName}.`}
+      className="sm:max-w-[760px]"
+      footer={<><Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>Cancel</Button><Button onClick={submit} disabled={pending || !selected}>{pending ? "Sending…" : "Send signing link"}</Button></>}
+    >
+      <div className="space-y-6">
+        <div className="rounded-xl border border-primary/20 bg-primary/[0.04] p-4">
+          <div className="flex items-start gap-3"><span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><ShieldCheck className="size-4" /></span><div><p className="text-sm font-medium">Recipient</p><p className="mt-1 text-sm">{candidateName}</p><p className="text-xs text-muted-foreground">{candidateEmail}</p></div></div>
+        </div>
+        <div className="space-y-3">
+          <div><p className="text-sm font-medium">Document</p><p className="mt-1 text-xs text-muted-foreground">Only active, unsigned PDFs you can manage are shown.</p></div>
+          <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" /><Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search by document name…" className="pl-9" aria-label="Search documents" /></div>
+          <div className="max-h-[min(52vh,520px)] overflow-y-auto rounded-xl border">
+            {filtered.length === 0 ? <div className="px-5 py-10 text-center"><FileText className="mx-auto size-6 text-muted-foreground" /><p className="mt-3 text-sm font-medium">No matching documents</p><p className="mt-1 text-xs text-muted-foreground">Try another name or upload the PDF to the Documents hub first.</p></div> : filtered.map((document) => <button type="button" key={document.id} onClick={() => setSelectedId(document.id)} className={cn("flex w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors last:border-0 hover:bg-muted/40", selectedId === document.id && "bg-primary/[0.08]")}><span className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg border", selectedId === document.id ? "border-primary bg-primary text-primary-foreground" : "bg-muted/40 text-muted-foreground")}><FileText className="size-4" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{document.name}</span><span className="mt-0.5 block text-xs text-muted-foreground">PDF · {(document.sizeBytes / 1024).toFixed(0)} KB</span></span>{selectedId === document.id ? <Check className="size-4 shrink-0 text-primary" /> : null}</button>)}
+          </div>
+        </div>
+        <p className="text-xs leading-5 text-muted-foreground">The candidate receives a secure Harly Signature link. The workspace security setting controls whether email OTP is required.</p>
+      </div>
+    </SidePanel>
   );
 }
 
@@ -706,6 +781,18 @@ const INVENTORY_ROWS: Array<{ key: keyof PrivacyInventory; label: string }> = [
 
 // GDPR Art. 12(3): respond to a data-subject request within one month.
 const DSAR_DUE_DAYS = 30;
+
+const PRIVACY_TYPE_META = {
+  export: { label: "Data export request", icon: Download, className: "bg-slate-info/10 text-slate-info" },
+  erasure: { label: "Erasure request", icon: Trash2, className: "bg-destructive/10 text-destructive" },
+} as const;
+
+const PRIVACY_STATUS_ACCENT: Record<string, string> = {
+  warning: "bg-clay",
+  info: "bg-slate-info",
+  success: "bg-lime",
+  danger: "bg-destructive",
+};
 
 function PrivacyRequestCard({
   request,
@@ -783,16 +870,22 @@ function PrivacyRequestCard({
     confirmEmail.trim().toLowerCase() === candidateEmail.trim().toLowerCase();
 
   const source = request.requestedBy ? "candidate portal" : null;
+  const typeMeta = PRIVACY_TYPE_META[request.type];
 
   return (
-    <Card className="max-w-xl">
-      <CardContent className="space-y-5 py-5">
-        {/* Heading , title + status on one line, timing floated right */}
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-2.5">
-            <h3 className="font-medium">
-              {isErasure ? "Erasure request" : "Data export request"}
-            </h3>
+    <div className="relative max-w-xl overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+      <span
+        aria-hidden
+        className={cn("absolute inset-y-0 left-0 w-1", PRIVACY_STATUS_ACCENT[statusBadge])}
+      />
+      <div className="space-y-5 p-5 pl-6">
+        {/* Heading , type icon + title + status, timing floated right */}
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <span className={cn("flex size-8 shrink-0 items-center justify-center rounded-lg", typeMeta.className)}>
+              <typeMeta.icon className="size-4" strokeWidth={1.8} />
+            </span>
+            <h3 className="font-medium">{typeMeta.label}</h3>
             <Badge variant={statusBadge}>{statusLabel}</Badge>
           </div>
           <span className="shrink-0 text-[13px] text-muted-foreground">
@@ -818,10 +911,23 @@ function PrivacyRequestCard({
           ) : null}
         </p>
 
-        {/* Data in scope , scannable number grid, not a label-value list */}
+        {/* Data in scope , scannable number grid, weighted like the warning it is */}
         {isErasure ? (
-          <div className="rounded-xl bg-muted/40 p-5">
-            <p className="text-[13px] text-muted-foreground">
+          <div
+            className={cn(
+              "rounded-xl border p-5",
+              scoped.length > 0
+                ? "border-destructive/20 bg-destructive/[0.04]"
+                : "border-border/60 bg-muted/30",
+            )}
+          >
+            <p
+              className={cn(
+                "flex items-center gap-1.5 text-[13px]",
+                scoped.length > 0 ? "font-medium text-destructive" : "text-muted-foreground",
+              )}
+            >
+              {scoped.length > 0 ? <AlertTriangle className="size-3.5 shrink-0" /> : null}
               {scoped.length > 0
                 ? "Approving permanently destroys the following"
                 : "No linked records — only the candidate profile remains"}
@@ -830,7 +936,7 @@ function PrivacyRequestCard({
               <dl className="mt-4 grid grid-cols-[repeat(3,auto)] justify-start gap-x-12 gap-y-5">
                 {scoped.map((row) => (
                   <div key={row.key}>
-                    <dd className="text-xl font-medium tabular-nums leading-none">
+                    <dd className="text-xl font-semibold tabular-nums leading-none text-foreground">
                       {inventory[row.key]}
                     </dd>
                     <dt className="mt-1.5 text-[13px] text-muted-foreground">
@@ -1000,8 +1106,125 @@ function PrivacyRequestCard({
             </p>
           )
         ) : null}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
+  );
+}
+
+function ConversationThread({
+  conversation,
+  candidateId,
+  candidateName,
+  candidateEmail,
+  workspaceId,
+  aiConfigured,
+}: {
+  conversation: CandidateMessage[];
+  candidateId: string;
+  candidateName: string;
+  candidateEmail: string;
+  workspaceId: string;
+  aiConfigured: boolean;
+}) {
+  const first = conversation[0]!;
+  const last = conversation[conversation.length - 1]!;
+  const threadId = first.threadId;
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
+      <div className="flex items-start justify-between gap-3 border-b border-border/60 px-5 py-4">
+        <div className="flex min-w-0 items-start gap-3">
+          <UserAvatar name={candidateName} size="sm" className="mt-0.5 shrink-0" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-semibold">{first.subject}</p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
+              {candidateName} · {conversation.length}{" "}
+              {conversation.length === 1 ? "message" : "messages"} ·{" "}
+              <RelativeTime value={last.createdAt} />
+            </p>
+          </div>
+        </div>
+        <Badge
+          variant={last.status === "failed" ? "danger" : last.read ? "neutral" : "secondary"}
+        >
+          {last.status === "failed" ? "Failed" : last.read ? "Read" : "Unread"}
+        </Badge>
+      </div>
+
+      <div className="space-y-3 px-5 py-4">
+        {conversation.map((message) => {
+          const inbound = message.direction === "inbound";
+          return (
+            <div key={message.id} className={cn("flex", inbound ? "justify-start" : "justify-end")}>
+              <div className={cn("flex max-w-[85%] flex-col gap-1.5", inbound ? "items-start" : "items-end")}>
+                <div
+                  className={cn(
+                    "flex items-center gap-2 text-xs text-muted-foreground",
+                    !inbound && "flex-row-reverse",
+                  )}
+                >
+                  <span className="font-medium text-foreground/80">
+                    {inbound ? message.fromEmail ?? "Candidate" : "You"}
+                  </span>
+                  <RelativeTime value={message.createdAt} />
+                </div>
+                <div
+                  className={cn(
+                    "rounded-2xl px-4 py-2.5 text-sm",
+                    inbound ? "bg-muted/60 text-foreground" : "bg-primary/10 text-foreground",
+                  )}
+                >
+                  <p className="whitespace-pre-line">{message.body}</p>
+                </div>
+                {message.attachments.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {message.attachments.map((attachment, index) => (
+                      <a
+                        key={`${attachment.storageKey}-${index}`}
+                        href={`/api/inbound-email/attachments/${message.id}/${index}`}
+                        className="inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs text-muted-foreground"
+                      >
+                        <Paperclip className="size-3" />
+                        {attachment.filename}
+                      </a>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center justify-between gap-2 border-t border-border/60 px-5 py-3">
+        {threadId ? (
+          <Link
+            href={`/dashboard/inbox?thread=${encodeURIComponent(threadId)}`}
+            className="text-xs font-semibold text-foreground underline underline-offset-4"
+          >
+            Open in Inbox
+          </Link>
+        ) : (
+          <span />
+        )}
+        {threadId ? (
+          <EmailDrawer
+            candidateId={candidateId}
+            threadId={threadId}
+            workspaceId={workspaceId}
+            email={candidateEmail}
+            name={candidateName}
+            aiConfigured={aiConfigured}
+            trigger={
+              <Button size="sm" variant="outline">
+                <Mail className="size-4" />
+                Reply
+              </Button>
+            }
+          />
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -1058,8 +1281,17 @@ function InterviewCard({
   }
 
   return (
-    <Card className={cn(isPast && "opacity-80")}>
-      <CardContent className="space-y-3">
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm",
+        isPast && "opacity-80",
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn("absolute inset-y-0 left-0 w-1", INTERVIEW_STATUS_META[interview.status].accent)}
+      />
+      <div className="space-y-3 p-6 pl-7">
         {/* Title row: title left, status + edit right */}
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -1350,8 +1582,8 @@ function InterviewCard({
             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 

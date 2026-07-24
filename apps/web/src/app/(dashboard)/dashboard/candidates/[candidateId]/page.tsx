@@ -36,7 +36,7 @@ import { getNextStage } from "@/features/pipeline/data";
 import { listCandidateInterviews } from "@/features/interviews/data";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listOffersForCandidate } from "@/features/offers/data";
-import { listDocumentsForCandidate } from "@/features/documents/data";
+import { listDocumentsForCandidate, listDocumentsForSigning } from "@/features/documents/data";
 import { listDocumentRequestsForCandidate } from "@/features/documents/requests-data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { can } from "@/features/workspaces/permissions-server";
@@ -83,7 +83,7 @@ export default async function CandidateDetailPage({
   params,
 }: CandidateDetailPageProps) {
   const { candidateId } = await params;
-  const [profile, allCandidates, members, interviews, offers, emailTemplates, relatedDocuments, documentRequests] =
+  const [profile, allCandidates, members, interviews, offers, emailTemplates, relatedDocuments, documentRequests, signableDocuments] =
     await Promise.all([
       getCandidateProfile(candidateId),
       listCandidates(),
@@ -93,6 +93,7 @@ export default async function CandidateDetailPage({
       listEmailTemplates(),
       listDocumentsForCandidate(candidateId),
       listDocumentRequestsForCandidate(candidateId),
+      listDocumentsForSigning(),
     ]);
 
   if (!profile) {
@@ -429,6 +430,7 @@ export default async function CandidateDetailPage({
               createdAt: file.createdAt.toISOString(),
             }))}
             relatedDocuments={relatedDocuments}
+            signableDocuments={signableDocuments}
             documentRequests={documentRequests}
             canManageDocuments={canManageDocuments}
             activity={serializedActivity}

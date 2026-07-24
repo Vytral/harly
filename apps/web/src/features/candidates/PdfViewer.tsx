@@ -50,6 +50,7 @@ export function PdfViewer({
     destroy?: () => void;
   } | null>(null);
   const renderTokenRef = useRef(0);
+  const lastWidthRef = useRef(0);
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [zoom, setZoom] = useState(1);
   // pdfjs is browser-only (canvas, worker, import.meta.url); render nothing on
@@ -114,6 +115,7 @@ export function PdfViewer({
 
     const token = ++renderTokenRef.current;
     const outputScale = Math.min(window.devicePixelRatio || 1, 2);
+    lastWidthRef.current = scroller.clientWidth;
     const unclamped = scroller.clientWidth - 40;
     const available = pageMaxWidth
       ? Math.min(unclamped, pageMaxWidth)
@@ -160,12 +162,18 @@ export function PdfViewer({
     render();
   }, [state, render]);
 
-  // Re-fit when the container width changes.
+  // Re-fit when the container width changes. Guarded against the classic
+  // ResizeObserver feedback loop: re-rendering pages can toggle the
+  // scroller's vertical scrollbar, which changes clientWidth by a few
+  // pixels, which re-triggers this observer forever (visible as endless
+  // flicker). Only re-render when the width actually moved meaningfully.
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller) return;
     let raf = 0;
     const observer = new ResizeObserver(() => {
+      const width = scroller.clientWidth;
+      if (Math.abs(width - lastWidthRef.current) < 2) return;
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => render());
     });
@@ -277,7 +285,7 @@ export function PdfViewer({
       {/* Page canvases */}
       <div
         ref={scrollRef}
-        className="relative flex-1 overflow-auto bg-muted/35 p-4 md:p-5"
+        className="relative flex-1 overflow-auto bg-muted/35 p-4 [scrollbar-gutter:stable] md:p-5"
       >
         {state.status === "loading" ? (
           <div className="flex h-full items-center justify-center gap-2 text-sm text-muted-foreground">

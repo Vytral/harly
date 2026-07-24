@@ -17,7 +17,7 @@ export const DOCUMENT_STATUS_META = {
 
 export const SIGNATURE_STATUS_META = {
   unsigned: { label: "Not signed", className: "bg-muted text-muted-foreground" },
-  pending: { label: "Pending signature", className: "bg-amber-500/10 text-amber-700" },
+  pending: { label: "Pending signature", className: "bg-warning/10 text-warning" },
   signed: { label: "Signed", className: "bg-primary/10 text-primary" },
   declined: { label: "Declined", className: "bg-destructive/10 text-destructive" },
   expired: { label: "Expired", className: "bg-destructive/10 text-destructive" },
@@ -66,6 +66,7 @@ export type DocumentListItem = {
   expiresAt: string | null;
   ownerId: string | null;
   ownerName: string | null;
+  ownerImage: string | null;
   createdByName: string | null;
   category: DocumentCategoryItem | null;
   associationLabels: string[];
@@ -84,6 +85,8 @@ export type DocumentListItem = {
   }>;
   updatedAt: string;
   createdAt: string;
+  /** This user's resolved ACL level for this document — "read" means send/sign/manage actions are restricted. */
+  currentAccessLevel: "read" | "manage";
 };
 
 export type DocumentHubData = {
@@ -92,6 +95,7 @@ export type DocumentHubData = {
   members: DocumentMember[];
   currentUserId: string;
   canManage: boolean;
+  canDelete: boolean;
   canShare: boolean;
   associationOptions: Array<{ type: "candidate" | "job"; id: string; label: string }>;
   esign: { connected: boolean; hasWebhookSecret: boolean };

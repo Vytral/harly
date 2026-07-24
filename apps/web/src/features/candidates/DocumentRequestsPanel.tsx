@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, FileText, Plus, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
@@ -137,7 +138,7 @@ function RequestRow({ request, canManage }: { request: DocumentRequestItem; canM
         </p>
         {request.documentId ? (
           <Link
-            href={{ pathname: "/dashboard/documents", query: { documentId: request.documentId } }}
+            href={`/dashboard/documents/${request.documentId}` as Route}
             className="mt-1.5 inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline"
           >
             <FileText className="size-3.5" />

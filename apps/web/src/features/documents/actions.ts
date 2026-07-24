@@ -15,6 +15,7 @@ import {
   documentAssignments,
   documentCategories,
   documentLegalHolds,
+  signatureArtifacts,
   documentVersions,
   documents,
   jobs,
@@ -31,6 +32,7 @@ import { isExternallyManagedSignatureProvider } from "@/lib/esign/signature-stat
 import { sendDocumentForEnvelope } from "@/lib/esign/document-signing";
 import { archiveSubmission, freshEsignContext } from "@/lib/esign/client";
 import { createLogger } from "@/lib/logger";
+import { storage } from "@/lib/storage";
 
 const log = createLogger("documents-actions");
 
@@ -42,6 +44,12 @@ const associationSchema = z.object({
 const accessLevelSchema = z.enum(["read", "manage"]);
 
 export type DocumentActionResult = { ok: boolean; error?: string; documentId?: string };
+
+function archivedDocumentError(document: { status: string }) {
+  return document.status === "archived"
+    ? "Archived documents are read-only. Restore the document before editing it."
+    : null;
+}
 
 type DocumentPermissionContext = {
   context: Awaited<ReturnType<typeof requirePermission>>;
@@ -187,6 +195,8 @@ export async function renameDocument(input: { documentId: string; name: string }
   if (!parsed.success) return { ok: false, error: "Document name is invalid." };
   const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
+  const archivedError = archivedDocumentError(access.document);
+  if (archivedError) return { ok: false, error: archivedError };
   await db.transaction(async (tx) => {
     await tx.update(documents).set({ name: parsed.data.name.replace(/[\r\n]/g, "") }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
     await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.renamed", metadata: { name: parsed.data.name } });
@@ -228,6 +238,80 @@ export async function setDocumentStatus(input: { documentId: string; status: "ac
   });
   revalidatePath("/dashboard/documents");
   return { ok: true };
+}
+
+/** Permanently remove a document and every stored derivative. Owner/admin only. */
+export async function deleteDocument(input: { documentId: string }): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  if (context.roleKey !== "owner" && context.roleKey !== "admin") {
+    return { ok: false, error: "Only workspace owners and admins can delete documents." };
+  }
+  const parsed = documentIdSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid document." };
+  const access = await getDocumentAccessForUser({
+    documentId: input.documentId,
+    workspaceId: context.organization.id,
+    userId: context.user.id,
+    roleKey: context.roleKey,
+  });
+  if (!access) return { ok: false, error: "Document not found." };
+  if (["pending"].includes(access.document.signatureStatus)) {
+    return { ok: false, error: "Void the active signature request before deleting this document." };
+  }
+  const [activeHold] = await db
+    .select({ id: documentLegalHolds.id })
+    .from(documentLegalHolds)
+    .where(
+      and(
+        eq(documentLegalHolds.workspaceId, context.organization.id),
+        eq(documentLegalHolds.documentId, input.documentId),
+        isNull(documentLegalHolds.releasedAt),
+      ),
+    )
+    .limit(1);
+  if (activeHold) return { ok: false, error: "Documents under legal hold cannot be deleted." };
+
+  const versions = await db
+    .select({ storageKey: documentVersions.storageKey })
+    .from(documentVersions)
+    .where(eq(documentVersions.documentId, input.documentId));
+  const artifacts = await db
+    .select({ id: signatureArtifacts.id, storageKey: signatureArtifacts.storageKey })
+    .from(signatureArtifacts)
+    .where(
+      and(
+        eq(signatureArtifacts.workspaceId, context.organization.id),
+        eq(signatureArtifacts.documentId, input.documentId),
+      ),
+    );
+  const storageKeys = [...new Set([access.document.storageKey, ...versions.map((row) => row.storageKey), ...artifacts.map((row) => row.storageKey)])];
+
+  await db.transaction(async (tx) => {
+    await tx.delete(signatureArtifacts).where(
+      and(
+        eq(signatureArtifacts.workspaceId, context.organization.id),
+        eq(signatureArtifacts.documentId, input.documentId),
+      ),
+    );
+    await logDocumentActivity(tx, {
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      documentId: input.documentId,
+      type: "document.deleted",
+      metadata: { name: access.document.name, versionCount: versions.length },
+    });
+    await tx.delete(documents).where(
+      and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)),
+    );
+  });
+
+  const deletions = await Promise.allSettled(storageKeys.map((key) => storage.delete(key)));
+  const failed = deletions.filter((result) => result.status === "rejected").length;
+  if (failed > 0) log.warn({ documentId: input.documentId, failed, total: storageKeys.length }, "Some document storage objects could not be deleted");
+  revalidatePath("/dashboard/documents");
+  return { ok: true, documentId: input.documentId };
 }
 
 export async function placeDocumentLegalHold(input: {
@@ -349,6 +433,8 @@ export async function setDocumentCategory(input: { documentId: string; categoryI
   if (!parsed.success) return { ok: false, error: "Invalid category." };
   const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
+  const archivedError = archivedDocumentError(access.document);
+  if (archivedError) return { ok: false, error: archivedError };
   if (parsed.data.categoryId) {
     const [category] = await db.select({ id: documentCategories.id }).from(documentCategories).where(and(eq(documentCategories.id, parsed.data.categoryId), eq(documentCategories.workspaceId, context.organization.id), eq(documentCategories.active, true))).limit(1);
     if (!category) return { ok: false, error: "Category not found." };
@@ -367,6 +453,8 @@ export async function createDocumentVersion(input: { documentId: string; origina
   const { context } = permission;
   const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
+  const archivedError = archivedDocumentError(access.document);
+  if (archivedError) return { ok: false, error: archivedError };
   if (["signed", "pending"].includes(access.document.signatureStatus)) return { ok: false, error: "Signed documents cannot be replaced. Create a new document instead." };
   const checked = await verifyUploadedDocument({ workspaceId: context.organization.id, storageKey: input.storageKey, name: input.originalName, mimeType: input.mimeType, sizeBytes: input.sizeBytes, checksum: input.checksum });
   if ("error" in checked) return { ok: false, error: checked.error };
@@ -390,6 +478,8 @@ export async function saveDocumentAcl(input: { documentId: string; roles: Array<
   if (!parsed.success) return { ok: false, error: "Invalid access rules." };
   const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot share this document." };
+  const archivedError = archivedDocumentError(access.document);
+  if (archivedError) return { ok: false, error: archivedError };
   const memberIds = parsed.data.members.map((member) => member.userId);
   if (memberIds.length) {
     const workspaceMembers = await db.select({ userId: authMembers.userId }).from(authMembers).where(and(eq(authMembers.organizationId, context.organization.id), inArray(authMembers.userId, memberIds)));
@@ -414,6 +504,8 @@ export async function assignDocument(input: { documentId: string; userId: string
   if (!parsed.success) return { ok: false, error: "Invalid assignment." };
   const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot assign this document." };
+  const archivedError = archivedDocumentError(access.document);
+  if (archivedError) return { ok: false, error: archivedError };
   if (parsed.data.userId) {
     const [member] = await db.select({ userId: authMembers.userId }).from(authMembers).where(and(eq(authMembers.organizationId, context.organization.id), eq(authMembers.userId, parsed.data.userId))).limit(1);
     if (!member) return { ok: false, error: "Assignee is not a workspace member." };
@@ -435,6 +527,8 @@ export async function saveDocumentSignature(input: { documentId: string; status:
   if (!parsed.success) return { ok: false, error: "Invalid signature details." };
   const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot update this document." };
+  const archivedError = archivedDocumentError(access.document);
+  if (archivedError) return { ok: false, error: archivedError };
   if (
     isExternallyManagedSignatureProvider(access.document.signatureProvider) ||
     isExternallyManagedSignatureProvider(parsed.data.provider)
@@ -461,6 +555,25 @@ export async function saveDocumentSignature(input: { documentId: string; status:
   await db.transaction(async (tx) => {
     await tx.update(documents).set({ signatureStatus: parsed.data.status, signatureProvider: parsed.data.provider ?? null, signatureEnvelopeId: parsed.data.envelopeId ?? null, signatureUrl: parsed.data.url ?? null, expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null, ...manualAttestation }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
     await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.signature_changed", metadata: { status: parsed.data.status, provider: parsed.data.provider ?? null, envelopeId: parsed.data.envelopeId ?? null, attestationNote: manualAttestation.manualSignatureNote } });
+  });
+  revalidatePath("/dashboard/documents");
+  return { ok: true };
+}
+
+/** Set or clear a document's business date (e.g. an NDA's expiration/effective date). */
+export async function setDocumentExpiresAt(input: { documentId: string; expiresAt: string | null }): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  const parsed = documentIdSchema.extend({ expiresAt: z.iso.date().nullable() }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Enter a valid date." };
+  const access = await getDocumentAccessForUser({ documentId: input.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  if (!access || access.level !== "manage") return { ok: false, error: "You cannot edit this document." };
+  const archivedError = archivedDocumentError(access.document);
+  if (archivedError) return { ok: false, error: archivedError };
+  await db.transaction(async (tx) => {
+    await tx.update(documents).set({ expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
+    await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.date_set", metadata: { expiresAt: parsed.data.expiresAt } });
   });
   revalidatePath("/dashboard/documents");
   return { ok: true };
@@ -526,6 +639,8 @@ export async function sendDocumentForSignature(input: {
     roleKey: context.roleKey,
   });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot send this document for signature." };
+  const archivedError = archivedDocumentError(access.document);
+  if (archivedError) return { ok: false, error: archivedError };
 
   const result = await sendDocumentForEnvelope({
     workspaceId: context.organization.id,
@@ -564,6 +679,8 @@ export async function voidDocumentSignature(input: {
     roleKey: context.roleKey,
   });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot void this request." };
+  const archivedError = archivedDocumentError(access.document);
+  if (archivedError) return { ok: false, error: archivedError };
   const document = access.document;
   if (!isExternallyManagedSignatureProvider(document.signatureProvider)) {
     return { ok: false, error: "This document is not part of a DocuSeal submission." };
@@ -633,11 +750,12 @@ async function resolveManageableIds(
   userId: string,
   roleKey: string,
   documentIds: string[],
+  activeOnly = false,
 ): Promise<string[]> {
   const accessible: string[] = [];
   for (const documentId of documentIds) {
     const access = await getDocumentAccessForUser({ documentId, workspaceId, userId, roleKey });
-    if (access?.level === "manage") accessible.push(documentId);
+    if (access?.level === "manage" && (!activeOnly || access.document.status === "active")) accessible.push(documentId);
   }
   return accessible;
 }
@@ -704,12 +822,74 @@ export async function bulkSetDocumentCategory(input: {
     const [category] = await db.select({ id: documentCategories.id }).from(documentCategories).where(and(eq(documentCategories.id, parsed.data.categoryId), eq(documentCategories.workspaceId, context.organization.id), eq(documentCategories.active, true))).limit(1);
     if (!category) return { ok: false, error: "Category not found." };
   }
-  const ids = await resolveManageableIds(context.organization.id, context.user.id, context.roleKey, parsed.data.documentIds);
+  const ids = await resolveManageableIds(context.organization.id, context.user.id, context.roleKey, parsed.data.documentIds, true);
   if (ids.length === 0) return { ok: false, error: "You cannot manage any of the selected documents." };
   await db.transaction(async (tx) => {
     await tx.update(documents).set({ categoryId: parsed.data.categoryId }).where(and(eq(documents.workspaceId, context.organization.id), inArray(documents.id, ids)));
     await tx.insert(activityEvents).values(ids.map((documentId) => ({ workspaceId: context.organization.id, actorId: context.user.id, entityType: "document" as const, entityId: documentId, type: "document.category_changed", metadata: { categoryId: parsed.data.categoryId, bulk: true } })));
   });
   revalidatePath("/dashboard/documents");
+  return { ok: true };
+}
+
+/** Permanently delete many documents at once. Owner/admin only; skips pending-signature and legal-hold ids. */
+export async function bulkDeleteDocuments(input: { documentIds: string[] }): Promise<DocumentActionResult> {
+  const permission = await documentContext("documents:manage");
+  if (permission.error) return { ok: false, error: permission.error };
+  const { context } = permission;
+  if (context.roleKey !== "owner" && context.roleKey !== "admin") {
+    return { ok: false, error: "Only workspace owners and admins can delete documents." };
+  }
+  const parsed = bulkIdsSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid bulk delete request." };
+
+  const held = await db
+    .select({ documentId: documentLegalHolds.documentId })
+    .from(documentLegalHolds)
+    .where(and(eq(documentLegalHolds.workspaceId, context.organization.id), inArray(documentLegalHolds.documentId, parsed.data.documentIds), isNull(documentLegalHolds.releasedAt)));
+  const heldIds = new Set(held.map((row) => row.documentId));
+
+  const candidates = await db
+    .select({ id: documents.id, storageKey: documents.storageKey, name: documents.name, signatureStatus: documents.signatureStatus })
+    .from(documents)
+    .where(and(eq(documents.workspaceId, context.organization.id), inArray(documents.id, parsed.data.documentIds)));
+
+  const deletable: typeof candidates = [];
+  let skippedPending = 0;
+  for (const doc of candidates) {
+    if (heldIds.has(doc.id)) continue;
+    if (doc.signatureStatus === "pending") {
+      skippedPending += 1;
+      continue;
+    }
+    const access = await getDocumentAccessForUser({ documentId: doc.id, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+    if (access?.level === "manage") deletable.push(doc);
+  }
+  if (deletable.length === 0) {
+    return { ok: false, error: "None of the selected documents could be deleted (legal hold or pending signature)." };
+  }
+
+  const ids = deletable.map((doc) => doc.id);
+  const [versions, artifacts] = await Promise.all([
+    db.select({ storageKey: documentVersions.storageKey }).from(documentVersions).where(inArray(documentVersions.documentId, ids)),
+    db.select({ storageKey: signatureArtifacts.storageKey }).from(signatureArtifacts).where(and(eq(signatureArtifacts.workspaceId, context.organization.id), inArray(signatureArtifacts.documentId, ids))),
+  ]);
+  const storageKeys = [...new Set([...deletable.map((doc) => doc.storageKey), ...versions.map((row) => row.storageKey), ...artifacts.map((row) => row.storageKey)])];
+
+  await db.transaction(async (tx) => {
+    await tx.delete(signatureArtifacts).where(and(eq(signatureArtifacts.workspaceId, context.organization.id), inArray(signatureArtifacts.documentId, ids)));
+    await tx.insert(activityEvents).values(ids.map((documentId) => ({ workspaceId: context.organization.id, actorId: context.user.id, entityType: "document" as const, entityId: documentId, type: "document.deleted", metadata: { bulk: true } })));
+    await tx.delete(documents).where(and(eq(documents.workspaceId, context.organization.id), inArray(documents.id, ids)));
+  });
+
+  const deletions = await Promise.allSettled(storageKeys.map((key) => storage.delete(key)));
+  const failed = deletions.filter((result) => result.status === "rejected").length;
+  if (failed > 0) log.warn({ failed, total: storageKeys.length }, "Some document storage objects could not be deleted during bulk delete");
+
+  revalidatePath("/dashboard/documents");
+  const skipped = candidates.length - deletable.length;
+  if (skipped > 0) {
+    return { ok: true, error: `${deletable.length} deleted. ${skipped} skipped (legal hold${skippedPending > 0 ? " or pending signature" : ""}).` };
+  }
   return { ok: true };
 }

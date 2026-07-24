@@ -107,6 +107,28 @@ export async function listDocumentsForCandidate(candidateId: string) {
   return visible.filter((row): row is NonNullable<typeof row> => Boolean(row));
 }
 
+/**
+ * Documents a recruiter can attach to a candidate workflow. This deliberately
+ * does not limit the result to candidate associations: a reusable NDA or offer
+ * template normally lives in the workspace library. ACL filtering remains the
+ * final authority, so the picker never exposes documents the current user
+ * cannot manage.
+ */
+export async function listDocumentsForSigning() {
+  if (!(await can("documents:manage"))) return [];
+  const { organization, user, roleKey } = await getWorkspaceContext();
+  const rows = await db
+    .select({ id: documents.id, name: documents.name, mimeType: documents.mimeType, sizeBytes: documents.sizeBytes, updatedAt: documents.updatedAt })
+    .from(documents)
+    .where(and(eq(documents.workspaceId, organization.id), eq(documents.status, "active"), eq(documents.signatureStatus, "unsigned"), eq(documents.mimeType, "application/pdf")))
+    .orderBy(desc(documents.updatedAt));
+  const visible = await Promise.all(rows.map(async (row) => {
+    const access = await getDocumentAccess(row.id, { workspaceId: organization.id, userId: user.id, roleKey });
+    return access?.level === "manage" ? row : null;
+  }));
+  return visible.filter((row): row is NonNullable<typeof row> => Boolean(row));
+}
+
 export async function getDocumentHubData(): Promise<DocumentHubData> {
   const { organization, user, roleKey } = await getWorkspaceContext();
   const manualSigners = alias(authUsers, "manual_signers");
@@ -131,6 +153,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
         expiresAt: documents.expiresAt,
         ownerId: documents.ownerId,
         ownerName: authUsers.name,
+        ownerImage: authUsers.image,
         createdByName: authUsers.name,
         categoryId: documents.categoryId,
         updatedAt: documents.updatedAt,
@@ -226,6 +249,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
       if (!access) return null;
       return {
         ...row,
+        currentAccessLevel: access.level,
         status: row.status as DocumentListItem["status"],
         signatureStatus: row.signatureStatus as DocumentListItem["signatureStatus"],
         category: row.categoryId ? categoryById.get(row.categoryId) ?? null : null,
@@ -251,6 +275,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
     members,
     currentUserId: user.id,
     canManage: permissionSet.has("documents:manage"),
+    canDelete: roleKey === "owner" || roleKey === "admin",
     canShare: permissionSet.has("documents:share"),
     associationOptions: [
       ...candidateOptions.map((candidate) => ({ type: "candidate" as const, id: candidate.id, label: `${candidate.label} ${candidate.lastName}` })),

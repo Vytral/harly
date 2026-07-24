@@ -66,7 +66,7 @@ export async function expireOverdueDocuments(): Promise<{ expired: number }> {
             type: "document.expired",
             title: "Document expired",
             body: `"${doc.name}" passed its expiration date and needs review.`,
-            href: `/dashboard/documents?documentId=${doc.id}`,
+            href: `/dashboard/documents/${doc.id}`,
             metadata: { documentId: doc.id },
             dedupeKey: `doc-expired-${doc.id}`,
           })
