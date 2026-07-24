@@ -5,6 +5,8 @@ import { getLocalUploadPath } from "@harly/storage";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const dynamicParams = true;
 
 const CONTENT_TYPES: Record<string, string> = {
   ".gif": "image/gif",
