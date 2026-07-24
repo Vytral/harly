@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(process.cwd(), "../.."),
   outputFileTracingExcludes: {
-    "/*": ["uploads/**/*", "src/lib/ai/surfaces/*.ts"],
+    "/*": ["src/lib/ai/surfaces/*.ts"],
   },
   // These controls make the standalone production build deterministic and
   // memory-aware. Turbopack does not need them during `next dev`, and keeping
