@@ -18,7 +18,7 @@ COPY tooling/harly/package.json tooling/harly/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1 \
-    NODE_OPTIONS=--max-old-space-size=2048 \
+    NODE_OPTIONS=--max-old-space-size=4096 \
     HARLY_URL=http://localhost:3000 \
     DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build \
     BETTER_AUTH_SECRET=build-only-better-auth-secret-000000000000 \
