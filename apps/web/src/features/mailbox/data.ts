@@ -105,6 +105,7 @@ export function normalizeInboxFilter(value: string | undefined): InboxFilter {
     : "all";
 }
 
+
 export async function getInboxData(input: {
   filter?: string;
   page?: number;
@@ -117,6 +118,7 @@ export async function getInboxData(input: {
   candidates: InboxCandidate[];
   applications: InboxApplication[];
   mailboxStatus: InboxMailboxStatus;
+  currentUserId: string;
 }> {
   const { organization, user: currentUser } = await getWorkspaceContext();
   const filter = normalizeInboxFilter(input.filter);
@@ -369,6 +371,7 @@ export async function getInboxData(input: {
           lastError: null,
           canReply,
         },
+    currentUserId: currentUser.id,
   };
 }
 

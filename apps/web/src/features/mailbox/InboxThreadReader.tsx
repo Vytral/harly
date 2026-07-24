@@ -173,7 +173,7 @@ export function InboxThreadReader({
   }
 
   return (
-    <section className="flex h-full min-h-0 flex-col bg-background" aria-label="Conversation">
+    <section className="flex h-full min-h-0 flex-col bg-background duration-200 animate-in fade-in" aria-label="Conversation">
       <header className="flex items-start justify-between gap-3 border-b border-border/70 px-5 py-3.5">
         <div className="flex min-w-0 items-start gap-3">
           {onBack ? (

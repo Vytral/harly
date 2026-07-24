@@ -185,6 +185,7 @@ export async function replyMailboxThreadAction(input: {
       references: lastMessage?.references ? `${lastMessage.references} ${lastMessage.messageId ?? ""}`.trim() : lastMessage?.messageId ?? null,
       attachments: (attachments ?? []).map((attachment) => ({ filename: attachment.filename, contentType: attachment.contentType ?? "application/octet-stream", content: attachment.content! })),
       sourceHint: "smtp",
+      authorId: user.id,
     });
     revalidatePath("/dashboard/inbox");
     return { ok: true, threadId: canonical.threadId, idempotentReplay: canonical.idempotentReplay, legacyWriteWarning: canonical.legacyWriteWarning };
@@ -232,7 +233,7 @@ export async function replyMailboxThreadAction(input: {
     }
   }
 
-  const sender = await getWorkspaceEmailSender(organization.id);
+  const sender = await getWorkspaceEmailSender(organization.id, user.id);
   if (!sender) return { ok: false, error: "Email sending is not configured. Go to Settings → Email to set up your sender." };
 
   const replyTo = thread.applicationId
@@ -305,7 +306,7 @@ export async function createMailboxThreadAction(input: {
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter a subject and message." };
 
   await requirePermission("collab:write");
-  const { organization } = await getWorkspaceContext();
+  const { organization, user } = await getWorkspaceContext();
   const [candidate] = parsed.data.candidateId
     ? await db
         .select({ id: candidates.id, email: candidates.email })
@@ -337,12 +338,13 @@ export async function createMailboxThreadAction(input: {
       textBody: parsed.data.body,
       htmlBody: parsed.data.html ?? null,
       attachments: (attachments ?? []).map((attachment) => ({ filename: attachment.filename, contentType: attachment.contentType ?? "application/octet-stream", content: attachment.content! })),
+      authorId: user.id,
     });
     revalidatePath("/dashboard/inbox");
     return { ok: true, threadId: canonical.threadId, delivered: canonical.delivered, legacyWriteWarning: canonical.legacyWriteWarning };
   }
 
-  const sender = await getWorkspaceEmailSender(organization.id);
+  const sender = await getWorkspaceEmailSender(organization.id, user.id);
   if (!sender) {
     return { ok: false, error: "Email sending is not configured. Go to Settings → Email to set up your sender." };
   }

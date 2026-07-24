@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { matchesInboxFilter } from "./InboxThreadList";
+import { matchesInboxFilter } from "./inbox-filters";
 
 describe("canonical inbox replies", () => {
   it("accepts canonical threads after the server applies reply filtering", () => {

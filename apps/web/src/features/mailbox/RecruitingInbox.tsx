@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -18,9 +18,9 @@ import { cn } from "@/lib/utils";
 import { InboxConversationList } from "@/features/mailbox/InboxConversationList";
 import { InboxNewThreadSheet } from "@/features/mailbox/InboxNewThreadSheet";
 import { InboxPeopleList, type InboxPerson } from "@/features/mailbox/InboxPeopleList";
-import { inboxFilters, matchesInboxFilter } from "@/features/mailbox/InboxThreadList";
 import { InboxThreadReader } from "@/features/mailbox/InboxThreadReader";
 import { InboxActionsPanel } from "@/features/mailbox/InboxActionsPanel";
+import { inboxFilters, matchesInboxFilter } from "@/features/mailbox/inbox-filters";
 import type { InboxApplication, InboxCandidate, InboxFilter, InboxMailboxStatus, InboxMember, InboxMessage, InboxThread } from "@/features/mailbox/data";
 import {
   createCandidateFromMailboxThreadAction,
@@ -116,12 +116,12 @@ function InboxCommandBar({
         onClick={() => onFilterChange(value)}
         className={cn(
           "inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:active:scale-100",
-          isActive ? "bg-foreground text-background shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+          isActive ? "bg-primary text-primary-foreground shadow-sm" : "text-muted-foreground hover:bg-muted hover:text-foreground",
         )}
       >
         {filterLabel(value)}
         {count > 0 ? (
-          <span className={cn("tabular-nums", isActive ? "text-background/70" : "text-muted-foreground/60")}>{count}</span>
+          <span className={cn("tabular-nums", isActive ? "text-primary-foreground/70" : "text-muted-foreground/60")}>{count}</span>
         ) : null}
       </button>
     );
@@ -149,7 +149,7 @@ function InboxCommandBar({
               type="button"
               className={cn(
                 "inline-flex shrink-0 items-center gap-1 rounded-md px-2.5 py-1 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-                moreActive ? "bg-foreground text-background" : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                moreActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               {moreActive ? filterLabel(filter) : "More"}
@@ -272,6 +272,7 @@ export function RecruitingInbox({
   candidates,
   applications,
   mailboxStatus,
+  currentUserId,
 }: {
   threads: InboxThread[];
   messages: Record<string, InboxMessage[]>;
@@ -283,6 +284,7 @@ export function RecruitingInbox({
   candidates: InboxCandidate[];
   applications: InboxApplication[];
   mailboxStatus: InboxMailboxStatus;
+  currentUserId: string;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<InboxFilter>(initialFilter ?? "all");
@@ -300,34 +302,47 @@ export function RecruitingInbox({
   const [pending, startTransition] = useTransition();
   const searchRef = useRef<HTMLInputElement>(null);
 
-  useEffect(() => {
+  // The URL (initialFilter/initialThreadId) is the source of truth; local
+  // state only needs to resync when those props actually change, not on
+  // every re-render. Adjusting state during render , guarded by tracking the
+  // previous prop value , avoids the extra commit an effect-based sync would
+  // cause (https://react.dev/reference/react/useState#storing-information-from-previous-renders).
+  const [prevInitialFilter, setPrevInitialFilter] = useState(initialFilter);
+  if (initialFilter !== prevInitialFilter) {
+    setPrevInitialFilter(initialFilter);
     setFilter(initialFilter ?? "all");
-    if (!initialThreadId) return;
-    const initialThread = threads.find((item) => item.id === initialThreadId);
-    setActiveThreadId(initialThreadId);
-    setSelectedPersonKey(initialThread ? personKey(initialThread) : undefined);
-    setMobileView("thread");
-  }, [initialFilter, initialThreadId, threads]);
+  }
+
+  const [prevInitialThreadId, setPrevInitialThreadId] = useState(initialThreadId);
+  if (initialThreadId !== prevInitialThreadId) {
+    setPrevInitialThreadId(initialThreadId);
+    if (initialThreadId) {
+      const initialThread = threads.find((item) => item.id === initialThreadId);
+      setActiveThreadId(initialThreadId);
+      setSelectedPersonKey(initialThread ? personKey(initialThread) : undefined);
+      setMobileView("thread");
+    }
+  }
 
   const connectionActive = mailboxStatus.enabled && mailboxStatus.configured && mailboxStatus.route !== "conflict";
   const showConnectionStrip = !connectionActive && threads.length > 0;
 
   const counts = useMemo(() => {
     const record = {} as Record<InboxFilter, number>;
-    for (const [value] of inboxFilters) record[value] = threads.filter((item) => matchesInboxFilter(item, value)).length;
+    for (const [value] of inboxFilters) record[value] = threads.filter((item) => matchesInboxFilter(item, value, currentUserId)).length;
     return record;
-  }, [threads]);
+  }, [threads, currentUserId]);
 
   const normalizedQuery = normalizeSearch(query);
   const searched = useMemo(() => {
-    const byFilter = threads.filter((item) => matchesInboxFilter(item, filter));
+    const byFilter = threads.filter((item) => matchesInboxFilter(item, filter, currentUserId));
     if (!normalizedQuery) return byFilter;
     return byFilter.filter((item) =>
       [item.subject, item.participantEmail, item.candidateName, item.preview, item.searchText]
         .filter(Boolean)
         .some((value) => normalizeSearch(value ?? "").includes(normalizedQuery)),
     );
-  }, [threads, filter, normalizedQuery]);
+  }, [threads, filter, normalizedQuery, currentUserId]);
 
   const people = useMemo(() => {
     const grouped = new Map<string, InboxPerson>();
@@ -461,7 +476,7 @@ export function RecruitingInbox({
   ) : null;
 
   return (
-    <div className="-mx-4 -mb-6 -mt-2 flex h-[calc(100%+2rem)] min-h-0 flex-col overflow-hidden border-t border-border/70 md:-mx-6 lg:-mx-8 lg:-mb-8 lg:-mt-3 lg:h-[calc(100%+2.75rem)]">
+    <div className="-mx-4 -mb-6 -mt-2 flex h-[calc(100%+2rem)] min-h-0 flex-col overflow-hidden border-t border-border/70 duration-300 animate-in fade-in md:-mx-6 lg:-mx-8 lg:-mb-8 lg:-mt-3 lg:h-[calc(100%+2.75rem)]">
       <div aria-live="polite" className="sr-only">{announcement}</div>
       <InboxCommandBar
         filter={filter}
