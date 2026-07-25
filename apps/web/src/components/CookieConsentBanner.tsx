@@ -330,7 +330,7 @@ const CookiePanel = (props: CookiePanelProps) => {
           <button
             type="button"
             onClick={() => closeWithExit("true")}
-            className="inline-flex flex-1 items-center justify-center rounded-xl px-3.5 py-2.5 text-[13px] font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
+            className="inline-flex flex-1 items-center justify-center rounded-xl px-3.5 py-2.5 text-[13px] font-semibold text-[var(--board-primary-contrast,#ffffff)] shadow-sm transition-all hover:opacity-90 active:scale-[0.98]"
             style={{ backgroundColor: ACCENT }}
           >
             {acceptText}
@@ -341,7 +341,7 @@ const CookiePanel = (props: CookiePanelProps) => {
           <button
             type="button"
             onClick={savePreferences}
-            className="mt-2 w-full rounded-xl px-3.5 py-2.5 text-[13px] font-semibold text-white shadow-sm transition-all hover:opacity-90 active:scale-[0.98] animate-in fade-in slide-in-from-top-1 duration-200"
+            className="mt-2 w-full rounded-xl px-3.5 py-2.5 text-[13px] font-semibold text-[var(--board-primary-contrast,#ffffff)] shadow-sm transition-all hover:opacity-90 active:scale-[0.98] animate-in fade-in slide-in-from-top-1 duration-200"
             style={{ backgroundColor: ACCENT }}
           >
             Save preferences

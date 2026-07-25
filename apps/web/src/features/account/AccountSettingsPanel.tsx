@@ -1,29 +1,41 @@
 "use client";
 
-import { useRef, useState, useSyncExternalStore, useTransition } from "react";
+import Link from "next/link";
+import type { Route } from "next";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AtSign,
   CalendarDays,
   Camera,
+  CheckCircle2,
+  Clock,
   Copy,
   Eye,
   EyeOff,
   Globe,
   Hash,
+  Languages,
   LogOut,
   LockKeyhole,
   MapPin,
   Mail,
   PencilLine,
   Phone,
+  Sparkles,
   UserRound,
+  XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 
 import { authClient, signOut } from "@/lib/auth-client";
 import { getImageFileValidationError } from "@/lib/storage-validation";
-import { updateUserProfileAction } from "@/features/account/actions";
+import {
+  changeUsernameAction,
+  checkUsernameAvailableAction,
+  updateOwnProfileAction,
+} from "@/features/people/actions";
+import type { WeeklyAvailability } from "@harly/db";
 import { AvatarCropDialog } from "@/components/ui/AvatarCropDialog";
 import { GithubIcon } from "@/components/ui/icons/GithubIcon";
 import { LinkedinLogo } from "@/components/ui/icons/brands";
@@ -44,6 +56,54 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
 
+const WEEKDAYS: (keyof WeeklyAvailability)[] = [
+  "monday",
+  "tuesday",
+  "wednesday",
+  "thursday",
+  "friday",
+  "saturday",
+  "sunday",
+];
+const DAY_LABELS: Record<keyof WeeklyAvailability, string> = {
+  monday: "Mon",
+  tuesday: "Tue",
+  wednesday: "Wed",
+  thursday: "Thu",
+  friday: "Fri",
+  saturday: "Sat",
+  sunday: "Sun",
+};
+
+function emptyWeek(): WeeklyAvailability {
+  return {
+    monday: [],
+    tuesday: [],
+    wednesday: [],
+    thursday: [],
+    friday: [],
+    saturday: [],
+    sunday: [],
+  };
+}
+
+/** "09:00-17:00, 18:00-19:00" -> TimeRange[]; throws on malformed input. */
+function parseDayRanges(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed) return [];
+  return trimmed.split(",").map((chunk) => {
+    const [start, end] = chunk.trim().split("-").map((s) => s.trim());
+    if (!/^\d{2}:\d{2}$/.test(start ?? "") || !/^\d{2}:\d{2}$/.test(end ?? "")) {
+      throw new Error(`Invalid range "${chunk.trim()}". Use HH:mm-HH:mm.`);
+    }
+    return { start, end };
+  });
+}
+
+function formatDayRanges(ranges: { start: string; end: string }[]) {
+  return ranges.map((r) => `${r.start}-${r.end}`).join(", ");
+}
+
 type AccountUser = {
   id: string;
   name: string;
@@ -56,6 +116,12 @@ type AccountUser = {
   linkedinUrl: string | null;
   githubUrl: string | null;
   websiteUrl: string | null;
+  username: string | null;
+  timezone: string | null;
+  specialties: string[] | null;
+  languages: string[] | null;
+  weeklyAvailability: WeeklyAvailability | null;
+  capacityHoursPerWeek: number | null;
   createdAt?: Date;
 };
 
@@ -256,8 +322,27 @@ export function AccountSettingsPanel({
   const [linkedinUrl, setLinkedinUrl] = useState(user.linkedinUrl ?? "");
   const [githubUrl, setGithubUrl] = useState(user.githubUrl ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(user.websiteUrl ?? "");
+  const [timezone, setTimezone] = useState(user.timezone ?? "");
+  const [specialtiesText, setSpecialtiesText] = useState((user.specialties ?? []).join(", "));
+  const [languagesText, setLanguagesText] = useState((user.languages ?? []).join(", "));
+  const [capacity, setCapacity] = useState(
+    user.capacityHoursPerWeek != null ? String(user.capacityHoursPerWeek) : "",
+  );
+  const [availabilityText, setAvailabilityText] = useState<Record<keyof WeeklyAvailability, string>>(
+    () => {
+      const week = user.weeklyAvailability ?? emptyWeek();
+      return Object.fromEntries(
+        WEEKDAYS.map((day) => [day, formatDayRanges(week[day] ?? [])]),
+      ) as Record<keyof WeeklyAvailability, string>;
+    },
+  );
   const [savingProfile, startProfile] = useTransition();
   const [profileDirty, setProfileDirty] = useState(false);
+
+  const [username, setUsername] = useState(user.username ?? "");
+  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const [usernameError, setUsernameError] = useState<string | null>(null);
+  const [savingUsername, startUsername] = useTransition();
 
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
@@ -292,22 +377,90 @@ export function AccountSettingsPanel({
     if (!profileDirty) setProfileDirty(true);
   }
 
+  useEffect(() => {
+    const trimmed = username.trim();
+    if (trimmed === (user.username ?? "")) {
+      setUsernameStatus("idle");
+      setUsernameError(null);
+      return;
+    }
+    if (!trimmed) {
+      setUsernameStatus("idle");
+      setUsernameError(null);
+      return;
+    }
+
+    setUsernameStatus("checking");
+    const handle = setTimeout(() => {
+      checkUsernameAvailableAction(trimmed).then((result) => {
+        if (result.available) {
+          setUsernameStatus("available");
+          setUsernameError(null);
+        } else {
+          setUsernameStatus(result.error === "Username is already taken." ? "taken" : "invalid");
+          setUsernameError(result.error ?? null);
+        }
+      });
+    }, 400);
+
+    return () => clearTimeout(handle);
+  }, [username, user.username]);
+
+  function saveUsername() {
+    startUsername(async () => {
+      const result = await changeUsernameAction(username.trim());
+      if (!result.success) {
+        toast.error(result.error ?? "Could not update username.");
+        return;
+      }
+      toast.success("Username updated.");
+      setUsernameStatus("idle");
+      router.refresh();
+    });
+  }
+
+  function buildProfilePayload() {
+    let weeklyAvailability: WeeklyAvailability;
+    try {
+      weeklyAvailability = Object.fromEntries(
+        WEEKDAYS.map((day) => [day, parseDayRanges(availabilityText[day])]),
+      ) as WeeklyAvailability;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Invalid availability.");
+      throw error;
+    }
+
+    return {
+      name: displayName,
+      image: image.trim() || null,
+      jobTitle: jobTitle.trim() || null,
+      phone: phone.trim() || null,
+      location: location.trim() || null,
+      bio: bio.trim() || null,
+      linkedinUrl: linkedinUrl.trim() || null,
+      githubUrl: githubUrl.trim() || null,
+      websiteUrl: websiteUrl.trim() || null,
+      timezone: timezone.trim() || null,
+      specialties: specialtiesText.split(",").map((s) => s.trim()).filter(Boolean),
+      languages: languagesText.split(",").map((s) => s.trim()).filter(Boolean),
+      weeklyAvailability,
+      capacityHoursPerWeek: capacity.trim() ? Number(capacity.trim()) : null,
+    };
+  }
+
   function saveProfile() {
     startProfile(async () => {
-      const result = await updateUserProfileAction({
-        name: displayName,
-        image: image.trim() || null,
-        jobTitle: jobTitle.trim() || null,
-        phone: phone.trim() || null,
-        location: location.trim() || null,
-        bio: bio.trim() || null,
-        linkedinUrl: linkedinUrl.trim() || null,
-        githubUrl: githubUrl.trim() || null,
-        websiteUrl: websiteUrl.trim() || null,
-      });
+      let payload: ReturnType<typeof buildProfilePayload>;
+      try {
+        payload = buildProfilePayload();
+      } catch {
+        return;
+      }
+
+      const result = await updateOwnProfileAction(payload);
 
       if (!result.success) {
-        toast.error(result.error ?? "Could not update profile.");
+        toast.error("Could not update profile.");
         return;
       }
 
@@ -340,17 +493,16 @@ export function AccountSettingsPanel({
       try {
         const url = await uploadImage(blob);
         setImage(url);
-        const result = await updateUserProfileAction({
-          name: displayName,
-          image: url,
-          jobTitle: jobTitle.trim() || null,
-          phone: phone.trim() || null,
-          location: location.trim() || null,
-          bio: bio.trim() || null,
-        });
+        let payload: ReturnType<typeof buildProfilePayload>;
+        try {
+          payload = { ...buildProfilePayload(), image: url };
+        } catch {
+          return;
+        }
+        const result = await updateOwnProfileAction(payload);
 
         if (!result.success) {
-          toast.error(result.error ?? "Could not update avatar.");
+          toast.error("Could not update avatar.");
           return;
         }
 
@@ -373,17 +525,16 @@ export function AccountSettingsPanel({
   function removeAvatar() {
     setImage("");
     startProfile(async () => {
-      const result = await updateUserProfileAction({
-        name: displayName,
-        image: null,
-        jobTitle: jobTitle.trim() || null,
-        phone: phone.trim() || null,
-        location: location.trim() || null,
-        bio: bio.trim() || null,
-      });
+      let payload: ReturnType<typeof buildProfilePayload>;
+      try {
+        payload = { ...buildProfilePayload(), image: null };
+      } catch {
+        return;
+      }
+      const result = await updateOwnProfileAction(payload);
 
       if (!result.success) {
-        toast.error(result.error ?? "Could not remove avatar.");
+        toast.error("Could not remove avatar.");
         return;
       }
 
@@ -626,6 +777,150 @@ export function AccountSettingsPanel({
             </div>
           </SectionCard>
 
+          <SectionCard
+            title="Username"
+            description="Your internal profile URL. Changing it keeps the old link working via a redirect."
+            action={
+              <Button
+                variant="outline"
+                onClick={saveUsername}
+                disabled={
+                  savingUsername ||
+                  usernameStatus !== "available" ||
+                  username.trim() === (user.username ?? "")
+                }
+              >
+                {savingUsername ? "Saving…" : "Save username"}
+              </Button>
+            }
+          >
+            <div className="space-y-2">
+              <div className="relative">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground/60">
+                  @
+                </span>
+                <Input
+                  id="acc-username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                  placeholder="ada-lovelace"
+                  className="pl-7 pr-9"
+                  aria-describedby="acc-username-hint"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {usernameStatus === "available" && (
+                    <CheckCircle2 className="size-4 text-emerald-600" />
+                  )}
+                  {(usernameStatus === "taken" || usernameStatus === "invalid") && (
+                    <XCircle className="size-4 text-destructive" />
+                  )}
+                </span>
+              </div>
+              <p
+                id="acc-username-hint"
+                className={cn(
+                  "text-xs",
+                  usernameStatus === "taken" || usernameStatus === "invalid"
+                    ? "text-destructive"
+                    : "text-muted-foreground",
+                )}
+              >
+                {usernameError ??
+                  (user.username
+                    ? `Your profile: /people/${user.username}`
+                    : "Pick a username to get a public internal profile.")}
+              </p>
+              {user.username && (
+                <Link
+                  href={`/people/${user.username}` as Route}
+                  className="inline-block text-xs text-primary hover:underline"
+                >
+                  View public profile
+                </Link>
+              )}
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Operational details"
+            description="Specialties, languages, and timezone shown on your internal profile."
+          >
+            <div className="space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="acc-timezone">Timezone</Label>
+                  <IconInput
+                    icon={Globe}
+                    id="acc-timezone"
+                    value={timezone}
+                    onChange={(e) => { setTimezone(e.target.value); markDirty(); }}
+                    placeholder="America/Sao_Paulo"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="acc-capacity">Capacity (hrs/week)</Label>
+                  <IconInput
+                    icon={Clock}
+                    id="acc-capacity"
+                    type="number"
+                    min={0}
+                    max={168}
+                    value={capacity}
+                    onChange={(e) => { setCapacity(e.target.value); markDirty(); }}
+                    placeholder="40"
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="acc-specialties">Specialties</Label>
+                <IconInput
+                  icon={Sparkles}
+                  id="acc-specialties"
+                  value={specialtiesText}
+                  onChange={(e) => { setSpecialtiesText(e.target.value); markDirty(); }}
+                  placeholder="Technical sourcing, Executive search"
+                />
+                <p className="text-xs text-muted-foreground">Comma-separated.</p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="acc-languages">Languages</Label>
+                <IconInput
+                  icon={Languages}
+                  id="acc-languages"
+                  value={languagesText}
+                  onChange={(e) => { setLanguagesText(e.target.value); markDirty(); }}
+                  placeholder="English, Spanish"
+                />
+                <p className="text-xs text-muted-foreground">Comma-separated.</p>
+              </div>
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="Weekly availability"
+            description="Ranges in HH:mm-HH:mm, comma-separated for multiple ranges per day."
+          >
+            <div className="space-y-3">
+              {WEEKDAYS.map((day) => (
+                <div key={day} className="grid grid-cols-[3rem_1fr] items-center gap-3">
+                  <Label htmlFor={`acc-avail-${day}`} className="text-xs text-muted-foreground">
+                    {DAY_LABELS[day]}
+                  </Label>
+                  <Input
+                    id={`acc-avail-${day}`}
+                    value={availabilityText[day]}
+                    onChange={(e) => {
+                      setAvailabilityText((prev) => ({ ...prev, [day]: e.target.value }));
+                      markDirty();
+                    }}
+                    placeholder="09:00-17:00"
+                    className="text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+
           {profileDirty ? (
             <div className="sticky bottom-4 z-10 flex items-center justify-between rounded-xl border border-pine/30 bg-card px-5 py-3.5 shadow-[0_8px_24px_-12px_rgba(31,41,38,0.25)]">
               <p className="text-sm text-muted-foreground">
@@ -647,6 +942,16 @@ export function AccountSettingsPanel({
                     setLinkedinUrl(user.linkedinUrl ?? "");
                     setGithubUrl(user.githubUrl ?? "");
                     setWebsiteUrl(user.websiteUrl ?? "");
+                    setTimezone(user.timezone ?? "");
+                    setSpecialtiesText((user.specialties ?? []).join(", "));
+                    setLanguagesText((user.languages ?? []).join(", "));
+                    setCapacity(user.capacityHoursPerWeek != null ? String(user.capacityHoursPerWeek) : "");
+                    const week = user.weeklyAvailability ?? emptyWeek();
+                    setAvailabilityText(
+                      Object.fromEntries(
+                        WEEKDAYS.map((day) => [day, formatDayRanges(week[day] ?? [])]),
+                      ) as Record<keyof WeeklyAvailability, string>,
+                    );
                     setProfileDirty(false);
                   }}
                   disabled={savingProfile}

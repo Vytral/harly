@@ -96,6 +96,7 @@
   /* ── Public job board (candidate-facing). Workspaces override via inline style. ── */
   --board-primary: #18181b;
   --board-primary-foreground: #ffffff;
+  --board-primary-contrast: #ffffff;
   --board-primary-soft: #f4f4f5;
   --board-surface: #ffffff;
   --board-surface-muted: #fafafa;

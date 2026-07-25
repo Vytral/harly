@@ -1,4 +1,5 @@
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { getOwnProfileAction } from "@/features/people/actions";
 import { getSecurityPasskeys } from "@/features/security/data";
 import { PageTitle } from "@/components/dashboard/PageTitleContext";
 import { AccountSettingsPanel } from "@/features/account/AccountSettingsPanel";
@@ -9,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
   const { user } = await getWorkspaceContext();
+  const profile = await getOwnProfileAction();
 
   let userPasskeys: Awaited<ReturnType<typeof getSecurityPasskeys>> = [];
   try {
@@ -28,16 +30,22 @@ export default async function AccountPage() {
       <AccountSettingsPanel
         user={{
           id: user.id,
-          name: user.name,
-          email: user.email,
-          image: user.image ?? null,
-          jobTitle: (user as Record<string, unknown>).jobTitle as string | null ?? null,
-          phone: (user as Record<string, unknown>).phone as string | null ?? null,
-          location: (user as Record<string, unknown>).location as string | null ?? null,
-          bio: (user as Record<string, unknown>).bio as string | null ?? null,
-          linkedinUrl: (user as Record<string, unknown>).linkedinUrl as string | null ?? null,
-          githubUrl: (user as Record<string, unknown>).githubUrl as string | null ?? null,
-          websiteUrl: (user as Record<string, unknown>).websiteUrl as string | null ?? null,
+          name: profile?.name ?? user.name,
+          email: profile?.email ?? user.email,
+          image: profile?.image ?? user.image ?? null,
+          jobTitle: profile?.jobTitle ?? null,
+          phone: profile?.phone ?? null,
+          location: profile?.location ?? null,
+          bio: profile?.bio ?? null,
+          linkedinUrl: profile?.linkedinUrl ?? null,
+          githubUrl: profile?.githubUrl ?? null,
+          websiteUrl: profile?.websiteUrl ?? null,
+          username: profile?.username ?? null,
+          timezone: profile?.timezone ?? null,
+          specialties: profile?.specialties ?? null,
+          languages: profile?.languages ?? null,
+          weeklyAvailability: profile?.weeklyAvailability ?? null,
+          capacityHoursPerWeek: profile?.capacityHoursPerWeek ?? null,
           createdAt: (user as Record<string, unknown>).createdAt as Date | undefined,
         }}
         securitySlot={

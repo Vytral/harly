@@ -10,6 +10,7 @@ import {
   markNotificationRead,
   markNotificationUnread,
   deleteNotification,
+  deleteAllNotifications,
 } from "@/features/notifications/actions";
 import type { NotificationItem } from "@/features/notifications/data";
 import { NotificationTypeIconSmall } from "@/features/notifications/notification-icons";
@@ -57,7 +58,9 @@ export function NotificationsBell({
     startTransition(async () => {
       if (!item.read) {
         try {
-          const result = await markNotificationRead({ notificationId: item.id });
+          const result = await markNotificationRead({
+            notificationId: item.id,
+          });
           if (!result.success) setError("Could not mark notification as read.");
         } catch {
           setError("Could not mark notification as read.");
@@ -125,6 +128,26 @@ export function NotificationsBell({
     });
   }
 
+  function removeAll() {
+    if (!window.confirm("Delete all notifications? This cannot be undone."))
+      return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await deleteAllNotifications();
+        if (!result.success) {
+          setError("Could not delete all notifications.");
+          return;
+        }
+      } catch {
+        setError("Could not delete all notifications.");
+        return;
+      }
+      setOpen(false);
+      router.refresh();
+    });
+  }
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
@@ -158,21 +181,36 @@ export function NotificationsBell({
       <PopoverContent align="end" className="w-96 p-0">
         <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
           <p className="text-sm font-semibold">Notifications</p>
-          {unread > 0 ? (
+          <div className="flex items-center gap-1">
+            {unread > 0 ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 text-xs text-muted-foreground"
+                onClick={markAll}
+                disabled={isPending}
+              >
+                <CheckCheck className="size-3.5" />
+                Mark all read
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="ghost"
-              className="-mr-2 h-7 text-xs text-muted-foreground"
-              onClick={markAll}
+              className="h-7 text-xs text-muted-foreground"
+              onClick={removeAll}
               disabled={isPending}
             >
-              <CheckCheck className="size-3.5" />
-              Mark all read
+              <Trash2 className="size-3.5" />
+              Clear all
             </Button>
-          ) : null}
+          </div>
         </div>
         {error ? (
-          <p role="alert" className="border-b px-4 py-2 text-xs text-destructive">
+          <p
+            role="alert"
+            className="border-b px-4 py-2 text-xs text-destructive"
+          >
             {error}
           </p>
         ) : null}
@@ -286,7 +324,6 @@ export function NotificationsBell({
             ))}
           </div>
         )}
-
       </PopoverContent>
     </Popover>
   );

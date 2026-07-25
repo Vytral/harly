@@ -25,7 +25,7 @@ const VERSION = "v0.1.0";
 const REPO_URL = "https://github.com/Vytral/harly";
 
 type UserMenuProps = {
-  user: { name: string; email: string; image: string | null };
+  user: { name: string; email: string; image: string | null; username: string | null };
   role: string;
   workspace: { id: string; name: string; logoUrl: string | null };
   workspaceOptions: WorkspaceOption[];
@@ -178,6 +178,19 @@ export function UserMenu({
 
               {/* ── Nav actions ── */}
               <div className="px-3 py-2">
+                {user.username && (
+                  <Link
+                    href={`/people/${user.username}` as Route}
+                    onClick={() => setOpen(false)}
+                    className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <ExternalLink
+                      className="size-4 text-muted-foreground"
+                      strokeWidth={1.5}
+                    />
+                    View profile
+                  </Link>
+                )}
                 <Link
                   href={"/account" as Route}
                   onClick={() => setOpen(false)}

@@ -104,11 +104,14 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
 
   const hasIntegration = Boolean(
     settings?.gcalEnabled ||
-      settings?.zoomEnabled ||
-      settings?.calEnabled ||
-      settings?.emailEnabled ||
-      settings?.outlookEnabled ||
-      settings?.slackEnabled,
+    settings?.zoomEnabled ||
+    settings?.calEnabled ||
+    settings?.emailEnabled ||
+    settings?.outlookEnabled ||
+    settings?.slackEnabled,
+  );
+  const hasCalendar = Boolean(
+    settings?.gcalEnabled || settings?.zoomEnabled || settings?.calEnabled,
   );
 
   const hasJob = jobCount > 0;
@@ -120,14 +123,14 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
   // workspaces rarely fill every field, so we treat these as OR, not AND.
   const hasCustomColor = Boolean(
     settings?.primaryColor &&
-      settings.primaryColor.toLowerCase() !==
-        DEFAULT_BOARD_PRIMARY_COLOR.toLowerCase(),
+    settings.primaryColor.toLowerCase() !==
+      DEFAULT_BOARD_PRIMARY_COLOR.toLowerCase(),
   );
   const profileDone = Boolean(
     settings?.tagline ||
-      settings?.description ||
-      settings?.websiteUrl ||
-      hasCustomColor,
+    settings?.description ||
+    settings?.websiteUrl ||
+    hasCustomColor,
   );
 
   // Careers page is customised when they've edited its config away from the
@@ -135,10 +138,10 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
   const careerConfig = settings?.careerPageConfig;
   const careersDone = Boolean(
     settings?.heroImageUrl ||
-      settings?.description ||
-      (careerConfig &&
-        typeof careerConfig === "object" &&
-        Object.keys(careerConfig).length > 0),
+    settings?.description ||
+    (careerConfig &&
+      typeof careerConfig === "object" &&
+      Object.keys(careerConfig).length > 0),
   );
 
   const items: SetupChecklistItem[] = [];
@@ -208,7 +211,19 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     done: memberCount > 1 || inviteCount > 0,
   });
 
-  // 6. Integrations , only surfaced while nothing's connected.
+  // 6. Scheduling is a separate critical step: an email integration alone
+  // does not let a recruiter book interviews.
+  if (!hasCalendar) {
+    push({
+      key: "scheduling",
+      title: "Set up interview scheduling",
+      value: "Let candidates book time without the back-and-forth.",
+      href: "/settings/integrations",
+      done: false,
+    });
+  }
+
+  // 7. Other integrations , only surfaced while nothing's connected.
   if (!hasIntegration) {
     push({
       key: "integrations",
@@ -219,7 +234,7 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     });
   }
 
-  // 7. Legal , last; important, but not what gets you hiring.
+  // 8. Legal , last; important, but not what gets you hiring.
   push({
     key: "legal",
     title: "Set up legal info",

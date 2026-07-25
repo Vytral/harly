@@ -469,11 +469,7 @@ function MembersPanel({
                           Not set — generate
                         </button>
                       ) : null
-                    ) : (
-                      <p className="truncate text-[11px] text-muted-foreground/70">
-                        Uses workspace default sender
-                      </p>
-                    )}
+                    ) : null}
                   </div>
 
                   {!canEditMembers || isLockedOwner ? (

@@ -29,7 +29,7 @@ import type { WorkspaceOption } from "@/features/workspaces/data";
 import type { Permission } from "@/features/workspaces/permissions";
 
 type TopBarProps = {
-  user: { name: string; email: string; image: string | null };
+  user: { name: string; email: string; image: string | null; username: string | null };
   role: string;
   workspace: { id: string; name: string; logoUrl: string | null };
   workspaceOptions: WorkspaceOption[];
