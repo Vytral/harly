@@ -1,0 +1,99 @@
+# DigitalOcean App Platform spec, read automatically by the "Deploy to
+# DigitalOcean" button (cloud.digitalocean.com/apps/new?repo=...). Editing
+# this file changes what that button provisions.
+#
+# Provisions a managed dev PostgreSQL database alongside the app. For
+# production traffic, replace the `databases` entry below with an existing
+# DigitalOcean Managed PostgreSQL cluster (see docs/cloud-deployments.md).
+#
+# IMPORTANT: HARLY_SETUP_SECRET is the token that claims the first owner
+# account at https://<your-app>/setup after deploy. You type its value into
+# the deploy form below — write it down before clicking Deploy. App Platform
+# SECRET-type variables are write-only: once saved, the dashboard will never
+# show it to you again, and there is no recovery except editing the app's
+# env vars to set a new value and redeploying.
+name: harly
+region: nyc
+
+databases:
+  - name: harly-db
+    engine: PG
+    version: "16"
+
+envs:
+  - key: DATABASE_URL
+    scope: RUN_TIME
+    type: SECRET
+    value: ${harly-db.DATABASE_URL}
+  - key: HARLY_URL
+    scope: RUN_TIME
+    type: GENERAL
+    value: ${APP_URL}
+  - key: HARLY_INITIAL_ADMIN_EMAIL
+    scope: RUN_TIME
+    type: GENERAL
+  - key: STORAGE_PROVIDER
+    scope: RUN_TIME
+    type: GENERAL
+    value: s3
+  - key: S3_BUCKET
+    scope: RUN_TIME
+    type: GENERAL
+  - key: S3_REGION
+    scope: RUN_TIME
+    type: GENERAL
+    value: auto
+  - key: S3_ACCESS_KEY_ID
+    scope: RUN_TIME
+    type: SECRET
+  - key: S3_SECRET_ACCESS_KEY
+    scope: RUN_TIME
+    type: SECRET
+  - key: BETTER_AUTH_SECRET
+    scope: RUN_TIME
+    type: SECRET
+  - key: AI_ENCRYPTION_KEY
+    scope: RUN_TIME
+    type: SECRET
+  - key: STORAGE_UPLOAD_SECRET
+    scope: RUN_TIME
+    type: SECRET
+  - key: CRON_SECRET
+    scope: RUN_TIME
+    type: SECRET
+  - key: HARLY_SETUP_SECRET
+    scope: RUN_TIME
+    type: SECRET
+
+services:
+  - name: web
+    image: &harly_image
+      registry_type: GHCR
+      registry: vytral
+      repository: harly
+      tag: 0.1.0-beta.2
+    run_command: node /app/runtime.mjs serve
+    http_port: 3000
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-1gb
+    health_check:
+      http_path: /api/health/ready
+      port: 3000
+      initial_delay_seconds: 20
+      period_seconds: 30
+      timeout_seconds: 5
+      failure_threshold: 5
+
+workers:
+  - name: scheduler
+    image: *harly_image
+    run_command: node /app/runtime.mjs scheduler
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+
+jobs:
+  - name: migrate
+    kind: PRE_DEPLOY
+    image: *harly_image
+    run_command: node /app/runtime.mjs migrate
+    instance_size_slug: apps-s-1vcpu-0.5gb

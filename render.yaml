@@ -1,0 +1,90 @@
+# Render Blueprint, read automatically by the "Deploy to Render" button
+# (render.com/deploy?repo=...). Editing this file changes what that button
+# provisions.
+#
+# BETTER_AUTH_SECRET, AI_ENCRYPTION_KEY, STORAGE_UPLOAD_SECRET, CRON_SECRET,
+# and HARLY_SETUP_SECRET must be the SAME value on both services below —
+# Render can't share a generated secret across services in a Blueprint, so
+# generate one value per key yourself (`openssl rand -base64 32`) and paste
+# it into both the web and scheduler prompts during deploy.
+#
+# HARLY_SETUP_SECRET specifically is the token that claims the first owner
+# account at https://<your-app>.onrender.com/setup right after deploy —
+# write it down before clicking Deploy. Render lets an account Admin view
+# saved secret values again later from the dashboard, but don't rely on it.
+databases:
+  - name: harly-postgres
+    plan: basic-256mb
+    postgresMajorVersion: "16"
+
+services:
+  - name: harly-web
+    type: web
+    runtime: image
+    plan: starter
+    image:
+      url: ghcr.io/vytral/harly:0.1.0-beta.2
+    healthCheckPath: /api/health/ready
+    preDeployCommand: node /app/runtime.mjs migrate
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: harly-postgres
+          property: connectionString
+      - key: HARLY_URL
+        sync: false
+      - key: HARLY_INITIAL_ADMIN_EMAIL
+        sync: false
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      - key: AI_ENCRYPTION_KEY
+        sync: false
+      - key: STORAGE_UPLOAD_SECRET
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: HARLY_SETUP_SECRET
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: s3
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
+
+  - name: harly-scheduler
+    type: worker
+    runtime: image
+    plan: starter
+    image:
+      url: ghcr.io/vytral/harly:0.1.0-beta.2
+    dockerCommand: scheduler
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: harly-postgres
+          property: connectionString
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      - key: AI_ENCRYPTION_KEY
+        sync: false
+      - key: STORAGE_UPLOAD_SECRET
+        sync: false
+      - key: CRON_SECRET
+        sync: false
+      - key: HARLY_SETUP_SECRET
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: s3
+      - key: S3_BUCKET
+        sync: false
+      - key: S3_REGION
+        value: auto
+      - key: S3_ACCESS_KEY_ID
+        sync: false
+      - key: S3_SECRET_ACCESS_KEY
+        sync: false
