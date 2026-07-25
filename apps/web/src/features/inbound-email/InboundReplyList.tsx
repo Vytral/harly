@@ -13,6 +13,7 @@ import type { InboundReplyItem } from "@/features/inbound-email/data";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
@@ -91,11 +92,12 @@ export function InboundReplyList({ items }: { items: InboundReplyItem[] }) {
       </div>
 
       {visible.length === 0 ? (
-        <Card className="border-dashed">
-          <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No unread replies.
-          </CardContent>
-        </Card>
+        <EmptyState
+          variant="filtered"
+          icon={CheckCheck}
+          title="No unread replies"
+          hint="You're caught up. Switch off the unread filter to see the whole history."
+        />
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">
           {visible.map((item, index) => (

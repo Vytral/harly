@@ -8,6 +8,7 @@ import { createCandidateNote } from "@/features/candidates/actions";
 import type { CandidateNoteItem, NoteMention } from "@/features/candidates/data";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Textarea } from "@/components/ui/textarea";
 import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
@@ -298,12 +299,11 @@ export function NoteForm({
       </div>
 
       {notes.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center">
-          <MessageSquare className="size-5 text-muted-foreground" strokeWidth={1.5} />
-          <p className="text-sm text-muted-foreground">
-            No notes yet. Add the first one above.
-          </p>
-        </div>
+        <EmptyState
+          icon={MessageSquare}
+          title="No notes on this candidate"
+          hint="Write what you noticed above. Mention a teammate with @ and they get notified."
+        />
       ) : (
         <div className="space-y-3">
           {notes.map((note) => (

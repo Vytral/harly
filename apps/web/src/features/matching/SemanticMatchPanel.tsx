@@ -14,6 +14,7 @@ import type { JobMatch } from "@/features/matching/data";
 import { assignFromPoolToJobAction } from "@/features/pool/actions";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   TargetIcon,
   UserPlusIcon,
@@ -173,11 +174,12 @@ export function SemanticMatchPanel({
           ))}
         </ul>
       ) : matches && matches.length === 0 ? (
-        <CardContent className="mt-3 flex flex-col items-center gap-2 rounded-xl border border-dashed py-8 text-center">
-          <TargetIcon className="size-6 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">
-            No indexed candidates yet. Add candidates to your pool first.
-          </p>
+        <CardContent className="mt-3">
+          <EmptyState
+            icon={TargetIcon}
+            title="Nobody in the pool is indexed yet"
+            hint="Indexing runs after a candidate is saved to the pool. Add a few and check back."
+          />
         </CardContent>
       ) : null}
     </Card>

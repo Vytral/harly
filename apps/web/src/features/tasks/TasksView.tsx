@@ -293,7 +293,17 @@ export function TasksView({
       </div>
 
       {view === "list" ? (
-        <TaskList tasks={filtered} handlers={handlers} />
+        <TaskList
+          tasks={filtered}
+          handlers={handlers}
+          filtersActive={
+            query.trim() !== "" ||
+            assignee !== "all" ||
+            priority !== "all" ||
+            status !== "all" ||
+            due !== "all"
+          }
+        />
       ) : (
         <TaskBoard tasks={filtered} handlers={handlers} />
       )}

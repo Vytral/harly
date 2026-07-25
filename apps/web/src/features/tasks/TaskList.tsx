@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, ChevronRight } from "lucide-react";
+import { CheckCircle2, ChevronRight, SearchX } from "lucide-react";
 
+import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 import type { TaskItem } from "./shared";
 import { TaskRow } from "./TaskRow";
@@ -23,7 +24,16 @@ type Group = {
   tasks: TaskItem[];
 };
 
-export function TaskList({ tasks, handlers }: { tasks: TaskItem[]; handlers: TaskHandlers }) {
+export function TaskList({
+  tasks,
+  handlers,
+  filtersActive = false,
+}: {
+  tasks: TaskItem[];
+  handlers: TaskHandlers;
+  /** Lets the empty state tell "nothing exists" apart from "nothing matches". */
+  filtersActive?: boolean;
+}) {
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(["completed", "canceled"]));
 
   const groups = useMemo<Group[]>(() => {
@@ -49,18 +59,19 @@ export function TaskList({ tasks, handlers }: { tasks: TaskItem[]; handlers: Tas
   }, [tasks]);
 
   if (tasks.length === 0) {
-    return (
-      <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed py-20 text-center">
-        <div className="flex size-12 items-center justify-center rounded-2xl bg-muted">
-          <CheckCircle2 className="size-6 text-muted-foreground" />
-        </div>
-        <div>
-          <p className="text-sm font-medium">No tasks match</p>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Adjust filters, or create a task to start tracking work.
-          </p>
-        </div>
-      </div>
+    return filtersActive ? (
+      <EmptyState
+        variant="filtered"
+        icon={SearchX}
+        title="No tasks match these filters"
+        hint="Try a different assignee or due window, or reset the filters."
+      />
+    ) : (
+      <EmptyState
+        icon={CheckCircle2}
+        title="Nothing on your plate"
+        hint="Tasks you create , or that a stage move assigns you , collect here with the most urgent first."
+      />
     );
   }
 

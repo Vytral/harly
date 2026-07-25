@@ -34,6 +34,7 @@ import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -388,9 +389,12 @@ export function TemplatesManager({
           </div>
         </div>
       ) : filteredTemplates.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-14 text-center">
-          <p className="text-sm text-muted-foreground">No templates match your filters.</p>
-        </div>
+        <EmptyState
+          variant="filtered"
+          icon={FileTextIcon}
+          title="No templates match these filters"
+          hint="Try another stage or category, or search by the template's name."
+        />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {filteredTemplates.map((template) => (

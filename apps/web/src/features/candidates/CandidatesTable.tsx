@@ -11,6 +11,7 @@ import {
   Search,
   Trash2,
   User,
+  Users,
   XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,6 +36,7 @@ import { PipelineSpine } from "@/components/ui/PipelineSpine";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { EmptyState } from "@/components/ui/empty-state";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -627,18 +629,31 @@ export function CandidatesTable({
               );
             })}
 
+            {/*
+              Two different situations that used to share one message. A new
+              workspace with no candidates was being told its filters were
+              wrong, which is both untrue and unhelpful.
+            */}
             {filtered.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-16 text-center">
-                <Search className="size-5 text-muted-foreground" />
-                <p className="text-sm text-muted-foreground">
-                  No candidates match your filters.
-                </p>
-                {filtersActive ? (
-                  <Button variant="outline" size="sm" onClick={clearFilters}>
-                    Clear filters
-                  </Button>
-                ) : null}
-              </div>
+              filtersActive ? (
+                <EmptyState
+                  variant="filtered"
+                  icon={Search}
+                  title="Nobody matches these filters"
+                  hint="Widen the search, or clear the filters to see everyone again."
+                  action={
+                    <Button variant="outline" size="sm" onClick={clearFilters}>
+                      Clear filters
+                    </Button>
+                  }
+                />
+              ) : (
+                <EmptyState
+                  icon={Users}
+                  title="No candidates yet"
+                  hint="They arrive when someone applies through your career page, or you add one by hand."
+                />
+              )
             ) : null}
           </div>
         </div>
