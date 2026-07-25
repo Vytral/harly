@@ -13,11 +13,9 @@
 </p>
 
 <p align="center">
-  <a href="https://vercel.com/new/clone?repository-url=https://github.com/Vytral/harly"><img src="https://img.shields.io/badge/Deploy-Vercel-000000?logo=vercel&logoColor=white" alt="Deploy to Vercel" /></a>
-  <a href="docs/cloud-deployments.md#railway"><img src="https://img.shields.io/badge/Deploy-Railway-0B0D0E?logo=railway&logoColor=white" alt="Deploy on Railway" /></a>
-  <a href="docs/cloud-deployments.md#flyio"><img src="https://img.shields.io/badge/Deploy-Fly.io-7B3FE4?logo=flydotio&logoColor=white" alt="Deploy on Fly.io" /></a>
-  <a href="docs/cloud-deployments.md#digitalocean-app-platform"><img src="https://img.shields.io/badge/Deploy-DigitalOcean-0080FF?logo=digitalocean&logoColor=white" alt="Deploy on DigitalOcean" /></a>
-  <a href="#docker--self-hosting"><img src="https://img.shields.io/badge/Self--host-Docker-2496ED?logo=docker&logoColor=white" alt="Self-host with Docker" /></a>
+  <a href="https://render.com/deploy?repo=https://github.com/Vytral/harly"><img src="https://img.shields.io/badge/Deploy-Render-46E3B7?logo=render&logoColor=white" alt="Deploy to Render" /></a>
+  <a href="https://cloud.digitalocean.com/apps/new?repo=https://github.com/Vytral/harly/tree/main"><img src="https://img.shields.io/badge/Deploy-DigitalOcean-0080FF?logo=digitalocean&logoColor=white" alt="Deploy on DigitalOcean" /></a>
+  <a href="#deployment"><img src="https://img.shields.io/badge/Self--host-Docker%20%2F%20Fly%20%2F%20Railway-2496ED?logo=docker&logoColor=white" alt="Self-host with the Harly CLI" /></a>
 </p>
 
 > **Public beta.** Harly is usable for small, self-hosted teams, but it is still evolving. Review the [launch checklist](docs/launch-checklist.md), make a backup, and test upgrades in a non-production environment before relying on it for critical hiring.
@@ -74,16 +72,16 @@ npx @harly/cli
 
 This opens a guided installer that checks the host and creates the PostgreSQL, migrator, app, scheduler, and optional Caddy topology. Run the same command later from the installation directory to manage it. Use `npx @harly/cli doctor` after deployment, and see the self-hosting guide for proxy modes, storage, backups, restore, and upgrades.
 
-Prefer a managed platform? The same `npx @harly/cli` wizard also deploys to **Railway** and **DigitalOcean App Platform** (managed PostgreSQL, S3-compatible uploads, scheduler included). For **Vercel**, use the button above to clone the repo into a project, add a managed PostgreSQL database, and configure the environment variables before the first deploy — then run `pnpm db:migrate` from CI or a trusted migration job, not from every serverless instance.
+Prefer a managed platform? Click **Deploy to Render** or **Deploy on DigitalOcean** above for a one-click deploy straight from this repo ([`render.yaml`](render.yaml) and [`.do/app.yaml`](.do/app.yaml) define exactly what gets provisioned — web, scheduler, migration job, and a managed PostgreSQL database). The same `npx @harly/cli` wizard also deploys to **Railway**, provisioning the project, managed PostgreSQL, both services, and secrets for you through Railway's API, and to **Fly.io** with a versioned [`fly.toml`](fly.toml). Harly does not run on serverless platforms like Vercel: the scheduler needs a persistent background process, which serverless functions can't provide.
 
-Full deployment steps and the environment variable reference live in [`docs/self-hosting.md`](docs/self-hosting.md), [`docs/cloud-deployments.md`](docs/cloud-deployments.md), and [`docs/configuration.md`](docs/configuration.md). A manual DigitalOcean [`app.template.yaml`](deploy/digitalocean/app.template.yaml) is also available. For Google Calendar and Google Meet, configure the server-side OAuth client and connect a workspace calendar from Settings using the [Google OAuth setup guide](docs/integrations/google-calendar.md).
+Full deployment steps and the environment variable reference live in [`docs/self-hosting.md`](docs/self-hosting.md), [`docs/cloud-deployments.md`](docs/cloud-deployments.md), and [`docs/configuration.md`](docs/configuration.md). For Google Calendar and Google Meet, configure the server-side OAuth client and connect a workspace calendar from Settings using the [Google OAuth setup guide](docs/integrations/google-calendar.md).
 
 ### Before inviting your team
 
 1. Use an HTTPS `HARLY_URL` and set independent production secrets.
 2. Run `npx @harly/cli doctor` after deployment.
 3. Configure off-host encrypted backups and prove a restore once.
-4. Create the first owner at `/setup`, then keep registration invite-only.
+4. Create the first owner at `/setup` using `HARLY_SETUP_SECRET` — the CLI writes it to a local `.env`, and Render/DigitalOcean's buttons have you type it in during deploy, so save it then (see [`docs/cloud-deployments.md`](docs/cloud-deployments.md#render) for where to find it per platform). Registration is invite-only after that.
 
 ### Career-page discovery
 
