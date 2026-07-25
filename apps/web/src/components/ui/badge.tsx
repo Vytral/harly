@@ -5,8 +5,9 @@ import { Slot } from "radix-ui"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  // Tags are softly-rounded rectangles (~6px), not pills , per the design ref.
-  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-[6px] border border-transparent px-2 py-0.5 text-xs font-medium whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3",
+  // Status and taxonomy badges are fully pill (DESIGN.md , Status Pill), set in
+  // the chrome face at 12px so they hold as labels rather than speech.
+  "font-chrome inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-2.5 py-0.5 text-[12px] leading-[18px] whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
       variant: {
@@ -19,12 +20,23 @@ const badgeVariants = cva(
           "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
         link: "text-primary underline-offset-4 [a&]:hover:underline",
-        // Lime accent , the one place the chartreuse shows up by default.
-        success: "bg-lime text-lime-ink",
-        warning: "bg-clay/10 text-clay",
-        info: "bg-slate-info/15 text-slate-info",
-        danger: "bg-destructive/10 text-destructive",
-        neutral: "bg-muted text-muted-foreground",
+        /*
+         * Success is NOT the brand accent. It used to be a solid chartreuse
+         * fill, which put the signal colour on every "Open" job and every
+         * "Hired" candidate , the exact spray DESIGN.md rations against. Sage
+         * wash + success olive reads as confirmation without claiming to be a
+         * live signal.
+         */
+        success: "bg-sage-wash text-success-olive",
+        warning: "bg-warning-clay/10 text-warning-clay",
+        info: "bg-status-quiet text-status-quiet-ink",
+        danger: "bg-danger-rust/10 text-danger-rust",
+        // The frame's default state pill: cool grey-blue, silent.
+        neutral: "bg-status-quiet text-status-quiet-ink",
+        // Solid ink taxonomy tag (`Product` in frame 01).
+        tag: "bg-tag-solid text-pure-snow dark:text-warm-paper",
+        // Chartreuse stays available, but only for genuine live signals.
+        signal: "bg-chartreuse-signal text-chartreuse-ink",
       },
     },
     defaultVariants: {

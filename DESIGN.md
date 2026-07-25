@@ -694,15 +694,23 @@ A UI change **passes** when:
 
 ## Redesign execution order
 
-| Phase | Scope                                      | Done means                           |
-| ----- | ------------------------------------------ | ------------------------------------ |
-| 0     | This file + freeze feature UI sprawl       | Agents cited DESIGN.md               |
-| 1     | Tokens bridge + button/chip/row primitives | Story-level match to mock chips/rows |
-| 2     | App shell (rail + top bar)                 | ≤5 primaries; workspace pill center  |
-| 3     | Home = human applications table            | Greeting + filters + soft selection  |
-| 4     | Candidate focus                            | Decision rail; ≤3 sections           |
-| 5     | Pipeline                                   | Same density language                |
-| 6     | Cascade (Inbox, Jobs, Settings skin)       | Inheritance, not reinterpretation    |
+| Phase | Scope                                      | Done means                           | Status |
+| ----- | ------------------------------------------ | ------------------------------------ | ------ |
+| 0     | This file + freeze feature UI sprawl       | Agents cited DESIGN.md               | **done** — Onest lock + `referencias/` reference lock |
+| 1     | Tokens bridge + button/chip/row primitives | Story-level match to mock chips/rows | **done** — Onest self-hosted, Inter/Cal Sans deleted, `--primary` is ink, radius + shadow doctrine, `components/ui/human-table.tsx` |
+| 2     | App shell (rail + top bar)                 | ≤5 primaries; workspace pill center  | **done** — `IconRail` replaces the shadcn sidebar kit; no Coming soon; AI FAB retired into the top bar signal button |
+| 3     | Home = human applications table            | Greeting + filters + soft selection  | **done** — six-widget bento replaced by `getApplicationsBoard` + `ApplicationsBoardTable` |
+| 4     | Candidate focus                            | Decision rail; ≤3 sections           | **done** — 8 tabs → Overview / Process / Files; 10-control bar → primary + stage action + reject + utilities |
+| 5     | Pipeline                                   | Same density language                | **partial** — inherits shell, tokens and the pill/status spec; the board's own cards and columns still need the row-wash + 60px density pass |
+| 6     | Cascade (Inbox, Jobs, Settings skin)       | Inheritance, not reinterpretation    | **partial** — `Badge`, `FilterPill` and `PipelineSpine` are on-spec, so every consumer inherits; per-screen QA not done |
+
+### Known open items (do not re-derive , these are deliberate, not forgotten)
+
+1. **Icon families still mixed.** Lucide and Phosphor both ship. One family must win; the rail, top bar and human table are Lucide, so Lucide is the likely survivor. Mechanical but wide.
+2. **Pipeline board cards** keep their old card language. They should read like table rows in a column, not mini-cards.
+3. **Dark mode** has correct tokens but no per-screen QA. Light identity was the priority, per this file.
+4. **Career page and Portal** are untouched on purpose , brand surfaces come after the daily tool, and the Portal keeps its deeper sidebar by design.
+5. **`.font-cal` is a retired alias** resolving to Onest display. New code uses `.font-display`; the ~14 old call sites can be renamed opportunistically.
 
 ---
 

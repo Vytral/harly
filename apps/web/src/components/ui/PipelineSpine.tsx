@@ -73,10 +73,12 @@ export function PipelineSpine({
                     ? "bg-destructive"
                     : "bg-destructive/20"
                   : isHired
-                    ? "bg-emerald-500"
+                    // Success olive, not a raw emerald. DESIGN.md bans a second
+                    // brand-green family competing with ink + chartreuse.
+                    ? "bg-success-olive"
                     : filled
                       ? "bg-primary"
-                      : "bg-muted",
+                      : "bg-soft-kraft",
                 isCurrent && "ring-1 ring-primary/30",
               )}
             />
