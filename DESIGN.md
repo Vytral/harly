@@ -8,6 +8,28 @@
 **External reference:** [Remote by Modula](https://remotebymodula.framer.website/) (soft SaaS shell, human tables, lime signal)
 **Product one-liner:** Harly is a self-hosted ATS that feels like a calm morning desk — not an enterprise suite, not a feature warehouse.
 
+### Reference lock — [`referencias/`](referencias/)
+
+Every UI PR is compared against these five frames. They are the design, not mood board decoration.
+
+| File                                                                                     | What it locks                                                                                                       |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| [`01-hero-human-table.webp`](referencias/01-hero-human-table.webp)                       | **The whole thesis.** Shell frame, icon rail, centered workspace pill, greeting, filter chips, human table, row wash |
+| [`02-onboarding-checklist.png`](referencias/02-onboarding-checklist.png)                  | Collapsible stacked list rows on paper — the pattern for checklists and grouped sections (not cards)                 |
+| [`03-ai-candidate-cards.png`](referencias/03-ai-candidate-cards.png)                      | How AI appears: small labelled cards inside a flow, chartreuse icon tile, `AI` micro-chip — never a permanent FAB    |
+| [`04-activity-feed-lime.png`](referencias/04-activity-feed-lime.png)                      | Activity/timeline rows with inline avatar pills; chartreuse as a **block wash** only in marketing-grade moments      |
+| [`05-feature-cards-row.webp`](referencias/05-feature-cards-row.webp)                      | Notification card, radio-select rows, toast, and batch-selection language — plus the marketing card rhythm           |
+
+**Reading the frames (rules extracted, not vibes):**
+
+- Chrome is a single 56px bar. One row of icons left, one pill centered, one compact cluster right. Nothing else.
+- The table is the page. Greeting and two filter chips are the only things above it.
+- Selection is a **filled soft row block with its own radius**, and the trailing `…` cell darkens with it. No borders, no checkmark-only state.
+- Column headers are small, letterspaced, soft-ink — quiet structure.
+- Chartreuse appears exactly four times in frame 01: brand mark, `Tech` chips, the AI icon button, the workspace dot. Count yours.
+- Status pills are cool-grey and silent. Category tags are either solid ink (`Product`) or chartreuse (`Tech`) — never both styles for the same taxonomy level.
+- Avatars are real photographs at 36px in rows, 24px in stacks, initials on soft kraft as fallback.
+
 Harly operates as a **light engineering-adjacent people tool**: warm paper canvas (`#f5f5f4`) with near-black typography (`#171717`) and a single chartreuse accent (`#c8f560`) that activates only live signals — selected rows, category chips, brand marks, unread dots, active nav. Structure comes from **luminance and spacing**, not ornament: soft row washes instead of card farms, hairline borders that disappear until looked for, minimal shadow. The outer app shell is a generous rounded white frame; the sidebar is an **icon rail**, not a module warehouse. Density is comfortable. People are the UI — real avatars, soft initials, team stacks. The product's intelligence is the workbench itself: triage, pipeline, and decision — never decorative chrome.
 
 > **Authority rule for agents and humans:** If implementation conflicts with this file, **this file wins**. Fix the code. Do not “almost” match the mock.
@@ -76,42 +98,55 @@ Chartreuse primary = marketing / rare high-delight moments only.
 
 ## Tokens — Typography
 
-### Inter — Body and UI text — workhorse for paragraphs, buttons, nav labels, table cells, forms. Geometric neo-grotesque; neutral enough for a tool, tight enough to feel modern. · `--font-inter`
+**Harly is set in Onest. One family, two faces, a hard role split.** Onest is a geometric humanist sans with open apertures and a warm, slightly rounded skeleton — it reads as a *people* tool on paper, where a neo-grotesque like Inter reads as a dashboard. The reference frames are set in exactly this register: friendly letterforms, tight headline tracking, quiet small caps-ish column heads.
 
-- **Substitute:** Geist Sans, system UI sans
-- **Weights:** 400, 500, 600
-- **Sizes:** 12px, 13px, 14px, 15px, 16px, 18px, 20px
-- **Line height:** 1.35–1.50
-- **Letter spacing:** -0.01em at 15–16px body; default at small UI
-- **Role:** All product UI text. Prefer 510–600 only for titles and emphasis — body stays 400/500.
+### Onest — Static instances — the primary face · `--font-onest`
 
-### Inter Display — Greetings, page titles, empty-state headlines. Same family, tighter tracking, semibold. · `--font-inter-display`
+Everything the user reads as **content or command**: paragraphs, buttons, nav labels, table cells, names, forms, greetings, page titles, empty states.
 
-- **Substitute:** Inter with `font-display` utility (tracking-tight + semibold)
-- **Weights:** 600, 650
-- **Sizes:** 22px, 24px, 28px, 32px
-- **Line height:** 1.15–1.25
-- **Letter spacing:** -0.02em to -0.03em
-- **Role:** “Good morning, Jessica!”-class greetings and rare marketing headings. **Not** every section H2.
+- **Weights (self-hosted static instances only):** `400` Regular · `500` Medium · `600` SemiBold
+- **Substitute:** system UI sans (`ui-sans-serif`, `-apple-system`) — never Inter
+- **Sizes:** 12px, 13px, 14px, 15px, 16px, 18px, 20px, 24px, 32px
+- **Line height:** 1.15 for display sizes, 1.35–1.50 for body
+- **Letter spacing:** `-0.01em` at 14–16px, `-0.02em`/`-0.03em` at 20px+, default below 13px
+- **Role:** Medium (500) is the workhorse for row names, nav labels, buttons and chips. Regular (400) for paragraphs and meta. SemiBold (600) **only** for greetings, page titles and table-row names — never a whole section of it.
+- **Display is the same face, not a second family:** greeting weight comes from `600` + `-0.03em` tracking, applied via the `font-display` utility.
+
+### Onest Variable — the secondary/chrome face · `--font-onest-var`
+
+Reserved for **small standalone chrome that labels rather than speaks** — the pieces that must hold at 11–12px without turning to mush, where a live weight axis lets us go slightly heavier without going bigger.
+
+- **Use for:** status pills (`Pending`), category chips (`Tech`, `Product`), badges, counters, unread dots with numbers, `AI` micro-chips, table column headers, keyboard hints (`⌘K`), micro meta.
+- **Axis range:** `100 900`, driven at `500`–`600` in practice
+- **Sizes:** 11px, 12px, 13px only
+- **Letter spacing:** `0.02em` at 12px, `0.04em` at 11px — small text needs air, unlike display
+- **Never use for:** body copy, buttons with real verbs, names, headings, or anything longer than three words. If it's a sentence, it's the static face.
+
+> **The split in one line:** static Onest *speaks*, variable Onest *labels*. A chip is a label. A button is speech.
 
 ### Type Scale (product UI)
 
-| Role     | Size | Weight  | Line Height | Letter Spacing | Token             |
-| -------- | ---- | ------- | ----------- | -------------- | ----------------- |
-| micro    | 11px | 500     | 1.3         | 0.04em         | `--text-micro`    |
-| caption  | 12px | 500     | 1.35        | 0.02em         | `--text-caption`  |
-| body-sm  | 13px | 400     | 1.45        | —              | `--text-body-sm`  |
-| body     | 14px | 400     | 1.45        | -0.01em        | `--text-body`     |
-| body-ui  | 15px | 400–500 | 1.4         | -0.01em        | `--text-body-ui`  |
-| label    | 13px | 500     | 1.3         | —              | `--text-label`    |
-| title-sm | 16px | 600     | 1.3         | -0.01em        | `--text-title-sm` |
-| title    | 20px | 600     | 1.25        | -0.02em        | `--text-title`    |
-| greeting | 24px | 600     | 1.2         | -0.03em        | `--text-greeting` |
-| display  | 32px | 600     | 1.15        | -0.03em        | `--text-display`  |
+| Role      | Size | Weight  | Line Height | Letter Spacing | Face     | Token             |
+| --------- | ---- | ------- | ----------- | -------------- | -------- | ----------------- |
+| micro     | 11px | 500     | 1.3         | 0.04em         | variable | `--text-micro`    |
+| caption   | 12px | 500     | 1.35        | 0.02em         | variable | `--text-caption`  |
+| chip      | 12px | 500     | 1.2         | 0.01em         | variable | `--text-chip`     |
+| col-head  | 12px | 500     | 1.2         | 0.06em         | variable | `--text-col-head` |
+| body-sm   | 13px | 400     | 1.45        | —              | static   | `--text-body-sm`  |
+| body      | 14px | 400     | 1.45        | -0.01em        | static   | `--text-body`     |
+| body-ui   | 15px | 400–500 | 1.4         | -0.01em        | static   | `--text-body-ui`  |
+| label     | 13px | 500     | 1.3         | —              | static   | `--text-label`    |
+| row-name  | 15px | 500     | 1.3         | -0.01em        | static   | `--text-row-name` |
+| title-sm  | 16px | 600     | 1.3         | -0.01em        | static   | `--text-title-sm` |
+| title     | 20px | 600     | 1.25        | -0.02em        | static   | `--text-title`    |
+| greeting  | 24px | 600     | 1.2         | -0.03em        | static   | `--text-greeting` |
+| display   | 32px | 600     | 1.15        | -0.03em        | static   | `--text-display`  |
 
-**Column headers (tables):** caption/micro, medium weight, soft ink, slight tracking — quiet structure, never shouty uppercase walls.
+**Column headers (tables):** `col-head` — 12px, variable face, medium, soft ink, `0.06em` tracking. Matches frame 01 (`USERS  ROLE  STATUS`): quiet structure, never a shouty bold uppercase wall.
 
 **Eyebrows:** rare. Max sparingly in marketing. Product UI prefers plain titles without `01 / SECTION` agency labels.
+
+**Numerals:** tabular figures (`font-variant-numeric: tabular-nums`) in every table column, counter and metric so digits stop dancing between rows.
 
 ---
 
@@ -310,7 +345,8 @@ Minimal, soft corners, ink text; success uses success olive sparingly.
 
 ### Do
 
-- Compare every UI PR to `public/images/figma-preview/dashboard-hero.png`
+- Compare every UI PR to `referencias/01-hero-human-table.webp` and `public/images/figma-preview/dashboard-hero.png`
+- Set text in **Onest** — static face for speech, variable face for labels (chips, statuses, badges, column heads)
 - Keep primary nav ≤5 visible destinations; bury the rest under More/Settings
 - Use **row wash** for selection/hover instead of boxing every entity in a card
 - Ration `#c8f560` to signals — chips, dots, rare CTAs, brand
@@ -333,6 +369,8 @@ Minimal, soft corners, ink text; success uses success olive sparingly.
 - Don't use heavy shadows, glassmorphism stacks, or AI-purple gradients
 - Don't use pure `#000000` large fields or pure neon decoration
 - Don't add agency eyebrows (`01 / INDEX`), scroll cues, or fake version stamps in product UI
+- Don't reintroduce **Inter** (or Geist Sans / any second UI sans) anywhere — Onest is the only family
+- Don't set body copy, buttons or headings in the **variable** face, and don't set 11–12px chips in the static face
 - Don't redesign Career/Portal aesthetics before Shell + Home + Candidate focus match this file
 
 ---
@@ -391,7 +429,8 @@ Portal may use a calmer candidate-facing variant, but must share: radius scale, 
 2. No Coming soon in chrome
 3. No widget-bento Home
 4. No second accent color family (purple/blue brand)
-5. One surface per task — Shell, then List, then Candidate
+5. No second type family — **Onest only**; Inter is retired, not deprecated
+6. One surface per task — Shell, then List, then Candidate
 
 **Example Component Prompts**
 
@@ -407,9 +446,22 @@ Portal may use a calmer candidate-facing variant, but must share: radius scale, 
 
 6. **Primary admin button:** pill, `#171717` bg, white label 14px medium, padding 10×18.
 
-7. **Signal chip Tech:** pill, `#c8f560` bg, `#2a330d` text, 11–12px medium.
+7. **Signal chip Tech:** pill, `#c8f560` bg, `#2a330d` text, 12px medium, **Onest Variable**, `0.01em`.
 
 8. **Candidate focus:** left 1fr profile/resume; right 320–360px decision rail with **one** primary stage action + overflow menu. Max three sections.
+
+9. **Column header row:** 12px, **Onest Variable** 500, `0.06em` tracking, `#6a6a67`, uppercase-ish label only (`USERS`, `ROLE`, `STATUS`) — no border under it, spacing does the separating.
+
+**Quick Type Reference**
+
+- family (speech): `var(--font-onest)` — 400 / 500 / 600
+- family (labels): `var(--font-onest-var)` — variable axis, driven 500–600
+- greeting: 24px / 600 / `-0.03em` / static
+- row name: 15px / 500 / `-0.01em` / static
+- body: 14px / 400 / `-0.01em` / static
+- chip + status: 12px / 500 / `0.01em` / **variable**
+- column head: 12px / 500 / `0.06em` / **variable**
+- tabular numerals on every metric and table figure
 
 ---
 
@@ -485,18 +537,22 @@ Language: clear, calm, adult. English product UI default; same tone in ES if loc
   --color-danger-rust: #d6453a;
   --color-success-olive: #4d7c0f;
 
-  /* Typography */
-  --font-inter:
-    "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+  /* Typography — Onest only. Static face speaks, variable face labels. */
+  --font-onest:
+    "Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     sans-serif;
-  --font-inter-display: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-onest-var:
+    "Onest Variable", "Onest", ui-sans-serif, system-ui, sans-serif;
 
   --text-micro: 11px;
   --text-caption: 12px;
+  --text-chip: 12px;
+  --text-col-head: 12px;
   --text-body-sm: 13px;
   --text-body: 14px;
   --text-body-ui: 15px;
   --text-label: 13px;
+  --text-row-name: 15px;
   --text-title-sm: 16px;
   --text-title: 20px;
   --text-greeting: 24px;
@@ -571,7 +627,8 @@ Language: clear, calm, adult. English product UI default; same tone in ES if loc
   --color-danger-rust: #d6453a;
   --color-success-olive: #4d7c0f;
 
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Onest", ui-sans-serif, system-ui, sans-serif;
+  --font-chrome: "Onest Variable", "Onest", ui-sans-serif, system-ui, sans-serif;
 
   --radius-sm: 8px;
   --radius-md: 12px;
@@ -587,22 +644,28 @@ Language: clear, calm, adult. English product UI default; same tone in ES if loc
 
 ### Bridge note (current codebase)
 
-Today’s `globals.css` still maps `--primary` to olive/pine and keeps legacy names (`pine`, `sage`, `lime`).
-**Target mapping for the redesign:**
+Legacy `globals.css` mapped `--primary` to olive/pine, set Inter for every role, and kept domain names (`pine`, `sage`, `lime`).
+**Mapping for the redesign:**
 
-| Legacy              | Becomes                   |
-| ------------------- | ------------------------- |
-| `--paper`           | Warm Paper                |
-| `--paper-raised`    | Pure Snow                 |
-| `--kraft`           | Soft Kraft                |
-| `--ink`             | Near Ink                  |
-| `--ink-soft`        | Soft Ink                  |
-| `--lime`            | Chartreuse Signal         |
-| `--sage`            | Sage Wash                 |
-| `--primary` (admin) | **Ink Action** (not pine) |
-| pine-as-brand       | **retired** as primary    |
+| Legacy                    | Becomes                                    |
+| ------------------------- | ------------------------------------------ |
+| `--paper`                 | Warm Paper                                 |
+| `--paper-raised`          | Pure Snow                                  |
+| `--kraft`                 | Soft Kraft                                 |
+| `--ink`                   | Near Ink                                   |
+| `--ink-soft`              | Soft Ink                                   |
+| `--lime`                  | Chartreuse Signal                          |
+| `--sage`                  | Sage Wash                                  |
+| `--primary` (admin)       | **Ink Action** (not pine)                  |
+| pine-as-brand             | **retired** as primary                     |
+| `--font-inter`            | `--font-onest` (static)                    |
+| `--font-inter-display`    | `--font-onest` @ 600 + tight tracking      |
+| Inter for chips/badges    | `--font-onest-var` (variable face)         |
+| `inter.woff2`             | **deleted** — no Inter file ships          |
 
-Implement in a dedicated tokens PR after Shell/Home visually lock — do not half-migrate mid-feature.
+`pine` and `sage` stay as *aliases* so existing consumers (`bg-sage`, `text-pine`) inherit the retheme untouched — but no new code may reference them. New surfaces use the DESIGN.md names.
+
+Fonts are self-hosted under `apps/web/src/app/fonts/onest/` (F5-04: the build never reaches `fonts.googleapis.com`).
 
 ---
 
@@ -616,7 +679,9 @@ A UI change **fails** review if any box is true:
 - [ ] Introduces a second icon library
 - [ ] Ships Coming soon in sidebar/topbar
 - [ ] Candidate surface adds tabs beyond the three-section cap without explicit exception
-- [ ] Visually diverges from `dashboard-hero.png` on shell/list density without written reason
+- [ ] Visually diverges from `referencias/01-hero-human-table.webp` on shell/list density without written reason
+- [ ] Introduces Inter, Geist Sans, or any font family other than Onest
+- [ ] Sets a chip/status/badge in the static face, or body/button copy in the variable face
 
 A UI change **passes** when:
 
@@ -641,4 +706,4 @@ A UI change **passes** when:
 
 ---
 
-_Last updated: 2026-07-25 · Source of truth for Harly visual + product UI identity._
+_Last updated: 2026-07-25 · Onest typography lock + `referencias/` reference lock · Source of truth for Harly visual + product UI identity._

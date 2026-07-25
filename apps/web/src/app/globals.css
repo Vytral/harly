@@ -4,46 +4,86 @@
 @custom-variant dark (&:is(.dark *):not(:is(.light *)));
 
 /*
- * Harly admin theme , "off-white + lime" (Remote.com-inspired soft UI).
- * Near-white warm canvas, pure-white surfaces lifted by shadow (not borders),
- * ink-black as the action color, and a single chartreuse accent used with an
- * eyedropper. Domain var names are kept from the previous theme so every
- * existing consumer (bg-sage, text-pine, …) inherits the retheme untouched:
- * pine now reads as "ink action", sage as "lime wash".
+ * Harly admin theme , DESIGN.md is the authority for every value below.
+ *
+ * Warm paper canvas → pure snow surfaces → row wash for selection. Structure
+ * comes from luminance and spacing, not ornament: hairlines that disappear
+ * until looked for, almost no shadow. Near ink is the ACTION color (the
+ * workhorse CTA); chartreuse is a rationed *live signal* , chips, brand marks,
+ * unread, AI , never a primary button field or a decorative block.
+ *
+ * Legacy domain names (--pine, --sage, --kraft …) survive as ALIASES so every
+ * existing consumer (bg-sage, text-pine, …) inherits the retheme untouched.
+ * pine no longer means olive: it resolves to ink action. New code must use the
+ * DESIGN.md names below, not the aliases.
  */
 :root,
 .light {
   color-scheme: light;
+  /* Radius doctrine (DESIGN.md , Spacing & Shapes). --radius is the `lg` step
+     that shadcn's calc() chain hangs off; the named steps below are canonical. */
   --radius: 1rem;
 
-  /* ── Domain base ── */
-  --paper: #f5f5f4;        /* warm off-white canvas */
-  --paper-raised: #ffffff; /* pure white surfaces */
-  --kraft: #efefed;        /* muted surface , soft grey */
-  --ink: #171717;          /* near-black */
-  --ink-soft: #6a6a67;     /* mid grey text , tuned for ≥4.5:1 AA on --paper/--card */
-  --pine: #3f6212;         /* action color , dark olive, same tonal family as lime */
-  --pine-strong: #365314;  /* pressed/hover */
-  --sage: #eaf6c8;         /* lime wash , soft active/highlight tint */
-  --sage-ink: #44520f;     /* text on lime wash */
-  --lime: #c8f560;         /* chartreuse accent , use sparingly */
-  --lime-ink: #2a330d;     /* text on lime */
-  --clay: #b45309;         /* warning , amber */
-  --slate-info: #64748b;   /* info , neutral slate */
-  --rust: #d6453a;         /* destructive , warm red */
-  --hairline: #ececea;     /* borders disappear until looked for */
+  /* ── Surfaces ── */
+  --warm-paper: #f5f5f4;   /* 0 , app canvas, sidebar plane */
+  --pure-snow: #ffffff;    /* 1 , shell, panels, popovers */
+  --soft-kraft: #efefed;   /* 2 , chips at rest, secondary fills */
+  --row-wash: #f0f0ee;     /* 3 , hover/selected human rows */
+  --sage-wash: #eaf6c8;    /* 4 , soft active tint (nav, chips) */
 
-  /* ── shadcn semantics → domain base (primitives untouched) ── */
-  --background: var(--paper);
-  --foreground: var(--ink);
+  /* ── Ink ── */
+  --near-ink: #171717;     /* primary text + primary solid actions */
+  --soft-ink: #6a6a67;     /* secondary body, column headers , ≥4.5:1 on paper */
+  --quiet-mist: #9a9a96;   /* placeholders, disabled labels, tertiary meta */
 
-  --card: var(--paper-raised);
-  --card-foreground: var(--ink);
+  /* ── Lines ── */
+  --hairline-c: #ececea;   /* borders that almost disappear */
+  --mist-border: #e4e4e1;  /* slightly stronger dividers on pure white */
 
-  --popover: var(--paper-raised);
-  --popover-foreground: var(--ink);
+  /* ── Signal (rationed) ── */
+  --chartreuse-signal: #c8f560;
+  --chartreuse-ink: #2a330d;
+  --sage-ink-c: #44520f;
 
-  --primary: var(--pine);
+  /* ── Status + tags ── */
+  --status-quiet: #e8eef2;      /* neutral status pill bg (Pending) */
+  --status-quiet-ink: #5b6b76;  /* text inside quiet status pills */
+  --tag-solid: #171717;         /* high-weight category tag (Product) */
+
+  /* ── Semantic ── */
+  --warning-clay: #b45309;
+  --danger-rust: #d6453a;
+  --success-olive: #4d7c0f;
+
+  /* ── Legacy aliases , do not use in new code ── */
+  --paper: var(--warm-paper);
+  --paper-raised: var(--pure-snow);
+  --kraft: var(--soft-kraft);
+  --ink: var(--near-ink);
+  --ink-soft: var(--soft-ink);
+  --pine: var(--near-ink);        /* retired as olive , now ink action */
+  --pine-strong: #2e2e2e;         /* hover for the ink pill (softer black) */
+  --sage: var(--sage-wash);
+  --sage-ink: var(--sage-ink-c);
+  --lime: var(--chartreuse-signal);
+  --lime-ink: var(--chartreuse-ink);
+  --clay: var(--warning-clay);
+  --slate-info: var(--status-quiet-ink);
+  --rust: var(--danger-rust);
+  --hairline: var(--hairline-c);
+
+  /* ── shadcn semantics → tokens (primitives untouched) ── */
+  --background: var(--warm-paper);
+  --foreground: var(--near-ink);
+
+  --card: var(--pure-snow);
+  --card-foreground: var(--near-ink);
+
+  --popover: var(--pure-snow);
+  --popover-foreground: var(--near-ink);
+
+  /* Default admin CTA = near ink + white label. Chartreuse is NOT primary. */
+  --primary: var(--near-ink);
   --primary-foreground: #ffffff;
 
   --secondary: var(--kraft);
@@ -58,32 +98,34 @@
   --destructive: var(--rust);
   --destructive-foreground: #ffffff;
 
-  --success: #4d7c0f;
+  --success: var(--success-olive);
   --success-foreground: #ffffff;
-  --warning: var(--clay);
+  --warning: var(--warning-clay);
   --warning-foreground: #ffffff;
-  --info: var(--slate-info);
+  --info: var(--status-quiet-ink);
   --info-foreground: #ffffff;
 
-  --border: var(--hairline);
-  --input: var(--hairline);
-  --ring: var(--pine);
+  --border: var(--hairline-c);
+  --input: var(--mist-border);
+  --ring: var(--near-ink);
 
-  --chart-1: var(--pine);
+  /* Charts still need separable hues , they are data, not chrome. Ink leads,
+     chartreuse is the single accent, the rest are quiet neutrals + semantics. */
+  --chart-1: var(--near-ink);
   --chart-2: #a3cc3a;
-  --chart-3: var(--slate-info);
-  --chart-4: var(--clay);
-  --chart-5: var(--rust);
+  --chart-3: var(--status-quiet-ink);
+  --chart-4: var(--warning-clay);
+  --chart-5: var(--danger-rust);
 
-  /* Sidebar sits flat on the canvas; separation comes from the hairline. */
-  --sidebar: var(--paper);
+  /* Sidebar is a flat icon rail on the canvas; active = soft wash, not a brick. */
+  --sidebar: var(--warm-paper);
   --sidebar-foreground: #2a2a28;
-  --sidebar-primary: var(--pine);
+  --sidebar-primary: var(--near-ink);
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #eaeae8;
-  --sidebar-accent-foreground: var(--ink);
-  --sidebar-border: var(--hairline);
-  --sidebar-ring: var(--pine);
+  --sidebar-accent: var(--row-wash);
+  --sidebar-accent-foreground: var(--near-ink);
+  --sidebar-border: var(--hairline-c);
+  --sidebar-ring: var(--near-ink);
 
   /* Portal sidebar (dark evergreen variant, applied via .portal-sidebar class). */
   --portal-sidebar: #2a331a;
@@ -170,21 +212,59 @@
   --color-portal-sidebar-accent-foreground: var(--portal-sidebar-accent-foreground);
   --color-portal-sidebar-border: var(--portal-sidebar-border);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --color-warm-paper: var(--warm-paper);
+  --color-pure-snow: var(--pure-snow);
+  --color-soft-kraft: var(--soft-kraft);
+  --color-row-wash: var(--row-wash);
+  --color-near-ink: var(--near-ink);
+  --color-soft-ink: var(--soft-ink);
+  --color-quiet-mist: var(--quiet-mist);
+  --color-hairline: var(--hairline-c);
+  --color-mist-border: var(--mist-border);
+  --color-chartreuse-signal: var(--chartreuse-signal);
+  --color-chartreuse-ink: var(--chartreuse-ink);
+  --color-sage-wash: var(--sage-wash);
+  --color-status-quiet: var(--status-quiet);
+  --color-status-quiet-ink: var(--status-quiet-ink);
+  --color-tag-solid: var(--tag-solid);
+  --color-warning-clay: var(--warning-clay);
+  --color-danger-rust: var(--danger-rust);
+  --color-success-olive: var(--success-olive);
 
+  /* Radius doctrine (DESIGN.md): pills for chips + primary CTA + filters; rows
+     and panels are soft rectangles. Nothing else is rounded-full. */
+  --radius-sm: 8px;   /* checkbox, tiny chip */
+  --radius-md: 12px;  /* inputs, small buttons, menus */
+  --radius-lg: 16px;  /* cards, panels, table shell */
+  --radius-xl: 20px;
+  --radius-row: 14px;   /* selected rows / soft blocks */
+  --radius-shell: 24px; /* app outer frame */
+
+  /* Depth = row wash + paper contrast, not drop shadows on every card. */
+  --shadow-soft: 0 1px 2px rgba(23, 23, 23, 0.04);
+  --shadow-float: 0 8px 30px rgba(23, 23, 23, 0.06);
+
+  --spacing-rail: 60px;    /* icon rail width */
+  --spacing-topbar: 56px;  /* top bar height */
+  --spacing-row: 60px;     /* human table row height */
+
+  /* ── Type , Onest only. Static speaks, variable labels (DESIGN.md). ── */
   --font-sans:
-    var(--font-inter), ui-sans-serif, system-ui, -apple-system,
+    var(--font-onest), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  /* Chrome face: pills, statuses, badges, column heads, keyboard hints. */
+  --font-chrome:
+    var(--font-onest-var), var(--font-onest), ui-sans-serif, system-ui,
+    sans-serif;
   --font-mono:
     var(--font-geist-mono), ui-monospace, "SF Mono", "Menlo", "Consolas",
     monospace;
-  /* Display = Inter bold w/ tight tracking (see .font-display rule below). */
+  /* Display is the SAME family , weight 600 + tight tracking does the work
+     (see the .font-display rule below). Never a second family. */
   --font-display:
-    var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  /* Serif = UI serif stack for the `font-serif` design option. */
+    var(--font-onest), ui-sans-serif, system-ui, sans-serif;
+  /* Serif = UI serif stack for the customer-branded career-page `font-serif`
+     theme option only. Not part of the Harly admin identity. */
   --font-serif:
     ui-serif, Georgia, Cambria, "Times New Roman",
     serif;
@@ -205,7 +285,9 @@
     background: var(--background);
     color: var(--foreground);
     font-family: var(--font-sans);
-    font-feature-settings: "cv11", "ss01";
+    /* No cv11/ss01 here , those were Inter character variants and are dead
+       features on Onest. Onest's default glyphs are the intended shapes. */
+    font-feature-settings: normal;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -246,17 +328,46 @@
   select:not(:disabled) {
     cursor: pointer;
   }
-  /* Display text: same family, heavier + tighter , the "Good morning" look. */
+  /* Display text: same family, heavier + tighter , the "Good morning" look.
+     600 is the cap , 700 reads shouty on Onest's wide, warm skeleton. */
   .font-display {
-    font-weight: 700;
+    font-family: var(--font-display);
+    font-weight: 600;
+    letter-spacing: -0.03em;
+  }
+  /* `.font-cal` is a retired alias. Cal Sans was a third display family; it now
+     resolves to Onest display so the ~14 existing builder/automation call sites
+     keep working without shipping a second font. Do not use in new code , use
+     .font-display. */
+  .font-cal {
+    font-family: var(--font-display);
+    font-weight: 600;
     letter-spacing: -0.02em;
   }
-  /* Cal Sans , distinctive display face for focus-mode builder chrome only.
-     Falls back to sans until the local font (app/(fullscreen)/layout.tsx)
-     loads. Deliberately NOT applied to public/live pages. */
-  .font-cal {
-    font-family: var(--font-cal), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-    letter-spacing: -0.01em;
+  /* Chrome face , the *labelling* half of the type system. Apply to status
+     pills, category chips, badges, counters, column headers and keyboard hints
+     at 11,13px. Never to body copy, buttons with verbs, names, or headings. */
+  .font-chrome {
+    font-family: var(--font-chrome);
+    font-variation-settings: "wght" 500;
+    letter-spacing: 0.01em;
+  }
+  /* Table column header , frame 01 (`USERS  ROLE  STATUS`): quiet structure. */
+  .type-col-head {
+    font-family: var(--font-chrome);
+    font-size: 12px;
+    line-height: 1.2;
+    font-variation-settings: "wght" 500;
+    letter-spacing: 0.06em;
+    color: var(--soft-ink);
+  }
+  /* Digits must not dance between rows. */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+  th,
+  td {
+    font-variant-numeric: tabular-nums;
   }
 }
 
@@ -437,54 +548,89 @@
 .dark {
   color-scheme: dark;
 
-  --paper: #161614;
-  --paper-raised: #1d1d1b;
-  --kraft: #262624;
-  --ink: #f2f2f0;
-  --ink-soft: #9c9c98;
-  --pine: #c3d98e;
-  --pine-strong: #d6e8ab;
-  --sage: #2a331a;
-  --sage-ink: #d8f18f;
-  --lime: #c8f560;
-  --lime-ink: #2a330d;
-  --clay: #e8964b;
-  --slate-info: #94a3b8;
-  --rust: #e0715a;
-  --hairline: #2c2c2a;
+  /* Surfaces: paper → deep charcoal, snow → elevated charcoal (DESIGN.md).
+     Chartreuse keeps its value , it glows correctly on charcoal. */
+  --warm-paper: #161614;
+  --pure-snow: #1d1d1b;
+  --soft-kraft: #262624;
+  --row-wash: #232321;
+  --sage-wash: #2a331a;
 
-  --background: var(--paper);
-  --foreground: var(--ink);
-  --card: var(--paper-raised);
-  --card-foreground: var(--ink);
-  --popover: var(--paper-raised);
-  --popover-foreground: var(--ink);
-  --primary: var(--pine);
+  --near-ink: #f2f2f0;
+  --soft-ink: #9c9c98;
+  --quiet-mist: #74746f;
+
+  --hairline-c: #2c2c2a;
+  --mist-border: #323230;
+
+  --chartreuse-signal: #c8f560;
+  --chartreuse-ink: #2a330d;
+  --sage-ink-c: #d8f18f;
+
+  --status-quiet: #24303a;
+  --status-quiet-ink: #a9bcc9;
+  --tag-solid: #f2f2f0;
+
+  --warning-clay: #e8964b;
+  --danger-rust: #e0715a;
+  --success-olive: #84cc16;
+
+  /* Legacy aliases , same retirement as light. */
+  --paper: var(--warm-paper);
+  --paper-raised: var(--pure-snow);
+  --kraft: var(--soft-kraft);
+  --ink: var(--near-ink);
+  --ink-soft: var(--soft-ink);
+  --pine: var(--near-ink);
+  --pine-strong: #ffffff;
+  --sage: var(--sage-wash);
+  --sage-ink: var(--sage-ink-c);
+  --lime: var(--chartreuse-signal);
+  --lime-ink: var(--chartreuse-ink);
+  --clay: var(--warning-clay);
+  --slate-info: var(--status-quiet-ink);
+  --rust: var(--danger-rust);
+  --hairline: var(--hairline-c);
+
+  --background: var(--warm-paper);
+  --foreground: var(--near-ink);
+  --card: var(--pure-snow);
+  --card-foreground: var(--near-ink);
+  --popover: var(--pure-snow);
+  --popover-foreground: var(--near-ink);
+  /* Inverted ink pill: light fill, dark label , still ink action, not olive. */
+  --primary: var(--near-ink);
   --primary-foreground: #171717;
-  --secondary: var(--kraft);
+  --secondary: var(--soft-kraft);
   --secondary-foreground: #ececea;
-  --muted: var(--kraft);
-  --muted-foreground: var(--ink-soft);
-  --accent: var(--sage);
-  --accent-foreground: var(--sage-ink);
-  --destructive: var(--rust);
+  --muted: var(--soft-kraft);
+  --muted-foreground: var(--soft-ink);
+  --accent: var(--sage-wash);
+  --accent-foreground: var(--sage-ink-c);
+  --destructive: var(--danger-rust);
   --destructive-foreground: #1a0f0c;
-  --success: #84cc16;
+  --success: var(--success-olive);
   --success-foreground: #14190a;
-  --warning: var(--clay);
-  --info: var(--slate-info);
-  --border: var(--hairline);
-  --input: #323230;
-  --ring: var(--pine);
+  --warning: var(--warning-clay);
+  --info: var(--status-quiet-ink);
+  --border: var(--hairline-c);
+  --input: var(--mist-border);
+  --ring: var(--near-ink);
 
-  --sidebar: var(--paper);
+  --chart-1: #d8e8a8;
+  --chart-2: #a3cc3a;
+  --chart-3: var(--status-quiet-ink);
+  --chart-4: var(--warning-clay);
+  --chart-5: var(--danger-rust);
+
+  --sidebar: var(--warm-paper);
   --sidebar-foreground: #ececea;
-  --sidebar-primary: var(--pine);
+  --sidebar-primary: var(--near-ink);
   --sidebar-primary-foreground: #171717;
-  --sidebar-accent: #2a2a28;
-  --sidebar-accent-foreground: var(--ink);
-  --sidebar-border: var(--hairline);
-  --sidebar-ring: var(--pine);
+  --sidebar-accent: var(--row-wash);
+  --sidebar-accent-foreground: var(--near-ink);
+  --sidebar-border: var(--hairline-c);
+  --sidebar-ring: var(--near-ink);
 }
 
 /* ── Sidebar fluid collapse , premium bezier + text animation ── */

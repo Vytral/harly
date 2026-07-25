@@ -104,7 +104,7 @@ export function buildOfferHtml(input: {
   const signatureTag = `<signature-field name="${OFFER_SIGNATURE_FIELD}" role="${OFFER_SIGNER_ROLE}" required="true" style="width:280px;height:64px;display:block"></signature-field>`;
 
   return `<!doctype html><html><head><meta charset="utf-8"><style>
-  body{font-family:Inter,Helvetica,Arial,sans-serif;color:#171717;max-width:640px;margin:0 auto;padding:32px}
+  body{font-family:Onest,ui-sans-serif,system-ui,Helvetica,Arial,sans-serif;color:#171717;max-width:640px;margin:0 auto;padding:32px}
   h1{font-size:28px;font-weight:600;letter-spacing:-0.5px;margin:0 0 8px}
   .sub{color:#52525b;font-size:14px;margin-bottom:24px}
   table{width:100%;border-collapse:collapse;background:#eaf6c8;border-radius:12px;overflow:hidden;margin:16px 0 24px}

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { GeistMono } from "geist/font/mono";
-import { GeistSans } from "geist/font/sans";
 
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
@@ -10,13 +9,29 @@ import { CookiePanel } from "@/components/CookieConsentBanner";
 
 import "./globals.css";
 
-// Inter carries both body and display roles (bold + tight tracking for
-// headings) , single-family system per the off-white/lime design language.
+// Onest is the only UI family (DESIGN.md, Tokens , Typography). Two faces, a
+// hard role split: the static instances *speak* (body, buttons, names, nav,
+// greetings , display weight is 600 + tight tracking, not another family), the
+// variable face *labels* (pills, statuses, badges, column heads at 11,13px,
+// where a live weight axis buys density without buying size).
 // Self-hosted (F5-04) so the build never reaches fonts.googleapis.com.
-const inter = localFont({
-  src: "./fonts/inter.woff2",
-  variable: "--font-inter",
+const onest = localFont({
+  src: [
+    { path: "./fonts/onest/onest-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "./fonts/onest/onest-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "./fonts/onest/onest-latin-600-normal.woff2", weight: "600", style: "normal" },
+  ],
+  variable: "--font-onest",
   display: "swap",
+  fallback: ["ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
+});
+
+const onestVariable = localFont({
+  src: "./fonts/onest/onest-latin-variable.woff2",
+  variable: "--font-onest-var",
+  weight: "100 900",
+  display: "swap",
+  fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
 });
 
 export const metadata: Metadata = {
@@ -38,7 +53,7 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} ${GeistMono.variable} ${GeistSans.variable} h-full antialiased`}
+      className={`${onest.variable} ${onestVariable.variable} ${GeistMono.variable} h-full antialiased`}
       data-scroll-behavior="smooth"
     >
       <head>
