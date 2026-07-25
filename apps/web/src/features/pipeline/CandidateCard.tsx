@@ -5,13 +5,7 @@ import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
 
-import {
-  CheckIcon,
-  ClockIcon,
-  DotsSixVerticalIcon,
-  TargetIcon,
-  XIcon,
-} from "@/components/ui/icons/phosphor";
+import { DotsSixVerticalIcon } from "@/components/ui/icons/phosphor";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -29,80 +23,79 @@ type CandidateCardProps = {
   selected: boolean;
   disabled?: boolean;
   onSelect: (applicationId: string, selected: boolean) => void;
-  onStatusChange: (
-    applicationIds: string[],
-    status: PipelineApplication["status"],
-  ) => void;
 };
 
 type CandidateCardOverlayProps = {
   application: PipelineApplication;
 };
 
-const accentStyles: Record<PipelineApplication["status"], string> = {
-  active: "border-l-transparent",
-  hired: "border-l-success",
-  rejected: "border-l-destructive",
-  withdrawn: "border-l-muted-foreground/30",
-};
-
-/** Days a candidate can sit in a stage before the meta pill flags it as stale. */
+/** Days a candidate can sit in a stage before the card admits it is stuck. */
 const STALE_AFTER_DAYS = 14;
 
-const recommendationTone: Record<
+/**
+ * AI fit, stated the way a colleague would state it.
+ *
+ * Was a coloured pill with a target icon and a bare number , four possible
+ * colours, so the loudest thing on a card was a machine's opinion. It now reads
+ * as one quiet line of text, and the *number* is only in the tooltip alongside
+ * the reasoning. A score is a suggestion; it should not out-shout the person's
+ * name (DESIGN.md , "AI is optional guidance inside flows").
+ */
+const recommendationLabel: Record<
   NonNullable<PipelineApplication["aiRecommendation"]>,
-  { pill: string; label: string }
+  string
 > = {
-  strong_yes: { pill: "bg-success/10 text-success", label: "Strong yes" },
-  yes: { pill: "bg-success/10 text-success", label: "Yes" },
-  maybe: { pill: "bg-warning/10 text-warning", label: "Maybe" },
-  no: { pill: "bg-destructive/10 text-destructive", label: "No" },
+  strong_yes: "Strong fit",
+  yes: "Good fit",
+  maybe: "Possible fit",
+  no: "Weak fit",
 };
 
-function ScorePill({
+function AiFitNote({
   score,
   recommendation,
 }: {
   score: number;
   recommendation: PipelineApplication["aiRecommendation"];
 }) {
-  const tone = recommendation
-    ? recommendationTone[recommendation]
-    : { pill: "bg-muted text-muted-foreground", label: "Scored" };
+  const label = recommendation ? recommendationLabel[recommendation] : "Scored";
 
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <span
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold tabular-nums",
-            tone.pill,
-          )}
-        >
-          <TargetIcon className="size-2.5" />
-          {score}
+        <span className="font-chrome inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] text-soft-ink">
+          <span
+            aria-hidden="true"
+            className={cn(
+              "size-1.5 rounded-full",
+              recommendation === "no"
+                ? "bg-quiet-mist"
+                : "bg-chartreuse-signal",
+            )}
+          />
+          {label}
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        AI fit {score}/100, {tone.label}
+        Harly AI rates this a {score}/100 fit. A suggestion, not a decision.
       </TooltipContent>
     </Tooltip>
   );
 }
 
-function StageAgePill({ value }: { value: string }) {
+/** Only speaks up once someone has been waiting too long. */
+function StageAge({ value }: { value: string }) {
   const days = useDaysSince(value);
   const stale = days >= STALE_AFTER_DAYS;
 
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium",
-        stale ? "bg-warning/10 text-warning" : "bg-muted text-muted-foreground",
+        "font-chrome tabular shrink-0 whitespace-nowrap text-[11px]",
+        stale ? "text-warning-clay" : "text-quiet-mist",
       )}
     >
-      <ClockIcon className="size-2.5" />
-      {days}d
+      {stale ? `Stuck ${days}d` : `${days}d`}
     </span>
   );
 }
@@ -112,7 +105,6 @@ export function CandidateCard({
   selected,
   disabled = false,
   onSelect,
-  onStatusChange,
 }: CandidateCardProps) {
   const router = useRouter();
   const pointerStartRef = useRef<{ x: number; y: number } | null>(null);
@@ -160,22 +152,24 @@ export function CandidateCard({
         }
       }}
       className={cn(
-        "group cursor-pointer rounded-xl border border-border/70 border-l-[3px] bg-card p-3 shadow-sm transition-[transform,box-shadow,background-color] duration-150 ease-out active:scale-[0.98]",
-        accentStyles[application.status],
+        // A person in a column, not a mini-card: flat snow, hairline, row-wash
+        // hover. No shadow, no coloured left accent bar, no scale-on-press.
+        "group cursor-pointer rounded-[var(--radius-md)] border bg-pure-snow px-2.5 py-2.5 transition-colors",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
         selected
-          ? "ring-2 ring-primary/30 bg-accent/20"
-          : "hover:shadow-md",
-        isDragging && "z-10 scale-[0.97] opacity-50 shadow-lg",
+          ? "border-near-ink/20 bg-row-wash"
+          : "border-hairline hover:bg-row-wash",
+        isDragging && "opacity-40",
       )}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2.5">
         <span
           onClick={(event) => event.stopPropagation()}
           className={cn(
             "shrink-0 transition-opacity",
             selected
               ? "opacity-100"
-              : "opacity-30 group-hover:opacity-100 group-focus-within:opacity-100",
+              : "opacity-0 group-hover:opacity-100 group-focus-within:opacity-100",
           )}
         >
           <Checkbox
@@ -194,63 +188,40 @@ export function CandidateCard({
           size="sm"
         />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold leading-tight">{fullName}</p>
-          <p className="truncate text-[11px] text-muted-foreground">
-            {application.candidateEmail}
+          <p className="truncate text-[14px] font-medium leading-tight text-near-ink">
+            {fullName}
           </p>
+          <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden">
+            {application.aiScore != null ? (
+              <AiFitNote
+                score={application.aiScore}
+                recommendation={application.aiRecommendation}
+              />
+            ) : null}
+            <StageAge value={stageStartedAt} />
+            {application.status !== "active" ? (
+              <ApplicationStatusBadge status={application.status} />
+            ) : null}
+          </div>
         </div>
+        {/*
+          Drag is the move affordance. The Hire and Reject buttons that used to
+          appear here on hover are gone: ending someone's candidacy from a
+          hover-revealed 11px link on a kanban card, with no context and no
+          confirmation, is the most consequential action in the product behind
+          the least deliberate gesture. Those decisions live on the candidate
+          surface, where the resume and the rest of the team's notes are.
+        */}
         <button
           type="button"
           {...attributes}
           {...listeners}
           disabled={disabled}
           onClick={(event) => event.stopPropagation()}
-          className="shrink-0 touch-none cursor-grab rounded-md p-0.5 text-muted-foreground/50 opacity-40 transition hover:bg-accent hover:text-foreground hover:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
-          aria-label={`Drag ${fullName}`}
+          className="shrink-0 touch-none cursor-grab rounded-md p-1 text-quiet-mist opacity-0 transition hover:text-near-ink group-hover:opacity-100 active:cursor-grabbing"
+          aria-label={`Drag ${fullName} to another stage`}
         >
           <DotsSixVerticalIcon className="size-3.5" />
-        </button>
-      </div>
-
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        {application.aiScore != null ? (
-          <ScorePill score={application.aiScore} recommendation={application.aiRecommendation} />
-        ) : null}
-        <StageAgePill value={stageStartedAt} />
-        {application.source ? (
-          <span className="truncate rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-            {application.source}
-          </span>
-        ) : null}
-        {application.status !== "active" ? (
-          <ApplicationStatusBadge status={application.status} />
-        ) : null}
-      </div>
-
-      <div className="mt-2.5 flex justify-end gap-1 border-t pt-2 opacity-0 transition-opacity duration-100 group-hover:opacity-100 group-focus-within:opacity-100">
-          <button
-            type="button"
-            disabled={disabled}
-          onClick={(event) => {
-            event.stopPropagation();
-            onStatusChange([application.id], "hired");
-          }}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold text-success transition hover:bg-success/10 active:scale-[0.97]"
-        >
-          <CheckIcon className="size-3" />
-          Hire
-        </button>
-          <button
-            type="button"
-            disabled={disabled}
-          onClick={(event) => {
-            event.stopPropagation();
-            onStatusChange([application.id], "rejected");
-          }}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-[11px] font-semibold text-destructive transition hover:bg-destructive/10 active:scale-[0.97]"
-        >
-          <XIcon className="size-3" />
-          Reject
         </button>
       </div>
     </article>
@@ -259,37 +230,19 @@ export function CandidateCard({
 
 export function CandidateCardOverlay({ application }: CandidateCardOverlayProps) {
   const fullName = `${application.candidateFirstName} ${application.candidateLastName}`;
-  const stageStartedAt = application.lastStageMovedAt ?? application.createdAt;
 
   return (
-    <article
-      className={cn(
-        "w-56 cursor-grabbing rounded-xl border border-border/70 border-l-[3px] bg-card p-3 shadow-2xl lg:w-64",
-        accentStyles[application.status],
-      )}
-    >
-      <div className="flex items-center gap-2">
+    <article className="w-56 cursor-grabbing rounded-[var(--radius-md)] border border-mist-border bg-pure-snow px-2.5 py-2.5 shadow-[var(--shadow-float)] lg:w-64">
+      <div className="flex items-center gap-2.5">
         <UserAvatar
           name={fullName}
           src={application.candidateAvatarUrl}
           fallbackSrcs={application.candidateAvatarFallbackSrcs}
           size="sm"
         />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold leading-tight">{fullName}</p>
-          <p className="truncate text-[11px] text-muted-foreground">
-            {application.candidateEmail}
-          </p>
-        </div>
-      </div>
-      <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-        {application.aiScore != null ? (
-          <ScorePill score={application.aiScore} recommendation={application.aiRecommendation} />
-        ) : null}
-        <StageAgePill value={stageStartedAt} />
-        {application.status !== "active" ? (
-          <ApplicationStatusBadge status={application.status} />
-        ) : null}
+        <p className="truncate text-[14px] font-medium leading-tight text-near-ink">
+          {fullName}
+        </p>
       </div>
     </article>
   );

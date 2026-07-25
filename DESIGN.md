@@ -23,7 +23,7 @@ Every UI PR is compared against these five frames. They are the design, not mood
 **Reading the frames (rules extracted, not vibes):**
 
 - Chrome is a single 56px bar. One row of icons left, one pill centered, one compact cluster right. Nothing else.
-- The table is the page. Greeting and two filter chips are the only things above it.
+- The table is the page *in that frame*. Read the frame for its **density and chrome budget**, not its information architecture , see the Home note below.
 - Selection is a **filled soft row block with its own radius**, and the trailing `…` cell darkens with it. No borders, no checkmark-only state.
 - Column headers are small, letterspaced, soft-ink — quiet structure.
 - Chartreuse appears exactly four times in frame 01: brand mark, `Tech` chips, the AI icon button, the workspace dot. Count yours.
@@ -44,7 +44,7 @@ Harly operates as a **light engineering-adjacent people tool**: warm paper canva
 | Primary surfaces           | **Shell** → **People / applications list** → **Pipeline** → **Candidate focus**                  |
 | Secondary                  | Inbox, Jobs, Calendar                                                                            |
 | Tertiary (not primary nav) | Career Page, Templates, Documents, Talent Pool, People (team), Reports, Integrations, Developers |
-| Home is                    | A **human work table** (greeting + filters + soft rows) — **not** a 6-card widget bento          |
+| Home is                    | A **triage cockpit**: greeting → countable "what needs me" strip → the work, ranked by urgency    |
 | Candidate focus is         | Decision rail + resume/context — **not** 8 equal tabs                                            |
 | AI is                      | Optional guidance inside flows — **not** a permanent noisy FAB identity                          |
 | Coming soon                | Never in primary chrome (topbar / sidebar). Hide or bury until real                              |
@@ -52,10 +52,34 @@ Harly operates as a **light engineering-adjacent people tool**: warm paper canva
 ### Sacred screens (redesign order)
 
 1. **App shell** (icon rail + quiet top bar + workspace pill)
-2. **Home / applications list** (the Jessica table)
+2. **Home** (triage cockpit) and the **candidates directory** (the Jessica-table density)
 3. **Candidate focus panel** (contextual primary action by stage)
 4. **Pipeline board** (same density language as the list)
 5. Everything else inherits — do not redesign Settings or Career first
+
+### Home is a cockpit, not the reference frame (learned the hard way)
+
+`referencias/01-hero-human-table.webp` is an **employee directory with a salary
+column** — an HR/payroll surface. It is the reference for *density, chrome budget,
+selection language and type*, and it is **not** the reference for what Home shows.
+
+Translating it literally once already produced a Home that was a flat table of
+applications. That is the wrong question: a directory of everyone answers "who
+exists", and Harly already answers that at `/dashboard/candidates`. Home has to
+answer **"what needs me today"**.
+
+The order is fixed, and it is a ranking, not a grid:
+
+| Rank | Zone            | Contents                                                     |
+| ---- | --------------- | ------------------------------------------------------------ |
+| 1    | Greeting        | Avatar + `Good morning, {First}!` + one operational subline   |
+| 2    | **Triage strip**| ≤4 countable, clickable answers to "what needs me"           |
+| 3    | The work        | Candidates awaiting a decision (widest), today's interviews   |
+| 4    | Context         | Pipeline health, inbox                                        |
+| 5    | Analytics       | Tasks, hiring performance — useful, never urgent              |
+
+Widgets are allowed. **Equal-weight widgets are not.** Every element on Home must
+be able to answer "why are you above the thing below you".
 
 ---
 
@@ -351,7 +375,8 @@ Minimal, soft corners, ink text; success uses success olive sparingly.
 - Use **row wash** for selection/hover instead of boxing every entity in a card
 - Ration `#c8f560` to signals — chips, dots, rare CTAs, brand
 - Default product CTAs to **near-ink pills**
-- Prefer **one hero table** on Home over multi-widget dashboards
+- Rank Home by urgency (triage strip → decisions → context → analytics), never by symmetry
+- Let AI **suggest** in the language a colleague would use ("Strong fit", "Harly can be wrong , you decide"), collapsed by default, never louder than the person's name
 - Use real avatars and human row height (56–64px)
 - One icon family project-wide (pick **Phosphor** _or_ **Lucide**, not both)
 - Let hairlines be almost invisible; structure with space
@@ -371,6 +396,8 @@ Minimal, soft corners, ink text; success uses success olive sparingly.
 - Don't add agency eyebrows (`01 / INDEX`), scroll cues, or fake version stamps in product UI
 - Don't reintroduce **Inter** (or Geist Sans / any second UI sans) anywhere — Onest is the only family
 - Don't set body copy, buttons or headings in the **variable** face, and don't set 11–12px chips in the static face
+- Don't put an irreversible decision (hire, reject, delete) behind a hover-revealed control on a card or row
+- Don't let an AI panel explain its own emptiness — if it has nothing to say, it renders nothing
 - Don't redesign Career/Portal aesthetics before Shell + Home + Candidate focus match this file
 
 ---
@@ -427,7 +454,7 @@ Portal may use a calmer candidate-facing variant, but must share: radius scale, 
 
 1. No new primary nav items without updating this file
 2. No Coming soon in chrome
-3. No widget-bento Home
+3. No flat bento of equal-weight cards on Home , rank by urgency instead
 4. No second accent color family (purple/blue brand)
 5. No second type family — **Onest only**; Inter is retired, not deprecated
 6. One surface per task — Shell, then List, then Candidate
@@ -674,7 +701,7 @@ Fonts are self-hosted under `apps/web/src/app/fonts/onest/` (F5-04: the build ne
 A UI change **fails** review if any box is true:
 
 - [ ] Adds a top-level nav item without DESIGN.md update
-- [ ] Home gains another equal-weight dashboard card instead of strengthening the human list
+- [ ] Home gains another card at the *same* weight as its neighbours, instead of finding its rank in the triage order
 - [ ] Uses chartreuse on a non-signal decorative block
 - [ ] Introduces a second icon library
 - [ ] Ships Coming soon in sidebar/topbar
@@ -699,9 +726,9 @@ A UI change **passes** when:
 | 0     | This file + freeze feature UI sprawl       | Agents cited DESIGN.md               | **done** — Onest lock + `referencias/` reference lock |
 | 1     | Tokens bridge + button/chip/row primitives | Story-level match to mock chips/rows | **done** — Onest self-hosted, Inter/Cal Sans deleted, `--primary` is ink, radius + shadow doctrine, `components/ui/human-table.tsx` |
 | 2     | App shell (rail + top bar)                 | ≤5 primaries; workspace pill center  | **done** — `IconRail` replaces the shadcn sidebar kit; no Coming soon; AI FAB retired into the top bar signal button |
-| 3     | Home = human applications table            | Greeting + filters + soft selection  | **done** — six-widget bento replaced by `getApplicationsBoard` + `ApplicationsBoardTable` |
+| 3     | Home = triage cockpit                      | Greeting + triage strip + ranked work | **done** — see the Home note below. Landed as a table first, corrected to a cockpit |
 | 4     | Candidate focus                            | Decision rail; ≤3 sections           | **done** — 8 tabs → Overview / Process / Files; 10-control bar → primary + stage action + reject + utilities |
-| 5     | Pipeline                                   | Same density language                | **partial** — inherits shell, tokens and the pill/status spec; the board's own cards and columns still need the row-wash + 60px density pass |
+| 5     | Pipeline                                   | Same density language                | **done** — columns are paper regions with a funnel-progression dot, cards read as people not mini-cards, Hire/Reject removed from cards, AI collapsed |
 | 6     | Cascade (Inbox, Jobs, Settings skin)       | Inheritance, not reinterpretation    | **partial** — `Badge`, `FilterPill` and `PipelineSpine` are on-spec, so every consumer inherits; per-screen QA not done |
 
 ### Known open items (do not re-derive , these are deliberate, not forgotten)

@@ -1,119 +1,73 @@
-import { BrainCircuit } from "lucide-react";
-
-import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 import { getPipelineSummary } from "@/features/pipeline/data";
-import { getWorkspaceAiConfig } from "@/lib/ai/config";
-import { generatePipelineHeadlineWithAI } from "@/lib/ai/surfaces/summarize-pipeline";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
+/**
+ * Pipeline health, as a single line of numbers above the board.
+ *
+ * Was a card with a brain-circuit icon, an AI-written narrative paragraph
+ * ("Have 5 active candidates with 3 strong yes; 2 unscored and 5 stalled 14+
+ * days,prioritize follow-ups to move decisions.") and four bordered stat tiles.
+ * Three problems: the board is the point of this page and this pushed it below
+ * the fold; the narrative restated numbers that were already on screen two
+ * inches lower; and it cost an LLM call on every page load to do so.
+ *
+ * The board itself now shows counts per column, so this only carries what the
+ * columns cannot: how many are stuck, and how many nobody has rated.
+ */
 export async function PipelineSummaryCard({ jobId }: { jobId: string }) {
-  const { organization: workspace } = await getWorkspaceContext();
-
-  // Run DB query and AI config fetch in parallel.
-  const [summary, aiConfig] = await Promise.all([
-    getPipelineSummary(jobId),
-    getWorkspaceAiConfig(workspace.id),
-  ]);
+  await getWorkspaceContext();
+  const summary = await getPipelineSummary(jobId);
 
   if (!summary || summary.totalActive === 0) return null;
 
-  let aiHeadline: string | null = null;
-  try {
-    if (aiConfig) {
-      aiHeadline = await generatePipelineHeadlineWithAI(aiConfig, summary);
-    }
-  } catch {
-    // AI unavailable , show stats only
-  }
-
-  const topFits = summary.byRecommendation.strong_yes + summary.byRecommendation.yes;
+  const topFits =
+    summary.byRecommendation.strong_yes + summary.byRecommendation.yes;
 
   return (
-    <Card className="bg-muted/30">
-      <CardContent className="space-y-3">
-        <div className="flex items-center gap-2 text-sm font-medium">
-          <BrainCircuit className="size-4 text-primary" strokeWidth={1.8} />
-          <span>Pipeline overview</span>
-        </div>
-
-        {aiHeadline ? (
-          <p className="text-sm text-muted-foreground">{aiHeadline}</p>
-        ) : null}
-
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatTile label="Active" value={summary.totalActive} />
-          <StatTile label="Top fits" value={topFits} tone="positive" />
-          <StatTile
-            label="Unscored"
-            value={summary.unscored}
-            tone={summary.unscored > 0 ? "neutral" : "positive"}
-          />
-          <StatTile
-            label={`Stalled ${summary.stalledDays}d+`}
-            value={summary.stalledCandidates}
-            tone={summary.stalledCandidates > 0 ? "warning" : "positive"}
-          />
-        </div>
-
-        {summary.byRecommendation.strong_yes > 0 || summary.byRecommendation.yes > 0 ? (
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            {summary.byRecommendation.strong_yes > 0 ? (
-              <span>
-                <span className="font-medium text-primary">
-                  {summary.byRecommendation.strong_yes}
-                </span>{" "}
-                strong yes
-              </span>
-            ) : null}
-            {summary.byRecommendation.yes > 0 ? (
-              <span>
-                <span className="font-medium text-primary">{summary.byRecommendation.yes}</span> yes
-              </span>
-            ) : null}
-            {summary.byRecommendation.maybe > 0 ? (
-              <span>
-                <span className="font-medium text-clay">{summary.byRecommendation.maybe}</span>{" "}
-                maybe
-              </span>
-            ) : null}
-            {summary.byRecommendation.no > 0 ? (
-              <span>
-                <span className="font-medium text-muted-foreground">
-                  {summary.byRecommendation.no}
-                </span>{" "}
-                no
-              </span>
-            ) : null}
-          </div>
-        ) : null}
-      </CardContent>
-    </Card>
+    <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
+      <Stat label="active" value={summary.totalActive} />
+      {topFits > 0 ? <Stat label="rated a good fit" value={topFits} /> : null}
+      {summary.unscored > 0 ? (
+        <Stat label="not rated" value={summary.unscored} muted />
+      ) : null}
+      {summary.stalledCandidates > 0 ? (
+        <Stat
+          label={`stuck ${summary.stalledDays}+ days`}
+          value={summary.stalledCandidates}
+          warning
+        />
+      ) : null}
+    </div>
   );
 }
 
-function StatTile({
+function Stat({
   label,
   value,
-  tone = "neutral",
+  warning,
+  muted,
 }: {
   label: string;
   value: number;
-  tone?: "positive" | "warning" | "neutral";
+  warning?: boolean;
+  muted?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border/70 bg-card px-3 py-2">
-      <p
-        className={`text-xl font-semibold tabular-nums ${
-          tone === "positive"
-            ? "text-primary"
-            : tone === "warning"
-              ? "text-clay"
-              : "text-foreground"
-        }`}
+    <span className="flex items-baseline gap-1.5">
+      <span
+        className={cn(
+          "tabular text-[15px] font-medium",
+          warning
+            ? "text-warning-clay"
+            : muted
+              ? "text-soft-ink"
+              : "text-near-ink",
+        )}
       >
         {value}
-      </p>
-      <p className="text-xs text-muted-foreground">{label}</p>
-    </div>
+      </span>
+      <span className="text-[13px] text-soft-ink">{label}</span>
+    </span>
   );
 }

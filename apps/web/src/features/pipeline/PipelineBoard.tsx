@@ -664,11 +664,10 @@ export function PipelineBoard({
               selected={selectedIds.has(application.id)}
               disabled={mutationPending}
               onSelect={handleSelect}
-              onStatusChange={handleStatusChange}
             />
           ))}
           {mobileApplications.length === 0 ? (
-            <div className="flex items-center justify-center rounded-xl border border-dashed p-8 text-center text-sm text-muted-foreground">
+            <div className="flex items-center justify-center rounded-[var(--radius-md)] bg-warm-paper p-8 text-center text-[13px] text-soft-ink">
               No candidates in this stage
             </div>
           ) : null}
@@ -686,16 +685,19 @@ export function PipelineBoard({
           onDragEnd={handleDragEnd}
           onDragCancel={() => setActiveApplication(null)}
         >
-          <div className="grid grid-flow-col auto-cols-[minmax(15rem,1fr)] gap-3 overflow-x-auto overscroll-x-contain pb-2">
-            {visibleStages.map((stage) => (
+          {/* 17rem, not 15: a name plus the fit note plus the stage age has to
+              fit on one line, or every card truncates its own meta. */}
+          <div className="group/board grid grid-flow-col auto-cols-[minmax(17rem,1fr)] gap-2 overflow-x-auto overscroll-x-contain pb-2">
+            {visibleStages.map((stage, index) => (
               <StageColumn
                 key={stage.id}
                 stage={stage}
                 applications={filteredColumns.get(stage.id) ?? []}
                 selectedIds={selectedIds}
                 disabled={mutationPending}
+                index={index}
+                total={visibleStages.length}
                 onSelect={handleSelect}
-                onStatusChange={handleStatusChange}
                 onToggleStageEmail={(stageId, enabled) => {
                   void handleToggleStageEmail(stageId, enabled);
                 }}

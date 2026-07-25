@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileText, Users } from "lucide-react";
+import { ChevronDown as CaretDown, FileText, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { bulkGenerateAiEvaluationsForJobAction } from "@/features/candidates/ai-actions";
@@ -44,6 +44,7 @@ export function JobCandidateRanking({
 }: JobCandidateRankingProps) {
   const router = useRouter();
   const [ranking, setRanking] = useState(false);
+  const [showOrder, setShowOrder] = useState(false);
   const stageNameById = useMemo(
     () => new Map(stages.map((stage) => [stage.id, stage.name])),
     [stages],
@@ -111,21 +112,46 @@ export function JobCandidateRanking({
     }
   }
 
+  /*
+   * With nobody to rank, this panel used to occupy a full card explaining its
+   * own emptiness , the board's first and largest element was AI apologising.
+   * The pipeline already says the funnel is empty; AI staying silent is the
+   * whole point of "optional guidance inside flows".
+   */
+  if (activeApplications.length === 0) return null;
+
   return (
-    <Card className="bg-muted/20">
-      <CardContent className="space-y-4">
+    <Card className="border-hairline bg-pure-snow">
+      <CardContent className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-semibold">AI candidate ranking</p>
-            <p className="truncate text-xs text-muted-foreground">
-              Active applicants for {jobTitle} · {scored} scored · {unscored} unscored
+            {/* Framed as a suggestion from a colleague, not a verdict. */}
+            <p className="text-[14px] font-medium text-near-ink">
+              Harly AI can suggest an order
+            </p>
+            <p className="truncate text-[12px] text-soft-ink">
+              {unscored === 0
+                ? `All ${scored} active applicant${scored === 1 ? "" : "s"} rated. Yours to overrule.`
+                : `${unscored} of ${activeApplications.length} not rated yet for ${jobTitle}.`}
             </p>
           </div>
           {aiConfigured ? (
-            <Button size="sm" onClick={rankUnscored} disabled={ranking || unscored === 0}>
-              <Users className={cn("size-4", ranking && "animate-pulse motion-reduce:animate-none")} />
-              {ranking ? "Ranking…" : unscored === 0 ? "All scored" : "Rank unscored"}
-            </Button>
+            unscored === 0 ? null : (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={rankUnscored}
+                disabled={ranking}
+              >
+                <Users
+                  className={cn(
+                    "size-4",
+                    ranking && "animate-pulse motion-reduce:animate-none",
+                  )}
+                />
+                {ranking ? "Rating…" : "Rate the rest"}
+              </Button>
+            )
           ) : (
             <Button asChild size="sm" variant="outline">
               <Link href="/settings/ai">Set up AI</Link>
@@ -133,14 +159,28 @@ export function JobCandidateRanking({
           )}
         </div>
 
-        {activeApplications.length === 0 ? (
-          <div className="rounded-lg border border-dashed px-4 py-8 text-center">
-            <p className="text-sm font-medium">No active applicants</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Active applications for this job will appear here for ranking.
-            </p>
-          </div>
-        ) : (
+        {/*
+          Collapsed by default. The board is what this page is for, and a
+          five-row machine-ranked list sitting permanently above it means the
+          first thing a recruiter reads every morning is a score, not a person.
+          Open it when you want a second opinion.
+        */}
+        <button
+          type="button"
+          onClick={() => setShowOrder((value) => !value)}
+          aria-expanded={showOrder}
+          className="flex items-center gap-1.5 rounded-md text-[13px] font-medium text-soft-ink transition-colors hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+        >
+          <CaretDown
+            className={cn(
+              "size-3.5 transition-transform duration-200",
+              !showOrder && "-rotate-90",
+            )}
+          />
+          {showOrder ? "Hide suggested order" : "Show suggested order"}
+        </button>
+
+        {showOrder ? (
           <div className="divide-y divide-border/60 overflow-hidden rounded-lg border bg-card">
             {activeApplications.map((application) => {
               const recommendation = application.aiRecommendation;
@@ -217,12 +257,13 @@ export function JobCandidateRanking({
               );
             })}
           </div>
-        )}
+        ) : null}
 
-        {scored > 0 ? (
-          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <FileText className="size-3.5" />
-            Scores use each candidate&apos;s resume and application answers against this job.
+        {showOrder && scored > 0 ? (
+          <p className="flex items-center gap-1.5 text-[12px] text-soft-ink">
+            <FileText className="size-3.5 shrink-0" />
+            Based on each candidate&apos;s resume and answers against this job.
+            Harly can be wrong , you decide.
           </p>
         ) : null}
       </CardContent>
