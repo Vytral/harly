@@ -467,27 +467,43 @@ export function CandidateActionBar({
     );
   }
 
-  // ── Full (header card) ──
+  /*
+   * ── Full (decision row) ──
+   *
+   * This used to be ten controls in one row: Move, Email, Schedule, Evaluate,
+   * Status, Pool, Edit, Resume, Reject, Delete , separated by four vertical
+   * rules. That is not power, it is surface without choreography, and it makes
+   * every decision cost a scan (DESIGN.md , Candidate Focus: one primary action
+   * that changes with stage, reject secondary, the rest behind an overflow).
+   *
+   * Shape now: [primary advance] [the one action this stage calls for] · [Reject]
+   * · [⋯]. MoveStageButton is already stage-contextual , its label and target
+   * read "Move to Screening", "Move to Interview" , and `stageAction` picks the
+   * verb that matters at that stage.
+   */
+  const stageAction = stageContextualAction(stageName, {
+    schedule,
+    evaluate,
+    email,
+  });
+
   return (
     <div className="flex flex-wrap items-center gap-x-2 gap-y-2">
-      {/* Primary , advance the pipeline */}
+      {/* Primary , advance the pipeline. Label and target follow the stage. */}
       <MoveStageButton target={moveTarget} />
 
-      {/* Communication */}
-      <div className="flex items-center gap-2">
-        {email}
-        {schedule}
-        {evaluate}
-      </div>
+      {/* The one action this stage actually calls for. */}
+      {stageAction}
 
-      {/* Status + pool */}
-      <div className="flex items-center gap-2 sm:border-l sm:border-border/70 sm:pl-2">
+      {/* Reject , grave, adjacent to the advance it opposes, never hidden in a
+          menu: an irreversible decision should cost a deliberate click, not a
+          hunt. */}
+      {reject}
+
+      {/* Everything rare , status, pool, edit, resume, delete , lives here. */}
+      <div className="ml-auto flex items-center gap-1">
         <CandidateStatusMenu name={name} applicationIds={applicationIds} />
         <CandidatePoolButton candidateId={candidate.id} inPool={inPool} />
-      </div>
-
-      {/* Utilities , compact icons */}
-      <div className="flex items-center gap-1 sm:border-l sm:border-border/70 sm:pl-2">
         <EditCandidateDrawer
           candidate={candidate}
           trigger={
@@ -555,18 +571,9 @@ export function CandidateActionBar({
             </Button>
           )
         ) : null}
-      </div>
 
-      {/* Reject , prominent, isolated */}
-      {reject && (
-        <div className="flex items-center sm:border-l sm:border-border/70 sm:pl-2">
-          {reject}
-        </div>
-      )}
-
-      {/* Destructive , far right so it can't be hit by accident */}
-      {!isHired && (
-        <div className="ml-auto flex items-center sm:ml-1 sm:border-l sm:border-border/70 sm:pl-2">
+        {/* Destructive , last in the row so it can't be hit by accident. */}
+        {!isHired ? (
           <DeleteCandidateButton
             candidateId={candidate.id}
             name={name}
@@ -582,8 +589,32 @@ export function CandidateActionBar({
               </Button>
             }
           />
-        </div>
-      )}
+        ) : null}
+      </div>
     </div>
   );
+}
+
+/**
+ * Which verb this stage is actually about (DESIGN.md , "Primary action changes
+ * with stage"). Advancing is always available via MoveStageButton; this picks
+ * the one companion action worth a full button here, instead of showing every
+ * weapon at every stage.
+ *
+ *   Applied / Screening → Evaluate  (is this person any good?)
+ *   Interview           → Schedule  (get them in a room)
+ *   Offer / Hired       → Email     (talk terms)
+ */
+function stageContextualAction(
+  stageName: string | null,
+  actions: {
+    schedule: React.ReactNode;
+    evaluate: React.ReactNode;
+    email: React.ReactNode;
+  },
+) {
+  const stage = (stageName ?? "").toLowerCase();
+  if (stage.includes("interview")) return actions.schedule;
+  if (stage.includes("offer") || stage.includes("hire")) return actions.email;
+  return actions.evaluate ?? actions.email;
 }

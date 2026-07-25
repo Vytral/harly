@@ -258,6 +258,15 @@ const RATING_META = {
   weak: { label: "Weak", icon: ThumbsDown, className: "text-destructive", accent: "bg-destructive" },
 } as const;
 
+/**
+ * Quiet label for a stacked section inside Overview / Process / Files. Uses the
+ * chrome face at column-header scale so it structures without shouting , the
+ * same treatment the human table gives its column heads.
+ */
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return <h3 className="type-col-head pt-1 uppercase">{children}</h3>;
+}
+
 function TabCount({ value }: { value: number }) {
   if (value <= 0) return null;
   return (
@@ -305,7 +314,7 @@ export function CandidateProfileTabs({
   privacyRequests = [],
   canFulfilErasure = false,
 }: CandidateProfileTabsProps) {
-  const [tab, setTab] = useState("profile");
+  const [tab, setTab] = useState("overview");
   const [signatureOpen, setSignatureOpen] = useState(false);
   const conversations = Array.from(
     messages.reduce((groups, message) => {
@@ -319,45 +328,44 @@ export function CandidateProfileTabs({
 
   return (
     <Tabs value={tab} onValueChange={setTab}>
+      {/*
+        Three sections, hard cap (DESIGN.md , Candidate Focus).
+
+        This was eight equal tabs: Profile, Interviews, Communication,
+        Evaluation, Offers, Activity, Documents, Privacy. Eight equal tabs is a
+        confession that the model was never decided , everything is equally
+        important, so nothing is. A recruiter does not work by tab, they work by
+        intention: is this person any good (Overview), what is happening with
+        them (Process), and what is on file (Files).
+
+        Radix renders every TabsContent whose value matches, so the old panels
+        stack as labelled sections inside their new home rather than being
+        rewritten , same content, three doors instead of eight.
+      */}
       <TabsList
         variant="line"
-        className="w-full justify-start gap-3 overflow-x-auto border-b border-border/60 text-sm [&>button]:flex-none [&>button]:px-0.5"
+        className="w-full justify-start gap-5 border-b border-hairline text-sm [&>button]:flex-none [&>button]:px-0.5"
       >
-        <TabsTrigger value="profile">Profile</TabsTrigger>
-        <TabsTrigger value="interviews">
-          Interviews
-          <TabCount value={interviews.length} />
+        <TabsTrigger value="overview">Overview</TabsTrigger>
+        <TabsTrigger value="process">
+          Process
+          <TabCount
+            value={
+              interviews.length +
+              messages.length +
+              scorecards.length +
+              offers.length
+            }
+          />
         </TabsTrigger>
-        <TabsTrigger value="communication">
-          Communication
-          <TabCount value={messages.length} />
+        <TabsTrigger value="files">
+          Files
+          <TabCount value={relatedDocuments.length + privacyRequests.length} />
         </TabsTrigger>
-        <TabsTrigger value="evaluation">
-          Evaluation
-          <TabCount value={scorecards.length} />
-        </TabsTrigger>
-        <TabsTrigger value="offers">
-          Offers
-          <TabCount value={offers.length} />
-        </TabsTrigger>
-        <TabsTrigger value="activity">
-          Activity
-          <TabCount value={activity.length + notes.length} />
-        </TabsTrigger>
-        <TabsTrigger value="documents">
-          Documents
-          <TabCount value={relatedDocuments.length} />
-        </TabsTrigger>
-        {privacyRequests.length > 0 ? (
-          <TabsTrigger value="privacy">
-            Privacy
-            <TabCount value={privacyRequests.length} />
-          </TabsTrigger>
-        ) : null}
       </TabsList>
 
       {/* ── Profile , AI match leads, single "Details" panel follows ── */}
-      <TabsContent value="profile" className="mt-5 space-y-4">
+      <TabsContent value="overview" className="mt-5 space-y-4">
         <AiScoreCard
           applications={applications.map((application) => ({
             id: application.id,
@@ -366,7 +374,7 @@ export function CandidateProfileTabs({
           evaluations={aiEvaluations}
           aiConfigured={aiConfigured}
           variant="condensed"
-          onViewDetailsAction={() => setTab("evaluation")}
+          onViewDetailsAction={() => setTab("process")}
         />
 
         <CandidateDetailsPanel
@@ -387,7 +395,8 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── Interviews ── */}
-      <TabsContent value="interviews" className="mt-4 space-y-3">
+      <TabsContent value="process" className="mt-4 space-y-3">
+        <SectionHeading>Interviews</SectionHeading>
         <div className="flex justify-end">
           <ScheduleDrawer
             candidateId={candidateId}
@@ -425,7 +434,8 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── Activity (merged History + Comments) ── */}
-      <TabsContent value="activity" className="mt-4 space-y-4">
+      <TabsContent value="overview" className="mt-4 space-y-4">
+        <SectionHeading>Activity & notes</SectionHeading>
         {/* Notes always on top so the form is reachable without scrolling */}
         <div>
           <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -476,7 +486,8 @@ export function CandidateProfileTabs({
         ) : null}
       </TabsContent>
 
-      <TabsContent value="privacy" className="mt-4 space-y-3">
+      <TabsContent value="files" className="mt-4 space-y-3">
+        <SectionHeading>Privacy requests</SectionHeading>
         <div className="flex items-start justify-between gap-4 border-b border-border/60 pb-4">
           <div>
             <p className="text-sm font-medium">Privacy requests</p>
@@ -488,7 +499,7 @@ export function CandidateProfileTabs({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => setTab("activity")}
+            onClick={() => setTab("overview")}
           >
             View activity
           </Button>
@@ -518,7 +529,8 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── Communication ── */}
-      <TabsContent value="communication" className="mt-4 space-y-3">
+      <TabsContent value="process" className="mt-4 space-y-3">
+        <SectionHeading>Communication</SectionHeading>
         <div className="flex justify-end">
           <EmailDrawer
             candidateId={candidateId}
@@ -564,7 +576,8 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── Evaluation: AI score + scorecards ── */}
-      <TabsContent value="evaluation" className="mt-4 space-y-4">
+      <TabsContent value="process" className="mt-4 space-y-4">
+        <SectionHeading>Evaluation</SectionHeading>
         <AiScoreCard
           applications={applications.map((application) => ({
             id: application.id,
@@ -640,7 +653,8 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/* ── Offers ── */}
-      <TabsContent value="offers" className="mt-4">
+      <TabsContent value="process" className="mt-4">
+        <SectionHeading>Offers</SectionHeading>
         <OffersPanel
           offers={offers}
           applications={applications.map((application) => ({
@@ -651,7 +665,8 @@ export function CandidateProfileTabs({
         />
       </TabsContent>
 
-      <TabsContent value="documents" className="mt-4 space-y-4">
+      <TabsContent value="files" className="mt-4 space-y-4">
+        <SectionHeading>Documents</SectionHeading>
         <div className="flex items-start justify-between gap-3 rounded-xl border border-primary/20 bg-primary/[0.03] p-4">
           <div className="flex min-w-0 gap-3">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><NotebookTabs className="size-4" /></span>
