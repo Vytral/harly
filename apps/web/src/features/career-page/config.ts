@@ -5,7 +5,7 @@
  */
 import { z } from "zod";
 
-export const careerTemplates = ["minimal", "playful", "ashby", "bento"] as const;
+export const careerTemplates = ["minimal", "playful", "ashby", "join"] as const;
 export type CareerTemplate = (typeof careerTemplates)[number];
 
 export const fontFamilies = ["sans", "serif", "display", "mono"] as const;
@@ -207,23 +207,17 @@ export const CAREER_PRESETS: Record<CareerTemplate, () => CareerPageConfig> = {
     positions: { title: "Open positions", filters: ["department", "location", "type"] },
     cta: { ...EMPTY.cta, buttonText: "Get in touch" },
   }),
-  bento: () => ({
+  join: () => ({
     ...structuredClone(EMPTY),
-    template: "bento",
-    hero: {
-      ...EMPTY.hero,
-      headline: "Come build with us",
-      subhead: "We're a small team shipping big things. Find your seat.",
-      logoPosition: "left",
-      ctaButtonText: "See open roles",
-    },
-    // Optional tiles start OFF — the grid intentionally shows hero + jobs only
-    // until the admin turns sections on (no demo content ever ships to prod).
-    overview: { enabled: false, title: "By the numbers", stats: [] },
-    values: { enabled: false, title: "What we value", items: [] },
-    positions: { title: "Open roles", filters: ["department", "location", "type"] },
+    template: "join",
+    hero: { ...EMPTY.hero, headline: "Join us", logoPosition: "left" },
+    // Optional sections start OFF — the profile tabs only show up once the
+    // admin adds real content (no demo content ever ships to prod).
+    overview: { enabled: false, title: "About", stats: [] },
+    values: { enabled: false, title: "Benefits", items: [] },
+    positions: { title: "Open positions", filters: ["department", "location"] },
     cta: { ...EMPTY.cta, buttonText: "Get in touch" },
-    theme: { mode: "light", background: "#fafaf9", font: "sans", accent: "#4f46e5", rounded: "soft" },
+    theme: { mode: "light", background: "#ffffff", font: "sans", accent: null, rounded: "soft" },
   }),
 };
 
@@ -456,7 +450,7 @@ const stat = z.object({ label: s(40), value: s(60), icon: s(40).optional() });
 const value = z.object({ title: s(60), body: s(400), art: s(200).optional() });
 
 export const careerPageConfigSchema = z.object({
-  template: z.enum([...careerTemplates, ""] as ["minimal", "playful", "ashby", "bento", ""]),
+  template: z.enum([...careerTemplates, ""] as ["minimal", "playful", "ashby", "join", ""]),
   hero: z.object({
     headline: s(120),
     subhead: s(200),

@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 
 import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
+import { readableInk } from "@/features/career-page/color";
 
 export type PublicJobBrand = {
   name: string;
@@ -25,9 +26,11 @@ function accentThemeStyle(color: string): React.CSSProperties {
   const soft = m
     ? `rgba(${parseInt(m[1].slice(0, 2), 16)}, ${parseInt(m[1].slice(2, 4), 16)}, ${parseInt(m[1].slice(4, 6), 16)}, 0.08)`
     : "#f4f4f5";
+  const ink = readableInk(m ? color : "#18181b");
   return {
     "--board-primary": color,
-    "--board-primary-foreground": "#ffffff",
+    "--board-primary-foreground": ink,
+    "--board-primary-contrast": ink,
     "--board-primary-soft": soft,
   } as React.CSSProperties;
 }

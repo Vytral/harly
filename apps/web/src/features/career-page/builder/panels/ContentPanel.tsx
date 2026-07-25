@@ -102,8 +102,8 @@ export function ContentPanel({ config, update, workspace }: ContentPanelProps) {
           </>
         )}
 
-        {/* Logo type + CTA text , Minimal and Bento (topbar-based heroes) */}
-        {(config.template === "minimal" || config.template === "bento") && (
+        {/* Logo type + CTA text , Minimal and Join (topbar-based heroes) */}
+        {(config.template === "minimal" || config.template === "join") && (
           <>
             <Field label="Logo to display">
               <Segmented

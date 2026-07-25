@@ -1,8 +1,8 @@
 /**
  * Pure colour helpers for deriving a small, WCAG-checked palette from a single
- * accent hex. Used by templates that colour-block their layout (e.g. Bento) so
- * every tile gets a solid fill derived from the workspace accent instead of the
- * same white card. No dependencies , sRGB channel maths only.
+ * accent hex. Used by templates that tint surfaces (tab underlines, badges,
+ * tinted tiles) from the workspace accent instead of a flat white card. No
+ * dependencies , sRGB channel maths only.
  */
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -73,7 +73,7 @@ export function readableInk(bg: string): string {
  * AA on both `tintBg` and white; `onAccent` is the readable ink for text sitting
  * directly on the solid accent fill.
  */
-export function bentoPalette(accent: string) {
+export function accentPalette(accent: string) {
   return {
     accent,
     tintBg: tint(accent, 0.8),

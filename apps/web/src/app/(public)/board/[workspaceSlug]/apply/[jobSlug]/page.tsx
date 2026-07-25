@@ -28,6 +28,13 @@ export default async function BoardApplyPage({
       jobSlug={job.slug}
       workspaceSlug={workspace.slug}
       applicationConfig={normalizeJobApplicationConfig(job.applicationConfig)}
+      variant={
+        config.template === "ashby"
+          ? "ashby"
+          : config.template === "join"
+            ? "join"
+            : "default"
+      }
       captchaProvider={captcha?.provider ?? null}
       captchaSiteKey={captcha?.siteKey ?? null}
       legalConfigured={workspace.legalConfigured}

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { readableInk } from "@/features/career-page/color";
+
 export const boardStyles = ["hero", "minimal"] as const;
 export type BoardStyle = (typeof boardStyles)[number];
 
@@ -116,9 +118,11 @@ export function boardThemeStyle(
   branding: Pick<WorkspaceBoardBranding, "primaryColor">,
 ): Record<string, string> {
   const primary = branding.primaryColor;
+  const ink = readableInk(primary);
   return {
     "--board-primary": primary,
-    "--board-primary-foreground": "#ffffff",
+    "--board-primary-foreground": ink,
+    "--board-primary-contrast": ink,
     "--board-primary-soft": hexToSoftBackground(primary),
   };
 }

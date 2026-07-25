@@ -21,11 +21,13 @@ export function JobsPanel({ config, update }: { config: CareerPageConfig; update
           />
         </Field>
         <Field label="Filters">
-          {config.template === "playful" || config.template === "ashby" ? (
+          {config.template === "playful" || config.template === "ashby" || config.template === "join" ? (
             <div className="flex flex-wrap gap-2">
               {(config.template === "playful"
                 ? ["department"]
-                : ["department", "location", "type"]
+                : config.template === "join"
+                  ? ["department", "location"]
+                  : ["department", "location", "type"]
               ).map((f) => {
                 const filter = f as "department" | "location" | "type";
                 const on = config.positions.filters.includes(filter);
@@ -54,7 +56,7 @@ export function JobsPanel({ config, update }: { config: CareerPageConfig; update
             </div>
           ) : (
             <p className="text-xs leading-5 text-ink-soft">
-              Filters are available in the Playful and Ashby templates.
+              Filters are available in the Playful, Ashby, and Join templates.
             </p>
           )}
         </Field>

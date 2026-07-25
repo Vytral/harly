@@ -12,7 +12,7 @@ import {
 } from "@/features/career-page/config";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 import type { ConfigUpdater } from "../types";
-import { Field, ToggleRow, ColorField, ListEditor, move } from "../primitives";
+import { Field, ToggleRow, ColorField, IconSelect, ListEditor, move } from "../primitives";
 import { PanelHeader, Section, Segmented } from "./PanelKit";
 
 type DesignPanelProps = {
@@ -76,8 +76,8 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
         />
       </Section>
 
-      {/* Overview , Playful (marginalia) + Bento (stat tiles) */}
-      {(config.template === "playful" || config.template === "bento") && (
+      {/* Overview , Playful (marginalia) + Join (meta line under name) */}
+      {(config.template === "playful" || config.template === "join") && (
         <Section title="Overview card">
           <ToggleRow
             label="Show overview card"
@@ -102,6 +102,10 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
             onMove={(i, dir) => update((d) => move(d.overview.stats, i, dir))}
             render={(stat, i) => (
               <div className="flex gap-2">
+                <IconSelect
+                  value={stat.icon ?? ""}
+                  onChange={(v) => update((d) => (d.overview.stats[i].icon = v))}
+                />
                 <Input
                   value={stat.label}
                   onChange={(e) =>
@@ -124,8 +128,8 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
         </Section>
       )}
 
-      {/* Gallery , Playful + Bento (photo tile) */}
-      {(config.template === "playful" || config.template === "bento") && (
+      {/* Gallery , Playful + Join (Images tab) */}
+      {(config.template === "playful" || config.template === "join") && (
         <Section title="Photo gallery">
           <ToggleRow
             label="Show gallery"
@@ -162,8 +166,8 @@ export function DesignPanel({ config, update, workspace }: DesignPanelProps) {
         </Section>
       )}
 
-      {/* Values , Playful + Bento */}
-      {(config.template === "playful" || config.template === "bento") && (
+      {/* Values , Playful + Join */}
+      {(config.template === "playful" || config.template === "join") && (
         <Section title="Values">
           <ToggleRow
             label="Show values"

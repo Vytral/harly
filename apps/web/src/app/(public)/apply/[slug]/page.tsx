@@ -45,7 +45,13 @@ export default async function ApplyPage({ params }: ApplyPageProps) {
         jobSlug={job.slug}
         workspaceSlug={workspace.slug}
         applicationConfig={applicationConfig}
-        variant={config.template === "ashby" ? "ashby" : "default"}
+        variant={
+          config.template === "ashby"
+            ? "ashby"
+            : config.template === "join"
+              ? "join"
+              : "default"
+        }
         captchaProvider={captcha?.provider ?? null}
         captchaSiteKey={captcha?.siteKey ?? null}
         legalConfigured={workspace.legalConfigured}

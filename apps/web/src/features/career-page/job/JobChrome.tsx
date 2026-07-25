@@ -2,6 +2,7 @@ import type { CSSProperties } from "react";
 
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
+import { readableInk } from "../color";
 import type { CareerPageConfig, CareerTemplate } from "../config";
 import { ThemeWrapper } from "../ThemeWrapper";
 import { JobShell, type JobShellVariant } from "./JobShell";
@@ -10,6 +11,7 @@ import type { JobLike } from "./jobMeta";
 /** Map a career template to its job-page chrome variant. */
 function templateToVariant(t: CareerTemplate | ""): JobShellVariant {
   if (t === "playful") return "playful";
+  if (t === "join") return "join";
   return "structured";
 }
 
@@ -38,9 +40,11 @@ export function JobChrome({
 }) {
   const accent = config.theme.accent ?? workspace.primaryColor;
 
+  const ink = readableInk(accent);
   const vars = {
     "--board-primary": accent,
-    "--board-primary-foreground": "#ffffff",
+    "--board-primary-foreground": ink,
+    "--board-primary-contrast": ink,
   } as CSSProperties;
 
   return (

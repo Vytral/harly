@@ -1,21 +1,22 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Briefcase, Building2, Check, Link2, MapPin, Wallet } from "lucide-react";
 
 import { cn } from "@/lib/utils";
+import { formatEmploymentType, formatWorkplaceType } from "@/lib/format";
 import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 
 import { isLightColor, type CareerPageConfig } from "../config";
 import { CareerFooter } from "../CareerFooter";
-import { buildJobMeta, type JobLike } from "./jobMeta";
+import { buildJobMeta, formatCompensation, type JobLike } from "./jobMeta";
 
 const reveal =
   "duration-300 animate-in fade-in fill-mode-backwards motion-reduce:animate-none";
 
-export type JobShellVariant = "playful" | "structured";
+export type JobShellVariant = "playful" | "structured" | "join";
 
 /**
  * Unified public job chrome, built on the Ashby distribution: title top-left, a
@@ -216,114 +217,142 @@ export function JobShell({
         </header>
       )}
 
-      <div
-        className={cn(
-          "mx-auto w-full max-w-5xl flex-1 px-6 pb-20",
-          variant === "playful" ? "pt-6" : "pt-10",
-        )}
-      >
-        <h1
-          className={cn(
-            "text-2xl font-semibold tracking-tight sm:text-3xl",
-            reveal,
-          )}
-          style={{ animationDelay: "0ms" }}
+      {variant === "join" ? (
+        <JoinJobContent
+          job={job}
+          title={job.title}
+          accent={accent}
+          onAccent={onAccent}
+          radius={radius}
+          activeTab={activeTab}
+          applyHref={applyHref}
+          overviewHref={overviewHref}
         >
-          {job.title}
-        </h1>
-
-        <div className="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-[232px_minmax(0,1fr)]">
-          {/* Meta column */}
-          <aside
-            className={cn("lg:sticky lg:top-8 lg:self-start", reveal)}
-            style={{ animationDelay: "80ms" }}
+          {children}
+        </JoinJobContent>
+      ) : (
+        <div
+          className={cn(
+            "mx-auto w-full max-w-5xl flex-1 px-6 pb-20",
+            variant === "playful" ? "pt-6" : "pt-10",
+          )}
+        >
+          <h1
+            className={cn(
+              "text-2xl font-semibold tracking-tight sm:text-3xl",
+              reveal,
+            )}
+            style={{ animationDelay: "0ms" }}
           >
-            <dl className="divide-y divide-zinc-200 dark:divide-zinc-800">
-              {meta.map((m) => (
-                <div key={m.label} className="py-3.5 first:pt-0">
-                  <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                    {m.label}
-                  </dt>
-                  <dd className="mt-1 text-sm font-medium leading-snug">
-                    {m.value}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            {activeTab === "application" ? (
-              <dl className="pt-1">
-                <div className="border-t border-zinc-200 py-3.5 dark:border-zinc-800">
-                  <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
-                    Position
-                  </dt>
-                  <dd className="mt-1 text-sm font-medium leading-snug text-zinc-900 dark:text-zinc-100">
-                    {job.title}
-                  </dd>
-                </div>
-              </dl>
-            ) : null}
-            {activeTab === "overview" ? (
-              <Link
-                href={applyHref}
-                className={cn(
-                  "mt-6 inline-flex h-10 w-full items-center justify-center px-5 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]",
-                  radius,
-                )}
-                style={{ backgroundColor: accent, color: onAccent }}
-              >
-                Apply for this role
-              </Link>
-            ) : null}
-          </aside>
+            {job.title}
+          </h1>
 
-          {/* Content column */}
-          <main
-            className={cn("min-w-0", reveal)}
-            style={{ animationDelay: "120ms" }}
-          >
-            <nav
-              ref={navRef}
-              className="relative flex gap-8 border-b border-zinc-200 text-sm font-medium dark:border-zinc-800"
+          <div className="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-[232px_minmax(0,1fr)]">
+            {/* Meta column */}
+            <aside
+              className={cn("lg:sticky lg:top-8 lg:self-start", reveal)}
+              style={{ animationDelay: "80ms" }}
             >
-              {tabs.map((t) => {
-                const on = activeTab === t.tab;
-                return (
-                  <Link
-                    key={t.tab}
-                    ref={(el) => {
-                      tabRefs.current[t.tab] = el;
-                    }}
-                    href={t.href}
-                    className={cn(
-                      "pb-3 transition-colors",
-                      on
-                        ? ""
-                        : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
-                    )}
-                    style={on ? { color: accent } : undefined}
-                  >
-                    {t.label}
-                  </Link>
-                );
-              })}
-              {/* Animated indicator bar */}
-              <div
-                ref={indicatorRef}
-                className="absolute bottom-0 h-0.5 rounded-full"
-                style={{
-                  backgroundColor: accent,
-                  left: 0,
-                  width: 0,
-                }}
-              />
-            </nav>
+              <dl className="divide-y divide-zinc-200 dark:divide-zinc-800">
+                {meta.map((m) => (
+                  <div key={m.label} className="py-3.5 first:pt-0">
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                      {m.label}
+                    </dt>
+                    <dd className="mt-1 text-sm font-medium leading-snug">
+                      {m.value}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+              {activeTab === "application" ? (
+                <dl className="pt-1">
+                  <div className="border-t border-zinc-200 py-3.5 dark:border-zinc-800">
+                    <dt className="text-[11px] font-medium uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                      Position
+                    </dt>
+                    <dd className="mt-1 text-sm font-medium leading-snug text-zinc-900 dark:text-zinc-100">
+                      {job.title}
+                    </dd>
+                  </div>
+                </dl>
+              ) : null}
+              {activeTab === "overview" ? (
+                <Link
+                  href={applyHref}
+                  className={cn(
+                    "mt-6 inline-flex h-10 w-full items-center justify-center px-5 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]",
+                    radius,
+                  )}
+                  style={{ backgroundColor: accent, color: onAccent }}
+                >
+                  Apply for this role
+                </Link>
+              ) : null}
+            </aside>
 
-            <div className="mt-8">{children}</div>
-          </main>
+            {/* Content column */}
+            <main
+              className={cn("min-w-0", reveal)}
+              style={{ animationDelay: "120ms" }}
+            >
+              <nav
+                ref={navRef}
+                className="relative flex gap-8 border-b border-zinc-200 text-sm font-medium dark:border-zinc-800"
+              >
+                {tabs.map((t) => {
+                  const on = activeTab === t.tab;
+                  return (
+                    <Link
+                      key={t.tab}
+                      ref={(el) => {
+                        tabRefs.current[t.tab] = el;
+                      }}
+                      href={t.href}
+                      className={cn(
+                        "pb-3 transition-colors",
+                        on
+                          ? ""
+                          : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
+                      )}
+                      style={on ? { color: accent } : undefined}
+                    >
+                      {t.label}
+                    </Link>
+                  );
+                })}
+                {/* Animated indicator bar */}
+                <div
+                  ref={indicatorRef}
+                  className="absolute bottom-0 h-0.5 rounded-full"
+                  style={{
+                    backgroundColor: accent,
+                    left: 0,
+                    width: 0,
+                  }}
+                />
+              </nav>
+
+              <div className="mt-8">{children}</div>
+            </main>
+          </div>
         </div>
-      </div>
+      )}
 
       <footer className="border-t border-zinc-200 dark:border-zinc-800">
+        {variant === "join" && (
+          <div className="mx-auto max-w-5xl px-6 pt-6 text-xs text-zinc-400 dark:text-zinc-500">
+            <Link href={(boardRoot || "/") as Route} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              Home
+            </Link>
+            <span className="mx-1.5">/</span>
+            <Link href={(boardRoot || "/") as Route} className="hover:text-zinc-700 dark:hover:text-zinc-300">
+              Jobs at {workspace.name}
+            </Link>
+            <span className="mx-1.5">/</span>
+            <span>{job.title}</span>
+          </div>
+        )}
         <div className="py-6">
           <CareerFooter
             config={config}
@@ -335,6 +364,140 @@ export function JobShell({
           />
         </div>
       </footer>
+    </div>
+  );
+}
+
+/**
+ * join.com-style job body: meta as an inline icon row under the title (not a
+ * stacked left column), main content full-width, and a slim sticky sidebar
+ * carrying just the primary action (Apply) + a copy-link share — the two
+ * things join.com keeps visible while reading a long posting. No tab nav:
+ * the sidebar CTA is the overview→application switch, so a second nav would
+ * be redundant chrome.
+ */
+function JoinJobContent({
+  job,
+  title,
+  accent,
+  onAccent,
+  radius,
+  activeTab,
+  applyHref,
+  overviewHref,
+  children,
+}: {
+  job: JobLike;
+  title: string;
+  accent: string;
+  onAccent: string;
+  radius: string;
+  activeTab: "overview" | "application";
+  applyHref: Route;
+  overviewHref: Route;
+  children: React.ReactNode;
+}) {
+  const [copied, setCopied] = useState(false);
+  const comp = formatCompensation(job);
+
+  async function copyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      // Clipboard access denied , nothing to recover, the button just won't confirm.
+    }
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-5xl flex-1 px-6 pb-20 pt-10">
+      <h1 className={cn("text-2xl font-semibold tracking-tight sm:text-3xl", reveal)}>
+        {title}
+      </h1>
+
+      <div
+        className={cn("mt-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-zinc-500 dark:text-zinc-400", reveal)}
+        style={{ animationDelay: "40ms" }}
+      >
+        <span className="flex items-center gap-1.5">
+          <MapPin className="size-3.5" strokeWidth={1.8} />
+          {job.location ?? formatWorkplaceType(job.workplaceType)}
+        </span>
+        <span className="flex items-center gap-1.5">
+          <Briefcase className="size-3.5" strokeWidth={1.8} />
+          {formatEmploymentType(job.employmentType)}
+        </span>
+        {job.department && (
+          <span className="flex items-center gap-1.5">
+            <Building2 className="size-3.5" strokeWidth={1.8} />
+            {job.department}
+          </span>
+        )}
+        {comp && (
+          <span className="flex items-center gap-1.5">
+            <Wallet className="size-3.5" strokeWidth={1.8} />
+            {comp}
+          </span>
+        )}
+      </div>
+
+      <div className="mt-8 grid gap-x-12 gap-y-8 lg:grid-cols-[minmax(0,1fr)_240px]">
+        <main className={cn("min-w-0", reveal)} style={{ animationDelay: "100ms" }}>
+          {children}
+        </main>
+
+        <aside className={cn("lg:sticky lg:top-8 lg:self-start", reveal)} style={{ animationDelay: "140ms" }}>
+          {activeTab === "overview" ? (
+            <>
+              <p className="text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+                Interested?
+              </p>
+              <Link
+                href={applyHref}
+                className={cn(
+                  "mt-3 inline-flex h-10 w-full items-center justify-center px-5 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]",
+                  radius,
+                )}
+                style={{ backgroundColor: accent, color: onAccent }}
+              >
+                Apply now
+              </Link>
+            </>
+          ) : (
+            <Link
+              href={overviewHref}
+              className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition-colors hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+            >
+              <ArrowLeft className="size-3.5" strokeWidth={1.8} />
+              Back to job
+            </Link>
+          )}
+
+          <p className="mt-6 text-xs font-semibold uppercase tracking-wide text-zinc-400 dark:text-zinc-500">
+            Share this job
+          </p>
+          <button
+            type="button"
+            onClick={copyLink}
+            className={cn(
+              "mt-3 inline-flex h-9 items-center gap-2 rounded-lg border border-zinc-200 px-3.5 text-sm font-medium text-zinc-600 transition-colors hover:border-zinc-300 hover:text-zinc-900 dark:border-zinc-800 dark:text-zinc-400 dark:hover:border-zinc-700 dark:hover:text-zinc-100",
+            )}
+          >
+            {copied ? (
+              <>
+                <Check className="size-3.5" strokeWidth={2} />
+                Copied
+              </>
+            ) : (
+              <>
+                <Link2 className="size-3.5" strokeWidth={1.8} />
+                Copy link
+              </>
+            )}
+          </button>
+        </aside>
+      </div>
     </div>
   );
 }
