@@ -22,7 +22,7 @@ import {
   PlusCircleIcon,
   UserCircleIcon,
 } from "@/components/ui/icons/command";
-import { primaryNav, workspaceNav } from "@/components/dashboard/nav-items";
+import { allNavItems, hasNavPermission } from "@/components/dashboard/nav-items";
 import type { Permission } from "@/features/workspaces/permissions";
 
 const emptyResults: SearchResults = { jobs: [], candidates: [] };
@@ -38,16 +38,11 @@ export function CommandMenu({
   onOpenChange: (open: boolean) => void;
   userPermissions: Permission[];
 }) {
-  const navItems = [
-    ...primaryNav,
-    ...workspaceNav.filter(
-      (item) =>
-        !item.requiredPermission ||
-        (Array.isArray(item.requiredPermission)
-          ? item.requiredPermission.some((permission) => userPermissions.includes(permission))
-          : userPermissions.includes(item.requiredPermission)),
-    ),
-  ];
+  // The rail only shows five destinations now, so the palette carries the full
+  // index , it is the fast path to everything that moved behind More.
+  const navItems = allNavItems().filter((item) =>
+    hasNavPermission(item, userPermissions),
+  );
 
   const router = useRouter();
   const [query, setQuery] = useState("");

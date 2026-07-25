@@ -2111,27 +2111,6 @@ export function HarlyAIPanel({
   );
 }
 
-// ─── Floating button ───────────────────────────────────────────────────────────
-
-type HarlyAIButtonProps = {
-  open: boolean;
-  onClick: () => void;
-};
-
-export function HarlyAIButton({ open, onClick }: HarlyAIButtonProps) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={open ? "Close Harly AI" : "Open Harly AI"}
-      className={cn(
-        "fixed bottom-6 right-6 z-50 flex size-12 items-center justify-center rounded-2xl shadow-lg ring-1 ring-border/60 transition-all duration-200 active:scale-95 hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        open
-          ? "bg-foreground text-background ring-foreground/20"
-          : "bg-background hover:bg-accent",
-      )}
-    >
-      {open ? <X className="size-5" /> : <HarlyAILogoMark className="size-7" />}
-    </button>
-  );
-}
+// The floating action button that used to live here is gone. A permanent FAB is
+// a second brand identity shouting over the work; AI now opens from the top
+// bar's chartreuse signal button and from the command menu (DESIGN.md).

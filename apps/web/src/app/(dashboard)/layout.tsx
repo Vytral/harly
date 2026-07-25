@@ -1,11 +1,8 @@
-import { cookies } from "next/headers";
-
-import { AppSidebar } from "@/components/dashboard/AppSidebar";
-import { HarlyAIWidget } from "@/components/dashboard/HarlyAIWidget";
+import { HarlyAIProvider } from "@/components/dashboard/HarlyAIWidget";
+import { IconRail } from "@/components/dashboard/IconRail";
 import { PageTitleProvider } from "@/components/dashboard/PageTitleContext";
 import { StickyBarProvider } from "@/components/dashboard/StickyBarContext";
 import { TopBar } from "@/components/dashboard/TopBar";
-import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import {
   getUnreadNotificationCount,
   listNotifications,
@@ -27,10 +24,6 @@ export default async function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const cookieStore = await cookies();
-  // Manual toggle persists via the sidebar_state cookie; first visit is compact.
-  const sidebarOpen = cookieStore.get("sidebar_state")?.value === "true";
-
   const { organization, user, role } = await getWorkspaceContext();
   const [
     workspaceOptions,
@@ -65,45 +58,54 @@ export default async function DashboardLayout({
 
   return (
     <StickyBarProvider>
-      <SidebarProvider defaultOpen={sidebarOpen}>
-        <AppSidebar
-          workspace={workspace}
-          inboxCount={unreadInboxThreadCount}
-          taskDueCount={taskDueCount}
-          userPermissions={userPermissions}
-          sidebarLogo={sidebarLogo}
-          assignableRoles={assignableRoles}
-        />
-        <SidebarInset>
-          <TopBar
-            user={{
-              name: user.name,
-              email: user.email,
-              image: user.image ?? null,
-              username: ownProfile?.username ?? null,
-            }}
-            role={role}
+      <HarlyAIProvider
+        userName={user.name}
+        userId={user.id}
+        workspaceId={organization.id}
+        aiEnabled={
+          aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
+        }
+      >
+        {/*
+          The shell from frame 01: a warm-paper viewport with the icon rail flat
+          on the canvas, and the work sitting inside one rounded snow stage. Not
+          a pile of cards , a single calm window. The outer radius only appears
+          from md up, where there is room for the paper margin to read.
+        */}
+        <div className="flex h-dvh w-full overflow-hidden bg-warm-paper">
+          <IconRail
             workspace={workspace}
-            workspaceOptions={workspaceOptions}
-            notifications={notifications}
-            unreadNotificationCount={unreadNotificationCount}
+            inboxCount={unreadInboxThreadCount}
+            taskDueCount={taskDueCount}
             userPermissions={userPermissions}
+            sidebarLogo={sidebarLogo}
+            assignableRoles={assignableRoles}
           />
-          <PageTitleProvider>
-            <main className="min-h-0 w-full flex-1 overflow-y-auto px-4 pb-6 pt-2 md:px-6 lg:px-8 lg:pb-8 lg:pt-3">
-              {children}
-            </main>
-          </PageTitleProvider>
-        </SidebarInset>
-        <HarlyAIWidget
-          userName={user.name}
-          userId={user.id}
-          workspaceId={organization.id}
-          aiEnabled={
-            aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
-          }
-        />
-      </SidebarProvider>
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-pure-snow md:my-2 md:mr-2 md:rounded-[var(--radius-shell)] md:border md:border-hairline">
+            <TopBar
+              user={{
+                name: user.name,
+                email: user.email,
+                image: user.image ?? null,
+                username: ownProfile?.username ?? null,
+              }}
+              role={role}
+              workspace={workspace}
+              workspaceOptions={workspaceOptions}
+              notifications={notifications}
+              unreadNotificationCount={unreadNotificationCount}
+              userPermissions={userPermissions}
+              inboxCount={unreadInboxThreadCount}
+              taskDueCount={taskDueCount}
+            />
+            <PageTitleProvider>
+              <main className="min-h-0 w-full flex-1 overflow-y-auto px-4 pb-8 pt-2 md:px-7">
+                {children}
+              </main>
+            </PageTitleProvider>
+          </div>
+        </div>
+      </HarlyAIProvider>
     </StickyBarProvider>
   );
 }

@@ -1,9 +1,37 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { getCandidateContextAction } from "@/features/ai-chat/actions";
-import { HarlyAIButton, HarlyAIPanel } from "./HarlyAIPanel";
+import { HarlyAIPanel } from "./HarlyAIPanel";
+
+type HarlyAIContextValue = {
+  /** Whether the AI panel is currently open. */
+  open: boolean;
+  /** Toggle the panel. Wired to the top bar's signal button. */
+  toggle: () => void;
+  /** False when the workspace has no usable AI config , the trigger hides. */
+  enabled: boolean;
+};
+
+const HarlyAIContext = createContext<HarlyAIContextValue>({
+  open: false,
+  toggle: () => {},
+  enabled: false,
+});
+
+/** Read by the top bar so AI lives in chrome you can ignore, not a FAB. */
+export function useHarlyAI() {
+  return useContext(HarlyAIContext);
+}
 
 function candidateIdFromPath(pathname: string | null): string | undefined {
   const match = pathname?.match(
@@ -23,12 +51,22 @@ function surfaceLabelFromPath(pathname: string | null): string {
   return "Current workspace";
 }
 
-export function HarlyAIWidget({
+/**
+ * Hosts the AI panel and publishes its toggle through context.
+ *
+ * This used to render a permanent floating action button in the bottom-right
+ * corner , a second brand identity shouting over the work (DESIGN.md: "AI is
+ * optional guidance inside flows, not a permanent noisy FAB"). The panel is
+ * unchanged; only its trigger moved into the top bar's signal button, which is
+ * also where the command menu sends AI actions.
+ */
+export function HarlyAIProvider({
   userName,
   userId,
   workspaceId,
   aiEnabled,
   candidateId,
+  children,
 }: {
   userName: string;
   userId: string;
@@ -36,6 +74,7 @@ export function HarlyAIWidget({
   aiEnabled: boolean;
   /** Optional candidate context, so the conversation is erased with the candidate (IA-02). */
   candidateId?: string;
+  children: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [storageReady, setStorageReady] = useState(false);
@@ -85,8 +124,15 @@ export function HarlyAIWidget({
     };
   }, [activeCandidateId]);
 
+  const toggle = useCallback(() => setOpen((v) => !v), []);
+  const value = useMemo(
+    () => ({ open, toggle, enabled: aiEnabled }),
+    [open, toggle, aiEnabled],
+  );
+
   return (
-    <>
+    <HarlyAIContext value={value}>
+      {children}
       <HarlyAIPanel
         userName={userName}
         persistenceKey={persistenceKey}
@@ -96,7 +142,6 @@ export function HarlyAIWidget({
         candidateId={activeCandidateId}
         surfaceContext={surfaceContext}
       />
-      <HarlyAIButton open={open} onClick={() => setOpen((v) => !v)} />
-    </>
+    </HarlyAIContext>
   );
 }
