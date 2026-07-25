@@ -35,7 +35,10 @@ import { cn } from "@/lib/utils";
 
 const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
-const MODE_ICON: Record<InterviewMode, React.ComponentType<{ className?: string }>> = {
+const MODE_ICON: Record<
+  InterviewMode,
+  React.ComponentType<{ className?: string }>
+> = {
   video: VideoCameraIcon,
   phone: PhoneIcon,
   onsite: MapPinIcon,
@@ -90,12 +93,18 @@ export function CalendarBoard({
 
   useEffect(() => {
     if (selectedDay) {
-      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      detailRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
     }
   }, [selectedDay]);
 
   const [year, month] = monthParam.split("-").map(Number);
-  const grid = useMemo(() => buildMonthGrid(new Date(year, month - 1, 1)), [year, month]);
+  const grid = useMemo(
+    () => buildMonthGrid(new Date(year, month - 1, 1)),
+    [year, month],
+  );
   const today = dayKey(new Date());
 
   const filtered = useMemo(() => {
@@ -134,8 +143,11 @@ export function CalendarBoard({
     router.push(`/dashboard/calendars?month=${param}`);
   }
 
-  const selectedDayInterviews = selectedDay ? (byDay.get(selectedDay) ?? []) : [];
-  const hasAnyFilter = jobFilter !== "all" || interviewerFilter !== "all" || typeFilter !== "all";
+  const selectedDayInterviews = selectedDay
+    ? (byDay.get(selectedDay) ?? [])
+    : [];
+  const hasAnyFilter =
+    jobFilter !== "all" || interviewerFilter !== "all" || typeFilter !== "all";
   const selectedDayHeading = useMemo(() => {
     if (!selectedDay) return "";
     const [y, m, d] = selectedDay.split("-").map(Number);
@@ -238,60 +250,63 @@ export function CalendarBoard({
 
       {/* Mobile: agenda list grouped by day (7-col grid is unreadable under sm) */}
       <div className="space-y-3 sm:hidden">
-        {filtered.length === 0 ? null : (
-          [...byDay.entries()]
-            .sort(([a], [b]) => (a > b ? 1 : -1))
-            .map(([key, dayInterviews]) => {
-              const [y, m, d] = key.split("-").map(Number);
-              const heading = new Date(y, m, d).toLocaleDateString("en", {
-                weekday: "short",
-                month: "short",
-                day: "numeric",
-              });
-              return (
-                <div key={key} className="space-y-1.5">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    {heading}
-                  </h3>
-                  <div className="space-y-1.5">
-                    {dayInterviews.map((iv) => {
-                      const ModeIcon = MODE_ICON[iv.mode];
-                      return (
-                        <Link
-                          key={iv.id}
-                          href={`/dashboard/candidates/${iv.candidateId}`}
-                          className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 transition-colors hover:bg-accent/60"
-                        >
-                          <span className="w-14 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
-                            {new Date(iv.scheduledAt).toLocaleTimeString("en", {
-                              hour: "numeric",
-                              minute: "2-digit",
-                            })}
-                          </span>
-                          <span
-                            className={cn(
-                              "inline-flex size-7 shrink-0 items-center justify-center rounded-full",
-                              MODE_TONE[iv.mode],
-                            )}
+        {filtered.length === 0
+          ? null
+          : [...byDay.entries()]
+              .sort(([a], [b]) => (a > b ? 1 : -1))
+              .map(([key, dayInterviews]) => {
+                const [y, m, d] = key.split("-").map(Number);
+                const heading = new Date(y, m, d).toLocaleDateString("en", {
+                  weekday: "short",
+                  month: "short",
+                  day: "numeric",
+                });
+                return (
+                  <div key={key} className="space-y-1.5">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {heading}
+                    </h3>
+                    <div className="space-y-1.5">
+                      {dayInterviews.map((iv) => {
+                        const ModeIcon = MODE_ICON[iv.mode];
+                        return (
+                          <Link
+                            key={iv.id}
+                            href={`/dashboard/candidates/${iv.candidateId}`}
+                            className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 transition-colors hover:bg-accent/60"
                           >
-                            <ModeIcon className="size-3.5" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-medium">
-                              {iv.candidateName}
+                            <span className="w-14 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                              {new Date(iv.scheduledAt).toLocaleTimeString(
+                                "en",
+                                {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                },
+                              )}
                             </span>
-                            <span className="block truncate text-xs text-muted-foreground">
-                              {interviewTypeLabel(iv.type)} · {iv.jobTitle}
+                            <span
+                              className={cn(
+                                "inline-flex size-7 shrink-0 items-center justify-center rounded-full",
+                                MODE_TONE[iv.mode],
+                              )}
+                            >
+                              <ModeIcon className="size-3.5" />
                             </span>
-                          </span>
-                        </Link>
-                      );
-                    })}
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium">
+                                {iv.candidateName}
+                              </span>
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {interviewTypeLabel(iv.type)} · {iv.jobTitle}
+                              </span>
+                            </span>
+                          </Link>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })
-        )}
+                );
+              })}
       </div>
 
       <AnimatePresence mode="wait" initial={false}>
@@ -303,7 +318,10 @@ export function CalendarBoard({
           transition={{ duration: 0.18, ease: EASE_OUT }}
           className="hidden overflow-hidden rounded-xl border border-border sm:block"
         >
-          <div className="grid grid-cols-7 border-b border-border bg-muted/40" aria-hidden="true">
+          <div
+            className="grid grid-cols-7 border-b border-border bg-muted/40"
+            aria-hidden="true"
+          >
             {WEEKDAY_LABELS.map((d) => (
               <div
                 key={d}
@@ -341,7 +359,7 @@ export function CalendarBoard({
                       ? `${dateLabel}, ${dayInterviews.length} interview${dayInterviews.length === 1 ? "" : "s"}${isToday ? ", today" : ""}`
                       : `${dateLabel}, no interviews${isToday ? ", today" : ""}`
                   }
-                  aria-pressed={selectedDay === key}
+                  aria-selected={selectedDay === key}
                   onClick={() =>
                     dayInterviews.length > 0 &&
                     setSelectedDay(selectedDay === key ? null : key)
@@ -362,7 +380,10 @@ export function CalendarBoard({
                   >
                     {date.getDate()}
                   </span>
-                  <div aria-hidden="true" className="flex flex-1 flex-col gap-1">
+                  <div
+                    aria-hidden="true"
+                    className="flex flex-1 flex-col gap-1"
+                  >
                     {visible.map((iv) => {
                       const ModeIcon = MODE_ICON[iv.mode];
                       return (
@@ -442,10 +463,13 @@ export function CalendarBoard({
                             aria-expanded={isExpanded}
                           >
                             <span className="w-16 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
-                              {new Date(iv.scheduledAt).toLocaleTimeString("en", {
-                                hour: "numeric",
-                                minute: "2-digit",
-                              })}
+                              {new Date(iv.scheduledAt).toLocaleTimeString(
+                                "en",
+                                {
+                                  hour: "numeric",
+                                  minute: "2-digit",
+                                },
+                              )}
                             </span>
                             <span
                               className={cn(
@@ -487,9 +511,17 @@ export function CalendarBoard({
                         <AnimatePresence initial={false}>
                           {isExpanded && hasDetails ? (
                             <motion.div
-                              initial={shouldReduceMotion ? false : { height: 0, opacity: 0 }}
+                              initial={
+                                shouldReduceMotion
+                                  ? false
+                                  : { height: 0, opacity: 0 }
+                              }
                               animate={{ height: "auto", opacity: 1 }}
-                              exit={shouldReduceMotion ? undefined : { height: 0, opacity: 0 }}
+                              exit={
+                                shouldReduceMotion
+                                  ? undefined
+                                  : { height: 0, opacity: 0 }
+                              }
                               transition={{ duration: 0.15, ease: EASE_OUT }}
                               className="overflow-hidden"
                             >
@@ -498,11 +530,15 @@ export function CalendarBoard({
                                   <span className="font-medium text-foreground">
                                     {iv.candidateName}
                                   </span>{" "}
-                                  · {new Date(iv.scheduledAt).toLocaleDateString("en", {
-                                    weekday: "short",
-                                    month: "short",
-                                    day: "numeric",
-                                  })}
+                                  ·{" "}
+                                  {new Date(iv.scheduledAt).toLocaleDateString(
+                                    "en",
+                                    {
+                                      weekday: "short",
+                                      month: "short",
+                                      day: "numeric",
+                                    },
+                                  )}
                                 </div>
                                 {iv.location ? (
                                   <div className="flex items-center gap-1.5">

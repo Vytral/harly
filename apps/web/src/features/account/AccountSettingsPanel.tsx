@@ -2,7 +2,13 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import {
   AtSign,
@@ -92,8 +98,14 @@ function parseDayRanges(text: string) {
   const trimmed = text.trim();
   if (!trimmed) return [];
   return trimmed.split(",").map((chunk) => {
-    const [start, end] = chunk.trim().split("-").map((s) => s.trim());
-    if (!/^\d{2}:\d{2}$/.test(start ?? "") || !/^\d{2}:\d{2}$/.test(end ?? "")) {
+    const [start, end] = chunk
+      .trim()
+      .split("-")
+      .map((s) => s.trim());
+    if (
+      !/^\d{2}:\d{2}$/.test(start ?? "") ||
+      !/^\d{2}:\d{2}$/.test(end ?? "")
+    ) {
       throw new Error(`Invalid range "${chunk.trim()}". Use HH:mm-HH:mm.`);
     }
     return { start, end };
@@ -158,7 +170,9 @@ function SectionCard({
       >
         <div className={cn(compact ? "flex items-center" : "space-y-1.5")}>
           <CardTitle className="text-base">{title}</CardTitle>
-          {description ? <CardDescription>{description}</CardDescription> : null}
+          {description ? (
+            <CardDescription>{description}</CardDescription>
+          ) : null}
         </div>
         {action ? <CardAction>{action}</CardAction> : null}
       </CardHeader>
@@ -323,24 +337,30 @@ export function AccountSettingsPanel({
   const [githubUrl, setGithubUrl] = useState(user.githubUrl ?? "");
   const [websiteUrl, setWebsiteUrl] = useState(user.websiteUrl ?? "");
   const [timezone, setTimezone] = useState(user.timezone ?? "");
-  const [specialtiesText, setSpecialtiesText] = useState((user.specialties ?? []).join(", "));
-  const [languagesText, setLanguagesText] = useState((user.languages ?? []).join(", "));
+  const [specialtiesText, setSpecialtiesText] = useState(
+    (user.specialties ?? []).join(", "),
+  );
+  const [languagesText, setLanguagesText] = useState(
+    (user.languages ?? []).join(", "),
+  );
   const [capacity, setCapacity] = useState(
     user.capacityHoursPerWeek != null ? String(user.capacityHoursPerWeek) : "",
   );
-  const [availabilityText, setAvailabilityText] = useState<Record<keyof WeeklyAvailability, string>>(
-    () => {
-      const week = user.weeklyAvailability ?? emptyWeek();
-      return Object.fromEntries(
-        WEEKDAYS.map((day) => [day, formatDayRanges(week[day] ?? [])]),
-      ) as Record<keyof WeeklyAvailability, string>;
-    },
-  );
+  const [availabilityText, setAvailabilityText] = useState<
+    Record<keyof WeeklyAvailability, string>
+  >(() => {
+    const week = user.weeklyAvailability ?? emptyWeek();
+    return Object.fromEntries(
+      WEEKDAYS.map((day) => [day, formatDayRanges(week[day] ?? [])]),
+    ) as Record<keyof WeeklyAvailability, string>;
+  });
   const [savingProfile, startProfile] = useTransition();
   const [profileDirty, setProfileDirty] = useState(false);
 
   const [username, setUsername] = useState(user.username ?? "");
-  const [usernameStatus, setUsernameStatus] = useState<"idle" | "checking" | "available" | "taken" | "invalid">("idle");
+  const [usernameStatus, setUsernameStatus] = useState<
+    "idle" | "checking" | "available" | "taken" | "invalid"
+  >("idle");
   const [usernameError, setUsernameError] = useState<string | null>(null);
   const [savingUsername, startUsername] = useTransition();
 
@@ -370,7 +390,9 @@ export function AccountSettingsPanel({
 
   const [signingOut, startSignOut] = useTransition();
 
-  const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
+  const fullName = [firstName.trim(), lastName.trim()]
+    .filter(Boolean)
+    .join(" ");
   const displayName = fullName || user.name;
 
   function markDirty() {
@@ -379,25 +401,18 @@ export function AccountSettingsPanel({
 
   useEffect(() => {
     const trimmed = username.trim();
-    if (trimmed === (user.username ?? "")) {
-      setUsernameStatus("idle");
-      setUsernameError(null);
-      return;
-    }
-    if (!trimmed) {
-      setUsernameStatus("idle");
-      setUsernameError(null);
-      return;
-    }
+    if (!trimmed || trimmed === (user.username ?? "")) return;
 
-    setUsernameStatus("checking");
     const handle = setTimeout(() => {
+      setUsernameStatus("checking");
       checkUsernameAvailableAction(trimmed).then((result) => {
         if (result.available) {
           setUsernameStatus("available");
           setUsernameError(null);
         } else {
-          setUsernameStatus(result.error === "Username is already taken." ? "taken" : "invalid");
+          setUsernameStatus(
+            result.error === "Username is already taken." ? "taken" : "invalid",
+          );
           setUsernameError(result.error ?? null);
         }
       });
@@ -426,7 +441,9 @@ export function AccountSettingsPanel({
         WEEKDAYS.map((day) => [day, parseDayRanges(availabilityText[day])]),
       ) as WeeklyAvailability;
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Invalid availability.");
+      toast.error(
+        error instanceof Error ? error.message : "Invalid availability.",
+      );
       throw error;
     }
 
@@ -441,8 +458,14 @@ export function AccountSettingsPanel({
       githubUrl: githubUrl.trim() || null,
       websiteUrl: websiteUrl.trim() || null,
       timezone: timezone.trim() || null,
-      specialties: specialtiesText.split(",").map((s) => s.trim()).filter(Boolean),
-      languages: languagesText.split(",").map((s) => s.trim()).filter(Boolean),
+      specialties: specialtiesText
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      languages: languagesText
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
       weeklyAvailability,
       capacityHoursPerWeek: capacity.trim() ? Number(capacity.trim()) : null,
     };
@@ -561,7 +584,9 @@ export function AccountSettingsPanel({
 
   function savePassword() {
     if (!canSavePassword) {
-      toast.error("Enter your current password and a matching new one (8+ chars).");
+      toast.error(
+        "Enter your current password and a matching new one (8+ chars).",
+      );
       return;
     }
     startPassword(async () => {
@@ -689,7 +714,10 @@ export function AccountSettingsPanel({
                   <Input
                     id="acc-first-name"
                     value={firstName}
-                    onChange={(e) => { setFirstName(e.target.value); markDirty(); }}
+                    onChange={(e) => {
+                      setFirstName(e.target.value);
+                      markDirty();
+                    }}
                     placeholder="Ada"
                   />
                 </div>
@@ -698,7 +726,10 @@ export function AccountSettingsPanel({
                   <Input
                     id="acc-last-name"
                     value={lastName}
-                    onChange={(e) => { setLastName(e.target.value); markDirty(); }}
+                    onChange={(e) => {
+                      setLastName(e.target.value);
+                      markDirty();
+                    }}
                     placeholder="Lovelace"
                   />
                 </div>
@@ -710,7 +741,10 @@ export function AccountSettingsPanel({
                     icon={UserRound}
                     id="acc-job-title"
                     value={jobTitle}
-                    onChange={(e) => { setJobTitle(e.target.value); markDirty(); }}
+                    onChange={(e) => {
+                      setJobTitle(e.target.value);
+                      markDirty();
+                    }}
                     placeholder="e.g. Engineering Manager"
                   />
                 </div>
@@ -721,7 +755,10 @@ export function AccountSettingsPanel({
                     id="acc-phone"
                     type="tel"
                     value={phone}
-                    onChange={(e) => { setPhone(e.target.value); markDirty(); }}
+                    onChange={(e) => {
+                      setPhone(e.target.value);
+                      markDirty();
+                    }}
                     placeholder="+1 (555) 123-4567"
                   />
                 </div>
@@ -733,7 +770,10 @@ export function AccountSettingsPanel({
                     icon={MapPin}
                     id="acc-location"
                     value={location}
-                    onChange={(e) => { setLocation(e.target.value); markDirty(); }}
+                    onChange={(e) => {
+                      setLocation(e.target.value);
+                      markDirty();
+                    }}
                     placeholder="San Francisco, CA"
                   />
                 </div>
@@ -741,38 +781,56 @@ export function AccountSettingsPanel({
             </div>
           </SectionCard>
 
-          <SectionCard title="Bio" description="A short description shown on your profile and hiring team views.">
+          <SectionCard
+            title="Bio"
+            description="A short description shown on your profile and hiring team views."
+          >
             <Textarea
               id="acc-bio"
               value={bio}
-              onChange={(e) => { setBio(e.target.value); markDirty(); }}
+              onChange={(e) => {
+                setBio(e.target.value);
+                markDirty();
+              }}
               placeholder="Tell your team a bit about yourself…"
               className="min-h-[100px] resize-y"
             />
           </SectionCard>
 
-          <SectionCard title="Links" description="Connected profiles and personal links.">
+          <SectionCard
+            title="Links"
+            description="Connected profiles and personal links."
+          >
             <div className="space-y-4">
               <SocialLinkField
                 icon={LinkedinLogo}
                 label="LinkedIn"
                 placeholder="https://linkedin.com/in/username"
                 value={linkedinUrl}
-                onChange={(v) => { setLinkedinUrl(v); markDirty(); }}
+                onChange={(v) => {
+                  setLinkedinUrl(v);
+                  markDirty();
+                }}
               />
               <SocialLinkField
                 icon={GithubIcon}
                 label="GitHub"
                 placeholder="https://github.com/username"
                 value={githubUrl}
-                onChange={(v) => { setGithubUrl(v); markDirty(); }}
+                onChange={(v) => {
+                  setGithubUrl(v);
+                  markDirty();
+                }}
               />
               <SocialLinkField
                 icon={Globe}
                 label="Website"
                 placeholder="https://yoursite.com"
                 value={websiteUrl}
-                onChange={(v) => { setWebsiteUrl(v); markDirty(); }}
+                onChange={(v) => {
+                  setWebsiteUrl(v);
+                  markDirty();
+                }}
               />
             </div>
           </SectionCard>
@@ -802,7 +860,11 @@ export function AccountSettingsPanel({
                 <Input
                   id="acc-username"
                   value={username}
-                  onChange={(e) => setUsername(e.target.value.toLowerCase())}
+                  onChange={(e) => {
+                    setUsername(e.target.value.toLowerCase());
+                    setUsernameStatus("idle");
+                    setUsernameError(null);
+                  }}
                   placeholder="ada-lovelace"
                   className="pl-7 pr-9"
                   aria-describedby="acc-username-hint"
@@ -811,7 +873,8 @@ export function AccountSettingsPanel({
                   {usernameStatus === "available" && (
                     <CheckCircle2 className="size-4 text-emerald-600" />
                   )}
-                  {(usernameStatus === "taken" || usernameStatus === "invalid") && (
+                  {(usernameStatus === "taken" ||
+                    usernameStatus === "invalid") && (
                     <XCircle className="size-4 text-destructive" />
                   )}
                 </span>
@@ -853,7 +916,10 @@ export function AccountSettingsPanel({
                     icon={Globe}
                     id="acc-timezone"
                     value={timezone}
-                    onChange={(e) => { setTimezone(e.target.value); markDirty(); }}
+                    onChange={(e) => {
+                      setTimezone(e.target.value);
+                      markDirty();
+                    }}
                     placeholder="America/Sao_Paulo"
                   />
                 </div>
@@ -866,7 +932,10 @@ export function AccountSettingsPanel({
                     min={0}
                     max={168}
                     value={capacity}
-                    onChange={(e) => { setCapacity(e.target.value); markDirty(); }}
+                    onChange={(e) => {
+                      setCapacity(e.target.value);
+                      markDirty();
+                    }}
                     placeholder="40"
                   />
                 </div>
@@ -877,10 +946,15 @@ export function AccountSettingsPanel({
                   icon={Sparkles}
                   id="acc-specialties"
                   value={specialtiesText}
-                  onChange={(e) => { setSpecialtiesText(e.target.value); markDirty(); }}
+                  onChange={(e) => {
+                    setSpecialtiesText(e.target.value);
+                    markDirty();
+                  }}
                   placeholder="Technical sourcing, Executive search"
                 />
-                <p className="text-xs text-muted-foreground">Comma-separated.</p>
+                <p className="text-xs text-muted-foreground">
+                  Comma-separated.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="acc-languages">Languages</Label>
@@ -888,10 +962,15 @@ export function AccountSettingsPanel({
                   icon={Languages}
                   id="acc-languages"
                   value={languagesText}
-                  onChange={(e) => { setLanguagesText(e.target.value); markDirty(); }}
+                  onChange={(e) => {
+                    setLanguagesText(e.target.value);
+                    markDirty();
+                  }}
                   placeholder="English, Spanish"
                 />
-                <p className="text-xs text-muted-foreground">Comma-separated.</p>
+                <p className="text-xs text-muted-foreground">
+                  Comma-separated.
+                </p>
               </div>
             </div>
           </SectionCard>
@@ -902,15 +981,24 @@ export function AccountSettingsPanel({
           >
             <div className="space-y-3">
               {WEEKDAYS.map((day) => (
-                <div key={day} className="grid grid-cols-[3rem_1fr] items-center gap-3">
-                  <Label htmlFor={`acc-avail-${day}`} className="text-xs text-muted-foreground">
+                <div
+                  key={day}
+                  className="grid grid-cols-[3rem_1fr] items-center gap-3"
+                >
+                  <Label
+                    htmlFor={`acc-avail-${day}`}
+                    className="text-xs text-muted-foreground"
+                  >
                     {DAY_LABELS[day]}
                   </Label>
                   <Input
                     id={`acc-avail-${day}`}
                     value={availabilityText[day]}
                     onChange={(e) => {
-                      setAvailabilityText((prev) => ({ ...prev, [day]: e.target.value }));
+                      setAvailabilityText((prev) => ({
+                        ...prev,
+                        [day]: e.target.value,
+                      }));
                       markDirty();
                     }}
                     placeholder="09:00-17:00"
@@ -945,11 +1033,18 @@ export function AccountSettingsPanel({
                     setTimezone(user.timezone ?? "");
                     setSpecialtiesText((user.specialties ?? []).join(", "));
                     setLanguagesText((user.languages ?? []).join(", "));
-                    setCapacity(user.capacityHoursPerWeek != null ? String(user.capacityHoursPerWeek) : "");
+                    setCapacity(
+                      user.capacityHoursPerWeek != null
+                        ? String(user.capacityHoursPerWeek)
+                        : "",
+                    );
                     const week = user.weeklyAvailability ?? emptyWeek();
                     setAvailabilityText(
                       Object.fromEntries(
-                        WEEKDAYS.map((day) => [day, formatDayRanges(week[day] ?? [])]),
+                        WEEKDAYS.map((day) => [
+                          day,
+                          formatDayRanges(week[day] ?? []),
+                        ]),
                       ) as Record<keyof WeeklyAvailability, string>,
                     );
                     setProfileDirty(false);
@@ -958,7 +1053,11 @@ export function AccountSettingsPanel({
                 >
                   Discard
                 </Button>
-                <Button size="sm" onClick={saveProfile} disabled={savingProfile}>
+                <Button
+                  size="sm"
+                  onClick={saveProfile}
+                  disabled={savingProfile}
+                >
                   <PencilLine className="size-4" />
                   {savingProfile ? "Saving…" : "Save profile"}
                 </Button>
@@ -1047,7 +1146,9 @@ export function AccountSettingsPanel({
               <p
                 className={cn(
                   "text-xs",
-                  passwordsMismatch ? "text-destructive" : "text-muted-foreground",
+                  passwordsMismatch
+                    ? "text-destructive"
+                    : "text-muted-foreground",
                 )}
               >
                 {passwordsMismatch
@@ -1070,16 +1171,15 @@ export function AccountSettingsPanel({
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium">Current browser</p>
-                  <p className="text-xs text-muted-foreground">
-                    {userAgent}
-                  </p>
+                  <p className="text-xs text-muted-foreground">{userAgent}</p>
                 </div>
                 <Badge variant="secondary" className="shrink-0">
                   This device
                 </Badge>
               </div>
               <p className="text-xs text-muted-foreground">
-                Signing out will end this session. Use &ldquo;Sign out everywhere&rdquo; from settings to revoke all sessions.
+                Signing out will end this session. Use &ldquo;Sign out
+                everywhere&rdquo; from settings to revoke all sessions.
               </p>
             </div>
           </SectionCard>
