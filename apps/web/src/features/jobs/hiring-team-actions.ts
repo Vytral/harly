@@ -16,11 +16,16 @@ const HIRING_TEAM_ROLES = new Set<HiringTeamRole>([
   "interviewer",
 ]);
 
-async function validateJob(context: Awaited<ReturnType<typeof requirePermission>>, jobId: string) {
+async function validateJob(
+  context: Awaited<ReturnType<typeof requirePermission>>,
+  jobId: string,
+) {
   const [job] = await db
     .select({ id: jobs.id })
     .from(jobs)
-    .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, context.organization.id)))
+    .where(
+      and(eq(jobs.id, jobId), eq(jobs.workspaceId, context.organization.id)),
+    )
     .limit(1);
   return job ?? null;
 }
@@ -31,7 +36,7 @@ export async function addHiringTeamMember(input: {
   role: HiringTeamRole;
 }): Promise<Result> {
   try {
-    const context = await requirePermission("jobs:edit");
+    const context = await requirePermission("hiring_team:manage");
     if (!HIRING_TEAM_ROLES.has(input.role)) {
       return { success: false, error: "Invalid hiring-team role." };
     }
@@ -50,7 +55,10 @@ export async function addHiringTeamMember(input: {
     ]);
     if (!job) return { success: false, error: "Job not found." };
     if (!member[0]) {
-      return { success: false, error: "That person is not a member of this workspace." };
+      return {
+        success: false,
+        error: "That person is not a member of this workspace.",
+      };
     }
     await db
       .insert(jobHiringTeam)
@@ -87,7 +95,7 @@ export async function updateHiringTeamRole(input: {
   role: HiringTeamRole;
 }): Promise<Result> {
   try {
-    const context = await requirePermission("jobs:edit");
+    const context = await requirePermission("hiring_team:manage");
     if (!HIRING_TEAM_ROLES.has(input.role)) {
       return { success: false, error: "Invalid hiring-team role." };
     }
@@ -129,7 +137,7 @@ export async function removeHiringTeamMember(input: {
   jobId: string;
 }): Promise<Result> {
   try {
-    const context = await requirePermission("jobs:edit");
+    const context = await requirePermission("hiring_team:manage");
     if (!(await validateJob(context, input.jobId))) {
       return { success: false, error: "Job not found." };
     }

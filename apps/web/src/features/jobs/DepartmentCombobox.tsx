@@ -23,6 +23,7 @@ type DepartmentComboboxProps = {
   name: string;
   departments: string[];
   defaultValue?: string | null;
+  className?: string;
 };
 
 /**
@@ -33,6 +34,7 @@ export function DepartmentCombobox({
   name,
   departments,
   defaultValue,
+  className,
 }: DepartmentComboboxProps) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(defaultValue ?? "");
@@ -59,7 +61,7 @@ export function DepartmentCombobox({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="h-10 w-full justify-between rounded-lg bg-card px-3.5 font-normal"
+            className={cn("h-10 w-full justify-between rounded-lg bg-card px-3.5 font-normal", className)}
           >
             <span className={cn("truncate", !value && "text-muted-foreground")}>
               {value || "Select or create a department"}

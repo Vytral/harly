@@ -10,8 +10,8 @@ import { generateScreeningQuestionsAction } from "./actions";
 import { AiButton } from "@/components/ui/AiButton";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { FieldBox, fieldBoxControlClassName, fieldBoxSelectTriggerClassName } from "@/components/ui/field-box";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -202,24 +202,22 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
       {questions.map((question, index) => (
         <div key={`${question.id}-${index}`} className="space-y-3 rounded-lg border bg-muted/30 p-4">
           <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-            <div className="space-y-2">
-              <Label>Question label</Label>
+            <FieldBox label="Question label">
               <Input
                 value={question.label}
                 onChange={(event) => updateQuestion(index, { label: event.target.value })}
                 placeholder="What makes you a strong fit?"
-                className="bg-card"
+                className={fieldBoxControlClassName}
               />
-            </div>
-            <div className="space-y-2">
-              <Label>Type</Label>
+            </FieldBox>
+            <FieldBox label="Type">
               <Select
                 value={question.type}
                 onValueChange={(value) =>
                   updateQuestion(index, { type: value as JobQuestionType })
                 }
               >
-                <SelectTrigger className="w-full bg-card">
+                <SelectTrigger className={fieldBoxSelectTriggerClassName}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -230,21 +228,19 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            </FieldBox>
           </div>
 
           <div className="grid gap-3 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Placeholder</Label>
+            <FieldBox label="Placeholder">
               <Input
                 value={question.placeholder ?? ""}
                 onChange={(event) => updateQuestion(index, { placeholder: event.target.value })}
                 placeholder="Optional helper text"
-                className="bg-card"
+                className={fieldBoxControlClassName}
               />
-            </div>
-            <div className="space-y-2">
-              <Label>Minimum characters</Label>
+            </FieldBox>
+            <FieldBox label="Minimum characters">
               <Input
                 value={question.minLength ?? ""}
                 onChange={(event) =>
@@ -254,14 +250,13 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
                 }
                 type="number"
                 min="0"
-                className="bg-card"
+                className={fieldBoxControlClassName}
               />
-            </div>
+            </FieldBox>
           </div>
 
           {question.type === "select" ? (
-            <div className="space-y-2">
-              <Label>Options</Label>
+            <FieldBox label="Options">
               <Textarea
                 value={optionsToText(question.options)}
                 onChange={(event) =>
@@ -269,9 +264,9 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
                 }
                 rows={4}
                 placeholder={"One option per line\nRemote\nHybrid\nOn-site"}
-                className="bg-card"
+                className={fieldBoxControlClassName}
               />
-            </div>
+            </FieldBox>
           ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-3">

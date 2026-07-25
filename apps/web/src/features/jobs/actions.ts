@@ -21,6 +21,7 @@ import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { generateJobDraftWithAI } from "@/lib/ai/surfaces/generate-job";
 import type { JobDraft } from "@/lib/ai/schemas";
 import { normalizeCareerPageConfig } from "@/features/career-page/config";
+import { getPendingJobApproval } from "./approval";
 
 function parseJobFormData(formData: FormData) {
   return jobFormSchema.parse({
@@ -123,6 +124,9 @@ export async function updateJobStatusAction(formData: FormData) {
   const context = await requirePermission("jobs:edit");
   const jobId = String(formData.get("jobId") ?? "");
   const status = jobStatusSchema.parse(formData.get("status"));
+  if (status === "open" && await getPendingJobApproval(jobId)) {
+    throw new Error("Job has a pending approval request.");
+  }
   const job = await updateJobStatus(jobId, status);
 
   if (!job) {

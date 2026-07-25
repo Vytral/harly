@@ -5,7 +5,16 @@ import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 
 import { db } from "@harly/db";
-import { customRoles, member as authMembers, user as authUsers } from "@harly/db";
+import {
+  customRoles,
+  applications,
+  candidates,
+  offers,
+  interviews,
+  jobHiringTeam,
+  member as authMembers,
+  user as authUsers,
+} from "@harly/db";
 
 import {
   getWorkspaceContext,
@@ -86,6 +95,145 @@ export async function requirePermission(permission: Permission) {
     throw new Error("You do not have permission to perform this action.");
   }
   return context;
+}
+
+/** Require a permission and, for non-admin job members, membership in that job. */
+export async function requireJobPermission(
+  permission: Permission,
+  jobId: string,
+) {
+  const context = await requirePermission(permission);
+  if (
+    roleIsAllPowerful(context.roleKey) ||
+    context.roleKey === "admin" ||
+    context.roleKey === "recruiter"
+  ) {
+    return context;
+  }
+
+  const [assignment] = await db
+    .select({ id: jobHiringTeam.id })
+    .from(jobHiringTeam)
+    .where(
+      and(
+        eq(jobHiringTeam.workspaceId, context.organization.id),
+        eq(jobHiringTeam.jobId, jobId),
+        eq(jobHiringTeam.userId, context.user.id),
+      ),
+    )
+    .limit(1);
+
+  if (!assignment) throw new Error("You are not assigned to this job.");
+  return context;
+}
+
+/** Resolve an application to its job, then enforce job-scoped access. */
+export async function requireApplicationPermission(
+  permission: Permission,
+  applicationId: string,
+) {
+  const context = await requirePermission(permission);
+  if (
+    roleIsAllPowerful(context.roleKey) ||
+    context.roleKey === "admin" ||
+    context.roleKey === "recruiter"
+  ) {
+    return context;
+  }
+
+  const [application] = await db
+    .select({ jobId: applications.jobId })
+    .from(applications)
+    .where(
+      and(
+        eq(applications.workspaceId, context.organization.id),
+        eq(applications.id, applicationId),
+      ),
+    )
+    .limit(1);
+  if (!application) throw new Error("Application not found.");
+  return requireJobPermission(permission, application.jobId);
+}
+
+/** Resolve an offer to its application/job, then enforce job-scoped access. */
+export async function requireOfferPermission(
+  permission: Permission,
+  offerId: string,
+) {
+  const context = await requirePermission(permission);
+  if (
+    roleIsAllPowerful(context.roleKey) ||
+    context.roleKey === "admin" ||
+    context.roleKey === "recruiter"
+  ) {
+    return context;
+  }
+  const [offer] = await db
+    .select({ applicationId: offers.applicationId })
+    .from(offers)
+    .where(
+      and(
+        eq(offers.workspaceId, context.organization.id),
+        eq(offers.id, offerId),
+      ),
+    )
+    .limit(1);
+  if (!offer) throw new Error("Offer not found.");
+  return requireApplicationPermission(permission, offer.applicationId);
+}
+
+/** Resolve a candidate to one of its applications/jobs, then enforce access. */
+export async function requireCandidatePermission(
+  permission: Permission,
+  candidateId: string,
+) {
+  const context = await requirePermission(permission);
+  if (
+    roleIsAllPowerful(context.roleKey) ||
+    context.roleKey === "admin" ||
+    context.roleKey === "recruiter"
+  ) {
+    return context;
+  }
+  const [application] = await db
+    .select({ jobId: applications.jobId })
+    .from(applications)
+    .innerJoin(candidates, eq(candidates.id, applications.candidateId))
+    .where(
+      and(
+        eq(applications.workspaceId, context.organization.id),
+        eq(applications.candidateId, candidateId),
+      ),
+    )
+    .limit(1);
+  if (!application) throw new Error("Candidate is not assigned to a job.");
+  return requireJobPermission(permission, application.jobId);
+}
+
+/** Resolve an interview to its job, then enforce job-scoped access. */
+export async function requireInterviewPermission(
+  permission: Permission,
+  interviewId: string,
+) {
+  const context = await requirePermission(permission);
+  if (
+    roleIsAllPowerful(context.roleKey) ||
+    context.roleKey === "admin" ||
+    context.roleKey === "recruiter"
+  )
+    return context;
+  const [interview] = await db
+    .select({ jobId: interviews.jobId })
+    .from(interviews)
+    .where(
+      and(
+        eq(interviews.workspaceId, context.organization.id),
+        eq(interviews.id, interviewId),
+      ),
+    )
+    .limit(1);
+  if (!interview) throw new Error("Interview not found.");
+  return requireJobPermission(permission, interview.jobId);
 }
 
 /** Soft check (no throw) , for conditional logic in actions. */

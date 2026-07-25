@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import type {
   ApplicationFieldVisibility,
@@ -43,30 +43,37 @@ function VisibilityField({
   value: JobApplicationFieldConfig;
   description?: string;
 }) {
+  const [selected, setSelected] = useState<ApplicationFieldVisibility>(
+    value.visibility,
+  );
+
   return (
-    <fieldset className="rounded-lg border bg-muted/30 px-4 py-3">
-      <legend className="px-1 text-sm font-medium">{label}</legend>
+    <fieldset className="rounded-lg border border-input bg-card px-3.5 pt-2 pb-3">
+      <legend className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground/80">
+        {label}
+      </legend>
       {description ? (
         <p className="mb-3 text-xs text-muted-foreground">{description}</p>
       ) : null}
       <div className="grid gap-2 sm:grid-cols-3">
         {visibilityOptions.map((option) => {
-          const checked = value.visibility === option.value;
+          const checked = selected === option.value;
           return (
             <label
               key={option.value}
               className={cn(
-                "flex cursor-pointer flex-col rounded-md border px-3 py-2 transition",
+                "flex cursor-pointer flex-col rounded-md border px-3 py-2 transition-colors duration-150",
                 checked
-                  ? "border-foreground bg-background"
-                  : "border-border bg-background/60 hover:border-foreground/40",
+                  ? "border-pine/50 bg-sage/50"
+                  : "border-border bg-background/60 hover:border-pine/30",
               )}
             >
               <input
                 type="radio"
                 name={name}
                 value={option.value}
-                defaultChecked={checked}
+                checked={checked}
+                onChange={() => setSelected(option.value)}
                 className="sr-only"
               />
               <span className="text-sm font-medium">{option.label}</span>

@@ -10,16 +10,24 @@
 
 export const PERMISSIONS = [
   "jobs:create",
+  "jobs:view",
   "jobs:edit",
   "jobs:delete",
+  "jobs:publish",
+  "jobs:approve",
+  "hiring_team:manage",
+  "candidates:view",
   "candidates:edit",
   "candidates:delete",
   "candidates:move",
   "dsar:manage",
   "collab:write", // notes, scorecards, schedule interviews, message
+  "interviews:manage",
+  "interviews:feedback",
   "tasks:read",
   "tasks:write",
   "offers:manage",
+  "offers:approve",
   "templates:manage",
   "reports:read",
   "members:read",
@@ -50,14 +58,23 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "Jobs",
     permissions: [
       { key: "jobs:create", label: "Create jobs" },
+      { key: "jobs:view", label: "View jobs" },
       { key: "jobs:edit", label: "Edit jobs" },
       { key: "jobs:delete", label: "Delete jobs", hint: "Move jobs to trash" },
+      { key: "jobs:publish", label: "Publish jobs" },
+      {
+        key: "jobs:approve",
+        label: "Approve jobs",
+        hint: "Approve jobs before recruiting starts",
+      },
+      { key: "hiring_team:manage", label: "Manage hiring teams" },
     ],
   },
   {
     label: "Candidates",
     permissions: [
       { key: "candidates:edit", label: "Edit candidates" },
+      { key: "candidates:view", label: "View candidates" },
       { key: "candidates:delete", label: "Delete / reject candidates" },
       { key: "candidates:move", label: "Move in pipeline" },
     ],
@@ -80,6 +97,8 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         label: "Notes, evaluations & scheduling",
         hint: "Write notes, add scorecards, schedule interviews, email candidates",
       },
+      { key: "interviews:manage", label: "Manage interviews" },
+      { key: "interviews:feedback", label: "Submit interview feedback" },
       {
         key: "tasks:read",
         label: "View tasks",
@@ -94,6 +113,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
         label: "Manage offers",
         hint: "Create, send and decide job offers",
       },
+      { key: "offers:approve", label: "Approve offers" },
       {
         key: "templates:manage",
         label: "Manage email templates",
@@ -126,14 +146,22 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     label: "Administration",
     permissions: [
       { key: "members:read", label: "View members & invitations" },
-      { key: "members:invite", label: "Invite members", hint: "Send invites, cancel invites, and add existing users" },
+      {
+        key: "members:invite",
+        label: "Invite members",
+        hint: "Send invites, cancel invites, and add existing users",
+      },
       { key: "members:edit", label: "Change member roles" },
       { key: "members:remove", label: "Remove members" },
       { key: "invite_links:manage", label: "Manage invite links" },
       { key: "settings:edit", label: "Edit workspace settings" },
       { key: "integrations:manage", label: "Manage integrations" },
       { key: "roles:manage", label: "Manage roles & permissions" },
-      { key: "security:manage", label: "Manage workspace security", hint: "2FA enforcement, SSO, and security settings" },
+      {
+        key: "security:manage",
+        label: "Manage workspace security",
+        hint: "2FA enforcement, SSO, and security settings",
+      },
     ],
   },
 ];
@@ -157,10 +185,16 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
   admin: [...PERMISSIONS],
   recruiter: [
     "jobs:create",
+    "jobs:view",
     "jobs:edit",
+    "jobs:publish",
+    "hiring_team:manage",
+    "candidates:view",
     "candidates:edit",
     "candidates:move",
     "collab:write",
+    "interviews:manage",
+    "interviews:feedback",
     "tasks:read",
     "tasks:write",
     "offers:manage",
@@ -173,8 +207,13 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "documents:share",
   ],
   hiring_manager: [
+    "jobs:view",
+    "jobs:edit",
+    "jobs:approve",
+    "candidates:view",
     "candidates:move",
     "collab:write",
+    "interviews:feedback",
     "tasks:read",
     "tasks:write",
     "members:read",
@@ -226,7 +265,10 @@ export function roleLabel(role: string): string {
  * by the nav (to hide what you can't open) and each page (to redirect direct
  * URL access). Sections not listed here are open to any member.
  */
-export const SETTINGS_SECTION_PERMISSION: Record<string, Permission | Permission[]> = {
+export const SETTINGS_SECTION_PERMISSION: Record<
+  string,
+  Permission | Permission[]
+> = {
   "/settings": "settings:edit",
   "/settings/members": "members:read",
   "/settings/roles": "roles:manage",

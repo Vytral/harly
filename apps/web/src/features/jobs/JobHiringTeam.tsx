@@ -16,6 +16,7 @@ import type {
   WorkspaceMemberOption,
 } from "@/features/jobs/hiring-team-data";
 import { FormSection } from "@/components/ui/Form";
+import { PersonLink } from "@/components/people/PersonLink";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -65,7 +66,7 @@ export function JobHiringTeam({
     <FormSection
       title="Hiring team"
       description="Assigned teammates receive candidate updates for this role. Roles clarify who owns recruiting, the decision, and interviews."
-      contentClassName="space-y-1.5"
+      contentClassName="divide-y divide-border/60"
       action={
         available.length > 0 ? (
           <DropdownMenu>
@@ -110,7 +111,9 @@ export function JobHiringTeam({
           >
             <UserAvatar name={member.name} src={member.image} size="sm" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{member.name}</p>
+              <PersonLink username={member.username} className="block truncate text-sm font-medium">
+                {member.name}
+              </PersonLink>
               <p className="truncate text-xs text-muted-foreground">{member.email}</p>
             </div>
             <Select

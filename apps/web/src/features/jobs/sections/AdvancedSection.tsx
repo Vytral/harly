@@ -3,6 +3,7 @@ import { MapPin, X } from "lucide-react";
 
 import type { Job } from "@harly/db";
 
+import { FieldBox, fieldBoxControlClassName } from "@/components/ui/field-box";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -50,38 +51,40 @@ export function AdvancedSection({
   return (
     <div className="space-y-6">
       <div className="grid gap-5 sm:grid-cols-2">
-        <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="slug">Public slug</Label>
+        <FieldBox
+          className="sm:col-span-2"
+          label="Public slug"
+          htmlFor="slug"
+          hint="Leave blank to generate from the title."
+        >
           <Input
             id="slug"
             name="slug"
             defaultValue={job?.slug ?? ""}
             placeholder="senior-full-stack-engineer"
+            className={fieldBoxControlClassName}
           />
-          <p className="text-xs text-muted-foreground">
-            Leave blank to generate from the title.
-          </p>
-        </div>
+        </FieldBox>
 
-        <div className="space-y-2">
-          <Label htmlFor="experienceLevel">Experience</Label>
+        <FieldBox label="Experience" htmlFor="experienceLevel">
           <Input
             id="experienceLevel"
             name="experienceLevel"
             defaultValue={job?.experienceLevel ?? ""}
             placeholder="Mid / Senior · 3-5 years"
+            className={fieldBoxControlClassName}
           />
-        </div>
+        </FieldBox>
 
-        <div className="space-y-2">
-          <Label htmlFor="education">Education</Label>
+        <FieldBox label="Education" htmlFor="education">
           <Input
             id="education"
             name="education"
             defaultValue={job?.education ?? ""}
             placeholder="Not required / Bachelor's"
+            className={fieldBoxControlClassName}
           />
-        </div>
+        </FieldBox>
       </div>
 
       {/* Keywords */}
@@ -91,18 +94,21 @@ export function AdvancedSection({
           Tags that help candidates and search find this role.
         </p>
         <div className="flex gap-2">
-          <Input
-            value={keywordDraft}
-            onChange={(e) => setKeywordDraft(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                addKeyword();
-              }
-            }}
-            placeholder="react, remote, fintech..."
-          />
-          <Button type="button" variant="outline" onClick={addKeyword}>
+          <FieldBox className="flex-1" label="Add a keyword">
+            <Input
+              value={keywordDraft}
+              onChange={(e) => setKeywordDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  addKeyword();
+                }
+              }}
+              placeholder="react, remote, fintech..."
+              className={fieldBoxControlClassName}
+            />
+          </FieldBox>
+          <Button type="button" variant="outline" onClick={addKeyword} className="self-end">
             Add
           </Button>
         </div>
@@ -131,20 +137,25 @@ export function AdvancedSection({
       {/* Office (conditional) */}
       {showOffice ? (
         <div className="space-y-4 rounded-xl border bg-muted/20 p-4">
-          <div className="space-y-2">
-            <Label htmlFor="officeAddress">Office address</Label>
+          <FieldBox
+            label="Office address"
+            htmlFor="officeAddress"
+            hint={
+              <>
+                <MapPin className="mr-1 inline size-3" />
+                We&apos;ll show an interactive map. No API key needed.
+              </>
+            }
+          >
             <Input
               id="officeAddress"
               name="officeAddress"
               value={office}
               onChange={(e) => setOffice(e.target.value)}
               placeholder="221B Baker Street, London"
+              className={fieldBoxControlClassName}
             />
-            <p className="text-xs text-muted-foreground">
-              <MapPin className="mr-1 inline size-3" />
-              We&apos;ll show an interactive map. No API key needed.
-            </p>
-          </div>
+          </FieldBox>
           {mapSrc ? (
             <iframe
               key={mapSrc}
@@ -158,18 +169,21 @@ export function AdvancedSection({
           <div className="space-y-2">
             <Label>Office photos</Label>
             <div className="flex gap-2">
-              <Input
-                value={photoDraft}
-                onChange={(e) => setPhotoDraft(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    addPhoto();
-                  }
-                }}
-                placeholder="https://.../office.jpg"
-              />
-              <Button type="button" variant="outline" onClick={addPhoto}>
+              <FieldBox className="flex-1" label="Add a photo URL">
+                <Input
+                  value={photoDraft}
+                  onChange={(e) => setPhotoDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addPhoto();
+                    }
+                  }}
+                  placeholder="https://.../office.jpg"
+                  className={fieldBoxControlClassName}
+                />
+              </FieldBox>
+              <Button type="button" variant="outline" onClick={addPhoto} className="self-end">
                 Add
               </Button>
             </div>

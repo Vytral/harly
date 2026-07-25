@@ -3,7 +3,7 @@ import "server-only";
 import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
-import { db, jobHiringTeam, jobs, jobStages, type Job } from "@harly/db";
+import { db, jobApprovalRequests, jobHiringTeam, jobs, jobStages, type Job } from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 
@@ -230,6 +230,10 @@ export async function updateJobForApi(input: {
   });
 
   const nextStatus = input.values.status ?? existing.status;
+  if (nextStatus === "open") {
+    const [pending] = await db.select({ id: jobApprovalRequests.id }).from(jobApprovalRequests).where(and(eq(jobApprovalRequests.workspaceId, input.workspaceId), eq(jobApprovalRequests.jobId, input.jobId), eq(jobApprovalRequests.status, "pending"))).limit(1);
+    if (pending) throw ApiError.conflict("Job has a pending approval request.");
+  }
   const becomesPublished = nextStatus === "open" && !existing.publishedAt;
 
   const [updated] = await db

@@ -1,7 +1,7 @@
 import type { Job } from "@harly/db";
 
+import { FieldBox, fieldBoxControlClassName, fieldBoxSelectTriggerClassName } from "@/components/ui/field-box";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -15,34 +15,30 @@ const currencies = ["USD", "EUR", "GBP", "CLP", "MXN", "ARS", "BRL", "COP"];
 export function CompensationSection({ job }: { job?: Job }) {
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">
-        Optional. Listing a range measurably increases applications.
-      </p>
       <div className="grid gap-4 sm:grid-cols-4">
-        <div className="space-y-2">
-          <Label htmlFor="salaryMin">Salary min</Label>
+        <FieldBox label="Salary min" htmlFor="salaryMin">
           <Input
             id="salaryMin"
             name="salaryMin"
             type="number"
             min="0"
             defaultValue={job?.salaryMin ?? ""}
+            className={fieldBoxControlClassName}
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="salaryMax">Salary max</Label>
+        </FieldBox>
+        <FieldBox label="Salary max" htmlFor="salaryMax">
           <Input
             id="salaryMax"
             name="salaryMax"
             type="number"
             min="0"
             defaultValue={job?.salaryMax ?? ""}
+            className={fieldBoxControlClassName}
           />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="currency">Currency</Label>
+        </FieldBox>
+        <FieldBox label="Currency" htmlFor="currency">
           <Select name="currency" defaultValue={job?.currency ?? "USD"}>
-            <SelectTrigger id="currency" className="w-full">
+            <SelectTrigger id="currency" className={fieldBoxSelectTriggerClassName}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -53,11 +49,10 @@ export function CompensationSection({ job }: { job?: Job }) {
               ))}
             </SelectContent>
           </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="salaryPeriod">Period</Label>
+        </FieldBox>
+        <FieldBox label="Period" htmlFor="salaryPeriod">
           <Select name="salaryPeriod" defaultValue={job?.salaryPeriod ?? "annual"}>
-            <SelectTrigger id="salaryPeriod" className="w-full">
+            <SelectTrigger id="salaryPeriod" className={fieldBoxSelectTriggerClassName}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -65,7 +60,7 @@ export function CompensationSection({ job }: { job?: Job }) {
               <SelectItem value="monthly">Per month</SelectItem>
             </SelectContent>
           </Select>
-        </div>
+        </FieldBox>
       </div>
     </div>
   );

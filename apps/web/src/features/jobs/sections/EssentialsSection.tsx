@@ -1,8 +1,8 @@
 import type { Job } from "@harly/db";
 
 import { DepartmentCombobox } from "../DepartmentCombobox";
+import { FieldBox, fieldBoxControlClassName, fieldBoxSelectTriggerClassName } from "@/components/ui/field-box";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -46,10 +46,13 @@ export function EssentialsSection({
   return (
     <section data-section="essentials" className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-2 sm:col-span-2">
-          <Label htmlFor="title">
-            Job title <span className="text-destructive">*</span>
-          </Label>
+        <FieldBox
+          className="sm:col-span-2"
+          label="Job name"
+          htmlFor="title"
+          required
+          error={titleError ? "Add a job title (at least 3 characters) to continue." : undefined}
+        >
           <Input
             id="title"
             name="title"
@@ -60,51 +63,53 @@ export function EssentialsSection({
             }}
             aria-invalid={titleError}
             placeholder="Senior Full Stack Engineer"
-            className="text-base"
+            className={fieldBoxControlClassName}
           />
-          {titleError ? (
-            <p className="text-xs text-destructive">
-              Add a job title (at least 3 characters) to continue.
-            </p>
-          ) : null}
-        </div>
+        </FieldBox>
 
-        <div className="space-y-2">
-          <Label>Department</Label>
+        <FieldBox label="Department">
           <DepartmentCombobox
             name="department"
             departments={departments}
             defaultValue={job?.department}
+            className={fieldBoxControlClassName}
           />
-        </div>
+        </FieldBox>
 
-        <div className="space-y-2">
-          <Label htmlFor="jobLocationCountry">Country code for search</Label>
-          <Input id="jobLocationCountry" name="jobLocationCountry" defaultValue={job?.jobLocationCountry ?? ""} placeholder="US" maxLength={2} className="uppercase" />
-        </div>
+        <FieldBox label="Country code for search" htmlFor="jobLocationCountry">
+          <Input
+            id="jobLocationCountry"
+            name="jobLocationCountry"
+            defaultValue={job?.jobLocationCountry ?? ""}
+            placeholder="US"
+            maxLength={2}
+            className={cnUppercase}
+          />
+        </FieldBox>
 
-        <div className="space-y-2">
-          <Label htmlFor="jobLocationRegion">State or region</Label>
-          <Input id="jobLocationRegion" name="jobLocationRegion" defaultValue={job?.jobLocationRegion ?? ""} placeholder="California" />
-        </div>
+        <FieldBox label="State or region" htmlFor="jobLocationRegion">
+          <Input
+            id="jobLocationRegion"
+            name="jobLocationRegion"
+            defaultValue={job?.jobLocationRegion ?? ""}
+            placeholder="California"
+            className={fieldBoxControlClassName}
+          />
+        </FieldBox>
 
-        <div className="space-y-2">
-          <Label htmlFor="location">Location</Label>
+        <FieldBox label="Location" htmlFor="location" hint="Shown on your public posting.">
           <Input
             id="location"
             name="location"
             defaultValue={job?.location ?? ""}
             placeholder="Remote, LATAM"
+            className={fieldBoxControlClassName}
           />
-        </div>
+        </FieldBox>
 
-        <div className="space-y-2">
-          <Label htmlFor="employmentType">Employment type</Label>
-          <Select
-            name="employmentType"
-            defaultValue={job?.employmentType ?? "full_time"}
-          >
-            <SelectTrigger id="employmentType" className="w-full">
+        <FieldBox label="Employment type" htmlFor="employmentType">
+          <Select name="employmentType" defaultValue={job?.employmentType ?? "full_time"}>
+            <SelectTrigger id="employmentType" className={fieldBoxSelectTriggerClassName}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -115,16 +120,11 @@ export function EssentialsSection({
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </FieldBox>
 
-        <div className="space-y-2">
-          <Label htmlFor="workplaceType">Workplace type</Label>
-          <Select
-            name="workplaceType"
-            value={workplace}
-            onValueChange={setWorkplace}
-          >
-            <SelectTrigger id="workplaceType" className="w-full">
+        <FieldBox label="Workplace type" htmlFor="workplaceType">
+          <Select name="workplaceType" value={workplace} onValueChange={setWorkplace}>
+            <SelectTrigger id="workplaceType" className={fieldBoxSelectTriggerClassName}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -135,18 +135,36 @@ export function EssentialsSection({
               ))}
             </SelectContent>
           </Select>
-        </div>
+        </FieldBox>
       </div>
+
       {workplace === "remote" ? (
-        <div className="space-y-2">
-          <Label htmlFor="remoteEligibleCountries">Eligible remote countries</Label>
-          <Input id="remoteEligibleCountries" name="remoteEligibleCountries" defaultValue={(job?.remoteEligibleCountries as string[] | undefined)?.join(", ") ?? ""} placeholder="US, CA, CL (leave empty for worldwide)" />
-        </div>
+        <FieldBox
+          label="Eligible remote countries"
+          htmlFor="remoteEligibleCountries"
+          hint="Leave empty for worldwide."
+        >
+          <Input
+            id="remoteEligibleCountries"
+            name="remoteEligibleCountries"
+            defaultValue={(job?.remoteEligibleCountries as string[] | undefined)?.join(", ") ?? ""}
+            placeholder="US, CA, CL"
+            className={fieldBoxControlClassName}
+          />
+        </FieldBox>
       ) : null}
-      <div className="space-y-2">
-        <Label htmlFor="validThrough">Posting expires</Label>
-        <Input id="validThrough" name="validThrough" type="date" defaultValue={job?.validThrough ? job.validThrough.toISOString().slice(0, 10) : ""} />
-      </div>
+
+      <FieldBox label="Posting expires" htmlFor="validThrough">
+        <Input
+          id="validThrough"
+          name="validThrough"
+          type="date"
+          defaultValue={job?.validThrough ? job.validThrough.toISOString().slice(0, 10) : ""}
+          className={fieldBoxControlClassName}
+        />
+      </FieldBox>
     </section>
   );
 }
+
+const cnUppercase = `${fieldBoxControlClassName} uppercase`;

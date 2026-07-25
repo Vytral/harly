@@ -18,6 +18,7 @@ export type HiringTeamMember = {
   name: string;
   email: string;
   image?: string | null;
+  username?: string | null;
   role: HiringTeamRole;
 };
 
@@ -41,6 +42,7 @@ export async function listJobHiringTeam(
       name: authUsers.name,
       email: authUsers.email,
       image: authUsers.image,
+      username: authUsers.username,
     })
     .from(jobHiringTeam)
     .innerJoin(authUsers, eq(authUsers.id, jobHiringTeam.userId))
