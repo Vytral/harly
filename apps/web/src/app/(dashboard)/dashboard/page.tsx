@@ -1,72 +1,138 @@
-
-import { ApplicationsBoardTable } from "@/features/dashboard/ApplicationsBoardTable";
+import { CandidatesNeedingReview } from "@/components/dashboard/widgets/CandidatesNeedingReview";
+import { HiringPerformance } from "@/components/dashboard/widgets/HiringPerformance";
+import { InboxCard } from "@/components/dashboard/widgets/InboxCard";
+import { MyTasksCard } from "@/components/dashboard/widgets/MyTasksCard";
+import { PipelineOverviewCard } from "@/components/dashboard/widgets/PipelineOverviewCard";
+import { SetupChecklistCard } from "@/components/dashboard/widgets/SetupChecklistCard";
+import { TodayInterviews } from "@/components/dashboard/widgets/TodayInterviews";
 import {
   buildSubline,
   GreetingHeader,
 } from "@/features/dashboard/GreetingHeader";
-import { SetupChecklistCard } from "@/components/dashboard/widgets/SetupChecklistCard";
-import { getApplicationsBoard } from "@/features/dashboard/applications-board";
-import { getTodayInterviews } from "@/features/dashboard/widgets";
+import { TriageStrip } from "@/features/dashboard/TriageStrip";
+import {
+  getCandidatesNeedingReview,
+  getHiringPerformance,
+  getInbox,
+  getMyDashboardTasks,
+  getPipelineOverview,
+  getTodayInterviews,
+} from "@/features/dashboard/widgets";
 import { getSetupChecklist } from "@/features/dashboard/setup-checklist";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Home , the human work table (DESIGN.md , "Home is a human work table, not a
- * 6-card widget bento").
+ * Home , the recruiter's cockpit.
  *
- * What used to be here: a greeting with a waving emoji, a permanent setup card,
- * then six equal-weight widgets (inbox, interviews, pipeline, review, tasks,
- * performance chart) that informed without pushing. Six cards of equal weight
- * means nothing is important.
+ * Two wrong answers preceded this one. The first was a bento of six
+ * equal-weight widgets: it informed without pushing, and equal weight meant
+ * nothing was important. The second over-read the reference frame and made Home
+ * a flat table of applications , but that frame is an employee directory with
+ * salaries, an HR surface. An ATS home is not a directory; the directory already
+ * exists at /dashboard/candidates. Home has to answer "what needs me today".
  *
- * What is here now: who needs a decision from you, as people, in one table. The
- * widgets did not die pointlessly , their destinations are one rail click away
- * (Inbox, Pipeline) or in the More menu (Tasks, Reports), which is where a
- * recruiter goes deliberately rather than glancing at a mural.
+ * So: hierarchy, not symmetry, and not a single list either.
+ *   1. Greeting , who you are, what today looks like in one line.
+ *   2. Triage strip , the four countable answers to "what needs me", each a
+ *      link. One glance, above everything.
+ *   3. The work , candidates awaiting a decision (widest), today's interviews.
+ *   4. Context , pipeline health, inbox.
+ *   5. Analytics last , tasks and performance. Useful, never urgent.
  */
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ job?: string; stage?: string }>;
+  searchParams: Promise<{ job?: string }>;
 }) {
-  const { job, stage } = await searchParams;
+  const { job } = await searchParams;
   const { user } = await getWorkspaceContext();
   const firstName = (user.name ?? "").trim().split(/\s+/)[0] || "there";
 
-  const [board, interviews, setup] = await Promise.all([
-    getApplicationsBoard({ jobId: job, stage }),
-    getTodayInterviews(),
-    getSetupChecklist(),
-  ]);
+  const [inbox, interviews, pipeline, review, myTasks, performance, setup] =
+    await Promise.all([
+      getInbox(),
+      getTodayInterviews(),
+      getPipelineOverview(job),
+      getCandidatesNeedingReview(),
+      getMyDashboardTasks(),
+      getHiringPerformance(),
+      getSetupChecklist(),
+    ]);
 
-  const overdue = board.applications.filter(
-    (application) => application.daysWaiting >= 7,
-  ).length;
+  const overdue = inbox.filter((item) => item.dueState === "overdue").length;
+  const activeCandidates = pipeline.stages.reduce(
+    (total, stage) => total + stage.count,
+    0,
+  );
 
   return (
-    <div className="mx-auto w-full max-w-[1400px]">
+    <div className="mx-auto w-full max-w-[1440px] pb-4">
       <GreetingHeader
         name={firstName}
         avatarUrl={user.image ?? null}
         hour={new Date().getHours()}
         subline={buildSubline({
-          waiting: board.totalActive,
+          waiting: review.length,
           overdue,
           interviewsToday: interviews.length,
         })}
       />
 
-      {/* Collapsed by default, and only while genuinely incomplete , not a
-          permanent card of guilt (or of congratulation) above the work. */}
+      {/* Collapsed by default, and gone entirely once setup is complete. */}
       {setup.visible && !setup.allDone ? (
         <div className="mt-5">
           <SetupChecklistCard checklist={setup} />
         </div>
       ) : null}
 
-      <ApplicationsBoardTable board={board} filters={{ job, stage }} />
+      <div className="mt-5">
+        <TriageStrip
+          items={[
+            {
+              label: "Awaiting your review",
+              value: review.length,
+              href: "/dashboard/candidates",
+              urgent: true,
+            },
+            {
+              label: "Overdue replies",
+              value: overdue,
+              href: "/dashboard/inbox",
+              urgent: true,
+            },
+            {
+              label: "Interviews today",
+              value: interviews.length,
+              href: "/dashboard/calendars",
+            },
+            {
+              label: "Candidates in pipeline",
+              value: activeCandidates,
+              href: "/dashboard/pipeline",
+            },
+          ]}
+        />
+      </div>
+
+      {/* The work itself , decisions first, and the widest column gets them. */}
+      <section className="mt-4 grid gap-4 lg:grid-cols-5">
+        <CandidatesNeedingReview candidates={review} className="lg:col-span-3" />
+        <TodayInterviews interviews={interviews} className="lg:col-span-2" />
+      </section>
+
+      {/* Context for those decisions. */}
+      <section className="mt-4 grid gap-4 lg:grid-cols-5">
+        <PipelineOverviewCard data={pipeline} className="lg:col-span-3" />
+        <InboxCard items={inbox} className="lg:col-span-2" />
+      </section>
+
+      {/* Useful, never urgent , so it sits where the eye arrives last. */}
+      <section className="mt-4 grid gap-4 lg:grid-cols-5">
+        <MyTasksCard tasks={myTasks} className="lg:col-span-2" />
+        <HiringPerformance data={performance} className="lg:col-span-3" />
+      </section>
     </div>
   );
 }

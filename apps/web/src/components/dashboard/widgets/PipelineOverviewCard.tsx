@@ -4,8 +4,23 @@ import type { PipelineOverview } from "@/features/dashboard/widgets";
 import { Tile, TileHeader, TileLink, EmptyHint } from "./primitives";
 import { PipelineJobSelect } from "./PipelineJobSelect";
 
-// Warm, distinct lane colours by funnel position (Applied → Hired).
-const LANE_COLORS = ["#1f6f53", "#4f9e7f", "#b4540a", "#7a5ea8", "#9b968a"];
+/**
+ * Funnel lanes, Applied → Hired.
+ *
+ * Was five unrelated hues (pine, jade, burnt orange, violet, stone) , a rainbow
+ * that read as a second and third brand family and made the funnel look like a
+ * pie chart. DESIGN.md allows exactly one accent, so depth here comes from
+ * *progression*: ink lightens as the funnel narrows, and the final stage is the
+ * chartreuse signal, because reaching Hired is the one genuinely live event in
+ * the sequence.
+ */
+const LANE_COLORS = [
+  "#171717", // Applied , near ink
+  "#3d3d3a",
+  "#6a6a67", // soft ink
+  "#9a9a96", // quiet mist
+  "#c8f560", // Hired , chartreuse signal
+];
 
 export function PipelineOverviewCard({
   data,

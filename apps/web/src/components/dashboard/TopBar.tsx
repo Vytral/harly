@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Menu, Moon, Search, Sparkles, Sun } from "lucide-react";
+import { Menu, Moon, Search, Sun, X } from "lucide-react";
 import { useTheme } from "next-themes";
+
+import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
 
 import { CommandMenu } from "@/components/dashboard/CommandMenu";
 import { MobileNav } from "@/components/dashboard/IconRail";
@@ -180,6 +182,11 @@ function IconButton({
  * what the accent is for , and it is the only place in the top bar that gets it
  * (DESIGN.md , accent rationing). Hidden entirely when AI isn't configured,
  * rather than shown disabled.
+ *
+ * Wears Harly's own mark, not a generic sparkle. A sparkle is what every product
+ * bolted onto its toolbar in 2024; the mark says this assistant belongs to this
+ * tool. When open it flips to ink + a close glyph, so the button reads as the
+ * panel's toggle rather than a second "ask" affordance.
  */
 function AiSignalButton() {
   const { open, toggle, enabled } = useHarlyAI();
@@ -200,7 +207,11 @@ function AiSignalButton() {
               : "bg-chartreuse-signal text-chartreuse-ink hover:brightness-[0.97]",
           )}
         >
-          <Sparkles className="size-[17px]" strokeWidth={2} />
+          {open ? (
+            <X className="size-[17px]" strokeWidth={2} />
+          ) : (
+            <HarlyAILogoMark className="size-[19px]" />
+          )}
         </button>
       </TooltipTrigger>
       <TooltipContent>{open ? "Close Harly AI" : "Ask Harly AI"}</TooltipContent>
