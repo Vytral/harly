@@ -4,44 +4,45 @@ import {
   serializeCandidate,
   updateCandidateForApi,
 } from "@/features/candidates/service";
-import { authenticateApiKey } from "@/server/api/auth";
-import { candidateUpdateSchema } from "@/server/api/schemas";
+import { buildRouteHandler } from "@/server/api/contracts";
+import {
+  deleteCandidateContract,
+  getCandidateContract,
+  updateCandidateContract,
+} from "@/server/api/contracts/candidates";
 import { apiOk, withApi } from "@/server/api/respond";
+import { candidateUpdateSchema } from "@/server/api/schemas";
 
 export const runtime = "nodejs";
 
-type Context = { params: Promise<{ id: string }> };
+export const GET = withApi(
+  buildRouteHandler(getCandidateContract, async ({ params, auth }) => {
+    const candidate = await getCandidateForApi({
+      workspaceId: auth.workspaceId,
+      candidateId: params.id,
+    });
+    return apiOk(serializeCandidate(candidate));
+  }),
+);
 
-export const GET = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "candidates:read");
-  const { id } = await (context as Context).params;
-  const candidate = await getCandidateForApi({
-    workspaceId: ctx.workspaceId,
-    candidateId: id,
-  });
-  return apiOk(serializeCandidate(candidate));
-});
+export const PATCH = withApi(
+  buildRouteHandler(updateCandidateContract, async ({ params, body, auth }) => {
+    const values = candidateUpdateSchema.parse(body);
+    const candidate = await updateCandidateForApi({
+      workspaceId: auth.workspaceId,
+      candidateId: params.id,
+      values,
+    });
+    return apiOk(serializeCandidate(candidate));
+  }),
+);
 
-export const PATCH = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "candidates:write");
-  const { id } = await (context as Context).params;
-  const values = candidateUpdateSchema.parse(
-    await request.json().catch(() => null),
-  );
-  const candidate = await updateCandidateForApi({
-    workspaceId: ctx.workspaceId,
-    candidateId: id,
-    values,
-  });
-  return apiOk(serializeCandidate(candidate));
-});
-
-export const DELETE = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "candidates:write");
-  const { id } = await (context as Context).params;
-  await deleteCandidateForApi({
-    workspaceId: ctx.workspaceId,
-    candidateId: id,
-  });
-  return apiOk({ deleted: true });
-});
+export const DELETE = withApi(
+  buildRouteHandler(deleteCandidateContract, async ({ params, auth }) => {
+    await deleteCandidateForApi({
+      workspaceId: auth.workspaceId,
+      candidateId: params.id,
+    });
+    return apiOk({ deleted: true });
+  }),
+);

@@ -4,11 +4,8 @@ import {
   replayWebhookDelivery,
   serializeDelivery,
 } from "@/features/developers/data";
-import {
-  authenticateApiKey,
-  requireScope,
-  type ApiKeyContext,
-} from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import { replayWebhookDeliveryContract } from "@/server/api/contracts/webhooks";
 import {
   reserveIdempotencyKey,
   type IdempotencyResult,
@@ -16,19 +13,6 @@ import {
 import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
-
-type Context = { params: Promise<{ id: string; deliveryId: string }> };
-
-async function authenticateWebhookApiKey(
-  request: Request,
-  scope: "webhooks:read" | "webhooks:write",
-): Promise<ApiKeyContext> {
-  const ctx = await authenticateApiKey(request);
-  if (!ctx.scopes.includes(scope) && !ctx.scopes.includes("webhooks:manage")) {
-    requireScope(ctx, scope);
-  }
-  return ctx;
-}
 
 function replayIdempotentResponse(
   result: IdempotencyResult,
@@ -40,25 +24,25 @@ function replayIdempotentResponse(
   });
 }
 
-/** POST /api/v1/webhooks/{id}/deliveries/{deliveryId}/replay , queue a fresh replay. */
-export const POST = withApi(async (request, context) => {
-  const ctx = await authenticateWebhookApiKey(request, "webhooks:write");
-  const { id, deliveryId } = await (context as Context).params;
-  const idempotency = await reserveIdempotencyKey(request, {
-    workspaceId: ctx.workspaceId,
-    keyId: ctx.keyId,
-  });
-  const replay = replayIdempotentResponse(idempotency);
-  if (replay) return replay;
+export const POST = withApi(
+  buildRouteHandler(
+    replayWebhookDeliveryContract,
+    async ({ params, auth, request }) => {
+      const idempotency = await reserveIdempotencyKey(request, auth);
+      const replay = replayIdempotentResponse(idempotency);
+      if (replay) return replay;
 
-  const delivery = await replayWebhookDelivery({
-    workspaceId: ctx.workspaceId,
-    endpointId: id,
-    deliveryId,
-  });
-  const data = serializeDelivery(delivery);
-  if (idempotency.kind === "reserved") {
-    await idempotency.complete({ status: 202, body: { data } });
-  }
-  return apiOk(data, { status: 202 });
-});
+      const delivery = await replayWebhookDelivery({
+        workspaceId: auth.workspaceId,
+        endpointId: params.id,
+        deliveryId: params.deliveryId,
+      });
+      const data = serializeDelivery(delivery);
+      const response = apiOk(data, { status: 202 });
+      if (idempotency.kind === "reserved") {
+        await idempotency.complete({ status: 202, body: { data } });
+      }
+      return response;
+    },
+  ),
+);

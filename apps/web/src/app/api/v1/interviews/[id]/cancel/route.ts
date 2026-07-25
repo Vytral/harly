@@ -5,13 +5,12 @@ import {
   serializeInterview,
   setInterviewStatusForApi,
 } from "@/features/interviews/service";
-import { authenticateApiKey } from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import { cancelInterviewContract } from "@/server/api/contracts/interviews";
 import { reserveIdempotencyKey } from "@/server/api/idempotency";
 import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
-
-type Context = { params: Promise<{ id: string }> };
 
 function actorUserId(createdById: string | null): string {
   if (!createdById) {
@@ -22,28 +21,30 @@ function actorUserId(createdById: string | null): string {
   return createdById;
 }
 
-/** POST /api/v1/interviews/{id}/cancel , terminal cancellation. */
-export const POST = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "interviews:write");
-  const { id } = await (context as Context).params;
-  const reservation = await reserveIdempotencyKey(request, ctx);
-  if (reservation.kind === "replay") {
-    return NextResponse.json(reservation.response.body, {
-      status: reservation.response.status,
-    });
-  }
-  const interview = await setInterviewStatusForApi({
-    workspaceId: ctx.workspaceId,
-    actorUserId: actorUserId(ctx.createdById),
-    interviewId: id,
-    status: "canceled",
-  });
-  const response = apiOk(serializeInterview(interview));
-  if (reservation.kind === "reserved") {
-    await reservation.complete({
-      status: response.status,
-      body: await response.clone().json(),
-    });
-  }
-  return response;
-});
+export const POST = withApi(
+  buildRouteHandler(
+    cancelInterviewContract,
+    async ({ params, auth, request }) => {
+      const reservation = await reserveIdempotencyKey(request, auth);
+      if (reservation.kind === "replay") {
+        return NextResponse.json(reservation.response.body, {
+          status: reservation.response.status,
+        });
+      }
+      const interview = await setInterviewStatusForApi({
+        workspaceId: auth.workspaceId,
+        actorUserId: actorUserId(auth.createdById),
+        interviewId: params.id,
+        status: "canceled",
+      });
+      const response = apiOk(serializeInterview(interview));
+      if (reservation.kind === "reserved") {
+        await reservation.complete({
+          status: response.status,
+          body: await response.clone().json(),
+        });
+      }
+      return response;
+    },
+  ),
+);

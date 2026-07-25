@@ -24,8 +24,10 @@ import {
 export const CORS_HEADERS: Record<string, string> = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Api-Key, Idempotency-Key",
-  "Access-Control-Expose-Headers": "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After, Harly-API-Version, Deprecation, Sunset",
+  "Access-Control-Allow-Headers":
+    "Content-Type, Authorization, X-Api-Key, Idempotency-Key",
+  "Access-Control-Expose-Headers":
+    "X-RateLimit-Limit, X-RateLimit-Remaining, X-RateLimit-Reset, Retry-After, Harly-API-Version, Deprecation, Sunset",
   "Access-Control-Max-Age": "86400",
 };
 
@@ -107,20 +109,25 @@ export function corsPreflight(): NextResponse {
  * standard error envelope. Pass `{ cors: true }` for public routes.
  */
 export function withApi(
-  handler: (request: Request, context: unknown) => Promise<NextResponse>,
+  handler: (request: Request, context?: unknown) => Promise<Response>,
   options?: { cors?: boolean },
 ) {
-  return async (request: Request, context: unknown): Promise<NextResponse> => {
+  return async (request: Request, context?: unknown): Promise<NextResponse> => {
     try {
       const response = await handler(request, context);
       return withRateLimitHeaders(
-        withHeaders(response, options?.cors),
+        withHeaders(response as NextResponse, options?.cors),
         getRequestRateLimit(request),
       );
     } catch (error) {
-      await Promise.resolve(releaseIdempotencyReservation(request)).catch((releaseError) => {
-        console.error("[api] failed to release idempotency reservation", releaseError);
-      });
+      await Promise.resolve(releaseIdempotencyReservation(request)).catch(
+        (releaseError) => {
+          console.error(
+            "[api] failed to release idempotency reservation",
+            releaseError,
+          );
+        },
+      );
       const rateLimit =
         getRequestRateLimit(request) ?? rateLimitResultFromError(error);
       if (error instanceof ApiError) {

@@ -6,10 +6,13 @@ import {
   listScorecardsForApi,
   serializeScorecard,
 } from "@/features/scorecards/service";
-import { authenticateApiKey } from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import {
+  createScorecardContract,
+  listScorecardsContract,
+} from "@/server/api/contracts/scorecards";
 import { reserveIdempotencyKey } from "@/server/api/idempotency";
 import { apiOk, withApi } from "@/server/api/respond";
-import { scorecardCreateSchema } from "@/server/api/schemas";
 
 export const runtime = "nodejs";
 
@@ -22,50 +25,51 @@ function actorUserId(createdById: string | null): string {
   return createdById;
 }
 
-/** GET /api/v1/scorecards , cursor-paginated scorecards. */
-export const GET = withApi(async (request) => {
-  const ctx = await authenticateApiKey(request, "scorecards:read");
-  const url = new URL(request.url);
-  const limit = parseLimit(url.searchParams.get("limit"));
-  const cursor = decodeCursor(url.searchParams.get("cursor"));
-  const rows = await listScorecardsForApi({
-    workspaceId: ctx.workspaceId,
-    candidateId: url.searchParams.get("candidateId") ?? undefined,
-    applicationId: url.searchParams.get("applicationId") ?? undefined,
-    cursor,
-    limit,
-  });
-  const { items, meta } = paginate(rows, limit, (scorecard) => ({
-    createdAt: scorecard.createdAt.toISOString(),
-    id: scorecard.id,
-  }));
-  return apiOk(items.map(serializeScorecard), { pagination: meta });
-});
+export const GET = withApi(
+  buildRouteHandler(listScorecardsContract, async ({ query, auth }) => {
+    const q = query as {
+      limit?: number;
+      cursor?: string;
+      candidateId?: string;
+      applicationId?: string;
+    };
+    const limit = q.limit ?? parseLimit(null);
+    const rows = await listScorecardsForApi({
+      workspaceId: auth.workspaceId,
+      candidateId: q.candidateId,
+      applicationId: q.applicationId,
+      cursor: decodeCursor(q.cursor ?? null),
+      limit,
+    });
+    const { items, meta } = paginate(rows, limit, (scorecard) => ({
+      createdAt: scorecard.createdAt.toISOString(),
+      id: scorecard.id,
+    }));
+    return apiOk(items.map(serializeScorecard), { pagination: meta });
+  }),
+);
 
-/** POST /api/v1/scorecards , add an attributed team evaluation. */
-export const POST = withApi(async (request) => {
-  const ctx = await authenticateApiKey(request, "scorecards:write");
-  // Parse clone first; the reservation hashes the original request body.
-  const values = scorecardCreateSchema.parse(
-    await request.clone().json().catch(() => null),
-  );
-  const reservation = await reserveIdempotencyKey(request, ctx);
-  if (reservation.kind === "replay") {
-    return NextResponse.json(reservation.response.body, {
-      status: reservation.response.status,
-    });
-  }
-  const scorecard = await createScorecardForApi({
-    workspaceId: ctx.workspaceId,
-    actorUserId: actorUserId(ctx.createdById),
-    values,
-  });
-  const response = apiOk(serializeScorecard(scorecard), { status: 201 });
-  if (reservation.kind === "reserved") {
-    await reservation.complete({
-      status: response.status,
-      body: await response.clone().json(),
-    });
-  }
-  return response;
-});
+export const POST = withApi(
+  buildRouteHandler(
+    createScorecardContract,
+    async ({ body, auth, request }) => {
+      const reservation = await reserveIdempotencyKey(request, auth);
+      if (reservation.kind === "replay") {
+        return NextResponse.json(reservation.response.body, {
+          status: reservation.response.status,
+        });
+      }
+      const scorecard = await createScorecardForApi({
+        workspaceId: auth.workspaceId,
+        actorUserId: actorUserId(auth.createdById),
+        values: body as never,
+      });
+      const bodyJson = serializeScorecard(scorecard);
+      const response = apiOk(bodyJson, { status: 201 });
+      if (reservation.kind === "reserved") {
+        await reservation.complete({ status: response.status, body: bodyJson });
+      }
+      return response;
+    },
+  ),
+);

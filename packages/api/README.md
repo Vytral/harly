@@ -15,16 +15,76 @@ Pure TypeScript + `node:crypto` only — no Next.js, no DB. Consumed by the web 
 
 ## Endpoints (served by apps/web)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| GET | `/api/v1/jobs` | List jobs |
-| POST | `/api/v1/jobs` | Create job |
-| GET | `/api/v1/candidates` | List candidates |
-| POST | `/api/v1/candidates` | Create candidate |
-| GET | `/api/v1/applications` | List applications |
-| POST | `/api/v1/applications` | Create application |
-| CRUD | `/api/v1/webhooks` | Manage outbound webhooks |
-| GET | `/api/v1/openapi.json` | OpenAPI spec |
+The OpenAPI document is the source of truth:
+
+- `GET /api/v1/openapi.json`
+- `GET /docs/api`
+
+If you want a human-readable inventory, see [`../../docs/api-reference.md`](../../docs/api-reference.md).
+
+Summary of the public REST surface:
+
+| Method | Path                                                   |
+| ------ | ------------------------------------------------------ |
+| GET    | `/api/v1/jobs`                                         |
+| POST   | `/api/v1/jobs`                                         |
+| GET    | `/api/v1/jobs/{id}/stages`                             |
+| PATCH  | `/api/v1/jobs/{id}/stages/{stageId}`                   |
+| GET    | `/api/v1/candidates`                                   |
+| POST   | `/api/v1/candidates`                                   |
+| GET    | `/api/v1/candidates/{id}`                              |
+| PATCH  | `/api/v1/candidates/{id}`                              |
+| DELETE | `/api/v1/candidates/{id}`                              |
+| GET    | `/api/v1/candidates/{id}/notes`                        |
+| POST   | `/api/v1/candidates/{id}/notes`                        |
+| GET    | `/api/v1/candidates/{id}/tags`                         |
+| POST   | `/api/v1/candidates/{id}/tags`                         |
+| DELETE | `/api/v1/candidates/{id}/tags/{tagId}`                 |
+| GET    | `/api/v1/candidates/{id}/files`                        |
+| GET    | `/api/v1/applications`                                 |
+| POST   | `/api/v1/applications`                                 |
+| GET    | `/api/v1/applications/{id}`                            |
+| POST   | `/api/v1/applications/{id}/move`                       |
+| POST   | `/api/v1/applications/{id}/reject`                     |
+| POST   | `/api/v1/applications/{id}/hire`                       |
+| POST   | `/api/v1/applications/bulk`                            |
+| GET    | `/api/v1/interviews`                                   |
+| POST   | `/api/v1/interviews`                                   |
+| GET    | `/api/v1/interviews/{id}`                              |
+| PATCH  | `/api/v1/interviews/{id}`                              |
+| POST   | `/api/v1/interviews/{id}/cancel`                       |
+| POST   | `/api/v1/interviews/{id}/complete`                     |
+| GET    | `/api/v1/offers`                                       |
+| POST   | `/api/v1/offers`                                       |
+| GET    | `/api/v1/offers/{id}`                                  |
+| PATCH  | `/api/v1/offers/{id}`                                  |
+| POST   | `/api/v1/offers/{id}/send`                             |
+| POST   | `/api/v1/offers/{id}/decision`                         |
+| POST   | `/api/v1/offers/{id}/withdraw`                         |
+| GET    | `/api/v1/scorecards`                                   |
+| POST   | `/api/v1/scorecards`                                   |
+| GET    | `/api/v1/tasks`                                        |
+| POST   | `/api/v1/tasks`                                        |
+| GET    | `/api/v1/tasks/{id}`                                   |
+| PATCH  | `/api/v1/tasks/{id}`                                   |
+| DELETE | `/api/v1/tasks/{id}`                                   |
+| GET    | `/api/v1/pool-entries`                                 |
+| POST   | `/api/v1/pool-entries`                                 |
+| DELETE | `/api/v1/pool-entries/{id}`                            |
+| POST   | `/api/v1/pool-entries/{id}/assign`                     |
+| GET    | `/api/v1/activity-events`                              |
+| GET    | `/api/v1/webhooks`                                     |
+| POST   | `/api/v1/webhooks`                                     |
+| PATCH  | `/api/v1/webhooks/{id}`                                |
+| DELETE | `/api/v1/webhooks/{id}`                                |
+| POST   | `/api/v1/webhooks/{id}/test`                           |
+| GET    | `/api/v1/webhooks/{id}/deliveries`                     |
+| POST   | `/api/v1/webhooks/{id}/deliveries/{deliveryId}/replay` |
+| GET    | `/api/v1/api-keys`                                     |
+| POST   | `/api/v1/api-keys`                                     |
+| DELETE | `/api/v1/api-keys/{id}`                                |
+| POST   | `/api/v1/api-keys/{id}/rotate`                         |
+| GET    | `/api/v1/me`                                           |
 
 ## Usage
 

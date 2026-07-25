@@ -5,42 +5,46 @@ import {
   updateWorkflow,
 } from "@/features/automations/data";
 import { workflowInputSchema } from "@/features/automations/schema";
-import { authenticateApiKey } from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import {
+  deleteAutomationByIdContract,
+  getAutomationByIdContract,
+  updateAutomationByIdContract,
+} from "@/server/api/contracts/automations";
 import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
-type Context = { params: Promise<{ id: string }> };
-
-/** GET /api/v1/automations/:id — fetch a single workflow. */
-export const GET = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "automations:read");
-  const { id } = await (context as Context).params;
-  const workflow = await getWorkflow({ workspaceId: ctx.workspaceId, id });
-  return apiOk(serializeWorkflow(workflow));
-});
+export const GET = withApi(
+  buildRouteHandler(getAutomationByIdContract, async ({ params, auth }) => {
+    const workflow = await getWorkflow({
+      workspaceId: auth.workspaceId,
+      id: params.id,
+    });
+    return apiOk(serializeWorkflow(workflow));
+  }),
+);
 
 /** PATCH /api/v1/automations/:id — partial update (name, enabled, trigger, ...). */
-export const PATCH = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "automations:write");
-  const { id } = await (context as Context).params;
-  // Validate the partial body against the full input schema (each field is
-  // optional there); the data layer re-validates individual fields too.
-  const patch = workflowInputSchema.partial().parse(
-    await request.clone().json().catch(() => null),
-  );
-  const workflow = await updateWorkflow({
-    workspaceId: ctx.workspaceId,
-    id,
-    patch,
-  });
-  return apiOk(serializeWorkflow(workflow));
-});
+export const PATCH = withApi(
+  buildRouteHandler(
+    updateAutomationByIdContract,
+    async ({ params, body, auth }) => {
+      const patch = workflowInputSchema.partial().parse(body);
+      const workflow = await updateWorkflow({
+        workspaceId: auth.workspaceId,
+        id: params.id,
+        patch,
+      });
+      return apiOk(serializeWorkflow(workflow));
+    },
+  ),
+);
 
 /** DELETE /api/v1/automations/:id — remove a workflow (cascades to runs). */
-export const DELETE = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "automations:write");
-  const { id } = await (context as Context).params;
-  await deleteWorkflow({ workspaceId: ctx.workspaceId, id });
-  return apiOk({ deleted: true });
-});
+export const DELETE = withApi(
+  buildRouteHandler(deleteAutomationByIdContract, async ({ params, auth }) => {
+    await deleteWorkflow({ workspaceId: auth.workspaceId, id: params.id });
+    return apiOk({ deleted: true });
+  }),
+);

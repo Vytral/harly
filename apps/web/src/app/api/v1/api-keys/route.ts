@@ -7,17 +7,18 @@ import {
   serializeApiKey,
 } from "@/features/developers/data";
 import { resolveWorkspaceActorUserId } from "@/server/api/actor";
-import {
-  authenticateApiKey,
-  hasApiScope,
-  type ApiKeyContext,
-} from "@/server/api/auth";
+import { hasApiScope, type ApiKeyContext } from "@/server/api/auth";
 import {
   reserveIdempotencyKey,
   type IdempotencyResult,
 } from "@/server/api/idempotency";
-import { apiKeyCreateSchema } from "@/server/api/schemas";
 import { apiOk, withApi } from "@/server/api/respond";
+import { apiKeyCreateSchema } from "@/server/api/schemas";
+import { buildRouteHandler } from "@/server/api/contracts/core";
+import {
+  createApiKeyContract,
+  listApiKeysContract,
+} from "@/server/api/contracts/api-keys";
 
 export const runtime = "nodejs";
 
@@ -41,56 +42,48 @@ function replayIdempotentResponse(
   });
 }
 
-/** GET /api/v1/api-keys , list masked workspace API keys. */
-export const GET = withApi(async (request) => {
-  const ctx = await authenticateApiKey(request, "api_keys:read");
-  requireSecretKey(ctx);
-  const keys = await listApiKeys(ctx.workspaceId);
-  return apiOk(keys.map(serializeApiKey));
-});
+export const GET = withApi(
+  buildRouteHandler(listApiKeysContract, async ({ auth }) => {
+    requireSecretKey(auth);
+    const keys = await listApiKeys(auth.workspaceId);
+    return apiOk(keys.map(serializeApiKey));
+  }),
+);
 
-/** POST /api/v1/api-keys , create a key. Raw key is returned once. */
-export const POST = withApi(async (request) => {
-  const ctx = await authenticateApiKey(request, "api_keys:write");
-  requireSecretKey(ctx);
-  const values = apiKeyCreateSchema.parse(
-    await request
-      .clone()
-      .json()
-      .catch(() => null),
-  );
-  const actorUserId = await resolveWorkspaceActorUserId(
-    ctx.workspaceId,
-    ctx.createdById,
-  );
-  if (!values.scopes.every(isApiScope)) {
-    throw ApiError.badRequest("API key contains an invalid scope.");
-  }
-  if (!values.scopes.every((scope) => hasApiScope(ctx.scopes, scope))) {
-    throw ApiError.forbidden(
-      "An API key cannot grant scopes it does not hold.",
+export const POST = withApi(
+  buildRouteHandler(createApiKeyContract, async ({ body, auth, request }) => {
+    requireSecretKey(auth);
+    const values = apiKeyCreateSchema.parse(body);
+    const actorUserId = await resolveWorkspaceActorUserId(
+      auth.workspaceId,
+      auth.createdById,
     );
-  }
-  const idempotency = await reserveIdempotencyKey(request, {
-    workspaceId: ctx.workspaceId,
-    keyId: ctx.keyId,
-  });
-  const replay = replayIdempotentResponse(idempotency);
-  if (replay) return replay;
+    if (!values.scopes.every(isApiScope)) {
+      throw ApiError.badRequest("API key contains an invalid scope.");
+    }
+    if (!values.scopes.every((scope) => hasApiScope(auth.scopes, scope))) {
+      throw ApiError.forbidden(
+        "An API key cannot grant scopes it does not hold.",
+      );
+    }
+    const idempotency = await reserveIdempotencyKey(request, auth);
+    const replay = replayIdempotentResponse(idempotency);
+    if (replay) return replay;
 
-  const { key, raw } = await createApiKey({
-    workspaceId: ctx.workspaceId,
-    name: values.name,
-    type: values.type,
-    environment: ctx.environment,
-    scopes: values.scopes,
-    createdById: actorUserId,
-    expiresAt: expiresAtFromDays(values.expiresInDays),
-  });
-  const data = serializeApiKey(key);
-  if (idempotency.kind === "reserved") {
-    // Do not persist `raw`: API keys must remain recoverable only from creation.
-    await idempotency.complete({ status: 201, body: { data } });
-  }
-  return apiOk({ ...data, key: raw }, { status: 201 });
-});
+    const { key, raw } = await createApiKey({
+      workspaceId: auth.workspaceId,
+      name: values.name,
+      type: values.type,
+      environment: auth.environment,
+      scopes: values.scopes,
+      createdById: actorUserId,
+      expiresAt: expiresAtFromDays(values.expiresInDays),
+    });
+    const data = serializeApiKey(key);
+    const response = apiOk({ ...data, key: raw }, { status: 201 });
+    if (idempotency.kind === "reserved") {
+      await idempotency.complete({ status: 201, body: { data } });
+    }
+    return response;
+  }),
+);

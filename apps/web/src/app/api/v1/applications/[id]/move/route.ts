@@ -2,35 +2,41 @@ import {
   moveApplicationStageForApi,
   serializeApplication,
 } from "@/features/applications/service";
-import { authenticateApiKey } from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import { moveApplicationContract } from "@/server/api/contracts/applications";
 import { reserveIdempotencyKey } from "@/server/api/idempotency";
-import { applicationMoveSchema } from "@/server/api/schemas";
 import { apiOk, withApi } from "@/server/api/respond";
+import { applicationMoveSchema } from "@/server/api/schemas";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 
-type Context = { params: Promise<{ id: string }> };
-
-/** POST /api/v1/applications/{id}/move , move to a pipeline stage. */
-export const POST = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "applications:write");
-  const idempotency = await reserveIdempotencyKey(request, ctx);
-  if (idempotency.kind === "replay") {
-    return NextResponse.json(idempotency.response.body, { status: idempotency.response.status });
-  }
-  const { id } = await (context as Context).params;
-  const { toStageId } = applicationMoveSchema.parse(
-    await request.json().catch(() => null),
-  );
-  const application = await moveApplicationStageForApi({
-    workspaceId: ctx.workspaceId,
-    applicationId: id,
-    toStageId,
-  });
-  const response = apiOk(serializeApplication(application));
-  if (idempotency.kind === "reserved") {
-    await idempotency.complete({ status: response.status, body: await response.clone().json() });
-  }
-  return response;
-});
+export const POST = withApi(
+  buildRouteHandler(
+    moveApplicationContract,
+    async ({ params, body, auth, request }) => {
+      const reservation = await reserveIdempotencyKey(request, auth, {
+        path: moveApplicationContract.path,
+      });
+      if (reservation.kind === "replay") {
+        return NextResponse.json(reservation.response.body, {
+          status: reservation.response.status,
+        });
+      }
+      const { toStageId } = applicationMoveSchema.parse(body);
+      const application = await moveApplicationStageForApi({
+        workspaceId: auth.workspaceId,
+        applicationId: params.id,
+        toStageId,
+      });
+      const response = apiOk(serializeApplication(application));
+      if (reservation.kind === "reserved") {
+        await reservation.complete({
+          status: response.status,
+          body: await response.clone().json(),
+        });
+      }
+      return response;
+    },
+  ),
+);

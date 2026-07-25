@@ -2,19 +2,18 @@ import {
   getApplicationForApi,
   serializeApplication,
 } from "@/features/applications/service";
-import { authenticateApiKey } from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import { getApplicationContract } from "@/server/api/contracts/applications";
 import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
-type Context = { params: Promise<{ id: string }> };
-
-export const GET = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "applications:read");
-  const { id } = await (context as Context).params;
-  const application = await getApplicationForApi({
-    workspaceId: ctx.workspaceId,
-    applicationId: id,
-  });
-  return apiOk(serializeApplication(application));
-});
+export const GET = withApi(
+  buildRouteHandler(getApplicationContract, async ({ params, auth }) => {
+    const application = await getApplicationForApi({
+      workspaceId: auth.workspaceId,
+      applicationId: params.id,
+    });
+    return apiOk(serializeApplication(application));
+  }),
+);

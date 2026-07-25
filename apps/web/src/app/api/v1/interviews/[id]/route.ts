@@ -5,13 +5,15 @@ import {
   serializeInterview,
   updateInterviewForApi,
 } from "@/features/interviews/service";
-import { authenticateApiKey } from "@/server/api/auth";
-import { interviewUpdateSchema } from "@/server/api/schemas";
+import { buildRouteHandler } from "@/server/api/contracts";
+import {
+  getInterviewContract,
+  updateInterviewContract,
+} from "@/server/api/contracts/interviews";
 import { apiOk, withApi } from "@/server/api/respond";
+import { interviewUpdateSchema } from "@/server/api/schemas";
 
 export const runtime = "nodejs";
-
-type Context = { params: Promise<{ id: string }> };
 
 function actorUserId(createdById: string | null): string {
   if (!createdById) {
@@ -22,31 +24,31 @@ function actorUserId(createdById: string | null): string {
   return createdById;
 }
 
-export const GET = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "interviews:read");
-  const { id } = await (context as Context).params;
-  const interview = await getInterviewForApi({
-    workspaceId: ctx.workspaceId,
-    interviewId: id,
-  });
-  return apiOk(serializeInterview(interview));
-});
+export const GET = withApi(
+  buildRouteHandler(getInterviewContract, async ({ params, auth }) => {
+    const interview = await getInterviewForApi({
+      workspaceId: auth.workspaceId,
+      interviewId: params.id,
+    });
+    return apiOk(serializeInterview(interview));
+  }),
+);
 
-export const PATCH = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "interviews:write");
-  const { id } = await (context as Context).params;
-  const values = interviewUpdateSchema.parse(
-    await request.json().catch(() => null),
-  );
-  const { scheduledAt, ...patch } = values;
-  const interview = await updateInterviewForApi({
-    workspaceId: ctx.workspaceId,
-    actorUserId: actorUserId(ctx.createdById),
-    interviewId: id,
-    values: {
-      ...patch,
-      ...(scheduledAt === undefined ? {} : { scheduledAt: new Date(scheduledAt) }),
-    },
-  });
-  return apiOk(serializeInterview(interview));
-});
+export const PATCH = withApi(
+  buildRouteHandler(updateInterviewContract, async ({ params, body, auth }) => {
+    const values = interviewUpdateSchema.parse(body);
+    const { scheduledAt, ...patch } = values;
+    const interview = await updateInterviewForApi({
+      workspaceId: auth.workspaceId,
+      actorUserId: actorUserId(auth.createdById),
+      interviewId: params.id,
+      values: {
+        ...patch,
+        ...(scheduledAt === undefined
+          ? {}
+          : { scheduledAt: new Date(scheduledAt) }),
+      },
+    });
+    return apiOk(serializeInterview(interview));
+  }),
+);

@@ -2,28 +2,29 @@ import { ApiError } from "@harly/api";
 
 import { deleteCandidateTagForApi } from "@/features/candidates/collaboration-service";
 import { resolveWorkspaceActorUserId } from "@/server/api/actor";
-import { authenticateApiKey } from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import { deleteCandidateTagContract } from "@/server/api/contracts/candidates";
 import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
-type Context = { params: Promise<{ id: string; tagId: string }> };
-
-export const DELETE = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "tags:write");
-  const { id, tagId } = await (context as Context).params;
-  const actorId = await resolveWorkspaceActorUserId(
-    ctx.workspaceId,
-    ctx.createdById,
-  );
-  if (!actorId) {
-    throw ApiError.unprocessable("Workspace has no owner to attribute this to.");
-  }
-  await deleteCandidateTagForApi({
-    workspaceId: ctx.workspaceId,
-    candidateId: id,
-    tagId,
-    actorId,
-  });
-  return apiOk({ deleted: true });
-});
+export const DELETE = withApi(
+  buildRouteHandler(deleteCandidateTagContract, async ({ params, auth }) => {
+    const actorId = await resolveWorkspaceActorUserId(
+      auth.workspaceId,
+      auth.createdById,
+    );
+    if (!actorId) {
+      throw ApiError.unprocessable(
+        "Workspace has no owner to attribute this to.",
+      );
+    }
+    await deleteCandidateTagForApi({
+      workspaceId: auth.workspaceId,
+      candidateId: params.id,
+      tagId: params.tagId,
+      actorId,
+    });
+    return apiOk({ deleted: true });
+  }),
+);

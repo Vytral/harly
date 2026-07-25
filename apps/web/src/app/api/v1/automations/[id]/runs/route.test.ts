@@ -17,12 +17,16 @@ vi.mock("@/server/api/auth", () => ({
 import { GET } from "./route";
 
 const ctx = { workspaceId: "ws-1", keyId: "k" };
-const routeCtx = () => ({ params: Promise.resolve({ id: "wf-1" }) });
+const WORKFLOW_ID = "11111111-1111-4111-8111-111111111111";
+const routeCtx = () => ({ params: Promise.resolve({ id: WORKFLOW_ID }) });
 
 function buildRequest(query = "") {
-  return new Request(`https://harly.dev/api/v1/automations/wf-1/runs${query}`, {
-    method: "GET",
-  });
+  return new Request(
+    `https://harly.dev/api/v1/automations/${WORKFLOW_ID}/runs${query}`,
+    {
+      method: "GET",
+    },
+  );
 }
 
 describe("GET /api/v1/automations/:id/runs", () => {
@@ -36,10 +40,13 @@ describe("GET /api/v1/automations/:id/runs", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.authenticate).toHaveBeenCalledWith(expect.any(Request), "automations:read");
+    expect(mocks.authenticate).toHaveBeenCalledWith(
+      expect.any(Request),
+      "automations:read",
+    );
     expect(mocks.listRuns).toHaveBeenCalledWith({
       workspaceId: "ws-1",
-      workflowId: "wf-1",
+      workflowId: WORKFLOW_ID,
       limit: 50,
     });
     expect(body.data).toEqual([{ id: "run-1" }, { id: "run-2" }]);

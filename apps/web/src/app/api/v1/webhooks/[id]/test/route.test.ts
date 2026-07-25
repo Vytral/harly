@@ -40,10 +40,12 @@ vi.mock("@harly/db", () => ({
 
 import { POST } from "./route";
 
-const endpoint = { id: "endpoint-1", url: "https://example.com/hook" };
+const ENDPOINT_ID = "22222222-2222-4222-8222-222222222222";
+const DELIVERY_ID = "33333333-3333-4333-8333-333333333333";
+const endpoint = { id: ENDPOINT_ID, url: "https://example.com/hook" };
 
 function buildRequest() {
-  return new Request("https://harly.dev/api/v1/webhooks/endpoint-1/test", {
+  return new Request(`https://harly.dev/api/v1/webhooks/${ENDPOINT_ID}/test`, {
     method: "POST",
   });
 }
@@ -59,7 +61,7 @@ describe("POST /api/v1/webhooks/{id}/test", () => {
     });
     mocks.getWebhookEndpoint.mockResolvedValue(endpoint);
     mocks.insertReturning.mockReturnValue([
-      { id: "delivery-1", event: "application.created", payload: {} },
+      { id: DELIVERY_ID, event: "application.created", payload: {} },
     ]);
     mocks.dispatchDueWebhooks.mockResolvedValue({
       processed: 1,
@@ -69,7 +71,7 @@ describe("POST /api/v1/webhooks/{id}/test", () => {
   });
 
   it("routes the ping through the claim+lock dispatcher (no direct deliverWebhook)", async () => {
-    const ctx = { params: Promise.resolve({ id: "endpoint-1" }) };
+    const ctx = { params: Promise.resolve({ id: ENDPOINT_ID }) };
     const response = await POST(buildRequest(), ctx);
     const body = await response.json();
 
@@ -77,12 +79,12 @@ describe("POST /api/v1/webhooks/{id}/test", () => {
     expect(body.data).toMatchObject({
       delivered: true,
       status: "success",
-      deliveryId: "delivery-1",
+      deliveryId: DELIVERY_ID,
     });
     // The dispatcher is called with the new delivery id, which claims the row
     // with a worker lock before sending — closing the race where a concurrent
     // cron tick could double-deliver the test ping.
-    expect(mocks.dispatchDueWebhooks).toHaveBeenCalledWith(1, ["delivery-1"]);
+    expect(mocks.dispatchDueWebhooks).toHaveBeenCalledWith(1, [DELIVERY_ID]);
   });
 
   it("reports not-delivered when the dispatcher fails the delivery", async () => {
@@ -91,14 +93,14 @@ describe("POST /api/v1/webhooks/{id}/test", () => {
       success: 0,
       failed: 1,
     });
-    const ctx = { params: Promise.resolve({ id: "endpoint-1" }) };
+    const ctx = { params: Promise.resolve({ id: ENDPOINT_ID }) };
     const response = await POST(buildRequest(), ctx);
     const body = await response.json();
 
     expect(body.data).toMatchObject({
       delivered: false,
       status: "failed",
-      deliveryId: "delivery-1",
+      deliveryId: DELIVERY_ID,
     });
   });
 });

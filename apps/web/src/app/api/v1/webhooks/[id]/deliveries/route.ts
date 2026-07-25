@@ -7,50 +7,36 @@ import {
   WEBHOOK_DELIVERY_STATUSES,
   type WebhookDeliveryStatus,
 } from "@/features/developers/data";
-import {
-  authenticateApiKey,
-  requireScope,
-  type ApiKeyContext,
-} from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import { listWebhookDeliveriesContract } from "@/server/api/contracts/webhooks";
 import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
-type Context = { params: Promise<{ id: string }> };
-
-async function authenticateWebhookApiKey(
-  request: Request,
-  scope: "webhooks:read" | "webhooks:write",
-): Promise<ApiKeyContext> {
-  const ctx = await authenticateApiKey(request);
-  if (!ctx.scopes.includes(scope) && !ctx.scopes.includes("webhooks:manage")) {
-    requireScope(ctx, scope);
-  }
-  return ctx;
-}
-
 function parseStatus(value: string | null): WebhookDeliveryStatus | undefined {
   if (!value) return undefined;
-  if (
-    !(WEBHOOK_DELIVERY_STATUSES as readonly string[]).includes(value)
-  ) {
+  if (!(WEBHOOK_DELIVERY_STATUSES as readonly string[]).includes(value)) {
     throw ApiError.badRequest("Invalid webhook delivery status.");
   }
   return value as WebhookDeliveryStatus;
 }
 
-/** GET /api/v1/webhooks/{id}/deliveries , endpoint-scoped delivery log. */
-export const GET = withApi(async (request, context) => {
-  const ctx = await authenticateWebhookApiKey(request, "webhooks:read");
-  const { id } = await (context as Context).params;
-  const url = new URL(request.url);
-
-  await getWebhookEndpoint({ workspaceId: ctx.workspaceId, id });
-  const deliveries = await listWebhookDeliveries({
-    workspaceId: ctx.workspaceId,
-    endpointId: id,
-    limit: parseLimit(url.searchParams.get("limit")),
-    status: parseStatus(url.searchParams.get("status")),
-  });
-  return apiOk(deliveries.map(serializeDelivery));
-});
+export const GET = withApi(
+  buildRouteHandler(
+    listWebhookDeliveriesContract,
+    async ({ query, params, auth }) => {
+      const q = query as { limit?: number; status?: string };
+      await getWebhookEndpoint({
+        workspaceId: auth.workspaceId,
+        id: params.id,
+      });
+      const deliveries = await listWebhookDeliveries({
+        workspaceId: auth.workspaceId,
+        endpointId: params.id,
+        limit: q.limit ?? parseLimit(null),
+        status: parseStatus(q.status ?? null),
+      });
+      return apiOk(deliveries.map(serializeDelivery));
+    },
+  ),
+);

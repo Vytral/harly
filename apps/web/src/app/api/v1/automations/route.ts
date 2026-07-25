@@ -6,43 +6,45 @@ import {
   serializeWorkflow,
 } from "@/features/automations/data";
 import { workflowInputSchema } from "@/features/automations/schema";
-import { authenticateApiKey } from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import {
+  createAutomationContract,
+  listAutomationsContract,
+} from "@/server/api/contracts/automations";
 import { reserveIdempotencyKey } from "@/server/api/idempotency";
 import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
-/** GET /api/v1/automations — list workflows for the authenticated workspace. */
-export const GET = withApi(async (request) => {
-  const ctx = await authenticateApiKey(request, "automations:read");
-  const workflows = await listWorkflows(ctx.workspaceId);
-  return apiOk(workflows.map(serializeWorkflow));
-});
+export const GET = withApi(
+  buildRouteHandler(listAutomationsContract, async ({ auth }) => {
+    const workflows = await listWorkflows(auth.workspaceId);
+    return apiOk(workflows.map(serializeWorkflow));
+  }),
+);
 
-/** POST /api/v1/automations — create a workflow. Idempotent via Idempotency-Key. */
-export const POST = withApi(async (request) => {
-  const ctx = await authenticateApiKey(request, "automations:write");
-  const values = workflowInputSchema.parse(
-    await request.clone().json().catch(() => null),
-  );
-  const idempotency = await reserveIdempotencyKey(request, ctx);
-  if (idempotency.kind === "replay") {
-    return NextResponse.json(idempotency.response.body, {
-      status: idempotency.response.status,
-    });
-  }
-  const workflow = await createWorkflow({
-    workspaceId: ctx.workspaceId,
-    values,
-    // API-created workflows run as the key's creator (decision D1).
-    createdById: ctx.createdById ?? "",
-  });
-  const response = apiOk(serializeWorkflow(workflow), { status: 201 });
-  if (idempotency.kind === "reserved") {
-    await idempotency.complete({
-      status: response.status,
-      body: { data: serializeWorkflow(workflow) },
-    });
-  }
-  return response;
-});
+export const POST = withApi(
+  buildRouteHandler(
+    createAutomationContract,
+    async ({ body, auth, request }) => {
+      const values = workflowInputSchema.parse(body);
+      const idempotency = await reserveIdempotencyKey(request, auth);
+      if (idempotency.kind === "replay") {
+        return NextResponse.json(idempotency.response.body, {
+          status: idempotency.response.status,
+        });
+      }
+      const workflow = await createWorkflow({
+        workspaceId: auth.workspaceId,
+        values,
+        createdById: auth.createdById ?? "",
+      });
+      const bodyJson = serializeWorkflow(workflow);
+      const response = apiOk(bodyJson, { status: 201 });
+      if (idempotency.kind === "reserved") {
+        await idempotency.complete({ status: response.status, body: bodyJson });
+      }
+      return response;
+    },
+  ),
+);

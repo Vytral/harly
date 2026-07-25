@@ -50,7 +50,10 @@ describe("GET /api/v1/automations", () => {
     const body = await response.json();
 
     expect(response.status).toBe(200);
-    expect(mocks.authenticate).toHaveBeenCalledWith(expect.any(Request), "automations:read");
+    expect(mocks.authenticate).toHaveBeenCalledWith(
+      expect.any(Request),
+      "automations:read",
+    );
     expect(mocks.listWorkflows).toHaveBeenCalledWith("ws-1");
     expect(body.data).toEqual([{ id: "wf-1" }, { id: "wf-2" }]);
   });
@@ -69,7 +72,10 @@ describe("POST /api/v1/automations", () => {
     const body = await response.json();
 
     expect(response.status).toBe(201);
-    expect(mocks.authenticate).toHaveBeenCalledWith(expect.any(Request), "automations:write");
+    expect(mocks.authenticate).toHaveBeenCalledWith(
+      expect.any(Request),
+      "automations:write",
+    );
     expect(mocks.createWorkflow).toHaveBeenCalledWith({
       workspaceId: "ws-1",
       values: expect.objectContaining({ name: "Auto-reject juniors" }),
@@ -100,10 +106,17 @@ describe("POST /api/v1/automations", () => {
 
   it("completes the idempotency reservation after a successful create", async () => {
     mocks.authenticate.mockResolvedValue(ctx);
-    mocks.reserve.mockResolvedValue({ kind: "reserved", key: "idem-1", complete: mocks.complete });
+    mocks.reserve.mockResolvedValue({
+      kind: "reserved",
+      key: "idem-1",
+      complete: mocks.complete,
+    });
     mocks.createWorkflow.mockResolvedValue({ id: "wf-1", ...validBody });
 
-    await POST(buildRequest(validBody, { "Idempotency-Key": "idem-1" }), undefined);
+    await POST(
+      buildRequest(validBody, { "Idempotency-Key": "idem-1" }),
+      undefined,
+    );
 
     expect(mocks.complete).toHaveBeenCalled();
   });
@@ -112,7 +125,14 @@ describe("POST /api/v1/automations", () => {
     mocks.authenticate.mockResolvedValue(ctx);
     mocks.reserve.mockResolvedValue({ kind: "not_requested" });
 
-    const response = await POST(buildRequest({ name: "", trigger: { event: "application.created" }, actions: [] }), undefined);
+    const response = await POST(
+      buildRequest({
+        name: "",
+        trigger: { event: "application.created" },
+        actions: [],
+      }),
+      undefined,
+    );
 
     expect(response.status).toBe(422);
     expect(mocks.createWorkflow).not.toHaveBeenCalled();

@@ -1,61 +1,65 @@
-import { ApiError } from "@harly/api";
-
 import {
   createCandidateNoteForApi,
   listCandidateNotesForApi,
 } from "@/features/candidates/collaboration-service";
 import { resolveWorkspaceActorUserId } from "@/server/api/actor";
-import { authenticateApiKey } from "@/server/api/auth";
-import { reserveIdempotencyKey } from "@/server/api/idempotency";
+import { buildRouteHandler } from "@/server/api/contracts";
+import {
+  createCandidateNoteContract,
+  listCandidateNotesContract,
+} from "@/server/api/contracts/candidates";
 import { apiOk, withApi } from "@/server/api/respond";
 import { candidateNoteCreateSchema } from "@/server/api/schemas";
+import { reserveIdempotencyKey } from "@/server/api/idempotency";
+import { ApiError } from "@harly/api";
 
 export const runtime = "nodejs";
-
-type Context = { params: Promise<{ id: string }> };
 
 async function actorForWrite(workspaceId: string, createdById: string | null) {
   const actorId = await resolveWorkspaceActorUserId(workspaceId, createdById);
   if (!actorId) {
-    throw ApiError.unprocessable("Workspace has no owner to attribute this to.");
+    throw ApiError.unprocessable(
+      "Workspace has no owner to attribute this to.",
+    );
   }
   return actorId;
 }
 
-/** GET /api/v1/candidates/:id/notes */
-export const GET = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "notes:read");
-  const { id } = await (context as Context).params;
-  const notes = await listCandidateNotesForApi({
-    workspaceId: ctx.workspaceId,
-    candidateId: id,
-  });
-  return apiOk(notes);
-});
-
-/** POST /api/v1/candidates/:id/notes. Supports Idempotency-Key replay. */
-export const POST = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "notes:write");
-  const reservation = await reserveIdempotencyKey(request, ctx);
-  if (reservation.kind === "replay") {
-    return apiOk(reservation.response.body, {
-      status: reservation.response.status,
+export const GET = withApi(
+  buildRouteHandler(listCandidateNotesContract, async ({ params, auth }) => {
+    const notes = await listCandidateNotesForApi({
+      workspaceId: auth.workspaceId,
+      candidateId: params.id,
     });
-  }
+    return apiOk(notes);
+  }),
+);
 
-  const { id } = await (context as Context).params;
-  const values = candidateNoteCreateSchema.parse(
-    await request.json().catch(() => null),
-  );
-  const note = await createCandidateNoteForApi({
-    workspaceId: ctx.workspaceId,
-    candidateId: id,
-    actorId: await actorForWrite(ctx.workspaceId, ctx.createdById),
-    body: values.body,
-    mentions: values.mentions,
-  });
-  if (reservation.kind === "reserved") {
-    await reservation.complete({ status: 201, body: note });
-  }
-  return apiOk(note, { status: 201 });
-});
+export const POST = withApi(
+  buildRouteHandler(
+    createCandidateNoteContract,
+    async ({ params, body, auth, request }) => {
+      const reservation = await reserveIdempotencyKey(request, auth, {
+        path: createCandidateNoteContract.path,
+      });
+      if (reservation.kind === "replay") {
+        return apiOk(reservation.response.body, {
+          status: reservation.response.status,
+        });
+      }
+
+      const values = candidateNoteCreateSchema.parse(body);
+      const note = await createCandidateNoteForApi({
+        workspaceId: auth.workspaceId,
+        candidateId: params.id,
+        actorId: await actorForWrite(auth.workspaceId, auth.createdById),
+        body: values.body,
+        mentions: values.mentions,
+      });
+      if (reservation.kind === "reserved") {
+        await reservation.complete({ status: 201, body: note });
+      }
+      return apiOk(note, { status: 201 });
+    },
+  ),
+);

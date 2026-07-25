@@ -17,6 +17,8 @@ vi.mock("@/server/api/auth", () => ({
 import { GET } from "./route";
 
 describe("GET /api/v1/candidates/:id/files", () => {
+  const CANDIDATE_ID = "44444444-4444-4444-8444-444444444444";
+
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.authenticate.mockResolvedValue({ workspaceId: "ws-1" });
@@ -34,8 +36,10 @@ describe("GET /api/v1/candidates/:id/files", () => {
     ]);
 
     const response = await GET(
-      new Request("https://example.test/api/v1/candidates/candidate-1/files"),
-      { params: Promise.resolve({ id: "candidate-1" }) },
+      new Request(
+        `https://example.test/api/v1/candidates/${CANDIDATE_ID}/files`,
+      ),
+      { params: Promise.resolve({ id: CANDIDATE_ID }) },
     );
 
     expect(mocks.authenticate).toHaveBeenCalledWith(
@@ -44,7 +48,7 @@ describe("GET /api/v1/candidates/:id/files", () => {
     );
     expect(mocks.list).toHaveBeenCalledWith({
       workspaceId: "ws-1",
-      candidateId: "candidate-1",
+      candidateId: CANDIDATE_ID,
     });
     await expect(response.json()).resolves.toEqual({
       data: [

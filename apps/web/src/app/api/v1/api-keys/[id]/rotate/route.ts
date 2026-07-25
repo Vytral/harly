@@ -8,7 +8,9 @@ import {
   serializeApiKey,
 } from "@/features/developers/data";
 import { resolveWorkspaceActorUserId } from "@/server/api/actor";
-import { authenticateApiKey, type ApiKeyContext } from "@/server/api/auth";
+import { type ApiKeyContext } from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import { rotateApiKeyContract } from "@/server/api/contracts/api-keys";
 import {
   reserveIdempotencyKey,
   type IdempotencyResult,
@@ -16,8 +18,6 @@ import {
 import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
-
-type Context = { params: Promise<{ id: string }> };
 
 function requireSecretKey(context: ApiKeyContext): void {
   if (context.type !== "secret") {
@@ -35,47 +35,42 @@ function replayIdempotentResponse(
   });
 }
 
-/** POST /api/v1/api-keys/{id}/rotate , replace a key and return its raw value once. */
-export const POST = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "api_keys:write");
-  requireSecretKey(ctx);
-  const { id } = await (context as Context).params;
-  const idempotency = await reserveIdempotencyKey(request, {
-    workspaceId: ctx.workspaceId,
-    keyId: ctx.keyId,
-  });
-  const replay = replayIdempotentResponse(idempotency);
-  if (replay) return replay;
+export const POST = withApi(
+  buildRouteHandler(rotateApiKeyContract, async ({ params, auth, request }) => {
+    requireSecretKey(auth);
+    const idempotency = await reserveIdempotencyKey(request, auth);
+    const replay = replayIdempotentResponse(idempotency);
+    if (replay) return replay;
 
-  const existing = (await listApiKeys(ctx.workspaceId)).find(
-    (key) => key.id === id,
-  );
-  if (!existing) throw ApiError.notFound("API key not found.");
-  if (existing.revokedAt) {
-    throw ApiError.conflict("A revoked API key cannot be rotated.");
-  }
+    const existing = (await listApiKeys(auth.workspaceId)).find(
+      (key) => key.id === params.id,
+    );
+    if (!existing) throw ApiError.notFound("API key not found.");
+    if (existing.revokedAt) {
+      throw ApiError.conflict("A revoked API key cannot be rotated.");
+    }
 
-  const actorUserId = await resolveWorkspaceActorUserId(
-    ctx.workspaceId,
-    ctx.createdById,
-  );
+    const actorUserId = await resolveWorkspaceActorUserId(
+      auth.workspaceId,
+      auth.createdById,
+    );
 
-  // Insert first. Old key is revoked only after its replacement exists.
-  const { key, raw } = await createApiKey({
-    workspaceId: ctx.workspaceId,
-    name: existing.name,
-    type: existing.type as "publishable" | "secret",
-    environment: existing.environment as "live" | "test",
-    scopes: existing.scopes as string[],
-    createdById: actorUserId,
-    expiresAt: existing.expiresAt,
-  });
-  await revokeApiKey({ workspaceId: ctx.workspaceId, keyId: existing.id });
+    const { key, raw } = await createApiKey({
+      workspaceId: auth.workspaceId,
+      name: existing.name,
+      type: existing.type as "publishable" | "secret",
+      environment: existing.environment as "live" | "test",
+      scopes: existing.scopes as string[],
+      createdById: actorUserId,
+      expiresAt: existing.expiresAt ? new Date(existing.expiresAt) : null,
+    });
+    await revokeApiKey({ workspaceId: auth.workspaceId, keyId: existing.id });
 
-  const data = { replacedKeyId: existing.id, apiKey: serializeApiKey(key) };
-  if (idempotency.kind === "reserved") {
-    // Persist metadata only; never store a newly generated raw API key.
-    await idempotency.complete({ status: 201, body: { data } });
-  }
-  return apiOk({ ...data, key: raw }, { status: 201 });
-});
+    const data = { replacedKeyId: existing.id, apiKey: serializeApiKey(key) };
+    const response = apiOk({ ...data, key: raw }, { status: 201 });
+    if (idempotency.kind === "reserved") {
+      await idempotency.complete({ status: 201, body: { data } });
+    }
+    return response;
+  }),
+);

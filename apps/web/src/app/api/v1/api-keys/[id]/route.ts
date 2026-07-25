@@ -1,11 +1,12 @@
-import { revokeApiKey } from "@/features/developers/data";
-import { authenticateApiKey, type ApiKeyContext } from "@/server/api/auth";
 import { ApiError } from "@harly/api";
+
+import { revokeApiKey } from "@/features/developers/data";
+import { type ApiKeyContext } from "@/server/api/auth";
+import { buildRouteHandler } from "@/server/api/contracts";
+import { deleteApiKeyContract } from "@/server/api/contracts/api-keys";
 import { apiOk, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
-
-type Context = { params: Promise<{ id: string }> };
 
 function requireSecretKey(context: ApiKeyContext): void {
   if (context.type !== "secret") {
@@ -13,11 +14,10 @@ function requireSecretKey(context: ApiKeyContext): void {
   }
 }
 
-/** DELETE /api/v1/api-keys/{id} , revoke an API key. */
-export const DELETE = withApi(async (request, context) => {
-  const ctx = await authenticateApiKey(request, "api_keys:write");
-  requireSecretKey(ctx);
-  const { id } = await (context as Context).params;
-  await revokeApiKey({ workspaceId: ctx.workspaceId, keyId: id });
-  return apiOk({ deleted: true });
-});
+export const DELETE = withApi(
+  buildRouteHandler(deleteApiKeyContract, async ({ params, auth }) => {
+    requireSecretKey(auth);
+    await revokeApiKey({ workspaceId: auth.workspaceId, keyId: params.id });
+    return apiOk({ deleted: true });
+  }),
+);
