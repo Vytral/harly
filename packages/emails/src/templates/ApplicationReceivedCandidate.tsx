@@ -13,6 +13,8 @@ export type ApplicationReceivedCandidateProps = {
   socialLinks?: SocialLink[];
   hideBranding?: boolean;
   jobBoardUrl?: string;
+  portalUrl?: string;
+  profileUrl?: string;
 };
 
 export function applicationReceivedCandidateSubject({
@@ -31,6 +33,8 @@ export function ApplicationReceivedCandidate({
   socialLinks,
   hideBranding,
   jobBoardUrl,
+  portalUrl,
+  profileUrl,
 }: ApplicationReceivedCandidateProps) {
   return (
     <WorkspaceLayout
@@ -44,7 +48,9 @@ export function ApplicationReceivedCandidate({
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         Application received
       </Text>
-      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        Hi {candidateName},
+      </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
         We got your application for{" "}
         <span className="text-fg font-semibold">{jobTitle}</span>. The team will
@@ -53,6 +59,28 @@ export function ApplicationReceivedCandidate({
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
         Thanks for taking the time — we appreciate it.
       </Text>
+      {portalUrl ? (
+        <Section className="mt-2">
+          <Button
+            href={portalUrl}
+            className="bg-brand text-[14px] leading-[1.5] font-inter text-fg-inverted inline-block border-none px-4 py-2.5 text-center box-border no-underline"
+          >
+            Review your application
+          </Button>
+          <EmailFallbackLink url={portalUrl} />
+        </Section>
+      ) : null}
+      {profileUrl ? (
+        <Section className="mt-2">
+          <Button
+            href={profileUrl}
+            className="border border-stroke text-[14px] leading-[1.5] font-inter text-fg inline-block px-4 py-2.5 text-center box-border no-underline"
+          >
+            Complete your profile
+          </Button>
+          <EmailFallbackLink url={profileUrl} />
+        </Section>
+      ) : null}
       {jobBoardUrl ? (
         <Section className="mt-2">
           <Button

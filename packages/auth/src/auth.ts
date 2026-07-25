@@ -4,20 +4,26 @@ import { nextCookies } from "better-auth/next-js";
 import { magicLink, organization, twoFactor } from "better-auth/plugins";
 import { sso } from "@better-auth/sso";
 
-import { db, schema, organization as organizationTable, oauthProviders } from "@harly/db";
+import {
+  db,
+  schema,
+  organization as organizationTable,
+  workspaceSettings,
+  oauthProviders,
+} from "@harly/db";
 import { eq, and, sql } from "drizzle-orm";
 import {
   createEmailSender,
   ResetPasswordEmail,
   resetPasswordSubject,
+  StaffMagicLinkEmail,
+  staffMagicLinkSubject,
+  type EmailProviderConfig,
   type SendEmailOptions,
 } from "@harly/emails";
 import { decryptSecret, isEncryptionConfigured } from "./crypto-adapter";
 import { loadHarlyConfig } from "@harly/config";
-import {
-  authorizeUserCreation,
-  setupClaimCookieName,
-} from "./setup";
+import { authorizeUserCreation, setupClaimCookieName } from "./setup";
 
 const config = loadHarlyConfig(
   process.env.NEXT_PHASE === "phase-production-build"
@@ -25,14 +31,14 @@ const config = loadHarlyConfig(
     : process.env,
 );
 const appUrl = config.HARLY_URL;
-const emailFrom = process.env.EMAIL_FROM ?? "Harly <noreply@harly.dev>";
 const allowConsoleAuthEmailFallback =
   process.env.NODE_ENV !== "production" &&
   process.env.AUTH_EMAIL_CONSOLE_FALLBACK === "true";
 
 if (
   process.env.NODE_ENV === "production" &&
-  (!process.env.AI_ENCRYPTION_KEY || process.env.AI_ENCRYPTION_KEY.trim() === "")
+  (!process.env.AI_ENCRYPTION_KEY ||
+    process.env.AI_ENCRYPTION_KEY.trim() === "")
 ) {
   console.warn(
     "[Harly] AI_ENCRYPTION_KEY is not set — OAuth provider secrets, mailbox credentials, and AI provider keys cannot be encrypted at rest. Set AI_ENCRYPTION_KEY before configuring those integrations.",
@@ -40,8 +46,92 @@ if (
 }
 
 /**
- * Send an auth email via Resend. A console fallback is available only through
- * explicit opt-in in non-production local development.
+ * Self-host is single-org per deployment (see [[project_self_host_single_org]]),
+ * so staff-facing auth emails (magic link, password reset) can resolve the
+ * one workspace's own sending config directly, instead of always going out
+ * as the platform's Harly <noreply@harly.dev>. Falls back to the platform
+ * env config when the workspace hasn't configured its own sender.
+ */
+async function getSingleWorkspaceEmailConfig(): Promise<EmailProviderConfig | null> {
+  const [row] = await db
+    .select({
+      emailEnabled: workspaceSettings.emailEnabled,
+      emailProvider: workspaceSettings.emailProvider,
+      emailFrom: workspaceSettings.emailFrom,
+      emailApiKeyCiphertext: workspaceSettings.emailApiKeyCiphertext,
+      emailApiKeyIv: workspaceSettings.emailApiKeyIv,
+      emailApiKeyTag: workspaceSettings.emailApiKeyTag,
+      emailSmtpHost: workspaceSettings.emailSmtpHost,
+      emailSmtpPort: workspaceSettings.emailSmtpPort,
+      emailSmtpSecure: workspaceSettings.emailSmtpSecure,
+      emailSmtpUser: workspaceSettings.emailSmtpUser,
+    })
+    .from(workspaceSettings)
+    .limit(1);
+
+  if (!row || !row.emailEnabled || !row.emailProvider || !row.emailFrom) {
+    return null;
+  }
+
+  if (row.emailProvider === "resend") {
+    if (
+      !row.emailApiKeyCiphertext ||
+      !row.emailApiKeyIv ||
+      !row.emailApiKeyTag ||
+      !isEncryptionConfigured()
+    ) {
+      return null;
+    }
+    try {
+      const apiKey = decryptSecret({
+        ciphertext: row.emailApiKeyCiphertext,
+        iv: row.emailApiKeyIv,
+        tag: row.emailApiKeyTag,
+      });
+      return { provider: "resend", apiKey, from: row.emailFrom };
+    } catch {
+      return null;
+    }
+  }
+
+  if (
+    row.emailProvider !== "smtp" ||
+    !row.emailSmtpHost ||
+    !row.emailSmtpPort
+  ) {
+    return null;
+  }
+
+  let pass: string | undefined;
+  if (row.emailApiKeyCiphertext && row.emailApiKeyIv && row.emailApiKeyTag) {
+    if (!isEncryptionConfigured()) return null;
+    try {
+      pass = decryptSecret({
+        ciphertext: row.emailApiKeyCiphertext,
+        iv: row.emailApiKeyIv,
+        tag: row.emailApiKeyTag,
+      });
+    } catch {
+      return null;
+    }
+  }
+
+  return {
+    provider: "smtp",
+    from: row.emailFrom,
+    host: row.emailSmtpHost,
+    port: row.emailSmtpPort,
+    secure: Boolean(row.emailSmtpSecure),
+    user: row.emailSmtpUser ?? undefined,
+    pass,
+  };
+}
+
+/**
+ * Send an auth email via the workspace's own sender when configured,
+ * falling back to the platform Resend/SMTP env vars otherwise. A console
+ * fallback is available only through explicit opt-in in non-production
+ * local development.
  */
 async function sendAuthEmail(options: {
   to: string;
@@ -49,7 +139,8 @@ async function sendAuthEmail(options: {
   react: SendEmailOptions["react"];
   fallbackLog: string;
 }) {
-  const sender = createEmailSender();
+  const config = await getSingleWorkspaceEmailConfig();
+  const sender = createEmailSender(config);
 
   if (!sender) {
     if (allowConsoleAuthEmailFallback) {
@@ -72,9 +163,10 @@ async function sendAuthEmail(options: {
 }
 
 async function sendMagicLinkEmail(email: string, url: string) {
-  const apiKey = process.env.RESEND_API_KEY;
+  const config = await getSingleWorkspaceEmailConfig();
+  const sender = createEmailSender(config);
 
-  if (!apiKey) {
+  if (!sender) {
     if (allowConsoleAuthEmailFallback) {
       console.log(`Magic link for ${email}: ${url}`);
       return;
@@ -83,14 +175,10 @@ async function sendMagicLinkEmail(email: string, url: string) {
   }
 
   try {
-    const { Resend } = await import("resend");
-    const resend = new Resend(apiKey);
-
-    await resend.emails.send({
-      from: emailFrom,
+    await sender.send({
       to: email,
-      subject: "Sign in to Harly",
-      text: `Use this link to sign in to Harly:\n\n${url}\n\nIf you did not request this, you can ignore this email.`,
+      subject: staffMagicLinkSubject(),
+      react: StaffMagicLinkEmail({ loginUrl: url }),
     });
   } catch (error) {
     console.error("[Harly] Failed to send magic link email:", error);
@@ -121,7 +209,12 @@ async function getOAuthCredentialsFromDb(
       )
       .limit(1);
 
-    if (!row || !row.clientSecretCiphertext || !row.clientSecretIv || !row.clientSecretTag) {
+    if (
+      !row ||
+      !row.clientSecretCiphertext ||
+      !row.clientSecretIv ||
+      !row.clientSecretTag
+    ) {
       return null;
     }
 
@@ -136,7 +229,10 @@ async function getOAuthCredentialsFromDb(
       clientSecret,
     };
   } catch (error) {
-    console.error(`[Harly] Failed to load ${provider} credentials from DB:`, error);
+    console.error(
+      `[Harly] Failed to load ${provider} credentials from DB:`,
+      error,
+    );
     return null;
   }
 }
@@ -146,12 +242,17 @@ async function getOAuthCredentialsFromDb(
  * DB config takes precedence over env vars.
  */
 async function buildSocialProviders() {
-  const providers: Record<string, {
-    clientId: string;
-    clientSecret: string;
-    tenantId?: string;
-    mapProfileToUser?: (profile: Record<string, unknown>) => Record<string, unknown>;
-  }> = {};
+  const providers: Record<
+    string,
+    {
+      clientId: string;
+      clientSecret: string;
+      tenantId?: string;
+      mapProfileToUser?: (
+        profile: Record<string, unknown>,
+      ) => Record<string, unknown>;
+    }
+  > = {};
   const providerNames = ["google", "microsoft", "github", "linkedin"];
 
   for (const providerName of providerNames) {
@@ -169,8 +270,9 @@ async function buildSocialProviders() {
 
     // Fallback to env vars
     const envClientId = process.env[`${providerName.toUpperCase()}_CLIENT_ID`];
-    const envClientSecret = process.env[`${providerName.toUpperCase()}_CLIENT_SECRET`];
-    
+    const envClientSecret =
+      process.env[`${providerName.toUpperCase()}_CLIENT_SECRET`];
+
     if (envClientId && envClientSecret) {
       providers[providerName] = {
         clientId: envClientId,
@@ -213,7 +315,8 @@ function getProfileMapper(provider: string) {
 // Build social providers on module load (cached for the lifetime of the process)
 // In production, this will be refreshed when the server restarts.
 // For dynamic updates, we use the cache invalidation in auth-logic.ts.
-let socialProvidersPromise: ReturnType<typeof buildSocialProviders> | null = null;
+let socialProvidersPromise: ReturnType<typeof buildSocialProviders> | null =
+  null;
 
 function getSocialProviders() {
   if (!socialProvidersPromise) {

@@ -40,6 +40,13 @@ export const workplaceTypeEnum = pgEnum("workplace_type", [
 
 export const jobStatusEnum = pgEnum("job_status", ["draft", "open", "closed"]);
 
+export const jobApprovalStatusEnum = pgEnum("job_approval_status", [
+  "pending",
+  "approved",
+  "rejected",
+  "cancelled",
+]);
+
 export const boardStyleEnum = pgEnum("board_style", ["hero", "minimal"]);
 
 export const logoStyleEnum = pgEnum("logo_style", ["bordered", "full"]);
@@ -170,34 +177,59 @@ export const workflowRunStatusEnum = pgEnum("workflow_run_status", [
 ]);
 
 // Better Auth
-export const user = pgTable("user", {
-  id: text("id").primaryKey(),
-  name: text("name").notNull(),
-  email: text("email").notNull().unique(),
-  emailVerified: boolean("email_verified").default(false).notNull(),
-  image: text("image"),
-  jobTitle: text("job_title"),
-  phone: text("phone"),
-  location: text("location"),
-  bio: text("bio"),
-  linkedinUrl: text("linkedin_url"),
-  githubUrl: text("github_url"),
-  websiteUrl: text("website_url"),
-  twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
-  // Set when an owner provisions the account with a temporary password; the
-  // member is forced through /change-password on next sign-in, after which it
-  // clears. Keeps the provisioning owner from retaining a working credential.
-  mustChangePassword: boolean("must_change_password").default(false).notNull(),
-  onboardingCompletedAt: timestamp("onboarding_completed_at", {
-    withTimezone: true,
-  }),
-  onboardingRole: text("onboarding_role"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at")
-    .defaultNow()
-    .$onUpdate(() => new Date())
-    .notNull(),
-});
+export const user = pgTable(
+  "user",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    email: text("email").notNull().unique(),
+    emailVerified: boolean("email_verified").default(false).notNull(),
+    image: text("image"),
+    jobTitle: text("job_title"),
+    phone: text("phone"),
+    location: text("location"),
+    bio: text("bio"),
+    linkedinUrl: text("linkedin_url"),
+    githubUrl: text("github_url"),
+    websiteUrl: text("website_url"),
+    username: text("username"),
+    timezone: text("timezone"),
+    specialties: text("specialties").array(),
+    languages: text("languages").array(),
+    weeklyAvailability: jsonb(
+      "weekly_availability",
+    ).$type<WeeklyAvailability>(),
+    capacityHoursPerWeek: integer("capacity_hours_per_week"),
+    twoFactorEnabled: boolean("two_factor_enabled").default(false).notNull(),
+    // Set when an owner provisions the account with a temporary password; the
+    // member is forced through /change-password on next sign-in, after which it
+    // clears. Keeps the provisioning owner from retaining a working credential.
+    mustChangePassword: boolean("must_change_password")
+      .default(false)
+      .notNull(),
+    onboardingCompletedAt: timestamp("onboarding_completed_at", {
+      withTimezone: true,
+    }),
+    onboardingRole: text("onboarding_role"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [uniqueIndex("user_username_uidx").on(table.username)],
+);
+
+export type TimeRange = { start: string; end: string };
+export type WeeklyAvailability = {
+  monday: TimeRange[];
+  tuesday: TimeRange[];
+  wednesday: TimeRange[];
+  thursday: TimeRange[];
+  friday: TimeRange[];
+  saturday: TimeRange[];
+  sunday: TimeRange[];
+};
 
 export const session = pgTable(
   "session",
@@ -342,6 +374,25 @@ export const memberSenderIdentity = pgTable(
     index("member_sender_identity_org_idx").on(table.organizationId),
   ],
 );
+
+export const usernameHistory = pgTable(
+  "username_history",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    oldUsername: text("old_username").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("username_history_old_username_uidx").on(table.oldUsername),
+    index("username_history_userId_idx").on(table.userId),
+  ],
+);
+
+export type UsernameHistory = typeof usernameHistory.$inferSelect;
+export type NewUsernameHistory = typeof usernameHistory.$inferInsert;
 
 export type MemberSenderIdentity = typeof memberSenderIdentity.$inferSelect;
 export type NewMemberSenderIdentity = typeof memberSenderIdentity.$inferInsert;
@@ -488,7 +539,9 @@ export const workspaceSettings = pgTable("workspace_settings", {
   organizationId: text("organization_id")
     .primaryKey()
     .references(() => organization.id, { onDelete: "cascade" }),
-  mailUnificationEnabled: boolean("mail_unification_enabled").default(false).notNull(),
+  mailUnificationEnabled: boolean("mail_unification_enabled")
+    .default(false)
+    .notNull(),
   tagline: text("tagline"),
   description: text("description"),
   websiteUrl: text("website_url"),
@@ -769,14 +822,26 @@ export const workspaceSettings = pgTable("workspace_settings", {
   // by default so each workspace can be enabled progressively.
   nativeSignEnabled: boolean("native_sign_enabled").default(true).notNull(),
   remoteSignEnabled: boolean("remote_sign_enabled").default(false).notNull(),
-  savedSignaturesEnabled: boolean("saved_signatures_enabled").default(false).notNull(),
-  signatureOtpEnabled: boolean("signature_otp_enabled").default(false).notNull(),
-  signatureTimelineEnabled: boolean("signature_timeline_enabled").default(false).notNull(),
-  signatureSecurityMode: text("signature_security_mode").default("link_only").notNull(),
-  signatureExpirationDays: integer("signature_expiration_days").default(30).notNull(),
+  savedSignaturesEnabled: boolean("saved_signatures_enabled")
+    .default(false)
+    .notNull(),
+  signatureOtpEnabled: boolean("signature_otp_enabled")
+    .default(false)
+    .notNull(),
+  signatureTimelineEnabled: boolean("signature_timeline_enabled")
+    .default(false)
+    .notNull(),
+  signatureSecurityMode: text("signature_security_mode")
+    .default("link_only")
+    .notNull(),
+  signatureExpirationDays: integer("signature_expiration_days")
+    .default(30)
+    .notNull(),
   // Offer delivery channel: "email" (default) or "esign" (collect signature via
   // embedded signing inside the candidate portal, email notifies instead).
-  offerSignatureChannel: text("offer_signature_channel").default("email").notNull(),
+  offerSignatureChannel: text("offer_signature_channel")
+    .default("email")
+    .notNull(),
   ...timestamps(),
 });
 
@@ -1053,6 +1118,40 @@ export const jobs = pgTable(
     index("jobs_created_by_idx").on(table.createdById),
   ],
 );
+
+export const jobApprovalRequests = pgTable(
+  "job_approval_requests",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    requesterId: text("requester_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    approverId: text("approver_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    status: jobApprovalStatusEnum("status").default("pending").notNull(),
+    comment: text("comment"),
+    decidedAt: timestamp("decided_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("job_approval_requests_workspace_idx").on(table.workspaceId),
+    index("job_approval_requests_job_idx").on(table.jobId),
+    index("job_approval_requests_approver_status_idx").on(
+      table.approverId,
+      table.status,
+    ),
+  ],
+);
+
+export type JobApprovalRequest = typeof jobApprovalRequests.$inferSelect;
+export type NewJobApprovalRequest = typeof jobApprovalRequests.$inferInsert;
 
 export const jobStages = pgTable(
   "job_stages",
@@ -2079,7 +2178,9 @@ export const signatureArtifacts = pgTable(
     sizeBytes: integer("size_bytes").notNull(),
     checksum: text("checksum").notNull(),
     certificateVersion: integer("certificate_version"),
-    metadata: jsonb("metadata").default(sql`'{}'::jsonb`).notNull(),
+    metadata: jsonb("metadata")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -2172,7 +2273,9 @@ export const signatureEvidenceEvents = pgTable(
     occurredAt: timestamp("occurred_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
-    payload: jsonb("payload").default(sql`'{}'::jsonb`).notNull(),
+    payload: jsonb("payload")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     previousHash: text("previous_hash"),
     currentHash: text("current_hash").notNull(),
     retentionExpiresAt: timestamp("retention_expires_at", {
@@ -2192,8 +2295,10 @@ export const signatureEvidenceEvents = pgTable(
 );
 
 export type SavedSignature = typeof savedSignatures.$inferSelect;
-export type NativeSignatureOtpChallenge = typeof nativeSignatureOtpChallenges.$inferSelect;
-export type SignatureEvidenceEvent = typeof signatureEvidenceEvents.$inferSelect;
+export type NativeSignatureOtpChallenge =
+  typeof nativeSignatureOtpChallenges.$inferSelect;
+export type SignatureEvidenceEvent =
+  typeof signatureEvidenceEvents.$inferSelect;
 
 /** Durable queue for outbound candidate communications. Workers may retry a
  * pending row safely; application mutations never depend on a dropped promise. */
@@ -2316,7 +2421,7 @@ export const emailTemplates = pgTable(
 export type EmailTemplate = typeof emailTemplates.$inferSelect;
 export type NewEmailTemplate = typeof emailTemplates.$inferInsert;
 
-    // In-app notifications (mentions, and later: assignments, interviews, …)
+// In-app notifications (mentions, and later: assignments, interviews, …)
 export const notifications = pgTable(
   "notifications",
   {
@@ -2656,20 +2761,32 @@ export const mailIdempotencyKeys = pgTable(
   "mail_idempotency_keys",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    workspaceId: text("workspace_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     idempotencyKey: text("idempotency_key").notNull(),
     messageId: text("message_id").notNull(),
     status: mailIdempotencyStatusEnum("status").default("pending").notNull(),
-    threadId: uuid("thread_id").references(() => mailThreads.id, { onDelete: "set null" }),
-    mailMessageId: uuid("mail_message_id").references(() => mailMessages.id, { onDelete: "set null" }),
+    threadId: uuid("thread_id").references(() => mailThreads.id, {
+      onDelete: "set null",
+    }),
+    mailMessageId: uuid("mail_message_id").references(() => mailMessages.id, {
+      onDelete: "set null",
+    }),
     providerMessageId: text("provider_message_id"),
     payloadHash: text("payload_hash").notNull(),
     error: text("error"),
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex("mail_idempotency_workspace_key_unique").on(table.workspaceId, table.idempotencyKey),
-    index("mail_idempotency_workspace_status_idx").on(table.workspaceId, table.status),
+    uniqueIndex("mail_idempotency_workspace_key_unique").on(
+      table.workspaceId,
+      table.idempotencyKey,
+    ),
+    index("mail_idempotency_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
   ],
 );
 
@@ -3266,7 +3383,9 @@ export const candidatePortalNotifications = pgTable(
     title: text("title").notNull(),
     body: text("body"),
     href: text("href"),
-    metadata: jsonb("metadata").default(sql`'{}'::jsonb`).notNull(),
+    metadata: jsonb("metadata")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     readAt: timestamp("read_at", { withTimezone: true }),
     emailedAt: timestamp("emailed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -3712,10 +3831,7 @@ export const workflowRuns = pgTable(
       table.workflowId,
       table.startedAt,
     ),
-    index("workflow_runs_status_started_idx").on(
-      table.status,
-      table.startedAt,
-    ),
+    index("workflow_runs_status_started_idx").on(table.status, table.startedAt),
     index("workflow_runs_parent_idx").on(table.parentRunId),
   ],
 );

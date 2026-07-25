@@ -764,6 +764,20 @@
       "when": 1784862401180,
       "tag": "0108_tiny_proemial_gods",
       "breakpoints": true
+    },
+    {
+      "idx": 109,
+      "version": "7",
+      "when": 1784913861390,
+      "tag": "0109_loud_jack_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 110,
+      "version": "7",
+      "when": 1784943913928,
+      "tag": "0110_real_baron_strucker",
+      "breakpoints": true
     }
   ]
 }

@@ -1,7 +1,8 @@
-import { Hr, Text } from "@react-email/components";
+import { Button, Hr, Section, Text } from "@react-email/components";
 
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import type { SocialLink } from "./HarlyLayout";
+import { EmailFallbackLink } from "./EmailFallbackLink";
 
 export type CandidateRejectedProps = {
   candidateName: string;
@@ -12,6 +13,7 @@ export type CandidateRejectedProps = {
   socialLinks?: SocialLink[];
   hideBranding?: boolean;
   customMessage?: string;
+  portalUrl?: string;
 };
 
 export function candidateRejectedSubject({
@@ -30,6 +32,7 @@ export function CandidateRejected({
   socialLinks,
   hideBranding,
   customMessage,
+  portalUrl,
 }: CandidateRejectedProps) {
   return (
     <WorkspaceLayout
@@ -43,7 +46,9 @@ export function CandidateRejected({
       <Text className="text-[40px] leading-[1.05] tracking-[-1px] font-inter text-fg m-0 mb-3.5 font-medium">
         Update on your application
       </Text>
-      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">Hi {candidateName},</Text>
+      <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
+        Hi {candidateName},
+      </Text>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
         {customMessage ??
           `Thank you for applying to ${jobTitle} at ${companyName}. After careful consideration, we've decided to move forward with other candidates.`}
@@ -54,6 +59,17 @@ export function CandidateRejected({
         <br />
         {companyName}
       </Text>
+      {portalUrl ? (
+        <Section className="mt-2">
+          <Button
+            href={portalUrl}
+            className="border border-stroke text-[14px] leading-[1.5] font-inter text-fg inline-block px-4 py-2.5 text-center box-border no-underline"
+          >
+            View application status
+          </Button>
+          <EmailFallbackLink url={portalUrl} />
+        </Section>
+      ) : null}
     </WorkspaceLayout>
   );
 }
