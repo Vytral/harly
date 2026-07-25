@@ -11,21 +11,39 @@ function read(relativePath) {
 }
 
 test("self-host deployment assets retain required lifecycle settings", () => {
-  const railwayApp = JSON.parse(read("deploy/railway/railway.app.json"));
-  const railwayScheduler = JSON.parse(read("deploy/railway/railway.scheduler.json"));
   const digitalOcean = read("deploy/digitalocean/app.template.yaml");
+  const digitalOceanButton = read(".do/app.yaml");
+  const render = read("render.yaml");
   const compose = read("compose.yaml");
 
-  assert.equal(railwayApp.deploy.preDeployCommand?.[0], "node /app/runtime.mjs migrate");
-  assert.equal(railwayApp.deploy.healthcheckPath, "/api/health/ready");
-  assert.equal(railwayScheduler.deploy.startCommand, "node /app/runtime.mjs scheduler");
   assert.match(digitalOcean, /^\s*- key: DATABASE_URL$/m);
   assert.match(digitalOcean, /^\s*- key: STORAGE_PROVIDER$/m);
   assert.match(digitalOcean, /^\s*value: s3$/m);
   assert.match(digitalOcean, /run_command: node \/app\/runtime\.mjs migrate/);
   assert.match(digitalOcean, /run_command: node \/app\/runtime\.mjs scheduler/);
   assert.match(digitalOcean, /http_path: \/api\/health\/ready/);
-  assert.match(compose, /scheduler:[\s\S]*healthcheck:[\s\S]*node", "\/app\/runtime\.mjs", "doctor/);
+
+  assert.match(digitalOceanButton, /^\s*- key: DATABASE_URL$/m);
+  assert.match(
+    digitalOceanButton,
+    /run_command: node \/app\/runtime\.mjs migrate/,
+  );
+  assert.match(
+    digitalOceanButton,
+    /run_command: node \/app\/runtime\.mjs scheduler/,
+  );
+  assert.match(digitalOceanButton, /http_path: \/api\/health\/ready/);
+  assert.match(digitalOceanButton, /^databases:$/m);
+
+  assert.match(render, /preDeployCommand: node \/app\/runtime\.mjs migrate/);
+  assert.match(render, /healthCheckPath: \/api\/health\/ready/);
+  assert.match(render, /dockerCommand: scheduler/);
+  assert.match(render, /^databases:$/m);
+
+  assert.match(
+    compose,
+    /scheduler:[\s\S]*healthcheck:[\s\S]*node", "\/app\/runtime\.mjs", "doctor/,
+  );
 });
 
 test("local Markdown links in self-host documentation resolve", () => {
@@ -44,7 +62,10 @@ test("local Markdown links in self-host documentation resolve", () => {
     for (const match of read(document).matchAll(linkPattern)) {
       const target = match[1].replace(/^<|>$/g, "").split("#", 1)[0];
       if (!target || /^(?:https?:|mailto:|#)/.test(target)) continue;
-      assert.ok(existsSync(resolve(directory, target)), `${document} links to missing ${target}`);
+      assert.ok(
+        existsSync(resolve(directory, target)),
+        `${document} links to missing ${target}`,
+      );
     }
   }
 });
