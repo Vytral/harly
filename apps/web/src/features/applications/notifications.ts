@@ -15,7 +15,9 @@ type ApplicationEmail = Extract<
  * endpoint so both behave identically. Any row the provider rejects stays
  * `pending`/`failed` and is retried by the scheduler (F4-03).
  */
-export async function sendApplicationReceivedEmails(email: ApplicationEmail): Promise<void> {
+export async function sendApplicationReceivedEmails(
+  email: ApplicationEmail & { portalEnabled?: boolean },
+): Promise<void> {
   const ids: string[] = [
     await enqueueEmailOutbox(email.workspaceId, "application.received.candidate", {
       candidateEmail: email.candidateEmail,
@@ -23,6 +25,8 @@ export async function sendApplicationReceivedEmails(email: ApplicationEmail): Pr
       jobTitle: email.jobTitle,
       workspaceName: email.workspaceName,
       workspaceSlug: email.workspaceSlug,
+      applicationId: email.applicationId,
+      portalEnabled: email.portalEnabled,
     }),
   ];
 

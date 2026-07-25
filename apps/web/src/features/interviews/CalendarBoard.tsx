@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import {
@@ -85,6 +85,14 @@ export function CalendarBoard({
   const [interviewerFilter, setInterviewerFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const detailRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (selectedDay) {
+      detailRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }, [selectedDay]);
 
   const [year, month] = monthParam.split("-").map(Number);
   const grid = useMemo(() => buildMonthGrid(new Date(year, month - 1, 1)), [year, month]);
@@ -228,6 +236,64 @@ export function CalendarBoard({
         ) : null}
       </div>
 
+      {/* Mobile: agenda list grouped by day (7-col grid is unreadable under sm) */}
+      <div className="space-y-3 sm:hidden">
+        {filtered.length === 0 ? null : (
+          [...byDay.entries()]
+            .sort(([a], [b]) => (a > b ? 1 : -1))
+            .map(([key, dayInterviews]) => {
+              const [y, m, d] = key.split("-").map(Number);
+              const heading = new Date(y, m, d).toLocaleDateString("en", {
+                weekday: "short",
+                month: "short",
+                day: "numeric",
+              });
+              return (
+                <div key={key} className="space-y-1.5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    {heading}
+                  </h3>
+                  <div className="space-y-1.5">
+                    {dayInterviews.map((iv) => {
+                      const ModeIcon = MODE_ICON[iv.mode];
+                      return (
+                        <Link
+                          key={iv.id}
+                          href={`/dashboard/candidates/${iv.candidateId}`}
+                          className="flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2.5 transition-colors hover:bg-accent/60"
+                        >
+                          <span className="w-14 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                            {new Date(iv.scheduledAt).toLocaleTimeString("en", {
+                              hour: "numeric",
+                              minute: "2-digit",
+                            })}
+                          </span>
+                          <span
+                            className={cn(
+                              "inline-flex size-7 shrink-0 items-center justify-center rounded-full",
+                              MODE_TONE[iv.mode],
+                            )}
+                          >
+                            <ModeIcon className="size-3.5" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium">
+                              {iv.candidateName}
+                            </span>
+                            <span className="block truncate text-xs text-muted-foreground">
+                              {interviewTypeLabel(iv.type)} · {iv.jobTitle}
+                            </span>
+                          </span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })
+        )}
+      </div>
+
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
           key={monthParam}
@@ -235,9 +301,9 @@ export function CalendarBoard({
           animate={{ opacity: 1, x: 0 }}
           exit={shouldReduceMotion ? undefined : { opacity: 0, x: -8 }}
           transition={{ duration: 0.18, ease: EASE_OUT }}
-          className="overflow-hidden rounded-xl border border-border"
+          className="hidden overflow-hidden rounded-xl border border-border sm:block"
         >
-          <div className="grid grid-cols-7 border-b border-border bg-muted/40">
+          <div className="grid grid-cols-7 border-b border-border bg-muted/40" aria-hidden="true">
             {WEEKDAY_LABELS.map((d) => (
               <div
                 key={d}
@@ -247,7 +313,11 @@ export function CalendarBoard({
               </div>
             ))}
           </div>
-          <div className="grid grid-cols-7">
+          <div
+            className="grid grid-cols-7"
+            role="grid"
+            aria-label={`Interview calendar for ${monthLabel}`}
+          >
             {grid.map((date) => {
               const key = dayKey(date);
               const dayInterviews = byDay.get(key) ?? [];
@@ -255,11 +325,23 @@ export function CalendarBoard({
               const isToday = key === today;
               const visible = dayInterviews.slice(0, MAX_VISIBLE_PER_DAY);
               const overflow = dayInterviews.length - visible.length;
+              const dateLabel = date.toLocaleDateString("en", {
+                weekday: "long",
+                month: "long",
+                day: "numeric",
+              });
 
               return (
                 <button
                   key={key}
                   type="button"
+                  role="gridcell"
+                  aria-label={
+                    dayInterviews.length > 0
+                      ? `${dateLabel}, ${dayInterviews.length} interview${dayInterviews.length === 1 ? "" : "s"}${isToday ? ", today" : ""}`
+                      : `${dateLabel}, no interviews${isToday ? ", today" : ""}`
+                  }
+                  aria-pressed={selectedDay === key}
                   onClick={() =>
                     dayInterviews.length > 0 &&
                     setSelectedDay(selectedDay === key ? null : key)
@@ -272,6 +354,7 @@ export function CalendarBoard({
                   )}
                 >
                   <span
+                    aria-hidden="true"
                     className={cn(
                       "inline-flex size-6 items-center justify-center rounded-full text-xs font-medium tabular-nums",
                       isToday && "bg-pine text-primary-foreground",
@@ -279,7 +362,7 @@ export function CalendarBoard({
                   >
                     {date.getDate()}
                   </span>
-                  <div className="flex flex-1 flex-col gap-1">
+                  <div aria-hidden="true" className="flex flex-1 flex-col gap-1">
                     {visible.map((iv) => {
                       const ModeIcon = MODE_ICON[iv.mode];
                       return (
@@ -317,6 +400,7 @@ export function CalendarBoard({
       <AnimatePresence>
         {selectedDay ? (
           <motion.div
+            ref={detailRef}
             initial={shouldReduceMotion ? false : { opacity: 0, y: -4 }}
             animate={{ opacity: 1, y: 0 }}
             exit={shouldReduceMotion ? undefined : { opacity: 0, y: -4 }}
@@ -339,64 +423,133 @@ export function CalendarBoard({
                 <div className="space-y-1.5">
                   {selectedDayInterviews.map((iv) => {
                     const ModeIcon = MODE_ICON[iv.mode];
+                    const isExpanded = expandedId === iv.id;
+                    const hasDetails = Boolean(
+                      iv.location || iv.notes || iv.meetLink || iv.title,
+                    );
                     return (
-                      <Link
+                      <div
                         key={iv.id}
-                        href={`/dashboard/candidates/${iv.candidateId}`}
-                        className="flex items-center gap-3 rounded-lg border border-transparent px-2 py-2 transition-colors hover:border-border hover:bg-accent/60"
+                        className="rounded-lg border border-transparent transition-colors hover:border-border hover:bg-accent/60"
                       >
-                        <span className="w-16 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
-                          {new Date(iv.scheduledAt).toLocaleTimeString("en", {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}
-                        </span>
-                        <span
-                          className={cn(
-                            "inline-flex size-7 shrink-0 items-center justify-center rounded-full",
-                            MODE_TONE[iv.mode],
-                          )}
-                        >
-                          <ModeIcon className="size-3.5" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-medium">
-                            {iv.candidateName}
-                          </span>
-                          <span className="block truncate text-xs text-muted-foreground">
-                            {interviewTypeLabel(iv.type)} · {iv.jobTitle} ·{" "}
-                            {interviewModeLabel(iv.mode)}
-                          </span>
-                        </span>
-                        {iv.interviewerName ? (
-                          <UserAvatar
-                            name={iv.interviewerName}
-                            src={iv.interviewerImage}
-                            size="sm"
-                            className="size-6 shrink-0 text-[10px]"
-                          />
-                        ) : null}
-                        <Badge variant="neutral" className="shrink-0">
-                          {iv.durationMins}m
-                        </Badge>
-                        {iv.gcalEventId ? (
+                        <div className="flex items-center gap-3 px-2 py-2">
                           <button
                             type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              window.open(
-                                `https://calendar.google.com/calendar/r/search?q=${encodeURIComponent(iv.gcalEventId!)}`,
-                                "_blank",
-                                "noopener,noreferrer",
-                              );
-                            }}
+                            onClick={() =>
+                              setExpandedId(isExpanded ? null : iv.id)
+                            }
+                            className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                            aria-expanded={isExpanded}
+                          >
+                            <span className="w-16 shrink-0 text-xs font-medium tabular-nums text-muted-foreground">
+                              {new Date(iv.scheduledAt).toLocaleTimeString("en", {
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                            <span
+                              className={cn(
+                                "inline-flex size-7 shrink-0 items-center justify-center rounded-full",
+                                MODE_TONE[iv.mode],
+                              )}
+                            >
+                              <ModeIcon className="size-3.5" />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-medium">
+                                {iv.title || iv.candidateName}
+                              </span>
+                              <span className="block truncate text-xs text-muted-foreground">
+                                {interviewTypeLabel(iv.type)} · {iv.jobTitle} ·{" "}
+                                {interviewModeLabel(iv.mode)}
+                              </span>
+                            </span>
+                            {iv.interviewerName ? (
+                              <UserAvatar
+                                name={iv.interviewerName}
+                                src={iv.interviewerImage}
+                                size="sm"
+                                className="size-6 shrink-0 text-[10px]"
+                              />
+                            ) : null}
+                            <Badge variant="neutral" className="shrink-0">
+                              {iv.durationMins}m
+                            </Badge>
+                          </button>
+                          <Link
+                            href={`/dashboard/candidates/${iv.candidateId}`}
                             className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
-                            title="View in Google Calendar"
+                            title="Open candidate"
                           >
                             <ArrowUpRightIcon className="size-4" />
-                          </button>
-                        ) : null}
-                      </Link>
+                          </Link>
+                        </div>
+                        <AnimatePresence initial={false}>
+                          {isExpanded && hasDetails ? (
+                            <motion.div
+                              initial={shouldReduceMotion ? false : { height: 0, opacity: 0 }}
+                              animate={{ height: "auto", opacity: 1 }}
+                              exit={shouldReduceMotion ? undefined : { height: 0, opacity: 0 }}
+                              transition={{ duration: 0.15, ease: EASE_OUT }}
+                              className="overflow-hidden"
+                            >
+                              <div className="space-y-1.5 border-t border-border/60 px-2 py-2.5 pl-[4.75rem] text-xs text-muted-foreground">
+                                <div>
+                                  <span className="font-medium text-foreground">
+                                    {iv.candidateName}
+                                  </span>{" "}
+                                  · {new Date(iv.scheduledAt).toLocaleDateString("en", {
+                                    weekday: "short",
+                                    month: "short",
+                                    day: "numeric",
+                                  })}
+                                </div>
+                                {iv.location ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <MapPinIcon className="size-3.5 shrink-0" />
+                                    <span>{iv.location}</span>
+                                  </div>
+                                ) : null}
+                                {iv.meetLink ? (
+                                  <div className="flex items-center gap-1.5">
+                                    <VideoCameraIcon className="size-3.5 shrink-0" />
+                                    <a
+                                      href={iv.meetLink}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="truncate text-pine hover:underline"
+                                    >
+                                      {iv.meetLink}
+                                    </a>
+                                  </div>
+                                ) : null}
+                                {iv.notes ? (
+                                  <p className="whitespace-pre-wrap text-foreground/80">
+                                    {iv.notes}
+                                  </p>
+                                ) : null}
+                                {iv.gcalEventId ? (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      window.open(
+                                        `https://calendar.google.com/calendar/r/search?q=${encodeURIComponent(iv.gcalEventId!)}`,
+                                        "_blank",
+                                        "noopener,noreferrer",
+                                      );
+                                    }}
+                                    className="inline-flex items-center gap-1 text-foreground/80 transition-colors hover:text-foreground"
+                                  >
+                                    View in Google Calendar
+                                    <ArrowUpRightIcon className="size-3" />
+                                  </button>
+                                ) : null}
+                              </div>
+                            </motion.div>
+                          ) : null}
+                        </AnimatePresence>
+                      </div>
                     );
                   })}
                 </div>

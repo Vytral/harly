@@ -176,7 +176,7 @@ export default async function ApplicationDetailPage({
       <div className="space-y-8">
         {/* Back link */}
         <Link
-          href="/portal/dashboard"
+          href="/portal/applications"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>

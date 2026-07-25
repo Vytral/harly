@@ -106,6 +106,7 @@ async function notifyApplicationStatusChange(input: {
       {
         candidateEmail: details.email,
         candidateName: `${details.firstName} ${details.lastName}`,
+        applicationId: input.application.id,
         jobTitle: details.jobTitle,
         workspaceName: details.workspaceName,
         type: "rejected",

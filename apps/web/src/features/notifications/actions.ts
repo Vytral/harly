@@ -9,7 +9,9 @@ import { db, notifications } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 const idSchema = z.object({ notificationId: z.uuid() });
-const idsSchema = z.object({ notificationIds: z.array(z.uuid()).min(1).max(100) });
+const idsSchema = z.object({
+  notificationIds: z.array(z.uuid()).min(1).max(100),
+});
 
 function revalidateNotifications() {
   revalidatePath("/dashboard/inbox");
@@ -65,7 +67,9 @@ export async function markNotificationUnread(input: {
 }
 
 /** Mark all unread notifications as read. */
-export async function markAllNotificationsRead(): Promise<{ success: boolean }> {
+export async function markAllNotificationsRead(): Promise<{
+  success: boolean;
+}> {
   const { organization: workspace, user } = await getWorkspaceContext();
 
   await db
@@ -120,6 +124,23 @@ export async function deleteNotifications(input: {
     .where(
       and(
         inArray(notifications.id, parsed.data.notificationIds),
+        eq(notifications.workspaceId, workspace.id),
+        eq(notifications.userId, user.id),
+      ),
+    );
+
+  revalidateNotifications();
+  return { success: true };
+}
+
+/** Delete every notification belonging to the current user in this workspace. */
+export async function deleteAllNotifications(): Promise<{ success: boolean }> {
+  const { organization: workspace, user } = await getWorkspaceContext();
+
+  await db
+    .delete(notifications)
+    .where(
+      and(
         eq(notifications.workspaceId, workspace.id),
         eq(notifications.userId, user.id),
       ),

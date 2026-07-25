@@ -600,6 +600,8 @@ async function deliverApplicationReceived(
     jobTitle?: string;
     workspaceName?: string;
     workspaceSlug?: string;
+    applicationId?: string;
+    portalEnabled?: boolean;
   } | null;
 
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
@@ -612,6 +614,10 @@ async function deliverApplicationReceived(
       return false;
     }
     const jobBoardUrl = `${appBaseUrl()}/board/${p.workspaceSlug ?? ""}`;
+    const portalUrl = p.portalEnabled && p.applicationId
+      ? `${appBaseUrl()}/portal/applications/${p.applicationId}`
+      : undefined;
+    const profileUrl = p.portalEnabled ? `${appBaseUrl()}/portal/profile` : undefined;
     candidateSubject = applicationReceivedCandidateSubject({
       jobTitle: p.jobTitle ?? "",
       companyName: p.workspaceName ?? "",
@@ -628,6 +634,8 @@ async function deliverApplicationReceived(
         accentColor: branding.primaryColor ?? undefined,
         socialLinks: branding.socialLinks,
         jobBoardUrl,
+        portalUrl,
+        profileUrl,
       }),
       ...deliveryOptions(row),
     });
@@ -685,6 +693,7 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
   const p = row.payload as {
     candidateEmail?: string;
     candidateName?: string;
+    applicationId?: string;
     jobTitle?: string;
     stageName?: string;
     workspaceName?: string;
@@ -761,6 +770,9 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
             hideBranding: branding.hideBranding,
             accentColor: branding.primaryColor ?? undefined,
             socialLinks: branding.socialLinks,
+            portalUrl: p.applicationId
+              ? `${appBaseUrl()}/portal/applications/${p.applicationId}`
+              : undefined,
           }),
           ...deliveryOptions(row),
         },
@@ -780,6 +792,9 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
             hideBranding: branding.hideBranding,
             accentColor: branding.primaryColor ?? undefined,
             socialLinks: branding.socialLinks,
+            portalUrl: p.applicationId
+              ? `${appBaseUrl()}/portal/applications/${p.applicationId}`
+              : undefined,
           }),
           ...deliveryOptions(row),
         },

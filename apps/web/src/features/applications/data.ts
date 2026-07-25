@@ -17,6 +17,7 @@ import {
   member as authMembers,
   organization,
   user as authUsers,
+  workspaceSettings,
 } from "@harly/db";
 import type {
   CandidateEducationEntry,
@@ -42,6 +43,8 @@ export type PublicApplicationResult =
         workspaceId: string;
         workspaceName: string;
         workspaceSlug: string;
+        portalEnabled: boolean;
+        applicationId: string;
         ownerEmails: string[];
       };
     }
@@ -176,8 +179,13 @@ export async function createPublicApplication(
         .select({
           name: organization.name,
           slug: organization.slug,
+          portalEnabled: workspaceSettings.candidatePortalEnabled,
         })
         .from(organization)
+        .leftJoin(
+          workspaceSettings,
+          eq(workspaceSettings.organizationId, organization.id),
+        )
         .where(eq(organization.id, workspaceId))
         .limit(1);
 
@@ -462,6 +470,8 @@ export async function createPublicApplication(
           workspaceId,
           workspaceName: workspace.name,
           workspaceSlug: workspace.slug,
+          portalEnabled: workspace.portalEnabled === true,
+          applicationId: application.id,
           ownerEmails: owners.map((owner) => owner.email),
         },
       };

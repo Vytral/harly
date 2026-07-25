@@ -42,7 +42,11 @@ import { getWorkspaceJitsiConfig } from "@/lib/jitsi/config";
 import { getZoomToken } from "@/lib/zoom/config";
 import { trackInterviewSync } from "@/lib/interviews/sync-ledger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  requireApplicationPermission,
+  requireInterviewPermission,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { getModel } from "@/lib/ai/registry";
 import { summarizeInterviewNotesWithAI } from "@/lib/ai/surfaces/summarize-interview-notes";
@@ -52,10 +56,7 @@ import {
   type InterviewNotesSummary,
 } from "@/lib/ai/schemas";
 import { createLogger } from "@/lib/logger";
-import {
-  deriveMeetLink,
-  parseScheduledAt,
-} from "@/features/interviews/shared";
+import { deriveMeetLink, parseScheduledAt } from "@/features/interviews/shared";
 import { extractResumeText } from "@/lib/resume/extract-text";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { storage } from "@/lib/storage";
@@ -90,7 +91,13 @@ async function queueInterviewEmail(
   actorId?: string,
 ): Promise<"sent" | "failed"> {
   try {
-    const id = await enqueueEmailOutbox(workspaceId, kind, payload, undefined, actorId);
+    const id = await enqueueEmailOutbox(
+      workspaceId,
+      kind,
+      payload,
+      undefined,
+      actorId,
+    );
     const result = await processEmailOutbox({ ids: [id], workspaceId });
     return result.sent > 0 && result.failed === 0 ? "sent" : "failed";
   } catch (error) {
@@ -186,17 +193,14 @@ const scheduleSchema = z.object({
     .string()
     .trim()
     .max(80)
-    .refine(
-      (value) => {
-        try {
-          new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      "Invalid timezone.",
-    )
+    .refine((value) => {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+        return true;
+      } catch {
+        return false;
+      }
+    }, "Invalid timezone.")
     .nullable()
     .optional(),
   durationMins: z.coerce.number().int().min(5).max(480).default(45),
@@ -278,7 +282,10 @@ export async function scheduleInterview(
       return { success: false, error: "Workspace access denied." };
     }
 
-    await requirePermission("collab:write");
+    await requireApplicationPermission(
+      "interviews:manage",
+      parsed.data.applicationId,
+    );
 
     const data = parsed.data;
     const when = parseScheduledAt(data.scheduledAt, data.timeZone);
@@ -715,7 +722,8 @@ export async function scheduleInterview(
         location: data.location,
         interviewerId: data.interviewerId,
       });
-      warning = warnings.length > 0 ? [...new Set(warnings)].join(" ") : undefined;
+      warning =
+        warnings.length > 0 ? [...new Set(warnings)].join(" ") : undefined;
     }
 
     return {
@@ -751,7 +759,10 @@ export async function setInterviewStatus(input: {
     }
     const { organization: workspace, user } = await getWorkspaceContext();
 
-    await requirePermission("collab:write");
+    await requireInterviewPermission(
+      "interviews:manage",
+      parsed.data.interviewId,
+    );
 
     // Distinguish "doesn't exist" from "exists but no longer scheduled" so the
     // recruiter gets an accurate message instead of a misleading "not found"
@@ -955,18 +966,15 @@ const rescheduleSchema = z.object({
     .string()
     .trim()
     .max(80)
-    .refine(
-      (value) => {
-        if (!value) return true;
-        try {
-          new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      "Invalid timezone.",
-    )
+    .refine((value) => {
+      if (!value) return true;
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+        return true;
+      } catch {
+        return false;
+      }
+    }, "Invalid timezone.")
     .nullable()
     .optional(),
   durationMins: z.coerce.number().int().min(5).max(480).default(45),
@@ -1001,7 +1009,10 @@ export async function rescheduleInterview(input: {
     const data = parsed.data;
     const when = parseScheduledAt(data.scheduledAt, data.timeZone);
 
-    await requirePermission("collab:write");
+    await requireInterviewPermission(
+      "interviews:manage",
+      parsed.data.interviewId,
+    );
 
     if (isPastWhen(when)) {
       return {
@@ -1283,18 +1294,15 @@ const updateSchema = z.object({
     .string()
     .trim()
     .max(80)
-    .refine(
-      (value) => {
-        if (!value) return true;
-        try {
-          new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
-          return true;
-        } catch {
-          return false;
-        }
-      },
-      "Invalid timezone.",
-    )
+    .refine((value) => {
+      if (!value) return true;
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: value }).format();
+        return true;
+      } catch {
+        return false;
+      }
+    }, "Invalid timezone.")
     .nullable()
     .optional(),
   durationMins: z.coerce.number().int().min(5).max(480).optional(),
@@ -1356,7 +1364,10 @@ export async function updateInterview(input: {
     const { organization: workspace, user } = await getWorkspaceContext();
     const data = parsed.data;
 
-    await requirePermission("collab:write");
+    await requireInterviewPermission(
+      "interviews:manage",
+      parsed.data.interviewId,
+    );
 
     if (
       data.interviewerId &&
@@ -1470,7 +1481,9 @@ export async function updateInterview(input: {
     // The interviewer we'll validate against: the new one if changing, else the
     // existing one (so a time-only edit still checks the current interviewer).
     const effectiveInterviewerId =
-      data.interviewerId !== undefined ? data.interviewerId : info?.interviewerId;
+      data.interviewerId !== undefined
+        ? data.interviewerId
+        : info?.interviewerId;
 
     // Re-validate interviewer availability when the time/duration/interviewer
     // changes (excluding self). updateInterview previously skipped this, so an

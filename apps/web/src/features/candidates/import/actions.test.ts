@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => {
     selectQueue,
     transactionImpl,
     requirePermission: vi.fn(),
+    requireJobPermission: vi.fn(),
     insertResults: [] as unknown[][],
     emitWebhookEvent: vi.fn(),
   };
@@ -38,7 +39,8 @@ vi.mock("@harly/db", () => {
       select: vi.fn(makeQuery),
       insert: vi.fn(() => ({
         values: () => ({
-          returning: async () => mocks.insertResults.shift() ?? [{ id: "app-1" }],
+          returning: async () =>
+            mocks.insertResults.shift() ?? [{ id: "app-1" }],
         }),
       })),
       transaction: (fn: (tx: unknown) => Promise<unknown>) =>
@@ -55,6 +57,7 @@ vi.mock("@harly/db", () => {
 
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: mocks.requirePermission,
+  requireJobPermission: mocks.requireJobPermission,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/server/webhooks/emit", () => ({
@@ -68,7 +71,11 @@ const STAGE_ID = "stage-1";
 const WORKSPACE_ID = "ws-1";
 
 function row(
-  overrides: Partial<{ firstName: string; lastName: string; email: string }> = {},
+  overrides: Partial<{
+    firstName: string;
+    lastName: string;
+    email: string;
+  }> = {},
   rowNumber = 2,
 ) {
   return {
@@ -101,6 +108,10 @@ describe("importCandidatesAction", () => {
       user: { id: "user-1" },
       organization: { id: WORKSPACE_ID },
     });
+    mocks.requireJobPermission.mockResolvedValue({
+      user: { id: "user-1" },
+      organization: { id: WORKSPACE_ID },
+    });
 
     // Query order in importCandidatesAction:
     //   1. db.select(jobs)            -> [{ id, title }]
@@ -115,27 +126,30 @@ describe("importCandidatesAction", () => {
       [{ value: 0 }],
     );
 
-    mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
-      const tx = {
-        // tx.select shares the same queue as db.select so row-level queries
-        // resolve in the order the action issues them.
-        select: () => {
-          const q: Record<string, unknown> = {};
-          q.then = (resolve: (v: unknown) => void) =>
-            Promise.resolve(mocks.selectQueue.shift() ?? []).then(resolve);
-          q.from = () => q;
-          q.where = () => q;
-          q.limit = () => q;
-          return q;
-        },
-        insert: () => ({
-          values: () => ({
-            returning: async () => mocks.insertResults.shift() ?? [{ id: "cand-new" }],
+    mocks.transactionImpl.mockImplementation(
+      async (fn: (tx: unknown) => Promise<unknown>) => {
+        const tx = {
+          // tx.select shares the same queue as db.select so row-level queries
+          // resolve in the order the action issues them.
+          select: () => {
+            const q: Record<string, unknown> = {};
+            q.then = (resolve: (v: unknown) => void) =>
+              Promise.resolve(mocks.selectQueue.shift() ?? []).then(resolve);
+            q.from = () => q;
+            q.where = () => q;
+            q.limit = () => q;
+            return q;
+          },
+          insert: () => ({
+            values: () => ({
+              returning: async () =>
+                mocks.insertResults.shift() ?? [{ id: "cand-new" }],
+            }),
           }),
-        }),
-      };
-      return fn(tx);
-    });
+        };
+        return fn(tx);
+      },
+    );
   });
 
   it("imports a new candidate and emits application.created", async () => {
@@ -144,7 +158,10 @@ describe("importCandidatesAction", () => {
       [], // tx.select(dup application): not in pipeline
     );
 
-    const result = await importCandidatesAction({ jobId: JOB_ID, rows: [row()] });
+    const result = await importCandidatesAction({
+      jobId: JOB_ID,
+      rows: [row()],
+    });
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -165,7 +182,7 @@ describe("importCandidatesAction", () => {
   it("dedupes a candidate already in this job's pipeline (no new application)", async () => {
     mocks.selectQueue.push(
       [{ id: "cand-existing" }], // tx.select(candidates): candidate exists
-      [{ id: "existing-app" }],  // tx.select(dup application): already applied
+      [{ id: "existing-app" }], // tx.select(dup application): already applied
     );
 
     const result = await importCandidatesAction({
@@ -185,10 +202,13 @@ describe("importCandidatesAction", () => {
   it("reuses an existing candidate but creates a new application for a different job", async () => {
     mocks.selectQueue.push(
       [{ id: "cand-existing" }], // candidate exists (e.g. from another job)
-      [],                         // no duplicate application for THIS job
+      [], // no duplicate application for THIS job
     );
 
-    const result = await importCandidatesAction({ jobId: JOB_ID, rows: [row()] });
+    const result = await importCandidatesAction({
+      jobId: JOB_ID,
+      rows: [row()],
+    });
 
     expect(result.success).toBe(true);
     if (result.success) {
@@ -208,7 +228,10 @@ describe("importCandidatesAction", () => {
 
     const result = await importCandidatesAction({
       jobId: JOB_ID,
-      rows: [row({ email: "not-an-email" }), row({ email: "grace@example.com" }, 3)],
+      rows: [
+        row({ email: "not-an-email" }),
+        row({ email: "grace@example.com" }, 3),
+      ],
     });
 
     expect(result.success).toBe(true);
@@ -224,7 +247,10 @@ describe("importCandidatesAction", () => {
     mocks.selectQueue.length = 0;
     mocks.selectQueue.push([]); // db.select(jobs): no match
 
-    const result = await importCandidatesAction({ jobId: JOB_ID, rows: [row()] });
+    const result = await importCandidatesAction({
+      jobId: JOB_ID,
+      rows: [row()],
+    });
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toMatch(/job not found/i);
@@ -238,7 +264,10 @@ describe("importCandidatesAction", () => {
       [], // no stages
     );
 
-    const result = await importCandidatesAction({ jobId: JOB_ID, rows: [row()] });
+    const result = await importCandidatesAction({
+      jobId: JOB_ID,
+      rows: [row()],
+    });
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toMatch(/pipeline stages/i);
@@ -246,8 +275,12 @@ describe("importCandidatesAction", () => {
 
   it("rejects when the caller lacks candidates:edit permission", async () => {
     mocks.requirePermission.mockRejectedValue(new Error("forbidden"));
+    mocks.requireJobPermission.mockRejectedValue(new Error("forbidden"));
 
-    const result = await importCandidatesAction({ jobId: JOB_ID, rows: [row()] });
+    const result = await importCandidatesAction({
+      jobId: JOB_ID,
+      rows: [row()],
+    });
 
     expect(result.success).toBe(false);
     if (!result.success) expect(result.error).toMatch(/permission/i);

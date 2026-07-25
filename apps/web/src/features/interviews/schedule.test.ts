@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => {
     transactionImpl,
     getWorkspaceContext: vi.fn(),
     requirePermission: vi.fn(),
+    requireApplicationPermission: vi.fn(),
     sendWorkspaceEmail: vi.fn(),
     getWorkspaceEmailBranding: vi.fn(),
     getInboundReplyTo: vi.fn(),
@@ -103,6 +104,8 @@ vi.mock("@/features/workspaces/context", () => ({
 }));
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: mocks.requirePermission,
+  requireApplicationPermission: mocks.requireApplicationPermission,
+  requireInterviewPermission: mocks.requirePermission,
 }));
 vi.mock("@/lib/email", () => ({
   sendWorkspaceEmail: mocks.sendWorkspaceEmail,
@@ -195,6 +198,7 @@ beforeEach(() => {
     user: { id: "user-1" },
   });
   mocks.requirePermission.mockResolvedValue(undefined);
+  mocks.requireApplicationPermission.mockResolvedValue(undefined);
   mocks.getZoomToken.mockResolvedValue(null);
   mocks.getWorkspaceOutlookConfig.mockResolvedValue(null);
   mocks.getWorkspaceGCalConfig.mockResolvedValue(null);
@@ -352,7 +356,9 @@ describe("F1-10 single video provider", () => {
 
   it("reports a Teams creation failure instead of hiding it", async () => {
     txMock([{ id: "app-1", jobId: "job-1" }], []);
-    mocks.getWorkspaceOutlookConfig.mockResolvedValue({ accessToken: "outlook" });
+    mocks.getWorkspaceOutlookConfig.mockResolvedValue({
+      accessToken: "outlook",
+    });
     mocks.syncInterviewToTeams.mockResolvedValue(null);
     mocks.selectQueue.push(
       [
@@ -384,7 +390,9 @@ describe("F1-10 single video provider", () => {
 
   it("reports a Jitsi creation failure instead of hiding it", async () => {
     txMock([{ id: "app-1", jobId: "job-1" }], []);
-    mocks.getWorkspaceJitsiConfig.mockResolvedValue({ baseUrl: "https://meet.jit.si" });
+    mocks.getWorkspaceJitsiConfig.mockResolvedValue({
+      baseUrl: "https://meet.jit.si",
+    });
     mocks.syncInterviewToJitsi.mockResolvedValue(null);
     mocks.selectQueue.push(
       [
@@ -579,7 +587,10 @@ describe("F1-11 full edit preserves effective meeting details", () => {
 describe("AI scheduling resilience", () => {
   it("keeps an explicit meeting link and reports a calendar reconnect warning", async () => {
     txMock([{ id: "app-1", jobId: "job-1" }], []);
-    mocks.getWorkspaceGCalConfig.mockResolvedValue({ oauth2Client: {}, calendarId: "primary" });
+    mocks.getWorkspaceGCalConfig.mockResolvedValue({
+      oauth2Client: {},
+      calendarId: "primary",
+    });
     mocks.syncInterviewToGCal.mockResolvedValue({
       ok: false,
       reason: "invalid_grant",

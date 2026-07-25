@@ -12,6 +12,7 @@ export type TaskItem = {
   ownerId: string;
   ownerName: string;
   ownerImage: string | null;
+  ownerUsername: string | null;
   candidateId: string | null;
   candidateName: string | null;
   applicationId: string | null;

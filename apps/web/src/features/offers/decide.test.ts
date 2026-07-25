@@ -114,6 +114,7 @@ vi.mock("@harly/db", () => {
 
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: mocks.requirePermission,
+  requireOfferPermission: mocks.requirePermission,
 }));
 vi.mock("@/lib/email/outbox-processor", () => ({
   enqueueEmailOutbox: mocks.enqueueEmailOutbox,

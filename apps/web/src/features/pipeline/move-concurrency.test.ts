@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
     transactionImpl,
     getWorkspaceContext: vi.fn(),
     requirePermission: vi.fn(),
+    requireApplicationPermission: vi.fn(),
   };
 });
 
@@ -51,6 +52,7 @@ vi.mock("@/features/workspaces/context", () => ({
 }));
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: mocks.requirePermission,
+  requireApplicationPermission: mocks.requirePermission,
 }));
 vi.mock("@/lib/email", () => ({
   sendWorkspaceEmail: vi.fn(),
@@ -181,7 +183,9 @@ describe("F1-08 pipeline move concurrency guard", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error ?? "").toMatch(/changed by another recruiter|unable to move/i);
+    expect(result.error ?? "").toMatch(
+      /changed by another recruiter|unable to move/i,
+    );
     expect(mocks.transactionImpl).toHaveBeenCalledTimes(3);
   });
 
@@ -241,7 +245,9 @@ describe("F1-08 pipeline move concurrency guard", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error ?? "").toMatch(/changed by another recruiter|unable to move/i);
+    expect(result.error ?? "").toMatch(
+      /changed by another recruiter|unable to move/i,
+    );
     expect(mocks.transactionImpl).toHaveBeenCalledTimes(3);
   });
 });

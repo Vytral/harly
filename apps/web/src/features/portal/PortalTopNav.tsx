@@ -35,6 +35,7 @@ type PortalTopNavProps = {
 
 const NAV_ITEMS = [
   { href: "/portal/dashboard" as Route, label: "Home", icon: HouseIcon },
+  { href: "/portal/applications" as Route, label: "Applications", icon: BriefcaseIcon },
   { href: "/portal/notifications" as Route, label: "Notifications", icon: BellIcon },
   { href: "/portal/jobs" as Route, label: "Jobs", icon: BriefcaseIcon },
 ];
@@ -170,7 +171,7 @@ export function PortalTopNav({
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem asChild>
-                <Link href={"/portal/dashboard" as Route}>
+                <Link href={"/portal/applications" as Route}>
                   <BriefcaseIcon className="size-4" />
                   My applications
                 </Link>

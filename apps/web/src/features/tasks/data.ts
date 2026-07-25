@@ -27,6 +27,7 @@ function toItem(row: {
   ownerId: string;
   ownerName: string | null;
   ownerImage: string | null;
+  ownerUsername: string | null;
   candidateId: string | null;
   candidateFirst: string | null;
   candidateLast: string | null;
@@ -49,6 +50,7 @@ function toItem(row: {
     ownerId: row.ownerId,
     ownerName: row.ownerName ?? "Unknown",
     ownerImage: row.ownerImage ?? null,
+    ownerUsername: row.ownerUsername ?? null,
     candidateId: row.candidateId,
     candidateName:
       row.candidateFirst && row.candidateLast
@@ -75,6 +77,7 @@ const baseSelect = () => ({
   ownerId: tasks.ownerId,
   ownerName: authUsers.name,
   ownerImage: authUsers.image,
+  ownerUsername: authUsers.username,
   candidateId: tasks.candidateId,
   candidateFirst: candidates.firstName,
   candidateLast: candidates.lastName,

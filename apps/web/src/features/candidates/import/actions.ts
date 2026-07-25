@@ -14,11 +14,19 @@ import {
   jobStages,
 } from "@harly/db";
 
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  requireJobPermission,
+} from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
-import { fetchGreenhouseCandidateImportRows, GreenhouseImportError } from "./greenhouse";
-import { fetchWorkableCandidateImportRows, WorkableImportError } from "./workable";
+import {
+  fetchGreenhouseCandidateImportRows,
+  GreenhouseImportError,
+} from "./greenhouse";
+import {
+  fetchWorkableCandidateImportRows,
+  WorkableImportError,
+} from "./workable";
 import { fetchAshbyCandidateImportRows, AshbyImportError } from "./ashby";
 import { fetchLeverCandidateImportRows, LeverImportError } from "./lever";
 
@@ -29,37 +37,93 @@ const optionalText = z
   .trim()
   .transform((value) => (value.length > 0 ? value : null));
 
-const optionalImportedText = z.string().optional().transform((value) => {
-  const trimmed = value?.trim() ?? "";
-  return trimmed.length > 0 ? trimmed : null;
-});
+const optionalImportedText = z
+  .string()
+  .optional()
+  .transform((value) => {
+    const trimmed = value?.trim() ?? "";
+    return trimmed.length > 0 ? trimmed : null;
+  });
 
-const importedStringList = z.string().optional().transform((value) => {
-  try {
-    const parsed: unknown = JSON.parse(value ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean).slice(0, 100) : [];
-  } catch {
-    return [];
-  }
-});
+const importedStringList = z
+  .string()
+  .optional()
+  .transform((value) => {
+    try {
+      const parsed: unknown = JSON.parse(value ?? "[]");
+      return Array.isArray(parsed)
+        ? parsed
+            .filter((item): item is string => typeof item === "string")
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .slice(0, 100)
+        : [];
+    } catch {
+      return [];
+    }
+  });
 
-const importedEducationEntries = z.string().optional().transform((value) => {
-  try {
-    const parsed: unknown = JSON.parse(value ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((entry): entry is { id: string; school: string; degree: string | null; field: string | null; startDate: string | null; endDate: string | null; description: string | null } => typeof entry === "object" && entry !== null && typeof (entry as { id?: unknown }).id === "string" && typeof (entry as { school?: unknown }).school === "string") : [];
-  } catch {
-    return [];
-  }
-});
+const importedEducationEntries = z
+  .string()
+  .optional()
+  .transform((value) => {
+    try {
+      const parsed: unknown = JSON.parse(value ?? "[]");
+      return Array.isArray(parsed)
+        ? parsed.filter(
+            (
+              entry,
+            ): entry is {
+              id: string;
+              school: string;
+              degree: string | null;
+              field: string | null;
+              startDate: string | null;
+              endDate: string | null;
+              description: string | null;
+            } =>
+              typeof entry === "object" &&
+              entry !== null &&
+              typeof (entry as { id?: unknown }).id === "string" &&
+              typeof (entry as { school?: unknown }).school === "string",
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  });
 
-const importedExperienceEntries = z.string().optional().transform((value) => {
-  try {
-    const parsed: unknown = JSON.parse(value ?? "[]");
-    return Array.isArray(parsed) ? parsed.filter((entry): entry is { id: string; company: string; title: string; startDate: string | null; endDate: string | null; current: boolean | null; location: string | null; description: string | null } => typeof entry === "object" && entry !== null && typeof (entry as { id?: unknown }).id === "string" && typeof (entry as { company?: unknown }).company === "string" && typeof (entry as { title?: unknown }).title === "string") : [];
-  } catch {
-    return [];
-  }
-});
+const importedExperienceEntries = z
+  .string()
+  .optional()
+  .transform((value) => {
+    try {
+      const parsed: unknown = JSON.parse(value ?? "[]");
+      return Array.isArray(parsed)
+        ? parsed.filter(
+            (
+              entry,
+            ): entry is {
+              id: string;
+              company: string;
+              title: string;
+              startDate: string | null;
+              endDate: string | null;
+              current: boolean | null;
+              location: string | null;
+              description: string | null;
+            } =>
+              typeof entry === "object" &&
+              entry !== null &&
+              typeof (entry as { id?: unknown }).id === "string" &&
+              typeof (entry as { company?: unknown }).company === "string" &&
+              typeof (entry as { title?: unknown }).title === "string",
+          )
+        : [];
+    } catch {
+      return [];
+    }
+  });
 
 const optionalProfileUrl = z.string().transform((value) => {
   const trimmed = value.trim();
@@ -114,23 +178,46 @@ export type ImportCandidatesResult =
 
 /** Imports a full Greenhouse candidate export into one existing Harly pipeline.
  * The credential is used only for this request and is never written to the DB or logs. */
-export async function importGreenhouseCandidatesAction(input: { jobId: string; apiKey: string }): Promise<ImportCandidatesResult & { skipped?: number }> {
-  if (!z.uuid().safeParse(input.jobId).success || typeof input.apiKey !== "string") {
+export async function importGreenhouseCandidatesAction(input: {
+  jobId: string;
+  apiKey: string;
+}): Promise<ImportCandidatesResult & { skipped?: number }> {
+  if (
+    !z.uuid().safeParse(input.jobId).success ||
+    typeof input.apiKey !== "string"
+  ) {
     return { success: false, error: "Invalid Greenhouse import request." };
   }
   try {
-    await requirePermission("candidates:edit");
+    await requireJobPermission("candidates:edit", input.jobId);
   } catch (error) {
     log.error(error, "Greenhouse import permission failed");
-    return { success: false, error: "You do not have permission to add candidates." };
+    return {
+      success: false,
+      error: "You do not have permission to add candidates.",
+    };
   }
   const apiKey = input.apiKey.trim();
   try {
     const exportRows = await fetchGreenhouseCandidateImportRows(apiKey);
-    if (exportRows.rows.length === 0) return { success: true, imported: 0, alreadyInPipeline: 0, errors: [], skipped: exportRows.skipped };
-    const totals = { imported: 0, alreadyInPipeline: 0, errors: [] as { row: number; email: string; reason: string }[] };
+    if (exportRows.rows.length === 0)
+      return {
+        success: true,
+        imported: 0,
+        alreadyInPipeline: 0,
+        errors: [],
+        skipped: exportRows.skipped,
+      };
+    const totals = {
+      imported: 0,
+      alreadyInPipeline: 0,
+      errors: [] as { row: number; email: string; reason: string }[],
+    };
     for (let start = 0; start < exportRows.rows.length; start += 500) {
-      const result = await importCandidatesAction({ jobId: input.jobId, rows: exportRows.rows.slice(start, start + 500) });
+      const result = await importCandidatesAction({
+        jobId: input.jobId,
+        rows: exportRows.rows.slice(start, start + 500),
+      });
       if (!result.success) return result;
       totals.imported += result.imported;
       totals.alreadyInPipeline += result.alreadyInPipeline;
@@ -138,21 +225,48 @@ export async function importGreenhouseCandidatesAction(input: { jobId: string; a
     }
     return { success: true, ...totals, skipped: exportRows.skipped };
   } catch (error) {
-    if (error instanceof GreenhouseImportError) return { success: false, error: error.message };
+    if (error instanceof GreenhouseImportError)
+      return { success: false, error: error.message };
     log.error(error, "Greenhouse candidate import failed");
-    return { success: false, error: "Could not import candidates from Greenhouse." };
+    return {
+      success: false,
+      error: "Could not import candidates from Greenhouse.",
+    };
   }
 }
 
-export async function importWorkableCandidatesAction(input: { jobId: string; subdomain: string; apiToken: string }): Promise<ImportCandidatesResult & { skipped?: number }> {
-  if (!z.uuid().safeParse(input.jobId).success || typeof input.subdomain !== "string" || typeof input.apiToken !== "string") return { success: false, error: "Invalid Workable import request." };
+export async function importWorkableCandidatesAction(input: {
+  jobId: string;
+  subdomain: string;
+  apiToken: string;
+}): Promise<ImportCandidatesResult & { skipped?: number }> {
+  if (
+    !z.uuid().safeParse(input.jobId).success ||
+    typeof input.subdomain !== "string" ||
+    typeof input.apiToken !== "string"
+  )
+    return { success: false, error: "Invalid Workable import request." };
   try {
-    await requirePermission("candidates:edit");
+    await requireJobPermission("candidates:edit", input.jobId);
     const exportRows = await fetchWorkableCandidateImportRows(input);
-    if (exportRows.rows.length === 0) return { success: true, imported: 0, alreadyInPipeline: 0, errors: [], skipped: exportRows.skipped };
-    const totals = { imported: 0, alreadyInPipeline: 0, errors: [] as { row: number; email: string; reason: string }[] };
+    if (exportRows.rows.length === 0)
+      return {
+        success: true,
+        imported: 0,
+        alreadyInPipeline: 0,
+        errors: [],
+        skipped: exportRows.skipped,
+      };
+    const totals = {
+      imported: 0,
+      alreadyInPipeline: 0,
+      errors: [] as { row: number; email: string; reason: string }[],
+    };
     for (let start = 0; start < exportRows.rows.length; start += 500) {
-      const result = await importCandidatesAction({ jobId: input.jobId, rows: exportRows.rows.slice(start, start + 500) });
+      const result = await importCandidatesAction({
+        jobId: input.jobId,
+        rows: exportRows.rows.slice(start, start + 500),
+      });
       if (!result.success) return result;
       totals.imported += result.imported;
       totals.alreadyInPipeline += result.alreadyInPipeline;
@@ -160,47 +274,99 @@ export async function importWorkableCandidatesAction(input: { jobId: string; sub
     }
     return { success: true, ...totals, skipped: exportRows.skipped };
   } catch (error) {
-    if (error instanceof WorkableImportError) return { success: false, error: error.message };
+    if (error instanceof WorkableImportError)
+      return { success: false, error: error.message };
     log.error(error, "Workable candidate import failed");
-    return { success: false, error: "Could not import candidates from Workable." };
+    return {
+      success: false,
+      error: "Could not import candidates from Workable.",
+    };
   }
 }
 
-export async function importAshbyCandidatesAction(input: { jobId: string; apiKey: string }): Promise<ImportCandidatesResult & { skipped?: number }> {
-  if (!z.uuid().safeParse(input.jobId).success || typeof input.apiKey !== "string") return { success: false, error: "Invalid Ashby import request." };
+export async function importAshbyCandidatesAction(input: {
+  jobId: string;
+  apiKey: string;
+}): Promise<ImportCandidatesResult & { skipped?: number }> {
+  if (
+    !z.uuid().safeParse(input.jobId).success ||
+    typeof input.apiKey !== "string"
+  )
+    return { success: false, error: "Invalid Ashby import request." };
   try {
-    await requirePermission("candidates:edit");
+    await requireJobPermission("candidates:edit", input.jobId);
     const exportRows = await fetchAshbyCandidateImportRows(input.apiKey);
-    if (exportRows.rows.length === 0) return { success: true, imported: 0, alreadyInPipeline: 0, errors: [], skipped: exportRows.skipped };
-    const totals = { imported: 0, alreadyInPipeline: 0, errors: [] as { row: number; email: string; reason: string }[] };
+    if (exportRows.rows.length === 0)
+      return {
+        success: true,
+        imported: 0,
+        alreadyInPipeline: 0,
+        errors: [],
+        skipped: exportRows.skipped,
+      };
+    const totals = {
+      imported: 0,
+      alreadyInPipeline: 0,
+      errors: [] as { row: number; email: string; reason: string }[],
+    };
     for (let start = 0; start < exportRows.rows.length; start += 500) {
-      const result = await importCandidatesAction({ jobId: input.jobId, rows: exportRows.rows.slice(start, start + 500) });
+      const result = await importCandidatesAction({
+        jobId: input.jobId,
+        rows: exportRows.rows.slice(start, start + 500),
+      });
       if (!result.success) return result;
-      totals.imported += result.imported; totals.alreadyInPipeline += result.alreadyInPipeline; totals.errors.push(...result.errors);
+      totals.imported += result.imported;
+      totals.alreadyInPipeline += result.alreadyInPipeline;
+      totals.errors.push(...result.errors);
     }
     return { success: true, ...totals, skipped: exportRows.skipped };
   } catch (error) {
-    if (error instanceof AshbyImportError) return { success: false, error: error.message };
+    if (error instanceof AshbyImportError)
+      return { success: false, error: error.message };
     log.error(error, "Ashby candidate import failed");
     return { success: false, error: "Could not import candidates from Ashby." };
   }
 }
 
-export async function importLeverCandidatesAction(input: { jobId: string; apiKey: string }): Promise<ImportCandidatesResult & { skipped?: number }> {
-  if (!z.uuid().safeParse(input.jobId).success || typeof input.apiKey !== "string") return { success: false, error: "Invalid Lever import request." };
+export async function importLeverCandidatesAction(input: {
+  jobId: string;
+  apiKey: string;
+}): Promise<ImportCandidatesResult & { skipped?: number }> {
+  if (
+    !z.uuid().safeParse(input.jobId).success ||
+    typeof input.apiKey !== "string"
+  )
+    return { success: false, error: "Invalid Lever import request." };
   try {
-    await requirePermission("candidates:edit");
+    await requireJobPermission("candidates:edit", input.jobId);
     const exportRows = await fetchLeverCandidateImportRows(input.apiKey);
-    if (exportRows.rows.length === 0) return { success: true, imported: 0, alreadyInPipeline: 0, errors: [], skipped: exportRows.skipped };
-    const totals = { imported: 0, alreadyInPipeline: 0, errors: [] as { row: number; email: string; reason: string }[] };
+    if (exportRows.rows.length === 0)
+      return {
+        success: true,
+        imported: 0,
+        alreadyInPipeline: 0,
+        errors: [],
+        skipped: exportRows.skipped,
+      };
+    const totals = {
+      imported: 0,
+      alreadyInPipeline: 0,
+      errors: [] as { row: number; email: string; reason: string }[],
+    };
     for (let start = 0; start < exportRows.rows.length; start += 500) {
-      const result = await importCandidatesAction({ jobId: input.jobId, rows: exportRows.rows.slice(start, start + 500) });
+      const result = await importCandidatesAction({
+        jobId: input.jobId,
+        rows: exportRows.rows.slice(start, start + 500),
+      });
       if (!result.success) return result;
-      totals.imported += result.imported; totals.alreadyInPipeline += result.alreadyInPipeline; totals.errors.push(...result.errors);
+      totals.imported += result.imported;
+      totals.alreadyInPipeline += result.alreadyInPipeline;
+      totals.errors.push(...result.errors);
     }
     return { success: true, ...totals, skipped: exportRows.skipped };
   } catch (error) {
-    if (error instanceof LeverImportError) return { success: false, error: error.message };
+    if (error instanceof LeverImportError)
+      return { success: false, error: error.message };
     log.error(error, "Lever candidate import failed");
     return { success: false, error: "Could not import candidates from Lever." };
   }
@@ -220,17 +386,22 @@ export async function importCandidatesAction(input: {
 
   let context;
   try {
-    context = await requirePermission("candidates:edit");
+    context = await requireJobPermission("candidates:edit", parsed.data.jobId);
   } catch (error) {
     log.error(error, "importCandidatesAction permission failed");
-    return { success: false, error: "You do not have permission to add candidates." };
+    return {
+      success: false,
+      error: "You do not have permission to add candidates.",
+    };
   }
   const workspaceId = context.organization.id;
 
   const [job] = await db
     .select({ id: jobs.id, title: jobs.title })
     .from(jobs)
-    .where(and(eq(jobs.workspaceId, workspaceId), eq(jobs.id, parsed.data.jobId)))
+    .where(
+      and(eq(jobs.workspaceId, workspaceId), eq(jobs.id, parsed.data.jobId)),
+    )
     .limit(1);
 
   if (!job) {
@@ -240,7 +411,9 @@ export async function importCandidatesAction(input: {
   const [firstStage] = await db
     .select({ id: jobStages.id })
     .from(jobStages)
-    .where(and(eq(jobStages.workspaceId, workspaceId), eq(jobStages.jobId, job.id)))
+    .where(
+      and(eq(jobStages.workspaceId, workspaceId), eq(jobStages.jobId, job.id)),
+    )
     .orderBy(asc(jobStages.order))
     .limit(1);
 
@@ -384,7 +557,11 @@ export async function importCandidatesAction(input: {
       });
     } catch (error) {
       log.error(error, "importCandidatesAction row import failed");
-      errors.push({ row: importedRow.rowNumber, email: values.email, reason: "Could not import this row." });
+      errors.push({
+        row: importedRow.rowNumber,
+        email: values.email,
+        reason: "Could not import this row.",
+      });
     }
   }
 

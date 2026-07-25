@@ -24,6 +24,7 @@ const EMAIL = {
   workspaceId: "ws-1",
   workspaceName: "Acme",
   workspaceSlug: "acme",
+  applicationId: "application-1",
   candidateEmail: "candi@example.com",
   candidateFirstName: "Candi",
   candidateName: "Candi Date",
@@ -55,6 +56,7 @@ describe("F1-14 application-received emails use the durable outbox", () => {
       candidateEmail: "candi@example.com",
       jobTitle: "Engineer",
       workspaceSlug: "acme",
+      applicationId: "application-1",
     });
 
     const recruiterPayload = mocks.enqueueEmailOutbox.mock.calls[1]?.[2] as Record<string, unknown>;

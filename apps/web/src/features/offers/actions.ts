@@ -17,7 +17,10 @@ import {
   offers,
 } from "@harly/db";
 
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  requireApplicationPermission,
+  requireOfferPermission,
+} from "@/features/workspaces/permissions-server";
 import { getDocumentAccessForUser } from "@/features/documents/access";
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
@@ -26,11 +29,7 @@ import {
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
 import { createOfferEnvelope } from "@/lib/esign/offer-signing";
-import {
-  assertOfferTerms,
-  getOfferRecipient,
-  offerHasExpired,
-} from "./core";
+import { assertOfferTerms, getOfferRecipient, offerHasExpired } from "./core";
 
 const log = createLogger("offers");
 
@@ -157,7 +156,10 @@ export async function createOffer(input: {
 
   let context;
   try {
-    context = await requirePermission("offers:manage");
+    context = await requireApplicationPermission(
+      "offers:manage",
+      parsed.data.applicationId,
+    );
   } catch (error) {
     log.error(error, "createOffer failed");
     return {
@@ -198,27 +200,37 @@ export async function createOffer(input: {
       ),
     );
     if (accessible.some((document) => !document)) {
-      return { success: false, error: "One or more selected documents are not accessible." };
+      return {
+        success: false,
+        error: "One or more selected documents are not accessible.",
+      };
     }
   }
 
   await db.transaction(async (tx) => {
-    const [createdOffer] = await tx.insert(offers).values({
-      workspaceId,
-      applicationId: application.id,
-      candidateId: application.candidateId,
-      jobId: application.jobId,
-      status: "draft",
-      title: parsed.data.title,
-      salaryAmount: parsed.data.salaryAmount,
-      currency: parsed.data.currency,
-      salaryPeriod: parsed.data.salaryPeriod,
-      equity: parsed.data.equity,
-      startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : null,
-      expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
-      notes: parsed.data.notes,
-      createdById: context.user.id,
-    }).returning({ id: offers.id });
+    const [createdOffer] = await tx
+      .insert(offers)
+      .values({
+        workspaceId,
+        applicationId: application.id,
+        candidateId: application.candidateId,
+        jobId: application.jobId,
+        status: "draft",
+        title: parsed.data.title,
+        salaryAmount: parsed.data.salaryAmount,
+        currency: parsed.data.currency,
+        salaryPeriod: parsed.data.salaryPeriod,
+        equity: parsed.data.equity,
+        startDate: parsed.data.startDate
+          ? new Date(parsed.data.startDate)
+          : null,
+        expiresAt: parsed.data.expiresAt
+          ? new Date(parsed.data.expiresAt)
+          : null,
+        notes: parsed.data.notes,
+        createdById: context.user.id,
+      })
+      .returning({ id: offers.id });
     if (createdOffer && parsed.data.documentIds.length > 0) {
       await tx.insert(documentAssociations).values(
         parsed.data.documentIds.map((documentId) => ({
@@ -277,7 +289,10 @@ export async function updateOffer(input: {
 
   let context;
   try {
-    context = await requirePermission("offers:manage");
+    context = await requireOfferPermission(
+      "offers:manage",
+      parsed.data.offerId,
+    );
   } catch (error) {
     log.error(error, "updateOffer failed");
     return {
@@ -322,7 +337,10 @@ export async function sendOffer(input: {
 
   let context;
   try {
-    context = await requirePermission("offers:manage");
+    context = await requireOfferPermission(
+      "offers:manage",
+      parsed.data.offerId,
+    );
   } catch (error) {
     log.error(error, "sendOffer failed");
     return {
@@ -359,10 +377,14 @@ export async function sendOffer(input: {
   try {
     await createOfferEnvelope({ workspaceId, offer });
   } catch (error) {
-    log.error({ error, offerId: offer.id }, "sendOffer: DocuSeal submission creation failed");
+    log.error(
+      { error, offerId: offer.id },
+      "sendOffer: DocuSeal submission creation failed",
+    );
     return {
       success: false,
-      error: "Could not create the signature request. Check the DocuSeal connection and try again.",
+      error:
+        "Could not create the signature request. Check the DocuSeal connection and try again.",
     };
   }
 
@@ -414,7 +436,10 @@ export async function decideOffer(input: {
 
   let context;
   try {
-    context = await requirePermission("offers:manage");
+    context = await requireOfferPermission(
+      "offers:approve",
+      parsed.data.offerId,
+    );
   } catch (error) {
     log.error(error, "decideOffer failed");
     return {
@@ -593,7 +618,10 @@ export async function withdrawOffer(input: {
 
   let context;
   try {
-    context = await requirePermission("offers:manage");
+    context = await requireOfferPermission(
+      "offers:manage",
+      parsed.data.offerId,
+    );
   } catch (error) {
     log.error(error, "withdrawOffer failed");
     return {

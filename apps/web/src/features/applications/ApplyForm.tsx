@@ -57,9 +57,10 @@ const initialState: ApplyJobActionState = {
 };
 
 /** Apply-form presentation variant. Driven by the active career template so the
- * "ashby" template gets its distinctive flat, sectioned layout, while every
- * other template keeps its existing card-based form unchanged. */
-type ApplyFormVariant = "ashby" | "default";
+ * "ashby" and "join" templates share the flat, sectioned layout (join swaps in
+ * its own minimal resume uploader), while every other template keeps its
+ * existing card-based form unchanged. */
+type ApplyFormVariant = "ashby" | "join" | "default";
 
 type ApplyFormProps = {
   jobSlug: string;
@@ -360,7 +361,7 @@ function YesNoToggle({
               "min-w-[76px] px-4 py-1.5 text-sm font-medium transition-transform duration-150 active:scale-[0.97]",
               "rounded-md",
               active
-                ? "text-white shadow-sm"
+                ? "text-[var(--board-primary-contrast)] shadow-sm"
                 : "text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100",
             )}
             style={
@@ -678,8 +679,10 @@ export function ApplyForm({
   legalBasePath = "/legal",
 }: ApplyFormProps) {
   const isAshby = variant === "ashby";
-  const input = isAshby ? inputClassAshby : inputClass;
-  const textarea = isAshby ? textareaClassAshby : textareaClass;
+  const isJoin = variant === "join";
+  const flatVariant = isAshby || isJoin;
+  const input = flatVariant ? inputClassAshby : inputClass;
+  const textarea = flatVariant ? textareaClassAshby : textareaClass;
 
   const action = submitApplicationAction.bind(null, { jobSlug, workspaceSlug });
   const [state, formAction, isPending] = useActionState(action, initialState);
@@ -1303,7 +1306,7 @@ export function ApplyForm({
     return (
       <div className="rounded-lg border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-900/60">
         <span
-          className="mx-auto flex size-12 items-center justify-center rounded-full text-white"
+          className="mx-auto flex size-12 items-center justify-center rounded-full text-[var(--board-primary-contrast)]"
           style={{ backgroundColor: "var(--board-primary)" }}
           aria-hidden
         >
@@ -1386,12 +1389,12 @@ export function ApplyForm({
   );
 
   const profileSectionEnabled = showEducation || showExperience;
-  const entryCardClass = isAshby
+  const entryCardClass = flatVariant
     ? "space-y-4 rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900/50"
     : "space-y-4 rounded-lg border border-zinc-200 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-900/40";
   const subLabelClass =
     "text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400";
-  const secondaryButtonClass = isAshby
+  const secondaryButtonClass = flatVariant
     ? "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50"
     : "inline-flex items-center gap-1.5 rounded-lg border border-zinc-200 bg-white px-3.5 py-2 text-sm font-medium text-zinc-700 transition hover:border-zinc-300 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/50";
   const removeButtonClass =
@@ -1432,7 +1435,7 @@ export function ApplyForm({
         />
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
-            <FieldLabel ashby={isAshby} required>
+            <FieldLabel ashby={flatVariant} required>
               School
             </FieldLabel>
             <input
@@ -1454,7 +1457,7 @@ export function ApplyForm({
             />
           </label>
           <label className="block">
-            <FieldLabel ashby={isAshby}>Degree</FieldLabel>
+            <FieldLabel ashby={flatVariant}>Degree</FieldLabel>
             <input
               id={`education-degree-${entry.id}`}
               name={`education-degree-${entry.id}`}
@@ -1474,7 +1477,7 @@ export function ApplyForm({
             />
           </label>
           <label className="block">
-            <FieldLabel ashby={isAshby}>Field of study</FieldLabel>
+            <FieldLabel ashby={flatVariant}>Field of study</FieldLabel>
             <input
               id={`education-field-${entry.id}`}
               name={`education-field-${entry.id}`}
@@ -1495,7 +1498,7 @@ export function ApplyForm({
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <FieldLabel ashby={isAshby}>Start date</FieldLabel>
+              <FieldLabel ashby={flatVariant}>Start date</FieldLabel>
               <input
                 id={`education-startDate-${entry.id}`}
                 name={`education-startDate-${entry.id}`}
@@ -1522,7 +1525,7 @@ export function ApplyForm({
               />
             </label>
             <label className="block">
-              <FieldLabel ashby={isAshby}>End date</FieldLabel>
+              <FieldLabel ashby={flatVariant}>End date</FieldLabel>
               <input
                 id={`education-endDate-${entry.id}`}
                 name={`education-endDate-${entry.id}`}
@@ -1547,7 +1550,7 @@ export function ApplyForm({
           </div>
         </div>
         <label className="block">
-          <FieldLabel ashby={isAshby}>Description</FieldLabel>
+          <FieldLabel ashby={flatVariant}>Description</FieldLabel>
           <textarea
             id={`education-description-${entry.id}`}
             name={`education-description-${entry.id}`}
@@ -1601,7 +1604,7 @@ export function ApplyForm({
         />
         <div className="grid gap-4 sm:grid-cols-2">
           <label className="block">
-            <FieldLabel ashby={isAshby} required>
+            <FieldLabel ashby={flatVariant} required>
               Company
             </FieldLabel>
             <input
@@ -1627,7 +1630,7 @@ export function ApplyForm({
             />
           </label>
           <label className="block">
-            <FieldLabel ashby={isAshby} required>
+            <FieldLabel ashby={flatVariant} required>
               Job title
             </FieldLabel>
             <input
@@ -1649,7 +1652,7 @@ export function ApplyForm({
             />
           </label>
           <label className="block">
-            <FieldLabel ashby={isAshby}>Location</FieldLabel>
+            <FieldLabel ashby={flatVariant}>Location</FieldLabel>
             <input
               id={`experience-location-${entry.id}`}
               name={`experience-location-${entry.id}`}
@@ -1674,7 +1677,7 @@ export function ApplyForm({
           </label>
           <div className="grid gap-4 sm:grid-cols-2">
             <label className="block">
-              <FieldLabel ashby={isAshby}>Start date</FieldLabel>
+              <FieldLabel ashby={flatVariant}>Start date</FieldLabel>
               <input
                 id={`experience-startDate-${entry.id}`}
                 name={`experience-startDate-${entry.id}`}
@@ -1701,7 +1704,7 @@ export function ApplyForm({
               />
             </label>
             <label className="block">
-              <FieldLabel ashby={isAshby}>End date</FieldLabel>
+              <FieldLabel ashby={flatVariant}>End date</FieldLabel>
               <input
                 id={`experience-endDate-${entry.id}`}
                 name={`experience-endDate-${entry.id}`}
@@ -1740,7 +1743,7 @@ export function ApplyForm({
           I currently work here
         </label>
         <label className="block">
-          <FieldLabel ashby={isAshby}>Description</FieldLabel>
+          <FieldLabel ashby={flatVariant}>Description</FieldLabel>
           <textarea
             id={`experience-description-${entry.id}`}
             name={`experience-description-${entry.id}`}
@@ -1772,7 +1775,7 @@ export function ApplyForm({
       ref={formRef}
       action={formAction}
       onSubmit={handleSubmit}
-      className={isAshby ? "space-y-8" : "space-y-6"}
+      className={flatVariant ? "space-y-8" : "space-y-6"}
     >
       <input
         id="resumeFile"
@@ -1811,97 +1814,163 @@ export function ApplyForm({
         </div>
       ) : null}
 
-      {isAshby ? (
-        /* ─────────────────────────── Ashby variant ─────────────────────────── */
+      {isAshby || isJoin ? (
+        /* ─────────────────────── Ashby / Join flat layout ─────────────────────── */
         <>
-          {/* Autofill from resume */}
+          {/* Resume */}
           {showResume ? (
-            <div
-              className={cn(cardClass, reveal)}
-              style={{ animationDelay: "0ms" }}
-            >
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="flex items-start gap-3">
-                  <span
-                    className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-lg"
-                    style={{
-                      backgroundColor:
-                        "color-mix(in srgb, var(--board-primary) 12%, transparent)",
-                      color: "var(--board-primary)",
-                    }}
-                    aria-hidden
-                  >
-                    <Upload className="size-[18px]" strokeWidth={1.8} />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                      Autofill from resume
-                    </p>
-                    <p className="mt-1 max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-                      Upload your resume to autofill key application fields.
-                    </p>
-                  </div>
+            isJoin ? (
+              <div className={cn("space-y-4", reveal)} style={{ animationDelay: "0ms" }}>
+                <div className="border-b border-zinc-200 pb-2.5 dark:border-zinc-800">
+                  <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+                    Resume
+                  </h2>
                 </div>
-                <label
-                  htmlFor="resumeFile"
-                  className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]"
-                  style={{
-                    borderColor:
-                      "color-mix(in srgb, var(--board-primary) 40%, transparent)",
-                    color: "var(--board-primary)",
-                  }}
-                >
-                  {resumeFile ? "Replace file" : "Upload file"}
-                </label>
-              </div>
-
-              {resumeFile ? (
-                <p className="mt-4 flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  <span
-                    className="inline-flex size-5 items-center justify-center rounded-full text-white"
-                    style={{ backgroundColor: "var(--board-primary)" }}
-                    aria-hidden
+                {resumeFile ? (
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 px-4 py-3 dark:border-zinc-800">
+                    <p className="flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                      <span
+                        className="inline-flex size-5 items-center justify-center rounded-full text-[var(--board-primary-contrast)]"
+                        style={{ backgroundColor: "var(--board-primary)" }}
+                        aria-hidden
+                      >
+                        <Check className="size-3" strokeWidth={3} />
+                      </span>
+                      {resumeFile.name} ({formatFileSize(resumeFile.size)})
+                    </p>
+                    <label
+                      htmlFor="resumeFile"
+                      className="cursor-pointer text-sm font-medium underline underline-offset-2"
+                      style={{ color: "var(--board-primary)" }}
+                    >
+                      Replace
+                    </label>
+                  </div>
+                ) : (
+                  <label
+                    htmlFor="resumeFile"
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={cn(
+                      "group flex cursor-pointer flex-col items-center gap-2 rounded-lg border border-dashed px-6 py-10 text-center transition",
+                      isDragging
+                        ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/5"
+                        : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500",
+                    )}
                   >
-                    <Check className="size-3" strokeWidth={3} />
-                  </span>
-                  {resumeFile.name} ({formatFileSize(resumeFile.size)})
-                </p>
-              ) : (
-                <label
-                  htmlFor="resumeFile"
-                  onDragOver={handleDragOver}
-                  onDragLeave={handleDragLeave}
-                  onDrop={handleDrop}
-                  className={cn(
-                    "group mt-4 flex cursor-pointer flex-col items-center gap-3 rounded-lg border border-dashed bg-zinc-50/50 px-6 py-7 text-center transition hover:bg-zinc-50 dark:bg-zinc-800/30 dark:hover:bg-zinc-800/50 sm:flex-row sm:justify-center sm:gap-4 sm:text-left",
-                    isDragging
-                      ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/5"
-                      : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500",
-                  )}
-                >
-                  <span
-                    className="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-4 text-sm font-semibold transition-transform duration-150 group-active:scale-[0.98] dark:bg-zinc-900"
+                    <span
+                      className="flex size-12 items-center justify-center rounded-full transition-transform duration-150 group-hover:-translate-y-0.5 motion-reduce:transform-none"
+                      style={{
+                        backgroundColor:
+                          "color-mix(in srgb, var(--board-primary) 10%, transparent)",
+                        color: "var(--board-primary)",
+                      }}
+                      aria-hidden
+                    >
+                      <UploadCloud className="size-5" strokeWidth={1.6} />
+                    </span>
+                    <p className="text-sm text-zinc-700 dark:text-zinc-300">
+                      <span className="font-semibold" style={{ color: "var(--board-primary)" }}>
+                        {isDragging ? "Drop here" : "Upload your resume"}
+                      </span>{" "}
+                      {isDragging ? "" : "or drag and drop"}
+                    </p>
+                    <p className="text-xs text-zinc-400 dark:text-zinc-500">
+                      PDF, DOC, or DOCX · up to 10MB
+                    </p>
+                  </label>
+                )}
+                {resumeStatus}
+              </div>
+            ) : (
+              <div
+                className={cn(cardClass, reveal)}
+                style={{ animationDelay: "0ms" }}
+              >
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="flex items-start gap-3">
+                    <span
+                      className="mt-0.5 inline-flex size-9 shrink-0 items-center justify-center rounded-lg"
+                      style={{
+                        backgroundColor:
+                          "color-mix(in srgb, var(--board-primary) 12%, transparent)",
+                        color: "var(--board-primary)",
+                      }}
+                      aria-hidden
+                    >
+                      <Upload className="size-[18px]" strokeWidth={1.8} />
+                    </span>
+                    <div>
+                      <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                        Autofill from resume
+                      </p>
+                      <p className="mt-1 max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
+                        Upload your resume to autofill key application fields.
+                      </p>
+                    </div>
+                  </div>
+                  <label
+                    htmlFor="resumeFile"
+                    className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-lg border px-4 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]"
                     style={{
                       borderColor:
                         "color-mix(in srgb, var(--board-primary) 40%, transparent)",
                       color: "var(--board-primary)",
                     }}
                   >
-                    <Paperclip className="size-4" strokeWidth={2} />
-                    {isDragging ? "Drop here" : "Upload File"}
-                  </span>
-                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    {isDragging ? "Release to upload" : "or drag and drop here"}
-                  </span>
-                </label>
-              )}
-              {!resumeFile ? (
-                <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500 sm:text-left">
-                  .pdf, .doc, .docx · up to 10MB
-                </p>
-              ) : null}
-              {resumeStatus}
-            </div>
+                    {resumeFile ? "Replace file" : "Upload file"}
+                  </label>
+                </div>
+
+                {resumeFile ? (
+                  <p className="mt-4 flex items-center gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    <span
+                      className="inline-flex size-5 items-center justify-center rounded-full text-[var(--board-primary-contrast)]"
+                      style={{ backgroundColor: "var(--board-primary)" }}
+                      aria-hidden
+                    >
+                      <Check className="size-3" strokeWidth={3} />
+                    </span>
+                    {resumeFile.name} ({formatFileSize(resumeFile.size)})
+                  </p>
+                ) : (
+                  <label
+                    htmlFor="resumeFile"
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                    className={cn(
+                      "group mt-4 flex cursor-pointer flex-col items-center gap-3 rounded-lg border border-dashed bg-zinc-50/50 px-6 py-7 text-center transition hover:bg-zinc-50 dark:bg-zinc-800/30 dark:hover:bg-zinc-800/50 sm:flex-row sm:justify-center sm:gap-4 sm:text-left",
+                      isDragging
+                        ? "border-[color:var(--board-primary)] bg-[color:var(--board-primary)]/5"
+                        : "border-zinc-300 hover:border-zinc-400 dark:border-zinc-700 dark:hover:border-zinc-500",
+                    )}
+                  >
+                    <span
+                      className="inline-flex h-10 items-center gap-2 rounded-lg border bg-white px-4 text-sm font-semibold transition-transform duration-150 group-active:scale-[0.98] dark:bg-zinc-900"
+                      style={{
+                        borderColor:
+                          "color-mix(in srgb, var(--board-primary) 40%, transparent)",
+                        color: "var(--board-primary)",
+                      }}
+                    >
+                      <Paperclip className="size-4" strokeWidth={2} />
+                      {isDragging ? "Drop here" : "Upload File"}
+                    </span>
+                    <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                      {isDragging ? "Release to upload" : "or drag and drop here"}
+                    </span>
+                  </label>
+                )}
+                {!resumeFile ? (
+                  <p className="mt-2 text-center text-xs text-zinc-400 dark:text-zinc-500 sm:text-left">
+                    .pdf, .doc, .docx · up to 10MB
+                  </p>
+                ) : null}
+                {resumeStatus}
+              </div>
+            )
           ) : null}
 
           <p className="text-xs text-zinc-500 dark:text-zinc-400">
@@ -2452,7 +2521,7 @@ export function ApplyForm({
           <button
             type="submit"
             disabled={isSubmitting}
-            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold text-white transition-transform duration-150 hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-lg text-sm font-semibold text-[var(--board-primary-contrast)] transition-transform duration-150 hover:brightness-110 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             style={{ backgroundColor: "var(--board-primary)" }}
           >
             {isSubmittingForm || isPending ? (
@@ -2512,7 +2581,7 @@ export function ApplyForm({
                 ) : (
                   <label
                     htmlFor="resumeFile"
-                    className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md px-5 text-sm font-medium text-white transition hover:brightness-110"
+                    className="inline-flex h-10 shrink-0 cursor-pointer items-center justify-center rounded-md px-5 text-sm font-medium text-[var(--board-primary-contrast)] transition hover:brightness-110"
                     style={{ backgroundColor: "var(--board-primary)" }}
                   >
                     Upload resume
@@ -2522,7 +2591,7 @@ export function ApplyForm({
               {resumeFile ? (
                 <p className="mt-3 flex items-center gap-2 text-sm font-medium text-zinc-700">
                   <span
-                    className="inline-flex size-5 items-center justify-center rounded-full text-white"
+                    className="inline-flex size-5 items-center justify-center rounded-full text-[var(--board-primary-contrast)]"
                     style={{ backgroundColor: "var(--board-primary)" }}
                     aria-hidden
                   >

@@ -26,7 +26,11 @@ import {
 import type { ResumeEducationItem, ResumeExperienceItem } from "@harly/db";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { parseResumeStructured } from "@/lib/ai/surfaces/parse-resume";
-import { composerAttachmentsSchema, decodeComposerAttachments, richBodyReact } from "@/features/mailbox/compose-shared";
+import {
+  composerAttachmentsSchema,
+  decodeComposerAttachments,
+  richBodyReact,
+} from "@/features/mailbox/compose-shared";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceEmailSender } from "@/lib/email";
@@ -34,7 +38,10 @@ import { getInboundReplyTo } from "@/lib/email/inbound-token";
 import { insertCanonicalMessage } from "@/lib/mail/canonical";
 import { sendCanonicalEmail } from "@/lib/mail/send-canonical-email";
 import { isMailUnificationEnabled } from "@/lib/mail/feature-flag";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  requireCandidatePermission,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
 import {
   permanentlyDeleteCandidate,
@@ -462,7 +469,7 @@ export async function updateCandidateProfile(input: {
       return { success: false, error: "Workspace access denied." };
     }
 
-    await requirePermission("candidates:edit");
+    await requireCandidatePermission("candidates:edit", input.candidateId);
 
     const [candidate] = await db.transaction(async (tx) => {
       const [row] = await tx
@@ -533,7 +540,7 @@ export async function updateCandidateAvatarAction(input: {
       return { success: false, error: "Workspace access denied." };
     }
 
-    await requirePermission("candidates:edit");
+    await requireCandidatePermission("candidates:edit", input.candidateId);
 
     const [candidate] = await db
       .update(candidates)
@@ -604,7 +611,7 @@ export async function attachCandidateFile(input: {
       return { success: false, error: "Workspace access denied." };
     }
 
-    await requirePermission("candidates:edit");
+    await requireCandidatePermission("candidates:edit", input.candidateId);
 
     const key = resumeKeyFromUrl(parsed.data.fileUrl);
     if (!key || !isWorkspaceStorageKey(workspace.id, key, "resumes")) {
@@ -812,7 +819,7 @@ export async function createScorecard(input: {
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
-    await requirePermission("collab:write");
+    await requireCandidatePermission("collab:write", input.candidateId);
     if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
       return { success: false, error: "Candidate not found." };
     }
@@ -895,7 +902,7 @@ export async function addCandidateTag(input: {
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
-    await requirePermission("candidates:edit");
+    await requireCandidatePermission("candidates:edit", input.candidateId);
     if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
       return { success: false, error: "Candidate not found." };
     }
@@ -928,7 +935,7 @@ export async function removeCandidateTag(input: {
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
-    await requirePermission("candidates:edit");
+    await requireCandidatePermission("candidates:edit", input.candidateId);
     await db
       .delete(candidateTags)
       .where(
@@ -1056,7 +1063,9 @@ export async function sendBulkCandidateEmail(input: {
   }
 
   const canonicalEnabled = await isMailUnificationEnabled(workspace.id);
-  const sender = canonicalEnabled ? null : await getWorkspaceEmailSender(workspace.id);
+  const sender = canonicalEnabled
+    ? null
+    : await getWorkspaceEmailSender(workspace.id);
   if (!sender && !canonicalEnabled) {
     return {
       success: false,
@@ -1100,7 +1109,14 @@ export async function sendBulkCandidateEmail(input: {
           replyTo,
         });
       } catch (sendError) {
-        emailLog.error({ err: sendError, workspaceId: workspace.id, candidateId: candidate.id }, "bulk canonical email failed");
+        emailLog.error(
+          {
+            err: sendError,
+            workspaceId: workspace.id,
+            candidateId: candidate.id,
+          },
+          "bulk canonical email failed",
+        );
         status = "failed";
       }
     } else if (sender) {
@@ -1129,20 +1145,21 @@ export async function sendBulkCandidateEmail(input: {
       }
     }
 
-    if (!canonicalEnabled) await insertCanonicalMessage({
-      workspaceId: workspace.id,
-      source: "provider",
-      candidateId: candidate.id,
-      applicationId: applicationId ?? null,
-      participantEmail: candidate.email,
-      subject,
-      receivedAt: new Date(),
-      messageId,
-      direction: "outbound",
-      fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
-      toEmails: [candidate.email],
-      textBody: body,
-    });
+    if (!canonicalEnabled)
+      await insertCanonicalMessage({
+        workspaceId: workspace.id,
+        source: "provider",
+        candidateId: candidate.id,
+        applicationId: applicationId ?? null,
+        participantEmail: candidate.email,
+        subject,
+        receivedAt: new Date(),
+        messageId,
+        direction: "outbound",
+        fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
+        toEmails: [candidate.email],
+        textBody: body,
+      });
 
     if (status === "failed") failed += 1;
     else sent += 1;
@@ -1229,7 +1246,9 @@ export async function generateEmailDraftAction(input: {
     .limit(20);
 
   const row = parsed.data.applicationId
-    ? rows.find((candidate) => candidate.applicationId === parsed.data.applicationId)
+    ? rows.find(
+        (candidate) => candidate.applicationId === parsed.data.applicationId,
+      )
     : rows[0];
 
   if (!row) {
@@ -1255,21 +1274,54 @@ export async function generateEmailDraftAction(input: {
     .limit(1);
 
   let threadSubject: string | null = null;
-  let threadContext: Array<{ direction: "inbound" | "outbound"; fromEmail: string; toEmails: string[]; body: string; receivedAt: string; read: boolean }> = [];
+  let threadContext: Array<{
+    direction: "inbound" | "outbound";
+    fromEmail: string;
+    toEmails: string[];
+    body: string;
+    receivedAt: string;
+    read: boolean;
+  }> = [];
   if (parsed.data.threadId) {
-    const [thread] = await db.select({ id: mailThreads.id, subject: mailThreads.subject, candidateId: mailThreads.candidateId })
+    const [thread] = await db
+      .select({
+        id: mailThreads.id,
+        subject: mailThreads.subject,
+        candidateId: mailThreads.candidateId,
+      })
       .from(mailThreads)
-      .where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, workspace.id)))
+      .where(
+        and(
+          eq(mailThreads.id, parsed.data.threadId),
+          eq(mailThreads.workspaceId, workspace.id),
+        ),
+      )
       .limit(1);
-    if (!thread || (thread.candidateId && thread.candidateId !== parsed.data.candidateId)) return { ok: false, error: "Thread not found." };
+    if (
+      !thread ||
+      (thread.candidateId && thread.candidateId !== parsed.data.candidateId)
+    )
+      return { ok: false, error: "Thread not found." };
     threadSubject = thread.subject;
-    const threadMessages = await db.select().from(mailMessages)
-      .where(and(eq(mailMessages.workspaceId, workspace.id), eq(mailMessages.threadId, thread.id)))
-      .orderBy(desc(mailMessages.receivedAt)).limit(50);
+    const threadMessages = await db
+      .select()
+      .from(mailMessages)
+      .where(
+        and(
+          eq(mailMessages.workspaceId, workspace.id),
+          eq(mailMessages.threadId, thread.id),
+        ),
+      )
+      .orderBy(desc(mailMessages.receivedAt))
+      .limit(50);
     threadContext = threadMessages.reverse().map((message) => ({
       direction: message.direction,
       fromEmail: message.fromEmail,
-      toEmails: Array.isArray(message.toEmails) ? message.toEmails.filter((value): value is string => typeof value === "string") : [],
+      toEmails: Array.isArray(message.toEmails)
+        ? message.toEmails.filter(
+            (value): value is string => typeof value === "string",
+          )
+        : [],
       body: message.textBody,
       receivedAt: message.receivedAt.toISOString(),
       read: Boolean(message.readAt),
@@ -1290,7 +1342,11 @@ export async function generateEmailDraftAction(input: {
       additionalInstructions: parsed.data.additionalInstructions ?? null,
       threadSubject,
       messages: threadContext,
-      latestInboundIntentHint: threadContext.some((message) => message.direction === "inbound") ? "available" : null,
+      latestInboundIntentHint: threadContext.some(
+        (message) => message.direction === "inbound",
+      )
+        ? "available"
+        : null,
     });
     return { ok: true, subject: draft.subject, body: draft.body };
   } catch (error) {
@@ -1309,7 +1365,11 @@ export async function sendCandidateMessage(input: {
   subject: string;
   body: string;
   html?: string;
-  attachments?: Array<{ filename: string; contentType: string; base64: string }>;
+  attachments?: Array<{
+    filename: string;
+    contentType: string;
+    base64: string;
+  }>;
   threadId?: string | null;
 }): Promise<{ success: boolean; error?: string; delivered?: boolean }> {
   try {
@@ -1324,7 +1384,7 @@ export async function sendCandidateMessage(input: {
     if (workspace.id !== input.workspaceId) {
       return { success: false, error: "Workspace access denied." };
     }
-    await requirePermission("collab:write");
+    await requireCandidatePermission("collab:write", input.candidateId);
     if (!(await assertCandidate(input.candidateId, input.workspaceId))) {
       return { success: false, error: "Candidate not found." };
     }
@@ -1343,12 +1403,27 @@ export async function sendCandidateMessage(input: {
       .orderBy(desc(applications.appliedAt))
       .limit(1);
     const explicitThread = parsed.data.threadId
-      ? (await db.select({ id: mailThreads.id, candidateId: mailThreads.candidateId, applicationId: mailThreads.applicationId })
-          .from(mailThreads)
-          .where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, input.workspaceId)))
-          .limit(1))[0]
+      ? (
+          await db
+            .select({
+              id: mailThreads.id,
+              candidateId: mailThreads.candidateId,
+              applicationId: mailThreads.applicationId,
+            })
+            .from(mailThreads)
+            .where(
+              and(
+                eq(mailThreads.id, parsed.data.threadId),
+                eq(mailThreads.workspaceId, input.workspaceId),
+              ),
+            )
+            .limit(1)
+        )[0]
       : null;
-    if (parsed.data.threadId && (!explicitThread || explicitThread.candidateId !== input.candidateId)) {
+    if (
+      parsed.data.threadId &&
+      (!explicitThread || explicitThread.candidateId !== input.candidateId)
+    ) {
       return { success: false, error: "Thread not found." };
     }
     const replyTo = latestApplication
@@ -1357,16 +1432,21 @@ export async function sendCandidateMessage(input: {
     if (await isMailUnificationEnabled(input.workspaceId)) {
       const canonical = await sendCanonicalEmail({
         workspaceId: input.workspaceId,
-        idempotencyKey: parsed.data.idempotencyKey ?? `candidate-message:${input.candidateId}:${parsed.data.subject}:${parsed.data.body}`,
+        idempotencyKey:
+          parsed.data.idempotencyKey ??
+          `candidate-message:${input.candidateId}:${parsed.data.subject}:${parsed.data.body}`,
         candidateId: input.candidateId,
-        applicationId: explicitThread?.applicationId ?? latestApplication?.id ?? null,
+        applicationId:
+          explicitThread?.applicationId ?? latestApplication?.id ?? null,
         threadId: explicitThread?.id ?? null,
         toEmail: parsed.data.toEmail,
         subject: parsed.data.subject,
         textBody: parsed.data.body,
         htmlBody: parsed.data.html ?? null,
         replyTo,
-        attachments: (decodeComposerAttachments(parsed.data.attachments) ?? []).map((attachment) => ({
+        attachments: (
+          decodeComposerAttachments(parsed.data.attachments) ?? []
+        ).map((attachment) => ({
           filename: attachment.filename,
           contentType: attachment.contentType ?? "application/octet-stream",
           content: attachment.content!,
@@ -1375,7 +1455,13 @@ export async function sendCandidateMessage(input: {
       revalidatePath(`/dashboard/candidates/${input.candidateId}`);
       revalidatePath("/dashboard/candidates");
       revalidatePath("/dashboard/inbox");
-      return { success: true, delivered: canonical.delivered, ...(canonical.legacyWriteWarning ? { error: canonical.legacyWriteWarning } : {}) };
+      return {
+        success: true,
+        delivered: canonical.delivered,
+        ...(canonical.legacyWriteWarning
+          ? { error: canonical.legacyWriteWarning }
+          : {}),
+      };
     }
     const messageId = `<${randomUUID()}@harly.local>`;
 
@@ -1450,7 +1536,7 @@ const candidateIdsSchema = z.array(z.string().min(1)).min(1).max(200);
 export async function trashCandidateAction(
   candidateId: string,
 ): Promise<CandidateActionState> {
-  await requirePermission("candidates:delete");
+  await requireCandidatePermission("candidates:delete", candidateId);
   const result = await trashCandidate(candidateId);
 
   if (!result.ok) {
@@ -1497,7 +1583,7 @@ export async function bulkTrashCandidatesAction(
 export async function restoreCandidateAction(
   candidateId: string,
 ): Promise<CandidateActionState> {
-  await requirePermission("candidates:delete");
+  await requireCandidatePermission("candidates:delete", candidateId);
   const result = await restoreCandidate(candidateId);
 
   if (!result.ok) {
@@ -1515,7 +1601,7 @@ export async function restoreCandidateAction(
 export async function permanentlyDeleteCandidateAction(
   candidateId: string,
 ): Promise<CandidateActionState> {
-  await requirePermission("candidates:delete");
+  await requireCandidatePermission("candidates:delete", candidateId);
   const { organization, user } = await getWorkspaceContext();
   const result = await permanentlyDeleteCandidate(candidateId, user.email);
 

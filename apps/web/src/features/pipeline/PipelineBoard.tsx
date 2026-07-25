@@ -10,6 +10,7 @@ import {
   pointerWithin,
   useSensor,
   useSensors,
+  type Announcements,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -243,6 +244,38 @@ export function PipelineBoard({
     ? stages.filter((stage) => (filteredColumns.get(stage.id)?.length ?? 0) > 0)
     : stages;
   const mobileApplications = filteredColumns.get(mobileStage) ?? [];
+
+  function candidateLabel(applicationId: string) {
+    const found = findApplicationStage(columns, applicationId);
+    return found
+      ? `${found.application.candidateFirstName} ${found.application.candidateLastName}`
+      : "Candidate";
+  }
+
+  function stageLabel(stageId: string) {
+    return stages.find((stage) => stage.id === stageId)?.name ?? "stage";
+  }
+
+  const dragAnnouncements: Announcements = {
+    onDragStart({ active }) {
+      return `Picked up ${candidateLabel(String(active.id))}.`;
+    },
+    onDragOver({ active, over }) {
+      if (!over) return undefined;
+      const target = getOverTarget(columns, stages, String(over.id));
+      if (!target) return undefined;
+      return `${candidateLabel(String(active.id))} is over ${stageLabel(target.stageId)}.`;
+    },
+    onDragEnd({ active, over }) {
+      if (!over) return `${candidateLabel(String(active.id))} was not moved.`;
+      const target = getOverTarget(columns, stages, String(over.id));
+      if (!target) return `${candidateLabel(String(active.id))} was not moved.`;
+      return `${candidateLabel(String(active.id))} moved to ${stageLabel(target.stageId)}.`;
+    },
+    onDragCancel({ active }) {
+      return `Moving ${candidateLabel(String(active.id))} was cancelled.`;
+    },
+  };
 
   function handleSelect(applicationId: string, selected: boolean) {
     setSelectedIds((current) => {
@@ -648,6 +681,7 @@ export function PipelineBoard({
           id={`pipeline-${selectedJob.id}`}
           sensors={sensors}
           collisionDetection={pointerWithin}
+          accessibility={{ announcements: dragAnnouncements }}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
           onDragCancel={() => setActiveApplication(null)}

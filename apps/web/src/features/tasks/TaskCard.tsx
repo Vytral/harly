@@ -188,7 +188,7 @@ export function TaskCardView({
             <Calendar className="size-3 text-muted-foreground/50" />
             <RelativeDate iso={task.dueDate} />
           </span>
-          <OwnerAvatar name={task.ownerName} image={task.ownerImage} />
+          <OwnerAvatar name={task.ownerName} image={task.ownerImage} username={task.ownerUsername} />
         </div>
       </div>
     </div>

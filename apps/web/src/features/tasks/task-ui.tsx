@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { PersonLink } from "@/components/people/PersonLink";
 import {
   currentTaskDateKey,
   taskDateKey,
@@ -135,8 +136,18 @@ export function RelativeDate({ iso }: { iso: string | null }) {
   return <span className={view.cls}>{view.label}</span>;
 }
 
-export function OwnerAvatar({ name, image }: { name: string; image: string | null }) {
+export function OwnerAvatar({
+  name,
+  image,
+  username,
+}: {
+  name: string;
+  image: string | null;
+  username?: string | null;
+}) {
   return (
-    <UserAvatar name={name} src={image} size="sm" className="size-6 text-[10px] ring-2 ring-card" />
+    <PersonLink username={username}>
+      <UserAvatar name={name} src={image} size="sm" className="size-6 text-[10px] ring-2 ring-card" />
+    </PersonLink>
   );
 }

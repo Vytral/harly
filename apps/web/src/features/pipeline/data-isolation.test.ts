@@ -45,6 +45,7 @@ vi.mock("@/features/workspaces/context", () => ({
 }));
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: mocks.requirePermission,
+  requireApplicationPermission: mocks.requirePermission,
 }));
 vi.mock("@/lib/email", () => ({
   sendWorkspaceEmail: vi.fn(),

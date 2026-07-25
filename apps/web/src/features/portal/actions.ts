@@ -18,10 +18,12 @@ import {
   workspaceSettings,
   consentRecords,
   candidatePortalMagicLinks,
+  member as authMembers,
+  organization,
+  user as authUsers,
 } from "@harly/db";
 import {
   PortalMagicLinkEmail,
-  createEmailSender,
   portalMagicLinkSubject,
 } from "@harly/emails";
 import {
@@ -31,9 +33,11 @@ import {
   getPortalWorkspaceBySlug,
   resolvePortalSession,
 } from "@/lib/portal-auth";
+import { getWorkspaceEmailSender } from "@/lib/email";
 import { createLogger } from "@/lib/logger";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { validatePortalApplication } from "@/features/portal/application-validation";
+import { sendApplicationReceivedEmails } from "@/features/applications/notifications";
 
 const log = createLogger("portal-actions");
 
@@ -95,7 +99,7 @@ export async function sendPortalMagicLinkAction(
     const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
     const url = `${appUrl}/api/portal/auth/magic?token=${token}`;
 
-    const sender = createEmailSender();
+    const sender = await getWorkspaceEmailSender(workspaceId);
     if (sender) {
       await sender.send({
         to: parsed.data,
@@ -143,6 +147,7 @@ export async function applyToJobAction(
     const [job] = await db
       .select({
         id: jobs.id,
+        title: jobs.title,
         status: jobs.status,
         applicationConfig: jobs.applicationConfig,
       })
@@ -285,6 +290,47 @@ export async function applyToJobAction(
         consentText,
         granted: true,
       });
+    }
+
+    // Keep portal submissions on the same durable email path as public
+    // applications. Email delivery must never turn a successful application
+    // into a failed request, so delivery errors are logged and retried by the
+    // outbox worker without changing the candidate-facing result.
+    try {
+      const [[workspace], owners] = await Promise.all([
+        db
+          .select({ name: organization.name, slug: organization.slug })
+          .from(organization)
+          .where(eq(organization.id, session.workspaceId))
+          .limit(1),
+        db
+          .select({ email: authUsers.email })
+          .from(authMembers)
+          .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
+          .where(
+            and(
+              eq(authMembers.organizationId, session.workspaceId),
+              eq(authMembers.role, "owner"),
+            ),
+          ),
+      ]);
+
+      if (workspace) {
+        await sendApplicationReceivedEmails({
+          workspaceId: session.workspaceId,
+          workspaceName: workspace.name,
+          workspaceSlug: workspace.slug,
+          applicationId: application.id,
+          portalEnabled: true,
+          candidateEmail: session.email,
+          candidateFirstName: session.firstName,
+          candidateName: `${session.firstName} ${session.lastName}`.trim(),
+          jobTitle: job.title,
+          ownerEmails: owners.map((owner) => owner.email),
+        });
+      }
+    } catch (emailError) {
+      log.error(emailError, "Portal application email delivery failed");
     }
 
     return { ok: true, applicationId: application.id };

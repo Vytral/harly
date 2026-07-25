@@ -5,6 +5,7 @@ import type { Route } from "next";
 
 import {
   applications,
+  candidates,
   db,
   jobs,
   jobStages,
@@ -23,6 +24,8 @@ import { PortalHeroBanner } from "@/features/portal/PortalHeroBanner";
 import { PortalInterviewPlan } from "@/features/portal/PortalInterviewPlan";
 import { PortalInterviewList } from "@/features/portal/PortalInterviewList";
 import { PortalEmptyState } from "@/features/portal/PortalEmptyState";
+import { PortalProfileCompletionCard } from "@/features/portal/PortalProfileCompletionCard";
+import { getPortalProfileCompletion } from "@/features/portal/profile-completion";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +37,7 @@ export default async function PortalDashboardPage() {
   const session = await resolvePortalSession(token);
   if (!session) redirect("/portal/login" as Route);
 
-  const [[settings], [org]] = await Promise.all([
+  const [[settings], [org], [candidate]] = await Promise.all([
     db
       .select({
         tagline: workspaceSettings.tagline,
@@ -51,6 +54,21 @@ export default async function PortalDashboardPage() {
       .select({ name: organization.name, logo: organization.logo })
       .from(organization)
       .where(eq(organization.id, session.workspaceId))
+      .limit(1),
+    db
+      .select({
+        firstName: candidates.firstName,
+        lastName: candidates.lastName,
+        headline: candidates.headline,
+        phone: candidates.phone,
+        location: candidates.location,
+        avatarUrl: candidates.avatarUrl,
+        linkedinUrl: candidates.linkedinUrl,
+        githubUrl: candidates.githubUrl,
+        websiteUrl: candidates.websiteUrl,
+      })
+      .from(candidates)
+      .where(and(eq(candidates.id, session.candidateId), eq(candidates.workspaceId, session.workspaceId)))
       .limit(1),
   ]);
 
@@ -82,12 +100,19 @@ export default async function PortalDashboardPage() {
   if (!primaryApp) {
     return (
       <PortalShell>
-        <PortalEmptyState
-          icon={BriefcaseIcon}
-          title="No applications yet"
-          description="Browse open positions and apply to get started."
-          cta={{ label: "Browse positions", href: "/portal/jobs" as Route }}
-        />
+        <div className="space-y-6">
+          {candidate && (
+            <PortalProfileCompletionCard
+              completion={getPortalProfileCompletion(candidate)}
+            />
+          )}
+          <PortalEmptyState
+            icon={BriefcaseIcon}
+            title="No applications yet"
+            description="Browse open positions and apply to get started."
+            cta={{ label: "Browse positions", href: "/portal/jobs" as Route }}
+          />
+        </div>
       </PortalShell>
     );
   }
@@ -127,6 +152,12 @@ export default async function PortalDashboardPage() {
   return (
     <PortalShell>
       <div className="space-y-8">
+        {candidate && (
+          <PortalProfileCompletionCard
+            completion={getPortalProfileCompletion(candidate)}
+          />
+        )}
+
         {/* Hero banner */}
         <PortalHeroBanner
           orgName={orgName}

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import {
   db,
@@ -60,6 +60,15 @@ async function getWorkspaceMemberIds(
     .select({ userId: member.userId })
     .from(member)
     .where(eq(member.organizationId, workspaceId));
+  return rows.map((r) => r.userId);
+}
+
+/** Owners/admins receive workspace-wide events, regardless of job assignment. */
+async function getWorkspaceAdminIds(workspaceId: string): Promise<string[]> {
+  const rows = await db
+    .select({ userId: member.userId })
+    .from(member)
+    .where(and(eq(member.organizationId, workspaceId), sql`${member.role} in ('owner', 'admin')`));
   return rows.map((r) => r.userId);
 }
 
@@ -237,6 +246,10 @@ async function resolveRecipients(
   } else {
     ids = await getWorkspaceMemberIds(workspaceId);
   }
+
+  // Workspace oversight: owners/admins always see every event, including
+  // interview schedule/reschedule/cancel/complete changes.
+  ids = [...new Set([...ids, ...(await getWorkspaceAdminIds(workspaceId))])];
 
   // Never notify the actor about their own action.
   if (actorId) {

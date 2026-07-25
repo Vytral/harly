@@ -16,6 +16,7 @@ import {
   markNotificationRead,
   markNotificationUnread,
   deleteNotification,
+  deleteAllNotifications,
 } from "@/features/notifications/actions";
 import type { NotificationItem } from "@/features/notifications/data";
 import { NotificationTypeIcon } from "@/features/notifications/notification-icons";
@@ -47,8 +48,11 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
     startTransition(async () => {
       if (!item.read) {
         try {
-          const result = await markNotificationRead({ notificationId: item.id });
-          if (!result.success) setError("Could not mark the notification as read.");
+          const result = await markNotificationRead({
+            notificationId: item.id,
+          });
+          if (!result.success)
+            setError("Could not mark the notification as read.");
         } catch {
           setError("Could not mark the notification as read.");
         }
@@ -114,6 +118,25 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
     });
   }
 
+  function removeAll() {
+    if (!window.confirm("Delete all notifications? This cannot be undone."))
+      return;
+    setError(null);
+    startTransition(async () => {
+      try {
+        const result = await deleteAllNotifications();
+        if (!result.success) {
+          setError("Could not delete all notifications.");
+          return;
+        }
+      } catch {
+        setError("Could not delete all notifications.");
+        return;
+      }
+      router.refresh();
+    });
+  }
+
   if (items.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed px-6 py-16 text-center">
@@ -144,10 +167,7 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
-        <Tabs
-          value={filter}
-          onValueChange={(v) => setFilter(v as Filter)}
-        >
+        <Tabs value={filter} onValueChange={(v) => setFilter(v as Filter)}>
           <TabsList>
             <TabsTrigger value="all">All</TabsTrigger>
             <TabsTrigger value="unread">
@@ -156,17 +176,28 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
           </TabsList>
         </Tabs>
 
-        {unread > 0 ? (
+        <div className="flex items-center gap-2">
+          {unread > 0 ? (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={markAll}
+              disabled={isPending}
+            >
+              <CheckCheck className="size-4" />
+              Mark all as read
+            </Button>
+          ) : null}
           <Button
             size="sm"
-            variant="outline"
-            onClick={markAll}
+            variant="ghost"
+            onClick={removeAll}
             disabled={isPending}
           >
-            <CheckCheck className="size-4" />
-            Mark all as read
+            <Trash2 className="size-4" />
+            Delete all
           </Button>
-        ) : null}
+        </div>
       </div>
 
       {error ? (
@@ -216,9 +247,7 @@ export function InboxList({ items }: { items: NotificationItem[] }) {
                     <span
                       className={cn(
                         "truncate text-sm",
-                        item.read
-                          ? "text-muted-foreground"
-                          : "font-medium",
+                        item.read ? "text-muted-foreground" : "font-medium",
                       )}
                     >
                       {item.title}

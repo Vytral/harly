@@ -89,7 +89,10 @@ export function PortalLoginForm({
   return (
     <div className="space-y-4">
       {error ? (
-        <p className="rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-sm text-destructive">
+        <p
+          role="alert"
+          className="rounded-xl border border-destructive/30 bg-destructive/5 px-3.5 py-2.5 text-sm text-destructive"
+        >
           {ERROR_MESSAGES[error] ?? "Something went wrong."}
         </p>
       ) : null}
