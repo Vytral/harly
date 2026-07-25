@@ -1,12 +1,11 @@
 "use client";
 
-import { useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { ArrowRight, Check, ChevronDown, Rocket, X } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Rocket } from "lucide-react";
 
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { tileClass } from "@/components/dashboard/widgets/primitives";
 import { SetupProgressRing } from "@/components/dashboard/SetupProgressRing";
 import type { SetupChecklist } from "@/features/dashboard/setup-checklist";
@@ -16,16 +15,17 @@ const COLLAPSE_KEY = "harly:setup-checklist-collapsed";
 
 /**
  * A localStorage-backed boolean shared with React via useSyncExternalStore.
- * SSR snapshot is always `false`, so the server renders "expanded / not
- * dismissed" and the client reconciles on hydration , no setState-in-effect.
+ * The SSR snapshot must equal `fallback`, so the server and the first client
+ * render agree and nothing needs a setState-in-effect.
  */
-function makePersistedFlag(key: string) {
+function makePersistedFlag(key: string, fallback = false) {
   const listeners = new Set<() => void>();
   const read = () => {
     try {
-      return window.localStorage.getItem(key) === "1";
+      const stored = window.localStorage.getItem(key);
+      return stored === null ? fallback : stored === "1";
     } catch {
-      return false;
+      return fallback;
     }
   };
   return {
@@ -46,14 +46,17 @@ function makePersistedFlag(key: string) {
 }
 
 const dismissStore = makePersistedFlag(DISMISS_KEY);
-const collapseStore = makePersistedFlag(COLLAPSE_KEY);
+// Collapsed by default. Home's hero surface is the human table; setup is a
+// single row you open on purpose, not a panel sitting on top of the work.
+const collapseStore = makePersistedFlag(COLLAPSE_KEY, true);
 const serverFalse = () => false;
+const serverTrue = () => true;
 
 /**
- * "Get your workspace ready" , a progressive, benefit-led launch checklist.
- * Reads state from getSetupChecklist and links to existing pages. Completed
- * rows keep an Edit link (users come back); collapsible to a single header row;
- * at 100% it shows a one-time celebration that, once dismissed, stays hidden.
+ * "Recommended next steps" , a progressive, benefit-led launch checklist.
+ * Reads state from getSetupChecklist and links to existing pages. Renders as a
+ * single collapsed header row by default (frame 02's stacked-row pattern), and
+ * the page unmounts it entirely once every step is done.
  */
 export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist }) {
   const dismissed = useSyncExternalStore(
@@ -64,75 +67,17 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
   const collapsed = useSyncExternalStore(
     collapseStore.subscribe,
     collapseStore.get,
-    serverFalse,
+    serverTrue,
   );
-  // Play a soft collapse before unmounting so the dashboard below glides up
-  // into place instead of snapping.
-  const [leaving, setLeaving] = useState(false);
   const pendingItems = checklist.items.filter((item) => !item.done);
 
   if (dismissed) return null;
 
-  if (checklist.allDone) {
-    return (
-      <div
-        className={cn(
-          "grid transition-all duration-500 ease-out motion-reduce:transition-none",
-          leaving ? "grid-rows-[0fr] opacity-0" : "grid-rows-[1fr] opacity-100",
-        )}
-        onTransitionEnd={(e) => {
-          // Only the wrapper's own opacity fade ends the card , ignore
-          // transitions bubbling up from children (progress bar, chevron).
-          if (
-            leaving &&
-            e.target === e.currentTarget &&
-            e.propertyName === "opacity"
-          ) {
-            dismissStore.set(true);
-          }
-        }}
-      >
-        <div className="min-h-0 overflow-hidden">
-          <section
-            className={cn(
-              tileClass,
-              "relative overflow-hidden p-6 duration-500 animate-in fade-in slide-in-from-bottom-2",
-            )}
-          >
-            <div
-              aria-hidden
-              className="pointer-events-none absolute -right-8 -top-10 size-40 rounded-full bg-sage/50 blur-2xl"
-            />
-            <button
-              type="button"
-              onClick={() => setLeaving(true)}
-              aria-label="Dismiss"
-              className="absolute right-4 top-4 rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <X className="size-4" />
-            </button>
-            <div className="relative flex flex-col items-start gap-3">
-              <span className="flex size-11 items-center justify-center rounded-2xl bg-sage text-pine ring-1 ring-pine/10">
-                <Rocket className="size-6" strokeWidth={1.8} />
-              </span>
-              <div className="space-y-1">
-                <h2 className="font-display text-lg font-semibold tracking-tight">
-                  Your workspace is ready
-                </h2>
-                <p className="max-w-prose text-sm text-muted-foreground">
-                  You&apos;ve completed every recommended step. Time to focus on
-                  what matters: hiring great people.
-                </p>
-              </div>
-              <Button size="sm" className="mt-1" onClick={() => setLeaving(true)}>
-                Got it
-              </Button>
-            </div>
-          </section>
-        </div>
-      </div>
-    );
-  }
+  // The 100%-complete celebration panel used to live here. Home's hero surface
+  // is the human table, and a full-width card congratulating you on finishing
+  // setup is exactly the noise DESIGN.md bans above it. The page now stops
+  // rendering the checklist once `allDone`, so there is nothing to celebrate
+  // with , finishing the list simply removes it.
 
   return (
     <section

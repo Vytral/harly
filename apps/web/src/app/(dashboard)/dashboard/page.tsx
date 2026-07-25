@@ -1,106 +1,72 @@
-import { CandidatesNeedingReview } from "@/components/dashboard/widgets/CandidatesNeedingReview";
-import { HiringPerformance } from "@/components/dashboard/widgets/HiringPerformance";
-import { InboxCard } from "@/components/dashboard/widgets/InboxCard";
-import { MyTasksCard } from "@/components/dashboard/widgets/MyTasksCard";
-import { PipelineOverviewCard } from "@/components/dashboard/widgets/PipelineOverviewCard";
-import { SetupChecklistCard } from "@/components/dashboard/widgets/SetupChecklistCard";
-import { TodayInterviews } from "@/components/dashboard/widgets/TodayInterviews";
+
+import { ApplicationsBoardTable } from "@/features/dashboard/ApplicationsBoardTable";
 import {
-  getCandidatesNeedingReview,
-  getHiringPerformance,
-  getInbox,
-  getMyDashboardTasks,
-  getPipelineOverview,
-  getTodayInterviews,
-} from "@/features/dashboard/widgets";
+  buildSubline,
+  GreetingHeader,
+} from "@/features/dashboard/GreetingHeader";
+import { SetupChecklistCard } from "@/components/dashboard/widgets/SetupChecklistCard";
+import { getApplicationsBoard } from "@/features/dashboard/applications-board";
+import { getTodayInterviews } from "@/features/dashboard/widgets";
 import { getSetupChecklist } from "@/features/dashboard/setup-checklist";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export const dynamic = "force-dynamic";
 
-const todayFormatter = new Intl.DateTimeFormat("en", {
-  weekday: "long",
-  month: "long",
-  day: "numeric",
-});
-
-function greeting(hour: number) {
-  if (hour < 12) return "Good morning";
-  if (hour < 18) return "Good afternoon";
-  return "Good evening";
-}
-
+/**
+ * Home , the human work table (DESIGN.md , "Home is a human work table, not a
+ * 6-card widget bento").
+ *
+ * What used to be here: a greeting with a waving emoji, a permanent setup card,
+ * then six equal-weight widgets (inbox, interviews, pipeline, review, tasks,
+ * performance chart) that informed without pushing. Six cards of equal weight
+ * means nothing is important.
+ *
+ * What is here now: who needs a decision from you, as people, in one table. The
+ * widgets did not die pointlessly , their destinations are one rail click away
+ * (Inbox, Pipeline) or in the More menu (Tasks, Reports), which is where a
+ * recruiter goes deliberately rather than glancing at a mural.
+ */
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ job?: string }>;
+  searchParams: Promise<{ job?: string; stage?: string }>;
 }) {
-  const { job } = await searchParams;
+  const { job, stage } = await searchParams;
   const { user } = await getWorkspaceContext();
   const firstName = (user.name ?? "").trim().split(/\s+/)[0] || "there";
-  const now = new Date();
 
-  const [inbox, interviews, pipeline, review, myTasks, performance, setup] =
-    await Promise.all([
-      getInbox(),
-      getTodayInterviews(),
-      getPipelineOverview(job),
-      getCandidatesNeedingReview(),
-      getMyDashboardTasks(),
-      getHiringPerformance(),
-      getSetupChecklist(),
-    ]);
+  const [board, interviews, setup] = await Promise.all([
+    getApplicationsBoard({ jobId: job, stage }),
+    getTodayInterviews(),
+    getSetupChecklist(),
+  ]);
 
-  const overdueCount = inbox.filter((i) => i.dueState === "overdue").length;
-  const reviewCount = review.length;
-  const openJobs = pipeline.jobs.length;
-  const interviewsToday = interviews.length;
-
-  let insight = "Here's what's happening with your hiring today.";
-  if (overdueCount > 0 && reviewCount > 0) {
-    insight = `${overdueCount} ${overdueCount === 1 ? "item" : "items"} need your attention and ${reviewCount} ${reviewCount === 1 ? "candidate" : "candidates"} await${reviewCount === 1 ? "s" : ""} review.`;
-  } else if (overdueCount > 0) {
-    insight = `You have ${overdueCount} ${overdueCount === 1 ? "overdue item" : "overdue items"} to tackle.`;
-  } else if (reviewCount > 0) {
-    insight = `${reviewCount} ${reviewCount === 1 ? "candidate" : "candidates"} ${reviewCount === 1 ? "is" : "are"} waiting for your feedback.`;
-  } else if (interviewsToday > 0) {
-    insight = `${interviewsToday} interview${interviewsToday > 1 ? "s" : ""} scheduled today. Let's go!`;
-  } else if (openJobs > 0) {
-    insight = `${openJobs} open ${openJobs === 1 ? "position" : "positions"}, keep the pipeline moving.`;
-  }
+  const overdue = board.applications.filter(
+    (application) => application.daysWaiting >= 7,
+  ).length;
 
   return (
-    <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-2 duration-500 animate-in fade-in slide-in-from-bottom-1">
-        <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight">
-            {greeting(now.getHours())}, {firstName} 👋
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            {insight}
-          </p>
+    <div className="mx-auto w-full max-w-[1400px]">
+      <GreetingHeader
+        name={firstName}
+        avatarUrl={user.image ?? null}
+        hour={new Date().getHours()}
+        subline={buildSubline({
+          waiting: board.totalActive,
+          overdue,
+          interviewsToday: interviews.length,
+        })}
+      />
+
+      {/* Collapsed by default, and only while genuinely incomplete , not a
+          permanent card of guilt (or of congratulation) above the work. */}
+      {setup.visible && !setup.allDone ? (
+        <div className="mt-5">
+          <SetupChecklistCard checklist={setup} />
         </div>
-        <p className="text-sm text-muted-foreground">
-          {todayFormatter.format(now)}
-        </p>
-      </header>
+      ) : null}
 
-      {setup.visible ? <SetupChecklistCard checklist={setup} /> : null}
-
-      <section className="grid gap-4 duration-500 animate-in fade-in slide-in-from-bottom-2 lg:grid-cols-3">
-        <InboxCard items={inbox} />
-        <TodayInterviews interviews={interviews} />
-        <PipelineOverviewCard data={pipeline} />
-      </section>
-
-      <section className="grid gap-4 duration-500 animate-in fade-in slide-in-from-bottom-3 lg:grid-cols-5">
-        <CandidatesNeedingReview candidates={review} className="lg:col-span-3" />
-        <MyTasksCard tasks={myTasks} className="lg:col-span-2" />
-      </section>
-
-      <div className="duration-500 animate-in fade-in slide-in-from-bottom-3">
-        <HiringPerformance data={performance} />
-      </div>
+      <ApplicationsBoardTable board={board} filters={{ job, stage }} />
     </div>
   );
 }

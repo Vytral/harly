@@ -38,12 +38,15 @@ export function FilterPill({
       <SelectTrigger
         size="sm"
         className={cn(
-          "h-9 w-auto gap-1.5 rounded-full border bg-card px-3.5 shadow-none",
-          active && "border-primary/40 bg-accent/40",
+          // Soft kraft fill, no visible border at rest (DESIGN.md , Filter Chip
+          // Row). Active gets a sage wash rather than a coloured outline.
+          "h-9 w-auto gap-1.5 rounded-full border-transparent bg-soft-kraft px-3.5 shadow-none",
+          "hover:bg-row-wash focus-visible:ring-near-ink",
+          active && "bg-sage-wash",
         )}
       >
-        <span className="text-muted-foreground">{label}</span>
-        <span className="max-w-32 truncate font-semibold text-foreground">
+        <span className="text-[13px] text-soft-ink">{label}</span>
+        <span className="max-w-32 truncate text-[13px] font-medium text-near-ink">
           {display}
         </span>
       </SelectTrigger>
