@@ -12,6 +12,7 @@ import {
   ListTodo,
   NotebookTabs,
   Settings,
+  UserRound,
   Users,
   type LucideIcon,
 } from "lucide-react";
@@ -51,6 +52,7 @@ export const workspaceNav: NavItem[] = [
     requiredPermission: "templates:manage",
   },
   { label: "Talent Pool", href: "/dashboard/talent-pool", icon: Bookmark },
+  { label: "People", href: "/people" as Route, icon: UserRound },
   {
     label: "Career Page",
     href: "/dashboard/career-page",

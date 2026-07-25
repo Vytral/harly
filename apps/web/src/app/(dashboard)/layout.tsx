@@ -20,6 +20,7 @@ import {
 } from "@/features/workspaces/data";
 import { listWorkspaceRoles } from "@/features/workspaces/permissions-server";
 import { getMyTasksDueCount } from "@/features/tasks/data";
+import { getOwnProfileAction } from "@/features/people/actions";
 
 export default async function DashboardLayout({
   children,
@@ -31,18 +32,29 @@ export default async function DashboardLayout({
   const sidebarOpen = cookieStore.get("sidebar_state")?.value === "true";
 
   const { organization, user, role } = await getWorkspaceContext();
-  const [workspaceOptions, notifications, unreadNotificationCount, unreadInboxThreadCount, sidebarLogo, roles, userPermissions, aiStatus, taskDueCount] =
-    await Promise.all([
-      listUserWorkspaceOptions(),
-      listNotifications(8),
-      getUnreadNotificationCount(),
-      getUnreadInboxThreadCount(),
-      getSidebarBranding(organization.id),
-      listWorkspaceRoles(),
-      getCurrentPermissions(),
-      getWorkspaceAiStatus(organization.id),
-      getMyTasksDueCount(),
-    ]);
+  const [
+    workspaceOptions,
+    notifications,
+    unreadNotificationCount,
+    unreadInboxThreadCount,
+    sidebarLogo,
+    roles,
+    userPermissions,
+    aiStatus,
+    taskDueCount,
+    ownProfile,
+  ] = await Promise.all([
+    listUserWorkspaceOptions(),
+    listNotifications(8),
+    getUnreadNotificationCount(),
+    getUnreadInboxThreadCount(),
+    getSidebarBranding(organization.id),
+    listWorkspaceRoles(),
+    getCurrentPermissions(),
+    getWorkspaceAiStatus(organization.id),
+    getMyTasksDueCount(),
+    getOwnProfileAction(),
+  ]);
   const assignableRoles = roles.map((r) => ({ key: r.key, name: r.name }));
 
   const workspace = {
@@ -64,7 +76,12 @@ export default async function DashboardLayout({
         />
         <SidebarInset>
           <TopBar
-            user={{ name: user.name, email: user.email, image: user.image ?? null }}
+            user={{
+              name: user.name,
+              email: user.email,
+              image: user.image ?? null,
+              username: ownProfile?.username ?? null,
+            }}
             role={role}
             workspace={workspace}
             workspaceOptions={workspaceOptions}
@@ -82,7 +99,9 @@ export default async function DashboardLayout({
           userName={user.name}
           userId={user.id}
           workspaceId={organization.id}
-          aiEnabled={aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady}
+          aiEnabled={
+            aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
+          }
         />
       </SidebarProvider>
     </StickyBarProvider>
