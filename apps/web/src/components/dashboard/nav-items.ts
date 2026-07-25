@@ -36,17 +36,24 @@ export type NavItem = {
 /**
  * PRIMARY NAV , the icon rail. Hard cap: 5 destinations (DESIGN.md).
  *
- * A recruiter does not think in modules. They ask three questions: who came in
- * today, who needs me to move or answer them, and which role is stuck. These
- * four answer all three. Everything else is a place you *visit*, not a place
- * you live, so it belongs in `moreNav`.
+ * A recruiter does not think in modules. They ask: who came in today, who needs
+ * me to move or answer them, which role is stuck, and where is that one person
+ * whose name I remember. These five answer those. Everything else is a place you
+ * *visit*, not a place you live, so it belongs in `moreNav`.
  *
- * Adding an item here requires updating DESIGN.md first , it is a hard ban.
+ * Candidates earns a slot because Home does not do its job. Home is a triage
+ * cockpit , it shows who needs a decision *today*, which is deliberately not the
+ * same as "everyone we have ever talked to". Looking someone up is a daily
+ * motion, and burying the directory behind More made it a three-click errand.
+ *
+ * This is now full. Adding a sixth requires updating DESIGN.md first, and
+ * demoting one of these , it is a hard ban, not a guideline.
  */
 export const primaryNav: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: Home, exact: true },
   { label: "Inbox", href: "/dashboard/inbox", icon: Inbox, badge: "inbox" },
   { label: "Pipeline", href: "/dashboard/pipeline", icon: KanbanSquare },
+  { label: "Candidates", href: "/dashboard/candidates", icon: Users },
   { label: "Jobs", href: "/dashboard/jobs", icon: Briefcase },
 ];
 
@@ -60,12 +67,8 @@ export const moreNav: MoreGroup[] = [
   {
     label: "People",
     items: [
-      {
-        label: "Candidates",
-        href: "/dashboard/candidates",
-        icon: Users,
-        hint: "Full directory and search",
-      },
+      // Candidates was promoted to the rail; only the two surfaces that are
+      // genuinely occasional stay here.
       {
         label: "Talent Pool",
         href: "/dashboard/talent-pool",

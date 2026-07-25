@@ -242,15 +242,25 @@ Large rounded white/ light container on warm paper (or edge-to-edge paper with i
 
 **Role:** Primary navigation
 
-Vertical strip of **≤5 primary icons** (Home/Inbox, Pipeline, Jobs, plus overflow/More). Collapsed by default. Active state: soft kraft/sage wash behind icon — not a loud green brick. Labels on expand only. **No 12-item labeled warehouse.**
+Vertical strip of **exactly 5 primary icons** (see the set below), plus overflow/More. Collapsed by default. Active state: soft kraft/sage wash behind icon — not a loud green brick. Labels on expand only. **No 12-item labeled warehouse.**
 
-Primary set (target):
+Primary set (**full , this is the cap**):
 
 1. Home
 2. Inbox
 3. Pipeline
-4. Jobs
-5. More → (Candidates directory, Tasks, Calendar, Reports, Settings…)
+4. **Candidates** (the directory)
+5. Jobs
+
+Then `More →` (Talent Pool, Team, Tasks, Calendar, Reports, Career Page,
+Templates, Documents) as an **overflow**, plus Settings pinned as rail chrome.
+More and Settings are not destinations and do not count against the five.
+
+**Why Candidates is primary:** Home is a triage cockpit , it answers "who needs a
+decision today", which is deliberately not "everyone we have ever talked to".
+Looking a person up by name is a daily motion, so the directory cannot live three
+clicks deep. Adding a sixth primary means demoting one of these five and editing
+this list first.
 
 ### Top Bar (Quiet Chrome)
 
