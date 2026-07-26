@@ -1,9 +1,14 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ChevronDown } from "lucide-react";
 
 import { FocusModeTopBar } from "@/components/focus-mode/FocusModeTopBar";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 export function JobEditorTopBar({
   onExit,
@@ -11,6 +16,7 @@ export function JobEditorTopBar({
   eyebrow,
   statusBadge,
   headerActions,
+  railActions,
   actions,
 }: {
   onExit: () => void;
@@ -18,6 +24,9 @@ export function JobEditorTopBar({
   eyebrow?: string;
   statusBadge?: ReactNode;
   headerActions?: ReactNode;
+  /** View job / Share job / status actions. Shown in the rail on desktop; on
+   *  mobile/tablet (no rail) they live behind a tap on the title instead. */
+  railActions?: ReactNode;
   actions: ReactNode;
 }) {
   return (
@@ -39,9 +48,29 @@ export function JobEditorTopBar({
               {eyebrow}
             </span>
           ) : null}
-          <span className="truncate text-sm font-semibold text-foreground">
+          <span className="hidden truncate text-sm font-semibold text-foreground md:inline">
             {title || "New job"}
           </span>
+          {railActions ? (
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="flex min-w-0 items-center gap-1 truncate text-sm font-semibold text-foreground md:hidden"
+                >
+                  <span className="truncate">{title || "New job"}</span>
+                  <ChevronDown className="size-3.5 shrink-0 text-muted-foreground" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="center" className="w-64 space-y-1.5">
+                {railActions}
+              </PopoverContent>
+            </Popover>
+          ) : (
+            <span className="truncate text-sm font-semibold text-foreground md:hidden">
+              {title || "New job"}
+            </span>
+          )}
           {statusBadge}
         </div>
       }

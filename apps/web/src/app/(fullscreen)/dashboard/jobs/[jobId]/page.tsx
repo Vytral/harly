@@ -68,8 +68,11 @@ export default async function DashboardJobPage({
       previewWorkspace={careerPageData?.workspace ?? null}
       previewConfig={careerPageData?.config ?? null}
       headerActions={
+        <JobActionsMenu jobId={job.id} slug={job.slug} redirectAfterTrash />
+      }
+      railActions={
         <>
-          <Button asChild variant="outline" size="sm">
+          <Button asChild variant="outline" size="sm" className="w-full justify-start">
             <a href={`/jobs/${job.slug}`} target="_blank" rel="noreferrer">
               <ExternalLink className="size-4" />
               View job
@@ -82,7 +85,6 @@ export default async function DashboardJobPage({
             slug={job.slug}
           />
           <JobStatusActions job={job} />
-          <JobActionsMenu jobId={job.id} slug={job.slug} redirectAfterTrash />
         </>
       }
     />

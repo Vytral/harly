@@ -178,15 +178,12 @@ function IconButton({
 }
 
 /**
- * The one chartreuse fill in the shell. AI is a live signal, which is exactly
- * what the accent is for , and it is the only place in the top bar that gets it
- * (DESIGN.md , accent rationing). Hidden entirely when AI isn't configured,
- * rather than shown disabled.
- *
  * Wears Harly's own mark, not a generic sparkle. A sparkle is what every product
  * bolted onto its toolbar in 2024; the mark says this assistant belongs to this
- * tool. When open it flips to ink + a close glyph, so the button reads as the
- * panel's toggle rather than a second "ask" affordance.
+ * tool. No fill , the mark alone reads clean against the bar. When open it flips
+ * to ink + a close glyph, so the button reads as the panel's toggle rather than
+ * a second "ask" affordance. Hidden entirely when AI isn't configured, rather
+ * than shown disabled.
  */
 function AiSignalButton() {
   const { open, toggle, enabled } = useHarlyAI();
@@ -204,13 +201,13 @@ function AiSignalButton() {
             "mr-1 flex size-9 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
             open
               ? "bg-near-ink text-pure-snow"
-              : "bg-chartreuse-signal text-chartreuse-ink hover:brightness-[0.97]",
+              : "text-near-ink hover:bg-row-wash",
           )}
         >
           {open ? (
             <X className="size-[17px]" strokeWidth={2} />
           ) : (
-            <HarlyAILogoMark className="size-[19px]" />
+            <HarlyAILogoMark className="size-[22px]" />
           )}
         </button>
       </TooltipTrigger>

@@ -34,6 +34,7 @@ import { JobEditorRail, type EditorRailSection } from "./JobEditorRail";
 import { JobLivePreview, type PreviewJobDraft } from "./JobLivePreview";
 import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";
 import { useUnsavedChangesGuard } from "@/components/focus-mode/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/components/focus-mode/UnsavedChangesDialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { CareerPageConfig } from "@/features/career-page/config";
@@ -51,6 +52,9 @@ type JobFormProps = {
   eyebrow?: string;
   statusBadge?: ReactNode;
   headerActions?: ReactNode;
+  /** View job / Share job / status actions , rendered in the editor rail
+   *  (desktop) and behind the title (mobile/tablet) instead of the top bar. */
+  railActions?: ReactNode;
   previewWorkspace?: (WorkspaceBoardBranding & { id: string }) | null;
   previewConfig?: CareerPageConfig | null;
 };
@@ -181,6 +185,7 @@ export function JobForm({
   eyebrow,
   statusBadge,
   headerActions,
+  railActions,
   previewWorkspace,
   previewConfig,
 }: JobFormProps) {
@@ -213,7 +218,7 @@ export function JobForm({
   const [aiPending, startAi] = useTransition();
 
   const [dirty, setDirty] = useState(false);
-  const { confirmDiscard } = useUnsavedChangesGuard(dirty);
+  const { confirmDiscard, discardDialogProps } = useUnsavedChangesGuard(dirty);
 
   const [flashSection, setFlashSection] = useState<SectionKey | null>(null);
   const [reviewInView, setReviewInView] = useState(job?.status === "open");
@@ -306,8 +311,8 @@ export function JobForm({
     keywords,
   };
 
-  function handleExit() {
-    if (!confirmDiscard()) return;
+  async function handleExit() {
+    if (!(await confirmDiscard())) return;
     window.location.href = "/dashboard/jobs";
   }
 
@@ -424,34 +429,41 @@ export function JobForm({
         value={JSON.stringify(photos)}
       />
 
-      <FocusModeShell
-        topBar={
+        <FocusModeShell
+          topBar={
           <JobEditorTopBar
             onExit={handleExit}
             title={title}
             eyebrow={eyebrow}
             statusBadge={statusBadge}
             headerActions={headerActions}
+            railActions={railActions}
             actions={primaryActions}
           />
         }
       >
-        <JobEditorRail sections={RAIL_SECTIONS} scrollRootRef={scrollRef} />
+        <JobEditorRail
+          sections={RAIL_SECTIONS}
+          scrollRootRef={scrollRef}
+          secondaryActions={railActions}
+        />
 
         <div
           ref={scrollRef}
           className="flex w-full min-w-0 max-w-2xl shrink-0 flex-col overflow-y-auto"
         >
           {/*
-            `min-h-full` + `mt-auto` on the footer row below , this column is
-            flex-stretched to the full viewport height by the row it sits in
-            (FocusModeShell), so short content (a fresh draft) would otherwise
-            leave a dead gray gap after the last section with no floor under
-            it. Pinning the Save/Publish row to the bottom instead means short
-            content still reaches the bottom of the screen, and long content
-            just flows past it normally.
+            No `min-h-full` here on purpose , percentage min-height on a flex
+            item inside this `overflow-y-auto` column freezes the item's own
+            box at the column's viewport height instead of growing with real
+            content (a Chromium flex sizing quirk), while content keeps
+            painting past it unclipped. That left the `mt-auto` footer row
+            below pinned near the top with thousands of px of dead space
+            under it on any job with real content. Footer just follows the
+            content in normal flow instead; short drafts get a small gap
+            before it rather than a forced full-viewport stretch.
           */}
-          <div className="flex min-h-full flex-col px-6 py-8">
+          <div className="flex flex-col px-6 py-8">
             <div className="space-y-10">
               {SECTIONS.map((s) => (
                 <section
@@ -561,6 +573,11 @@ export function JobForm({
           config={previewConfig ?? null}
         />
       </FocusModeShell>
+      <UnsavedChangesDialog
+        open={discardDialogProps.open}
+        onConfirm={discardDialogProps.onConfirm}
+        onCancel={discardDialogProps.onCancel}
+      />
     </form>
   );
 }

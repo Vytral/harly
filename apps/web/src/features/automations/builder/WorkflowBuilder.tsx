@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";
 import { FocusModeTopBar } from "@/components/focus-mode/FocusModeTopBar";
 import { useUnsavedChangesGuard } from "@/components/focus-mode/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/components/focus-mode/UnsavedChangesDialog";
 import {
   ArrowLeftIcon,
   CheckIcon,
@@ -86,7 +87,7 @@ export function WorkflowBuilder({
   const [dirty, setDirty] = useState(isNew);
   const [saving, startSave] = useTransition();
   const [tab, setTab] = useState<"build" | "test">("build");
-  const { confirmDiscard } = useUnsavedChangesGuard(dirty);
+  const { confirmDiscard, discardDialogProps } = useUnsavedChangesGuard(dirty);
 
   const update = useCallback((producer: (d: WorkflowDraft) => void) => {
     setDraft((prev) => {
@@ -110,8 +111,8 @@ export function WorkflowBuilder({
     [update],
   );
 
-  function handleExit() {
-    if (!confirmDiscard()) return;
+  async function handleExit() {
+    if (!(await confirmDiscard())) return;
     window.location.href = "/dashboard/automations";
   }
 
@@ -150,6 +151,7 @@ export function WorkflowBuilder({
   const meta = triggerMeta(draft.trigger.event);
 
   return (
+    <>
     <FocusModeShell
       topBar={
         <FocusModeTopBar
@@ -222,6 +224,12 @@ export function WorkflowBuilder({
         )}
       </BuilderCanvas>
     </FocusModeShell>
+    <UnsavedChangesDialog
+      open={discardDialogProps.open}
+      onConfirm={discardDialogProps.onConfirm}
+      onCancel={discardDialogProps.onCancel}
+    />
+    </>
   );
 }
 

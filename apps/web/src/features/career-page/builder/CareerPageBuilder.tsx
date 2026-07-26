@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 
 import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";
 import { useUnsavedChangesGuard } from "@/components/focus-mode/useUnsavedChangesGuard";
+import { UnsavedChangesDialog } from "@/components/focus-mode/UnsavedChangesDialog";
 import { PreviewFrame } from "@/components/preview/PreviewFrame";
 import { saveCareerPageConfigAction } from "@/features/career-page/actions";
 import { CAREER_PRESETS, type CareerPageConfig, type CareerTemplate } from "@/features/career-page/config";
@@ -42,7 +43,7 @@ export function CareerPageBuilder({
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [saving, startSave] = useTransition();
   const [dirty, setDirty] = useState(false);
-  const { confirmDiscard } = useUnsavedChangesGuard(dirty);
+  const { confirmDiscard, discardDialogProps } = useUnsavedChangesGuard(dirty);
 
   const update = useCallback((producer: (draft: CareerPageConfig) => void) => {
     setConfig((prev) => {
@@ -64,8 +65,8 @@ export function CareerPageBuilder({
     setDirty(true);
   }
 
-  function handleExit() {
-    if (!confirmDiscard()) return;
+  async function handleExit() {
+    if (!(await confirmDiscard())) return;
     window.location.href = "/dashboard";
   }
 
@@ -86,6 +87,7 @@ export function CareerPageBuilder({
   const hasTemplate = config.template !== "";
 
   return (
+    <>
     <FocusModeShell
       topBar={
         <BuilderTopBar
@@ -183,5 +185,11 @@ export function CareerPageBuilder({
         </div>
       </div>
     </FocusModeShell>
+    <UnsavedChangesDialog
+      open={discardDialogProps.open}
+      onConfirm={discardDialogProps.onConfirm}
+      onCancel={discardDialogProps.onCancel}
+    />
+    </>
   );
 }

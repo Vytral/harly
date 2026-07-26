@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -11,9 +11,14 @@ export type EditorRailSection = { key: string; label: string };
 export function JobEditorRail({
   sections,
   scrollRootRef,
+  secondaryActions,
 }: {
   sections: EditorRailSection[];
   scrollRootRef: React.RefObject<HTMLElement | null>;
+  /** View job / Share job / status actions , live here instead of the top bar
+   *  since the rail has room and the top bar doesn't (buttons were overlapping
+   *  the title at in-between widths). */
+  secondaryActions?: ReactNode;
 }) {
   const [active, setActive] = useState(sections[0]?.key ?? "");
 
@@ -68,6 +73,12 @@ export function JobEditorRail({
             </button>
           );
         })}
+
+        {secondaryActions ? (
+          <div className="mt-auto flex flex-col gap-1.5 border-t border-border pt-4">
+            {secondaryActions}
+          </div>
+        ) : null}
       </nav>
 
       <nav

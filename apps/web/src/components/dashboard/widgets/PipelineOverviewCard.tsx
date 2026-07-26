@@ -7,18 +7,17 @@ import { PipelineJobSelect } from "./PipelineJobSelect";
 /**
  * Funnel lanes, Applied → Hired.
  *
- * Was five unrelated hues (pine, jade, burnt orange, violet, stone) , a rainbow
- * that read as a second and third brand family and made the funnel look like a
- * pie chart. DESIGN.md allows exactly one accent, so depth here comes from
- * *progression*: ink lightens as the funnel narrows, and the final stage is the
- * chartreuse signal, because reaching Hired is the one genuinely live event in
- * the sequence.
+ * Deliberate exception to DESIGN.md's single-accent rule, scoped to this widget
+ * only: five stages read as one blur in mono progression, and this card exists
+ * specifically to be scanned at a glance. Distinct hues per stage, chosen close
+ * in value so no single stage reads as a second brand accent; Hired keeps the
+ * chartreuse signal since it's the one genuinely live event in the sequence.
  */
 const LANE_COLORS = [
-  "#171717", // Applied , near ink
-  "#3d3d3a",
-  "#6a6a67", // soft ink
-  "#9a9a96", // quiet mist
+  "#8a8f98", // Applied , stone
+  "#5b8def", // Screening , pine-blue
+  "#e8a33d", // Interview , burnt orange
+  "#a875e0", // Offer , violet
   "#c8f560", // Hired , chartreuse signal
 ];
 

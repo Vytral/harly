@@ -133,9 +133,16 @@ function PanelFooter({ children }: { children: React.ReactNode }) {
   )
 }
 
-function CloseButton() {
+function CloseButton(props: React.ComponentProps<typeof Button>) {
   return (
-    <Button type="button" variant="ghost" size="icon" className="size-8" aria-label="Close panel">
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      className="size-8"
+      aria-label="Close panel"
+      {...props}
+    >
       <XIcon className="size-4" />
     </Button>
   )
