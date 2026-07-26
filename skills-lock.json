@@ -1,6 +1,18 @@
 {
   "version": 1,
   "skills": {
+    "architecture": {
+      "source": "xiaobei930/claude-code-best-practices",
+      "sourceType": "github",
+      "skillPath": "skills/architecture/SKILL.md",
+      "computedHash": "1178bee76124ad28cbd1d0ef4309d882520671dd418a8550866fe5bc6281fef0"
+    },
+    "backend": {
+      "source": "xiaobei930/claude-code-best-practices",
+      "sourceType": "github",
+      "skillPath": "skills/backend/SKILL.md",
+      "computedHash": "2d25b01a9e3b69360b69a2f7ae27308fb4696595d4a2b51787700881080b2b7f"
+    },
     "cavecrew": {
       "source": "JuliusBrussee/caveman",
       "sourceType": "github",
@@ -103,6 +115,18 @@
       "skillPath": "skills/motion-design/SKILL.md",
       "computedHash": "9fcf9130cc46ee8fd1d8e09a9263347a9d76efbcbfa46591cc4cefaf19bbb453"
     },
+    "native": {
+      "source": "xiaobei930/claude-code-best-practices",
+      "sourceType": "github",
+      "skillPath": "skills/native/SKILL.md",
+      "computedHash": "39549f4722558dd6fb6712d3a704c191bdf25046edef037b39d8abfefe28ba0b"
+    },
+    "quality": {
+      "source": "xiaobei930/claude-code-best-practices",
+      "sourceType": "github",
+      "skillPath": "skills/quality/SKILL.md",
+      "computedHash": "16d1f6a459dad68e31159003d7b66844788eb77856322b70a5c8c635c6b95432"
+    },
     "react-email": {
       "source": "resend/react-email",
       "sourceType": "github",
@@ -114,6 +138,12 @@
       "sourceType": "github",
       "skillPath": "SKILL.md",
       "computedHash": "5fc5380a4e387040d16cc1ee5ae21c82da65d3df533490ed4c8e86fdbfcf4b03"
+    },
+    "testing": {
+      "source": "xiaobei930/claude-code-best-practices",
+      "sourceType": "github",
+      "skillPath": "skills/testing/SKILL.md",
+      "computedHash": "8b1426c060272e9a66e565b7b7b636e6d3abf3d2efbb169813a545c206009696"
     }
   }
 }
