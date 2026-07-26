@@ -24,7 +24,7 @@ const saveSchema = z.object({
   legalEntityAddress: z.string().trim().max(500).optional(),
   legalEntityEmail: z.string().trim().email().max(200).optional().or(z.literal("")),
   legalEntityWebsite: z.string().trim().url().max(500).optional().or(z.literal("")),
-  legalJurisdiction: z.enum(["eu", "us", "other"]).optional(),
+  legalJurisdiction: z.enum(["eu", "us", "cl", "br", "other"]).optional(),
   dpoEmail: z.string().trim().email().max(200).optional().or(z.literal("")),
   dataRetentionApplicantsMonths: z.number().int().min(1).max(120).optional(),
   dataRetentionTalentPoolMonths: z.number().int().min(1).max(120).optional(),

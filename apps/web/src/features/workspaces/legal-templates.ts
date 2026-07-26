@@ -1,6 +1,6 @@
 import type { LegalPageKey } from "@/features/workspaces/legal-settings-actions";
 
-export type Jurisdiction = "eu" | "us" | "other";
+export type Jurisdiction = "eu" | "us" | "cl" | "br" | "other";
 
 type LegalTemplate = Record<LegalPageKey, string>;
 
@@ -734,12 +734,299 @@ We may use AI tools for resume parsing. All hiring decisions are made by humans.
 AI does not make hiring decisions. Every decision in our recruitment process involves human review.
 
 To ask about how AI was used in your application, contact [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
+  `,
+};
+
+// Chilean privacy copy. The shared terms and cookie policy are jurisdiction-neutral;
+// only the notices that carry country-specific data-protection obligations are overridden.
+const CHILE_TEMPLATE: LegalTemplate = {
+  ...OTHER_TEMPLATE,
+  termsOfService: `# Términos de Servicio
+
+**Última actualización:** {{DATE}}
+
+Estos términos regulan el uso del sitio de carreras y del sistema de postulaciones operado por **{{ENTITY_NAME}}**. El servicio permite consultar vacantes, enviar postulaciones y revisar su estado.
+
+Debes entregar información verdadera, no presentar postulaciones fraudulentas y no intentar acceder a partes del sistema que no estén autorizadas para ti. El contenido y software del servicio pertenecen a {{ENTITY_NAME}} o a sus licenciantes.
+
+El tratamiento de tus datos se rige por nuestra [Política de Privacidad](/legal/privacy-policy). En la medida permitida por la ley, el servicio se ofrece tal como está disponible y {{ENTITY_NAME}} no será responsable por daños indirectos derivados de su uso.
+
+Estos términos se interpretan conforme a las leyes de Chile, sin perjuicio de los derechos irrenunciables que correspondan al titular de datos.
+
+Preguntas: [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
+
+> Este documento es un borrador informativo generado por Harly y no constituye asesoría legal.
+`,
+  cookiePolicy: `# Política de Cookies
+
+**Última actualización:** {{DATE}}
+
+Usamos cookies estrictamente necesarias para operar el sitio de carreras y, si las autorizas, cookies de analítica para comprender su uso. Las cookies opcionales solo se activan después de tu consentimiento.
+
+Puedes cambiar tus preferencias mediante el banner de cookies o la configuración de tu navegador. Deshabilitar las cookies estrictamente necesarias puede impedir el funcionamiento de partes del servicio.
+
+Preguntas: [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
+
+> Este documento es un borrador informativo generado por Harly y no constituye asesoría legal.
+`,
+  privacyPolicy: `# Política de Privacidad
+
+**Última actualización:** {{DATE}}
+
+Esta política explica cómo **{{ENTITY_NAME}}**, con domicilio en {{ENTITY_ADDRESS}}, trata tus datos personales cuando postulas a un empleo o utilizas nuestro sitio de carreras.
+
+> Este documento es un borrador informativo generado por Harly y no constituye asesoría legal. Debe ser revisado y adaptado por la entidad responsable antes de su publicación.
+
+---
+
+## Responsable del tratamiento
+
+{{ENTITY_NAME}} es responsable del tratamiento de los datos que recopila directamente a través de este sitio y de sus procesos de selección. Para consultas sobre privacidad, contáctanos en [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
+
+Cuando un proveedor trata datos por cuenta de {{ENTITY_NAME}}, lo hace únicamente según nuestras instrucciones y mediante un contrato que regula sus obligaciones de confidencialidad, seguridad y eliminación o devolución de los datos.
+
+---
+
+## Datos que recopilamos
+
+Podemos recopilar:
+
+- Nombre, correo electrónico, teléfono y ubicación.
+- Currículum, experiencia, educación, habilidades y enlaces profesionales.
+- Respuestas de postulación, carta de presentación y disponibilidad.
+- Información técnica necesaria para operar y proteger el sitio, como dirección IP, navegador y dispositivo.
+
+No solicitamos datos sensibles salvo que exista una finalidad legítima, una base legal suficiente y sean estrictamente necesarios para el proceso correspondiente.
+
+---
+
+## Finalidades y base de licitud
+
+Usamos los datos para evaluar tu postulación, comunicarnos contigo, cumplir obligaciones legales, proteger el servicio y, si lo autorizas separadamente, considerarte para futuras oportunidades.
+
+El tratamiento se funda, según corresponda, en la ejecución de medidas precontractuales solicitadas por ti, el cumplimiento de obligaciones legales, el interés legítimo en administrar un proceso de selección seguro y eficiente, o tu consentimiento. El consentimiento es libre, específico, informado, previo e inequívoco y puede retirarse en cualquier momento.
+
+No usamos decisiones exclusivamente automatizadas para decidir contrataciones. Las decisiones relevantes son revisadas por personas.
+
+---
+
+## Conservación
+
+- **Postulaciones activas o cerradas:** {{RETENTION_APPLICANTS}} meses desde la decisión final.
+- **Banco de talentos:** {{RETENTION_TALENT_POOL}} meses, si entregaste consentimiento.
+
+Eliminaremos o anonimizaremos los datos al terminar esos plazos, salvo que exista una obligación legal, una controversia o una medida de conservación válida.
+
+---
+
+## Tus derechos
+
+Puedes solicitar acceso, rectificación, supresión, oposición, portabilidad o bloqueo de tus datos, según corresponda a la legislación aplicable. También puedes retirar tu consentimiento sin que ello afecte los tratamientos realizados previamente de forma lícita.
+
+Escribe a [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}). Responderemos dentro de los plazos legales aplicables y podremos solicitar información razonable para verificar tu identidad.
+
+Si consideras que tu solicitud no fue atendida, podrás recurrir ante la autoridad competente en Chile cuando la Ley 21.719 y su institucionalidad entren en aplicación.
+
+---
+
+## Proveedores y transferencias internacionales
+
+Podemos utilizar proveedores ubicados fuera de Chile para alojamiento, almacenamiento, comunicaciones, seguridad y análisis técnico. Limitamos las transferencias a los datos necesarios y exigimos medidas contractuales, técnicas y organizativas adecuadas conforme a la legislación aplicable.
+
+---
+
+## Seguridad y vulneraciones
+
+Aplicamos controles de acceso, cifrado, respaldo, monitoreo y otras medidas proporcionales al riesgo. Si ocurre una vulneración que pueda afectar tus derechos, actuaremos y notificaremos según los deberes y plazos establecidos por la legislación chilena aplicable.
+
+---
+
+## Cambios y contacto
+
+Podemos actualizar esta política para reflejar cambios legales u operativos. Publicaremos la fecha de la última actualización en la parte superior.
+
+{{ENTITY_NAME}}
+{{ENTITY_ADDRESS}}
+[{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
+`,
+  candidateNotice: `# Aviso de Privacidad para Candidatos
+
+**Última actualización:** {{DATE}}
+
+**{{ENTITY_NAME}}** tratará los datos que entregues en tu postulación para evaluar tu candidatura, coordinar entrevistas, comunicarse contigo y cumplir obligaciones relacionadas con el proceso de selección.
+
+Podemos tratar tu nombre, contacto, ubicación, currículum, experiencia, educación, respuestas, referencias y datos técnicos del sitio. No solicitamos datos sensibles salvo que sean necesarios y exista una base legal adecuada.
+
+Conservaremos tus datos durante **{{RETENTION_APPLICANTS}} meses** después de la decisión final. Para incluirte en el banco de talentos durante **{{RETENTION_TALENT_POOL}} meses**, necesitaremos tu consentimiento separado.
+
+Puedes solicitar acceso, rectificación, supresión, oposición, portabilidad o bloqueo, o retirar tu consentimiento, escribiendo a [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
+
+Podemos usar herramientas de IA para extraer información del currículum y organizar datos. Estas herramientas no toman decisiones de contratación: toda decisión relevante es revisada por personas.
+
+> Este documento es un borrador informativo generado por Harly y no constituye asesoría legal.
+`,
+  aiTransparencyNotice: `# Aviso de Transparencia sobre IA
+
+**Última actualización:** {{DATE}}
+
+**{{ENTITY_NAME}}** puede usar herramientas de IA para extraer información de currículums, ordenar antecedentes y ayudar a redactar comunicaciones.
+
+- La IA no decide, puntúa ni descarta candidatos por sí sola.
+- Las decisiones relevantes son revisadas y tomadas por personas.
+- No usamos la IA para inferir características sensibles o protegidas.
+- Puedes solicitar información sobre el uso de IA en tu postulación escribiendo a [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
+
+> Este documento es un borrador informativo generado por Harly y no constituye asesoría legal.
+`,
+};
+
+// Brazilian privacy copy under Lei Geral de Proteção de Dados (LGPD).
+const BRAZIL_TEMPLATE: LegalTemplate = {
+  ...OTHER_TEMPLATE,
+  termsOfService: `# Termos de Serviço
+
+**Última atualização:** {{DATE}}
+
+Estes termos regulam o uso do site de carreiras e do sistema de candidaturas operado pela **{{ENTITY_NAME}}**. O serviço permite consultar vagas, enviar candidaturas e acompanhar seu andamento.
+
+Você deve fornecer informações verdadeiras, não enviar candidaturas fraudulentas e não tentar acessar partes do sistema sem autorização. O conteúdo e o software do serviço pertencem à {{ENTITY_NAME}} ou aos seus licenciadores.
+
+O tratamento dos seus dados é explicado em nossa [Política de Privacidade](/legal/privacy-policy). Na medida permitida pela lei, o serviço é disponibilizado no estado em que se encontra e a {{ENTITY_NAME}} não será responsável por danos indiretos decorrentes do seu uso.
+
+Estes termos serão interpretados conforme as leis do Brasil, sem prejuízo dos direitos irrenunciáveis do titular de dados.
+
+Dúvidas: [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
+
+> Este documento é um rascunho informativo gerado pela Harly e não constitui aconselhamento jurídico.
+`,
+  cookiePolicy: `# Política de Cookies
+
+**Última atualização:** {{DATE}}
+
+Usamos cookies estritamente necessários para operar o site de carreiras e, se você autorizar, cookies de análise para entender seu uso. Cookies opcionais somente serão ativados após seu consentimento.
+
+Você pode alterar suas preferências pelo banner de cookies ou pelas configurações do navegador. A desativação de cookies estritamente necessários pode impedir o funcionamento de partes do serviço.
+
+Dúvidas: [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
+
+> Este documento é um rascunho informativo gerado pela Harly e não constitui aconselhamento jurídico.
+`,
+  privacyPolicy: `# Política de Privacidade
+
+**Última atualização:** {{DATE}}
+
+Esta política explica como a **{{ENTITY_NAME}}**, com endereço em {{ENTITY_ADDRESS}}, trata dados pessoais quando você se candidata a uma vaga ou utiliza nosso site de carreiras.
+
+> Este documento é um rascunho informativo gerado pela Harly e não constitui aconselhamento jurídico. A organização responsável deve revisá-lo e adaptá-lo antes da publicação.
+
+---
+
+## Controlador e contato
+
+{{ENTITY_NAME}} é o controlador dos dados pessoais coletados diretamente neste site e durante nossos processos seletivos. Para dúvidas ou solicitações sobre privacidade, escreva para [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
+
+Quando um fornecedor trata dados pessoais em nosso nome, ele atua como operador, seguindo nossas instruções e obrigações contratuais de confidencialidade, segurança e eliminação ou devolução dos dados.
+
+---
+
+## Dados que coletamos
+
+Podemos coletar:
+
+- Nome, e-mail, telefone e localização.
+- Currículo, experiência, formação, habilidades e links profissionais.
+- Respostas de candidatura, carta de apresentação e disponibilidade.
+- Informações técnicas necessárias para operar e proteger o site, como endereço IP, navegador e dispositivo.
+
+Não solicitamos dados pessoais sensíveis, salvo quando necessários para uma finalidade legítima e tratados com a base legal adequada.
+
+---
+
+## Finalidades e bases legais
+
+Usamos os dados para avaliar sua candidatura, comunicar o andamento do processo, cumprir obrigações legais, proteger o serviço e, se você autorizar separadamente, considerar seu perfil para futuras oportunidades.
+
+O tratamento poderá se basear, conforme o caso, na execução de procedimentos preliminares relacionados a contrato, no cumprimento de obrigação legal ou regulatória, no exercício regular de direitos, no legítimo interesse ou no seu consentimento. O consentimento deve ser livre, informado e inequívoco e pode ser revogado.
+
+Não tomamos decisões exclusivamente automatizadas para contratar ou rejeitar candidatos. Decisões relevantes passam por revisão humana.
+
+---
+
+## Retenção
+
+- **Candidaturas:** {{RETENTION_APPLICANTS}} meses após a decisão final.
+- **Banco de talentos:** {{RETENTION_TALENT_POOL}} meses, se você tiver fornecido consentimento.
+
+Depois desses períodos, eliminaremos ou anonimizaremos os dados, salvo quando houver obrigação legal, disputa ou outra hipótese válida de retenção.
+
+---
+
+## Seus direitos
+
+Você pode solicitar confirmação da existência de tratamento, acesso, correção, anonimização, bloqueio, eliminação, portabilidade, informação sobre compartilhamentos e revisão de decisões tomadas unicamente com base em tratamento automatizado, quando aplicável.
+
+Para exercer seus direitos, escreva para [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}). Podemos solicitar informações razoáveis para confirmar sua identidade e responderemos dentro dos prazos aplicáveis.
+
+Você também pode apresentar uma petição à Autoridade Nacional de Proteção de Dados (ANPD), após buscar a solução diretamente conosco quando aplicável.
+
+---
+
+## Compartilhamento e transferências internacionais
+
+Podemos compartilhar dados com nossa equipe, fornecedores de recrutamento, hospedagem, armazenamento, comunicação e segurança. Transferências para outros países ocorrerão somente quando houver uma base legal e um mecanismo válido previsto na LGPD e na regulamentação da ANPD, como decisão de adequação, cláusulas-padrão contratuais ou outro mecanismo aplicável.
+
+---
+
+## Segurança e incidentes
+
+Adotamos medidas técnicas e administrativas para proteger os dados contra acessos não autorizados, perda, alteração ou tratamento inadequado. Se ocorrer um incidente que possa causar risco ou dano relevante, avaliaremos e comunicaremos a ANPD e os titulares nos prazos aplicáveis.
+
+---
+
+## Alterações e contato
+
+Podemos atualizar esta política para refletir mudanças legais ou operacionais. A data da última atualização aparece no início do documento.
+
+{{ENTITY_NAME}}
+{{ENTITY_ADDRESS}}
+[{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
+`,
+  candidateNotice: `# Aviso de Privacidade para Candidatos
+
+**Última atualização:** {{DATE}}
+
+A **{{ENTITY_NAME}}** tratará os dados que você fornecer para avaliar sua candidatura, organizar entrevistas, comunicar o andamento do processo e cumprir obrigações legais.
+
+Podemos tratar seu nome, contato, localização, currículo, experiência, formação, respostas, referências e dados técnicos do site. Dados pessoais sensíveis somente serão tratados quando necessários e com a base legal adequada.
+
+Conservaremos seus dados por **{{RETENTION_APPLICANTS}} meses** após a decisão final. Para incluí-lo no banco de talentos por **{{RETENTION_TALENT_POOL}} meses**, solicitaremos seu consentimento separado.
+
+Você pode solicitar confirmação, acesso, correção, eliminação, portabilidade, informação sobre compartilhamentos ou revisão de decisões automatizadas, quando aplicável, escrevendo para [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
+
+Podemos usar ferramentas de IA para extrair informações do currículo e organizar dados. A IA não toma decisões de contratação; todas as decisões relevantes são revisadas por pessoas.
+
+> Este documento é um rascunho informativo gerado pela Harly e não constitui aconselhamento jurídico.
+`,
+  aiTransparencyNotice: `# Aviso de Transparência sobre IA
+
+**Última atualização:** {{DATE}}
+
+A **{{ENTITY_NAME}}** pode utilizar ferramentas de IA para extrair informações de currículos, organizar dados e auxiliar na redação de comunicações.
+
+- A IA não decide, classifica nem elimina candidatos sozinha.
+- As decisões relevantes são revisadas e tomadas por pessoas.
+- Não usamos IA para inferir características sensíveis ou protegidas.
+- Você pode solicitar informações sobre o uso de IA na sua candidatura pelo e-mail [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
+
+> Este documento é um rascunho informativo gerado pela Harly e não constitui aconselhamento jurídico.
 `,
 };
 
 export function getTemplate(jurisdiction: Jurisdiction): LegalTemplate {
   if (jurisdiction === "eu") return EU_TEMPLATE;
   if (jurisdiction === "us") return US_TEMPLATE;
+  if (jurisdiction === "cl") return CHILE_TEMPLATE;
+  if (jurisdiction === "br") return BRAZIL_TEMPLATE;
   return OTHER_TEMPLATE;
 }
 

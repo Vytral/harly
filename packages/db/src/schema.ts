@@ -702,7 +702,7 @@ export const workspaceSettings = pgTable("workspace_settings", {
   legalEntityAddress: text("legal_entity_address"),
   legalEntityEmail: text("legal_entity_email"),
   legalEntityWebsite: text("legal_entity_website"),
-  legalJurisdiction: text("legal_jurisdiction"), // 'eu' | 'us' | 'other'
+  legalJurisdiction: text("legal_jurisdiction"), // 'eu' | 'us' | 'cl' | 'br' | 'other'
   dpoEmail: text("dpo_email"), // Data Protection Officer email
   dataRetentionApplicantsMonths: integer("data_retention_applicants_months")
     .default(6)

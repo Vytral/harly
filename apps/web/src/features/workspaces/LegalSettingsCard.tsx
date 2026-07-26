@@ -40,6 +40,8 @@ import { cn } from "@/lib/utils";
 const JURISDICTION_LABELS: Record<string, string> = {
   eu: "European Union (GDPR)",
   us: "United States",
+  cl: "Chile (Ley 21.719)",
+  br: "Brazil (LGPD)",
   other: "Other",
 };
 
@@ -286,7 +288,7 @@ export function LegalSettings({
         legalEntityAddress: entityAddress || undefined,
         legalEntityEmail: entityEmail || undefined,
         legalEntityWebsite: entityWebsite || undefined,
-        legalJurisdiction: (jurisdiction as "eu" | "us" | "other") || undefined,
+        legalJurisdiction: (jurisdiction as Jurisdiction) || undefined,
         dpoEmail: dpoEmail || undefined,
         dataRetentionApplicantsMonths: retentionApplicants,
         dataRetentionTalentPoolMonths: retentionTalentPool,
@@ -424,6 +426,8 @@ export function LegalSettings({
                 <SelectContent>
                   <SelectItem value="eu">European Union (GDPR)</SelectItem>
                   <SelectItem value="us">United States</SelectItem>
+                  <SelectItem value="cl">Chile (Ley 21.719)</SelectItem>
+                  <SelectItem value="br">Brazil (LGPD)</SelectItem>
                   <SelectItem value="other">Other</SelectItem>
                 </SelectContent>
               </Select>
@@ -539,6 +543,8 @@ export function LegalSettings({
               <SelectContent>
                 <SelectItem value="eu">EU Template (GDPR)</SelectItem>
                 <SelectItem value="us">US Template</SelectItem>
+                <SelectItem value="cl">Chile Template (Ley 21.719)</SelectItem>
+                <SelectItem value="br">Brazil Template (LGPD)</SelectItem>
                 <SelectItem value="other">Generic Template</SelectItem>
               </SelectContent>
             </Select>
