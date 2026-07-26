@@ -12,7 +12,7 @@ const cli = path.join(packageRoot, "dist", "index.js");
 test("version flag reports the published CLI version", () => {
   const result = spawnSync(process.execPath, [cli, "--version"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^0\.2\.3\n$/);
+  assert.match(result.stdout, /^0\.2\.4\n$/);
 });
 
 async function availablePort() {

@@ -117,7 +117,7 @@ const json = flags.has("--json");
 const interactive = Boolean(
   process.stdin.isTTY && process.stdout.isTTY && !process.env.CI,
 );
-const cliVersion = "0.2.3";
+const cliVersion = "0.2.4";
 const releaseManifestUrl =
   process.env.HARLY_RELEASE_MANIFEST_URL ??
   "https://raw.githubusercontent.com/Vytral/harly/main/release-manifest.json";
