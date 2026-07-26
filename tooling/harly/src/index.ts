@@ -24,6 +24,8 @@ import { spawnSync } from "node:child_process";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { embeddedRelease, releaseImage, type HarlyRelease } from "./release.js";
+import { pullWithProgress } from "./pull.js";
+import { accent, accentBadge, ink, showBrand, soft, spinnerStyle } from "./theme.js";
 
 type ProxyMode = "caddy" | "external" | "local";
 type ResourceProfile = "compact" | "standard" | "performance";
@@ -152,23 +154,26 @@ async function officialRelease(): Promise<HarlyRelease> {
   return currentOfficialRelease ?? embeddedRelease;
 }
 
-const logo = `
-██╗  ██╗ █████╗ ██████╗ ██╗     ██╗   ██╗
-██║  ██║██╔══██╗██╔══██╗██║     ╚██╗ ██╔╝
-███████║███████║██████╔╝██║      ╚████╔╝
-██╔══██║██╔══██║██╔══██╗██║       ╚██╔╝
-██║  ██║██║  ██║██║  ██║███████╗   ██║
-╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝`;
+const commandHelp: Array<[string, string]> = [
+  ["harly", "Guided menu — install, or manage a detected installation"],
+  ["harly init [directory] [--force]", "Generate a new installation"],
+  ["harly launch [directory] [--yes]", "Pull images and start the services"],
+  ["harly doctor [directory] [--json]", "Check services and public readiness"],
+  ["harly backup [directory] [--encrypt]", "Write a private rollback archive"],
+  ["harly restore <archive> [directory] --force", "Restore from an archive"],
+  ["harly update [directory] [--to version]", "Back up, upgrade, and migrate"],
+  ["harly uninstall [directory] [--remove-data]", "Stop and remove Harly"],
+];
 
 function usage() {
+  const width = Math.max(...commandHelp.map(([command]) => command.length));
   process.stdout.write(
-    `Harly — self-hosted ATS\n\nRun without arguments for the guided experience.\n\nAdvanced commands:\n  harly init [directory] [--force]\n  harly launch [directory] [--yes]\n  harly doctor [directory] [--json]\n  harly backup [directory] [--encrypt]\n  harly restore <archive> [directory] --force\n  harly update [directory] [--to version|edge] [--yes] [--encrypt]\n  harly uninstall [directory] [--remove-data] [--yes]\n`,
-  );
-}
-
-function showBrand() {
-  process.stdout.write(
-    `${pc.cyan(logo)}\n\n${pc.bold("Self-hosted ATS")} ${pc.dim(`· v${cliVersion}`)}\n\n`,
+    `\n  ${ink("Harly")} ${soft("· self-hosted ATS")}\n\n${commandHelp
+      .map(
+        ([command, description]) =>
+          `  ${accent(command.padEnd(width))}  ${soft(description)}`,
+      )
+      .join("\n")}\n\n  ${soft(`Run ${ink("npx @harly/cli")} with no arguments for the guided experience.`)}\n\n`,
   );
 }
 
@@ -320,7 +325,7 @@ function progressStep(message: string, success: string, action: () => void) {
     action();
     return;
   }
-  const step = p.spinner();
+  const step = p.spinner(spinnerStyle);
   step.start(message);
   try {
     action();
@@ -627,8 +632,8 @@ async function collectNonInteractiveAnswers(
 async function collectInteractiveAnswers(
   directory: string,
 ): Promise<InitAnswers> {
-  showBrand();
-  p.intro(pc.bgCyan(pc.black(" Welcome to Harly ")));
+  showBrand("Install", cliVersion);
+  p.intro(accentBadge(" Welcome to Harly "));
 
   const publicOrigin = unwrapPrompt(
     await p.text({
@@ -656,7 +661,7 @@ async function collectInteractiveAnswers(
   );
   const url = normalizeUrl(publicOrigin, mode);
 
-  const preflightSpinner = p.spinner();
+  const preflightSpinner = p.spinner(spinnerStyle);
   preflightSpinner.start("Checking Docker, ports, and DNS");
   let host: Awaited<ReturnType<typeof preflight>>;
   try {
@@ -951,7 +956,7 @@ async function init() {
     image,
   } = answers;
   const resources = resourceProfiles[resourceProfile];
-  const generationSpinner = interactive ? p.spinner() : null;
+  const generationSpinner = interactive ? p.spinner(spinnerStyle) : null;
   generationSpinner?.start("Generating secure configuration");
   try {
     await mkdir(directory, { recursive: true });
@@ -1051,11 +1056,11 @@ async function init() {
     if (launchNow) {
       await launch(directory, true);
       p.outro(
-        `Harly is ready at ${pc.cyan(url.origin)} · run ${pc.cyan("npx @harly/cli")}`,
+        `Harly is ready at ${accent(url.origin)} · run ${accent("npx @harly/cli")}`,
       );
     } else {
       p.outro(
-        `Next: ${pc.cyan(`cd ${shellQuote(directory)} && npx @harly/cli`)}`,
+        `Next: ${accent(`cd ${shellQuote(directory)} && npx @harly/cli`)}`,
       );
     }
   } else {
@@ -1108,8 +1113,8 @@ async function launch(explicitDirectory?: string, confirmed = false) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
   if (interactive && !confirmed) {
-    showBrand();
-    p.intro(pc.bgCyan(pc.black(" Launch Harly ")));
+    showBrand("Launch", cliVersion);
+    p.intro(accentBadge(" Launch Harly "));
     p.note(
       `Image  ${config.image}\nMode   ${config.proxyMode}\nURL    ${config.publicUrl}`,
       "Launch plan",
@@ -1129,11 +1134,7 @@ async function launch(explicitDirectory?: string, confirmed = false) {
     "Compose configuration is valid",
     () => compose(directory, ["config", "--quiet"]),
   );
-  progressStep(
-    "Pulling immutable container images",
-    "Container images downloaded",
-    () => compose(directory, ["pull"]),
-  );
+  await pullWithProgress(directory, [], interactive);
   progressStep(
     "Starting Harly and waiting for healthchecks",
     "Harly services are healthy",
@@ -1143,7 +1144,7 @@ async function launch(explicitDirectory?: string, confirmed = false) {
   );
   if (interactive && !confirmed) {
     p.outro(
-      `Harly is ready at ${pc.cyan(config.publicUrl)} · run ${pc.cyan("npx @harly/cli doctor .")}`,
+      `Harly is ready at ${accent(config.publicUrl)} · run ${accent("npx @harly/cli doctor .")}`,
     );
   } else if (!interactive) {
     process.stdout.write(
@@ -1155,11 +1156,22 @@ async function launch(explicitDirectory?: string, confirmed = false) {
 async function doctor(explicitDirectory?: string, print = true) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
-  const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];
+  // `name` is the stable machine key consumed by --json and by automation.
+  // `label` exists only to render a human sentence.
+  const checks: Array<{
+    name: string;
+    label: string;
+    ok: boolean;
+    detail?: string;
+  }> = [];
   const valid = compose(directory, ["config", "--quiet"], {
     allowFailure: true,
   });
-  checks.push({ name: "compose", ok: valid.status === 0 });
+  checks.push({
+    name: "compose",
+    label: "Compose file is valid",
+    ok: valid.status === 0,
+  });
   const servicesResult = compose(
     directory,
     ["ps", "--status", "running", "--services"],
@@ -1169,15 +1181,29 @@ async function doctor(explicitDirectory?: string, print = true) {
     .trim()
     .split(/\s+/)
     .filter(Boolean);
+  const serviceLabels: Record<string, string> = {
+    postgres: "Database is running",
+    app: "Application is running",
+    scheduler: "Scheduler is running",
+    caddy: "HTTPS proxy is running",
+  };
   for (const name of [
     "postgres",
     "app",
     "scheduler",
     ...(config.proxyMode === "caddy" ? ["caddy"] : []),
   ])
-    checks.push({ name: `service:${name}`, ok: services.includes(name) });
+    checks.push({
+      name: `service:${name}`,
+      label: serviceLabels[name] ?? `${name} is running`,
+      ok: services.includes(name),
+    });
   checks.push({
     name: "profile:caddy",
+    label:
+      config.proxyMode === "caddy"
+        ? "Proxy profile matches this installation"
+        : "No stray proxy is running",
     ok:
       config.proxyMode === "caddy"
         ? services.includes("caddy")
@@ -1189,11 +1215,17 @@ async function doctor(explicitDirectory?: string, print = true) {
     });
     checks.push({
       name: "readiness",
+      label: "Public URL answers as ready",
       ok: response.ok,
       detail: `HTTP ${response.status}`,
     });
   } catch {
-    checks.push({ name: "readiness", ok: false, detail: "unreachable" });
+    checks.push({
+      name: "readiness",
+      label: "Public URL answers as ready",
+      ok: false,
+      detail: "unreachable",
+    });
   }
   const result = {
     ok: checks.every((check) => check.ok),
@@ -1205,7 +1237,18 @@ async function doctor(explicitDirectory?: string, print = true) {
     process.stdout.write(
       json
         ? `${JSON.stringify(result)}\n`
-        : `${checks.map((check) => `${check.ok ? "✓" : "✗"} ${check.name}${check.detail ? ` — ${check.detail}` : ""}`).join("\n")}\n`,
+        : `\n${checks
+            .map(
+              (check) =>
+                `  ${check.ok ? accent("✓") : pc.red("✗")} ${check.label}${
+                  check.detail ? ` ${soft(`· ${check.detail}`)}` : ""
+                }  ${soft(check.name)}`,
+            )
+            .join("\n")}\n\n  ${
+            result.ok
+              ? accent("Harly is healthy.")
+              : pc.red("Harly needs attention.")
+          }\n\n`,
     );
   if (!result.ok && print) process.exitCode = 1;
   return result;
@@ -1474,8 +1517,8 @@ async function upgrade(explicitDirectory?: string) {
   }
 
   if (interactive) {
-    showBrand();
-    p.intro(pc.bgCyan(pc.black(" Upgrade Harly ")));
+    showBrand("Update", cliVersion);
+    p.intro(accentBadge(" Upgrade Harly "));
     p.note(
       `Current  ${config.image}\nTarget   ${requestedImage}\nData     preserved`,
       "Upgrade plan",
@@ -1498,8 +1541,10 @@ async function upgrade(explicitDirectory?: string) {
     0o600,
   );
   try {
-    progressStep("Pulling the requested image", "Image downloaded", () =>
-      compose(directory, ["pull", "app", "migrate", "scheduler"]),
+    await pullWithProgress(
+      directory,
+      ["app", "migrate", "scheduler"],
+      interactive,
     );
   } catch (error) {
     await atomicWrite(envPath, originalEnv, 0o600);
@@ -1569,7 +1614,7 @@ async function upgrade(explicitDirectory?: string) {
     );
   if (interactive)
     p.outro(
-      `Harly is running ${pc.cyan(deployedImage)} at ${pc.cyan(config.publicUrl)}`,
+      `Harly is running ${accent(deployedImage)} at ${accent(config.publicUrl)}`,
     );
 }
 
@@ -1612,8 +1657,8 @@ async function uninstall(explicitDirectory?: string) {
 }
 
 async function railwayGuide() {
-  showBrand();
-  p.intro(pc.bgCyan(pc.black(" Deploy Harly on Railway ")));
+  showBrand("Railway", cliVersion);
+  p.intro(accentBadge(" Deploy Harly on Railway "));
   const token = unwrapPrompt(
     await p.password({
       message: "Railway API token (from railway.app/account/tokens)",
@@ -1662,7 +1707,7 @@ async function railwayGuide() {
   };
   const postgresPassword = secret();
 
-  const spin = p.spinner();
+  const spin = p.spinner(spinnerStyle);
   spin.start("Creating Railway project");
   const { projectId, environmentId } = await railwayCreateProject(
     token,
@@ -1792,14 +1837,14 @@ async function railwayGuide() {
     "Railway deployment provisioned",
   );
   p.outro(
-    `Harly is deploying to ${pc.cyan(url.origin)}. Never commit the generated .env file.`,
+    `Harly is deploying to ${accent(url.origin)}. Never commit the generated .env file.`,
   );
 }
 
 async function cloudGuide(provider: "fly" | "digitalocean") {
-  showBrand();
   const providerName = provider === "fly" ? "Fly.io" : "DigitalOcean";
-  p.intro(pc.bgCyan(pc.black(` Deploy Harly on ${providerName} `)));
+  showBrand(providerName, cliVersion);
+  p.intro(accentBadge(` Deploy Harly on ${providerName} `));
   const url = normalizeUrl(
     unwrapPrompt(
       await p.text({
@@ -1981,9 +2026,9 @@ async function menu() {
     usage();
     return;
   }
-  showBrand();
+  showBrand(undefined, cliVersion);
   if (!installation) {
-    p.intro(pc.bgCyan(pc.black(" Welcome to Harly ")));
+    p.intro(accentBadge(" Welcome to Harly "));
     const choice = unwrapPrompt(
       await p.select({
         message: "What would you like to do?",
@@ -2019,7 +2064,7 @@ async function menu() {
     usage();
     return;
   }
-  p.intro(pc.bgCyan(pc.black(" Harly management ")));
+  p.intro(accentBadge(" Harly management "));
   p.note(
     `${installation.config.publicUrl}\n${installation.config.image}\n${installation.directory}`,
     "Detected installation",
