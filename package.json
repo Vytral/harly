@@ -8,8 +8,8 @@
     "node": ">=22"
   },
   "scripts": {
-    "dev": "pnpm db:up && pnpm db:migrate && DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo dev",
-    "dev:web": "DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo dev",
+    "dev": "pnpm db:up && pnpm db:migrate && DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo dev --filter=web",
+    "dev:web": "DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo dev --filter=web",
     "build": "DOTENV_CONFIG_PATH=.env.local node -r dotenv/config ./node_modules/turbo/bin/turbo build",
     "lint": "turbo lint",
     "typecheck": "turbo typecheck",
