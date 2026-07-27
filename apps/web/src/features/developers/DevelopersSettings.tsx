@@ -9,7 +9,10 @@ import {
   createApiKeyAction,
   createWebhookAction,
   deleteWebhookAction,
+  listWebhookDeliveriesAction,
+  replayWebhookDeliveryAction,
   revokeApiKeyAction,
+  rotateWebhookSecretAction,
   testWebhookAction,
   updateWebhookAction,
 } from "@/features/developers/actions";
@@ -33,6 +36,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -503,9 +513,118 @@ function WebhooksSection({
   const [pending, startTransition] = useTransition();
   const [showForm, setShowForm] = useState(false);
   const [url, setUrl] = useState("");
+  const [description, setDescription] = useState("");
   const [selectedEvents, setSelectedEvents] = useState<string[]>([]);
   const [secret, setSecret] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<WebhookView | null>(null);
+  const [editUrl, setEditUrl] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editEvents, setEditEvents] = useState<string[]>([]);
+  const [rotatingId, setRotatingId] = useState<string | null>(null);
+  const [deliveriesFor, setDeliveriesFor] = useState<WebhookView | null>(null);
+  const [deliveries, setDeliveries] = useState<
+    Array<{
+      id: string;
+      event: string;
+      status: string;
+      attempts: number;
+      responseStatus: number | null;
+      nextRetryAt: string | null;
+      deliveredAt: string | null;
+      createdAt: string;
+    }>
+  >([]);
+  const [loadingDeliveries, setLoadingDeliveries] = useState(false);
+  const [replayingId, setReplayingId] = useState<string | null>(null);
+
+  function rotateSecret(id: string) {
+    setRotatingId(id);
+    startTransition(async () => {
+      const result = await rotateWebhookSecretAction(id);
+      if (!result.ok || !result.secret) {
+        toast.error(result.error ?? "Could not rotate secret.");
+      } else {
+        setSecret(result.secret);
+        toast.success("Signing secret rotated");
+      }
+      setRotatingId(null);
+      router.refresh();
+    });
+  }
+
+  function openDeliveries(hook: WebhookView) {
+    setDeliveriesFor(hook);
+    setLoadingDeliveries(true);
+    startTransition(async () => {
+      const result = await listWebhookDeliveriesAction(hook.id);
+      if (!result.ok || !result.deliveries) {
+        toast.error(result.error ?? "Could not load deliveries.");
+        setDeliveries([]);
+      } else {
+        setDeliveries(result.deliveries);
+      }
+      setLoadingDeliveries(false);
+    });
+  }
+
+  function replayDelivery(deliveryId: string) {
+    if (!deliveriesFor) return;
+    setReplayingId(deliveryId);
+    startTransition(async () => {
+      const result = await replayWebhookDeliveryAction({
+        endpointId: deliveriesFor.id,
+        deliveryId,
+      });
+      if (!result.ok) toast.error(result.error ?? "Could not replay delivery.");
+      else {
+        toast.success("Replay queued");
+        openDeliveries(deliveriesFor);
+      }
+      setReplayingId(null);
+      router.refresh();
+    });
+  }
+
+  function toggleEditEvent(value: string) {
+    setEditEvents((prev) =>
+      prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
+    );
+  }
+
+  function openEdit(hook: WebhookView) {
+    setEditing(hook);
+    setEditUrl(hook.url);
+    setEditDescription(hook.description ?? "");
+    setEditEvents(hook.events);
+  }
+
+  function saveEdit() {
+    if (!editing) return;
+    if (!/^https?:\/\//.test(editUrl)) {
+      toast.error("Enter a valid http(s) URL.");
+      return;
+    }
+    if (editEvents.length === 0) {
+      toast.error("Subscribe to at least one event.");
+      return;
+    }
+    startTransition(async () => {
+      const result = await updateWebhookAction({
+        id: editing.id,
+        url: editUrl,
+        events: editEvents,
+        description: editDescription || null,
+      });
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not update webhook.");
+        return;
+      }
+      toast.success("Webhook updated");
+      setEditing(null);
+      router.refresh();
+    });
+  }
 
   function toggleEvent(value: string) {
     setSelectedEvents((prev) =>
@@ -523,13 +642,18 @@ function WebhooksSection({
       return;
     }
     startTransition(async () => {
-      const result = await createWebhookAction({ url, events: selectedEvents });
+      const result = await createWebhookAction({
+        url,
+        events: selectedEvents,
+        description: description || undefined,
+      });
       if (!result.ok || !result.secret) {
         toast.error(result.error ?? "Could not create webhook.");
         return;
       }
       setSecret(result.secret);
       setUrl("");
+      setDescription("");
       setSelectedEvents([]);
       setShowForm(false);
       router.refresh();
@@ -604,6 +728,14 @@ function WebhooksSection({
             />
           </div>
           <div className="space-y-1.5">
+            <Label>Description (optional)</Label>
+            <Input
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="e.g. Slack notifier"
+            />
+          </div>
+          <div className="space-y-1.5">
             <Label>Events</Label>
             <div className="flex flex-wrap gap-1.5">
               {events.map((event) => (
@@ -657,6 +789,11 @@ function WebhooksSection({
                         {hook.enabled ? "Active" : "Inactive"}
                       </StatusPill>
                     </div>
+                    {hook.description && (
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {hook.description}
+                      </p>
+                    )}
 
                     <p className="mt-2.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                       Subscribed events
@@ -712,6 +849,13 @@ function WebhooksSection({
                         )}
                         Send test
                       </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openDeliveries(hook)}
+                      >
+                        Deliveries
+                      </Button>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button
@@ -724,6 +868,15 @@ function WebhooksSection({
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEdit(hook)}>
+                            Edit endpoint
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            onClick={() => rotateSecret(hook.id)}
+                            disabled={pending && rotatingId === hook.id}
+                          >
+                            Rotate signing secret
+                          </DropdownMenuItem>
                           <DropdownMenuItem onClick={() => toggleEnabled(hook.id, !hook.enabled)}>
                             {hook.enabled ? "Disable endpoint" : "Enable endpoint"}
                           </DropdownMenuItem>
@@ -740,6 +893,120 @@ function WebhooksSection({
           })}
         </div>
       )}
+
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit endpoint</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Endpoint URL</Label>
+              <Input
+                value={editUrl}
+                onChange={(e) => setEditUrl(e.target.value)}
+                placeholder="https://example.com/webhooks/harly"
+                className="font-mono text-sm"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Description (optional)</Label>
+              <Input
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder="e.g. Slack notifier"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Events</Label>
+              <div className="flex flex-wrap gap-1.5">
+                {events.map((event) => (
+                  <Chip
+                    key={event.value}
+                    active={editEvents.includes(event.value)}
+                    onClick={() => toggleEditEvent(event.value)}
+                  >
+                    {event.label}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={pending}>
+              Cancel
+            </Button>
+            <Button onClick={saveEdit} disabled={pending}>
+              {pending && <SpinnerIcon className="size-4 animate-spin" />} Save changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deliveriesFor !== null}
+        onOpenChange={(open) => !open && setDeliveriesFor(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Delivery history</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-96 space-y-2 overflow-y-auto">
+            {loadingDeliveries ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                Loading…
+              </p>
+            ) : deliveries.length === 0 ? (
+              <p className="py-6 text-center text-sm text-muted-foreground">
+                No deliveries yet
+              </p>
+            ) : (
+              deliveries.map((delivery) => (
+                <div
+                  key={delivery.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="truncate font-mono text-xs">{delivery.event}</span>
+                      <StatusPill tone={delivery.status === "success" ? "on" : "off"}>
+                        {delivery.status}
+                      </StatusPill>
+                      {delivery.responseStatus !== null && (
+                        <span className="text-xs text-muted-foreground">
+                          {delivery.responseStatus}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(delivery.deliveredAt ?? delivery.createdAt), {
+                        addSuffix: true,
+                      })}
+                      {delivery.attempts > 1 ? ` · ${delivery.attempts} attempts` : ""}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={pending && replayingId === delivery.id}
+                    onClick={() => replayDelivery(delivery.id)}
+                  >
+                    {pending && replayingId === delivery.id && (
+                      <SpinnerIcon className="size-3.5 animate-spin" />
+                    )}
+                    Replay
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeliveriesFor(null)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

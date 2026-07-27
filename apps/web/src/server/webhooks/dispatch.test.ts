@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("@harly/db", () => ({
   db: {
+    insert: vi.fn(() => ({
+      values: vi.fn(() => ({ onConflictDoNothing: vi.fn(async () => undefined) })),
+    })),
     update: vi.fn(() => ({
       set: vi.fn((values: Record<string, unknown>) => {
         mocks.updates.push(values);
@@ -17,6 +20,7 @@ vi.mock("@harly/db", () => ({
     })),
   },
   webhookDeliveries: {},
+  webhookDeliveryAttempts: {},
   webhookEndpoints: {},
 }));
 

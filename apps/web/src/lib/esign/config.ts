@@ -26,7 +26,7 @@ export type WorkspaceEsignStatus = {
    * for our API. Null until the integration is first saved.
    */
   webhookSecret: string | null;
-  offerSignatureChannel: "email" | "esign";
+  offerSignatureChannel: "email" | "esign" | "native";
   encryptionReady: boolean;
 };
 
@@ -38,8 +38,12 @@ export type EsignConfig = {
   apiUrl: string;
   apiToken: string;
   webhookSecret: string | null;
-  offerSignatureChannel: "email" | "esign";
+  offerSignatureChannel: "email" | "esign" | "native";
 };
+
+function resolveOfferSignatureChannel(value: string | null | undefined): "email" | "esign" | "native" {
+  return value === "esign" || value === "native" ? value : "email";
+}
 
 /** Strip a trailing slash and a trailing /api so we can derive both cleanly. */
 function normalizeBaseUrl(value: string | null | undefined): string | null {
@@ -77,7 +81,7 @@ export async function getWorkspaceEsignStatus(
     .where(eq(workspaceSettings.organizationId, workspaceId))
     .limit(1);
 
-  const channel = row?.offerSignatureChannel === "esign" ? "esign" : "email";
+  const channel = resolveOfferSignatureChannel(row?.offerSignatureChannel);
   const url = normalizeBaseUrl(row?.docusealUrl) ?? envUrl();
 
   return {
@@ -137,7 +141,7 @@ export async function getWorkspaceEsignConfig(
   apiToken = apiToken ?? envToken();
   if (!apiToken) return null;
 
-  const channel = row.offerSignatureChannel === "esign" ? "esign" : "email";
+  const channel = resolveOfferSignatureChannel(row.offerSignatureChannel);
 
   return {
     baseUrl,

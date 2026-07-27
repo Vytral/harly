@@ -2,13 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
-import {
-  useEffect,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  useTransition,
-} from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   AtSign,
@@ -61,6 +55,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { revokeMySessionAction, revokeOtherMySessionsAction, type SessionDevice } from "@/features/security/session-actions";
 
 const WEEKDAYS: (keyof WeeklyAvailability)[] = [
   "monday",
@@ -318,9 +313,11 @@ async function uploadImage(file: File | Blob): Promise<string> {
 export function AccountSettingsPanel({
   user,
   securitySlot,
+  sessions,
 }: {
   user: AccountUser;
   securitySlot?: React.ReactNode;
+  sessions: SessionDevice[];
 }) {
   const router = useRouter();
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -366,12 +363,6 @@ export function AccountSettingsPanel({
 
   const [cropSrc, setCropSrc] = useState<string | null>(null);
   const [cropOpen, setCropOpen] = useState(false);
-
-  const userAgent = useSyncExternalStore(
-    () => () => {},
-    () => navigator.userAgent.slice(0, 60),
-    () => "Unknown browser",
-  );
 
   const [newEmail, setNewEmail] = useState("");
   const [savingEmail, startEmail] = useTransition();
@@ -610,6 +601,23 @@ export function AccountSettingsPanel({
     startSignOut(async () => {
       await signOut();
       window.location.href = "/login";
+    });
+  }
+
+  function revokeSession(sessionId: string) {
+    startSignOut(async () => {
+      const result = await revokeMySessionAction(sessionId);
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not revoke session.");
+        return;
+      }
+      if (result.current) {
+        await signOut();
+        window.location.href = "/login";
+      } else {
+        toast.success("Session revoked.");
+        router.refresh();
+      }
     });
   }
 
@@ -1165,22 +1173,18 @@ export function AccountSettingsPanel({
         <TabsContent value="session" className="mt-6 space-y-6">
           <SectionCard title="Active sessions">
             <div className="space-y-3">
-              <div className="flex items-center gap-3 rounded-lg border bg-muted/20 px-4 py-3">
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-                  <Globe className="size-4" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium">Current browser</p>
-                  <p className="text-xs text-muted-foreground">{userAgent}</p>
+              {sessions.map((item) => (
+                <div key={item.id} className="flex items-center gap-3 rounded-lg border bg-muted/20 px-4 py-3">
+                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary"><Globe className="size-4" /></span>
+                  <div className="min-w-0 flex-1"><p className="text-sm font-medium">{item.current ? "Current browser" : "Other device"}</p><p className="truncate text-xs text-muted-foreground">{item.userAgent ?? "Unknown browser"}{item.ipAddress ? ` · ${item.ipAddress}` : ""}</p><p className="text-[11px] text-muted-foreground">Last active {item.updatedAt.toLocaleString()}</p></div>
+                  {item.current ? <Badge variant="secondary" className="shrink-0">This device</Badge> : <Button type="button" size="sm" variant="outline" onClick={() => revokeSession(item.id)}>Revoke</Button>}
                 </div>
-                <Badge variant="secondary" className="shrink-0">
-                  This device
-                </Badge>
-              </div>
+              ))}
               <p className="text-xs text-muted-foreground">
                 Signing out will end this session. Use &ldquo;Sign out
                 everywhere&rdquo; from settings to revoke all sessions.
               </p>
+              {sessions.some((item) => !item.current) ? <Button type="button" variant="outline" onClick={() => startSignOut(async () => { const result = await revokeOtherMySessionsAction(); if (result.ok) { toast.success("Other sessions revoked."); router.refresh(); } })}>Sign out everywhere else</Button> : null}
             </div>
           </SectionCard>
 

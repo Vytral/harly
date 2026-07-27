@@ -9,6 +9,7 @@ import { UsersThreeDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { toggleForce2FAAction } from "@/features/security/actions";
+import { ensureSensitiveActionReauth } from "./reauth-client";
 
 export function Force2FACard({
   enabled,
@@ -22,7 +23,14 @@ export function Force2FACard({
 
   function handleToggle(value: boolean) {
     startTransition(async () => {
-      const result = await toggleForce2FAAction(value);
+      let result;
+      try {
+        await ensureSensitiveActionReauth();
+        result = await toggleForce2FAAction(value);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Reauthentication failed.");
+        return;
+      }
       if (!result.ok) {
         toast.error(result.error ?? "Could not update setting.");
         return;

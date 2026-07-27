@@ -36,6 +36,10 @@ export async function GET(request: Request) {
 
     const url = new URL(request.url);
     const severity = url.searchParams.get("severity") ?? undefined;
+    const format = url.searchParams.get("format") ?? "csv";
+    if (format !== "csv" && format !== "json") {
+      return NextResponse.json({ error: "Invalid format." }, { status: 400 });
+    }
     if (severity && !SEVERITIES.has(severity)) {
       return NextResponse.json({ error: "Invalid severity." }, { status: 400 });
     }
@@ -44,6 +48,8 @@ export async function GET(request: Request) {
     try {
       filters = {
         query: url.searchParams.get("q") ?? undefined,
+        action: url.searchParams.get("action") ?? undefined,
+        resourceType: url.searchParams.get("resourceType") ?? undefined,
         severity: severity as AuditLogFilters["severity"],
         from: parseDate(url.searchParams.get("from"), "from"),
         to: parseDate(url.searchParams.get("to"), "to"),
@@ -72,8 +78,8 @@ export async function GET(request: Request) {
       action: "audit_logs.exported",
       resourceType: "audit_logs",
       severity: "warning",
-      metadata: {
-        format: "csv",
+        metadata: {
+        format,
         query: filters.query ?? null,
         severity: filters.severity ?? null,
         from: filters.from?.toISOString() ?? null,
@@ -82,6 +88,16 @@ export async function GET(request: Request) {
     });
 
     const logs = await getWorkspaceAuditLogs(context.organization.id, filters);
+    if (format === "json") {
+      const filename = `harly-audit-logs-${new Date().toISOString().slice(0, 10)}.json`;
+      return new Response(JSON.stringify({ exportedAt: new Date().toISOString(), filters, logs }, null, 2), {
+        headers: {
+          "Content-Type": "application/json; charset=utf-8",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+          "Cache-Control": "private, no-store",
+        },
+      });
+    }
     const rows = [
       [
         "created_at",

@@ -11,6 +11,7 @@ import {
 } from "@/features/workspaces/roles-actions";
 import {
   PERMISSION_GROUPS,
+  type RoleScope,
   type Permission,
 } from "@/features/workspaces/permissions";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
@@ -29,6 +30,13 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetClose, SheetTrigger } from "@/components/ui/sheet";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
 
@@ -36,6 +44,7 @@ export type RoleSummary = {
   key: string;
   name: string;
   permissions: Permission[];
+  scope: RoleScope;
   isBuiltin: boolean;
   isOwner: boolean;
   editable: boolean;
@@ -135,6 +144,20 @@ export function RolesManager({ roles }: { roles: RoleSummary[] }) {
               </div>
             </div>
 
+            {role.scope.jobAccess === "assigned" ||
+            role.scope.departments.length > 0 ||
+            role.scope.regions.length > 0 ? (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Scoped to {role.scope.jobAccess === "assigned" ? "assigned jobs" : "selected filters"}
+                {role.scope.departments.length > 0
+                  ? ` · ${role.scope.departments.length} department${role.scope.departments.length === 1 ? "" : "s"}`
+                  : ""}
+                {role.scope.regions.length > 0
+                  ? ` · ${role.scope.regions.length} region${role.scope.regions.length === 1 ? "" : "s"}`
+                  : ""}
+              </p>
+            ) : null}
+
             {role.members.length > 0 && (
               <div className="mt-4 border-t pt-4">
                 <p className="mb-2 text-xs font-medium text-muted-foreground">
@@ -180,6 +203,13 @@ export function RoleEditor({
   const [selected, setSelected] = useState<Set<Permission>>(
     new Set(role?.permissions ?? []),
   );
+  const [jobAccess, setJobAccess] = useState<RoleScope["jobAccess"]>(
+    role?.scope.jobAccess ?? "all",
+  );
+  const [departments, setDepartments] = useState(
+    role?.scope.departments.join(", ") ?? "",
+  );
+  const [regions, setRegions] = useState(role?.scope.regions.join(", ") ?? "");
   const [saving, startSave] = useTransition();
   const [deleting, startDelete] = useTransition();
 
@@ -194,11 +224,16 @@ export function RoleEditor({
 
   function save() {
     const permissions = [...selected];
+    const scope = {
+      jobAccess,
+      departments: departments.split(",").map((value) => value.trim()).filter(Boolean),
+      regions: regions.split(",").map((value) => value.trim()).filter(Boolean),
+    } satisfies RoleScope;
     startSave(async () => {
       const result =
         mode === "create"
-          ? await createCustomRole({ name, permissions })
-          : await updateCustomRole({ key: role!.key, name, permissions });
+          ? await createCustomRole({ name, permissions, scope })
+          : await updateCustomRole({ key: role!.key, name, permissions, scope });
       if (!result.ok) {
         toast.error(result.error ?? "Could not save role.");
         return;
@@ -286,6 +321,35 @@ export function RoleEditor({
             placeholder="e.g. Sourcer"
             disabled={readOnly || Boolean(role?.isBuiltin)}
           />
+        </div>
+
+        <div className="space-y-3 rounded-xl border bg-muted/20 p-4">
+          <div>
+            <p className="text-sm font-medium">Access scope</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Limit this role to assigned jobs, departments, or regions. Empty filters mean unrestricted access.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label htmlFor="role-job-access">Jobs</Label>
+              <Select value={jobAccess} onValueChange={(value) => setJobAccess(value as RoleScope["jobAccess"])} disabled={readOnly}>
+                <SelectTrigger id="role-job-access"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All matching jobs</SelectItem>
+                  <SelectItem value="assigned">Assigned jobs only</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="role-departments">Departments</Label>
+              <Input id="role-departments" value={departments} onChange={(e) => setDepartments(e.target.value)} placeholder="Engineering, Sales" disabled={readOnly} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="role-regions">Regions</Label>
+              <Input id="role-regions" value={regions} onChange={(e) => setRegions(e.target.value)} placeholder="LATAM, EMEA" disabled={readOnly} />
+            </div>
+          </div>
         </div>
 
         <div className="space-y-4">

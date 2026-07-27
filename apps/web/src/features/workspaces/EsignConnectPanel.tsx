@@ -7,7 +7,6 @@ import { toast } from "sonner";
 import {
   disconnectEsignAction,
   saveEsignSettingsAction,
-  saveOfferSignatureChannelAction,
   testEsignAction,
 } from "@/features/workspaces/esign-settings-actions";
 import type { WorkspaceEsignStatus } from "@/lib/esign/config";
@@ -52,7 +51,6 @@ export function EsignConnectPanel({
   const connected = status.enabled && status.hasToken;
   const [open, setOpen] = useState(false);
   const [testing, startTest] = useTransition();
-  const [savingChannel, startSaveChannel] = useTransition();
 
   function testConnection() {
     startTest(async () => {
@@ -62,18 +60,6 @@ export function EsignConnectPanel({
         toast.error(result.error ?? "DocuSeal connection test failed.");
         router.refresh();
       }
-    });
-  }
-
-  function setChannel(channel: "email" | "esign") {
-    startSaveChannel(async () => {
-      const result = await saveOfferSignatureChannelAction(channel);
-      if (!result.ok) {
-        toast.error(result.error ?? "Could not update offer signature settings.");
-        return;
-      }
-      toast.success(channel === "esign" ? "DocuSeal enabled for offers" : "Email enabled for offers");
-      router.refresh();
     });
   }
 
@@ -110,13 +96,10 @@ export function EsignConnectPanel({
 
       {connected ? (
         <Card className="overflow-hidden p-0">
-          <div className="grid grid-cols-1 divide-y sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+          <div className="grid grid-cols-1 divide-y sm:grid-cols-2 sm:divide-x sm:divide-y-0">
             <StatCell label="Instance">
               <DocuSealLogo className="size-4" />
               <span className="truncate">{status.url ?? "Connected"}</span>
-            </StatCell>
-            <StatCell label="Offer signatures">
-              {status.offerSignatureChannel === "esign" ? "DocuSeal" : "Email"}
             </StatCell>
             <StatCell label="Status">
               <button type="button" onClick={testConnection} disabled={testing} className="flex items-center gap-1.5 text-sm font-medium text-pine hover:underline disabled:opacity-50">
@@ -132,14 +115,6 @@ export function EsignConnectPanel({
         <InlineReveal open={open}>
           {connected ? (
             <Card className="space-y-4 p-5">
-              <div>
-                <h2 className="font-display text-base font-semibold tracking-tight">Offer signature delivery</h2>
-                <p className="text-sm text-muted-foreground">Choose how candidates receive offers by default.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant={status.offerSignatureChannel === "email" ? "default" : "outline"} disabled={savingChannel} onClick={() => setChannel("email")}>Email</Button>
-                <Button variant={status.offerSignatureChannel === "esign" ? "default" : "outline"} disabled={savingChannel} onClick={() => setChannel("esign")}>DocuSeal</Button>
-              </div>
               {webhookUrl ? (
                 <div className="space-y-2 border-t pt-4">
                   <h2 className="font-display text-base font-semibold tracking-tight">Webhook URL</h2>

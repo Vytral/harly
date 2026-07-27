@@ -1,5 +1,6 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import {
@@ -15,6 +16,10 @@ import {
   rateLimitResultFromError,
   type RateLimitResult,
 } from "@/server/api/ratelimit";
+import { createLogger } from "@/lib/logger";
+import { recordHttpError, recordHttpRequest } from "@/server/observability/metrics";
+
+const apiLog = createLogger("api");
 
 /**
  * Transport layer for the REST API: turns service results / thrown ApiErrors
@@ -113,10 +118,18 @@ export function withApi(
   options?: { cors?: boolean },
 ) {
   return async (request: Request, context?: unknown): Promise<NextResponse> => {
+    const startedAt = performance.now();
+    const route = new URL(request.url).pathname;
+    const traceId = request.headers.get("x-request-id")?.slice(0, 128) || randomUUID();
+    const attachTrace = (response: NextResponse) => {
+      response.headers.set("X-Request-ID", traceId);
+      return response;
+    };
     try {
       const response = await handler(request, context);
+      recordHttpRequest({ method: request.method, route, status: response.status, durationMs: performance.now() - startedAt });
       return withRateLimitHeaders(
-        withHeaders(response as NextResponse, options?.cors),
+        attachTrace(withHeaders(response as NextResponse, options?.cors)),
         getRequestRateLimit(request),
       );
     } catch (error) {
@@ -131,11 +144,12 @@ export function withApi(
       const rateLimit =
         getRequestRateLimit(request) ?? rateLimitResultFromError(error);
       if (error instanceof ApiError) {
+        recordHttpRequest({ method: request.method, route, status: error.status, durationMs: performance.now() - startedAt });
         return withRateLimitHeaders(
-          apiError(error.code, error.message, {
+          attachTrace(apiError(error.code, error.message, {
             cors: options?.cors,
             details: error.details,
-          }),
+          })),
           rateLimit,
         );
       }
@@ -148,18 +162,20 @@ export function withApi(
         Array.isArray((error as { issues: unknown[] }).issues)
       ) {
         return withRateLimitHeaders(
-          apiError("unprocessable", "Validation failed.", {
+          attachTrace(apiError("unprocessable", "Validation failed.", {
             cors: options?.cors,
             details: (error as { issues: unknown[] }).issues,
-          }),
+          })),
           rateLimit,
         );
       }
-      console.error("[api] unhandled route error", error);
+      recordHttpError(route);
+      recordHttpRequest({ method: request.method, route, status: 500, durationMs: performance.now() - startedAt });
+      apiLog.error({ error, method: request.method, route, traceId }, "unhandled API route error");
       return withRateLimitHeaders(
-        apiError("internal", "Something went wrong.", {
+        attachTrace(apiError("internal", "Something went wrong.", {
           cors: options?.cors,
-        }),
+        })),
         rateLimit,
       );
     }

@@ -14,6 +14,11 @@ import {
   tasks,
   type Task,
 } from "@harly/db";
+import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+  type PersistedDomainEvent,
+} from "@/server/events/emit";
 
 /**
  * Workspace-scoped task service for the REST API.  It deliberately accepts an
@@ -298,6 +303,7 @@ export async function createTaskForApi(input: {
   ]);
 
   const status = input.values.status ?? "pending";
+  let domainEvent: PersistedDomainEvent | undefined;
   const task = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(tasks)
@@ -327,8 +333,17 @@ export async function createTaskForApi(input: {
       type: "task.created",
       metadata: { taskId: created.id, status },
     });
+    domainEvent = await persistDomainEvent(tx, {
+      name: "task.created",
+      workspaceId: input.workspaceId,
+      actorId: input.actorId,
+      aggregateType: "task",
+      aggregateId: created.id,
+      payload: { task: serializeTask(created) },
+    });
     return created;
   });
+  if (domainEvent) await publishPersistedDomainEvents([domainEvent]);
 
   return task;
 }
@@ -393,7 +408,8 @@ export async function updateTaskForApi(input: {
     set.completedAt = input.values.status === "completed" ? new Date() : null;
   }
 
-  return db.transaction(async (tx) => {
+  let domainEvent: PersistedDomainEvent | undefined;
+  const task = await db.transaction(async (tx) => {
     const [task] = await tx
       .update(tasks)
       .set(set)
@@ -415,8 +431,18 @@ export async function updateTaskForApi(input: {
       type: input.values.status === "completed" ? "task.completed" : "task.updated",
       metadata: { taskId: task.id, status: input.values.status ?? null },
     });
+    domainEvent = await persistDomainEvent(tx, {
+      name: input.values.status === "completed" ? "task.updated" : "task.updated",
+      workspaceId: input.workspaceId,
+      actorId: input.actorId,
+      aggregateType: "task",
+      aggregateId: task.id,
+      payload: { task: serializeTask(task) },
+    });
     return task;
   });
+  if (domainEvent) await publishPersistedDomainEvents([domainEvent]);
+  return task;
 }
 
 export async function deleteTaskForApi(input: {
@@ -434,6 +460,7 @@ export async function deleteTaskForApi(input: {
     taskId: input.taskId,
   });
 
+  let domainEvent: PersistedDomainEvent | undefined;
   await db.transaction(async (tx) => {
     const [deleted] = await tx
       .update(tasks)
@@ -456,5 +483,14 @@ export async function deleteTaskForApi(input: {
       type: "task.deleted",
       metadata: { taskId: deleted.id },
     });
+    domainEvent = await persistDomainEvent(tx, {
+      name: "task.deleted",
+      workspaceId: input.workspaceId,
+      actorId: input.actorId,
+      aggregateType: "task",
+      aggregateId: deleted.id,
+      payload: { task: { id: deleted.id } },
+    });
   });
+  if (domainEvent) await publishPersistedDomainEvents([domainEvent]);
 }

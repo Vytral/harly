@@ -1,10 +1,11 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { createOfferSigningViewAction } from "@/features/portal/actions";
+import { PortalOfferSignDialog } from "@/features/portal/PortalOfferSignDialog";
 import {
   CheckCircleIcon,
   FileTextIcon,
@@ -32,8 +33,14 @@ type Props = {
 
 export function PortalOfferSignCard({ applicationId, offer, signedPending }: Props) {
   const [isPending, start] = useTransition();
+  const [nativeSignOpen, setNativeSignOpen] = useState(false);
+  const isNative = offer.esignSubmissionId?.startsWith("native:") ?? false;
 
   function startSigning() {
+    if (isNative) {
+      setNativeSignOpen(true);
+      return;
+    }
     start(async () => {
       const result = await createOfferSigningViewAction({ applicationId });
       if (!result.ok) {
@@ -124,12 +131,21 @@ export function PortalOfferSignCard({ applicationId, offer, signedPending }: Pro
         </button>
       </div>
 
-      {signedPending && (
+      {signedPending && !isNative && (
         <div className="mt-4 flex items-center gap-2 rounded-lg border border-pine/20 bg-pine/5 px-3.5 py-2.5 text-sm text-pine-strong">
           <span className="size-2 shrink-0 animate-pulse rounded-full bg-pine" />
           Signature submitted — verifying with DocuSeal. This page will update
           shortly.
         </div>
+      )}
+
+      {isNative && (
+        <PortalOfferSignDialog
+          offerId={offer.id}
+          offerTitle={offer.title}
+          open={nativeSignOpen}
+          onOpenChange={setNativeSignOpen}
+        />
       )}
     </div>
   );

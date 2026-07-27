@@ -175,7 +175,11 @@ describe("importCandidatesAction", () => {
     expect(mocks.emitWebhookEvent).toHaveBeenCalledWith(
       WORKSPACE_ID,
       "application.created",
-      expect.objectContaining({ source: "csv_import" }),
+      expect.objectContaining({
+        application: expect.objectContaining({ id: "cand-new" }),
+        source: "csv_import",
+      }),
+      { actorId: "user-1", skipDomainEvent: true },
     );
   });
 

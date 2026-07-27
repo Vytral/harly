@@ -47,6 +47,60 @@ export const PERMISSIONS = [
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+/**
+ * Tenant-local constraints layered on top of a role's permissions. Keeping
+ * this separate from the permission key prevents a role matrix from exploding
+ * into combinations such as `jobs:view:engineering:emea`.
+ */
+export type RoleScope = {
+  jobAccess: "all" | "assigned";
+  departments: string[];
+  regions: string[];
+};
+
+export const unrestrictedRoleScope = (): RoleScope => ({
+  jobAccess: "all",
+  departments: [],
+  regions: [],
+});
+
+export function normalizeRoleScope(raw: unknown): RoleScope {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return unrestrictedRoleScope();
+  }
+
+  const value = raw as Record<string, unknown>;
+  const normalizeList = (input: unknown) =>
+    Array.isArray(input)
+      ? [...new Set(input.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))]
+      : [];
+
+  return {
+    jobAccess: value.jobAccess === "assigned" ? "assigned" : "all",
+    departments: normalizeList(value.departments),
+    regions: normalizeList(value.regions),
+  };
+}
+
+/** True when the target role would expose more tenant resources than the actor. */
+export function scopeExceedsPrivilege(actor: RoleScope, target: RoleScope) {
+  if (actor.jobAccess === "assigned" && target.jobAccess === "all") return true;
+  const subset = (held: string[], requested: string[]) =>
+    held.length > 0 &&
+    (requested.length === 0 ||
+      requested.some(
+        (value) =>
+          !held.some(
+            (candidate) =>
+              candidate.toLocaleLowerCase() === value.toLocaleLowerCase(),
+          ),
+      ));
+  return (
+    subset(actor.departments, target.departments) ||
+    subset(actor.regions, target.regions)
+  );
+}
+
 export type PermissionGroup = {
   label: string;
   permissions: { key: Permission; label: string; hint?: string }[];
@@ -279,4 +333,5 @@ export const SETTINGS_SECTION_PERMISSION: Record<
   "/settings/security": "security:manage",
   "/settings/legal": ["settings:edit", "dsar:manage"],
   "/settings/portal": "settings:edit",
+  "/settings/signature": "settings:edit",
 };

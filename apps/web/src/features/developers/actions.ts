@@ -6,7 +6,7 @@ import { db, webhookDeliveries } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
-import { deliverWebhook } from "@/server/webhooks/dispatch";
+import { dispatchDueWebhooks } from "@/server/webhooks/dispatch";
 
 const log = createLogger("developers");
 import {
@@ -14,7 +14,11 @@ import {
   createWebhookEndpoint,
   deleteWebhookEndpoint,
   getWebhookEndpoint,
+  listWebhookDeliveries,
+  replayWebhookDelivery,
   revokeApiKey,
+  rotateWebhookSecret,
+  serializeDelivery,
   updateWebhookEndpoint,
 } from "@/features/developers/data";
 
@@ -101,13 +105,19 @@ export async function updateWebhookAction(input: {
   url?: string;
   events?: string[];
   enabled?: boolean;
+  description?: string | null;
 }): Promise<DevActionResult> {
   try {
     const { organization } = await requirePermission("integrations:manage");
     await updateWebhookEndpoint({
       workspaceId: organization.id,
       id: input.id,
-      patch: { url: input.url, events: input.events, enabled: input.enabled },
+      patch: {
+        url: input.url,
+        events: input.events,
+        enabled: input.enabled,
+        description: input.description,
+      },
     });
     revalidatePath(SETTINGS_PATH);
     return { ok: true };
@@ -131,6 +141,66 @@ export async function deleteWebhookAction(
     return {
       ok: false,
       error: errorMessage(error, "Could not delete webhook."),
+    };
+  }
+}
+
+export async function rotateWebhookSecretAction(
+  id: string,
+): Promise<DevActionResult & { secret?: string }> {
+  try {
+    const { organization } = await requirePermission("integrations:manage");
+    const { secret } = await rotateWebhookSecret({
+      workspaceId: organization.id,
+      id,
+    });
+    revalidatePath(SETTINGS_PATH);
+    return { ok: true, secret };
+  } catch (error) {
+    return {
+      ok: false,
+      error: errorMessage(error, "Could not rotate secret."),
+    };
+  }
+}
+
+export async function listWebhookDeliveriesAction(
+  endpointId: string,
+): Promise<DevActionResult & { deliveries?: ReturnType<typeof serializeDelivery>[] }> {
+  try {
+    const { organization } = await requirePermission("integrations:manage");
+    await getWebhookEndpoint({ workspaceId: organization.id, id: endpointId });
+    const deliveries = await listWebhookDeliveries({
+      workspaceId: organization.id,
+      endpointId,
+      limit: 20,
+    });
+    return { ok: true, deliveries: deliveries.map(serializeDelivery) };
+  } catch (error) {
+    return {
+      ok: false,
+      error: errorMessage(error, "Could not load deliveries."),
+    };
+  }
+}
+
+export async function replayWebhookDeliveryAction(input: {
+  endpointId: string;
+  deliveryId: string;
+}): Promise<DevActionResult> {
+  try {
+    const { organization } = await requirePermission("integrations:manage");
+    await replayWebhookDelivery({
+      workspaceId: organization.id,
+      endpointId: input.endpointId,
+      deliveryId: input.deliveryId,
+    });
+    revalidatePath(SETTINGS_PATH);
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: errorMessage(error, "Could not replay delivery."),
     };
   }
 }
@@ -159,7 +229,12 @@ export async function testWebhookAction(
         status: "pending",
       })
       .returning();
-    const status = await deliverWebhook(delivery, endpoint);
+    const summary = await dispatchDueWebhooks(1, [delivery.id]);
+    const status = summary.success > 0
+      ? "success"
+      : summary.failed > 0
+        ? "failed"
+        : "pending";
     revalidatePath(SETTINGS_PATH);
     return { ok: status === "success", status };
   } catch (error) {

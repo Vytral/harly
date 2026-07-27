@@ -92,6 +92,7 @@ async function getMembershipForOrganization(
       and(
         eq(authMembers.userId, userId),
         eq(authMembers.organizationId, organizationId),
+        eq(authMembers.status, "active"),
       ),
     )
     .limit(1);
@@ -109,7 +110,7 @@ async function getFirstMembership(
       authOrganizations,
       eq(authOrganizations.id, authMembers.organizationId),
     )
-    .where(eq(authMembers.userId, userId))
+    .where(and(eq(authMembers.userId, userId), eq(authMembers.status, "active")))
     .orderBy(authOrganizations.name)
     .limit(1);
 

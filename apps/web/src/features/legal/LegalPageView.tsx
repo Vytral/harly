@@ -1,7 +1,7 @@
 import type { Route } from "next";
 
 import { LEGAL_PAGE_TITLES, type LegalPageData } from "@/features/legal/data";
-import { renderMarkdown } from "@/features/legal/render-markdown";
+import { isHtml, renderMarkdown } from "@/features/legal/render-markdown";
 
 export function LegalPageView({
   data,
@@ -14,9 +14,11 @@ export function LegalPageView({
 }) {
   // Templates historically linked to /legal/*. Rewrite those internal links
   // when rendering a workspace-scoped board so they cannot cross tenants.
-  const html = renderMarkdown(
-    data.content.replaceAll("](/legal/", `](${legalBasePath}/`),
-  );
+  const html = isHtml(data.content)
+    ? data.content.replaceAll('href="/legal/', `href="${legalBasePath}/`)
+    : renderMarkdown(
+        data.content.replaceAll("](/legal/", `](${legalBasePath}/`),
+      );
   const otherPages = data.publishedSlugs.filter(
     (slug) => slug !== data.pageSlug,
   );

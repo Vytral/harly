@@ -18,8 +18,17 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { normalizeSecurityPolicy } from "@/server/security/policy";
+import { requireRecentReauth } from "@/server/security/reauth";
 
 const log = createLogger("security");
+
+async function requireSensitiveReauth(userId: string, workspaceId: string) {
+  const [settings] = await db.select({ minutes: workspaceSettings.securityReauthMinutes }).from(workspaceSettings).where(eq(workspaceSettings.organizationId, workspaceId)).limit(1);
+  if ((settings?.minutes ?? 15) > 0 && !(await requireRecentReauth({ userId, workspaceId, purpose: "sensitive_action" }))) {
+    throw new Error("Reauthentication required. Confirm with a registered passkey and try again.");
+  }
+}
 
 async function getSession() {
   const session = await auth.api.getSession({ headers: await headers() });
@@ -56,6 +65,7 @@ export async function toggleForce2FAAction(
       await requirePermission("security:manage");
     if (roleKey !== "owner")
       throw new Error("Only owners can change this setting.");
+    await requireSensitiveReauth(user.id, organization.id);
 
     await db
       .insert(workspaceSettings)
@@ -81,6 +91,51 @@ export async function toggleForce2FAAction(
       ok: false,
       error: error instanceof Error ? error.message : "Failed.",
     };
+  }
+}
+
+export async function updateAdvancedSecurityPolicyAction(input: {
+  ipAllowlist: string[];
+  allowedDomains: string[];
+  riskDetectionEnabled: boolean;
+  reauthMinutes: number;
+  requirePasskey: boolean;
+}): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const { organization, roleKey, user } = await requirePermission("security:manage");
+    if (roleKey !== "owner") throw new Error("Only owners can change security policy.");
+    await requireSensitiveReauth(user.id, organization.id);
+    const policy = normalizeSecurityPolicy(input);
+    await db.insert(workspaceSettings).values({
+      organizationId: organization.id,
+      securityIpAllowlist: policy.ipAllowlist,
+      securityAllowedDomains: policy.allowedDomains,
+      securityRiskDetectionEnabled: policy.riskDetectionEnabled,
+      securityReauthMinutes: policy.reauthMinutes,
+      securityRequirePasskey: policy.requirePasskey,
+    }).onConflictDoUpdate({
+      target: workspaceSettings.organizationId,
+      set: {
+        securityIpAllowlist: policy.ipAllowlist,
+        securityAllowedDomains: policy.allowedDomains,
+        securityRiskDetectionEnabled: policy.riskDetectionEnabled,
+        securityReauthMinutes: policy.reauthMinutes,
+        securityRequirePasskey: policy.requirePasskey,
+        updatedAt: new Date(),
+      },
+    });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      actorEmail: user.email,
+      action: "settings.advanced_security_updated",
+      severity: "critical",
+      metadata: { ipCount: policy.ipAllowlist.length, domainCount: policy.allowedDomains.length, requirePasskey: policy.requirePasskey },
+    });
+    return { ok: true };
+  } catch (error) {
+    log.error(error, "updateAdvancedSecurityPolicyAction failed");
+    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
   }
 }
 

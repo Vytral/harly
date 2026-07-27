@@ -11,6 +11,13 @@ import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 import { logAuditEvent } from "@/lib/audit-log";
 import { assertTaskReferences } from "./service";
+import { emitRealtimeInvalidation } from "@/server/events/emit";
+import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+  type PersistedDomainEvent,
+} from "@/server/events/emit";
+import { REALTIME_EVENTS } from "@/server/events/registry";
 
 const log = createLogger("tasks");
 
@@ -25,7 +32,10 @@ const taskDateInput = z
       return z.NEVER;
     }
     const date = new Date(`${value}T00:00:00.000Z`);
-    if (Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== value) {
+    if (
+      Number.isNaN(date.getTime()) ||
+      date.toISOString().slice(0, 10) !== value
+    ) {
       ctx.addIssue({ code: "custom", message: "Enter a valid due date." });
       return z.NEVER;
     }
@@ -36,7 +46,9 @@ const createSchema = z.object({
   title: z.string().trim().min(1, "Title is required.").max(200),
   description: z.string().trim().max(2000).optional(),
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
-  status: z.enum(["pending", "in_progress", "completed", "canceled"]).default("pending"),
+  status: z
+    .enum(["pending", "in_progress", "completed", "canceled"])
+    .default("pending"),
   dueDate: taskDateInput,
   ownerId: z.string().min(1, "Assignee is required."),
   candidateId: z.string().uuid().optional().nullable(),
@@ -47,9 +59,7 @@ const createSchema = z.object({
 
 export type CreateTaskInput = z.input<typeof createSchema>;
 
-export async function createTask(
-  input: CreateTaskInput,
-): Promise<{
+export async function createTask(input: CreateTaskInput): Promise<{
   success: boolean;
   error?: string;
   taskId?: string;
@@ -61,7 +71,8 @@ export async function createTask(
       return { success: false, error: parsed.error.issues[0]?.message };
     }
 
-    const { organization: workspace, user } = await requirePermission("tasks:write");
+    const { organization: workspace, user } =
+      await requirePermission("tasks:write");
     const data = parsed.data;
 
     await assertTaskReferences({
@@ -75,6 +86,7 @@ export async function createTask(
       },
     });
 
+    let domainEvent: PersistedDomainEvent | undefined;
     const task = await db.transaction(async (tx) => {
       const [created] = await tx
         .insert(tasks)
@@ -123,8 +135,19 @@ export async function createTask(
         });
       }
 
+      domainEvent = await persistDomainEvent(tx, {
+        name: "task.created",
+        workspaceId: workspace.id,
+        actorId: user.id,
+        aggregateType: "task",
+        aggregateId: created.id,
+        payload: { task: { id: created.id, status: data.status } },
+      });
+
       return created;
     });
+
+    if (domainEvent) await publishPersistedDomainEvents([domainEvent]);
 
     await logAuditEvent({
       workspaceId: workspace.id,
@@ -138,6 +161,11 @@ export async function createTask(
 
     revalidatePath("/dashboard/tasks");
     revalidatePath("/dashboard");
+    void emitRealtimeInvalidation({
+      eventName: REALTIME_EVENTS.DASHBOARD_INVALIDATE,
+      workspaceId: workspace.id,
+      payload: { area: "tasks", taskId: task.id },
+    }).catch(() => undefined);
     return {
       success: true,
       taskId: task.id,
@@ -147,7 +175,8 @@ export async function createTask(
     log.error(error, "createTask failed");
     return {
       success: false,
-      error: error instanceof ApiError ? error.message : "Unable to create task.",
+      error:
+        error instanceof ApiError ? error.message : "Unable to create task.",
     };
   }
 }
@@ -157,7 +186,9 @@ const updateSchema = z.object({
   title: z.string().trim().min(1).max(200).optional(),
   description: z.string().trim().max(2000).optional().nullable(),
   priority: z.enum(["low", "medium", "high", "urgent"]).optional(),
-  status: z.enum(["pending", "in_progress", "completed", "canceled"]).optional(),
+  status: z
+    .enum(["pending", "in_progress", "completed", "canceled"])
+    .optional(),
   // Absent → undefined (leave the column untouched). Explicit null/"" → clear it.
   // The previous transform collapsed an absent value to null, so every
   // status-only update (e.g. a kanban drag) silently wiped the due date.
@@ -180,7 +211,8 @@ export async function updateTask(
       return { success: false, error: parsed.error.issues[0]?.message };
     }
 
-    const { organization: workspace, user } = await requirePermission("tasks:write");
+    const { organization: workspace, user } =
+      await requirePermission("tasks:write");
     const { taskId, ...fields } = parsed.data;
 
     const [existing] = await db
@@ -206,12 +238,18 @@ export async function updateTask(
     const ownerId = fields.ownerId ?? existing.ownerId;
     const links = {
       candidateId:
-        fields.candidateId === undefined ? existing.candidateId : fields.candidateId,
+        fields.candidateId === undefined
+          ? existing.candidateId
+          : fields.candidateId,
       applicationId:
-        fields.applicationId === undefined ? existing.applicationId : fields.applicationId,
+        fields.applicationId === undefined
+          ? existing.applicationId
+          : fields.applicationId,
       jobId: fields.jobId === undefined ? existing.jobId : fields.jobId,
       interviewId:
-        fields.interviewId === undefined ? existing.interviewId : fields.interviewId,
+        fields.interviewId === undefined
+          ? existing.interviewId
+          : fields.interviewId,
     };
 
     await assertTaskReferences({
@@ -227,7 +265,8 @@ export async function updateTask(
     if (fields.dueDate !== undefined) set.dueDate = fields.dueDate;
     if (fields.ownerId !== undefined) set.ownerId = fields.ownerId;
     if (fields.candidateId !== undefined) set.candidateId = fields.candidateId;
-    if (fields.applicationId !== undefined) set.applicationId = fields.applicationId;
+    if (fields.applicationId !== undefined)
+      set.applicationId = fields.applicationId;
     if (fields.jobId !== undefined) set.jobId = fields.jobId;
     if (fields.interviewId !== undefined) set.interviewId = fields.interviewId;
 
@@ -244,6 +283,7 @@ export async function updateTask(
       return { success: true };
     }
 
+    let domainEvent: PersistedDomainEvent | undefined;
     const updated = await db.transaction(async (tx) => {
       const [task] = await tx
         .update(tasks)
@@ -283,8 +323,19 @@ export async function updateTask(
         });
       }
 
+      domainEvent = await persistDomainEvent(tx, {
+        name: "task.updated",
+        workspaceId: workspace.id,
+        actorId: user.id,
+        aggregateType: "task",
+        aggregateId: task.id,
+        payload: { task: { id: task.id, status: fields.status ?? null } },
+      });
+
       return task;
     });
+
+    if (domainEvent) await publishPersistedDomainEvents([domainEvent]);
 
     await logAuditEvent({
       workspaceId: workspace.id,
@@ -298,12 +349,18 @@ export async function updateTask(
 
     revalidatePath("/dashboard/tasks");
     revalidatePath("/dashboard");
+    void emitRealtimeInvalidation({
+      eventName: REALTIME_EVENTS.DASHBOARD_INVALIDATE,
+      workspaceId: workspace.id,
+      payload: { area: "tasks", taskId: updated.id },
+    }).catch(() => undefined);
     return { success: true };
   } catch (error) {
     log.error(error, "updateTask failed");
     return {
       success: false,
-      error: error instanceof ApiError ? error.message : "Unable to update task.",
+      error:
+        error instanceof ApiError ? error.message : "Unable to update task.",
     };
   }
 }
@@ -321,8 +378,10 @@ export async function completeMyOpenTasks(): Promise<{
   updatedCount?: number;
 }> {
   try {
-    const { organization: workspace, user } = await requirePermission("tasks:write");
+    const { organization: workspace, user } =
+      await requirePermission("tasks:write");
 
+    const domainEvents: PersistedDomainEvent[] = [];
     const updated = await db.transaction(async (tx) => {
       const rows = await tx
         .update(tasks)
@@ -346,9 +405,21 @@ export async function completeMyOpenTasks(): Promise<{
           type: "task.completed",
           metadata: { taskId: row.id },
         });
+        domainEvents.push(
+          await persistDomainEvent(tx, {
+            name: "task.updated",
+            workspaceId: workspace.id,
+            actorId: user.id,
+            aggregateType: "task",
+            aggregateId: row.id,
+            payload: { task: { id: row.id, status: "completed" } },
+          }),
+        );
       }
       return rows;
     });
+
+    await publishPersistedDomainEvents(domainEvents);
 
     if (updated.length > 0) {
       await logAuditEvent({
@@ -363,6 +434,13 @@ export async function completeMyOpenTasks(): Promise<{
 
     revalidatePath("/dashboard/tasks");
     revalidatePath("/dashboard");
+    if (updated.length > 0) {
+      void emitRealtimeInvalidation({
+        eventName: REALTIME_EVENTS.DASHBOARD_INVALIDATE,
+        workspaceId: workspace.id,
+        payload: { area: "tasks", count: updated.length },
+      }).catch(() => undefined);
+    }
     return { success: true, updatedCount: updated.length };
   } catch (error) {
     log.error(error, "completeMyOpenTasks failed");
@@ -375,8 +453,10 @@ export async function deleteTask(
   expectedUpdatedAt?: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { organization: workspace, user } = await requirePermission("tasks:write");
+    const { organization: workspace, user } =
+      await requirePermission("tasks:write");
 
+    let domainEvent: PersistedDomainEvent | undefined;
     const deleted = await db.transaction(async (tx) => {
       const rows = await tx
         .update(tasks)
@@ -402,9 +482,19 @@ export async function deleteTask(
           type: "task.deleted",
           metadata: { taskId: rows[0].id },
         });
+        domainEvent = await persistDomainEvent(tx, {
+          name: "task.deleted",
+          workspaceId: workspace.id,
+          actorId: user.id,
+          aggregateType: "task",
+          aggregateId: rows[0].id,
+          payload: { task: { id: rows[0].id } },
+        });
       }
       return rows;
     });
+
+    if (domainEvent) await publishPersistedDomainEvents([domainEvent]);
 
     if (deleted.length === 0) {
       return {
@@ -427,6 +517,11 @@ export async function deleteTask(
 
     revalidatePath("/dashboard/tasks");
     revalidatePath("/dashboard");
+    void emitRealtimeInvalidation({
+      eventName: REALTIME_EVENTS.DASHBOARD_INVALIDATE,
+      workspaceId: workspace.id,
+      payload: { area: "tasks", taskId: deleted[0].id },
+    }).catch(() => undefined);
     return { success: true };
   } catch (error) {
     log.error(error, "deleteTask failed");

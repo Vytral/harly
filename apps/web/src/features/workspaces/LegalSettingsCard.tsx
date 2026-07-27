@@ -17,6 +17,7 @@ import {
   getTemplate,
   type Jurisdiction,
 } from "@/features/workspaces/legal-templates";
+import { renderMarkdown, toHtml } from "@/features/legal/render-markdown";
 import {
   SpinnerIcon,
   SealCheckDuotoneIcon,
@@ -26,6 +27,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/ui/RichTextEditor";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -59,7 +61,13 @@ function loadDraft(): Record<string, string> | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Record<string, string>;
+    const normalized: Record<string, string> = {};
+    for (const [key, value] of Object.entries(parsed)) {
+      normalized[key] = typeof value === "string" ? toHtml(value) : "";
+    }
+    return normalized;
   } catch {
     return null;
   }
@@ -84,102 +92,9 @@ function clearDraft() {
 function pagesToDraft(pages: LegalPages): Record<string, string> {
   const draft: Record<string, string> = {};
   for (const [key, value] of Object.entries(pages)) {
-    draft[key] = typeof value === "string" ? value : "";
+    draft[key] = typeof value === "string" ? toHtml(value) : "";
   }
   return draft;
-}
-
-function MarkdownToolbar({
-  onInsert,
-}: {
-  onInsert: (before: string, after?: string) => void;
-}) {
-  return (
-    <div className="flex flex-wrap items-center gap-1 border-b border-input bg-muted/50 px-3 py-1.5">
-      <ToolBtn onClick={() => onInsert("**", "**")} title="Bold">
-        <b>B</b>
-      </ToolBtn>
-      <ToolBtn onClick={() => onInsert("*", "*")} title="Italic">
-        <i>I</i>
-      </ToolBtn>
-      <ToolBtn onClick={() => onInsert("~~", "~~")} title="Strikethrough">
-        <span className="line-through">S</span>
-      </ToolBtn>
-      <Sep />
-      <ToolBtn onClick={() => onInsert("## ")} title="Heading">
-        H2
-      </ToolBtn>
-      <ToolBtn onClick={() => onInsert("### ")} title="Subheading">
-        H3
-      </ToolBtn>
-      <Sep />
-      <ToolBtn onClick={() => onInsert("- ")} title="Bullet list">
-        • List
-      </ToolBtn>
-      <ToolBtn onClick={() => onInsert("1. ")} title="Numbered list">
-        1. List
-      </ToolBtn>
-      <ToolBtn onClick={() => onInsert("> ")} title="Quote">
-        &quot;&quot;
-      </ToolBtn>
-      <Sep />
-      <ToolBtn onClick={() => onInsert("[", "](url)")} title="Link">
-        🔗
-      </ToolBtn>
-      <ToolBtn onClick={() => onInsert("\n| Column 1 | Column 2 |\n|----------|----------|\n| Cell 1   | Cell 2   |\n")} title="Table">
-        ⊞
-      </ToolBtn>
-    </div>
-  );
-}
-
-function ToolBtn({
-  children,
-  onClick,
-  title,
-}: {
-  children: React.ReactNode;
-  onClick: () => void;
-  title: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      title={title}
-      className="flex h-7 items-center rounded px-2 text-xs text-muted-foreground transition hover:bg-accent hover:text-foreground"
-    >
-      {children}
-    </button>
-  );
-}
-
-function Sep() {
-  return <div className="mx-0.5 h-4 w-px bg-border" />;
-}
-
-function MarkdownPreview({ content }: { content: string }) {
-  // Simple markdown → HTML (headings, bold, italic, lists, links, tables, blockquotes)
-  const html = content
-    .replace(/^### (.+)$/gm, '<h3 class="text-sm font-semibold mt-4 mb-2">$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2 class="text-base font-semibold mt-6 mb-2">$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1 class="text-lg font-bold mt-6 mb-3">$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    .replace(/~~(.+?)~~/g, '<del>$1</del>')
-    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-pine underline">$1</a>')
-    .replace(/^> (.+)$/gm, '<blockquote class="border-l-2 border-pine/30 pl-3 text-muted-foreground italic my-2">$1</blockquote>')
-    .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
-    .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 list-decimal">$2</li>')
-    .replace(/\n\n+/g, '</p><p class="mb-3">')
-    .replace(/\n/g, '<br/>');
-
-  return (
-    <div
-      className="prose prose-sm max-w-none rounded-md border border-input bg-card p-4 text-sm leading-relaxed"
-      dangerouslySetInnerHTML={{ __html: `<p class="mb-3">${html}</p>` }}
-    />
-  );
 }
 
 export function LegalSettings({
@@ -200,6 +115,7 @@ export function LegalSettings({
   const [retentionApplicants, setRetentionApplicants] = useState(settings.dataRetentionApplicantsMonths);
   const [retentionTalentPool, setRetentionTalentPool] = useState(settings.dataRetentionTalentPoolMonths);
   const [retentionEnabled, setRetentionEnabled] = useState(settings.dataRetentionEnabled);
+  const [auditRetentionMonths, setAuditRetentionMonths] = useState(settings.auditLogRetentionMonths);
   const [consentText, setConsentText] = useState(settings.consentCheckboxText ?? "");
 
   // Legal pages , initialize from saved or draft
@@ -210,7 +126,9 @@ export function LegalSettings({
   });
 
   const [activeTab, setActiveTab] = useState<LegalPageKey>("privacyPolicy");
-  const [previewMode, setPreviewMode] = useState(false);
+  // Bumped whenever `pages` is replaced wholesale (template applied, draft discarded)
+  // so the uncontrolled RichTextEditor remounts and picks up the new content.
+  const [pagesVersion, setPagesVersion] = useState(0);
 
   // Check for draft on mount
   const [hasDraft, setHasDraft] = useState(() => {
@@ -233,28 +151,6 @@ export function LegalSettings({
     setHasDraft(true);
   }, [setHasDraft]);
 
-  const handleInsert = useCallback(
-    (before: string, after?: string) => {
-      const textarea = document.getElementById(`editor-${activeTab}`) as HTMLTextAreaElement | null;
-      if (!textarea) return;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const selected = pages[activeTab]?.slice(start, end) ?? "";
-      const replacement = before + selected + (after ?? "");
-      const newValue =
-        (pages[activeTab]?.slice(0, start) ?? "") +
-        replacement +
-        (pages[activeTab]?.slice(end) ?? "");
-      updatePage(activeTab, newValue);
-      // Restore cursor position
-      setTimeout(() => {
-        textarea.focus();
-        textarea.setSelectionRange(start + before.length, start + before.length + selected.length);
-      }, 0);
-    },
-    [activeTab, pages, updatePage],
-  );
-
   function applyTemplate() {
     if (!jurisdiction) {
       toast.error("Select a jurisdiction first.");
@@ -273,10 +169,11 @@ export function LegalSettings({
         .replaceAll("{{RETENTION_TALENT_POOL}}", String(retentionTalentPool));
       // Handle conditional DPO blocks
       text = text.replace(/\{\{#DPO\}\}([\s\S]*?)\{\{\/DPO\}\}/g, dpoEmail ? "$1" : "");
-      filled[key] = text.trim();
+      filled[key] = renderMarkdown(text.trim());
     }
     setPages(filled);
     setHasDraft(true);
+    setPagesVersion((v) => v + 1);
     saveDraft(filled);
     toast.success(`${JURISDICTION_LABELS[jurisdiction]} template applied. Review and customize.`);
   }
@@ -293,6 +190,7 @@ export function LegalSettings({
         dataRetentionApplicantsMonths: retentionApplicants,
         dataRetentionTalentPoolMonths: retentionTalentPool,
         dataRetentionEnabled: retentionEnabled,
+        auditLogRetentionMonths: auditRetentionMonths,
         consentCheckboxText: consentText || undefined,
         legalPages: pages as LegalPages,
       });
@@ -309,6 +207,7 @@ export function LegalSettings({
 
   function discardDraft() {
     setPages(pagesToDraft(settings.legalPages));
+    setPagesVersion((v) => v + 1);
     clearDraft();
     setHasDraft(false);
     toast.success("Draft discarded");
@@ -500,6 +399,22 @@ export function LegalSettings({
             </p>
           </Field>
         </div>
+        <div className="mt-4 max-w-sm">
+          <Field>
+            <Label htmlFor="retention-audit">Audit log retention (months)</Label>
+            <Input
+              id="retention-audit"
+              type="number"
+              min={12}
+              max={120}
+              value={auditRetentionMonths}
+              onChange={(e) => setAuditRetentionMonths(Number(e.target.value) || 24)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Audit evidence is pruned by the protected nightly retention job. Minimum 12 months.
+            </p>
+          </Field>
+        </div>
       </Card>
 
       {/* Consent */}
@@ -530,7 +445,7 @@ export function LegalSettings({
           <div>
             <h2 className="text-sm font-semibold text-foreground">Legal Pages</h2>
             <p className="text-xs text-muted-foreground">
-              Write your legal content in Markdown. Pages are published at{" "}
+              Write your legal content. Pages are published at{" "}
               <code className="text-xs">/legal/privacy-policy</code>,{" "}
               <code className="text-xs">/legal/terms-of-service</code>, etc.
             </p>
@@ -554,7 +469,7 @@ export function LegalSettings({
           </div>
         </div>
 
-        <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v as LegalPageKey); setPreviewMode(false); }}>
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as LegalPageKey)}>
           <div className="border-b px-6 pt-3">
             <TabsList className="h-auto gap-0 bg-transparent p-0">
               {PAGE_KEYS.map((key) => (
@@ -577,35 +492,21 @@ export function LegalSettings({
 
           {PAGE_KEYS.map((key) => (
             <TabsContent key={key} value={key} className="m-0 p-0">
-              <div className="flex items-center justify-between border-b px-6 py-2">
+              <div className="border-b px-6 py-2">
                 <p className="text-xs text-muted-foreground">
                   /legal/{key.replace(/([A-Z])/g, "-$1").toLowerCase().replace(/^-/, "")}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setPreviewMode(!previewMode)}
-                  className="text-xs font-medium text-pine transition hover:text-pine/80"
-                >
-                  {previewMode ? "Edit" : "Preview"}
-                </button>
               </div>
 
-              {previewMode ? (
-                <div className="p-6">
-                  <MarkdownPreview content={pages[key] ?? ""} />
-                </div>
-              ) : (
-                <div className="border-input">
-                  <MarkdownToolbar onInsert={handleInsert} />
-                  <textarea
-                    id={`editor-${key}`}
-                    value={pages[key] ?? ""}
-                    onChange={(e) => updatePage(key, e.target.value)}
-                    placeholder={`Write your ${LEGAL_PAGE_LABELS[key].toLowerCase()} here...`}
-                    className="min-h-[400px] w-full resize-y border-0 bg-transparent p-4 font-mono text-sm leading-relaxed text-foreground placeholder:text-muted-foreground focus:outline-none"
-                  />
-                </div>
-              )}
+              <div className="p-6">
+                <RichTextEditor
+                  key={pagesVersion}
+                  defaultValue={pages[key] ?? ""}
+                  placeholder={`Write your ${LEGAL_PAGE_LABELS[key].toLowerCase()} here...`}
+                  minHeight="24rem"
+                  onChange={(html) => updatePage(key, html)}
+                />
+              </div>
             </TabsContent>
           ))}
         </Tabs>

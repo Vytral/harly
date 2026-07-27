@@ -102,18 +102,17 @@ export function CompanyBrandingSection({
   useActionToast(brandingState, "Brand settings saved.");
 
   const identityFormRef = useRef<HTMLFormElement>(null);
-  const isFirstLogoRender = useRef(true);
+  const shouldAutoSaveLogo = useRef(false);
 
   const [name, setName] = useState(workspace.name);
   const [logoUrl, setLogoUrl] = useState(workspace.logoUrl ?? "");
 
-  // Auto-save the identity form the moment the logo changes, so the user
-  // doesn't have to separately hit "Save identity" after uploading one.
+  // Auto-save only after an actual uploader interaction. Tracking the intent
+  // separately from logoUrl avoids submitting on the initial render (and on
+  // React StrictMode's development-only effect replay).
   useEffect(() => {
-    if (isFirstLogoRender.current) {
-      isFirstLogoRender.current = false;
-      return;
-    }
+    if (!shouldAutoSaveLogo.current) return;
+    shouldAutoSaveLogo.current = false;
     identityFormRef.current?.requestSubmit();
   }, [logoUrl]);
   const [tagline, setTagline] = useState(workspace.tagline ?? "");
@@ -167,7 +166,10 @@ export function CompanyBrandingSection({
           <div className="flex items-center gap-5">
             <FileDropzone
               value={logoUrl || null}
-              onChange={(url) => setLogoUrl(url ?? "")}
+              onChange={(url) => {
+                shouldAutoSaveLogo.current = true;
+                setLogoUrl(url ?? "");
+              }}
               variant="avatar"
               disabled={!canEdit || savingProfile}
               hint="Square logo · PNG, JPG, SVG or WEBP"

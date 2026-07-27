@@ -739,7 +739,12 @@ describe("F1-12d reschedule honours the recruiter timezone", () => {
     expect(mocks.emitWebhookEvent).toHaveBeenCalledWith(
       "ws-1",
       "interview.rescheduled",
-      expect.objectContaining({ scheduledAt: "2099-08-01T14:00:00.000Z" }),
+      expect.objectContaining({
+        interview: expect.objectContaining({
+          scheduledAt: "2099-08-01T14:00:00.000Z",
+        }),
+      }),
+      { actorId: "user-1", skipDomainEvent: true },
     );
   });
 });

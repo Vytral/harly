@@ -1,14 +1,35 @@
-import Link from "next/link";
+"use client";
 
-import { CaretRightIcon, CheckCircleIcon, UserCircleIcon } from "@/components/ui/icons/phosphor";
+import Link from "next/link";
+import { useEffect, useState } from "react";
+
+import {
+  CaretRightIcon,
+  CheckCircleIcon,
+  UserCircleIcon,
+  XIcon,
+} from "@/components/ui/icons/phosphor";
 import type { PortalProfileCompletion } from "./profile-completion";
+
+const DISMISS_KEY = "portal:profile-complete-dismissed";
 
 export function PortalProfileCompletionCard({
   completion,
 }: {
   completion: PortalProfileCompletion;
 }) {
+  const [dismissed, setDismissed] = useState(true);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDismissed(window.localStorage.getItem(DISMISS_KEY) === "1");
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   if (completion.percentage === 100) {
+    if (dismissed) return null;
+
     return (
       <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-4 py-3 dark:border-emerald-900 dark:bg-emerald-950/20">
         <CheckCircleIcon className="size-5 shrink-0 text-emerald-600 dark:text-emerald-400" />
@@ -21,6 +42,17 @@ export function PortalProfileCompletionCard({
         >
           Review
         </Link>
+        <button
+          type="button"
+          aria-label="Dismiss"
+          onClick={() => {
+            window.localStorage.setItem(DISMISS_KEY, "1");
+            setDismissed(true);
+          }}
+          className="shrink-0 rounded-md p-1 text-emerald-700 hover:bg-emerald-100 dark:text-emerald-400 dark:hover:bg-emerald-900/40"
+        >
+          <XIcon className="size-4" />
+        </button>
       </div>
     );
   }
@@ -41,9 +73,17 @@ export function PortalProfileCompletionCard({
             </span>
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            Add more information to present your experience more clearly in future applications.
+            Add more information to present your experience more clearly in
+            future applications.
           </p>
-          <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted" aria-label={`Profile ${completion.percentage}% complete`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={completion.percentage}>
+          <div
+            className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted"
+            aria-label={`Profile ${completion.percentage}% complete`}
+            role="progressbar"
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-valuenow={completion.percentage}
+          >
             <div
               className="h-full rounded-full bg-pine transition-[width] duration-300"
               style={{ width: `${completion.percentage}%` }}

@@ -95,7 +95,10 @@ export const GET = () => {
           }
         : {}),
       ...(contract.auth?.scopes?.length
-        ? { security: [{ bearerAuth: contract.auth.scopes }] }
+        ? {
+            security: [{ bearerAuth: [] }],
+            "x-harly-required-scopes": contract.auth.scopes,
+          }
         : {}),
     };
   }
@@ -113,6 +116,7 @@ export const GET = () => {
         bearerAuth: {
           type: "http",
           scheme: "bearer",
+          bearerFormat: "Harly API key",
         },
       },
       schemas: {},
@@ -123,7 +127,7 @@ export const GET = () => {
           ),
         ),
       },
-      apiScopes: API_SCOPES,
+      "x-harly-api-scopes": API_SCOPES,
     },
   };
 

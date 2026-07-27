@@ -5,7 +5,9 @@ import {
   PERMISSIONS,
   SETTINGS_SECTION_PERMISSION,
   exceedsPrivilege,
+  normalizeRoleScope,
   roleLabel,
+  scopeExceedsPrivilege,
 } from "@/features/workspaces/permissions";
 import { normalizeWorkspaceRole } from "@/features/workspaces/roles";
 
@@ -91,6 +93,47 @@ describe("exceedsPrivilege", () => {
 });
 
 describe("workspace roles", () => {
+  it("normalizes contextual role scope and removes duplicate/blank filters", () => {
+    expect(
+      normalizeRoleScope({
+        jobAccess: "assigned",
+        departments: ["Engineering", "Engineering", " "],
+        regions: ["LATAM"],
+      }),
+    ).toEqual({
+      jobAccess: "assigned",
+      departments: ["Engineering"],
+      regions: ["LATAM"],
+    });
+  });
+
+  it("normalizes missing stored scope to the documented unrestricted default", () => {
+    expect(normalizeRoleScope(null)).toEqual({
+      jobAccess: "all",
+      departments: [],
+      regions: [],
+    });
+  });
+
+  it("prevents a scoped actor from granting all jobs or broader filters", () => {
+    const actor = {
+      jobAccess: "assigned" as const,
+      departments: ["Engineering"],
+      regions: ["LATAM"],
+    };
+    expect(scopeExceedsPrivilege(actor, { ...actor })).toBe(false);
+    expect(scopeExceedsPrivilege(actor, { ...actor, jobAccess: "all" })).toBe(true);
+    expect(
+      scopeExceedsPrivilege(actor, {
+        ...actor,
+        departments: ["Engineering", "Sales"],
+      }),
+    ).toBe(true);
+    expect(
+      scopeExceedsPrivilege(actor, { ...actor, regions: [] }),
+    ).toBe(true);
+  });
+
   it("normalizes unknown role keys only for built-in fallback surfaces", () => {
     expect(normalizeWorkspaceRole("owner")).toBe("owner");
     expect(normalizeWorkspaceRole("custom-sourcer")).toBe("recruiter");

@@ -10,13 +10,15 @@ import { db } from "@harly/db";
 import { customRoles, member as authMembers } from "@harly/db";
 
 import {
-  grantPermissionsPrivilegeError,
+  grantRolePolicyPrivilegeError,
   requirePermission,
 } from "@/features/workspaces/permissions-server";
 import {
   PERMISSIONS,
   isBuiltinRole,
+  normalizeRoleScope,
   roleLabel,
+  type RoleScope,
 } from "@/features/workspaces/permissions";
 import { createLogger } from "@/lib/logger";
 import { slugify } from "@/lib/utils";
@@ -26,15 +28,22 @@ const log = createLogger("workspace-roles");
 export type RoleActionResult = { ok: boolean; error?: string };
 
 const permissionEnum = z.enum(PERMISSIONS);
+const roleScopeSchema = z.object({
+  jobAccess: z.enum(["all", "assigned"]).default("all"),
+  departments: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
+  regions: z.array(z.string().trim().min(1).max(120)).max(100).default([]),
+});
 
 const roleSchema = z.object({
   name: z.string().trim().min(2, "Name is too short.").max(40),
   permissions: z.array(permissionEnum).max(PERMISSIONS.length),
+  scope: roleScopeSchema.optional(),
 });
 
 export async function createCustomRole(input: {
   name: string;
   permissions: string[];
+  scope?: RoleScope;
 }): Promise<RoleActionResult> {
   const context = await requirePermission("roles:manage");
 
@@ -43,9 +52,10 @@ export async function createCustomRole(input: {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid role." };
   }
 
-  const privilegeError = await grantPermissionsPrivilegeError(
+  const privilegeError = await grantRolePolicyPrivilegeError(
     context,
     parsed.data.permissions,
+    normalizeRoleScope(parsed.data.scope),
   );
   if (privilegeError) {
     return { ok: false, error: privilegeError };
@@ -65,6 +75,7 @@ export async function createCustomRole(input: {
       key,
       name: parsed.data.name,
       permissions: parsed.data.permissions,
+      scope: normalizeRoleScope(parsed.data.scope),
     });
   } catch (error) {
     log.error(error, "createCustomRole failed");
@@ -77,7 +88,11 @@ export async function createCustomRole(input: {
     actorEmail: context.user.email,
     action: "role.created",
     severity: "warning",
-    metadata: { key, name: parsed.data.name },
+    metadata: {
+      key,
+      name: parsed.data.name,
+      scope: normalizeRoleScope(parsed.data.scope),
+    },
   });
 
   revalidatePath("/settings/members");
@@ -88,6 +103,7 @@ export async function updateCustomRole(input: {
   key: string;
   name: string;
   permissions: string[];
+  scope?: RoleScope;
 }): Promise<RoleActionResult> {
   const context = await requirePermission("roles:manage");
 
@@ -100,9 +116,10 @@ export async function updateCustomRole(input: {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid role." };
   }
 
-  const privilegeError = await grantPermissionsPrivilegeError(
+  const privilegeError = await grantRolePolicyPrivilegeError(
     context,
     parsed.data.permissions,
+    normalizeRoleScope(parsed.data.scope),
   );
   if (privilegeError) {
     return { ok: false, error: privilegeError };
@@ -121,10 +138,20 @@ export async function updateCustomRole(input: {
       key: input.key,
       name,
       permissions: parsed.data.permissions,
+      ...(parsed.data.scope
+        ? { scope: normalizeRoleScope(parsed.data.scope) }
+        : {}),
     })
     .onConflictDoUpdate({
       target: [customRoles.workspaceId, customRoles.key],
-      set: { name, permissions: parsed.data.permissions, updatedAt: new Date() },
+      set: {
+        name,
+        permissions: parsed.data.permissions,
+        ...(parsed.data.scope
+          ? { scope: normalizeRoleScope(parsed.data.scope) }
+          : {}),
+        updatedAt: new Date(),
+      },
     });
 
   await logAuditEvent({
@@ -133,7 +160,12 @@ export async function updateCustomRole(input: {
     actorEmail: context.user.email,
     action: "role.updated",
     severity: "warning",
-    metadata: { key: input.key, name, permissions: parsed.data.permissions },
+    metadata: {
+      key: input.key,
+      name,
+      permissions: parsed.data.permissions,
+      scope: normalizeRoleScope(parsed.data.scope),
+    },
   });
 
   revalidatePath("/settings/members");

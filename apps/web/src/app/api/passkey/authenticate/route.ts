@@ -4,10 +4,11 @@ import {
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
 import { eq, and } from "drizzle-orm";
-import { db, passkeys } from "@harly/db";
+import { db, member, passkeys } from "@harly/db";
 import { auth } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { RP_ID, ORIGIN, storeChallenge, consumeChallenge } from "@/lib/passkey";
+import { issueReauthToken } from "@/server/security/reauth";
 
 const log = createLogger("api-passkey-authenticate");
 
@@ -112,5 +113,11 @@ export async function POST(req: NextRequest) {
     })
     .where(eq(passkeys.id, storedPasskey.id));
 
-  return NextResponse.json({ verified: true });
+  const activeOrganizationId = session.session.activeOrganizationId;
+  const [membership] = await db.select({ organizationId: member.organizationId }).from(member).where(and(eq(member.userId, session.user.id), activeOrganizationId ? eq(member.organizationId, activeOrganizationId) : undefined)).limit(1);
+  if (!membership) return NextResponse.json({ verified: true });
+  const reauth = await issueReauthToken({ userId: session.user.id, workspaceId: membership.organizationId, purpose: "sensitive_action", minutes: 15 });
+  const response = NextResponse.json({ verified: true, expiresAt: reauth.expiresAt.toISOString() });
+  response.cookies.set(reauth.cookieName, reauth.raw, { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", expires: reauth.expiresAt });
+  return response;
 }

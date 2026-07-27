@@ -1,4 +1,3 @@
-import { expect } from "vitest";
 import { RouteDefinition } from "./types";
 
 /**
@@ -11,7 +10,9 @@ export async function validateRouteResponse(
   expectedStatus?: number,
 ) {
   const status = expectedStatus ?? response.status;
-  expect(response.status).toBe(status);
+  if (response.status !== status) {
+    throw new Error(`Expected HTTP ${status}, received ${response.status}`);
+  }
 
   const responseDef = route.responses[status];
   if (!responseDef) {
@@ -30,6 +31,10 @@ export async function validateRouteResponse(
       result.error.format(),
     );
   }
-  expect(result.success).toBe(true);
+  if (!result.success) {
+    throw new Error(
+      `Response for ${route.method} ${route.path} does not satisfy its contract`,
+    );
+  }
   return json;
 }

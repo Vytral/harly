@@ -21,6 +21,11 @@ import {
   requirePermission,
 } from "@/features/workspaces/permissions-server";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+  type PersistedDomainEvent,
+} from "@/server/events/emit";
 import { normalizeStageEmailConfig } from "@/features/pipeline/data";
 import {
   statusForStageName,
@@ -200,9 +205,11 @@ export async function moveApplicationInPipeline(
 
     // Captured inside the transaction, emitted after commit (see data.ts note).
     const stageEvents: StageTransitionEvent[] = [];
+    const domainEvents: PersistedDomainEvent[] = [];
 
     const emails = await withConcurrencyRetry(
       async () => {
+        domainEvents.length = 0;
         return db.transaction<PipelineEmail[]>(async (tx) => {
           const [application] = await tx
             .select({
@@ -353,6 +360,46 @@ export async function moveApplicationInPipeline(
               becameRejected:
                 application.status !== "rejected" && nextStatus === "rejected",
             });
+
+            domainEvents.push(
+              await persistDomainEvent(tx, {
+                name: "application.stage_changed",
+                workspaceId: input.workspaceId,
+                actorId: user.id,
+                aggregateType: "application",
+                aggregateId: input.applicationId,
+                payload: {
+                  application: { id: input.applicationId },
+                  fromStageId: application.currentStageId,
+                  toStageId: input.toStageId,
+                  status: nextStatus,
+                },
+              }),
+            );
+            if (application.status !== "hired" && nextStatus === "hired") {
+              domainEvents.push(
+                await persistDomainEvent(tx, {
+                  name: "application.hired",
+                  workspaceId: input.workspaceId,
+                  actorId: user.id,
+                  aggregateType: "application",
+                  aggregateId: input.applicationId,
+                  payload: { application: { id: input.applicationId } },
+                }),
+              );
+            }
+            if (application.status !== "rejected" && nextStatus === "rejected") {
+              domainEvents.push(
+                await persistDomainEvent(tx, {
+                  name: "application.rejected",
+                  workspaceId: input.workspaceId,
+                  actorId: user.id,
+                  aggregateType: "application",
+                  aggregateId: input.applicationId,
+                  payload: { application: { id: input.applicationId } },
+                }),
+              );
+            }
           }
 
           if (changedStatus) {
@@ -447,6 +494,7 @@ export async function moveApplicationInPipeline(
 
     revalidatePath("/dashboard/pipeline");
     void sendPipelineEmails(input.workspaceId, emails, user.id);
+    await publishPersistedDomainEvents(domainEvents);
 
     for (const event of stageEvents) {
       await emitWebhookEvent(
@@ -458,7 +506,7 @@ export async function moveApplicationInPipeline(
           toStageId: event.toStageId,
           status: event.status,
         },
-        { actorId: user.id },
+        { actorId: user.id, skipDomainEvent: true },
       );
       if (event.becameHired) {
         await emitWebhookEvent(
@@ -467,7 +515,7 @@ export async function moveApplicationInPipeline(
           {
             application: { id: event.applicationId },
           },
-          { actorId: user.id },
+          { actorId: user.id, skipDomainEvent: true },
         );
       }
       if (event.becameRejected) {
@@ -477,7 +525,7 @@ export async function moveApplicationInPipeline(
           {
             application: { id: event.applicationId },
           },
-          { actorId: user.id },
+          { actorId: user.id, skipDomainEvent: true },
         );
       }
     }
@@ -520,9 +568,11 @@ export async function bulkMoveApplications(
       portalSettings?.showApplicationStatus !== false;
 
     const stageEvents: StageTransitionEvent[] = [];
+    const domainEvents: PersistedDomainEvent[] = [];
 
     const emails = await withConcurrencyRetry(
       async () => {
+        domainEvents.length = 0;
         return db.transaction<PipelineEmail[]>(async (tx) => {
           const [targetStage] = await tx
             .select({
@@ -708,6 +758,46 @@ export async function bulkMoveApplications(
                 becameRejected,
               });
 
+              domainEvents.push(
+                await persistDomainEvent(tx, {
+                  name: "application.stage_changed",
+                  workspaceId: input.workspaceId,
+                  actorId: user.id,
+                  aggregateType: "application",
+                  aggregateId: applicationId,
+                  payload: {
+                    application: { id: applicationId },
+                    fromStageId,
+                    toStageId: input.toStageId,
+                    status: resolvedStatus,
+                  },
+                }),
+              );
+              if (becameHired) {
+                domainEvents.push(
+                  await persistDomainEvent(tx, {
+                    name: "application.hired",
+                    workspaceId: input.workspaceId,
+                    actorId: user.id,
+                    aggregateType: "application",
+                    aggregateId: applicationId,
+                    payload: { application: { id: applicationId } },
+                  }),
+                );
+              }
+              if (becameRejected) {
+                domainEvents.push(
+                  await persistDomainEvent(tx, {
+                    name: "application.rejected",
+                    workspaceId: input.workspaceId,
+                    actorId: user.id,
+                    aggregateType: "application",
+                    aggregateId: applicationId,
+                    payload: { application: { id: applicationId } },
+                  }),
+                );
+              }
+
               if (shouldNotifyPortalStatus && (becameRejected || becameHired)) {
                 await tx.insert(candidatePortalNotifications).values({
                   workspaceId: input.workspaceId,
@@ -798,6 +888,7 @@ export async function bulkMoveApplications(
 
     revalidatePath("/dashboard/pipeline");
     void sendPipelineEmails(input.workspaceId, emails, user.id);
+    await publishPersistedDomainEvents(domainEvents);
 
     for (const evt of stageEvents) {
       void emitWebhookEvent(
@@ -809,7 +900,7 @@ export async function bulkMoveApplications(
           toStageId: input.toStageId,
           status: evt.status,
         },
-        { actorId: user.id },
+        { actorId: user.id, skipDomainEvent: true },
       );
       if (evt.becameHired) {
         void emitWebhookEvent(
@@ -818,7 +909,7 @@ export async function bulkMoveApplications(
           {
             application: { id: evt.applicationId },
           },
-          { actorId: user.id },
+          { actorId: user.id, skipDomainEvent: true },
         );
       }
       if (evt.becameRejected) {
@@ -828,7 +919,7 @@ export async function bulkMoveApplications(
           {
             application: { id: evt.applicationId },
           },
-          { actorId: user.id },
+          { actorId: user.id, skipDomainEvent: true },
         );
       }
     }
@@ -884,8 +975,12 @@ export async function updateApplicationStatus(
 
     const stageEvents: StageTransitionEvent[] = [];
     const statusEvents: string[] = [];
+    const domainEvents: PersistedDomainEvent[] = [];
     const emails = await withConcurrencyRetry(
       async () => {
+        stageEvents.length = 0;
+        statusEvents.length = 0;
+        domainEvents.length = 0;
         return db.transaction<PipelineEmail[]>(async (tx) => {
           const now = new Date();
           const collectedEmails: PipelineEmail[] = [];
@@ -1058,10 +1153,40 @@ export async function updateApplicationStatus(
                   application.status !== "rejected" &&
                   input.status === "rejected",
               });
+              domainEvents.push(
+                await persistDomainEvent(tx, {
+                  name: "application.stage_changed",
+                  workspaceId: input.workspaceId,
+                  actorId: user.id,
+                  aggregateType: "application",
+                  aggregateId: application.id,
+                  payload: {
+                    application: { id: application.id },
+                    fromStageId: application.currentStageId,
+                    toStageId: targetStageId,
+                    status: input.status,
+                  },
+                }),
+              );
             }
 
             if (statusChanged) {
               statusEvents.push(application.id);
+              if (input.status === "hired" || input.status === "rejected") {
+                domainEvents.push(
+                  await persistDomainEvent(tx, {
+                    name:
+                      input.status === "hired"
+                        ? "application.hired"
+                        : "application.rejected",
+                    workspaceId: input.workspaceId,
+                    actorId: user.id,
+                    aggregateType: "application",
+                    aggregateId: application.id,
+                    payload: { application: { id: application.id } },
+                  }),
+                );
+              }
               await tx.insert(activityEvents).values({
                 workspaceId: input.workspaceId,
                 actorId: user.id,
@@ -1140,6 +1265,7 @@ export async function updateApplicationStatus(
     );
 
     revalidatePath("/dashboard/pipeline");
+    await publishPersistedDomainEvents(domainEvents);
 
     for (const applicationId of statusEvents) {
       if (input.status === "hired") {
@@ -1149,7 +1275,7 @@ export async function updateApplicationStatus(
           {
             application: { id: applicationId },
           },
-          { actorId: user.id },
+          { actorId: user.id, skipDomainEvent: true },
         );
       } else if (input.status === "rejected") {
         void emitWebhookEvent(
@@ -1158,7 +1284,7 @@ export async function updateApplicationStatus(
           {
             application: { id: applicationId },
           },
-          { actorId: user.id },
+          { actorId: user.id, skipDomainEvent: true },
         );
       }
     }
@@ -1172,7 +1298,7 @@ export async function updateApplicationStatus(
           toStageId: event.toStageId,
           status: event.status,
         },
-        { actorId: user.id },
+        { actorId: user.id, skipDomainEvent: true },
       );
     }
     void sendPipelineEmails(input.workspaceId, emails, user.id);

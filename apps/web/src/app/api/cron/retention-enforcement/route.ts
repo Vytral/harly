@@ -5,6 +5,10 @@ import {
   findDueCandidatesForRetention,
 } from "@/features/candidates/retention";
 import { authorizeCron } from "@/server/cron-auth";
+import { pruneDomainEventOutbox } from "@/server/events/outbox";
+import { db } from "@harly/db";
+import { sql } from "drizzle-orm";
+import { startCronRun } from "@/server/cron-runs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +19,10 @@ const BATCH_SIZE = 25;
 export async function POST(request: NextRequest) {
   const auth = await authorizeCron(request, CRON_KEY);
   if (!auth.ok) return auth.response;
+  const run = startCronRun(CRON_KEY);
   try {
+    const domainEventsPruned = await pruneDomainEventOutbox();
+    const auditLogsPruned = await pruneExpiredAuditLogs();
     const due = await findDueCandidatesForRetention(BATCH_SIZE);
     let anonymized = 0;
     let skipped = 0;
@@ -30,8 +37,34 @@ export async function POST(request: NextRequest) {
       else if (outcome === "failed") failed += 1;
       else skipped += 1;
     }
-    return NextResponse.json({ ok: true, due: due.length, anonymized, skipped, failed });
+    const counters = {
+      due: due.length,
+      anonymized,
+      skipped,
+      failed,
+      domainEventsPruned,
+      auditLogsPruned,
+    };
+    await run.finish("succeeded", counters);
+    return NextResponse.json({ ok: true, ...counters });
+  } catch (error) {
+    await run.finish("failed");
+    throw error;
   } finally {
     await auth.release();
   }
+}
+
+async function pruneExpiredAuditLogs() {
+  // Never delete the most recent 12 months, even if a bad setting reaches the
+  // database. Critical entries are retained for the configured window too;
+  // they are compliance evidence, not operational noise.
+  const result = await db.execute(sql`
+    delete from "audit_logs" a
+    using "workspace_settings" s
+    where a."workspace_id" = s."organization_id"
+      and a."created_at" < now() - (greatest(s."audit_log_retention_months", 12)::text || ' months')::interval
+    returning a."id"
+  `);
+  return result.length;
 }

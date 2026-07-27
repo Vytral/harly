@@ -7,6 +7,8 @@ import type { Route } from "next";
 
 import type { CandidatePortalNotificationItem } from "@/features/portal/notification-data";
 import {
+  deleteAllCandidatePortalNotifications,
+  deleteCandidatePortalNotification,
   markAllCandidatePortalNotificationsRead,
   markCandidatePortalNotificationRead,
   markCandidatePortalNotificationUnread,
@@ -16,6 +18,7 @@ import { cn } from "@/lib/utils";
 import {
   CheckCircleIcon,
   CalendarIcon,
+  TrashIcon,
   XCircleIcon,
 } from "@/components/ui/icons/phosphor";
 import { Button } from "@/components/ui/button";
@@ -67,6 +70,20 @@ export function PortalNotificationsList({
     });
   }
 
+  function deleteOne(notificationId: string) {
+    startTransition(async () => {
+      await deleteCandidatePortalNotification({ notificationId });
+      router.refresh();
+    });
+  }
+
+  function deleteAll() {
+    startTransition(async () => {
+      await deleteAllCandidatePortalNotifications();
+      router.refresh();
+    });
+  }
+
   if (notifications.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border bg-card p-10 text-center">
@@ -81,13 +98,16 @@ export function PortalNotificationsList({
 
   return (
     <div className="space-y-2">
-      {unreadCount > 0 ? (
-        <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {unreadCount > 0 ? (
           <Button variant="ghost" size="sm" onClick={markAllRead} disabled={isPending}>
             Mark all as read
           </Button>
-        </div>
-      ) : null}
+        ) : null}
+        <Button variant="ghost" size="sm" onClick={deleteAll} disabled={isPending}>
+          Clear all
+        </Button>
+      </div>
       {notifications.map((notification) => (
         <div
           key={notification.id}
@@ -118,15 +138,27 @@ export function PortalNotificationsList({
               {formatRelative(new Date(notification.createdAt))}
             </p>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="shrink-0 text-xs text-muted-foreground"
-            onClick={() => markRead(notification.id, notification.read)}
-            disabled={isPending}
-          >
-            {notification.read ? "Mark unread" : "Mark read"}
-          </Button>
+          <div className="flex shrink-0 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground"
+              onClick={() => markRead(notification.id, notification.read)}
+              disabled={isPending}
+            >
+              {notification.read ? "Mark unread" : "Mark read"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Delete notification"
+              className="text-muted-foreground hover:text-destructive"
+              onClick={() => deleteOne(notification.id)}
+              disabled={isPending}
+            >
+              <TrashIcon className="size-4" />
+            </Button>
+          </div>
         </div>
       ))}
     </div>

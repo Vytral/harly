@@ -41,12 +41,17 @@ export type ReserveIdempotencyOptions = {
 // release hook so `withApi` can discard a reservation when validation or the
 // write fails; otherwise the same safe retry would be stuck as "processing".
 const activeReservations = new WeakMap<Request, () => Promise<void>>();
+// A few legacy handlers still call reserveIdempotencyKey themselves while the
+// contract wrapper also reserves automatically. Cache the request-local result
+// so both layers share one DB lease instead of hashing/claiming the body twice.
+const requestReservations = new WeakMap<Request, IdempotencyResult>();
 
 /** Release an unfinished reservation after a route handler fails. */
 export async function releaseIdempotencyReservation(request: Request): Promise<void> {
   const release = activeReservations.get(request);
   if (!release) return;
   activeReservations.delete(request);
+  requestReservations.delete(request);
   await release();
 }
 
@@ -101,12 +106,14 @@ export async function reserveIdempotencyKey(
   context: IdempotencyContext,
   options: ReserveIdempotencyOptions = {},
 ): Promise<IdempotencyResult> {
-  if (request.method !== "POST") {
-    throw ApiError.badRequest("Idempotency-Key is supported only for POST requests.");
+  if (!(["POST", "PUT", "PATCH"] as const).includes(request.method as "POST" | "PUT" | "PATCH")) {
+    throw ApiError.badRequest("Idempotency-Key is supported for POST, PUT, and PATCH requests.");
   }
 
   const key = idempotencyKeyFrom(request);
   if (!key) return { kind: "not_requested" };
+  const cached = requestReservations.get(request);
+  if (cached) return cached;
 
   const path = routePath(request, options.path);
   const hash = await requestHash(request);
@@ -188,7 +195,9 @@ export async function reserveIdempotencyKey(
   });
 
   if (reservation.kind === "replay") {
-    return { kind: "replay", key, response: reservation.response };
+    const result = { kind: "replay" as const, key, response: reservation.response };
+    requestReservations.set(request, result);
+    return result;
   }
 
   const release = async () => {
@@ -203,11 +212,13 @@ export async function reserveIdempotencyKey(
   };
   activeReservations.set(request, release);
 
-  return {
+  let completed = false;
+  const result: IdempotencyResult = {
     kind: "reserved",
     key,
     complete: async (response) => {
-      const [completed] = await db
+      if (completed) return;
+      const [completedRow] = await db
         .update(apiIdempotencyKeys)
         .set({
           status: "completed",
@@ -224,12 +235,15 @@ export async function reserveIdempotencyKey(
         )
         .returning({ id: apiIdempotencyKeys.id });
 
-      if (!completed) {
+      if (!completedRow) {
         throw ApiError.internal("Could not persist the idempotent response.");
       }
+      completed = true;
       activeReservations.delete(request);
     },
   };
+  requestReservations.set(request, result);
+  return result;
 }
 
 /** Delete expired keys. Safe for a scheduled cleanup job; not required per request. */

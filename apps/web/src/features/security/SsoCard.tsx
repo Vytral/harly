@@ -61,9 +61,13 @@ export function SsoCard({
 
   function connect(provider: OAuthProvider) {
     startTransition(async () => {
+      // This is a provider smoke test, not an account-linking action. Keep the
+      // current OAuth configuration unchanged and return to Security after
+      // the provider completes the sign-in flow.
       await authClient.signIn.social({
         provider,
         callbackURL: "/settings/security",
+        errorCallbackURL: "/settings/security",
       });
     });
   }
@@ -143,7 +147,7 @@ export function SsoCard({
                     className="inline-flex items-center gap-1.5 rounded-lg border border-pine/20 bg-sage/30 px-2.5 py-1 text-xs font-medium text-pine transition-colors hover:bg-sage/50 disabled:opacity-50"
                   >
                     <CheckIcon className="size-3" />
-                    Connect account
+                    Test sign-in
                   </button>
                 ) : null}
                 <SsoConfigDrawer

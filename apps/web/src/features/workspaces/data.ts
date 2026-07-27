@@ -76,6 +76,11 @@ export type WorkspaceMemberItem = {
   linkedinUrl?: string | null;
   githubUrl?: string | null;
   websiteUrl?: string | null;
+  department: string | null;
+  region: string | null;
+  team: string | null;
+  managerMemberId: string | null;
+  status: "active" | "inactive" | "suspended";
   isCurrentUser: boolean;
   createdAt: Date;
   senderLocalPart: string | null;
@@ -197,6 +202,11 @@ export async function getWorkspaceSettingsData() {
           githubUrl: authUsers.githubUrl,
           websiteUrl: authUsers.websiteUrl,
           role: authMembers.role,
+          department: authMembers.department,
+          region: authMembers.region,
+          team: authMembers.team,
+          managerMemberId: authMembers.managerMemberId,
+          status: authMembers.status,
           createdAt: authMembers.createdAt,
           senderLocalPart: memberSenderIdentity.localPart,
           senderDisplayName: memberSenderIdentity.displayName,

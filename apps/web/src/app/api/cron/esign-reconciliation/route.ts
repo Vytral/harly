@@ -14,6 +14,7 @@ import { syncDocumentsForEnvelope } from "@/lib/esign/webhook-sync";
 import { decideOfferForApi } from "@/features/offers/service";
 import { createLogger } from "@/lib/logger";
 import { authorizeCron } from "@/server/cron-auth";
+import { startCronRun } from "@/server/cron-runs";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -220,6 +221,7 @@ async function reconcileEnvelope(envelope: typeof signatureEnvelopes.$inferSelec
 export async function POST(request: NextRequest) {
   const auth = await authorizeCron(request, CRON_KEY);
   if (!auth.ok) return auth.response;
+  const run = startCronRun(CRON_KEY);
   try {
     const now = new Date();
     const candidates = await db
@@ -236,12 +238,16 @@ export async function POST(request: NextRequest) {
     for (const envelope of claimed) {
       results.push(await reconcileEnvelope(envelope));
     }
-    return NextResponse.json({
-      ok: true,
+    const counters = {
       claimed: claimed.length,
       succeeded: results.filter((r) => r === "succeeded").length,
       failed: results.filter((r) => r === "failed").length,
-    });
+    };
+    await run.finish(counters.failed > 0 ? "failed" : "succeeded", counters);
+    return NextResponse.json({ ok: true, ...counters });
+  } catch (error) {
+    await run.finish("failed");
+    throw error;
   } finally {
     await auth.release();
   }

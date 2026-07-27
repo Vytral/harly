@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "@harly/auth/cookies";
 
 import { mustSetUp2fa } from "@/lib/two-factor";
+import { detectSuspiciousSession, isEmailDomainAllowed, isIpAllowed } from "@/server/security/policy";
 
 const PORTAL_SESSION_COOKIE = "harly_portal_session";
 
@@ -15,10 +16,17 @@ const PUBLIC_PATHS = [
   "/setup",
   "/api/auth",
   "/api/health",
+  "/api/metrics",
+  // SSE authenticates in the route so unauthenticated EventSource clients get
+  // a 401 response instead of a redirect to an HTML login page.
+  "/api/realtime",
   "/api/setup",
   "/api/webhooks",
   "/api/public",
   "/api/v1",
+  // SCIM authenticates with its workspace-scoped bearer token in the route;
+  // never redirect an IdP to the browser login page.
+  "/api/scim",
   "/api/cron",
   "/embed",
   "/api/applications/resume/presign",
@@ -99,7 +107,7 @@ export async function proxy(request: NextRequest) {
       const { db, workspaceSettings } = await import("@harly/db");
       const { and, eq } = await import("drizzle-orm");
 
-      const { member: authMembers, user: userTable, passkeys } = await import("@harly/db");
+      const { member: authMembers, user: userTable, passkeys, session: authSessions } = await import("@harly/db");
 
       // Resolve org: activeOrganizationId → first membership (same as workspace/context.ts)
       const activeOrgId = (session.session as Record<string, unknown>).activeOrganizationId as string | undefined;
@@ -114,9 +122,15 @@ export async function proxy(request: NextRequest) {
       }
 
       if (orgId) {
-        const [[wsRow], [memberRow], [userRow], [existingPasskey]] = await Promise.all([
+        const [[wsRow], [memberRow], [userRow], [existingPasskey], [sessionMeta]] = await Promise.all([
           db
-            .select({ require2fa: workspaceSettings.require2fa })
+            .select({
+              require2fa: workspaceSettings.require2fa,
+              ipAllowlist: workspaceSettings.securityIpAllowlist,
+              allowedDomains: workspaceSettings.securityAllowedDomains,
+              requirePasskey: workspaceSettings.securityRequirePasskey,
+              riskDetectionEnabled: workspaceSettings.securityRiskDetectionEnabled,
+            })
             .from(workspaceSettings)
             .where(eq(workspaceSettings.organizationId, orgId))
             .limit(1),
@@ -143,7 +157,38 @@ export async function proxy(request: NextRequest) {
             .from(passkeys)
             .where(eq(passkeys.userId, session.user.id))
             .limit(1),
+          db
+            .select({ ipAddress: authSessions.ipAddress, userAgent: authSessions.userAgent })
+            .from(authSessions)
+            .where(eq(authSessions.id, session.session.id))
+            .limit(1),
         ]);
+
+        const forwarded = request.headers.get("x-forwarded-for");
+        const requestIp = forwarded?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip");
+        const ipAllowlist = Array.isArray(wsRow?.ipAllowlist) ? wsRow.ipAllowlist as string[] : [];
+        if (!isIpAllowed(requestIp, ipAllowlist)) {
+          return new NextResponse("Workspace access is restricted by IP policy.", { status: 403 });
+        }
+        const allowedDomains = Array.isArray(wsRow?.allowedDomains) ? wsRow.allowedDomains as string[] : [];
+        if (!isEmailDomainAllowed(session.user.email, allowedDomains)) {
+          return new NextResponse("Your email domain is not allowed for this workspace.", { status: 403 });
+        }
+        if (
+          wsRow?.riskDetectionEnabled &&
+          detectSuspiciousSession({
+            previousIp: sessionMeta?.ipAddress,
+            currentIp: requestIp,
+            previousUserAgent: sessionMeta?.userAgent,
+            currentUserAgent: request.headers.get("user-agent"),
+          })
+        ) {
+          await db.delete(authSessions).where(eq(authSessions.id, session.session.id));
+          return new NextResponse("Suspicious session activity detected. Please sign in again.", {
+            status: 403,
+            headers: { "x-harly-security-event": "reauthentication-required" },
+          });
+        }
 
         // A forced password change takes priority over the 2FA gate: the member
         // must replace the owner-set temporary password before anything else.
@@ -164,6 +209,10 @@ export async function proxy(request: NextRequest) {
             roleKey: memberRow?.role,
           })
         ) {
+          return NextResponse.redirect(new URL("/setup-2fa", request.url));
+        }
+
+        if (wsRow?.requirePasskey && !existingPasskey) {
           return NextResponse.redirect(new URL("/setup-2fa", request.url));
         }
       }

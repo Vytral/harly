@@ -26,7 +26,7 @@ import { InterviewCard } from "./candidate-profile/InterviewCard";
 import { PrivacyRequestCard } from "./candidate-profile/PrivacyRequestCard";
 import { ScorecardList } from "./candidate-profile/ScorecardList";
 import { CandidateSignaturePanel } from "./candidate-profile/SignaturePanel";
-import { EmptySection, SectionHeading, TabCount } from "./candidate-profile/shared";
+import { EmptySection, TabCount } from "./candidate-profile/shared";
 import type {
   CandidateMessage,
   CandidateProfileTabsProps,
@@ -85,7 +85,7 @@ export function CandidateProfileTabs({
   privacyRequests = [],
   canFulfilErasure = false,
 }: CandidateProfileTabsProps) {
-  const [tab, setTab] = useState("overview");
+  const [tab, setTab] = useState("profile");
   const [signatureOpen, setSignatureOpen] = useState(false);
   const conversations = groupIntoConversations(messages);
   const jobOptions = applications.map((application) => ({
@@ -96,48 +96,59 @@ export function CandidateProfileTabs({
   return (
     <Tabs value={tab} onValueChange={setTab}>
       {/*
-        Three sections, hard cap (DESIGN.md , Candidate Focus).
-
-        This was eight equal tabs: Profile, Interviews, Communication,
-        Evaluation, Offers, Activity, Documents, Privacy. Eight equal tabs is a
-        confession that the model was never decided , everything is equally
-        important, so nothing is. A recruiter does not work by tab, they work by
-        intention: is this person any good (Overview), what is happening with
-        them (Process), and what is on file (Files).
-
-        Radix renders every TabsContent whose value matches, so each former
-        panel lives on as a labelled section inside its new home.
+        Flat, exclusive tabs, one module per tab (DESIGN.md , Candidate Focus:
+        complex-workspace exception). Each tab is its own independent
+        functional module, not a rung in a decision hierarchy, so grouping
+        them under 3 umbrella tabs just stacked unrelated TabsContent blocks
+        on top of each other and produced a single endless-scroll page. Flat
+        tabs keep each module reachable in one click and scoped to its own
+        content.
       */}
       <TabsList
         variant="line"
-        className="w-full justify-start gap-5 border-b border-hairline text-sm [&>button]:flex-none [&>button]:px-0.5"
+        className="w-full justify-start gap-5 overflow-x-auto border-b border-hairline text-sm [&>button]:flex-none [&>button]:px-0.5"
       >
-        <TabsTrigger value="overview">Overview</TabsTrigger>
-        <TabsTrigger value="process">
-          Process
-          <TabCount
-            value={
-              interviews.length +
-              messages.length +
-              scorecards.length +
-              offers.length
-            }
-          />
+        <TabsTrigger value="profile">Profile</TabsTrigger>
+        <TabsTrigger value="interviews">
+          Interviews
+          <TabCount value={interviews.length} />
         </TabsTrigger>
-        <TabsTrigger value="files">
-          Files
-          <TabCount value={relatedDocuments.length + privacyRequests.length} />
+        <TabsTrigger value="communication">
+          Communication
+          <TabCount value={messages.length} />
         </TabsTrigger>
+        <TabsTrigger value="evaluation">
+          Evaluation
+          <TabCount value={scorecards.length} />
+        </TabsTrigger>
+        <TabsTrigger value="offers">
+          Offers
+          <TabCount value={offers.length} />
+        </TabsTrigger>
+        <TabsTrigger value="activity">
+          Activity
+          <TabCount value={activity.length + notes.length} />
+        </TabsTrigger>
+        <TabsTrigger value="documents">
+          Documents
+          <TabCount value={relatedDocuments.length} />
+        </TabsTrigger>
+        {privacyRequests.length > 0 ? (
+          <TabsTrigger value="privacy">
+            Privacy
+            <TabCount value={privacyRequests.length} />
+          </TabsTrigger>
+        ) : null}
       </TabsList>
 
-      {/* ── Overview , AI match leads, single "Details" panel follows ── */}
-      <TabsContent value="overview" className="mt-5 space-y-4">
+      {/* ── Profile , AI match leads, single "Details" panel follows ── */}
+      <TabsContent value="profile" className="mt-5 space-y-4">
         <AiScoreCard
           applications={jobOptions}
           evaluations={aiEvaluations}
           aiConfigured={aiConfigured}
           variant="condensed"
-          onViewDetailsAction={() => setTab("process")}
+          onViewDetailsAction={() => setTab("evaluation")}
         />
 
         <CandidateDetailsPanel
@@ -157,44 +168,8 @@ export function CandidateProfileTabs({
         />
       </TabsContent>
 
-      {/* ── Overview , activity and notes ── */}
-      <TabsContent value="overview" className="mt-4 space-y-4">
-        <SectionHeading>Activity &amp; notes</SectionHeading>
-
-        {/* Notes always on top so the form is reachable without scrolling */}
-        <div>
-          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-            Notes &amp; comments
-          </p>
-          <NoteForm
-            candidateId={candidateId}
-            workspaceId={workspaceId}
-            initialNotes={notes}
-            members={members}
-          />
-        </div>
-
-        {activity.length > 0 ? (
-          <div>
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Timeline
-            </p>
-            <ActivityTimeline activity={activity} />
-          </div>
-        ) : null}
-
-        {activity.length === 0 && notes.length === 0 ? (
-          <EmptySection
-            icon={MessageSquare}
-            title="Nothing has happened yet"
-            hint="Stage moves, notes, emails and interviews all land here in order, so you can see how this candidate got to where they are."
-          />
-        ) : null}
-      </TabsContent>
-
-      {/* ── Process , interviews ── */}
-      <TabsContent value="process" className="mt-4 space-y-3">
-        <SectionHeading>Interviews</SectionHeading>
+      {/* ── Interviews ── */}
+      <TabsContent value="interviews" className="mt-4 space-y-3">
         <div className="flex justify-end">
           <ScheduleDrawer
             candidateId={candidateId}
@@ -235,9 +210,8 @@ export function CandidateProfileTabs({
         )}
       </TabsContent>
 
-      {/* ── Process , communication ── */}
-      <TabsContent value="process" className="mt-4 space-y-3">
-        <SectionHeading>Communication</SectionHeading>
+      {/* ── Communication ── */}
+      <TabsContent value="communication" className="mt-4 space-y-3">
         <div className="flex justify-end">
           <EmailDrawer
             candidateId={candidateId}
@@ -278,9 +252,8 @@ export function CandidateProfileTabs({
         )}
       </TabsContent>
 
-      {/* ── Process , evaluation: AI score + scorecards ── */}
-      <TabsContent value="process" className="mt-4 space-y-4">
-        <SectionHeading>Evaluation</SectionHeading>
+      {/* ── Evaluation: AI score + scorecards ── */}
+      <TabsContent value="evaluation" className="mt-4 space-y-4">
         <AiScoreCard
           applications={jobOptions}
           evaluations={aiEvaluations}
@@ -315,9 +288,8 @@ export function CandidateProfileTabs({
         <ScorecardList scorecards={scorecards} />
       </TabsContent>
 
-      {/* ── Process , offers ── */}
-      <TabsContent value="process" className="mt-4">
-        <SectionHeading>Offers</SectionHeading>
+      {/* ── Offers ── */}
+      <TabsContent value="offers" className="mt-4">
         <OffersPanel
           offers={offers}
           applications={jobOptions}
@@ -325,9 +297,41 @@ export function CandidateProfileTabs({
         />
       </TabsContent>
 
-      {/* ── Files , documents ── */}
-      <TabsContent value="files" className="mt-4 space-y-4">
-        <SectionHeading>Documents</SectionHeading>
+      {/* ── Activity , notes and timeline ── */}
+      <TabsContent value="activity" className="mt-4 space-y-4">
+        {/* Notes always on top so the form is reachable without scrolling */}
+        <div>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Notes &amp; comments
+          </p>
+          <NoteForm
+            candidateId={candidateId}
+            workspaceId={workspaceId}
+            initialNotes={notes}
+            members={members}
+          />
+        </div>
+
+        {activity.length > 0 ? (
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Timeline
+            </p>
+            <ActivityTimeline activity={activity} />
+          </div>
+        ) : null}
+
+        {activity.length === 0 && notes.length === 0 ? (
+          <EmptySection
+            icon={MessageSquare}
+            title="Nothing has happened yet"
+            hint="Stage moves, notes, emails and interviews all land here in order, so you can see how this candidate got to where they are."
+          />
+        ) : null}
+      </TabsContent>
+
+      {/* ── Documents ── */}
+      <TabsContent value="documents" className="mt-4 space-y-4">
         <DocumentsSection
           candidateId={candidateId}
           relatedDocuments={relatedDocuments}
@@ -347,13 +351,12 @@ export function CandidateProfileTabs({
       </TabsContent>
 
       {/*
-        Files , privacy requests. Rendered only when one exists: a permanently
-        visible "Privacy requests / none" block is a section explaining that it
+        Privacy requests. Rendered only when one exists: a permanently
+        visible "Privacy requests / none" tab is a section explaining that it
         has nothing to say, which is the same mistake the AI panels made.
       */}
       {privacyRequests.length > 0 ? (
-        <TabsContent value="files" className="mt-4 space-y-3">
-          <SectionHeading>Privacy requests</SectionHeading>
+        <TabsContent value="privacy" className="mt-4 space-y-3">
           <div className="space-y-4 duration-300 animate-in fade-in slide-in-from-bottom-1">
             {privacyRequests.map((request) => (
               <PrivacyRequestCard

@@ -63,6 +63,15 @@ const updateMemberRoleSchema = z.object({
   role: z.string().trim().min(1),
 });
 
+const updateMemberAccessSchema = z.object({
+  memberId: z.string().trim().min(1),
+  department: z.string().trim().max(120).optional().nullable(),
+  region: z.string().trim().max(120).optional().nullable(),
+  team: z.string().trim().max(120).optional().nullable(),
+  managerMemberId: z.string().trim().min(1).optional().nullable(),
+  status: z.enum(["active", "inactive", "suspended"]),
+});
+
 async function isAssignableRole(
   organizationId: string,
   role: string,
@@ -843,6 +852,39 @@ export async function updateMemberRolesAction(input: {
       success: false,
       error: "Unable to update roles.",
     };
+  }
+}
+
+export async function updateMemberAccessAction(input: {
+  memberId: string;
+  department?: string | null;
+  region?: string | null;
+  team?: string | null;
+  managerMemberId?: string | null;
+  status: "active" | "inactive" | "suspended";
+}): Promise<ActionResult> {
+  try {
+    const context = await requirePermission("members:edit");
+    const parsed = updateMemberAccessSchema.safeParse(input);
+    if (!parsed.success) return { success: false, error: "Invalid member access profile." };
+    const [target] = await db.select({ id: authMembers.id, userId: authMembers.userId, role: authMembers.role }).from(authMembers).where(and(eq(authMembers.id, parsed.data.memberId), eq(authMembers.organizationId, context.organization.id))).limit(1);
+    if (!target) return { success: false, error: "Member not found." };
+    if (target.userId === context.user.id && parsed.data.status !== "active") return { success: false, error: "You cannot deactivate your own membership." };
+    if (isOwnerRole(target.role) && parsed.data.status !== "active" && !isOwnerRole(context.roleKey)) return { success: false, error: "Only an owner can suspend an owner." };
+    const managerMemberId = parsed.data.managerMemberId ?? null;
+    if (managerMemberId) {
+      if (managerMemberId === target.id) return { success: false, error: "A member cannot manage themselves." };
+      const [manager] = await db.select({ id: authMembers.id }).from(authMembers).where(and(eq(authMembers.id, managerMemberId), eq(authMembers.organizationId, context.organization.id), eq(authMembers.status, "active"))).limit(1);
+      if (!manager) return { success: false, error: "Manager must be an active member of this workspace." };
+    }
+    await db.update(authMembers).set({ department: parsed.data.department?.trim() || null, region: parsed.data.region?.trim() || null, team: parsed.data.team?.trim() || null, managerMemberId, status: parsed.data.status, updatedAt: new Date() }).where(eq(authMembers.id, target.id));
+    if (parsed.data.status !== "active") await db.delete(authSessions).where(eq(authSessions.userId, target.userId));
+    await logAuditEvent({ workspaceId: context.organization.id, actorId: context.user.id, actorEmail: context.user.email, action: "member.access_profile_changed", resourceType: "member", resourceId: target.id, severity: parsed.data.status === "active" ? "info" : "warning", metadata: { department: parsed.data.department ?? null, region: parsed.data.region ?? null, team: parsed.data.team ?? null, managerMemberId, status: parsed.data.status } });
+    revalidatePath("/settings/members");
+    return { success: true };
+  } catch (error) {
+    log.error(error, "updateMemberAccessAction failed");
+    return { success: false, error: "Unable to update member access." };
   }
 }
 

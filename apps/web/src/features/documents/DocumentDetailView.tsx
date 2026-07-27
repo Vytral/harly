@@ -1093,7 +1093,7 @@ export function DocumentDetailView({
                   Void request
                 </Button>
               ) : canSendForSignature ? (
-                <div className="grid grid-cols-2 gap-2">
+                <div className={data.esign.connected ? "grid grid-cols-2 gap-2" : "grid gap-2"}>
                   <Button
                     size="sm"
                     variant="outline"
@@ -1103,15 +1103,17 @@ export function DocumentDetailView({
                     <LockKeyhole className="size-4" />
                     Native link
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isArchived}
-                    onClick={() => setSendSignOpen(true)}
-                  >
-                    <Send className="size-4" />
-                    DocuSeal
-                  </Button>
+                  {data.esign.connected ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isArchived}
+                      onClick={() => setSendSignOpen(true)}
+                    >
+                      <Send className="size-4" />
+                      DocuSeal
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
             </div>

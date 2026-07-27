@@ -13,12 +13,15 @@ import { notifyOutlookEvent } from "@/server/notify/outlook";
 import { notifyZoomEvent } from "@/server/notify/zoom";
 import { dispatchWorkflowEvent } from "@/features/automations/dispatch";
 import { createLogger } from "@/lib/logger";
+import { emitDomainEvent } from "@/server/events/emit";
 
 const log = createLogger("webhooks");
 
 type EmitWebhookOptions = {
   actorId?: string;
   eventId?: string;
+  /** The durable event was inserted in the business transaction already. */
+  skipDomainEvent?: boolean;
 };
 
 /**
@@ -35,6 +38,37 @@ export async function emitWebhookEvent(
   data: Record<string, unknown>,
   options: EmitWebhookOptions = {},
 ): Promise<void> {
+  if (!options.skipDomainEvent) {
+    await emitDomainEvent({
+      name: event,
+      workspaceId,
+      actorId: options.actorId,
+      aggregateType:
+        typeof data.application === "object" && data.application
+          ? "application"
+          : typeof data.candidate === "object" && data.candidate
+            ? "candidate"
+            : typeof data.job === "object" && data.job
+              ? "job"
+              : undefined,
+      aggregateId:
+        typeof data.application === "object" &&
+        data.application &&
+        "id" in data.application
+          ? String(data.application.id)
+          : typeof data.candidate === "object" &&
+              data.candidate &&
+              "id" in data.candidate
+            ? String(data.candidate.id)
+            : typeof data.job === "object" && data.job && "id" in data.job
+              ? String(data.job.id)
+              : undefined,
+      payload: data,
+    }).catch((error) =>
+      log.error({ workspaceId, event, error }, "domain event emit failed"),
+    );
+  }
+
   try {
     const endpoints = await db
       .select()
@@ -67,7 +101,9 @@ export async function emitWebhookEvent(
 
         if (!row) continue;
         // Best-effort immediate delivery; the dispatcher is the safety net.
-        void dispatchDueWebhooks(1, [row.id]).catch((err) => log.error(err, "deliverWebhook failed"));
+        void dispatchDueWebhooks(1, [row.id]).catch((err) =>
+          log.error(err, "deliverWebhook failed"),
+        );
       }
     }
   } catch (error) {
@@ -75,18 +111,30 @@ export async function emitWebhookEvent(
   }
 
   // Fire-and-forget: chat webhook (Slack/Discord incoming-webhook) + Slack OAuth API
-  void notifyChatEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyChatEvent failed"));
-  void notifyTelegramEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyTelegramEvent failed"));
-  void notifySlackEvent(workspaceId, event, data).catch((err) => log.error(err, "notifySlackEvent failed"));
+  void notifyChatEvent(workspaceId, event, data).catch((err) =>
+    log.error(err, "notifyChatEvent failed"),
+  );
+  void notifyTelegramEvent(workspaceId, event, data).catch((err) =>
+    log.error(err, "notifyTelegramEvent failed"),
+  );
+  void notifySlackEvent(workspaceId, event, data).catch((err) =>
+    log.error(err, "notifySlackEvent failed"),
+  );
   void notifyInboxEvent(
     workspaceId,
     event,
     data,
-    options.actorId ?? (typeof data.actorId === "string" ? data.actorId : undefined),
-    options.eventId ?? (typeof data.eventId === "string" ? data.eventId : undefined),
+    options.actorId ??
+      (typeof data.actorId === "string" ? data.actorId : undefined),
+    options.eventId ??
+      (typeof data.eventId === "string" ? data.eventId : undefined),
   ).catch((err) => log.error(err, "notifyInboxEvent failed"));
-  void notifyOutlookEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyOutlookEvent failed"));
-  void notifyZoomEvent(workspaceId, event, data).catch((err) => log.error(err, "notifyZoomEvent failed"));
+  void notifyOutlookEvent(workspaceId, event, data).catch((err) =>
+    log.error(err, "notifyOutlookEvent failed"),
+  );
+  void notifyZoomEvent(workspaceId, event, data).catch((err) =>
+    log.error(err, "notifyZoomEvent failed"),
+  );
 
   // Fire-and-forget: workflow automations. Finds enabled workflows whose
   // trigger matches this event and kicks off a best-effort run per match

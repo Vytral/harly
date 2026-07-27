@@ -23,15 +23,31 @@ export async function getSecurityPasskeys(userId: string) {
 
 export async function getWorkspaceSecuritySettings(workspaceId: string) {
   const [row] = await db
-    .select({ require2fa: workspaceSettings.require2fa })
+    .select({
+      require2fa: workspaceSettings.require2fa,
+      ipAllowlist: workspaceSettings.securityIpAllowlist,
+      allowedDomains: workspaceSettings.securityAllowedDomains,
+      riskDetectionEnabled: workspaceSettings.securityRiskDetectionEnabled,
+      reauthMinutes: workspaceSettings.securityReauthMinutes,
+      requirePasskey: workspaceSettings.securityRequirePasskey,
+    })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, workspaceId))
     .limit(1);
-  return { require2fa: row?.require2fa ?? false };
+  return {
+    require2fa: row?.require2fa ?? false,
+    ipAllowlist: Array.isArray(row?.ipAllowlist) ? row.ipAllowlist as string[] : [],
+    allowedDomains: Array.isArray(row?.allowedDomains) ? row.allowedDomains as string[] : [],
+    riskDetectionEnabled: row?.riskDetectionEnabled ?? true,
+    reauthMinutes: row?.reauthMinutes ?? 15,
+    requirePasskey: row?.requirePasskey ?? false,
+  };
 }
 
 export type AuditLogFilters = {
   query?: string;
+  action?: string;
+  resourceType?: string;
   severity?: AuditSeverity;
   from?: Date;
   to?: Date;
@@ -49,6 +65,10 @@ export async function getWorkspaceAuditLogs(
     .where(
       and(
         eq(auditLogs.workspaceId, workspaceId),
+        filters.action ? ilike(auditLogs.action, `%${filters.action.trim()}%`) : undefined,
+        filters.resourceType
+          ? ilike(auditLogs.resourceType, `%${filters.resourceType.trim()}%`)
+          : undefined,
         filters.severity ? eq(auditLogs.severity, filters.severity) : undefined,
         filters.from ? gte(auditLogs.createdAt, filters.from) : undefined,
         filters.to ? lte(auditLogs.createdAt, filters.to) : undefined,

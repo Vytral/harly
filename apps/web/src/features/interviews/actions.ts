@@ -43,6 +43,11 @@ import { getZoomToken } from "@/lib/zoom/config";
 import { trackInterviewSync } from "@/lib/interviews/sync-ledger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+  type PersistedDomainEvent,
+} from "@/server/events/emit";
+import {
   requireApplicationPermission,
   requireInterviewPermission,
   requirePermission,
@@ -307,6 +312,9 @@ export async function scheduleInterview(
       };
     }
 
+    const scheduledEvent: { current: PersistedDomainEvent | null } = {
+      current: null,
+    };
     const result = await db.transaction(async (tx) => {
       // The application is the anchor: it ties the interview to a candidate AND a job.
       const [application] = await tx
@@ -395,12 +403,36 @@ export async function scheduleInterview(
         metadata: { interviewId: interview.id, applicationId: application.id },
       });
 
+      scheduledEvent.current = await persistDomainEvent(tx, {
+        name: "interview.scheduled",
+        workspaceId: workspace.id,
+        actorId: user.id,
+        aggregateType: "interview",
+        aggregateId: interview.id,
+        payload: {
+          interview: {
+            id: interview.id,
+            applicationId: application.id,
+            candidateId: data.candidateId,
+            jobId: application.jobId,
+            type: data.type,
+            mode: data.mode,
+            scheduledAt: when.toISOString(),
+            durationMins: data.durationMins,
+            location: data.location ?? null,
+          },
+        },
+      });
+
       return { success: true as const, interviewId: interview.id };
     });
 
     let warning: string | undefined;
     let emailStatus: InterviewEmailStatus | undefined;
     if (result.success) {
+      if (scheduledEvent.current) {
+        await publishPersistedDomainEvents([scheduledEvent.current]);
+      }
       emailStatus = "skipped";
       // Resolve participant emails for GCal attendees + candidate notification.
       const [recipient] = await db
@@ -712,16 +744,18 @@ export async function scheduleInterview(
 
       // Emit outbound webhook event.
       void emitWebhookEvent(workspace.id, "interview.scheduled", {
-        interviewId: result.interviewId,
-        candidateId: data.candidateId,
-        applicationId: data.applicationId,
-        type: data.type,
-        mode: data.mode,
-        scheduledAt: when.toISOString(),
-        durationMins: data.durationMins,
-        location: data.location,
-        interviewerId: data.interviewerId,
-      });
+        interview: {
+          id: result.interviewId,
+          candidateId: data.candidateId,
+          applicationId: data.applicationId,
+          type: data.type,
+          mode: data.mode,
+          scheduledAt: when.toISOString(),
+          durationMins: data.durationMins,
+          location: data.location ?? null,
+          interviewerId: data.interviewerId ?? null,
+        },
+      }, { actorId: user.id, skipDomainEvent: true });
       warning =
         warnings.length > 0 ? [...new Set(warnings)].join(" ") : undefined;
     }
@@ -787,17 +821,34 @@ export async function setInterviewStatus(input: {
       };
     }
 
-    const updated = await db
-      .update(interviews)
-      .set({ status: parsed.data.status })
-      .where(
-        and(
-          eq(interviews.id, parsed.data.interviewId),
-          eq(interviews.workspaceId, workspace.id),
-          eq(interviews.status, "scheduled"),
-        ),
-      )
-      .returning();
+    const statusEvent: { current: PersistedDomainEvent | null } = {
+      current: null,
+    };
+    const updated = await db.transaction(async (tx) => {
+      const next = await tx
+        .update(interviews)
+        .set({ status: parsed.data.status })
+        .where(
+          and(
+            eq(interviews.id, parsed.data.interviewId),
+            eq(interviews.workspaceId, workspace.id),
+            eq(interviews.status, "scheduled"),
+          ),
+        )
+        .returning();
+      const nextInterview = next[0];
+      if (nextInterview) {
+        statusEvent.current = await persistDomainEvent(tx, {
+          name: `interview.${parsed.data.status}`,
+          workspaceId: workspace.id,
+          actorId: user.id,
+          aggregateType: "interview",
+          aggregateId: nextInterview.id,
+          payload: { interview: serializeInterview(nextInterview) },
+        });
+      }
+      return next;
+    });
 
     if (updated.length === 0) {
       // Race: the interview changed status between our check and the update.
@@ -808,6 +859,9 @@ export async function setInterviewStatus(input: {
     }
 
     const updatedInterview = updated[0];
+    if (statusEvent.current) {
+      await publishPersistedDomainEvents([statusEvent.current]);
+    }
     const providerWarnings: string[] = [];
 
     const gcalEventId = updatedInterview?.gcalEventId;
@@ -936,7 +990,7 @@ export async function setInterviewStatus(input: {
     const event = `interview.${parsed.data.status}` as const;
     void emitWebhookEvent(workspace.id, event, {
       interview: serializeInterview(updatedInterview),
-    });
+    }, { actorId: user.id, skipDomainEvent: true });
 
     return {
       success: true,
@@ -1197,30 +1251,51 @@ export async function rescheduleInterview(input: {
     if (!hasProviderMeeting) {
       rescheduleSet.meetLink = deriveMeetLink(row.mode, data.location);
     }
-    await db
-      .update(interviews)
-      .set(rescheduleSet)
-      .where(
-        and(
-          eq(interviews.id, data.interviewId),
-          eq(interviews.workspaceId, workspace.id),
-        ),
-      );
+    let persistedEvent: PersistedDomainEvent | undefined;
+    await db.transaction(async (tx) => {
+      await tx
+        .update(interviews)
+        .set(rescheduleSet)
+        .where(
+          and(
+            eq(interviews.id, data.interviewId),
+            eq(interviews.workspaceId, workspace.id),
+          ),
+        );
 
-    await db.insert(candidatePortalNotifications).values({
-      workspaceId: workspace.id,
-      candidateId: data.candidateId,
-      type: "interview_rescheduled",
-      title: "Interview rescheduled",
-      body: `Your interview is now scheduled for ${interviewWhenFormatter.format(when)}.`,
-      href: info?.applicationId
-        ? `/portal/applications/${info.applicationId}`
-        : null,
-      metadata: {
-        interviewId: data.interviewId,
-        applicationId: info?.applicationId,
-      },
+      await tx.insert(candidatePortalNotifications).values({
+        workspaceId: workspace.id,
+        candidateId: data.candidateId,
+        type: "interview_rescheduled",
+        title: "Interview rescheduled",
+        body: `Your interview is now scheduled for ${interviewWhenFormatter.format(when)}.`,
+        href: info?.applicationId
+          ? `/portal/applications/${info.applicationId}`
+          : null,
+        metadata: {
+          interviewId: data.interviewId,
+          applicationId: info?.applicationId,
+        },
+      });
+
+      persistedEvent = await persistDomainEvent(tx, {
+        workspaceId: workspace.id,
+        name: "interview.rescheduled",
+        aggregateType: "interview",
+        aggregateId: data.interviewId,
+        actorId: user.id,
+        payload: {
+          interview: {
+            id: data.interviewId,
+            candidateId: data.candidateId,
+            scheduledAt: when.toISOString(),
+            durationMins: data.durationMins,
+            location: data.location ?? null,
+          },
+        },
+      });
     });
+    if (persistedEvent) await publishPersistedDomainEvents([persistedEvent]);
 
     const [synced] = await db
       .select({ meetLink: interviews.meetLink })
@@ -1261,12 +1336,14 @@ export async function rescheduleInterview(input: {
 
     // Emit outbound webhook event.
     void emitWebhookEvent(workspace.id, "interview.rescheduled", {
-      interviewId: data.interviewId,
-      candidateId: data.candidateId,
-      scheduledAt: when.toISOString(),
-      durationMins: data.durationMins,
-      location: data.location,
-    });
+      interview: {
+        id: data.interviewId,
+        candidateId: data.candidateId,
+        scheduledAt: when.toISOString(),
+        durationMins: data.durationMins,
+        location: data.location ?? null,
+      },
+    }, { actorId: user.id, skipDomainEvent: true });
 
     return { success: true };
   } catch (error) {
@@ -1652,15 +1729,36 @@ export async function updateInterview(input: {
 
     // Persist the edits only after the provider meeting was successfully
     // recreated, keeping DB and provider state consistent.
-    await db
-      .update(interviews)
-      .set(set)
-      .where(
-        and(
-          eq(interviews.id, data.interviewId),
-          eq(interviews.workspaceId, workspace.id),
-        ),
-      );
+    let persistedEvent: PersistedDomainEvent | undefined;
+    await db.transaction(async (tx) => {
+      await tx
+        .update(interviews)
+        .set(set)
+        .where(
+          and(
+            eq(interviews.id, data.interviewId),
+            eq(interviews.workspaceId, workspace.id),
+          ),
+        );
+
+      persistedEvent = await persistDomainEvent(tx, {
+        workspaceId: workspace.id,
+        name: "interview.rescheduled",
+        aggregateType: "interview",
+        aggregateId: data.interviewId,
+        actorId: user.id,
+        payload: {
+          interview: {
+            id: data.interviewId,
+            candidateId: data.candidateId,
+            scheduledAt: effectiveScheduledAt.toISOString(),
+            durationMins: effectiveDurationMins,
+            location: data.location ?? null,
+          },
+        },
+      });
+    });
+    if (persistedEvent) await publishPersistedDomainEvents([persistedEvent]);
 
     // Send rescheduled email if date/time changed.
     if (data.scheduledAt && data.scheduledAt !== "" && info?.email) {
@@ -1691,12 +1789,14 @@ export async function updateInterview(input: {
     revalidatePath("/dashboard/calendars");
 
     void emitWebhookEvent(workspace.id, "interview.rescheduled", {
-      interviewId: data.interviewId,
-      candidateId: data.candidateId,
-      scheduledAt: effectiveScheduledAt.toISOString(),
-      durationMins: effectiveDurationMins,
-      location: data.location,
-    });
+      interview: {
+        id: data.interviewId,
+        candidateId: data.candidateId,
+        scheduledAt: effectiveScheduledAt.toISOString(),
+        durationMins: effectiveDurationMins,
+        location: data.location ?? null,
+      },
+    }, { actorId: user.id, skipDomainEvent: true });
 
     return { success: true };
   } catch (error) {

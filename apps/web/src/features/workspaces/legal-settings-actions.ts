@@ -29,6 +29,7 @@ const saveSchema = z.object({
   dataRetentionApplicantsMonths: z.number().int().min(1).max(120).optional(),
   dataRetentionTalentPoolMonths: z.number().int().min(1).max(120).optional(),
   dataRetentionEnabled: z.boolean().optional(),
+  auditLogRetentionMonths: z.number().int().min(12).max(120).optional(),
   consentCheckboxText: z.string().trim().max(500).optional(),
   legalPages: z
     .record(z.string(), z.string().max(50000))
@@ -68,6 +69,7 @@ export async function saveLegalSettingsAction(
     dataRetentionApplicantsMonths: d.dataRetentionApplicantsMonths ?? 6,
     dataRetentionTalentPoolMonths: d.dataRetentionTalentPoolMonths ?? 24,
     dataRetentionEnabled: d.dataRetentionEnabled ?? false,
+    auditLogRetentionMonths: d.auditLogRetentionMonths ?? 24,
     consentCheckboxText: d.consentCheckboxText || null,
     legalConfigured,
     updatedAt: new Date(),
@@ -126,6 +128,7 @@ export type LegalSettingsData = {
   dataRetentionApplicantsMonths: number;
   dataRetentionTalentPoolMonths: number;
   dataRetentionEnabled: boolean;
+  auditLogRetentionMonths: number;
   consentCheckboxText: string | null;
   legalPages: LegalPages;
   legalConfigured: boolean;
@@ -152,6 +155,7 @@ export async function getLegalSettingsData(): Promise<LegalSettingsData> {
     dataRetentionTalentPoolMonths:
       settings?.dataRetentionTalentPoolMonths ?? 24,
     dataRetentionEnabled: settings?.dataRetentionEnabled ?? false,
+    auditLogRetentionMonths: settings?.auditLogRetentionMonths ?? 24,
     consentCheckboxText: settings?.consentCheckboxText ?? null,
     legalPages: (settings?.legalPages as LegalPages) ?? {},
     legalConfigured: settings?.legalConfigured ?? false,

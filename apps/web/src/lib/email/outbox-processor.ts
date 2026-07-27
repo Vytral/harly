@@ -179,6 +179,8 @@ async function deliverRow(row: OutboxRow): Promise<boolean> {
         return await deliverNativeSignatureInvitation(row);
       case "native.signature.otp":
         return await deliverNativeSignatureOtp(row);
+      case "report.scheduled":
+        return await deliverScheduledReport(row);
       default:
         log.warn({ kind: row.kind }, "unknown email_outbox kind");
         await db
@@ -201,6 +203,34 @@ async function deliverRow(row: OutboxRow): Promise<boolean> {
     );
     return false;
   }
+}
+
+async function deliverScheduledReport(row: OutboxRow): Promise<boolean> {
+  const payload = row.payload as {
+    to?: string;
+    subject?: string;
+    bodyHtml?: string;
+    companyName?: string;
+  };
+  if (!payload.to || !payload.subject || !payload.bodyHtml) {
+    await markFailed(row.id, "Scheduled report payload is incomplete.");
+    return false;
+  }
+  const delivered = await sendWorkspaceEmail(row.workspaceId, {
+    to: payload.to,
+    subject: payload.subject,
+    react: createElement(CustomTemplateEmail, {
+      bodyHtml: payload.bodyHtml,
+      companyName: payload.companyName ?? "Harly",
+    }),
+    idempotencyKey: row.id,
+  });
+  if (!delivered) {
+    await markFailed(row.id, "No configured workspace email sender.");
+    return false;
+  }
+  await markSent(row.id, delivered);
+  return true;
 }
 
 async function deliverNativeSignatureInvitation(row: OutboxRow): Promise<boolean> {

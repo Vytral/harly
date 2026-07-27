@@ -42,6 +42,7 @@ export type IntegrationSlug =
   | "telegram"
   | "gmail"
   | "linkedin"
+  | "harly-sign"
   | "docuseal"
   | "turnstile"
   | "recaptcha"
@@ -221,6 +222,17 @@ export const INTEGRATIONS: IntegrationDefinition[] = [
     comingSoon: true,
   },
   {
+    slug: "harly-sign",
+    name: "Harly Sign",
+    category: "signing",
+    description: "Built-in e-signatures — no setup, always on.",
+    detail:
+      "Harly's native signing engine — candidates draw or type a signature and place it on documents and offers right inside the portal. No external account, no API keys: it's built into Harly and connected by default. Choose it as your offer delivery channel, or connect DocuSeal below for hosted third-party signing instead.",
+    // House feature (no brand) — Harly evergreen, same treatment as Webhooks.
+    tileClassName:
+      "bg-gradient-to-br from-emerald-500 via-pine to-emerald-900 text-white",
+  },
+  {
     slug: "docuseal",
     name: "DocuSeal",
     category: "signing",
@@ -360,6 +372,9 @@ export function isConnected(
       return statuses.jitsi.enabled && Boolean(statuses.jitsi.baseUrl);
     case "docuseal":
       return statuses.docuseal.enabled && statuses.docuseal.hasToken;
+    case "harly-sign":
+      // Built-in, no external connection required — always on.
+      return true;
     case "turnstile":
     case "recaptcha":
     case "hcaptcha":

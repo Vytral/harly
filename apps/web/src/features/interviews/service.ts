@@ -14,6 +14,10 @@ import {
 } from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+} from "@/server/events/emit";
 
 import { findWorkspaceMember } from "./core";
 
@@ -189,7 +193,7 @@ export async function createInterviewForApi(input: {
   ]);
   assertFutureWhen(input.values.scheduledAt);
 
-  const created = await db.transaction(async (tx) => {
+  const { created, event } = await db.transaction(async (tx) => {
     const [application] = await tx
       .select({ id: applications.id, jobId: applications.jobId })
       .from(applications)
@@ -277,12 +281,23 @@ export async function createInterviewForApi(input: {
         via: "api",
       },
     });
-    return interview;
+    return {
+      created: interview,
+      event: await persistDomainEvent(tx, {
+        name: "interview.scheduled",
+        workspaceId: input.workspaceId,
+        actorId: input.actorUserId,
+        aggregateType: "interview",
+        aggregateId: interview.id,
+        payload: { interview: serializeInterview(interview) },
+      }),
+    };
   });
 
+  await publishPersistedDomainEvents([event]);
   await emitWebhookEvent(input.workspaceId, "interview.scheduled", {
     interview: serializeInterview(created),
-  });
+  }, { actorId: input.actorUserId, skipDomainEvent: true });
   return created;
 }
 
@@ -329,29 +344,42 @@ export async function updateInterviewForApi(input: {
   if (input.values.location !== undefined) set.location = input.values.location;
   if (input.values.notes !== undefined) set.notes = input.values.notes;
 
-  const [updated] = await db
-    .update(interviews)
-    .set(set)
-    .where(
-      and(
-        eq(interviews.id, input.interviewId),
-        eq(interviews.workspaceId, input.workspaceId),
-      ),
-    )
-    .returning();
-  if (!updated) throw ApiError.notFound("Interview not found.");
-
-  await db.insert(activityEvents).values({
-    workspaceId: input.workspaceId,
-    actorId: input.actorUserId,
-    entityType: "application",
-    entityId: updated.applicationId,
-    type: "interview.updated",
-    metadata: { interviewId: updated.id, via: "api" },
+  const { updated, event } = await db.transaction(async (tx) => {
+    const [next] = await tx
+      .update(interviews)
+      .set(set)
+      .where(
+        and(
+          eq(interviews.id, input.interviewId),
+          eq(interviews.workspaceId, input.workspaceId),
+        ),
+      )
+      .returning();
+    if (!next) throw ApiError.notFound("Interview not found.");
+    await tx.insert(activityEvents).values({
+      workspaceId: input.workspaceId,
+      actorId: input.actorUserId,
+      entityType: "application",
+      entityId: next.applicationId,
+      type: "interview.updated",
+      metadata: { interviewId: next.id, via: "api" },
+    });
+    return {
+      updated: next,
+      event: await persistDomainEvent(tx, {
+        name: "interview.rescheduled",
+        workspaceId: input.workspaceId,
+        actorId: input.actorUserId,
+        aggregateType: "interview",
+        aggregateId: next.id,
+        payload: { interview: serializeInterview(next) },
+      }),
+    };
   });
+  await publishPersistedDomainEvents([event]);
   await emitWebhookEvent(input.workspaceId, "interview.rescheduled", {
     interview: serializeInterview(updated),
-  });
+  }, { actorId: input.actorUserId, skipDomainEvent: true });
   return updated;
 }
 
@@ -368,30 +396,43 @@ export async function setInterviewStatusForApi(input: {
     throw ApiError.conflict("Completed or canceled interviews cannot change status.");
   }
 
-  const [updated] = await db
-    .update(interviews)
-    .set({ status: input.status, updatedAt: new Date() })
-    .where(
-      and(
-        eq(interviews.id, input.interviewId),
-        eq(interviews.workspaceId, input.workspaceId),
-        eq(interviews.status, "scheduled"),
-      ),
-    )
-    .returning();
-  if (!updated) throw ApiError.conflict("Interview status changed; retry request.");
-
   const event = `interview.${input.status}` as const;
-  await db.insert(activityEvents).values({
-    workspaceId: input.workspaceId,
-    actorId: input.actorUserId,
-    entityType: "application",
-    entityId: updated.applicationId,
-    type: event,
-    metadata: { interviewId: updated.id, via: "api" },
+  const { updated, persistedEvent } = await db.transaction(async (tx) => {
+    const [next] = await tx
+      .update(interviews)
+      .set({ status: input.status, updatedAt: new Date() })
+      .where(
+        and(
+          eq(interviews.id, input.interviewId),
+          eq(interviews.workspaceId, input.workspaceId),
+          eq(interviews.status, "scheduled"),
+        ),
+      )
+      .returning();
+    if (!next) throw ApiError.conflict("Interview status changed; retry request.");
+    await tx.insert(activityEvents).values({
+      workspaceId: input.workspaceId,
+      actorId: input.actorUserId,
+      entityType: "application",
+      entityId: next.applicationId,
+      type: event,
+      metadata: { interviewId: next.id, via: "api" },
+    });
+    return {
+      updated: next,
+      persistedEvent: await persistDomainEvent(tx, {
+        name: event,
+        workspaceId: input.workspaceId,
+        actorId: input.actorUserId,
+        aggregateType: "interview",
+        aggregateId: next.id,
+        payload: { interview: serializeInterview(next) },
+      }),
+    };
   });
+  await publishPersistedDomainEvents([persistedEvent]);
   await emitWebhookEvent(input.workspaceId, event, {
     interview: serializeInterview(updated),
-  });
+  }, { actorId: input.actorUserId, skipDomainEvent: true });
   return updated;
 }

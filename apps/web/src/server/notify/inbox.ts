@@ -2,17 +2,14 @@ import "server-only";
 
 import { and, eq, sql } from "drizzle-orm";
 
-import {
-  db,
-  notifications,
-  member,
-  jobHiringTeam,
-} from "@harly/db";
+import { db, notifications, member, jobHiringTeam } from "@harly/db";
 
 import {
   WEBHOOK_EVENT_LABELS,
   type WebhookEvent,
 } from "@/server/webhooks/events";
+import { emitRealtimeInvalidation } from "@/server/events/emit";
+import { REALTIME_EVENTS } from "@/server/events/registry";
 
 type NotifyParams = {
   workspaceId: string;
@@ -26,36 +23,44 @@ type NotifyParams = {
   dedupeKey?: string;
 };
 
-export async function createNotification(
-  params: NotifyParams,
-): Promise<void> {
+export async function createNotification(params: NotifyParams): Promise<void> {
   const { recipientIds, ...rest } = params;
   if (recipientIds.length === 0) return;
 
   const unique = [...new Set(recipientIds)];
 
-  await db.insert(notifications).values(
-    unique.map((userId) => ({
-      ...rest,
-      userId,
-      actorId: rest.actorId ?? null,
-      body: rest.body ?? null,
-      href: rest.href ?? null,
-      metadata: rest.metadata ?? null,
-      dedupeKey: rest.dedupeKey ?? null,
-    })),
-  ).onConflictDoNothing({
-    target: [notifications.workspaceId, notifications.userId, notifications.dedupeKey],
-  });
+  await db
+    .insert(notifications)
+    .values(
+      unique.map((userId) => ({
+        ...rest,
+        userId,
+        actorId: rest.actorId ?? null,
+        body: rest.body ?? null,
+        href: rest.href ?? null,
+        metadata: rest.metadata ?? null,
+        dedupeKey: rest.dedupeKey ?? null,
+      })),
+    )
+    .onConflictDoNothing({
+      target: [
+        notifications.workspaceId,
+        notifications.userId,
+        notifications.dedupeKey,
+      ],
+    });
+
+  void emitRealtimeInvalidation({
+    eventName: REALTIME_EVENTS.NOTIFICATIONS_INVALIDATE,
+    workspaceId: rest.workspaceId,
+  }).catch(() => undefined);
 }
 
 // ---------------------------------------------------------------------------
 // Recipient resolution
 // ---------------------------------------------------------------------------
 
-async function getWorkspaceMemberIds(
-  workspaceId: string,
-): Promise<string[]> {
+async function getWorkspaceMemberIds(workspaceId: string): Promise<string[]> {
   const rows = await db
     .select({ userId: member.userId })
     .from(member)
@@ -68,7 +73,12 @@ async function getWorkspaceAdminIds(workspaceId: string): Promise<string[]> {
   const rows = await db
     .select({ userId: member.userId })
     .from(member)
-    .where(and(eq(member.organizationId, workspaceId), sql`${member.role} in ('owner', 'admin')`));
+    .where(
+      and(
+        eq(member.organizationId, workspaceId),
+        sql`${member.role} in ('owner', 'admin')`,
+      ),
+    );
   return rows.map((r) => r.userId);
 }
 
@@ -103,7 +113,10 @@ export async function notifyInboundEmail(params: {
   threadId?: string;
 }): Promise<void> {
   try {
-    let recipientIds = await getJobTeamMemberIds(params.workspaceId, params.jobId);
+    let recipientIds = await getJobTeamMemberIds(
+      params.workspaceId,
+      params.jobId,
+    );
     if (recipientIds.length === 0) {
       recipientIds = await getWorkspaceMemberIds(params.workspaceId);
     }
@@ -213,7 +226,10 @@ function buildTitle(
   return label;
 }
 
-function buildDetail(candidateName: string | null, jobTitle: string | null): string | null {
+function buildDetail(
+  candidateName: string | null,
+  jobTitle: string | null,
+): string | null {
   if (candidateName && jobTitle) return `${jobTitle}`;
   return candidateName ?? jobTitle ?? null;
 }
@@ -271,7 +287,12 @@ export async function notifyInboxEvent(
   eventId?: string,
 ): Promise<void> {
   try {
-    const recipientIds = await resolveRecipients(workspaceId, event, data, actorId);
+    const recipientIds = await resolveRecipients(
+      workspaceId,
+      event,
+      data,
+      actorId,
+    );
     if (recipientIds.length === 0) return;
 
     const { candidateName, jobTitle } = extractIds(data);
@@ -291,6 +312,10 @@ export async function notifyInboxEvent(
       dedupeKey: eventId ? `event:${eventId}` : undefined,
     });
   } catch (error) {
-    console.error("[notify] inbox notify failed", { workspaceId, event, error });
+    console.error("[notify] inbox notify failed", {
+      workspaceId,
+      event,
+      error,
+    });
   }
 }

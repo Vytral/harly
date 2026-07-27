@@ -6,6 +6,10 @@ import { ApiError, type Cursor } from "@harly/api";
 import { db, jobApprovalRequests, jobHiringTeam, jobs, jobStages, type Job } from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+} from "@/server/events/emit";
 
 import { generateUniqueJobSlug } from "./data";
 import type { JobStatus } from "./validation";
@@ -163,7 +167,7 @@ export async function createJobForApi(input: {
   );
   const status: JobStatus = values.status ?? "draft";
 
-  const job = await db.transaction(async (tx) => {
+  const { job, event } = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(jobs)
       .values({
@@ -208,13 +212,25 @@ export async function createJobForApi(input: {
       role: "recruiter",
     });
 
-    return created;
+    if (status !== "open") return { job: created, event: null };
+    return {
+      job: created,
+      event: await persistDomainEvent(tx, {
+        name: "job.published",
+        workspaceId,
+        actorId: actorUserId,
+        aggregateType: "job",
+        aggregateId: created.id,
+        payload: { job: serializeJob(created) },
+      }),
+    };
   });
 
-  if (status === "open") {
+  if (event) {
+    await publishPersistedDomainEvents([event]);
     await emitWebhookEvent(workspaceId, "job.published", {
       job: serializeJob(job),
-    });
+    }, { actorId: actorUserId, skipDomainEvent: true });
   }
   return job;
 }
@@ -236,9 +252,10 @@ export async function updateJobForApi(input: {
   }
   const becomesPublished = nextStatus === "open" && !existing.publishedAt;
 
-  const [updated] = await db
-    .update(jobs)
-    .set({
+  const { updated, event } = await db.transaction(async (tx) => {
+    const [next] = await tx
+      .update(jobs)
+      .set({
       title: input.values.title ?? existing.title,
       description: input.values.description ?? existing.description,
       department: input.values.department ?? existing.department,
@@ -255,16 +272,31 @@ export async function updateJobForApi(input: {
       status: nextStatus,
       publishedAt: becomesPublished ? new Date() : existing.publishedAt,
       updatedAt: new Date(),
-    })
-    .where(
-      and(eq(jobs.id, input.jobId), eq(jobs.workspaceId, input.workspaceId)),
-    )
-    .returning();
+      })
+      .where(
+        and(eq(jobs.id, input.jobId), eq(jobs.workspaceId, input.workspaceId)),
+      )
+      .returning();
+    if (!next) throw ApiError.notFound("Job not found.");
+    return {
+      updated: next,
+      event: becomesPublished
+        ? await persistDomainEvent(tx, {
+            name: "job.published",
+            workspaceId: input.workspaceId,
+            aggregateType: "job",
+            aggregateId: next.id,
+            payload: { job: serializeJob(next) },
+          })
+        : null,
+    };
+  });
 
-  if (becomesPublished) {
+  if (event) {
+    await publishPersistedDomainEvents([event]);
     await emitWebhookEvent(input.workspaceId, "job.published", {
       job: serializeJob(updated),
-    });
+    }, { skipDomainEvent: true });
   }
   return updated;
 }

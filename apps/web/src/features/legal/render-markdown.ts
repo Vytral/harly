@@ -4,6 +4,21 @@
  * code blocks, inline code, tables, horizontal rules, and paragraphs.
  * No external dependencies.
  */
+/**
+ * Legal pages used to be authored as Markdown in a plain textarea; they are
+ * now authored as HTML via a rich-text editor. Detect which format a stored
+ * value is in so old content can still be displayed/edited correctly.
+ */
+export function isHtml(content: string): boolean {
+  return /^\s*<[a-z][\s\S]*>/i.test(content.trim());
+}
+
+/** Normalizes a stored legal-page value to HTML, converting legacy Markdown on the fly. */
+export function toHtml(content: string): string {
+  if (!content.trim()) return "";
+  return isHtml(content) ? content : renderMarkdown(content);
+}
+
 export function renderMarkdown(md: string): string {
   const lines = md.split("\n");
   const out: string[] = [];

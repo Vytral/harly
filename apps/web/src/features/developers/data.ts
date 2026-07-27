@@ -13,6 +13,7 @@ import {
   db,
   apiKeys,
   webhookDeliveries,
+  webhookDeliveryAttempts,
   webhookEndpoints,
   type ApiKey,
   type WebhookDelivery,
@@ -235,6 +236,31 @@ export async function updateWebhookEndpoint(input: {
   return endpoint;
 }
 
+export async function rotateWebhookSecret(input: {
+  workspaceId: string;
+  id: string;
+}): Promise<{ endpoint: WebhookEndpoint; secret: string }> {
+  const secret = generateWebhookSecret();
+  const enc = encryptSecret(secret);
+  const [endpoint] = await db
+    .update(webhookEndpoints)
+    .set({
+      secretCiphertext: enc.ciphertext,
+      secretIv: enc.iv,
+      secretTag: enc.tag,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(webhookEndpoints.id, input.id),
+        eq(webhookEndpoints.workspaceId, input.workspaceId),
+      ),
+    )
+    .returning();
+  if (!endpoint) throw ApiError.notFound("Webhook endpoint not found.");
+  return { endpoint, secret };
+}
+
 export async function deleteWebhookEndpoint(input: {
   workspaceId: string;
   id: string;
@@ -276,8 +302,11 @@ export function serializeDelivery(delivery: WebhookDelivery) {
     status: delivery.status,
     attempts: delivery.attempts,
     responseStatus: delivery.responseStatus,
+    lastError: delivery.lastError,
     nextRetryAt: delivery.nextRetryAt?.toISOString() ?? null,
     deliveredAt: delivery.deliveredAt?.toISOString() ?? null,
+    deadLetteredAt: delivery.deadLetteredAt?.toISOString() ?? null,
+    replayOfId: delivery.replayOfId,
     createdAt: delivery.createdAt.toISOString(),
   };
 }
@@ -287,7 +316,7 @@ export const WEBHOOK_DELIVERY_STATUSES = [
   "processing",
   "success",
   "failed",
-  "exhausted",
+  "dead_letter",
 ] as const;
 
 export type WebhookDeliveryStatus =
@@ -311,6 +340,15 @@ export async function listWebhookDeliveries(input: {
     )
     .orderBy(desc(webhookDeliveries.createdAt))
     .limit(input.limit ?? 20);
+}
+
+export async function listWebhookDeliveryAttempts(input: {
+  workspaceId: string;
+  endpointId: string;
+  deliveryId: string;
+}) {
+  await getWebhookEndpoint({ workspaceId: input.workspaceId, id: input.endpointId });
+  return db.select().from(webhookDeliveryAttempts).innerJoin(webhookDeliveries, eq(webhookDeliveries.id, webhookDeliveryAttempts.deliveryId)).where(and(eq(webhookDeliveryAttempts.workspaceId, input.workspaceId), eq(webhookDeliveries.endpointId, input.endpointId), eq(webhookDeliveryAttempts.deliveryId, input.deliveryId))).orderBy(webhookDeliveryAttempts.attempt);
 }
 
 /** Queue a fresh delivery from an existing record without altering its audit log. */
@@ -346,6 +384,7 @@ export async function replayWebhookDelivery(input: {
       payload: original.payload,
       status: "pending",
       attempts: 0,
+      replayOfId: original.id,
     })
     .returning();
 

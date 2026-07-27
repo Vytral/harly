@@ -25,10 +25,16 @@ import { getDocumentAccessForUser } from "@/features/documents/access";
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+} from "@/server/events/emit";
+import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
 import { createOfferEnvelope } from "@/lib/esign/offer-signing";
+import { getOrCreateNativeOfferDocument } from "@/lib/esign/native/offer-signing";
+import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { assertOfferTerms, getOfferRecipient, offerHasExpired } from "./core";
 
 const log = createLogger("offers");
@@ -370,22 +376,44 @@ export async function sendOffer(input: {
     };
   }
 
-  // E-signature offer channel: when the workspace opted into e-signature, create
-  // the DocuSeal submission BEFORE the email. The email still notifies the
-  // candidate (and points them to the portal to sign); the submission id is the
-  // primary correlation key for the webhook to flip the offer status.
-  try {
-    await createOfferEnvelope({ workspaceId, offer });
-  } catch (error) {
-    log.error(
-      { error, offerId: offer.id },
-      "sendOffer: DocuSeal submission creation failed",
-    );
-    return {
-      success: false,
-      error:
-        "Could not create the signature request. Check the DocuSeal connection and try again.",
-    };
+  // Offer signing channel: when the workspace opted into e-signature (DocuSeal
+  // or native), prepare the signature envelope/document BEFORE the email. The
+  // email still notifies the candidate (and points them to the portal to
+  // sign); the envelope is the primary correlation key for flipping status.
+  const esignStatus = await getWorkspaceEsignStatus(workspaceId);
+  if (esignStatus.offerSignatureChannel === "esign") {
+    try {
+      await createOfferEnvelope({ workspaceId, offer });
+    } catch (error) {
+      log.error(
+        { error, offerId: offer.id },
+        "sendOffer: DocuSeal submission creation failed",
+      );
+      return {
+        success: false,
+        error:
+          "Could not create the signature request. Check the DocuSeal connection and try again.",
+      };
+    }
+  } else if (esignStatus.offerSignatureChannel === "native") {
+    try {
+      const prepared = await getOrCreateNativeOfferDocument({ workspaceId, offer });
+      if (!prepared) {
+        return {
+          success: false,
+          error: "Could not prepare the offer letter for signing.",
+        };
+      }
+    } catch (error) {
+      log.error(
+        { error, offerId: offer.id },
+        "sendOffer: native offer letter creation failed",
+      );
+      return {
+        success: false,
+        error: "Could not prepare the offer letter for signing.",
+      };
+    }
   }
 
   // A durable outbox row is the single source of truth: the worker sends the
@@ -490,6 +518,7 @@ export async function decideOffer(input: {
     }
   }
 
+  let persistedEvent: Awaited<ReturnType<typeof persistDomainEvent>> | null = null;
   await db.transaction(async (tx) => {
     const [updatedOffer] = await tx
       .update(offers)
@@ -579,14 +608,28 @@ export async function decideOffer(input: {
       type: decision === "accepted" ? "offer.accepted" : "offer.declined",
       metadata: { title: offer.title },
     });
+    if (decision !== "accepted") return;
+    persistedEvent = await persistDomainEvent(tx, {
+      name: "application.hired",
+      workspaceId,
+      actorId: context.user.id,
+      aggregateType: "application",
+      aggregateId: offer.applicationId,
+      payload: {
+        application: { id: offer.applicationId, jobId: offer.jobId },
+        candidate: { id: offer.candidateId },
+        offer: { id: offer.id, title: offer.title },
+      },
+    });
   });
 
-  if (decision === "accepted") {
+  if (persistedEvent) {
+    await publishPersistedDomainEvents([persistedEvent]);
     await emitWebhookEvent(workspaceId, "application.hired", {
       application: { id: offer.applicationId, jobId: offer.jobId },
       candidate: { id: offer.candidateId },
       offer: { id: offer.id, title: offer.title },
-    });
+    }, { actorId: context.user.id, skipDomainEvent: true });
   }
 
   const decisionRecipient = await getOfferRecipient(

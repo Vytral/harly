@@ -98,9 +98,9 @@ export async function saveEsignSettingsAction(input: {
   return { ok: true };
 }
 
-/** Toggle the per-workspace offer delivery channel (email | esign). */
+/** Toggle the per-workspace offer delivery channel (email | esign | native). */
 export async function saveOfferSignatureChannelAction(
-  channel: "email" | "esign",
+  channel: "email" | "esign" | "native",
 ): Promise<EsignSettingsActionResult> {
   const context = await requirePermission("integrations:manage");
 

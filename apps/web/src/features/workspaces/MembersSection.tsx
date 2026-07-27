@@ -2,6 +2,7 @@
 
 import {
   useMemo,
+  useEffect,
   useState,
   useTransition,
   type ComponentType,
@@ -18,6 +19,7 @@ import {
   resendWorkspaceInvitationAction,
   setMemberPasswordAction,
   updateMemberRolesAction,
+  updateMemberAccessAction,
 } from "@/features/workspaces/actions";
 import {
   generateMemberSenderIdentityAction,
@@ -90,6 +92,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DrawerLayout } from "@/features/candidates/DrawerLayout";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { cn } from "@/lib/utils";
+import { listMemberSessionsAction, revokeMemberSessionAction, type SessionDevice } from "@/features/security/session-actions";
 
 export type AssignableRole = { key: string; name: string };
 
@@ -118,6 +121,7 @@ export function MembersAndRoles({
   canManageInviteLinks,
   canManageRoles,
   canManageMemberAccounts,
+  canEditMemberAccess,
   emailIdentity,
 }: {
   members: WorkspaceMemberItem[];
@@ -131,6 +135,7 @@ export function MembersAndRoles({
   canManageInviteLinks: boolean;
   canManageRoles: boolean;
   canManageMemberAccounts: boolean;
+  canEditMemberAccess: boolean;
   emailIdentity: WorkspaceEmailIdentityStatus;
 }) {
   const [creatingRole, setCreatingRole] = useState(false);
@@ -184,6 +189,7 @@ export function MembersAndRoles({
           canRemoveMembers={canRemoveMembers}
           canManageInviteLinks={canManageInviteLinks}
           canManageMemberAccounts={canManageMemberAccounts}
+          canEditMemberAccess={canEditMemberAccess}
           emailIdentity={emailIdentity}
         />
       </TabsContent>
@@ -265,6 +271,7 @@ function MembersPanel({
   canRemoveMembers,
   canManageInviteLinks,
   canManageMemberAccounts,
+  canEditMemberAccess,
   emailIdentity,
 }: {
   members: WorkspaceMemberItem[];
@@ -276,6 +283,7 @@ function MembersPanel({
   canRemoveMembers: boolean;
   canManageInviteLinks: boolean;
   canManageMemberAccounts: boolean;
+  canEditMemberAccess: boolean;
   emailIdentity: WorkspaceEmailIdentityStatus;
 }) {
   const router = useRouter();
@@ -430,6 +438,11 @@ function MembersPanel({
                     <p className="truncate text-xs text-muted-foreground">
                       {member.email}
                     </p>
+                    {member.status !== "active" ? (
+                      <Badge variant={member.status === "suspended" ? "warning" : "outline"} className="mt-1 text-[10px]">
+                        {member.status === "suspended" ? "Suspended" : "Inactive"}
+                      </Badge>
+                    ) : null}
                     {emailIdentity.enabled ? (
                       member.senderLocalPart ? (
                         <p className="flex items-center gap-1 truncate text-[11px] text-muted-foreground">
@@ -503,10 +516,12 @@ function MembersPanel({
                         </SelectContent>
                       </Select>
                       {!member.isCurrentUser &&
-                      (canManageMemberAccounts || canRemoveMembers) ? (
-                        <MemberRowActions
+                      (canManageMemberAccounts || canEditMemberAccess || canRemoveMembers) ? (
+                      <MemberRowActions
                           member={member}
+                          workspaceMembers={members}
                           canManageMemberAccounts={canManageMemberAccounts}
+                          canEditMemberAccess={canEditMemberAccess}
                           canRemoveMembers={canRemoveMembers}
                         />
                       ) : null}
@@ -699,14 +714,19 @@ function SenderIdentityDialog({
 // single ⋮ so neither is a one-click accident, and gates removal on a confirm.
 function MemberRowActions({
   member,
+  workspaceMembers,
   canManageMemberAccounts,
+  canEditMemberAccess,
   canRemoveMembers,
 }: {
   member: WorkspaceMemberItem;
+  workspaceMembers: WorkspaceMemberItem[];
   canManageMemberAccounts: boolean;
+  canEditMemberAccess: boolean;
   canRemoveMembers: boolean;
 }) {
   const [manageOpen, setManageOpen] = useState(false);
+  const [accessOpen, setAccessOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
@@ -724,6 +744,12 @@ function MemberRowActions({
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-44">
+          {canEditMemberAccess ? (
+            <DropdownMenuItem onSelect={() => setAccessOpen(true)}>
+              <ShieldCheckDuotoneIcon className="size-4" />
+              Access profile
+            </DropdownMenuItem>
+          ) : null}
           {canManageMemberAccounts ? (
             <DropdownMenuItem onSelect={() => setManageOpen(true)}>
               <GearSixIcon className="size-4" />
@@ -748,9 +774,17 @@ function MemberRowActions({
       {canManageMemberAccounts ? (
         <ManageMemberAccountSheet
           member={member}
+          workspaceMembers={workspaceMembers}
           open={manageOpen}
           onOpenChange={setManageOpen}
         />
+      ) : null}
+      {canEditMemberAccess ? (
+        <Sheet open={accessOpen} onOpenChange={setAccessOpen} mobilePresentation="bottom-on-mobile">
+          <DrawerLayout title={`Access profile · ${member.name}`} className="sm:max-w-lg" description="Manage this member's organizational scope and lifecycle status.">
+            <MemberAccessForm member={member} workspaceMembers={workspaceMembers} onDone={() => setAccessOpen(false)} />
+          </DrawerLayout>
+        </Sheet>
       ) : null}
       {canRemoveMembers ? (
         <RemoveMemberDialog
@@ -876,10 +910,12 @@ function CancelInvitationButton({ invitationId }: { invitationId: string }) {
 
 function ManageMemberAccountSheet({
   member,
+  workspaceMembers,
   open,
   onOpenChange,
 }: {
   member: WorkspaceMemberItem;
+  workspaceMembers: WorkspaceMemberItem[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
@@ -900,6 +936,10 @@ function ManageMemberAccountSheet({
               <KeyDuotoneIcon className="size-4" />
               Password
             </TabsTrigger>
+            <TabsTrigger value="access" className="flex-1 gap-2">
+              <ShieldCheckDuotoneIcon className="size-4" />
+              Access
+            </TabsTrigger>
           </TabsList>
           <TabsContent value="profile">
             <EditMemberProfileForm
@@ -913,10 +953,44 @@ function ManageMemberAccountSheet({
               onDone={() => onOpenChange(false)}
             />
           </TabsContent>
+          <TabsContent value="access">
+            <MemberAccessForm member={member} workspaceMembers={workspaceMembers} onDone={() => onOpenChange(false)} />
+          </TabsContent>
         </Tabs>
       </DrawerLayout>
     </Sheet>
   );
+}
+
+function MemberAccessForm({ member, workspaceMembers, onDone }: { member: WorkspaceMemberItem; workspaceMembers: WorkspaceMemberItem[]; onDone: () => void }) {
+  const router = useRouter();
+  const [saving, startSave] = useTransition();
+  const [sessions, setSessions] = useState<SessionDevice[] | null>(null);
+  const [sessionPending, startSession] = useTransition();
+  const [form, setForm] = useState({ department: member.department ?? "", region: member.region ?? "", team: member.team ?? "", managerMemberId: member.managerMemberId ?? "none", status: member.status });
+  useEffect(() => { void listMemberSessionsAction(member.id).then(setSessions).catch(() => setSessions([])); }, [member.id]);
+  function submit() {
+    startSave(async () => {
+      const result = await updateMemberAccessAction({ memberId: member.id, ...form, managerMemberId: form.managerMemberId === "none" ? null : form.managerMemberId });
+      if (!result.success) {
+        toast.error(result.error ?? "Could not update access profile.");
+        return;
+      }
+      toast.success("Access profile updated."); onDone(); router.refresh();
+    });
+  }
+  return <div className="space-y-4">
+    <p className="text-sm text-muted-foreground">These attributes control contextual access and reporting inside this workspace.</p>
+    <div className="grid gap-4 sm:grid-cols-2">
+      <div className="space-y-1.5"><Label htmlFor="mm-department">Department</Label><Input id="mm-department" value={form.department} onChange={(e) => setForm((p) => ({ ...p, department: e.target.value }))} placeholder="Engineering" /></div>
+      <div className="space-y-1.5"><Label htmlFor="mm-region">Region</Label><Input id="mm-region" value={form.region} onChange={(e) => setForm((p) => ({ ...p, region: e.target.value }))} placeholder="LATAM" /></div>
+      <div className="space-y-1.5"><Label htmlFor="mm-team">Team</Label><Input id="mm-team" value={form.team} onChange={(e) => setForm((p) => ({ ...p, team: e.target.value }))} placeholder="People Operations" /></div>
+      <div className="space-y-1.5"><Label htmlFor="mm-manager">Manager</Label><Select value={form.managerMemberId} onValueChange={(value) => setForm((p) => ({ ...p, managerMemberId: value }))}><SelectTrigger id="mm-manager"><SelectValue placeholder="No manager" /></SelectTrigger><SelectContent><SelectItem value="none">No manager</SelectItem>{workspaceMembers.filter((candidate) => candidate.id !== member.id && candidate.status === "active").map((candidate) => <SelectItem key={candidate.id} value={candidate.id}>{candidate.name}</SelectItem>)}</SelectContent></Select></div>
+    </div>
+    <div className="space-y-1.5"><Label htmlFor="mm-status">Membership status</Label><Select value={form.status} onValueChange={(value: typeof form.status) => setForm((p) => ({ ...p, status: value }))}><SelectTrigger id="mm-status"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="suspended">Suspended</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select></div>
+    <div className="space-y-2 border-t pt-4"><div><p className="text-sm font-medium">Active devices</p><p className="text-xs text-muted-foreground">Revoke a session if this member loses a device or leaves the team.</p></div>{sessions === null ? <p className="text-xs text-muted-foreground">Loading sessions…</p> : sessions.length === 0 ? <p className="text-xs text-muted-foreground">No active sessions.</p> : <div className="divide-y rounded-lg border">{sessions.map((item) => <div key={item.id} className="flex items-center gap-3 px-3 py-2.5"><div className="min-w-0 flex-1"><p className="truncate text-xs font-medium">{item.userAgent ?? "Unknown device"}</p><p className="text-[11px] text-muted-foreground">{item.ipAddress ?? "Unknown IP"} · {item.updatedAt.toLocaleString()}</p></div><Button type="button" size="sm" variant="outline" disabled={sessionPending} onClick={() => startSession(async () => { const result = await revokeMemberSessionAction(member.id, item.id); if (!result.ok) { toast.error(result.error); return; } setSessions((previous) => previous?.filter((session) => session.id !== item.id) ?? []); toast.success("Session revoked."); })}>Revoke</Button></div>)}</div>}</div>
+    <div className="flex justify-end gap-2 border-t pt-4"><SheetClose asChild><Button variant="ghost" disabled={saving}>Cancel</Button></SheetClose><Button onClick={submit} disabled={saving}>{saving ? "Saving…" : "Save access"}</Button></div>
+  </div>;
 }
 
 function EditMemberProfileForm({

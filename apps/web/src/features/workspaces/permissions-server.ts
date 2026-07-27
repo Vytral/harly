@@ -7,6 +7,7 @@ import { and, eq } from "drizzle-orm";
 import { db } from "@harly/db";
 import {
   customRoles,
+  jobs,
   applications,
   candidates,
   offers,
@@ -28,8 +29,12 @@ import {
   isBuiltinRole,
   roleIsAllPowerful,
   roleLabel,
+  normalizeRoleScope,
+  scopeExceedsPrivilege,
+  unrestrictedRoleScope,
   type BuiltinRole,
   type Permission,
+  type RoleScope,
 } from "@/features/workspaces/permissions";
 
 /**
@@ -72,6 +77,49 @@ export async function getRolePermissions(
   return [];
 }
 
+export type RolePolicy = {
+  permissions: Permission[];
+  scope: RoleScope;
+};
+
+/** Resolve capabilities and tenant-local constraints for a role. */
+export async function getRolePolicy(
+  workspaceId: string,
+  roleKey: string,
+): Promise<RolePolicy> {
+  if (roleIsAllPowerful(roleKey)) {
+    return { permissions: [...PERMISSIONS], scope: unrestrictedRoleScope() };
+  }
+
+  const [row] = await db
+    .select({ permissions: customRoles.permissions, scope: customRoles.scope })
+    .from(customRoles)
+    .where(
+      and(
+        eq(customRoles.workspaceId, workspaceId),
+        eq(customRoles.key, roleKey),
+      ),
+    )
+    .limit(1);
+
+  if (row) {
+    const rawPermissions = Array.isArray(row.permissions)
+      ? (row.permissions as string[])
+      : [];
+    return {
+      permissions: PERMISSIONS.filter((permission) =>
+        rawPermissions.includes(permission),
+      ),
+      scope: normalizeRoleScope(row.scope),
+    };
+  }
+
+  return {
+    permissions: await getRolePermissions(workspaceId, roleKey),
+    scope: unrestrictedRoleScope(),
+  };
+}
+
 /** Permission set for the current user in the active workspace. */
 export async function getCurrentPermissions(): Promise<Permission[]> {
   const { organization, roleKey } = await getWorkspaceContext();
@@ -103,13 +151,34 @@ export async function requireJobPermission(
   jobId: string,
 ) {
   const context = await requirePermission(permission);
+  const policy = await getRolePolicy(context.organization.id, context.roleKey);
+  const [job] = await db
+    .select({
+      id: jobs.id,
+      department: jobs.department,
+      region: jobs.jobLocationRegion,
+    })
+    .from(jobs)
+    .where(
+      and(eq(jobs.workspaceId, context.organization.id), eq(jobs.id, jobId)),
+    )
+    .limit(1);
+  if (!job) throw new Error("Job not found.");
+
+  const matchesScope = (allowed: string[], value: string | null) =>
+    allowed.length === 0 ||
+    (value
+      ? allowed.some(
+          (candidate) => candidate.toLocaleLowerCase() === value.toLocaleLowerCase(),
+        )
+      : false);
   if (
-    roleIsAllPowerful(context.roleKey) ||
-    context.roleKey === "admin" ||
-    context.roleKey === "recruiter"
+    !matchesScope(policy.scope.departments, job.department) ||
+    !matchesScope(policy.scope.regions, job.region)
   ) {
-    return context;
+    throw new Error("You do not have access to this job.");
   }
+  if (policy.scope.jobAccess === "all") return context;
 
   const [assignment] = await db
     .select({ id: jobHiringTeam.id })
@@ -133,13 +202,6 @@ export async function requireApplicationPermission(
   applicationId: string,
 ) {
   const context = await requirePermission(permission);
-  if (
-    roleIsAllPowerful(context.roleKey) ||
-    context.roleKey === "admin" ||
-    context.roleKey === "recruiter"
-  ) {
-    return context;
-  }
 
   const [application] = await db
     .select({ jobId: applications.jobId })
@@ -161,13 +223,6 @@ export async function requireOfferPermission(
   offerId: string,
 ) {
   const context = await requirePermission(permission);
-  if (
-    roleIsAllPowerful(context.roleKey) ||
-    context.roleKey === "admin" ||
-    context.roleKey === "recruiter"
-  ) {
-    return context;
-  }
   const [offer] = await db
     .select({ applicationId: offers.applicationId })
     .from(offers)
@@ -188,14 +243,7 @@ export async function requireCandidatePermission(
   candidateId: string,
 ) {
   const context = await requirePermission(permission);
-  if (
-    roleIsAllPowerful(context.roleKey) ||
-    context.roleKey === "admin" ||
-    context.roleKey === "recruiter"
-  ) {
-    return context;
-  }
-  const [application] = await db
+  const applicationsForCandidate = await db
     .select({ jobId: applications.jobId })
     .from(applications)
     .innerJoin(candidates, eq(candidates.id, applications.candidateId))
@@ -205,9 +253,20 @@ export async function requireCandidatePermission(
         eq(applications.candidateId, candidateId),
       ),
     )
-    .limit(1);
-  if (!application) throw new Error("Candidate is not assigned to a job.");
-  return requireJobPermission(permission, application.jobId);
+    .limit(100);
+  if (applicationsForCandidate.length === 0) {
+    throw new Error("Candidate is not assigned to a job.");
+  }
+  // Candidates can have multiple applications. Access is granted when one
+  // related job is inside the actor's contextual scope.
+  for (const application of applicationsForCandidate) {
+    try {
+      return await requireJobPermission(permission, application.jobId);
+    } catch {
+      // Check the next application without revealing inaccessible job data.
+    }
+  }
+  throw new Error("You do not have access to this candidate.");
 }
 
 /** Resolve an interview to its job, then enforce job-scoped access. */
@@ -216,12 +275,6 @@ export async function requireInterviewPermission(
   interviewId: string,
 ) {
   const context = await requirePermission(permission);
-  if (
-    roleIsAllPowerful(context.roleKey) ||
-    context.roleKey === "admin" ||
-    context.roleKey === "recruiter"
-  )
-    return context;
   const [interview] = await db
     .select({ jobId: interviews.jobId })
     .from(interviews)
@@ -277,12 +330,15 @@ export async function assignRolePrivilegeError(
   if (roleIsAllPowerful(targetRoleKey)) {
     return "Only an owner can grant the Owner role.";
   }
-  const [actorPerms, targetPerms] = await Promise.all([
-    getRolePermissions(context.organization.id, context.roleKey),
-    getRolePermissions(context.organization.id, targetRoleKey),
+  const [actorPolicy, targetPolicy] = await Promise.all([
+    getRolePolicy(context.organization.id, context.roleKey),
+    getRolePolicy(context.organization.id, targetRoleKey),
   ]);
-  if (exceedsPrivilege(actorPerms, targetPerms)) {
+  if (exceedsPrivilege(actorPolicy.permissions, targetPolicy.permissions)) {
     return "You can't assign a role with more access than your own.";
+  }
+  if (scopeExceedsPrivilege(actorPolicy.scope, targetPolicy.scope)) {
+    return "You can't assign a role with a broader scope than your own.";
   }
   return null;
 }
@@ -308,6 +364,20 @@ export async function grantPermissionsPrivilegeError(
   return null;
 }
 
+export async function grantRolePolicyPrivilegeError(
+  context: WorkspaceContext,
+  permissions: readonly Permission[],
+  scope: RoleScope,
+): Promise<string | null> {
+  const permissionError = await grantPermissionsPrivilegeError(context, permissions);
+  if (permissionError) return permissionError;
+  if (roleIsAllPowerful(context.roleKey)) return null;
+  const actorPolicy = await getRolePolicy(context.organization.id, context.roleKey);
+  return scopeExceedsPrivilege(actorPolicy.scope, scope)
+    ? "You can't grant a role with a broader scope than your own."
+    : null;
+}
+
 export type WorkspaceRoleMember = {
   id: string;
   name: string;
@@ -318,6 +388,7 @@ export type WorkspaceRoleSummary = {
   key: string;
   name: string;
   permissions: Permission[];
+  scope: RoleScope;
   isBuiltin: boolean;
   /** Owner is the locked keyholder , full access, never editable. */
   isOwner: boolean;
@@ -336,6 +407,7 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
         key: customRoles.key,
         name: customRoles.name,
         permissions: customRoles.permissions,
+        scope: customRoles.scope,
       })
       .from(customRoles)
       .where(eq(customRoles.workspaceId, organization.id))
@@ -379,6 +451,12 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
           : override
             ? filterPerms(override.permissions)
             : [...BUILTIN_ROLE_PERMISSIONS[key]],
+      scope:
+        key === "owner"
+          ? unrestrictedRoleScope()
+          : override
+            ? normalizeRoleScope(override.scope)
+            : unrestrictedRoleScope(),
       isBuiltin: true,
       isOwner: key === "owner",
       editable: key !== "owner",
@@ -394,6 +472,7 @@ export async function listWorkspaceRoles(): Promise<WorkspaceRoleSummary[]> {
       key: row.key,
       name: row.name,
       permissions: filterPerms(row.permissions),
+      scope: normalizeRoleScope(row.scope),
       isBuiltin: false,
       isOwner: false,
       editable: true,

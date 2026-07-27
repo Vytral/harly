@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useMemo, useState } from "react";
-import { formatDistanceToNow, format } from "date-fns";
+import { format, formatDistanceToNow } from "date-fns";
 
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import {
@@ -34,7 +34,10 @@ type AuditLogRow = {
 const severityStyle: Record<Severity, { dot: string; active: string }> = {
   info: { dot: "bg-muted-foreground/50", active: "bg-muted text-foreground" },
   warning: { dot: "bg-clay", active: "bg-clay/15 text-clay" },
-  critical: { dot: "bg-destructive", active: "bg-destructive/10 text-destructive" },
+  critical: {
+    dot: "bg-destructive",
+    active: "bg-destructive/10 text-destructive",
+  },
 };
 
 const SEVERITY_ORDER: Severity[] = ["critical", "warning", "info"];
@@ -68,7 +71,11 @@ function CopyButton({ value }: { value: string }) {
       }}
       className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground active:scale-95"
     >
-      {copied ? <CheckIcon className="size-3" /> : <CopyIcon className="size-3" />}
+      {copied ? (
+        <CheckIcon className="size-3" />
+      ) : (
+        <CopyIcon className="size-3" />
+      )}
       {copied ? "Copied" : "Copy"}
     </button>
   );
@@ -94,7 +101,8 @@ export function AuditLogsCard({
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     return logs.filter((l) => {
-      if (severityFilter !== "all" && l.severity !== severityFilter) return false;
+      if (severityFilter !== "all" && l.severity !== severityFilter)
+        return false;
       if (!q) return true;
       return (
         l.action.toLowerCase().includes(q) ||
@@ -110,6 +118,9 @@ export function AuditLogsCard({
   if (query.trim()) exportParams.set("q", query.trim());
   if (severityFilter !== "all") exportParams.set("severity", severityFilter);
   const exportHref = `/api/security/audit-logs/export${exportParams.size ? `?${exportParams.toString()}` : ""}`;
+  const jsonExportParams = new URLSearchParams(exportParams);
+  jsonExportParams.set("format", "json");
+  const jsonExportHref = `/api/security/audit-logs/export?${jsonExportParams.toString()}`;
 
   return (
     <Card className="gap-5 p-6">
@@ -147,7 +158,10 @@ export function AuditLogsCard({
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
-            All <span className="tabular-nums text-muted-foreground">{logs.length}</span>
+            All{" "}
+            <span className="tabular-nums text-muted-foreground">
+              {logs.length}
+            </span>
           </button>
           {SEVERITY_ORDER.map((sev) => (
             <button
@@ -161,20 +175,25 @@ export function AuditLogsCard({
                   : "text-muted-foreground hover:text-foreground",
               )}
             >
-              <span className={cn("size-1.5 rounded-full", severityStyle[sev].dot)} />
-              {sev} <span className="tabular-nums opacity-70">{counts[sev]}</span>
+              <span
+                className={cn("size-1.5 rounded-full", severityStyle[sev].dot)}
+              />
+              {sev}{" "}
+              <span className="tabular-nums opacity-70">{counts[sev]}</span>
             </button>
           ))}
         </div>
 
         {canExport ? (
-          <a
-            href={exportHref}
-            className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors hover:bg-accent"
-          >
-            <DownloadDuotoneIcon className="size-4" />
-            Export CSV
-          </a>
+          <div className="flex items-center gap-2">
+            <a href={exportHref} className="inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors hover:bg-accent">
+              <DownloadDuotoneIcon className="size-4" />
+              CSV
+            </a>
+            <a href={jsonExportHref} className="inline-flex h-9 items-center rounded-md border px-3 text-sm font-medium transition-colors hover:bg-accent">
+              JSON
+            </a>
+          </div>
         ) : null}
       </div>
 
@@ -199,7 +218,9 @@ export function AuditLogsCard({
                     <div className="flex flex-col items-center gap-2 text-center">
                       <AuditDuotoneIcon className="size-8 text-muted-foreground/40" />
                       <p className="text-sm font-medium text-foreground">
-                        {hasFilter ? "No matching events" : "No audit events yet"}
+                        {hasFilter
+                          ? "No matching events"
+                          : "No audit events yet"}
                       </p>
                       <p className="max-w-[28ch] text-xs text-muted-foreground">
                         {hasFilter
@@ -212,7 +233,9 @@ export function AuditLogsCard({
               )}
               {filtered.map((log) => {
                 const expanded = expandedId === log.id;
-                const hasDetail = Boolean(log.userAgent || log.metadata || log.resourceId);
+                const hasDetail = Boolean(
+                  log.userAgent || log.metadata || log.resourceId,
+                );
                 return (
                   <Fragment key={log.id}>
                     <tr
@@ -220,7 +243,9 @@ export function AuditLogsCard({
                         "transition-colors",
                         hasDetail && "cursor-pointer hover:bg-muted/30",
                       )}
-                      onClick={() => hasDetail && setExpandedId(expanded ? null : log.id)}
+                      onClick={() =>
+                        hasDetail && setExpandedId(expanded ? null : log.id)
+                      }
                     >
                       <td className="py-2.5 pl-4 align-top">
                         {hasDetail ? (
@@ -228,7 +253,9 @@ export function AuditLogsCard({
                             type="button"
                             aria-expanded={expanded}
                             aria-controls={`audit-detail-${log.id}`}
-                            aria-label={expanded ? "Collapse details" : "Expand details"}
+                            aria-label={
+                              expanded ? "Collapse details" : "Expand details"
+                            }
                             onClick={(e) => {
                               e.stopPropagation();
                               setExpandedId(expanded ? null : log.id);
@@ -245,8 +272,13 @@ export function AuditLogsCard({
                         ) : null}
                       </td>
                       <td className="py-2.5 pr-4 align-top font-mono text-xs tabular-nums whitespace-nowrap text-muted-foreground">
-                        <span title={format(new Date(log.createdAt), "PPpp")}>
-                          {formatDistanceToNow(new Date(log.createdAt), { addSuffix: true })}
+                        <span
+                          title={new Date(log.createdAt).toISOString()}
+                          suppressHydrationWarning
+                        >
+                          {formatDistanceToNow(new Date(log.createdAt), {
+                            addSuffix: true,
+                          })}
                         </span>
                       </td>
                       <td className="py-2.5 pr-4 align-top font-mono text-xs">
@@ -287,8 +319,12 @@ export function AuditLogsCard({
                                 {log.resourceType ?? "Not recorded"}
                                 {log.resourceId ? (
                                   <>
-                                    <span className="text-muted-foreground">/</span>
-                                    <span className="truncate">{log.resourceId}</span>
+                                    <span className="text-muted-foreground">
+                                      /
+                                    </span>
+                                    <span className="truncate">
+                                      {log.resourceId}
+                                    </span>
                                     <CopyButton value={log.resourceId} />
                                   </>
                                 ) : null}
@@ -308,7 +344,13 @@ export function AuditLogsCard({
                                   <p className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
                                     Metadata
                                   </p>
-                                  <CopyButton value={JSON.stringify(log.metadata, null, 2)} />
+                                  <CopyButton
+                                    value={JSON.stringify(
+                                      log.metadata,
+                                      null,
+                                      2,
+                                    )}
+                                  />
                                 </div>
                                 <pre className="max-h-40 overflow-auto rounded-lg border bg-card p-3 font-mono text-[11px] leading-relaxed text-muted-foreground">
                                   {JSON.stringify(log.metadata, null, 2)}

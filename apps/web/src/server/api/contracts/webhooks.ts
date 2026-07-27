@@ -20,8 +20,11 @@ const deliverySchema = z.object({
   status: z.string(),
   attempts: z.number(),
   responseStatus: z.number().nullable(),
+  lastError: z.string().nullable(),
   nextRetryAt: z.string().nullable(),
   deliveredAt: z.string().nullable(),
+  deadLetteredAt: z.string().nullable(),
+  replayOfId: z.string().uuid().nullable(),
   createdAt: z.string(),
 });
 
@@ -33,6 +36,15 @@ const webhookDeliveryPath = z.object({
 const deliveryQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),
   status: z.string().optional(),
+});
+const attemptSchema = z.object({
+  id: z.string().uuid(),
+  attempt: z.number(),
+  status: z.string(),
+  responseStatus: z.number().nullable(),
+  error: z.string().nullable(),
+  startedAt: z.string(),
+  finishedAt: z.string().nullable(),
 });
 
 export const listWebhooksContract = defineContract({
@@ -162,6 +174,22 @@ export const replayWebhookDeliveryContract = defineContract({
   },
 });
 
+export const listWebhookDeliveryAttemptsContract = defineContract({
+  method: "GET",
+  path: "/api/v1/webhooks/{id}/deliveries/{deliveryId}/attempts",
+  operationId: "listWebhookDeliveryAttempts",
+  summary: "List webhook delivery attempts",
+  tags: ["Webhooks"],
+  auth: { scopes: ["webhooks:read"] },
+  parameters: { path: webhookDeliveryPath },
+  responses: {
+    200: successEnvelopeSchema(z.array(attemptSchema)),
+    401: errorEnvelopeSchema,
+    403: errorEnvelopeSchema,
+    404: errorEnvelopeSchema,
+  },
+});
+
 export const webhooksContracts = [
   listWebhooksContract,
   createWebhookContract,
@@ -170,4 +198,5 @@ export const webhooksContracts = [
   testWebhookContract,
   listWebhookDeliveriesContract,
   replayWebhookDeliveryContract,
+  listWebhookDeliveryAttemptsContract,
 ] as const;

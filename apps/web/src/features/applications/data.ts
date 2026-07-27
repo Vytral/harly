@@ -26,6 +26,11 @@ import type {
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { buildQuestionAnswerRows } from "@/features/applications/questions";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+  type PersistedDomainEvent,
+} from "@/server/events/emit";
 import type { ApplicationFormValues } from "@/lib/validations/applications";
 import { isWorkspaceStorageKey } from "@/lib/storage-validation";
 import { publicJobVisibilityConditions } from "@/features/jobs/data";
@@ -141,6 +146,9 @@ export async function createPublicApplication(
   // Held in a ref object so the transaction closure can populate it without
   // tripping TypeScript's "assigned-in-closure" narrowing of a bare `let`.
   const createdEvent: { current: CreatedEvent | null } = { current: null };
+  const createdDomainEvent: { current: PersistedDomainEvent | null } = {
+    current: null,
+  };
 
   const result = await db.transaction(
     async (tx): Promise<PublicApplicationResult> => {
@@ -457,6 +465,17 @@ export async function createPublicApplication(
         candidateEmail: candidate.email,
         candidateName: `${candidate.firstName} ${candidate.lastName}`,
       };
+      createdDomainEvent.current = await persistDomainEvent(tx, {
+        name: "application.created",
+        workspaceId,
+        aggregateType: "application",
+        aggregateId: application.id,
+        payload: {
+          application: { id: application.id, jobId: job.id },
+          candidate: { id: candidate.id, email: candidate.email },
+          job: { id: job.id, title: job.title },
+        },
+      });
 
       return {
         ok: true,
@@ -479,6 +498,9 @@ export async function createPublicApplication(
   );
 
   const event = createdEvent.current;
+  if (createdDomainEvent.current) {
+    await publishPersistedDomainEvents([createdDomainEvent.current]);
+  }
   if (event) {
     await emitWebhookEvent(event.workspaceId, "application.created", {
       application: { id: event.applicationId, jobId: event.jobId },
@@ -488,7 +510,7 @@ export async function createPublicApplication(
         name: event.candidateName,
       },
       job: { id: event.jobId, title: event.jobTitle },
-    });
+    }, { skipDomainEvent: true });
   }
 
   return result;

@@ -2,7 +2,7 @@ import { z } from "zod";
 import { NextResponse } from "next/server";
 
 import { ApiError, type ApiScope } from "@harly/api";
-import { authenticateApiKey, type ApiKeyContext } from "@/server/api/auth";
+import { authenticateApiKey, hasApiScope, type ApiKeyContext } from "@/server/api/auth";
 import {
   reserveIdempotencyKey,
   releaseIdempotencyReservation,
@@ -115,7 +115,7 @@ export function buildRouteHandler<
       );
       if (contract.auth?.scopes) {
         for (const scope of contract.auth.scopes.slice(1)) {
-          if (!auth.scopes.includes(scope)) {
+          if (!hasApiScope(auth.scopes, scope)) {
             throw ApiError.forbidden(
               `This key is missing the \`${scope}\` scope.`,
             );
@@ -124,7 +124,7 @@ export function buildRouteHandler<
       }
 
       const idempotency =
-        contract.method === "POST" && contract.idempotent
+        (contract.method === "POST" || contract.method === "PUT" || contract.method === "PATCH") && contract.idempotent
           ? await reserveIdempotencyKey(request, auth, { path: contract.path })
           : null;
       if (idempotency?.kind === "replay") {

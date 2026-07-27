@@ -8,6 +8,7 @@ import { EVENT_HEADER, SIGNATURE_HEADER, signWebhookPayload } from "@harly/api";
 import {
   db,
   webhookDeliveries,
+  webhookDeliveryAttempts,
   webhookEndpoints,
   type WebhookDelivery,
   type WebhookEndpoint,
@@ -37,6 +38,7 @@ export async function deliverWebhook(
   options?: { workerId?: string },
 ): Promise<"success" | "failed" | "exhausted"> {
   const attemptNumber = delivery.attempts + 1;
+  const startedAt = new Date();
   const body = JSON.stringify(delivery.payload);
   const timestamp = Math.floor(Date.now() / 1000);
 
@@ -83,6 +85,26 @@ export async function deliverWebhook(
       ? "exhausted"
       : "failed";
 
+  const error = !ok && responseStatus === null ? responseBody : null;
+
+  // Attempt rows are immutable operational history. Failure to write the
+  // secondary audit record must never strand the delivery itself.
+  await db
+    .insert(webhookDeliveryAttempts)
+    .values({
+      workspaceId: delivery.workspaceId,
+      deliveryId: delivery.id,
+      attempt: attemptNumber,
+      status: ok ? "success" : status === "exhausted" ? "dead_letter" : "failed",
+      responseStatus,
+      responseBody: responseStatus === null ? null : responseBody,
+      error,
+      startedAt,
+      finishedAt: new Date(),
+    })
+    .onConflictDoNothing()
+    .catch(() => undefined);
+
   await db
     .update(webhookDeliveries)
     .set({
@@ -90,8 +112,10 @@ export async function deliverWebhook(
       attempts: attemptNumber,
       responseStatus,
       responseBody,
+      lastError: error,
       deliveredAt: ok ? new Date() : null,
       nextRetryAt: status === "failed" ? nextRetryAt(attemptNumber) : null,
+      deadLetteredAt: status === "exhausted" ? new Date() : null,
       lockedAt: null,
       lockedBy: null,
       updatedAt: new Date(),

@@ -10,6 +10,7 @@ import {
   BellIcon,
   UserCircleIcon,
   BriefcaseIcon,
+  FileTextIcon,
 } from "@/components/ui/icons/phosphor";
 import {
   DropdownMenu,
@@ -35,7 +36,7 @@ type PortalTopNavProps = {
 
 const NAV_ITEMS = [
   { href: "/portal/dashboard" as Route, label: "Home", icon: HouseIcon },
-  { href: "/portal/applications" as Route, label: "Applications", icon: BriefcaseIcon },
+  { href: "/portal/applications" as Route, label: "Applications", icon: FileTextIcon },
   { href: "/portal/notifications" as Route, label: "Notifications", icon: BellIcon },
   { href: "/portal/jobs" as Route, label: "Jobs", icon: BriefcaseIcon },
 ];

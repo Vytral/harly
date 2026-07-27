@@ -20,6 +20,11 @@ import {
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+  type PersistedDomainEvent,
+} from "@/server/events/emit";
+import {
   fetchGreenhouseCandidateImportRows,
   GreenhouseImportError,
 } from "./greenhouse";
@@ -438,6 +443,7 @@ export async function importCandidatesAction(input: {
   let alreadyInPipeline = 0;
   const errors: { row: number; email: string; reason: string }[] = [];
   const importedApplicationIds: string[] = [];
+  const persistedEvents: PersistedDomainEvent[] = [];
 
   for (const importedRow of parsed.data.rows) {
     const raw = importedRow.values;
@@ -554,6 +560,21 @@ export async function importCandidatesAction(input: {
 
         imported += 1;
         importedApplicationIds.push(application.id);
+        persistedEvents.push(
+          await persistDomainEvent(tx, {
+            name: "application.created",
+            workspaceId,
+            actorId: context.user.id,
+            aggregateType: "application",
+            aggregateId: application.id,
+            payload: {
+              application: { id: application.id, jobId: job.id },
+              candidate: { id: candidate.id },
+              job: { id: job.id, title: job.title },
+              source: "csv_import",
+            },
+          }),
+        );
       });
     } catch (error) {
       log.error(error, "importCandidatesAction row import failed");
@@ -567,12 +588,13 @@ export async function importCandidatesAction(input: {
 
   revalidatePath("/dashboard/candidates");
   revalidatePath("/dashboard/pipeline");
+  await publishPersistedDomainEvents(persistedEvents);
 
   for (const applicationId of importedApplicationIds) {
     void emitWebhookEvent(workspaceId, "application.created", {
       application: { id: applicationId },
       source: "csv_import",
-    });
+    }, { actorId: context.user.id, skipDomainEvent: true });
   }
 
   return { success: true, imported, alreadyInPipeline, errors };

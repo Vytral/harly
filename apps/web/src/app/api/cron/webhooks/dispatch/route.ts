@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { dispatchDueWebhooks } from "@/server/webhooks/dispatch";
 import { reclaimStalledWorkflowRuns } from "@/features/automations/dispatch";
 import { authorizeCron } from "@/server/cron-auth";
+import { startCronRun } from "@/server/cron-runs";
 
 export const runtime = "nodejs";
 // Never cache , this mutates delivery state.
@@ -23,10 +24,16 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest): Promise<NextResponse> {
   const auth = await authorizeCron(request, "webhooks-dispatch");
   if (!auth.ok) return auth.response;
+  const run = startCronRun("webhooks-dispatch");
   try {
     const summary = await dispatchDueWebhooks();
     const reclaimed = await reclaimStalledWorkflowRuns();
-    return NextResponse.json({ ok: true, ...summary, workflowRunsReclaimed: reclaimed.reclaimed });
+    const counters = { ...summary, workflowRunsReclaimed: reclaimed.reclaimed };
+    await run.finish("succeeded", counters);
+    return NextResponse.json({ ok: true, ...counters });
+  } catch (error) {
+    await run.finish("failed");
+    throw error;
   } finally {
     await auth.release();
   }

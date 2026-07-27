@@ -17,6 +17,10 @@ import {
 } from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+} from "@/server/events/emit";
 import { createLogger } from "@/lib/logger";
 import { withConcurrencyRetry } from "@/lib/concurrent";
 import {
@@ -173,7 +177,7 @@ export async function createApplicationForApi(input: {
 }): Promise<Application> {
   const { workspaceId, jobId, candidateId } = input;
 
-  const application = await db.transaction(async (tx) => {
+  const { application, event } = await db.transaction(async (tx) => {
     const [job] = await tx
       .select({ id: jobs.id })
       .from(jobs)
@@ -269,12 +273,22 @@ export async function createApplicationForApi(input: {
       movedById: null,
     });
 
-    return created;
+    return {
+      application: created,
+      event: await persistDomainEvent(tx, {
+        name: "application.created",
+        workspaceId,
+        aggregateType: "application",
+        aggregateId: created.id,
+        payload: { application: serializeApplication(created) },
+      }),
+    };
   });
 
+  await publishPersistedDomainEvents([event]);
   await emitWebhookEvent(workspaceId, "application.created", {
     application: serializeApplication(application),
-  });
+  }, { skipDomainEvent: true });
   return application;
 }
 
@@ -396,7 +410,7 @@ export async function moveApplicationStageForApi(input: {
 
     const fromStageId = application.currentStageId;
 
-    const [updated] = await db.transaction(async (tx) => {
+    const { updated, persistedEvent } = await db.transaction(async (tx) => {
       const [next] = await tx
         .select({
           value: sql<number>`coalesce(max(${applications.pipelineOrder}), 0) + 1`,
@@ -440,14 +454,30 @@ export async function moveApplicationStageForApi(input: {
         movedById: null,
       });
 
-      return result;
+      const updatedApplication = result[0];
+      if (!updatedApplication) throw ApiError.conflict("Application changed; retry request.");
+      return {
+        updated: updatedApplication,
+        persistedEvent: await persistDomainEvent(tx, {
+          name: "application.stage_changed",
+          workspaceId: input.workspaceId,
+          aggregateType: "application",
+          aggregateId: input.applicationId,
+          payload: {
+            application: serializeApplication(updatedApplication),
+            fromStageId,
+            toStageId: input.toStageId,
+          },
+        }),
+      };
     });
 
+    await publishPersistedDomainEvents([persistedEvent]);
     await emitWebhookEvent(input.workspaceId, "application.stage_changed", {
       application: serializeApplication(updated),
       fromStageId,
       toStageId: input.toStageId,
-    });
+    }, { skipDomainEvent: true });
 
     return updated;
   };
@@ -487,7 +517,7 @@ async function setApplicationStatus(
       )
       .limit(1);
 
-    const [updated] = await db.transaction(async (tx) => {
+    const { updated, persistedEvent } = await db.transaction(async (tx) => {
       const [next] = await tx
         .update(applications)
         .set({
@@ -514,12 +544,22 @@ async function setApplicationStatus(
           movedById: null,
         });
       }
-      return [next];
+      return {
+        updated: next,
+        persistedEvent: await persistDomainEvent(tx, {
+          name: event,
+          workspaceId: input.workspaceId,
+          aggregateType: "application",
+          aggregateId: input.applicationId,
+          payload: { application: serializeApplication(next) },
+        }),
+      };
     });
 
+    await publishPersistedDomainEvents([persistedEvent]);
     await emitWebhookEvent(input.workspaceId, event, {
       application: serializeApplication(updated),
-    });
+    }, { skipDomainEvent: true });
     if (application.status !== status) {
       await notifyApplicationStatusChange({
         workspaceId: input.workspaceId,

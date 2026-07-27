@@ -23,6 +23,10 @@ import {
 } from "@/lib/email/outbox-processor";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+} from "@/server/events/emit";
+import {
   assertOfferTerms,
   getOfferRecipient,
   offerHasExpired,
@@ -379,17 +383,35 @@ export async function decideOfferForApi(input: {
       type: input.decision === "accepted" ? "offer.accepted" : "offer.declined",
       metadata: { title: offer.title },
     });
-    return updated;
+    return {
+      decided: updated,
+      event:
+        input.decision === "accepted"
+          ? await persistDomainEvent(tx, {
+              name: "application.hired",
+              workspaceId: input.workspaceId,
+              actorId: input.actorUserId,
+              aggregateType: "application",
+              aggregateId: offer.applicationId,
+              payload: {
+                application: { id: offer.applicationId, jobId: offer.jobId },
+                candidate: { id: offer.candidateId },
+                offer: { id: offer.id, title: offer.title },
+              },
+            })
+          : null,
+    };
   });
 
-  if (input.decision === "accepted") {
+  if (decided.event) {
+    await publishPersistedDomainEvents([decided.event]);
     await emitWebhookEvent(input.workspaceId, "application.hired", {
       application: { id: offer.applicationId, jobId: offer.jobId },
       candidate: { id: offer.candidateId },
       offer: { id: offer.id, title: offer.title },
-    });
+    }, { actorId: input.actorUserId, skipDomainEvent: true });
   }
-  return decided;
+  return decided.decided;
 }
 
 export async function withdrawOfferForApi(input: {

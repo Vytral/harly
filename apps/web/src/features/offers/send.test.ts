@@ -101,6 +101,16 @@ vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/esign/offer-signing", () => ({
   createOfferEnvelope: vi.fn(async () => null),
 }));
+vi.mock("@/lib/esign/native/offer-signing", () => ({
+  getOrCreateNativeOfferDocument: vi.fn(async () => ({ documentId: "doc-1" })),
+}));
+// Offer channel resolution is exercised in its own tests (config.test.ts /
+// EsignConnectPanel); here it's a fixed "email" so sendOffer's outbox delivery
+// path — not the esign branch — is what's under test, and so this doesn't
+// consume a slot from the manually-ordered `selectQueue` mock above.
+vi.mock("@/lib/esign/config", () => ({
+  getWorkspaceEsignStatus: vi.fn(async () => ({ offerSignatureChannel: "email" })),
+}));
 
 import { sendOffer } from "./actions";
 

@@ -225,6 +225,7 @@ describe("decideOffer guards", () => {
       "ws-1",
       "application.hired",
       expect.objectContaining({ application: { id: "app-1", jobId: "job-1" } }),
+      { actorId: "user-1", skipDomainEvent: true },
     );
   });
 

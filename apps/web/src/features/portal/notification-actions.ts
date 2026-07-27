@@ -84,3 +84,43 @@ export async function markAllCandidatePortalNotificationsRead(): Promise<{
   revalidatePortalNotifications();
   return { success: true };
 }
+
+export async function deleteCandidatePortalNotification(input: {
+  notificationId: string;
+}): Promise<{ success: boolean }> {
+  const parsed = idSchema.safeParse(input);
+  const session = await getCandidatePortalSession();
+  if (!parsed.success || !session) return { success: false };
+
+  await db
+    .delete(candidatePortalNotifications)
+    .where(
+      and(
+        eq(candidatePortalNotifications.id, parsed.data.notificationId),
+        eq(candidatePortalNotifications.workspaceId, session.workspaceId),
+        eq(candidatePortalNotifications.candidateId, session.candidateId),
+      ),
+    );
+
+  revalidatePortalNotifications();
+  return { success: true };
+}
+
+export async function deleteAllCandidatePortalNotifications(): Promise<{
+  success: boolean;
+}> {
+  const session = await getCandidatePortalSession();
+  if (!session) return { success: false };
+
+  await db
+    .delete(candidatePortalNotifications)
+    .where(
+      and(
+        eq(candidatePortalNotifications.workspaceId, session.workspaceId),
+        eq(candidatePortalNotifications.candidateId, session.candidateId),
+      ),
+    );
+
+  revalidatePortalNotifications();
+  return { success: true };
+}
