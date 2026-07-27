@@ -13,6 +13,7 @@ process.env.HARLY_REQUIRED_DISK_GB = "0";
 
 const packageRoot = path.resolve(import.meta.dirname, "..");
 const cli = path.join(packageRoot, "dist", "index.js");
+const ansiPattern = /\u001b\[[0-?]*[ -/]*[@-~]/g;
 
 async function makeFakeDocker(script) {
   const bin = await mkdtemp(path.join(os.tmpdir(), "harly-fake-bin-"));
@@ -335,6 +336,7 @@ exit 0
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Dry run/);
     assert.match(result.stdout, /no files were written/i);
+    const dryRunOutput = result.stdout.replace(ansiPattern, "");
     for (const file of [
       "compose.yaml",
       "Caddyfile",
@@ -345,7 +347,7 @@ exit 0
       ".env",
     ]) {
       assert.ok(
-        result.stdout.includes(`+ ${file}`),
+        dryRunOutput.includes(`+ ${file}`),
         `dry-run output should list ${file}`,
       );
     }
