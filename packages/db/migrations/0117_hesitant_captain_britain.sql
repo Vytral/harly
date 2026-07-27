@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "audit_log_retention_months" integer DEFAULT 24 NOT NULL;

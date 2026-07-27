@@ -778,6 +778,76 @@
       "when": 1784943913928,
       "tag": "0110_real_baron_strucker",
       "breakpoints": true
+    },
+    {
+      "idx": 111,
+      "version": "7",
+      "when": 1785101366690,
+      "tag": "0111_free_robbie_robertson",
+      "breakpoints": true
+    },
+    {
+      "idx": 112,
+      "version": "7",
+      "when": 1785108378469,
+      "tag": "0112_bumpy_malcolm_colcord",
+      "breakpoints": true
+    },
+    {
+      "idx": 113,
+      "version": "7",
+      "when": 1785111874453,
+      "tag": "0113_next_phantom_reporter",
+      "breakpoints": true
+    },
+    {
+      "idx": 114,
+      "version": "7",
+      "when": 1785113965656,
+      "tag": "0114_charming_rafael_vega",
+      "breakpoints": true
+    },
+    {
+      "idx": 115,
+      "version": "7",
+      "when": 1785114071503,
+      "tag": "0115_chunky_flatman",
+      "breakpoints": true
+    },
+    {
+      "idx": 116,
+      "version": "7",
+      "when": 1785114412798,
+      "tag": "0116_cute_shriek",
+      "breakpoints": true
+    },
+    {
+      "idx": 117,
+      "version": "7",
+      "when": 1785115970531,
+      "tag": "0117_hesitant_captain_britain",
+      "breakpoints": true
+    },
+    {
+      "idx": 118,
+      "version": "7",
+      "when": 1785119804325,
+      "tag": "0118_slim_reptil",
+      "breakpoints": true
+    },
+    {
+      "idx": 119,
+      "version": "7",
+      "when": 1785120201803,
+      "tag": "0119_unknown_liz_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 120,
+      "version": "7",
+      "when": 1785120601857,
+      "tag": "0120_freezing_scarlet_spider",
+      "breakpoints": true
     }
   ]
 }

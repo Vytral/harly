@@ -1,0 +1,1 @@
+ALTER TABLE "domain_event_outbox" ADD COLUMN "event_id" uuid DEFAULT gen_random_uuid() NOT NULL;

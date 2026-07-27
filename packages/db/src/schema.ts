@@ -1,6 +1,7 @@
 import { relations, sql } from "drizzle-orm";
 import {
   boolean,
+  bigint,
   check,
   doublePrecision,
   index,
@@ -176,6 +177,12 @@ export const workflowRunStatusEnum = pgEnum("workflow_run_status", [
   "skipped",
 ]);
 
+export const memberStatusEnum = pgEnum("member_status", [
+  "active",
+  "inactive",
+  "suspended",
+]);
+
 // Better Auth
 export const user = pgTable(
   "user",
@@ -337,13 +344,66 @@ export const member = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     role: text("role").default("member").notNull(),
+    // Tenant-local attributes used by contextual RBAC. They intentionally live
+    // on membership rather than user because one person may belong to several
+    // workspaces with different reporting lines and regional access.
+    department: text("department"),
+    region: text("region"),
+    team: text("team"),
+    // Validated as a same-workspace member in the service layer. Keeping this
+    // nullable reference unbound avoids a Better Auth self-relation cycle in
+    // the generated TypeScript schema.
+    managerMemberId: text("manager_member_id"),
+    status: memberStatusEnum("status").default("active").notNull(),
+    scimExternalId: text("scim_external_id"),
     createdAt: timestamp("created_at").notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
   },
   (table) => [
     index("member_organizationId_idx").on(table.organizationId),
     index("member_userId_idx").on(table.userId),
+    index("member_manager_idx").on(table.managerMemberId),
+    uniqueIndex("member_org_scim_external_id_idx").on(
+      table.organizationId,
+      table.scimExternalId,
+    ),
   ],
 );
+
+export type Member = typeof member.$inferSelect;
+export type NewMember = typeof member.$inferInsert;
+
+/** Workspace-scoped bearer credentials for SCIM provisioning. Only the hash
+ * is persisted; the raw token is shown once at creation time. */
+export const scimTokens = pgTable(
+  "scim_tokens",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tokenPrefix: text("token_prefix").notNull(),
+    tokenHash: text("token_hash").notNull().unique(),
+    createdBy: text("created_by").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+    expiresAt: timestamp("expires_at", { withTimezone: true }),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("scim_tokens_workspace_idx").on(table.workspaceId),
+    index("scim_tokens_active_idx").on(table.workspaceId, table.revokedAt),
+  ],
+);
+
+export type ScimToken = typeof scimTokens.$inferSelect;
+export type NewScimToken = typeof scimTokens.$inferInsert;
 
 /** Virtual per-recruiter sender identity (From display only). Never a real
  * mailbox — inbound routing stays on the per-application reply-token system. */
@@ -637,6 +697,22 @@ export const workspaceSettings = pgTable("workspace_settings", {
   emailInboundResendApiKeyTag: text("email_inbound_resend_api_key_tag"),
   // Require all workspace members to enable two-factor authentication.
   require2fa: boolean("require_2fa").default(false).notNull(),
+  // Enterprise access controls. Empty lists mean the control is disabled.
+  securityIpAllowlist: jsonb("security_ip_allowlist")
+    .default(sql`'[]'::jsonb`)
+    .notNull(),
+  securityAllowedDomains: jsonb("security_allowed_domains")
+    .default(sql`'[]'::jsonb`)
+    .notNull(),
+  securityRiskDetectionEnabled: boolean("security_risk_detection_enabled")
+    .default(true)
+    .notNull(),
+  securityReauthMinutes: integer("security_reauth_minutes")
+    .default(15)
+    .notNull(),
+  securityRequirePasskey: boolean("security_require_passkey")
+    .default(false)
+    .notNull(),
   // Shape lives in apps/web/src/features/career-page/config.ts.
   careerPageConfig: jsonb("career_page_config")
     .default(sql`'{}'::jsonb`)
@@ -715,6 +791,12 @@ export const workspaceSettings = pgTable("workspace_settings", {
   // automatic anonymization, so no one loses data they didn't ask to purge.
   dataRetentionEnabled: boolean("data_retention_enabled")
     .default(false)
+    .notNull(),
+  // Audit records are retained independently from candidate PII. A minimum
+  // window keeps compliance evidence available without allowing unbounded
+  // tenant growth. Enforcement is performed by the retention cron.
+  auditLogRetentionMonths: integer("audit_log_retention_months")
+    .default(24)
     .notNull(),
   consentCheckboxText: text("consent_checkbox_text"),
   // JSONB storing legal page content keyed by page type:
@@ -1033,6 +1115,16 @@ export const customRoles = pgTable(
     permissions: jsonb("permissions")
       .default(sql`'[]'::jsonb`)
       .notNull(),
+    // Contextual constraints are evaluated server-side in addition to the
+    // permission set. Empty arrays mean unrestricted access for that axis.
+    scope: jsonb("scope")
+      .$type<{
+        jobAccess?: "all" | "assigned";
+        departments?: string[];
+        regions?: string[];
+      }>()
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     ...timestamps(),
   },
   (table) => [
@@ -1324,6 +1416,34 @@ export const applications = pgTable(
     index("applications_applied_at_idx").on(table.workspaceId, table.appliedAt),
   ],
 );
+
+/** Optional self-identification data, kept separate from candidate PII. */
+export const candidateDemographics = pgTable(
+  "candidate_demographics",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    gender: text("gender"),
+    ethnicity: text("ethnicity"),
+    disability: text("disability"),
+    veteranStatus: text("veteran_status"),
+    consentAt: timestamp("consent_at", { withTimezone: true }).notNull(),
+    source: text("source").notNull().default("self_reported"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("candidate_demographics_candidate_uidx").on(table.candidateId),
+    index("candidate_demographics_workspace_idx").on(table.workspaceId),
+  ],
+);
+
+export type CandidateDemographics = typeof candidateDemographics.$inferSelect;
+export type NewCandidateDemographics = typeof candidateDemographics.$inferInsert;
 
 export const applicationAnswers = pgTable(
   "application_answers",
@@ -2365,6 +2485,50 @@ export const cronRuns = pgTable(
 export type EmailOutbox = typeof emailOutbox.$inferSelect;
 export type NewEmailOutbox = typeof emailOutbox.$inferInsert;
 
+/** Durable domain-event queue. Realtime delivery is intentionally separate:
+ * SSE notifications are ephemeral, while these rows support retries for
+ * integrations, automations, and other durable consumers. */
+export const domainEventOutbox = pgTable(
+  "domain_event_outbox",
+  {
+    id: bigint("id", { mode: "number" })
+      .generatedAlwaysAsIdentity()
+      .primaryKey(),
+    eventId: uuid("event_id").defaultRandom().notNull(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    eventName: text("event_name").notNull(),
+    eventVersion: integer("event_version").notNull(),
+    schemaVersion: integer("schema_version").notNull(),
+    aggregateType: text("aggregate_type"),
+    aggregateId: text("aggregate_id"),
+    actorId: text("actor_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    payload: jsonb("payload").notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    attempts: integer("attempts").default(0).notNull(),
+    lastError: text("last_error"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("domain_event_outbox_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    index("domain_event_outbox_pending_idx").on(
+      table.publishedAt,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type DomainEventOutbox = typeof domainEventOutbox.$inferSelect;
+export type NewDomainEventOutbox = typeof domainEventOutbox.$inferInsert;
+
 // Reusable outbound email templates with {{variable}} placeholders.
 export const emailTemplates = pgTable(
   "email_templates",
@@ -3179,15 +3343,18 @@ export const webhookDeliveries = pgTable(
     payload: jsonb("payload")
       .default(sql`'{}'::jsonb`)
       .notNull(),
-    // "pending" | "success" | "failed" | "exhausted"
+    // "pending" | "processing" | "success" | "failed" | "dead_letter"
     status: text("status").default("pending").notNull(),
     attempts: integer("attempts").default(0).notNull(),
     responseStatus: integer("response_status"),
     responseBody: text("response_body"),
+    lastError: text("last_error"),
     nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
     lockedAt: timestamp("locked_at", { withTimezone: true }),
     lockedBy: text("locked_by"),
     deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    deadLetteredAt: timestamp("dead_lettered_at", { withTimezone: true }),
+    replayOfId: uuid("replay_of_id"),
     ...timestamps(),
   },
   (table) => [
@@ -3212,6 +3379,132 @@ export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
 export type NewWebhookEndpoint = typeof webhookEndpoints.$inferInsert;
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
 export type NewWebhookDelivery = typeof webhookDeliveries.$inferInsert;
+
+/** Immutable per-attempt audit trail for outbound webhook delivery. */
+export const webhookDeliveryAttempts = pgTable(
+  "webhook_delivery_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    deliveryId: uuid("delivery_id")
+      .notNull()
+      .references(() => webhookDeliveries.id, { onDelete: "cascade" }),
+    attempt: integer("attempt").notNull(),
+    status: text("status").notNull(),
+    responseStatus: integer("response_status"),
+    responseBody: text("response_body"),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("webhook_delivery_attempts_delivery_attempt_idx").on(
+      table.deliveryId,
+      table.attempt,
+    ),
+    index("webhook_delivery_attempts_workspace_started_idx").on(
+      table.workspaceId,
+      table.startedAt,
+    ),
+  ],
+);
+
+export type WebhookDeliveryAttempt = typeof webhookDeliveryAttempts.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Reporting: durable scheduled reports and delivery history
+// ---------------------------------------------------------------------------
+
+export const scheduledReports = pgTable(
+  "scheduled_reports",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    reportType: text("report_type").notNull().default("hiring_overview"),
+    frequency: text("frequency").notNull().default("monthly"),
+    recipients: jsonb("recipients").default(sql`'[]'::jsonb`).notNull(),
+    filters: jsonb("filters").default(sql`'{}'::jsonb`).notNull(),
+    enabled: boolean("enabled").default(true).notNull(),
+    nextRunAt: timestamp("next_run_at", { withTimezone: true }),
+    lastRunAt: timestamp("last_run_at", { withTimezone: true }),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("scheduled_reports_workspace_enabled_next_run_idx").on(
+      table.workspaceId,
+      table.enabled,
+      table.nextRunAt,
+    ),
+  ],
+);
+
+export const scheduledReportRuns = pgTable(
+  "scheduled_report_runs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    scheduledReportId: uuid("scheduled_report_id")
+      .notNull()
+      .references(() => scheduledReports.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("running"),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }).notNull(),
+    recipientCount: integer("recipient_count").default(0).notNull(),
+    error: text("error"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("scheduled_report_runs_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    index("scheduled_report_runs_report_created_idx").on(
+      table.scheduledReportId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export type ScheduledReport = typeof scheduledReports.$inferSelect;
+export type NewScheduledReport = typeof scheduledReports.$inferInsert;
+export type ScheduledReportRun = typeof scheduledReportRuns.$inferSelect;
+
+// ---------------------------------------------------------------------------
+// Advanced workspace security policy
+// ---------------------------------------------------------------------------
+
+export const securityReauthChallenges = pgTable(
+  "security_reauth_challenges",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+    purpose: text("purpose").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("security_reauth_challenges_token_hash_idx").on(table.tokenHash),
+    index("security_reauth_challenges_user_workspace_idx").on(table.userId, table.workspaceId),
+  ],
+);
+
+export type SecurityReauthChallenge = typeof securityReauthChallenges.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Security: WebAuthn passkeys + audit logs
