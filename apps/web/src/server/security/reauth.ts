@@ -15,7 +15,6 @@ export async function issueReauthToken(input: { userId: string; workspaceId: str
   await db.insert(securityReauthChallenges).values({ userId: input.userId, workspaceId: input.workspaceId, purpose: input.purpose, tokenHash, expiresAt });
   return { raw, expiresAt, cookieName: COOKIE_NAME };
 }
-
 export async function requireRecentReauth(input: { userId: string; workspaceId: string; purpose: string }) {
   const raw = (await cookies()).get(COOKIE_NAME)?.value;
   if (!raw) return false;
@@ -23,4 +22,3 @@ export async function requireRecentReauth(input: { userId: string; workspaceId: 
   const [challenge] = await db.select({ id: securityReauthChallenges.id }).from(securityReauthChallenges).where(and(eq(securityReauthChallenges.userId, input.userId), eq(securityReauthChallenges.workspaceId, input.workspaceId), eq(securityReauthChallenges.purpose, input.purpose), eq(securityReauthChallenges.tokenHash, tokenHash), isNull(securityReauthChallenges.consumedAt), gt(securityReauthChallenges.expiresAt, new Date()))).limit(1);
   return Boolean(challenge);
 }
-
