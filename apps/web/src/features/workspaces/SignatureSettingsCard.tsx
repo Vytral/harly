@@ -7,7 +7,7 @@ import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
-import { SealCheckDuotoneIcon } from "@/components/ui/icons/phosphor";
+import { PencilIcon } from "@/components/ui/icons/phosphor";
 import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
@@ -78,7 +78,7 @@ export function SignatureSettingsCard({ settings }: { settings: Settings }) {
     <div className="space-y-6">
       <Card className="gap-5 p-6">
         <SectionHeader
-          icon={SealCheckDuotoneIcon}
+          icon={PencilIcon}
           title="Harly Signature"
           description="Control which native signing capabilities are available to this workspace. Native signing is compliance-ready and does not replace your legal policies."
           badge={

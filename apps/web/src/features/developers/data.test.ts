@@ -70,6 +70,7 @@ describe("replayWebhookDelivery", () => {
       endpointId: "endpoint-1",
       event: "candidate.created",
       payload: { candidateId: "c-1" },
+      replayOfId: "delivery-1",
       status: "pending",
       attempts: 0,
     });

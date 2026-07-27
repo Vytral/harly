@@ -14,6 +14,7 @@ import {
 import {
   CodeDuotoneIcon,
   IdentificationCardDuotoneIcon,
+  PencilIcon,
   RobotDuotoneIcon,
   SealCheckDuotoneIcon,
 } from "@/components/ui/icons/phosphor";
@@ -81,7 +82,7 @@ const sections: SettingsSection[] = [
     href: "/settings/signature" as Route,
     label: "Harly Signature",
     hint: "Native signing, remote links, OTP security, and evidence settings.",
-    icon: SealCheckDuotoneIcon,
+    icon: PencilIcon,
   },
   {
     href: "/settings/developers" as Route,

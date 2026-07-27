@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { saveOfferSignatureChannelAction } from "@/features/workspaces/esign-settings-actions";
 import type { WorkspaceEsignStatus } from "@/lib/esign/config";
 import { IntegrationHeader } from "@/features/workspaces/IntegrationDetailShell";
-import { SealCheckDuotoneIcon, GearSixIcon } from "@/components/ui/icons/phosphor";
+import { PencilIcon, GearSixIcon } from "@/components/ui/icons/phosphor";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -54,7 +54,7 @@ export function HarlySignConnectPanel({
   return (
     <div className="space-y-6">
       <IntegrationHeader
-        logo={SealCheckDuotoneIcon}
+      logo={PencilIcon}
         tileClassName={tileClassName}
         name="Harly Sign"
         description={description}

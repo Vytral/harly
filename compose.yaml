@@ -159,7 +159,10 @@ services:
     logging: *harly-logging
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:?Set POSTGRES_USER}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}@postgres:5432/${DOCUSEAL_DB:-docuseal}
-      SECRET_KEY_BASE: ${DOCUSEAL_SECRET_KEY_BASE:?Set DOCUSEAL_SECRET_KEY_BASE}
+      # Optional profile: Compose must still interpolate this value when it
+      # parses the file, so keep it empty by default. Set a strong secret
+      # before enabling the esign profile; DocuSeal will reject an empty key.
+      SECRET_KEY_BASE: ${DOCUSEAL_SECRET_KEY_BASE:-}
     depends_on:
       postgres:
         condition: service_healthy
