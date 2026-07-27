@@ -6,6 +6,11 @@ import path from "node:path";
 import { spawnSync } from "node:child_process";
 import test from "node:test";
 
+// Dev machines and CI runners don't always have the 5 GB the installer
+// recommends. Tests run with the floor disabled so a full /tmp doesn't
+// break the suite.
+process.env.HARLY_REQUIRED_DISK_GB = "0";
+
 const packageRoot = path.resolve(import.meta.dirname, "..");
 const cli = path.join(packageRoot, "dist", "index.js");
 

@@ -78,6 +78,10 @@ var RetryWithOptions = class extends CliError {
   port;
 };
 var HarlyError = class extends CliError {
+  constructor(message, exitCode = 1) {
+    super(message, exitCode);
+    this.cause = message;
+  }
 };
 var SYSTEMD_UNITS = /* @__PURE__ */ new Set([
   "nginx",
@@ -664,7 +668,7 @@ var json = flags.has("--json");
 var interactive = Boolean(
   process3.stdin.isTTY && process3.stdout.isTTY && !process3.env.CI
 );
-var cliVersion = "0.2.4";
+var cliVersion = "0.3.0";
 var releaseManifestUrl = process3.env.HARLY_RELEASE_MANIFEST_URL ?? "https://raw.githubusercontent.com/Vytral/harly/main/release-manifest.json";
 var currentOfficialRelease;
 var releaseManifestChecked = false;
@@ -875,7 +879,9 @@ async function preflightHost(directory) {
     );
   });
   const diskGb = await freeDiskGb(directory);
-  if (diskGb < 5) throw new InsufficientDisk(5, diskGb, directory);
+  const requiredDiskGb = Number(process3.env.HARLY_REQUIRED_DISK_GB ?? 5);
+  if (diskGb < requiredDiskGb)
+    throw new InsufficientDisk(requiredDiskGb, diskGb, directory);
   return {
     distro: await readDistro(),
     cpuCount: os.cpus().length,
@@ -1742,11 +1748,12 @@ function renderHostCheck(host, options = {}) {
       fix: "Install Docker Engine 24+"
     });
   }
+  const requiredDiskGb = Number(process3.env.HARLY_REQUIRED_DISK_GB ?? 5);
   rows.push({
     label: "Disk",
-    status: host.diskGb >= 5 ? "ok" : "fail",
+    status: host.diskGb >= requiredDiskGb ? "ok" : "fail",
     detail: `${host.diskGb.toFixed(1)} GB free`,
-    ...host.diskGb < 5 ? { fix: "Free at least 5 GB on the install path" } : {}
+    ...host.diskGb < requiredDiskGb ? { fix: `Free at least ${requiredDiskGb} GB on the install path` } : {}
   });
   if (host.firewall) {
     rows.push({
@@ -1791,7 +1798,8 @@ async function harlyCheck(directory = process3.cwd()) {
   process3.stdout.write(`${output}
 
 `);
-  const allOk = !host.firewall && portChecks.length === 0 && host.diskGb >= 5;
+  const requiredDiskGb = Number(process3.env.HARLY_REQUIRED_DISK_GB ?? 5);
+  const allOk = !host.firewall && portChecks.length === 0 && host.diskGb >= requiredDiskGb;
   if (interactive) {
     if (allOk) {
       p3.log.success("Your host is ready. Run `harly init` to install Harly.");

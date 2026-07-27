@@ -6,13 +6,15 @@ import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:net";
 import test from "node:test";
 
+process.env.HARLY_REQUIRED_DISK_GB = "0";
+
 const packageRoot = path.resolve(import.meta.dirname, "..");
 const cli = path.join(packageRoot, "dist", "index.js");
 
 test("version flag reports the published CLI version", () => {
   const result = spawnSync(process.execPath, [cli, "--version"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^0\.2\.4\n$/);
+  assert.match(result.stdout, /^0\.3\.0\n$/);
 });
 
 async function availablePort() {

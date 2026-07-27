@@ -125,7 +125,7 @@ const json = flags.has("--json");
 const interactive = Boolean(
   process.stdin.isTTY && process.stdout.isTTY && !process.env.CI,
 );
-const cliVersion = "0.2.4";
+const cliVersion = "0.3.0";
 const releaseManifestUrl =
   process.env.HARLY_RELEASE_MANIFEST_URL ??
   "https://raw.githubusercontent.com/Vytral/harly/main/release-manifest.json";
@@ -406,7 +406,12 @@ async function preflightHost(directory: string): Promise<HostSummary> {
     );
   });
   const diskGb = await freeDiskGb(directory);
-  if (diskGb < 5) throw new InsufficientDisk(5, diskGb, directory);
+  // HARLY_REQUIRED_DISK_GB lets operators and CI override the default 5 GB
+  // floor (small VPS, low-disk test runners, etc.). The CLI still surfaces
+  // the actual free space in the check output.
+  const requiredDiskGb = Number(process.env.HARLY_REQUIRED_DISK_GB ?? 5);
+  if (diskGb < requiredDiskGb)
+    throw new InsufficientDisk(requiredDiskGb, diskGb, directory);
   return {
     distro: await readDistro(),
     cpuCount: os.cpus().length,
@@ -1378,11 +1383,14 @@ function renderHostCheck(
       fix: "Install Docker Engine 24+",
     });
   }
+  const requiredDiskGb = Number(process.env.HARLY_REQUIRED_DISK_GB ?? 5);
   rows.push({
     label: "Disk",
-    status: host.diskGb >= 5 ? "ok" : "fail",
+    status: host.diskGb >= requiredDiskGb ? "ok" : "fail",
     detail: `${host.diskGb.toFixed(1)} GB free`,
-    ...(host.diskGb < 5 ? { fix: "Free at least 5 GB on the install path" } : {}),
+    ...(host.diskGb < requiredDiskGb
+      ? { fix: `Free at least ${requiredDiskGb} GB on the install path` }
+      : {}),
   });
   if (host.firewall) {
     rows.push({
@@ -1430,7 +1438,11 @@ async function harlyCheck(directory = process.cwd()) {
   const output = renderHostCheck(host, { ports: portChecks });
   process.stdout.write(`${output}\n\n`);
 
-  const allOk = !host.firewall && portChecks.length === 0 && host.diskGb >= 5;
+  const requiredDiskGb = Number(process.env.HARLY_REQUIRED_DISK_GB ?? 5);
+  const allOk =
+    !host.firewall &&
+    portChecks.length === 0 &&
+    host.diskGb >= requiredDiskGb;
   if (interactive) {
     if (allOk) {
       p.log.success("Your host is ready. Run `harly init` to install Harly.");

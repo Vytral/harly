@@ -1,16 +1,21 @@
 {
   "name": "@harly/cli",
-  "version": "0.2.5",
+  "version": "0.3.0",
   "private": false,
   "type": "module",
-  "description": "Official operations CLI for self-hosted Harly.",
+  "description": "Official operations CLI for self-hosted Harly — guided install, day-2 management, and disaster recovery for the Docker Compose distribution.",
   "license": "MIT",
   "keywords": [
     "harly",
     "ats",
+    "applicant-tracking",
     "recruiting",
+    "hiring",
     "self-hosted",
-    "docker"
+    "docker",
+    "docker-compose",
+    "caddy",
+    "devops"
   ],
   "homepage": "https://github.com/Vytral/harly#readme",
   "repository": {

@@ -47,6 +47,10 @@ export class RetryWithOptions extends CliError {
 abstract class HarlyError extends CliError {
   abstract readonly title: string;
   abstract render(ctx: RenderContext): Promise<RenderResult>;
+  constructor(message: string, exitCode: 1 | 2 = 1) {
+    super(message, exitCode);
+    this.cause = message;
+  }
 }
 
 const SYSTEMD_UNITS = new Set([
