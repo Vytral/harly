@@ -1,0 +1,53 @@
+---
+title: "Quickstart"
+description: "Install Harly on a fresh VPS with the guided CLI."
+---
+
+## Requirements
+
+Node 20.12+, Docker Engine 24+, and Compose 2.20+ on a 64-bit Linux host (`amd64` or `arm64`). See [self-hosting overview](/self-hosting/overview) for sizing and DNS setup before you install.
+
+<Steps>
+  <Step title="Point DNS at your VPS">
+    Create an `A` record for your domain or subdomain (for example `careers.example.com`) pointing at the VPS public IPv4 address. Add an `AAAA` record only if IPv6 is configured. Verify with:
+
+    ```bash
+    dig +short A careers.example.com
+    ```
+  </Step>
+  <Step title="Run the installer">
+    ```bash
+    npx @harly/cli
+    ```
+
+    This opens the guided installer. It checks the server, asks for the public URL and first owner, creates the configuration, pulls the image, runs migrations, starts Harly, and verifies readiness.
+  </Step>
+  <Step title="Create the first owner account">
+    Visit `/setup`, enter `HARLY_SETUP_SECRET`, and create the account matching `HARLY_INITIAL_ADMIN_EMAIL`. The claim link lasts 15 minutes.
+
+    <Note>
+      First workspace creation is a PostgreSQL-locked transaction that creates exactly one owner. After completion, `/setup` is unavailable and registration is invite-only.
+    </Note>
+  </Step>
+</Steps>
+
+## Re-running the installer
+
+Run the same command from the installation directory (or any child directory) to open the management menu:
+
+```bash
+npx @harly/cli
+```
+
+Re-running `init` preserves `.env` and secrets. Modified templates are preserved unless `--force` is supplied; `--force` still never rotates `.env`.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Proxy modes" icon="route" href="/self-hosting/proxy-modes">
+    Choose Caddy, an external reverse proxy, or local-only.
+  </Card>
+  <Card title="Operations" icon="wrench" href="/self-hosting/operations">
+    Health checks, the scheduler, backups, and upgrades.
+  </Card>
+</CardGroup>

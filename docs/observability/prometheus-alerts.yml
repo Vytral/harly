@@ -1,0 +1,24 @@
+groups:
+  - name: harly-operational
+    rules:
+      - alert: HarlyCronJobFailures
+        expr: increase(harly_cron_runs_failed_total[15m]) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Harly scheduled job failed
+          description: Inspect the cron run counters and structured logs for the failing job.
+      - alert: HarlySSEDeliveryLatencyHigh
+        expr: histogram_quantile(0.95, rate(harly_sse_delivery_latency_seconds_bucket[10m])) > 2
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Harly realtime delivery is slow
+          description: p95 SSE delivery latency exceeded two seconds.
+      - alert: HarlyHTTP5xxRateHigh
+        expr: sum(rate(harly_http_requests_total{status="5xx"}[5m])) / clamp_min(sum(rate(harly_http_requests_total[5m])), 1) > 0.05
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: Harly HTTP error rate is high
+          description: More than five percent of requests are returning 5xx responses.

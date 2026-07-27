@@ -15,6 +15,7 @@ BETTER_AUTH_SECRET=<independent-32-byte-secret>
 AI_ENCRYPTION_KEY=<independent-32-byte-secret>
 STORAGE_UPLOAD_SECRET=<independent-32-byte-secret>
 CRON_SECRET=<independent-32-byte-secret>
+METRICS_TOKEN=<independent-32-byte-secret>
 HARLY_SETUP_SECRET=<independent-32-byte-secret>
 HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
 ```
@@ -52,10 +53,20 @@ high-trust exception for private networks.
 
 ## Cron
 
+Prometheus scrapes `GET /api/metrics` with `Authorization: Bearer $METRICS_TOKEN`.
+The endpoint is never exposed without that token and also exposes operational
+queue/cron summaries as JSON when requested with `Accept: application/json`.
+Workspace operators can inspect secret-free connector status at
+`GET /api/health/integrations` with their Harly session; this reports configured
+state and check duration without returning credentials.
+Import `docs/observability/prometheus-alerts.yml` into the monitoring stack to
+alert on failed cron runs, high SSE p95 latency, and elevated HTTP 5xx rates.
+
 The scheduler calls these private endpoints with
 `Authorization: Bearer $CRON_SECRET`:
 
 - `POST /api/cron/email-outbox` every 60 seconds
+- `POST /api/cron/domain-events` every 15 seconds (replay committed realtime events after a failed fast publish)
 - `POST /api/cron/webhooks/dispatch` every 60 seconds
 - `POST /api/cron/interview-sync` every 60 seconds
 - `POST /api/cron/mailbox-sync` every 120 seconds
@@ -63,3 +74,38 @@ The scheduler calls these private endpoints with
 GET and query-string secrets are rejected. Email, SMTP, and webhook delivery
 are at-least-once; provider idempotency and durable queue keys reduce duplicate
 delivery after crashes.
+
+## Enterprise access control
+
+Harly uses workspace-scoped RBAC. A custom role combines module/action
+permissions with an optional contextual scope:
+
+- `all` or `assigned` jobs;
+- allowed departments;
+- allowed regions.
+
+Resource guards resolve the active membership and workspace on the server, then
+apply the role policy to the job before allowing access to applications,
+candidates, interviews, or offers. Role assignment also enforces a privilege
+ceiling, so a scoped administrator cannot create a role broader than its own.
+
+Workspace owners can enforce MFA from Settings → Security. OIDC/SAML provider
+configuration is owner-gated and secrets are encrypted at rest. Security and
+administrative changes are written to the workspace audit log and can be
+filtered or exported from the security settings page.
+
+SCIM 2.0 provisioning is available to workspace owners from Settings →
+Security. Create a named token, copy it once, and configure the identity
+provider with:
+
+```text
+Base URL: ${HARLY_URL}/api/scim/v2.0/<workspace-id>
+Users endpoint: ${HARLY_URL}/api/scim/v2.0/<workspace-id>/Users
+Authentication: HTTP Bearer token
+```
+
+SCIM supports idempotent user create/update, active/inactive lifecycle,
+department, region, team, manager, title, and safe role mapping. Deactivation
+revokes the member's Harly sessions without deleting recruiting history.
+The service also exposes the standard discovery resources
+`/ServiceProviderConfig`, `/ResourceTypes`, and `/Schemas`.

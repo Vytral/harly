@@ -1,5 +1,23 @@
 # Harly backup choices
 
+## Production recovery contract
+
+The recommended target is **RPO 15 minutes / RTO 60 minutes** for a single-region
+self-hosted deployment. These are operating targets, not guarantees: the owner
+must verify the storage provider, credentials, quota, and restore destination.
+
+- Run `harly backup --encrypt` at least every 15 minutes from an external scheduler.
+- Copy archives to an off-host bucket with object versioning, encryption, and a
+  retention lock/immutability policy. Keep at least 30 daily and 12 monthly versions.
+- Back up S3-compatible uploads independently with object versioning; local-mode
+  uploads are included in the Harly archive.
+- Run the destructive restore drill monthly in an isolated installation and after
+  every backup/restore code change:
+  `HARLY_DESTRUCTIVE_OK=1 ./tooling/harly/test/backup-restore.destructive.sh <throwaway-install>`.
+- Record the last successful backup, archive checksum, restore duration, and drill
+  result in the incident/recovery log. A backup that has not been restored is not
+  considered verified.
+
 Harly separates a convenient update rollback from disaster recovery. You do
 not need to install extra packages to use Harly or update it.
 

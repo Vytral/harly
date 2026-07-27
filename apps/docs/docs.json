@@ -1,0 +1,35 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Harly",
+  "colors": {
+    "primary": "#2a331a",
+    "light": "#4a5a2e",
+    "dark": "#2a331a"
+  },
+  "favicon": "/logo/light.svg",
+  "navigation": {
+    "groups": [
+      {
+        "group": "Get started",
+        "pages": ["introduction", "quickstart"]
+      },
+      {
+        "group": "Self-hosting",
+        "pages": ["self-hosting/overview", "self-hosting/proxy-modes", "self-hosting/operations"]
+      }
+    ]
+  },
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg"
+  },
+  "navbar": {
+    "links": [
+      {
+        "label": "GitHub",
+        "href": "https://github.com/vytral/harly"
+      }
+    ]
+  }
+}

@@ -1,0 +1,74 @@
+---
+title: "Proxy modes"
+description: "Choose Caddy, an external reverse proxy, or local-only for your Harly installation."
+---
+
+The installer asks which proxy mode to use. The selected mode is stored in `harly.config.json`, and `doctor` validates only its expected services.
+
+## After reading this
+
+- You will know the three proxy modes and when to use each
+- You will know which ports each mode publishes
+- You will know how to point an existing reverse proxy at Harly
+
+## Available modes
+
+| Mode | `COMPOSE_PROFILES` | Publishes | Use when |
+| --- | --- | --- | --- |
+| `caddy` | `proxy` | 80/443 | You want Harly to manage TLS automatically |
+| `external` | (none) | `127.0.0.1:$HARLY_PORT` only | Nginx, Apache, or Traefik already owns 80/443 |
+| `local` | (none) | Same loopback port, `http://` URL, no TLS | Local development or an internal-only installation |
+
+Caddy is never started in `external` or `local` mode.
+
+## Using an external reverse proxy
+
+If another proxy already owns ports 80 and 443, keep it and select `external` mode during install. Forward the hostname to `127.0.0.1:3000`.
+
+Example Nginx server block:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name careers.example.com;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+```
+
+Point your existing certificate management (Certbot, an ACME client, or a load balancer) at the same hostname; Harly does not manage TLS in this mode.
+
+<Note>
+  The Nginx block above is a standard reverse-proxy pattern, not a file shipped by Harly. Adapt it to your existing proxy configuration.
+</Note>
+
+## Troubleshooting
+
+### `doctor` reports the wrong services as unhealthy
+
+**Symptom:** `doctor` checks for Caddy even though you selected `external` mode.
+**Cause:** `harly.config.json` still records the previous mode.
+**Solution:** re-run the installer's management menu (`npx @harly/cli`) and confirm the proxy mode, or edit `harly.config.json` directly to match your actual topology.
+
+### 502 from the external proxy
+
+**Symptom:** the reverse proxy returns a 502 for every request.
+**Cause:** Harly is not listening on `127.0.0.1:$HARLY_PORT`, or the proxy is forwarding to the wrong port.
+**Solution:** confirm `docker compose ps` shows the app container healthy, then check `HARLY_PORT` in `.env` matches the proxy's upstream port.
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="Self-hosting overview" icon="server" href="/self-hosting/overview">
+    VPS requirements and DNS setup.
+  </Card>
+  <Card title="Operations" icon="wrench" href="/self-hosting/operations">
+    Health checks, the scheduler, backups, and upgrades.
+  </Card>
+</CardGroup>

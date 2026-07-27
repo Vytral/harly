@@ -353,7 +353,9 @@ Two-zone layout:
 - **Main:** resume / profile / timeline
 - **Rail:** stage, primary action (Advance / Schedule / Offer), reject secondary, activity compact
 
-Maximum **3** process sections or tabs (Overview / Process / Files). No 8-tab dump. Primary action **changes with stage**.
+Maximum **3** process sections or tabs for simple decision surfaces. Primary action **changes with stage**.
+
+**Exception , complex workspaces:** Candidate Profile is not a 3-rung decision hierarchy, it is a set of independent functional modules (Profile, Interviews, Communication, Evaluation, Offers, Activity, Documents, Privacy). Forcing those under 3 umbrella tabs stacks every module's `TabsContent` on top of the others under one shared tab value, producing a single endless-scroll page instead of exclusive views. For this surface, use flat, exclusive tabs , one module per tab, `overflow-x-auto` on the tab list for small screens , instead of grouping into Overview/Process/Files.
 
 ### Empty State
 

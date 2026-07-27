@@ -21,6 +21,19 @@ and 443 plus working DNS. External/local modes only bind Harly to loopback.
 Actual disk capacity must include database growth, attachments and backups;
 S3 storage removes attachment growth from the VPS but not database growth.
 
+Before running the installer, point a domain or, preferably, a subdomain such
+as `careers.example.com` at the VPS public IP. Create an `A` record for the
+public IPv4 address and an `AAAA` record only when IPv6 is actually configured
+and reachable. Verify propagation with `dig +short A careers.example.com`.
+Remove stale or incorrect records; Caddy cannot issue a certificate until the
+hostname resolves to this server.
+
+For automatic Caddy mode, no other service or Docker container may publish TCP
+port 80, TCP port 443, or UDP port 443. Allow inbound TCP 80/443 in the VPS
+firewall or cloud security group, plus UDP 443 if HTTP/3 is desired. If Nginx,
+Apache, Traefik, or another Caddy already owns those ports, keep it and select
+the external proxy mode; it must forward the hostname to `127.0.0.1:3000`.
+
 The generated defaults target the recommended 4 GB profile: app 1536 MB,
 PostgreSQL 768 MB, scheduler 256 MB and Caddy 256 MB. These are hard container
 ceilings, not reservations. On a 2 GB VPS, use the following in `.env` and
@@ -58,7 +71,9 @@ rotates `.env`.
 The interactive flow uses a static Harly banner and guided prompts, validates
 Docker/ports/DNS/free disk, detects CPU and RAM, recommends `compact`,
 `standard`, or `performance`, masks S3 credentials, and defaults to launching
-after configuration (you can decline). Caddy obtains and renews HTTPS certificates;
+after configuration (you can decline). The preflight reports resolved DNS
+addresses and, when possible, the process holding a required port. Caddy
+obtains and renews HTTPS certificates;
 the CLI configures and verifies the installation but does not mint certificates
 itself.
 

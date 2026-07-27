@@ -33,5 +33,8 @@ Use this checklist before inviting real recruiting teams or importing candidate 
 - [ ] Set a recurring scheduler for the documented cron endpoints when not using the bundled scheduler.
 - [ ] Decide who owns upgrades, secret rotation, backup verification, and vulnerability response.
 - [ ] Add a public issue template or discussion channel before inviting external contributors.
+- [ ] If using an IdP, create a named SCIM token, test create/update/deactivate, then revoke the test token.
+- [ ] Verify owners/admins can inspect and revoke a member device session without exposing session tokens.
+- [ ] Populate department, region, team, manager, and lifecycle status for each member before enabling scoped roles.
 
 Harly is self-hosted software, not a managed service. The operator remains responsible for infrastructure availability, recovery, and legal compliance.

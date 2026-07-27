@@ -1,5 +1,8 @@
 {
   "name": "@harly/docs",
   "version": "0.1.0",
-  "private": true
+  "private": true,
+  "devDependencies": {
+    "mint": "^4.2.742"
+  }
 }

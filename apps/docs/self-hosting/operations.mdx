@@ -1,0 +1,140 @@
+---
+title: "Operations"
+description: "Health checks, the scheduler, backups, restore, and upgrades for a Harly installation."
+---
+
+## After reading this
+
+- You will know what each health endpoint checks
+- You will know how the scheduler's advisory locks prevent duplicate work
+- You will know how to back up, restore, and verify a restore actually works
+- You will know how to upgrade safely
+
+## Health and logging
+
+| Endpoint | Checks |
+| --- | --- |
+| `/api/health/live` | Process only |
+| `/api/health/ready` | PostgreSQL and the required migration, three-second deadline |
+| `/api/health` | Alias for readiness |
+
+All public probe responses expose only `status` and `version`. With PostgreSQL down, liveness stays `200` and readiness becomes `503`.
+
+Every service rotates Docker JSON logs (10 MB x 3 files by default). The Next.js runtime cache is pruned at startup and every six hours, retaining at most 512 MB and seven days by default. Tune these without editing Compose:
+
+```dotenv
+HARLY_LOG_MAX_SIZE=10m
+HARLY_LOG_MAX_FILES=3
+HARLY_CACHE_MAX_MB=512
+HARLY_CACHE_MAX_AGE_DAYS=7
+```
+
+## Scheduler and queue runbook
+
+The scheduler is a single, restartable worker. It calls the email outbox and webhook retry routes every minute, and mailbox sync every two minutes. Each route uses a PostgreSQL advisory lock, so an accidental second scheduler or a retry after a container restart receives `409 Already running` instead of doing the same work concurrently. Queue rows left `processing` by a crash become eligible again after five minutes.
+
+The scheduler container's healthcheck runs its built-in doctor. It requires a recent successful-or-skipped record for **each** scheduled job, not merely a running container. By default a job is stale after five minutes:
+
+```dotenv
+HARLY_SCHEDULER_STALE_AFTER_SECONDS=300
+```
+
+Change this only when the instance is intentionally suspended for longer than five minutes.
+
+After a deployment, a restart, or an alert, run these from the installation directory:
+
+```bash
+npx @harly/cli doctor
+docker compose ps
+docker compose logs --tail=100 scheduler
+docker compose exec -T scheduler node /app/runtime.mjs doctor
+```
+
+The last command reports freshness per job plus email and webhook queue counts.
+
+<Warning>
+  Do not manually invoke cron URLs or put `CRON_SECRET` in a URL. If a job is stale, first confirm app readiness, then restart only the scheduler with `docker compose restart scheduler`.
+</Warning>
+
+If queue counts grow while scheduler runs are fresh, fix the corresponding SMTP, webhook destination, or mailbox credentials; retries remain durable in PostgreSQL. Alert on an unhealthy scheduler, a stale job, and disk usage or backup failures — not merely on a non-zero queue count.
+
+Uploads and PostgreSQL data are never pruned automatically. Monitor them with `docker system df -v` and keep encrypted backups outside the VPS.
+
+The image exposes `serve`, `migrate`, `scheduler`, and `doctor`. Runtime migrations use committed SQL through `drizzle-orm`; Drizzle Kit and the TypeScript toolchain are build-time only.
+
+## Backup, restore, and upgrade
+
+```bash
+# Works everywhere: a private local rollback point (mode 0600).
+npx @harly/cli backup
+npx @harly/cli update --to <release-version> --yes
+npx @harly/cli restore backups/harly-2026-...tar.gz --force
+
+# Optional advanced encryption for a portable backup.
+AGE_RECIPIENT=age1... npx @harly/cli backup --encrypt
+AGE_IDENTITY=/secure/key.txt npx @harly/cli restore backup.tar.gz.age --force
+```
+
+Backup stops app and scheduler, keeps PostgreSQL running, creates a `pg_dump -Fc`, includes local uploads and config, and checksums every included file before it can succeed. By default it creates a local rollback archive readable only by the deployment owner — this is convenient for a failed update, not a replacement for off-host disaster recovery.
+
+Restore verifies every archived file checksum, creates a safety backup before changing data, stops the app, scheduler, and migration services to avoid a database race, restores PostgreSQL and local uploads, then requires readiness to succeed. A failed restore keeps the safety archive under `backups/`.
+
+<Note>
+  S3 objects are not embedded in the archive. Use bucket versioning and an off-provider backup policy alongside `npx @harly/cli backup`.
+</Note>
+
+Upgrades take a backup first, run the single migrator, wait for readiness, and finish with `doctor`. Migrations are forward-only — restore the full backup when a release does not declare schema-compatible image rollback.
+
+For managed platforms, use their managed PostgreSQL backups and snapshots together with S3 bucket encryption and versioning; they do not require installing `age`.
+
+### Verify your backups actually restore
+
+A backup you have never restored is a guess. Prove recovery end-to-end against a **throwaway** installation with the destructive harness:
+
+```bash
+HARLY_DESTRUCTIVE_OK=1 \
+  tooling/harly/test/backup-restore.destructive.sh /path/to/installation
+```
+
+It seeds known rows and an uploaded object, backs them up, drops the entire database schema and deletes the upload, restores from the archive, and fails loudly unless row counts, a content checksum, the owner and user count, and the upload's SHA-256 all come back identical.
+
+<Warning>
+  This harness refuses to run without `HARLY_DESTRUCTIVE_OK=1` because it wipes the database it points at. Never aim it at production.
+</Warning>
+
+## Development database
+
+Repository contributors use a separate development Compose file, not the production stack:
+
+```bash
+pnpm db:up
+pnpm db:migrate
+pnpm dev:web
+```
+
+It lives at `tooling/docker/compose.dev.yml`. Development needs Node 22+, pnpm, Docker, about 4 GB of available RAM, and 10 GB of free disk for a comfortable full-monorepo workflow. Turbopack's persistent filesystem cache is disabled to prevent multi-gigabyte `.next` growth, and its memory graph defaults to 1024 MB. Larger workstations can set `HARLY_DEV_MEMORY_MB=2048`; values below 512 MB are ignored. `pnpm clean` removes generated workspace caches without touching PostgreSQL volumes.
+
+## Troubleshooting
+
+### Scheduler doctor reports a stale job
+
+**Symptom:** `docker compose exec -T scheduler node /app/runtime.mjs doctor` shows a job past its staleness window.
+**Cause:** the scheduler container restarted, hung, or the instance was suspended longer than `HARLY_SCHEDULER_STALE_AFTER_SECONDS`.
+**Solution:** confirm app readiness first, then `docker compose restart scheduler`. Do not invoke cron routes manually.
+
+### Restore fails checksum verification
+
+**Symptom:** `npx @harly/cli restore` exits before touching data.
+**Cause:** the archive is corrupted or was modified after the backup ran.
+**Solution:** use a different backup archive. The safety backup created before the attempted restore is preserved under `backups/`.
+
+## Related pages
+
+<CardGroup cols={2}>
+  <Card title="Self-hosting overview" icon="server" href="/self-hosting/overview">
+    VPS requirements and DNS setup.
+  </Card>
+  <Card title="Proxy modes" icon="route" href="/self-hosting/proxy-modes">
+    Choose Caddy, an external reverse proxy, or local-only.
+  </Card>
+</CardGroup>
