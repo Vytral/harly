@@ -344,9 +344,8 @@ exit 0
       "README.md",
       ".env",
     ]) {
-      assert.match(
-        result.stdout,
-        new RegExp(`\\+ ${file.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}`),
+      assert.ok(
+        result.stdout.includes(`+ ${file}`),
         `dry-run output should list ${file}`,
       );
     }
