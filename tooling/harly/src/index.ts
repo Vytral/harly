@@ -15,17 +15,30 @@ import {
   statfs,
   writeFile,
 } from "node:fs/promises";
-import { createServer } from "node:net";
+import { createServer, isIP } from "node:net";
+import { createSocket } from "node:dgram";
 import os from "node:os";
 import path from "node:path";
 import process from "node:process";
-import { spawnSync } from "node:child_process";
 
 import * as p from "@clack/prompts";
 import pc from "picocolors";
+import {
+  CliError,
+  DockerMissing,
+  DnsFailure,
+  InsufficientDisk,
+  PortConflict,
+  RetryWithOptions,
+  detectPortOwner,
+  handleHarlyError,
+  type PortDetail,
+  type RenderContext,
+} from "./errors.js";
 import { embeddedRelease, releaseImage, type HarlyRelease } from "./release.js";
 import { pullWithProgress } from "./pull.js";
-import { accent, accentBadge, ink, showBrand, soft, spinnerStyle } from "./theme.js";
+import { atLeast, compose, parseVersion, run } from "./shell.js";
+import { accent, ink, showBrand, soft, spinnerStyle } from "./theme.js";
 
 type ProxyMode = "caddy" | "external" | "local";
 type ResourceProfile = "compact" | "standard" | "performance";
@@ -84,19 +97,14 @@ const resourceProfiles: Record<
 };
 
 function detectResourceProfile(): ResourceProfile {
-  const memoryGb = os.totalmem() / 1024 ** 3;
-  if (memoryGb < 3.5) return "compact";
-  if (memoryGb < 7.5) return "standard";
+  // Profile the host by free memory minus Harly's known reservations, not by
+  // total RAM. A 4 GB VPS that already runs Postgres and Redis for another
+  // service is not a "standard" candidate; Harly would OOM under load.
+  const reservationsGb = 1.5; // postgres 768m + scheduler 256m + caddy 256m + headroom
+  const freeGb = os.freemem() / 1024 ** 3 - reservationsGb;
+  if (freeGb < 1.5) return "compact";
+  if (freeGb < 3.5) return "standard";
   return "performance";
-}
-
-class CliError extends Error {
-  constructor(
-    message: string,
-    readonly exitCode: 1 | 2 = 1,
-  ) {
-    super(message);
-  }
 }
 
 const args = process.argv.slice(2);
@@ -156,13 +164,16 @@ async function officialRelease(): Promise<HarlyRelease> {
 
 const commandHelp: Array<[string, string]> = [
   ["harly", "Guided menu — install, or manage a detected installation"],
-  ["harly init [directory] [--force]", "Generate a new installation"],
+  ["harly check [directory]", "Verify host requirements without installing"],
+  ["harly init [directory] [--force] [--dry-run]", "Generate a new installation"],
   ["harly launch [directory] [--yes]", "Pull images and start the services"],
-  ["harly doctor [directory] [--json]", "Check services and public readiness"],
+  ["harly doctor [directory] [--json] [--fix]", "Check services and public readiness"],
+  ["harly setup-secret [directory]", "Print HARLY_SETUP_SECRET from .env"],
   ["harly backup [directory] [--encrypt]", "Write a private rollback archive"],
   ["harly restore <archive> [directory] --force", "Restore from an archive"],
   ["harly update [directory] [--to version]", "Back up, upgrade, and migrate"],
   ["harly uninstall [directory] [--remove-data]", "Stop and remove Harly"],
+  ["harly deploy <railway|fly|digitalocean>", "Generate a cloud-platform config"],
 ];
 
 function usage() {
@@ -183,60 +194,6 @@ function unwrapPrompt<T>(value: T | symbol): T {
   throw new CliError("", 2);
 }
 
-function run(
-  program: string,
-  commandArgs: string[],
-  options: {
-    cwd?: string;
-    input?: Buffer;
-    binary?: boolean;
-    allowFailure?: boolean;
-  } = {},
-) {
-  const result = spawnSync(program, commandArgs, {
-    cwd: options.cwd,
-    input: options.input,
-    // Database dumps are binary. Never decode them as UTF-8 on the way out
-    // of Docker, otherwise pg_restore receives a silently corrupted archive.
-    encoding: options.input || options.binary ? undefined : "utf8",
-    stdio: options.input || options.binary ? ["pipe", "pipe", "pipe"] : "pipe",
-    maxBuffer: 1024 * 1024 * 512,
-  });
-  if (result.status !== 0 && !options.allowFailure) {
-    const message = Buffer.isBuffer(result.stderr)
-      ? result.stderr.toString("utf8")
-      : result.stderr;
-    throw new CliError(
-      `${program} ${commandArgs.join(" ")} failed${message ? `: ${message.trim()}` : "."}`,
-    );
-  }
-  return result;
-}
-
-function compose(
-  cwd: string,
-  composeArgs: string[],
-  options: { input?: Buffer; binary?: boolean; allowFailure?: boolean } = {},
-) {
-  return run("docker", ["compose", ...composeArgs], { cwd, ...options });
-}
-
-function parseVersion(value: string): number[] {
-  return (value.match(/\d+(?:\.\d+)+/)?.[0] ?? "0").split(".").map(Number);
-}
-
-function atLeast(actual: number[], expected: number[]): boolean {
-  return expected.every((part, index) =>
-    (actual[index] ?? 0) === part
-      ? true
-      : (actual[index] ?? 0) > part
-        ? true
-        : expected.slice(0, index).every((item, i) => item === (actual[i] ?? 0))
-          ? false
-          : true,
-  );
-}
-
 async function portAvailable(port: number): Promise<boolean> {
   return new Promise((resolve) => {
     const server = createServer();
@@ -247,6 +204,88 @@ async function portAvailable(port: number): Promise<boolean> {
     });
     server.listen(port, "127.0.0.1", () => server.close(() => resolve(true)));
   });
+}
+
+async function udpPortAvailable(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createSocket("udp4");
+    socket.once("error", (error: NodeJS.ErrnoException) => {
+      socket.close();
+      resolve(error.code !== "EADDRINUSE");
+    });
+    socket.bind(port, "127.0.0.1", () => socket.close(() => resolve(true)));
+  });
+}
+
+function portOwner(port: number, protocol: "tcp" | "udp" = "tcp") {
+  const commands: Array<[string, string[]]> =
+    protocol === "udp"
+      ? [
+          ["ss", ["-H", "-lunp", `sport = :${port}`]],
+          ["lsof", ["-nP", `-iUDP:${port}`]],
+        ]
+      : [
+          ["ss", ["-H", "-ltnp", `sport = :${port}`]],
+          ["lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"]],
+        ];
+  for (const [program, args] of commands) {
+    const result = run(program, args, { allowFailure: true });
+    const output = String(result.stdout ?? "").trim();
+    if (result.status === 0 && output) return output.split("\n")[0].trim();
+  }
+  return undefined;
+}
+
+async function checkRequiredPorts(
+  mode: ProxyMode,
+  requestedPort?: number,
+  ctx: RenderContext = { interactive, yes },
+): Promise<number | undefined> {
+  const port =
+    requestedPort ?? Number(process.env.HARLY_PORT ?? 3000);
+  const checks: PortDetail[] =
+    mode === "caddy"
+      ? [
+          { port: 80, protocol: "tcp" },
+          { port: 443, protocol: "tcp" },
+          { port: 443, protocol: "udp" },
+        ]
+      : [{ port, protocol: "tcp" }];
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const occupied: PortDetail[] = [];
+    for (const check of checks) {
+      const available =
+        check.protocol === "udp"
+          ? await udpPortAvailable(check.port)
+          : await portAvailable(check.port);
+      if (!available) {
+        const raw = portOwner(check.port, check.protocol);
+        const owner = detectPortOwner(check.port, check.protocol);
+        // Fall back to the raw line if classification lost the detail.
+        if (owner.kind === "unknown" && raw) {
+          occupied.push({ ...check });
+        } else {
+          occupied.push({ ...check, owner });
+        }
+      }
+    }
+    if (occupied.length === 0) return port;
+
+    const result = await handleHarlyError(
+      new PortConflict(occupied, mode, port),
+      ctx,
+    );
+    if (result.kind === "recovered") continue;
+    if (result.kind === "switch-mode") throw new RetryWithOptions(result.mode);
+    if (result.kind === "change-port") {
+      throw new RetryWithOptions(undefined, result.port);
+    }
+    throw new CliError("", result.exitCode);
+  }
+  throw new CliError(
+    `Could not free the required ports after 3 attempts: ${checks.map((c) => `${c.protocol.toUpperCase()} ${c.port}`).join(", ")}.`,
+    1,
+  );
 }
 
 async function freeDiskGb(directory: string): Promise<number> {
@@ -260,23 +299,55 @@ async function freeDiskGb(directory: string): Promise<number> {
   return (filesystem.bavail * filesystem.bsize) / 1024 ** 3;
 }
 
-async function preflight(
-  mode?: ProxyMode,
-  checkPorts = true,
-  requestedPort?: number,
-  directory = process.cwd(),
-) {
-  if (!atLeast(parseVersion(process.versions.node), [20, 12, 0]))
-    throw new CliError("Node.js 20.12 or newer is required.");
+type FirewallWarning = {
+  source: "ufw" | "iptables";
+  detail: string;
+  fix: string;
+};
+
+/** Detect a local firewall that would block Caddy's public ports. This is a
+ * warning, never an error: cloud security groups, transparent proxies, and
+ * VPS providers without OS-level firewalls are all valid configurations. */
+function detectFirewallWarning(): FirewallWarning | null {
+  const ufw = run("ufw", ["status"], { allowFailure: true });
+  if (ufw.status === 0) {
+    const out = String(ufw.stdout ?? "");
+    if (/Status:\s*active/i.test(out)) {
+      const allows80 = /(^|\s)80\/tcp\s+ALLOW/i.test(out);
+      const allows443 = /(^|\s)443\/tcp\s+ALLOW/i.test(out);
+      if (!allows80 || !allows443) {
+        return {
+          source: "ufw",
+          detail: `ufw is active but ports 80/443 are not allowed`,
+          fix: "ufw allow 80/tcp && ufw allow 443/tcp",
+        };
+      }
+    }
+  }
+  // iptables check: a non-empty INPUT chain with a REJECT policy is a
+  // common default on DigitalOcean / Hetzner. Skip — too noisy to verify
+  // whether a specific rule allows the port. The ufw path covers most cases.
+  return null;
+}
+
+async function readDockerInfo() {
   const docker = run("docker", ["version", "--format", "{{.Server.Version}}"], {
     allowFailure: true,
   });
-  if (
-    docker.status !== 0 ||
-    !atLeast(parseVersion(String(docker.stdout)), [24, 0, 0])
-  )
-    throw new CliError(
-      "Docker Engine 24 or newer is required and must be running.",
+  if (docker.status !== 0) {
+    const stderr = String(docker.stderr ?? "").trim();
+    throw new DockerMissing(
+      stderr.includes("Cannot connect to the Docker daemon") ||
+        stderr.includes("Is the docker daemon running")
+        ? "not-running"
+        : "not-installed",
+      stderr || "Docker Engine 24 or newer is required and must be running.",
+    );
+  }
+  if (!atLeast(parseVersion(String(docker.stdout)), [24, 0, 0]))
+    throw new DockerMissing(
+      "engine-too-old",
+      `Docker Engine 24 or newer is required (found ${String(docker.stdout).trim()}).`,
     );
   const plugin = run("docker", ["compose", "version", "--short"], {
     allowFailure: true,
@@ -285,26 +356,78 @@ async function preflight(
     plugin.status !== 0 ||
     !atLeast(parseVersion(String(plugin.stdout)), [2, 20, 0])
   )
-    throw new CliError("Docker Compose 2.20 or newer is required.");
-  if (checkPorts) {
-    const ports =
-      mode === "caddy"
-        ? [80, 443]
-        : [requestedPort ?? Number(process.env.HARLY_PORT ?? 3000)];
-    for (const port of ports)
-      if (!(await portAvailable(port)))
-        throw new CliError(`Port ${port} is already in use.`);
-  }
-  const diskGb = await freeDiskGb(directory);
-  if (diskGb < 5)
-    throw new CliError(
-      `At least 5 GB of free disk is required (${diskGb.toFixed(1)} GB available).`,
+    throw new DockerMissing(
+      "compose-too-old",
+      `Docker Compose 2.20 or newer is required (found ${String(plugin.stdout).trim() || "missing"}).`,
     );
   return {
+    engine: String(docker.stdout).trim(),
+    compose: String(plugin.stdout).trim(),
+  };
+}
+
+async function readDistro(): Promise<string> {
+  if (os.platform() === "darwin") return `macOS ${os.release()}`;
+  if (os.platform() === "win32") return `Windows ${os.release()}`;
+  try {
+    const raw = await readFile("/etc/os-release", "utf8");
+    const name = raw.match(/^PRETTY_NAME="?([^"\n]+)"?/m)?.[1];
+    if (name) return `${name} (kernel ${os.release()})`;
+  } catch {
+    // not Linux, or no /etc/os-release
+  }
+  return `${os.platform()} ${os.release()}`;
+}
+
+export type HostSummary = {
+  distro: string;
+  cpuCount: number;
+  memoryGb: number;
+  freeMemoryGb: number;
+  diskGb: number;
+  docker?: { engine: string; compose: string };
+  firewall?: FirewallWarning;
+};
+
+/** Lightweight host-only preflight. Does not check ports or DNS — those need a
+ * known proxy mode and domain. Used by `harly check` and as the first half of
+ * the full `preflight()`. */
+async function preflightHost(directory: string): Promise<HostSummary> {
+  if (!atLeast(parseVersion(process.versions.node), [20, 12, 0]))
+    throw new DockerMissing(
+      "not-installed",
+      `Node.js 20.12 or newer is required (running ${process.versions.node}).`,
+    );
+  const docker = await readDockerInfo().catch((error: unknown) => {
+    if (error instanceof DockerMissing) throw error;
+    throw new DockerMissing(
+      "not-installed",
+      error instanceof Error ? error.message : "Docker check failed.",
+    );
+  });
+  const diskGb = await freeDiskGb(directory);
+  if (diskGb < 5) throw new InsufficientDisk(5, diskGb, directory);
+  return {
+    distro: await readDistro(),
     cpuCount: os.cpus().length,
     memoryGb: os.totalmem() / 1024 ** 3,
+    freeMemoryGb: os.freemem() / 1024 ** 3,
     diskGb,
+    docker,
+    firewall: detectFirewallWarning() ?? undefined,
   };
+}
+
+async function preflight(
+  mode?: ProxyMode,
+  checkPorts = true,
+  requestedPort?: number,
+  directory = process.cwd(),
+  ctx: RenderContext = { interactive, yes },
+): Promise<HostSummary> {
+  const host = await preflightHost(directory);
+  if (checkPorts) await checkRequiredPorts(mode ?? "caddy", requestedPort, ctx);
+  return host;
 }
 
 function requiredEnvironment(name: string, value?: string): string {
@@ -351,7 +474,29 @@ function normalizeUrl(value: string, mode: ProxyMode): URL {
       "Caddy and external proxy modes require an HTTPS public URL.",
       2,
     );
+  if (mode !== "local" && (isIP(url.hostname) || ["localhost", "127.0.0.1", "::1"].includes(url.hostname)))
+    throw new CliError(
+      "Use a real domain or subdomain for HTTPS (for example careers.example.com), not a VPS IP or localhost.",
+      2,
+    );
   return url;
+}
+
+async function verifyPublicDns(
+  url: URL,
+  ctx: RenderContext = { interactive, yes },
+): Promise<string[]> {
+  const error = new DnsFailure(url.hostname);
+  const initial = await error.attemptResolve();
+  if (initial) return initial;
+  const result = await error.recover(ctx);
+  if (result.kind === "recovered") {
+    const resolved = await error.attemptResolve();
+    if (resolved) return resolved;
+  }
+  const exitCode = result.kind === "abort" ? result.exitCode : 1;
+  await error.render(ctx);
+  throw new CliError("", exitCode);
 }
 
 function validateDatabaseUrl(value?: string): string | undefined {
@@ -531,6 +676,7 @@ type S3Answers = {
 type InitAnswers = {
   mode: ProxyMode;
   url: URL;
+  port: number;
   email: string;
   organization: string;
   storage: "local" | "s3";
@@ -574,11 +720,11 @@ async function collectNonInteractiveAnswers(
     requiredEnvironment("HARLY_URL", process.env.HARLY_URL),
     mode,
   );
-  const requestedPort = Number(
+  const port = Number(
     process.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : 3000),
   );
-  await preflight(mode, true, requestedPort, directory);
-  if (mode !== "local") await dns.lookup(url.hostname);
+  await preflight(mode, true, port, directory);
+  if (mode !== "local") await verifyPublicDns(url);
   const email = requiredEnvironment(
     "HARLY_INITIAL_ADMIN_EMAIL",
     process.env.HARLY_INITIAL_ADMIN_EMAIL,
@@ -620,6 +766,7 @@ async function collectNonInteractiveAnswers(
   return {
     mode,
     url,
+    port,
     email,
     organization,
     storage,
@@ -633,17 +780,27 @@ async function collectInteractiveAnswers(
   directory: string,
 ): Promise<InitAnswers> {
   showBrand("Install", cliVersion);
-  p.intro(accentBadge(" Welcome to Harly "));
+  p.note(
+    [
+      "Before continuing, prepare a public URL for this VPS.",
+      "Recommended: a subdomain such as careers.example.com.",
+      "Create an A record pointing to the VPS public IPv4 (and an AAAA record only if IPv6 is configured).",
+      "With Caddy, TCP 80 and TCP/UDP 443 must be free and allowed by the firewall/security group.",
+      "If Nginx/Traefik already uses those ports, choose external proxy and point it to 127.0.0.1:3000.",
+      "Guide: https://github.com/Vytral/harly/blob/main/docs/self-hosting.md#vps-requirements",
+    ].join("\n"),
+    "Pre-install checklist",
+  );
 
   const publicOrigin = unwrapPrompt(
     await p.text({
-      message: "Public domain or URL",
-      placeholder: "harly.example.com",
-      initialValue: process.env.HARLY_URL,
+      message: "Public domain or subdomain",
+      placeholder: "careers.example.com",
+      initialValue: process.env.HARLY_URL ?? "careers.example.com",
       validate: validatePublicOrigin,
     }),
   );
-  const mode = unwrapPrompt(
+  let mode = unwrapPrompt(
     await p.select<ProxyMode>({
       message: "Reverse proxy",
       initialValue:
@@ -659,19 +816,46 @@ async function collectInteractiveAnswers(
       ],
     }),
   );
-  const url = normalizeUrl(publicOrigin, mode);
+  let url = normalizeUrl(publicOrigin, mode);
 
   const preflightSpinner = p.spinner(spinnerStyle);
   preflightSpinner.start("Checking Docker, ports, and DNS");
-  let host: Awaited<ReturnType<typeof preflight>>;
+  let dnsAnswers: string[] = [];
+  let requestedPort = Number(
+    process.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : 3000),
+  );
+  let host: Awaited<ReturnType<typeof preflight>> | undefined;
   try {
-    const requestedPort = Number(
-      process.env.HARLY_PORT ??
-        (mode === "local" && url.port ? url.port : 3000),
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        host = await preflight(mode, true, requestedPort, directory);
+        dnsAnswers = mode === "local" ? [] : await verifyPublicDns(url);
+        break;
+      } catch (error) {
+        if (error instanceof RetryWithOptions) {
+          preflightSpinner.message("Adjusting options and retrying preflight");
+          if (error.mode) {
+            mode = error.mode;
+            url = normalizeUrl(publicOrigin, mode);
+          }
+          if (error.port !== undefined) requestedPort = error.port;
+          continue;
+        }
+        throw error;
+      }
+    }
+    if (!host) {
+      preflightSpinner.stop("Host preflight failed");
+      throw new CliError(
+        "Could not complete preflight after adjusting options. Re-run the installer.",
+        1,
+      );
+    }
+    preflightSpinner.stop(
+      dnsAnswers.length > 0
+        ? `Host preflight passed · DNS: ${dnsAnswers.join(", ")}`
+        : "Host preflight passed",
     );
-    host = await preflight(mode, true, requestedPort, directory);
-    if (mode !== "local") await dns.lookup(url.hostname);
-    preflightSpinner.stop("Host preflight passed");
   } catch (error) {
     preflightSpinner.stop("Host preflight failed");
     throw error;
@@ -788,9 +972,7 @@ async function collectInteractiveAnswers(
       2,
     );
   const services = `PostgreSQL, migrator, app, scheduler${mode === "caddy" ? ", Caddy" : ""}`;
-  const localPort =
-    process.env.HARLY_PORT ??
-    (mode === "local" && url.port ? url.port : "3000");
+  const localPort = String(requestedPort);
   p.note(
     [
       `Directory   ${directory}`,
@@ -818,6 +1000,7 @@ async function collectInteractiveAnswers(
   return {
     mode,
     url,
+    port: requestedPort,
     email,
     organization,
     storage,
@@ -858,6 +1041,7 @@ x-env: &env
   AI_ENCRYPTION_KEY: \${AI_ENCRYPTION_KEY}
   STORAGE_UPLOAD_SECRET: \${STORAGE_UPLOAD_SECRET}
   CRON_SECRET: \${CRON_SECRET}
+  METRICS_TOKEN: \${METRICS_TOKEN:-}
   HARLY_SETUP_SECRET: \${HARLY_SETUP_SECRET}
   HARLY_INITIAL_ADMIN_EMAIL: \${HARLY_INITIAL_ADMIN_EMAIL}
   DOCUSEAL_URL: \${DOCUSEAL_URL:-}
@@ -937,17 +1121,19 @@ services:
 volumes: { postgres-data: {}, uploads: {}, next-cache: {}, caddy-data: {}, caddy-config: {} }
 `;
 
-const envExample = `HARLY_IMAGE=ghcr.io/vytral/harly:<version-or-digest>\nHARLY_VERSION=<version>\nHARLY_URL=https://harly.example.com\nHARLY_PORT=3000\nHARLY_DOMAIN=harly.example.com\nCOMPOSE_PROFILES=proxy\nPOSTGRES_USER=harly\nPOSTGRES_PASSWORD=<secret>\nPOSTGRES_DB=harly\nBETTER_AUTH_SECRET=<secret>\nAI_ENCRYPTION_KEY=<secret>\nSTORAGE_UPLOAD_SECRET=<secret>\nCRON_SECRET=<secret>\nHARLY_SETUP_SECRET=<secret>\nHARLY_INITIAL_ADMIN_EMAIL=owner@example.com\nSTORAGE_PROVIDER=local\nRESEND_API_KEY=\nEMAIL_FROM=\n# Optional resource tuning (defaults target a 4 GB VPS)\nHARLY_APP_MEMORY=1536m\nHARLY_POSTGRES_MEMORY=768m\nHARLY_SCHEDULER_MEMORY=256m\nHARLY_SCHEDULER_STALE_AFTER_SECONDS=300\nHARLY_CADDY_MEMORY=256m\nHARLY_CACHE_MAX_MB=512\nHARLY_CACHE_MAX_AGE_DAYS=7\nHARLY_LOG_MAX_SIZE=10m\nHARLY_LOG_MAX_FILES=3\n`;
+const envExample = `HARLY_IMAGE=ghcr.io/vytral/harly:<version-or-digest>\nHARLY_VERSION=<version>\nHARLY_URL=https://harly.example.com\nHARLY_PORT=3000\nHARLY_DOMAIN=harly.example.com\nCOMPOSE_PROFILES=proxy\nPOSTGRES_USER=harly\nPOSTGRES_PASSWORD=<secret>\nPOSTGRES_DB=harly\nBETTER_AUTH_SECRET=<secret>\nAI_ENCRYPTION_KEY=<secret>\nSTORAGE_UPLOAD_SECRET=<secret>\nCRON_SECRET=<secret>\nMETRICS_TOKEN=<independent-secret>\nHARLY_SETUP_SECRET=<secret>\nHARLY_INITIAL_ADMIN_EMAIL=owner@example.com\nSTORAGE_PROVIDER=local\nRESEND_API_KEY=\nEMAIL_FROM=\n# Optional resource tuning (defaults target a 4 GB VPS)\nHARLY_APP_MEMORY=1536m\nHARLY_POSTGRES_MEMORY=768m\nHARLY_SCHEDULER_MEMORY=256m\nHARLY_SCHEDULER_STALE_AFTER_SECONDS=300\nHARLY_CADDY_MEMORY=256m\nHARLY_CACHE_MAX_MB=512\nHARLY_CACHE_MAX_AGE_DAYS=7\nHARLY_LOG_MAX_SIZE=10m\nHARLY_LOG_MAX_FILES=3\n`;
 const envExampleWithEsign = `${envExample}# Optional DocuSeal global fallback (per-workspace config in Settings overrides)\nDOCUSEAL_URL=\nDOCUSEAL_API_TOKEN=\n# Set only when running the bundled DocuSeal service (--profile esign)\nDOCUSEAL_SECRET_KEY_BASE=\n`;
 
 async function init() {
   const directory = path.resolve(positionals[0] ?? "harly");
+  const dryRun = flags.has("--dry-run");
   const answers = interactive
     ? await collectInteractiveAnswers(directory)
     : await collectNonInteractiveAnswers(directory);
   const {
     mode,
     url,
+    port,
     email,
     organization,
     storage,
@@ -956,18 +1142,22 @@ async function init() {
     image,
   } = answers;
   const resources = resourceProfiles[resourceProfile];
-  const generationSpinner = interactive ? p.spinner(spinnerStyle) : null;
-  generationSpinner?.start("Generating secure configuration");
+  const generationSpinner = interactive && !dryRun ? p.spinner(spinnerStyle) : null;
+  if (!dryRun) generationSpinner?.start("Generating secure configuration");
+  let setupSecret: string | undefined;
+  let envWritten = false;
+  const wouldCreate: string[] = [];
   try {
     await mkdir(directory, { recursive: true });
 
     const envPath = path.join(directory, ".env");
     if (!(await exists(envPath))) {
+      setupSecret = secret();
       const env = [
         `HARLY_IMAGE=${envLine(image)}`,
         `HARLY_VERSION=${envLine(image.includes("@sha256:") ? "digest" : (image.split(":").at(-1) ?? "unknown"))}`,
         `HARLY_URL=${envLine(url.origin)}`,
-        `HARLY_PORT=${envLine(process.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : "3000"))}`,
+        `HARLY_PORT=${envLine(String(port))}`,
         `HARLY_DOMAIN=${envLine(url.hostname)}`,
         `COMPOSE_PROFILES=${envLine(mode === "caddy" ? "proxy" : "")}`,
         `POSTGRES_USER=${envLine("harly")}`,
@@ -977,7 +1167,7 @@ async function init() {
         `AI_ENCRYPTION_KEY=${envLine(secret())}`,
         `STORAGE_UPLOAD_SECRET=${envLine(secret())}`,
         `CRON_SECRET=${envLine(secret())}`,
-        `HARLY_SETUP_SECRET=${envLine(secret())}`,
+        `HARLY_SETUP_SECRET=${envLine(setupSecret)}`,
         `HARLY_INITIAL_ADMIN_EMAIL=${envLine(email)}`,
         "DOCUSEAL_URL=",
         "DOCUSEAL_API_TOKEN=",
@@ -1007,7 +1197,16 @@ async function init() {
         "HARLY_LOG_MAX_FILES=3",
         "",
       ].join("\n");
-      await atomicWrite(envPath, env, 0o600);
+      if (dryRun) {
+        wouldCreate.push(".env (mode 0600, contains random secrets)");
+      } else {
+        await atomicWrite(envPath, env, 0o600);
+        // atomicWrite only chmods when the file did not exist. Confirm and
+        // repair so the secrets file is owner-read-write-only.
+        const stat_ = await stat(envPath);
+        if ((stat_.mode & 0o777) !== 0o600) await chmod(envPath, 0o600);
+        envWritten = true;
+      }
     }
 
     const config: HarlyFileConfig = {
@@ -1031,17 +1230,35 @@ async function init() {
       ["harly.config.json", `${JSON.stringify(config, null, 2)}\n`],
       [
         "README.md",
-        `# Harly self-host\n\n- Open management: \`npx @harly/cli\`\n- Diagnose: \`npx @harly/cli doctor\`\n- Backup before every update.\n- Complete the first owner at ${url.origin}/setup using HARLY_SETUP_SECRET from .env.\n`,
+        `# Harly self-host\n\nBefore launching Caddy, make sure ${url.hostname} has an A record pointing to this VPS and that TCP 80/443 plus UDP 443 are allowed by the firewall. If another reverse proxy owns those ports, use external proxy mode and forward it to 127.0.0.1:3000.\n\n- Open management: \`npx @harly/cli\`\n- Diagnose: \`npx @harly/cli doctor\`\n- Backup before every update.\n- Complete the first owner at ${url.origin}/setup using HARLY_SETUP_SECRET from .env.\n`,
       ],
     ];
     for (const [name, contents, modeBits] of templates) {
       const target = path.join(directory, name);
-      if (!(await exists(target)) || force)
+      const existsAlready = await exists(target);
+      if (dryRun) {
+        if (!existsAlready || force) wouldCreate.push(name);
+      } else if (!existsAlready || force) {
         await atomicWrite(target, contents, modeBits);
+      }
     }
   } catch (error) {
     generationSpinner?.stop("Configuration generation failed");
     throw error;
+  }
+  if (dryRun) {
+    const header = `${directory}/`;
+    const lines = [
+      "",
+      `  ${ink("Dry run — no files were written.")}`,
+      "",
+      `  ${header}`,
+      ...wouldCreate.map((name) => `    ${accent("+")} ${name}`),
+      "",
+    ];
+    process.stdout.write(`${lines.join("\n")}\n`);
+    if (interactive) p.outro("Re-run without --dry-run to write these files.");
+    return;
   }
   generationSpinner?.stop("Configuration generated");
 
@@ -1055,19 +1272,209 @@ async function init() {
     );
     if (launchNow) {
       await launch(directory, true);
-      p.outro(
-        `Harly is ready at ${accent(url.origin)} · run ${accent("npx @harly/cli")}`,
-      );
+      printInstallOutro({
+        url: url.origin,
+        email,
+        mode,
+        setupSecret: setupSecret ?? "",
+        envWritten,
+        directory,
+      });
     } else {
       p.outro(
         `Next: ${accent(`cd ${shellQuote(directory)} && npx @harly/cli`)}`,
       );
+      if (setupSecret) {
+        process.stdout.write(
+          `\nSetup secret (copy and keep it safe — you will need it at ${url.origin}/setup):\n  ${accent(setupSecret)}\n\n`,
+        );
+      }
     }
   } else {
     process.stdout.write(
-      `\nGenerated ${directory}\nImage: ${image}\nMode: ${mode}\nResource profile: ${resourceProfile}\nServices: postgres, migrate, app, scheduler${mode === "caddy" ? ", caddy" : ""}\nVolumes: postgres-data, uploads, next-cache${mode === "caddy" ? ", caddy-data, caddy-config" : ""}\n\n`,
+      `\nGenerated ${directory}\nImage: ${image}\nMode: ${mode}\nResource profile: ${resourceProfile}\nServices: postgres, migrate, app, scheduler${mode === "caddy" ? ", caddy" : ""}\nVolumes: postgres-data, uploads, next-cache${mode === "caddy" ? ", caddy-data, caddy-config" : ""}\n`,
+    );
+    if (setupSecret) {
+      process.stdout.write(
+        `\nSetup secret: ${setupSecret}\nUse it at ${url.origin}/setup to claim the owner account.\n\n`,
+      );
+    } else {
+      process.stdout.write("\n");
+    }
+  }
+}
+
+function printInstallOutro(args: {
+  url: string;
+  email: string;
+  mode: ProxyMode;
+  setupSecret: string;
+  envWritten: boolean;
+  directory: string;
+}) {
+  const { url, email, mode, setupSecret, envWritten, directory } = args;
+  p.log.success(`Harly is running at ${accent(url)}`);
+  const lines: string[] = [];
+  if (setupSecret) {
+    lines.push("");
+    lines.push(`To finish setup, open ${accent(url)} and enter the secret below:`);
+    lines.push("");
+    lines.push(`  ${accent(setupSecret)}`);
+    lines.push("");
+    lines.push(
+      `Then sign in as ${accent(email)}. The secret is also in ${accent(`${directory}/.env`)} (line HARLY_SETUP_SECRET) for later reference.`,
+    );
+  } else if (envWritten) {
+    lines.push("");
+    lines.push(
+      `Open ${accent(url)} to finish setup. The setup secret is in ${accent(`${directory}/.env`)} (HARLY_SETUP_SECRET).`,
+    );
+  } else {
+    lines.push("");
+    lines.push(`Open ${accent(url)} to finish setup.`);
+  }
+  lines.push("");
+  lines.push("After setup:");
+  lines.push(`  ${accent("harly doctor")}   verify the public route`);
+  lines.push(`  ${accent("harly backup")}   write a private rollback point`);
+  lines.push(`  ${accent("harly update")}   apply future upgrades safely`);
+  if (mode === "caddy") {
+    lines.push("");
+    lines.push(
+      soft(
+        "If HTTPS does not load, check that TCP 80/443 and UDP 443 are open in the cloud security group.",
+      ),
     );
   }
+  p.outro(lines.join("\n"));
+}
+
+function renderHostCheck(
+  host: HostSummary,
+  options: { ports?: Array<{ port: number; protocol: "tcp" | "udp"; detail: string }> } = {},
+) {
+  const rows: Array<{ label: string; status: "ok" | "warn" | "fail"; detail: string; fix?: string }> = [];
+  rows.push({
+    label: "Host",
+    status: "ok",
+    detail: `${host.distro}, ${host.cpuCount} CPU, ${host.freeMemoryGb.toFixed(1)} GB free of ${host.memoryGb.toFixed(1)} GB`,
+  });
+  if (host.docker) {
+    rows.push({
+      label: "Docker",
+      status: "ok",
+      detail: `Engine ${host.docker.engine} (need ≥ 24)`,
+    });
+    rows.push({
+      label: "Compose",
+      status: "ok",
+      detail: `${host.docker.compose} (need ≥ 2.20)`,
+    });
+  } else {
+    rows.push({
+      label: "Docker",
+      status: "fail",
+      detail: "missing",
+      fix: "Install Docker Engine 24+",
+    });
+  }
+  rows.push({
+    label: "Disk",
+    status: host.diskGb >= 5 ? "ok" : "fail",
+    detail: `${host.diskGb.toFixed(1)} GB free`,
+    ...(host.diskGb < 5 ? { fix: "Free at least 5 GB on the install path" } : {}),
+  });
+  if (host.firewall) {
+    rows.push({
+      label: "Firewall",
+      status: "warn",
+      detail: host.firewall.detail,
+      fix: `Run: ${host.firewall.fix}`,
+    });
+  }
+  for (const port of options.ports ?? []) {
+    rows.push({ label: `Port ${port.port}`, status: "warn", detail: port.detail });
+  }
+
+  const labelWidth = Math.max(...rows.map((row) => row.label.length));
+  const glyph = (status: "ok" | "warn" | "fail") =>
+    status === "ok" ? accent("✓") : status === "warn" ? pc.yellow("⚠") : pc.red("✗");
+  const lines = ["", `  ${ink("Harly self-host requirements")}`, ""];
+  for (const row of rows) {
+    lines.push(
+      `  ${glyph(row.status)} ${row.label.padEnd(labelWidth)}  ${row.detail}`,
+    );
+    if (row.fix) lines.push(`  ${" ".repeat(labelWidth + 4)}${soft(row.fix)}`);
+  }
+  return lines.join("\n");
+}
+
+async function harlyCheck(directory = process.cwd()) {
+  const spinner = interactive ? p.spinner(spinnerStyle) : null;
+  spinner?.start("Checking host");
+  const host = await preflightHost(directory);
+  spinner?.stop("Host checked");
+
+  const portChecks: Array<{ port: number; protocol: "tcp" | "udp"; detail: string }> = [];
+  for (const portSpec of [80, 443] as const) {
+    const available = await portAvailable(portSpec);
+    if (!available) {
+      const owner = portOwner(portSpec, "tcp");
+      portChecks.push({
+        port: portSpec,
+        protocol: "tcp",
+        detail: owner ? `busy (${owner})` : "busy",
+      });
+    }
+  }
+  const output = renderHostCheck(host, { ports: portChecks });
+  process.stdout.write(`${output}\n\n`);
+
+  const allOk = !host.firewall && portChecks.length === 0 && host.diskGb >= 5;
+  if (interactive) {
+    if (allOk) {
+      p.log.success("Your host is ready. Run `harly init` to install Harly.");
+    } else {
+      p.log.warn("Some checks need attention. Resolve them above, then run `harly init`.");
+    }
+  } else {
+    if (!allOk) process.exitCode = 1;
+  }
+}
+
+async function setupSecret(explicitDirectory?: string) {
+  const directory = path.resolve(
+    explicitDirectory ?? positionals[0] ?? process.cwd(),
+  );
+  let envPath = path.join(directory, ".env");
+  if (!(await exists(envPath))) {
+    const installation = await findInstallation(directory);
+    if (!installation) {
+      throw new CliError(
+        `No .env file found at ${envPath}. Run \`harly init\` first.`,
+        1,
+      );
+    }
+    envPath = path.join(installation.directory, ".env");
+  }
+  let env: string;
+  try {
+    env = await readFile(envPath, "utf8");
+  } catch {
+    throw new CliError(`Cannot read ${envPath}. Check file permissions.`, 1);
+  }
+  const match = env.match(/^HARLY_SETUP_SECRET=(?:"([^"]+)"|(\S+))$/m);
+  if (!match) {
+    throw new CliError(
+      `HARLY_SETUP_SECRET is missing from ${envPath}. The install may be incomplete.`,
+      1,
+    );
+  }
+  const secret = match[1] ?? match[2] ?? "";
+  if (!secret) {
+    throw new CliError(`HARLY_SETUP_SECRET is empty in ${envPath}.`, 1);
+  }
+  process.stdout.write(`${secret}\n`);
 }
 
 async function readConfig(directory: string): Promise<HarlyFileConfig> {
@@ -1109,12 +1516,78 @@ async function findInstallation(
   }
 }
 
+type ServiceWaitResult = { ready: boolean; detail: string };
+
+/** Poll a service until it is ready. One-shot services (migrate) are ready
+ * when they exit 0; long-running services are ready when their Docker
+ * healthcheck reports healthy. */
+async function waitForService(
+  cwd: string,
+  service: string,
+  timeoutMs: number,
+): Promise<ServiceWaitResult> {
+  const isOneShot = service === "migrate";
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = run(
+      "docker",
+      ["compose", "ps", "-a", "--format", "json", service],
+      { cwd, allowFailure: true },
+    );
+    if (result.status === 0) {
+      const stdout = String(result.stdout ?? "").trim();
+      if (stdout) {
+        try {
+          const parsed = JSON.parse(stdout);
+          const item = Array.isArray(parsed) ? parsed[0] : parsed;
+          if (item) {
+            if (isOneShot) {
+              if (item.State === "exited" && item.ExitCode === 0) {
+                return { ready: true, detail: "applied" };
+              }
+              if (item.State === "exited" && item.ExitCode !== 0) {
+                return { ready: false, detail: `exited ${item.ExitCode}` };
+              }
+            } else {
+              if (item.State === "running" && item.Health === "healthy") {
+                return { ready: true, detail: "healthy" };
+              }
+              if (item.State === "exited") {
+                return {
+                  ready: false,
+                  detail: `exited ${item.ExitCode ?? "?"}`,
+                };
+              }
+            }
+          }
+        } catch {
+          // malformed JSON, retry
+        }
+      }
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1_000));
+  }
+  return { ready: false, detail: "timeout" };
+}
+
+function formatLaunchLine(
+  service: string,
+  ready: boolean,
+  detail: string,
+  elapsedSec: number,
+): string {
+  const glyph = ready ? accent("✓") : pc.red("✗");
+  const label = ready
+    ? `${service} ready`
+    : `${service} ${detail}`;
+  return `  ${glyph} ${label.padEnd(28)} ${soft(`· ${elapsedSec.toFixed(1)}s`)}`;
+}
+
 async function launch(explicitDirectory?: string, confirmed = false) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
   if (interactive && !confirmed) {
     showBrand("Launch", cliVersion);
-    p.intro(accentBadge(" Launch Harly "));
     p.note(
       `Image  ${config.image}\nMode   ${config.proxyMode}\nURL    ${config.publicUrl}`,
       "Launch plan",
@@ -1135,21 +1608,136 @@ async function launch(explicitDirectory?: string, confirmed = false) {
     () => compose(directory, ["config", "--quiet"]),
   );
   await pullWithProgress(directory, [], interactive);
-  progressStep(
-    "Starting Harly and waiting for healthchecks",
-    "Harly services are healthy",
-    () => {
-      compose(directory, ["up", "-d", "--wait", "--wait-timeout", "180"]);
-    },
-  );
+
+  // Start the services. We poll each one ourselves instead of using
+  // `compose up --wait` so the operator can see per-service timing and which
+  // service stalled if something goes wrong.
+  compose(directory, ["up", "-d"], { allowFailure: false });
+
+  const ordered = ["postgres"];
+  if (config.proxyMode === "caddy") ordered.push("caddy");
+  ordered.push("migrate", "app", "scheduler");
+
+  const results: Array<{ service: string; ready: boolean; elapsedSec: number; detail: string }> = [];
+  for (const service of ordered) {
+    const step = interactive ? p.spinner(spinnerStyle) : null;
+    const start = Date.now();
+    if (interactive) {
+      step?.start(`Waiting for ${service}`);
+    } else {
+      process.stdout.write(`  … ${service}\n`);
+    }
+    const result = await waitForService(directory, service, 90_000);
+    const elapsedSec = (Date.now() - start) / 1000;
+    if (interactive) {
+      const line = formatLaunchLine(service, result.ready, result.detail, elapsedSec);
+      step?.stop(line);
+    } else {
+      process.stdout.write(
+        `${formatLaunchLine(service, result.ready, result.detail, elapsedSec)}\n`,
+      );
+    }
+    results.push({ service, ready: result.ready, elapsedSec, detail: result.detail });
+  }
+
+  // Public URL smoke test (best-effort; not fatal on transient TLS issues).
+  let publicOk = false;
+  try {
+    const response = await fetch(`${config.publicUrl}/api/health/ready`, {
+      signal: AbortSignal.timeout(5_000),
+    });
+    publicOk = response.ok;
+  } catch {
+    publicOk = false;
+  }
+  if (interactive) {
+    const glyph = publicOk ? accent("✓") : pc.yellow("⚠");
+    const label = publicOk
+      ? `Public URL ready (HTTP 200)`
+      : `Public URL not reachable yet`;
+    process.stdout.write(
+      `  ${glyph} ${label.padEnd(28)} ${soft(`· ${config.publicUrl}`)}\n`,
+    );
+  } else {
+    process.stdout.write(
+      `${formatLaunchLine(
+        "public",
+        publicOk,
+        publicOk ? "ready" : "not reachable",
+        0,
+      )} ${soft(config.publicUrl)}\n`,
+    );
+  }
+
+  const allReady = results.every((r) => r.ready);
+  if (!allReady) {
+    throw new CliError(
+      `One or more services did not become healthy:\n${results
+        .filter((r) => !r.ready)
+        .map((r) => `  - ${r.service}: ${r.detail}`)
+        .join("\n")}\nRun \`harly doctor ${directory}\` to inspect.`,
+      1,
+    );
+  }
   if (interactive && !confirmed) {
     p.outro(
-      `Harly is ready at ${accent(config.publicUrl)} · run ${accent("npx @harly/cli doctor .")}`,
+      `Harly is ready at ${accent(config.publicUrl)} · run ${accent("harly doctor")}`,
     );
   } else if (!interactive) {
     process.stdout.write(
-      `Harly is ready at ${config.publicUrl}. Run doctor to verify the public route.\n`,
+      `Harly is ready at ${config.publicUrl}. Run \`harly doctor\` to verify.\n`,
     );
+  }
+}
+
+async function runDoctorFix(directory: string, config: HarlyFileConfig) {
+  if (!interactive) {
+    p.log.warn("--fix requires an interactive terminal.");
+    return;
+  }
+  const servicesResult = compose(
+    directory,
+    ["ps", "--status", "running", "--services"],
+    { allowFailure: true },
+  );
+  const running = String(servicesResult.stdout ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  const expected = ["postgres", "app", "scheduler", ...(config.proxyMode === "caddy" ? ["caddy"] : [])];
+  const stopped = expected.filter((name) => !running.includes(name));
+  if (stopped.length === 0) {
+    p.log.info("All expected services are running. Nothing to restart.");
+    return;
+  }
+  const action = unwrapPrompt(
+    await p.select({
+      message: `${stopped.join(", ")} ${stopped.length === 1 ? "is" : "are"} not running. What do you want to do?`,
+      options: [
+        { value: "restart", label: `Restart ${stopped.join(", ")}`, hint: "docker compose restart <service>" },
+        { value: "up", label: "Bring everything up", hint: "docker compose up -d" },
+        { value: "logs", label: "Show container logs first", hint: "docker compose logs --tail=100 <service>" },
+        { value: "abort", label: "Cancel" },
+      ],
+    }),
+  );
+  if (p.isCancel(action) || action === "abort") return;
+  if (action === "logs") {
+    p.log.info("Inspect logs with: docker compose logs --tail=100 " + stopped[0]);
+    return;
+  }
+  if (action === "restart") {
+    const spin = p.spinner(spinnerStyle);
+    spin.start(`Restarting ${stopped.join(", ")}`);
+    compose(directory, ["restart", ...stopped]);
+    spin.stop(`Restart issued. Run \`harly doctor\` to verify.`);
+    return;
+  }
+  if (action === "up") {
+    const spin = p.spinner(spinnerStyle);
+    spin.start("Starting services");
+    compose(directory, ["up", "-d"]);
+    spin.stop("Services started. Run `harly doctor` to verify.");
   }
 }
 
@@ -1251,6 +1839,14 @@ async function doctor(explicitDirectory?: string, print = true) {
           }\n\n`,
     );
   if (!result.ok && print) process.exitCode = 1;
+  if (
+    !result.ok &&
+    flags.has("--fix") &&
+    interactive &&
+    !json
+  ) {
+    await runDoctorFix(directory, config);
+  }
   return result;
 }
 
@@ -1518,7 +2114,6 @@ async function upgrade(explicitDirectory?: string) {
 
   if (interactive) {
     showBrand("Update", cliVersion);
-    p.intro(accentBadge(" Upgrade Harly "));
     p.note(
       `Current  ${config.image}\nTarget   ${requestedImage}\nData     preserved`,
       "Upgrade plan",
@@ -1658,7 +2253,6 @@ async function uninstall(explicitDirectory?: string) {
 
 async function railwayGuide() {
   showBrand("Railway", cliVersion);
-  p.intro(accentBadge(" Deploy Harly on Railway "));
   const token = unwrapPrompt(
     await p.password({
       message: "Railway API token (from railway.app/account/tokens)",
@@ -1844,7 +2438,6 @@ async function railwayGuide() {
 async function cloudGuide(provider: "fly" | "digitalocean") {
   const providerName = provider === "fly" ? "Fly.io" : "DigitalOcean";
   showBrand(providerName, cliVersion);
-  p.intro(accentBadge(` Deploy Harly on ${providerName} `));
   const url = normalizeUrl(
     unwrapPrompt(
       await p.text({
@@ -2028,7 +2621,6 @@ async function menu() {
   }
   showBrand(undefined, cliVersion);
   if (!installation) {
-    p.intro(accentBadge(" Welcome to Harly "));
     const choice = unwrapPrompt(
       await p.select({
         message: "What would you like to do?",
@@ -2039,32 +2631,19 @@ async function menu() {
             hint: "Docker + automatic HTTPS",
           },
           {
-            value: "railway",
-            label: "Deploy on Railway",
-            hint: "managed Postgres + S3",
-          },
-          {
-            value: "fly",
-            label: "Deploy on Fly.io",
-            hint: "managed Postgres + S3",
-          },
-          {
-            value: "digitalocean",
-            label: "Deploy on DigitalOcean",
-            hint: "App Platform + managed Postgres + S3",
+            value: "cloud",
+            label: "Deploy to a managed cloud",
+            hint: "Railway · Fly.io · DigitalOcean",
           },
           { value: "help", label: "Show advanced commands" },
         ],
       }),
     );
     if (choice === "install") return init();
-    if (choice === "railway") return railwayGuide();
-    if (choice === "fly" || choice === "digitalocean")
-      return cloudGuide(choice);
+    if (choice === "cloud") return cloudSubmenu();
     usage();
     return;
   }
-  p.intro(accentBadge(" Harly management "));
   p.note(
     `${installation.config.publicUrl}\n${installation.config.image}\n${installation.directory}`,
     "Detected installation",
@@ -2094,16 +2673,66 @@ async function menu() {
   return uninstall(installation.directory);
 }
 
+async function cloudSubmenu() {
+  p.note(
+    [
+      "Harly also runs on managed platforms, but the experience is the same:",
+      "Docker, a managed PostgreSQL database, S3 for uploads, and a setup secret.",
+      "Render and DigitalOcean have one-click deploy buttons from the README;",
+      "the CLI writes the spec and secrets for the platforms below.",
+      "",
+      "See docs/cloud-deployments.md for the full guide.",
+    ].join("\n"),
+    "Managed cloud",
+  );
+  const choice = unwrapPrompt(
+    await p.select({
+      message: "Pick a platform",
+      options: [
+        { value: "railway", label: "Railway" },
+        { value: "fly", label: "Fly.io" },
+        { value: "digitalocean", label: "DigitalOcean App Platform" },
+        { value: "back", label: "Back" },
+      ],
+    }),
+  );
+  if (p.isCancel(choice) || choice === "back") return;
+  if (choice === "railway") return railwayGuide();
+  return cloudGuide(choice as "fly" | "digitalocean");
+}
+
+async function deploy(provider?: string) {
+  const choice = provider ?? positionals[0];
+  switch (choice) {
+    case "railway":
+      return railwayGuide();
+    case "fly":
+      return cloudGuide("fly");
+    case "digitalocean":
+    case "do":
+      return cloudGuide("digitalocean");
+    default:
+      throw new CliError(
+        `harly deploy needs one of: railway, fly, digitalocean. Got: ${choice ?? "(none)"}.`,
+        2,
+      );
+  }
+}
+
 async function main() {
   switch (command) {
     case "menu":
       return menu();
+    case "check":
+      return harlyCheck();
     case "init":
       return init();
     case "launch":
       return launch();
     case "doctor":
       return doctor();
+    case "setup-secret":
+      return setupSecret();
     case "backup":
       return backup();
     case "restore":
@@ -2113,6 +2742,8 @@ async function main() {
       return upgrade();
     case "uninstall":
       return uninstall();
+    case "deploy":
+      return deploy();
     case "help":
     case "--help":
     case "-h":
@@ -2128,13 +2759,7 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  const cliError =
-    error instanceof CliError
-      ? error
-      : new CliError(
-          error instanceof Error ? error.message : "Unexpected failure.",
-        );
-  if (cliError.message) process.stderr.write(`${cliError.message}\n`);
-  process.exitCode = cliError.exitCode;
+main().catch(async (error) => {
+  const result = await handleHarlyError(error, { interactive, yes });
+  if (result.kind === "abort") process.exit(result.exitCode);
 });

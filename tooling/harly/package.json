@@ -1,18 +1,39 @@
 {
   "name": "@harly/cli",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": false,
   "type": "module",
   "description": "Official operations CLI for self-hosted Harly.",
   "license": "MIT",
-  "keywords": ["harly", "ats", "recruiting", "self-hosted", "docker"],
+  "keywords": [
+    "harly",
+    "ats",
+    "recruiting",
+    "self-hosted",
+    "docker"
+  ],
   "homepage": "https://github.com/Vytral/harly#readme",
-  "repository": { "type": "git", "url": "git+https://github.com/Vytral/harly.git", "directory": "tooling/harly" },
-  "bugs": { "url": "https://github.com/Vytral/harly/issues" },
-  "engines": { "node": ">=20.12.0" },
-  "publishConfig": { "access": "public" },
-  "files": ["dist", "README.md"],
-  "bin": { "harly": "dist/index.js" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Vytral/harly.git",
+    "directory": "tooling/harly"
+  },
+  "bugs": {
+    "url": "https://github.com/Vytral/harly/issues"
+  },
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "bin": {
+    "harly": "dist/index.js"
+  },
   "scripts": {
     "build": "esbuild src/index.ts --bundle --packages=external --platform=node --format=esm --target=node20 --outfile=dist/index.js",
     "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --types node src/index.ts",

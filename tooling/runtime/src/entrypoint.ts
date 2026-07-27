@@ -79,6 +79,7 @@ async function runMigrations() {
 
 type Job = { name: string; path: string; intervalMs: number };
 const jobs: Job[] = [
+  { name: "domain-events", path: "/api/cron/domain-events", intervalMs: 15_000 },
   { name: "email-outbox", path: "/api/cron/email-outbox", intervalMs: 60_000 },
   { name: "webhooks-dispatch", path: "/api/cron/webhooks/dispatch", intervalMs: 60_000 },
   { name: "esign-reconciliation", path: "/api/cron/esign-reconciliation", intervalMs: 60_000 },
@@ -86,6 +87,7 @@ const jobs: Job[] = [
   { name: "mailbox-sync", path: "/api/cron/mailbox-sync", intervalMs: 120_000 },
   { name: "document-expiry", path: "/api/cron/document-expiry", intervalMs: 60_000 },
   { name: "retention-enforcement", path: "/api/cron/retention-enforcement", intervalMs: 60_000 },
+  { name: "scheduled-reports", path: "/api/cron/scheduled-reports", intervalMs: 60_000 },
 ];
 
 const schedulerStaleAfterMs = Math.max(
@@ -202,7 +204,7 @@ async function doctor() {
           from (
             select job, max(created_at) filter (where status in ('success', 'skipped')) as last_run
             from cron_runs
-            where job in ('email-outbox', 'webhooks-dispatch', 'esign-reconciliation', 'interview-sync', 'mailbox-sync', 'document-expiry', 'retention-enforcement')
+            where job in ('domain-events', 'email-outbox', 'webhooks-dispatch', 'esign-reconciliation', 'interview-sync', 'mailbox-sync', 'document-expiry', 'retention-enforcement', 'scheduled-reports')
             group by job
           ) scheduler_runs
         ) as scheduler_runs,

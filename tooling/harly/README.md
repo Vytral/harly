@@ -11,6 +11,14 @@ The interactive wizard checks Docker, ports, DNS and free disk, detects the
 host's CPU/RAM, recommends a resource profile, masks provider secrets and shows
 the complete installation plan before writing anything.
 
+For Caddy/automatic HTTPS, prepare a domain or preferably a subdomain (for
+example `careers.example.com`) whose DNS `A` record points to the VPS public
+IPv4 address. TCP ports 80 and 443 plus UDP 443 must be free; inbound TCP
+80/443 (and UDP 443 for HTTP/3) must be allowed by the VPS firewall. If Nginx,
+Apache, Traefik, or another Caddy already owns those ports, select the external
+proxy mode and forward the hostname to `127.0.0.1:3000`. The wizard checks DNS
+and reports the process holding a conflicting port when the host allows it.
+
 Use the official user-facing entrypoint:
 
 ```bash
