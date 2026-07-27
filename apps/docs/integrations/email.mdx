@@ -1,0 +1,58 @@
+---
+title: "Email, inbound replies, and mailboxes"
+description: "Configure outbound email, reply routing, SMTP, Resend, IMAP, and provider webhooks."
+---
+
+Harly can send candidate email through Resend or SMTP and can attach replies to
+the correct application through an inbound provider or mailbox connection.
+
+## Outbound email
+
+Open **Settings → Email**, choose a provider, configure the sender identity,
+and send a test message to a controlled mailbox.
+
+### Resend
+
+Use a verified domain and an API key with the minimum permissions required by
+your provider policy. A deployment-level `RESEND_API_KEY` can act as a default,
+but workspace configuration is preferred for multi-tenant operation.
+
+### SMTP
+
+Configure the SMTP host, port, TLS mode, username, password, and sender. Use
+port `465` for implicit TLS or `587` for STARTTLS according to your provider.
+Never test with a real candidate until the sender domain passes authentication.
+
+## Inbound replies
+
+Configure a receiving hostname such as `replies.example.com` in **Settings →
+Email**. Enter only the hostname—not a URL, port, or localhost address.
+
+The provider webhook points to Harly's inbound-email endpoint and includes the
+workspace webhook secret. Harly generates a unique `reply+token@domain`
+address for each application.
+
+<Steps>
+  <Step title="Configure the receiving domain">
+    Add the provider's MX or inbound-routing records and verify the domain.
+  </Step>
+  <Step title="Set the Harly inbound endpoint">
+    Use the endpoint shown in the workspace email settings and keep its secret
+    in the provider's secret field.
+  </Step>
+  <Step title="Send a controlled reply">
+    Reply to a test candidate message, then confirm the message appears in the
+    application thread with the correct sender and attachments.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+- No outbound email: check the sender domain, provider credentials, and the
+  email outbox status in the operations view.
+- Reply not attached: verify the reply domain is a hostname and that the
+  provider preserved the `Reply-To` address.
+- Duplicate delivery: email is at-least-once; use provider message IDs and the
+  Harly delivery log to identify retries.
+- Invalid old domain: Harly omits the Reply-To address rather than rejecting an
+  entire message. Correct the workspace setting and resend.

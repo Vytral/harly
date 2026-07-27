@@ -1,0 +1,64 @@
+---
+title: "Managed cloud deployments"
+description: "Deploy Harly on Render, DigitalOcean, Railway, or Fly.io with durable storage and a scheduler."
+---
+
+Harly needs a persistent web process, PostgreSQL, durable file storage, and a
+separate scheduler worker. Vercel-only deployments are not supported because
+serverless functions cannot provide the scheduler lifecycle Harly requires.
+
+## Choose a platform
+
+| Platform | Best for | Database | Upload storage | Deployment path |
+| --- | --- | --- | --- | --- |
+| Render | Blueprint-based setup | Managed PostgreSQL | S3-compatible bucket | Deploy from `render.yaml` |
+| DigitalOcean | App Platform and managed infrastructure | Managed PostgreSQL | S3-compatible bucket | Deploy from `.do/app.yaml` |
+| Railway | CLI-driven setup | Railway PostgreSQL | S3-compatible bucket | `npx @harly/cli` |
+| Fly.io | Teams comfortable with Fly processes | Managed PostgreSQL | S3-compatible bucket | `npx @harly/cli`, then `fly deploy` |
+
+<Warning>
+  App Platform filesystems are ephemeral. Use S3, R2, or another S3-compatible
+  provider before accepting candidate resumes or attachments.
+</Warning>
+
+## Render
+
+1. Open the Render deploy link from the Harly repository.
+2. Create independent values for the runtime secrets.
+3. Paste the same shared runtime secrets into both the web and scheduler
+   services when Render asks for them.
+4. Confirm the database is production-grade and the image tag is pinned.
+5. Open `https://<your-app>.onrender.com/setup` and claim the owner with the
+   `HARLY_SETUP_SECRET` you saved before deployment.
+
+## DigitalOcean App Platform
+
+Use `.do/app.yaml` as the canonical spec. For production, replace the
+development database entry with a managed PostgreSQL cluster and keep the
+runtime on `linux/amd64`. Configure S3 before the first upload. The `migrate`
+job must finish before the web and scheduler services receive traffic.
+
+## Railway and Fly.io
+
+Run the CLI from a secure workstation:
+
+```bash
+npx @harly/cli
+```
+
+Choose the provider in the deploy menu. The CLI creates separate web,
+scheduler, and migration roles, writes generated secrets to a local file, and
+prints where the setup secret is stored. Do not commit that file. Complete
+`/setup` only after readiness is green.
+
+## Production checklist
+
+<Check>Web and scheduler run as separate long-lived processes.</Check>
+<Check>PostgreSQL backups and point-in-time recovery are enabled.</Check>
+<Check>S3 bucket encryption and versioning are enabled.</Check>
+<Check>Secrets are stored in the platform secret manager.</Check>
+<Check>Readiness and scheduler health are monitored.</Check>
+<Check>A restore drill has completed against a throwaway installation.</Check>
+
+See [configuration](/deployment/configuration) and [backups](/operations/backups)
+before inviting a production team.

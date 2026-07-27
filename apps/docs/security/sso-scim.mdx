@@ -1,0 +1,55 @@
+---
+title: "SSO and SCIM provisioning"
+description: "Configure SAML, OIDC, and SCIM lifecycle management for enterprise workspaces."
+---
+
+SSO controls authentication; SCIM controls member lifecycle. Configure them
+independently so a temporary identity-provider outage does not silently delete
+recruiting history.
+
+## SAML 2.0 or OIDC
+
+Open **Settings → Security → Single sign-on** and add a provider.
+
+### OIDC values
+
+Provide the issuer, client ID, client secret, scopes, and claim mapping required
+by your identity provider. The callback must use the public Harly origin shown
+by the setup screen.
+
+### SAML values
+
+Provide the IdP entry point, entity identifier, certificate, and claim mapping.
+Copy Harly's ACS URL and entity ID into the provider configuration exactly.
+
+<Warning>
+  Test SSO with a second owner or a break-glass account before enforcing it.
+  Keep the break-glass credentials outside the identity provider and review
+  their use in the audit log.
+</Warning>
+
+## SCIM 2.0
+
+Only workspace owners can create SCIM tokens. In **Settings → Security → SCIM
+provisioning**, create a named token and copy it immediately; the raw token is
+shown once.
+
+Configure the identity provider with:
+
+```text
+Base URL: ${HARLY_URL}/api/scim/v2.0/<workspace-id>
+Users:    ${HARLY_URL}/api/scim/v2.0/<workspace-id>/Users
+Auth:     HTTP Bearer token
+```
+
+Harly supports idempotent create/update, active/inactive lifecycle, department,
+region, team, manager, title, and safe role mapping. Deactivation revokes the
+member's Harly sessions without deleting recruiting history.
+
+## Rollout checklist
+
+1. Create a test group in the identity provider.
+2. Map one test user to a least-privilege Harly role.
+3. Verify create, update, deactivate, and reactivation behavior.
+4. Review the audit log and session revocation.
+5. Roll out by group and keep a documented token rotation owner.

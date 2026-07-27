@@ -2,6 +2,12 @@
   "name": "@harly/docs",
   "version": "0.1.0",
   "private": true,
+  "scripts": {
+    "dev": "mint dev",
+    "validate": "mint validate",
+    "broken-links": "mint broken-links",
+    "a11y": "mint a11y"
+  },
   "devDependencies": {
     "mint": "^4.2.742"
   }

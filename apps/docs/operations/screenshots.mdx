@@ -1,0 +1,53 @@
+---
+title: "Screenshots and visual evidence"
+description: "Capture useful, privacy-safe screenshots for support, runbooks, and documentation."
+---
+
+Screenshots are most useful when they prove one state or error and include
+enough context to reproduce it. They are not a substitute for logs or request
+IDs.
+
+## Product screenshot checklist
+
+Before capturing:
+
+- Use a seeded demo workspace, never a production workspace.
+- Replace candidate names, email addresses, resumes, domains, and IDs.
+- Hide browser extensions, personal notifications, and access tokens.
+- Keep the URL visible only when it is a safe local or demo origin.
+- Capture the full state: page title, integration status, error banner, and
+  relevant form fields.
+
+## Error screenshot checklist
+
+Capture the error together with:
+
+1. The action that produced it.
+2. The visible error code or message.
+3. The Harly version and provider.
+4. A nearby timestamp in UTC.
+5. The browser console or network request only after redacting cookies and
+   authorization headers.
+
+<Warning>
+  Never include `.env`, a bearer token, a webhook secret, a private resume, or
+  a full email thread in a screenshot. Crop or blur before sharing.
+</Warning>
+
+## Suggested documentation captures
+
+The most useful screenshots for Harly are:
+
+- the completed `/setup` confirmation;
+- Settings → Integrations with a successful test state;
+- a pipeline with stages and a sample candidate;
+- an interview showing its calendar and video link;
+- a webhook delivery with a successful attempt;
+- the backup and restore result from a throwaway installation;
+- the browser network view showing an SSE connection without response data.
+
+## Naming and storage
+
+Use names such as `integrations-google-calendar-connected.png` and store
+sanitized assets under `apps/docs/images/`. Add descriptive alt text and link
+to the troubleshooting page when a screenshot documents an error.

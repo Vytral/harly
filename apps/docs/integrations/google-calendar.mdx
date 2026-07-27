@@ -1,0 +1,81 @@
+---
+title: "Google Calendar and Google Meet"
+description: "Configure Google OAuth once on the server, then connect a workspace calendar from Harly."
+---
+
+Google Calendar and Google Meet use the same OAuth connection. Harly uses it to
+create, update, cancel, and invite attendees to interview events, and to create
+a Meet link when the interview requests one.
+
+## 1. Create the OAuth client
+
+In [Google Cloud Console](https://console.cloud.google.com/):
+
+1. Create or select a project.
+2. Enable **Google Calendar API**.
+3. Configure the OAuth consent screen.
+4. Add test users while the app is in Testing status.
+5. Create a **Web application** OAuth client.
+
+## 2. Set installation credentials
+
+```dotenv
+GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+```
+
+Add both values to the web service's private environment and restart Harly.
+They are optional at startup; the connect action stays unavailable until both
+are present.
+
+## 3. Register the callback
+
+Register the exact origin-specific callback in Google Cloud:
+
+```text
+https://hiring.example.com/api/integrations/google/callback
+```
+
+For local development:
+
+```text
+http://localhost:3000/api/integrations/google/callback
+```
+
+Do not add a trailing slash or path prefix.
+
+## 4. Connect a workspace calendar
+
+<Steps>
+  <Step title="Open the integration">
+    Sign in as an owner or administrator and open **Settings → Integrations →
+    Google Calendar**.
+  </Step>
+  <Step title="Authorize Google">
+    Select the account that can edit the interview calendar and approve the
+    requested Calendar permissions.
+  </Step>
+  <Step title="Select and test the calendar">
+    Choose a writable calendar, save it, and use **Test connection**. Schedule a
+    test interview and verify the event and Meet link.
+  </Step>
+</Steps>
+
+## Common errors
+
+### `redirect_uri_mismatch`
+
+Compare the provider callback with `${HARLY_URL}/api/integrations/google/callback`.
+Check protocol, host, port, and trailing slash.
+
+### `invalid_grant`
+
+Google revoked or expired the refresh token. Disconnect the stale connection,
+connect again, and authorize the intended account. Existing Harly interviews
+remain safe and can be synced again.
+
+### No refresh token
+
+Revoke Harly from [Google account permissions](https://myaccount.google.com/permissions)
+and reconnect. Harly requests offline access and consent so Google can issue a
+refresh token.

@@ -4,19 +4,75 @@
   "name": "Harly",
   "colors": {
     "primary": "#2a331a",
-    "light": "#4a5a2e",
-    "dark": "#2a331a"
+    "light": "#bfdc82",
+    "dark": "#7e9650"
   },
   "favicon": "/logo/light.svg",
   "navigation": {
     "groups": [
       {
         "group": "Get started",
-        "pages": ["introduction", "quickstart"]
+        "icon": "rocket",
+        "pages": [
+          "introduction",
+          "quickstart",
+          "getting-started/first-workspace",
+          "getting-started/daily-workflow"
+        ]
       },
       {
-        "group": "Self-hosting",
-        "pages": ["self-hosting/overview", "self-hosting/proxy-modes", "self-hosting/operations"]
+        "group": "Deploy Harly",
+        "icon": "server",
+        "pages": [
+          "self-hosting/overview",
+          "self-hosting/proxy-modes",
+          "deployment/cloud",
+          "deployment/configuration"
+        ]
+      },
+      {
+        "group": "Integrations",
+        "icon": "plug",
+        "pages": [
+          "integrations/overview",
+          "integrations/google-calendar",
+          "integrations/microsoft",
+          "integrations/video",
+          "integrations/email",
+          "integrations/notifications",
+          "integrations/signatures",
+          "integrations/storage"
+        ]
+      },
+      {
+        "group": "Security and governance",
+        "icon": "shield-check",
+        "pages": [
+          "security/access-control",
+          "security/sso-scim",
+          "security/privacy"
+        ]
+      },
+      {
+        "group": "API and automation",
+        "icon": "code",
+        "pages": [
+          "developers/api-overview",
+          "developers/api-reference",
+          "developers/webhooks",
+          "developers/realtime",
+          "developers/automations"
+        ]
+      },
+      {
+        "group": "Operations",
+        "icon": "wrench",
+        "pages": [
+          "self-hosting/operations",
+          "operations/backups",
+          "operations/troubleshooting",
+          "operations/screenshots"
+        ]
       }
     ]
   },

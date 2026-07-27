@@ -3,7 +3,18 @@ title: "Introduction"
 description: "Harly is an open-source applicant tracking system for modern teams."
 ---
 
-Harly is a self-hostable ATS: pipelines, candidate portal, offers and e-signature, career pages, and calendar integrations, deployable on your own infrastructure or a managed platform.
+Harly is an applicant tracking system for teams that want their recruiting
+workflow, candidate data, and integrations in one workspace. It covers
+pipelines, candidate portals, interviews, offers, e-signature, career pages,
+automations, and a versioned API.
+
+![Harly deployment architecture: web, PostgreSQL, scheduler, storage, and integrations](/images/architecture.svg)
+
+<Info>
+  This documentation is organized around outcomes. Start with the quickstart
+  if you are deploying Harly, or jump to integrations and the API if your
+  workspace is already running.
+</Info>
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
@@ -12,10 +23,16 @@ Harly is a self-hostable ATS: pipelines, candidate portal, offers and e-signatur
   <Card title="Self-hosting overview" icon="server" href="/self-hosting/overview">
     VPS requirements, memory profiles, and DNS setup.
   </Card>
-  <Card title="Proxy modes" icon="route" href="/self-hosting/proxy-modes">
-    Caddy, external reverse proxy, or local-only.
+  <Card title="Cloud deployments" icon="cloud" href="/deployment/cloud">
+    Deploy with Render, DigitalOcean, Railway, or Fly.io.
   </Card>
-  <Card title="Operations" icon="wrench" href="/self-hosting/operations">
-    Health checks, the scheduler, backups, and upgrades.
+  <Card title="Integrations" icon="plug" href="/integrations/overview">
+    Connect calendars, video, email, notifications, storage, and signatures.
+  </Card>
+  <Card title="API and webhooks" icon="code" href="/developers/api-overview">
+    Automate Harly with scoped keys, idempotency, and signed events.
+  </Card>
+  <Card title="Troubleshooting" icon="circle-help" href="/operations/troubleshooting">
+    Diagnose setup, delivery, scheduling, and realtime issues.
   </Card>
 </CardGroup>

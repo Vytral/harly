@@ -3,6 +3,12 @@ title: "Quickstart"
 description: "Install Harly on a fresh VPS with the guided CLI."
 ---
 
+## What you will build
+
+At the end of this guide you will have a running Harly installation with
+PostgreSQL, the scheduler, HTTPS, and an owner workspace. The installer keeps
+the application bound to port `3000` behind the selected proxy.
+
 ## Requirements
 
 Node 20.12+, Docker Engine 24+, and Compose 2.20+ on a 64-bit Linux host (`amd64` or `arm64`). See [self-hosting overview](/self-hosting/overview) for sizing and DNS setup before you install.
@@ -31,6 +37,20 @@ Node 20.12+, Docker Engine 24+, and Compose 2.20+ on a 64-bit Linux host (`amd64
   </Step>
 </Steps>
 
+## Verify the installation
+
+Run the health checks from the directory that contains `compose.yaml`:
+
+```bash
+npx @harly/cli doctor
+docker compose ps
+curl -fsS https://careers.example.com/api/health/ready
+```
+
+The readiness endpoint should return HTTP `200`. If the page loads but the
+endpoint fails, continue with [troubleshooting](/operations/troubleshooting)
+before inviting recruiters.
+
 ## Re-running the installer
 
 Run the same command from the installation directory (or any child directory) to open the management menu:
@@ -49,5 +69,11 @@ Re-running `init` preserves `.env` and secrets. Modified templates are preserved
   </Card>
   <Card title="Operations" icon="wrench" href="/self-hosting/operations">
     Health checks, the scheduler, backups, and upgrades.
+  </Card>
+  <Card title="First workspace" icon="building" href="/getting-started/first-workspace">
+    Configure a team, roles, pipeline, and first job.
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/deployment/configuration">
+    Understand runtime secrets, storage, email, and optional providers.
   </Card>
 </CardGroup>

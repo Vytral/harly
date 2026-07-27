@@ -1,0 +1,49 @@
+---
+title: "Realtime updates"
+description: "Consume Harly's server-sent events stream for live workspace updates without page refreshes."
+---
+
+Harly uses Server-Sent Events (SSE) for browser updates because the flow is
+server-to-client. PostgreSQL remains the source of truth; the stream is a
+delivery optimization and can be replayed or reconciled.
+
+## Client flow
+
+```ts
+const stream = new EventSource("/api/realtime");
+
+stream.addEventListener("application.stage_changed", (event) => {
+  const payload = JSON.parse(event.data);
+  queryClient.invalidateQueries({
+    queryKey: ["application", payload.applicationId],
+  });
+});
+
+stream.onerror = () => {
+  // EventSource reconnects. Reconcile visible queries after reconnect.
+};
+```
+
+The browser should invalidate the smallest affected query rather than call a
+global `router.refresh()` after every event.
+
+## Reliability model
+
+- PostgreSQL is authoritative.
+- Durable domain events support automation, audit, and webhooks.
+- Realtime events carry event type, event version, schema version, workspace,
+  sequence, and a compact payload.
+- The client reconnects automatically and performs a focused reconciliation.
+- Ephemeral UI events such as `candidate.viewed` do not need durable domain
+  retention.
+
+<Warning>
+  Never treat receipt of an SSE event as proof that a mutation committed. Read
+  the affected record from the authenticated API after invalidation.
+</Warning>
+
+## Production guidance
+
+Keep one stream per browser tab, bound concurrent connections per workspace,
+emit heartbeats, and monitor SSE p95 latency and reconnect rates. A broken
+stream must not block a database mutation or background job.

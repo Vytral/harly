@@ -62,13 +62,13 @@ HARLY_SCHEDULER_MEMORY=192m
 HARLY_CADDY_MEMORY=128m
 ```
 
-## Railway and Fly.io
+## Managed cloud deployments
 
-Choose either managed platform from the initial `npx @harly/cli` wizard instead of a VPS. Both platforms terminate HTTPS themselves and require S3-compatible uploads.
-
-<Warning>
-  The cloud deployment and configuration reference pages have not been migrated to this site yet. Until then, see `docs/cloud-deployments.md` and `docs/configuration.md` in the repository.
-</Warning>
+Choose a managed platform from the [cloud deployment guide](/deployment/cloud)
+instead of a VPS when you want the provider to manage the host lifecycle.
+Managed platforms terminate HTTPS themselves and require S3-compatible uploads.
+Read [configuration](/deployment/configuration) before adding provider
+credentials.
 
 ## Troubleshooting
 
@@ -92,5 +92,8 @@ Choose either managed platform from the initial `npx @harly/cli` wizard instead 
   </Card>
   <Card title="Proxy modes" icon="route" href="/self-hosting/proxy-modes">
     Choose Caddy, an external reverse proxy, or local-only.
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/deployment/configuration">
+    Required secrets, storage, cron, and optional integration variables.
   </Card>
 </CardGroup>

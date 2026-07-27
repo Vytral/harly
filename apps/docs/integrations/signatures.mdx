@@ -1,0 +1,53 @@
+---
+title: "E-signatures and offer signing"
+description: "Configure DocuSeal or Harly Signing and verify signed offer state safely."
+---
+
+Harly supports remote signing through DocuSeal and native signing through
+Harly Signing. Both are optional. A document becomes signed from a verified
+signing state transition, not from a browser redirect alone.
+
+## DocuSeal
+
+DocuSeal can run as a separate service or as the optional bundled Compose
+profile. Configure the Harly workspace connection in **Settings → Integrations
+→ DocuSeal**.
+
+For a bundled self-hosted service, set the secret only when enabling the
+profile:
+
+```dotenv
+COMPOSE_PROFILES=proxy,esign
+DOCUSEAL_URL=https://sign.example.com
+DOCUSEAL_API_TOKEN=<token>
+DOCUSEAL_SECRET_KEY_BASE=<secret-for-the-bundled-service>
+```
+
+`DOCUSEAL_SECRET_KEY_BASE` is not required by a normal Harly deployment. The
+Compose file accepts an empty value for the disabled optional profile, but
+DocuSeal itself must receive a real secret before the `esign` profile starts.
+
+Configure the DocuSeal webhook to:
+
+```text
+<HARLY_URL>/api/integrations/docuseal/webhook
+```
+
+Harly verifies the workspace secret, reconciles the submission status, and
+updates the document asynchronously.
+
+## Harly Signing
+
+Use the native signing flow when you want Harly to keep the signing ceremony
+inside the product. Add a signature, place it on the PDF, send the request,
+and verify the recipient's completion status from the document record.
+
+## Recovery rules
+
+- A candidate redirect can show `pending` while webhook verification is still
+  running.
+- A voided or expired submission must not be treated as signed.
+- If the provider is unavailable, keep the offer record and retry the provider
+  operation after checking the integration status.
+- Never mark a document signed by editing the database or trusting an email
+  without a verified provider event.

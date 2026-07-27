@@ -1,0 +1,52 @@
+---
+title: "Microsoft Outlook and Teams"
+description: "Configure Microsoft Entra OAuth for Outlook calendars and Teams interview meetings."
+---
+
+Harly uses a Microsoft Entra application for Outlook calendar access and Teams
+meeting creation. The workspace connection is separate from the installation
+client credentials.
+
+## Create the app registration
+
+In the [Microsoft Entra admin center](https://entra.microsoft.com/):
+
+1. Register a web application for Harly.
+2. Add the redirect URI for your public origin:
+
+   ```text
+   https://hiring.example.com/api/integrations/outlook/callback
+   ```
+3. Create a client secret and store it in your secret manager.
+4. Add delegated permissions for the calendar and online meetings required by
+   your tenant policy.
+5. Grant admin consent when the tenant requires it.
+
+Add the client ID and secret from **Settings → Integrations → Microsoft
+Outlook**. Harly stores the workspace token encrypted and does not return the
+raw token to the browser.
+
+## Connect and test
+
+1. Open **Settings → Integrations → Microsoft Outlook**.
+2. Enter or confirm the workspace's client credentials.
+3. Select **Connect** and approve the Microsoft consent screen.
+4. Select a writable calendar and test an interview.
+5. For a Teams interview, choose Microsoft Teams as the video provider and
+   verify that the meeting link is included in the calendar event.
+
+<Note>
+  Calendar synchronization is best effort after the Harly interview is saved.
+  If Microsoft is unavailable, Harly keeps the interview and displays a sync
+  warning for retry.
+</Note>
+
+## Troubleshooting
+
+- `invalid_client`: verify the client secret has not expired and belongs to the
+  same app registration as the client ID.
+- Consent failure: ask a tenant administrator to grant the delegated scopes.
+- Redirect failure: register the exact `HARLY_URL` origin and remove a trailing
+  slash from the callback.
+- No Teams link: confirm online meeting permission and select Teams as the
+  interview provider rather than entering a generic location.

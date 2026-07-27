@@ -1,0 +1,45 @@
+---
+title: "Automations"
+description: "Build safe recruiting automations with triggers, conditions, permissions, retries, and human approval points."
+---
+
+Automations connect a Harly event to one or more actions. Use them for
+repeatable notifications and task creation, while keeping consequential hiring
+decisions explicit.
+
+## A safe automation shape
+
+```text
+Domain event → condition → action → durable run log → retry or failure state
+```
+
+Typical examples:
+
+- candidate applies → notify a recruiting channel;
+- application enters interview → create a coordinator task;
+- interview completed → request a scorecard;
+- offer accepted → notify the hiring team.
+
+## Configure a workflow
+
+1. Open **Automations** and create a workflow.
+2. Choose a supported trigger event.
+3. Add conditions that limit the workspace, job, department, or status.
+4. Configure an action such as a task, Slack/Discord message, or HTTP request.
+5. Run the preview and enable the workflow.
+
+HTTP actions support workspace secret references so credentials do not appear in
+workflow payloads. Outbound requests use the same SSRF protections as webhooks.
+
+## Reliability and permissions
+
+Each run records its trigger, actions, result, and error. Actions validate their
+configuration before execution and enforce the permission required by the
+workflow actor. Retry transient failures; fix configuration failures before
+replaying.
+
+<Warning>
+  Do not build an automation that rejects candidates, deletes records, or
+  sends an offer without a human review step unless your documented governance
+  process explicitly permits it.
+</Warning>

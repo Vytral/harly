@@ -1,0 +1,52 @@
+---
+title: "Video interview providers"
+description: "Configure Zoom, Microsoft Teams, Google Meet, or Jitsi for interview links."
+---
+
+When an interview needs video, Harly selects one provider and stores the link
+on the interview. The current preference order is Zoom, Microsoft Teams,
+Google Meet, then Jitsi when more than one provider is available.
+
+## Provider setup
+
+| Provider | Credential model | Where to configure |
+| --- | --- | --- |
+| Zoom | OAuth client ID and secret | Installation variables, then workspace connect |
+| Microsoft Teams | Outlook/Entra connection | [Microsoft guide](/integrations/microsoft) |
+| Google Meet | Google Calendar OAuth | [Google guide](/integrations/google-calendar) |
+| Jitsi | Workspace base URL, default `https://meet.jit.si` | Settings → Integrations |
+
+## Zoom
+
+Create a Zoom OAuth app, register:
+
+```text
+https://hiring.example.com/api/integrations/zoom/callback
+```
+
+Then configure the web service:
+
+```dotenv
+ZOOM_CLIENT_ID=<client-id>
+ZOOM_CLIENT_SECRET=<client-secret>
+```
+
+Connect Zoom from **Settings → Integrations → Zoom** and test by scheduling a
+video interview. Rotate the provider secret in Zoom and Harly together.
+
+## Jitsi
+
+Jitsi does not require an OAuth client. Open **Settings → Integrations → Jitsi**
+and set the base URL if you operate a private Jitsi deployment. Use HTTPS for
+production and verify that candidates can reach the resulting room URL.
+
+## Sync behavior
+
+Editing or canceling an interview attempts to update the provider object. If a
+provider fails, Harly preserves the local interview and reports the provider
+warning. Retry from the interview instead of creating a second interview.
+
+<Warning>
+  Do not paste private provider tokens into the interview location field. Use
+  the integration settings so secrets are encrypted and access is auditable.
+</Warning>

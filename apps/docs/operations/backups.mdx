@@ -1,0 +1,54 @@
+---
+title: "Backups and restore"
+description: "Create rollback archives, protect production data off-host, and verify restores with a throwaway installation."
+---
+
+Backups cover different failure modes. A local Harly archive is useful for a
+failed update; disaster recovery requires off-host PostgreSQL and object
+storage protection.
+
+## Recommended recovery contract
+
+For a single-region self-hosted deployment, a practical target is RPO 15
+minutes and RTO 60 minutes. Validate the target against provider quotas,
+credentials, and restore capacity.
+
+## Create a backup
+
+```bash
+npx @harly/cli backup
+npx @harly/cli backup --encrypt
+```
+
+The CLI stops application workers, creates a PostgreSQL custom-format dump,
+includes local uploads and configuration, checksums archive contents, and
+writes a private rollback archive. Encrypted archives require an `age`
+recipient and a private identity stored outside the server.
+
+<Warning>
+  A local archive disappears with the VPS. Copy it to an encrypted off-host
+  bucket and enable object versioning. S3 uploads require an independent
+  backup policy because they are not embedded in the archive.
+</Warning>
+
+## Restore
+
+```bash
+npx @harly/cli restore backups/harly-2026-...tar.gz --force
+npx @harly/cli doctor
+```
+
+Restore verifies checksums, creates a safety backup, stops workers, restores
+PostgreSQL and local uploads, and requires readiness before returning success.
+
+## Prove recovery
+
+Use only a throwaway installation:
+
+```bash
+HARLY_DESTRUCTIVE_OK=1 \
+  tooling/harly/test/backup-restore.destructive.sh /path/to/throwaway-install
+```
+
+Run a restore drill monthly and after backup code changes. Record the archive
+checksum, restore duration, row counts, and upload checksum.

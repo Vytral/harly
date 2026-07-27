@@ -1,19 +1,27 @@
-# Harly Docs
+# Harly documentation
 
-Public documentation for Harly — `docs.harly.dev`.
+This is the public Mintlify site for Harly. Run it from this directory with:
 
-> **Status:** The public docs app is still planned. Until it is built, operator documentation lives in the repository-level [`docs/`](../../docs/) directory.
+```bash
+pnpm exec mint dev
+```
 
-## Direction
+The source of truth for published documentation is `apps/docs`. Repository
+notes under `docs/` are implementation records and should not be linked as
+the user-facing manual.
 
-Long-term, public docs can move to a dedicated repository. Keep internal product thinking in `docs-internal/`, not here.
+## Writing and validation
 
-## Content to cover (when built)
+Every page is MDX with `title` and `description` frontmatter. Use root-relative
+links such as `/integrations/google-calendar`, keep secrets redacted in
+examples, and add new pages to `docs.json` navigation.
 
-- Getting started / quickstart
-- Self-hosting guide (Docker/PostgreSQL, Vercel, Railway)
-- Configuration reference (environment variables)
-- API reference (auto-generated from OpenAPI spec)
-- Integrations guide
-- Customization (career pages, email templates, roles)
-- Troubleshooting
+```bash
+pnpm exec mint validate
+pnpm exec mint broken-links
+pnpm exec mint a11y
+```
+
+Use the [screenshots and visual evidence guide](/operations/screenshots) when
+adding product captures. Do not include candidate data, API keys, email
+addresses, or production domains in screenshots.

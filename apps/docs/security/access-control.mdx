@@ -1,0 +1,48 @@
+---
+title: "Access control and workspace security"
+description: "Design least-privilege roles, contextual access, MFA, and audit reviews for recruiting teams."
+---
+
+Harly uses workspace-scoped RBAC. A role combines module permissions with an
+optional context such as assigned jobs, departments, or regions.
+
+## Role design
+
+Start with job responsibilities, not with a copy of your organisation chart:
+
+| Role | Typical access |
+| --- | --- |
+| Owner | Workspace, billing, security, integrations, and all recruiting data |
+| Hiring manager | Assigned jobs, applications, interviews, and feedback |
+| Recruiter | Candidate and application workflow for allowed jobs or regions |
+| Interviewer | Assigned interviews and scorecards |
+| Coordinator | Scheduling and candidate communications without role administration |
+
+The exact permission set depends on your workspace policy. Keep administrative
+permissions separate from candidate-data permissions.
+
+## Contextual scopes
+
+Use `assigned` jobs when a member should work only on their requisitions. Add
+department or region constraints for larger teams. The server resolves the
+active workspace and applies the role policy before returning candidates,
+applications, interviews, or offers.
+
+<Warning>
+  A scoped administrator cannot create a role broader than its own privilege
+  ceiling. Review role changes in the audit log after every organisational
+  change.
+</Warning>
+
+## MFA and session controls
+
+Owners can enforce MFA from **Settings → Security**. For higher-risk teams,
+also configure passkeys, trusted domains, IP allowlists, and risk detection
+according to the deployment environment.
+
+## Audit review
+
+Review security and administrative events monthly and after an incident. Export
+the audit log before deleting or anonymising records required for an active
+investigation. A candidate's deletion request is not a substitute for an
+incident record.

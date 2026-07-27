@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 520" role="img" aria-labelledby="title desc">
+  <title id="title">Harly deployment architecture</title>
+  <desc id="desc">A web service and scheduler use PostgreSQL and durable storage, with optional provider integrations.</desc>
+  <rect width="1200" height="520" rx="28" fill="#f7f9f0"/>
+  <g font-family="Inter,Arial,sans-serif" fill="#2a331a">
+    <text x="64" y="68" font-size="28" font-weight="700">Harly deployment architecture</text>
+    <text x="64" y="96" font-size="16" fill="#5c6842">PostgreSQL is authoritative; workers and providers are replaceable delivery paths.</text>
+    <rect x="64" y="160" width="250" height="120" rx="18" fill="#2a331a"/>
+    <text x="94" y="208" font-size="22" fill="#fff" font-weight="700">Web application</text>
+    <text x="94" y="238" font-size="15" fill="#dce8b8">UI · API · SSE</text>
+    <rect x="64" y="326" width="250" height="100" rx="18" fill="#7e9650"/>
+    <text x="94" y="368" font-size="22" fill="#fff" font-weight="700">Scheduler</text>
+    <text x="94" y="396" font-size="15" fill="#f3f8e6">queues · retries · sync</text>
+    <rect x="475" y="190" width="250" height="150" rx="18" fill="#dce8b8" stroke="#7e9650" stroke-width="3"/>
+    <text x="520" y="244" font-size="24" font-weight="700">PostgreSQL</text>
+    <text x="520" y="276" font-size="15">data · outbox · audit</text>
+    <text x="520" y="302" font-size="15">events · idempotency</text>
+    <rect x="885" y="160" width="250" height="120" rx="18" fill="#fff" stroke="#7e9650" stroke-width="3"/>
+    <text x="935" y="208" font-size="22" font-weight="700">File storage</text>
+    <text x="935" y="238" font-size="15">local volume or S3</text>
+    <rect x="885" y="326" width="250" height="100" rx="18" fill="#fff" stroke="#7e9650" stroke-width="3"/>
+    <text x="928" y="368" font-size="22" font-weight="700">Providers</text>
+    <text x="928" y="396" font-size="15">calendar · email · signing</text>
+  </g>
+  <g stroke="#4a5a2e" stroke-width="4" fill="none" stroke-linecap="round">
+    <path d="M314 220H475"/><path d="M314 376H475"/><path d="M725 230H885"/><path d="M725 300H885"/><path d="M725 330H885"/>
+  </g>
+  <g fill="#4a5a2e"><path d="m461 210 20 10-20 10z"/><path d="m461 366 20 10-20 10z"/><path d="m871 220 20 10-20 10z"/><path d="m871 290 20 10-20 10z"/><path d="m871 320 20 10-20 10z"/></g>
+</svg>

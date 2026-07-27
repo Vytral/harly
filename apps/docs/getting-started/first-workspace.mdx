@@ -1,0 +1,69 @@
+---
+title: "Create your first workspace"
+description: "Set up the team, roles, pipeline, career page, and first job after Harly bootstrap."
+---
+
+The first workspace is where you define who can recruit, what your hiring
+process looks like, and how candidates experience your company.
+
+## Before you begin
+
+- Complete [quickstart](/quickstart) and claim the owner account.
+- Have your recruiting team, departments, regions, and approval rules ready.
+- Decide whether candidates should use the portal and which public domain will
+  host your career page.
+
+<Steps>
+  <Step title="Create the workspace profile">
+    Open **Settings → Workspace** and set the organisation name, logo, locale,
+    timezone, and public origin. Use the same origin configured in `HARLY_URL`
+    for links sent in email.
+  </Step>
+  <Step title="Invite the recruiting team">
+    Open **Settings → Members** and invite each teammate with the narrowest
+    role they need. Owners can manage security and billing-level settings;
+    recruiters generally need candidate, application, job, and interview
+    permissions.
+
+    <Warning>
+      Do not share an owner account. Every action is attributed to a member so
+      audit records and access reviews remain useful.
+    </Warning>
+  </Step>
+  <Step title="Create pipeline stages">
+    Open **Settings → Pipelines**, create the stages that match your process,
+    and keep the order intentional. A practical starting point is `Applied`,
+    `Screen`, `Interview`, `Offer`, and `Hired`, with a separate rejected or
+    withdrawn outcome.
+  </Step>
+  <Step title="Create a job">
+    Add the title, department, location, employment type, description, and
+    hiring team. Publish only after the pipeline and application questions have
+    been reviewed.
+  </Step>
+  <Step title="Review the candidate experience">
+    Open the public career page in a private browser window. Submit a test
+    application using a test mailbox, confirm the acknowledgement email, and
+    verify that the application appears in the expected stage.
+  </Step>
+</Steps>
+
+## Recommended workspace checklist
+
+<Check>Owner account claimed and recovery method tested.</Check>
+<Check>At least two owners or a documented break-glass procedure.</Check>
+<Check>Members assigned least-privilege roles.</Check>
+<Check>Sender identity and reply routing tested.</Check>
+<Check>Candidate privacy notice and retention policy published.</Check>
+<Check>Backup and restore owner assigned before production traffic.</Check>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Daily recruiting workflow" icon="list-checks" href="/getting-started/daily-workflow">
+    Move from application to hire with a repeatable operating rhythm.
+  </Card>
+  <Card title="Access control" icon="shield-check" href="/security/access-control">
+    Add contextual roles, MFA, SSO, and audit review.
+  </Card>
+</CardGroup>

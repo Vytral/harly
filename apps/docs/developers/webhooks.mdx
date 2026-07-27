@@ -1,0 +1,53 @@
+---
+title: "Webhooks"
+description: "Subscribe to Harly domain events, verify signatures, handle retries, and replay failed deliveries."
+---
+
+Webhooks notify external systems after Harly records a domain change. Delivery
+is durable and at-least-once: your receiver must be idempotent.
+
+## Create an endpoint
+
+1. Open **Settings → Developers → Webhooks**.
+2. Enter an HTTPS endpoint and select event types.
+3. Store the signing secret in your secret manager.
+4. Send a test delivery and confirm a `2xx` response.
+
+Harly blocks loopback, private, link-local, and metadata destinations. For a
+controlled internal deployment, an owner may explicitly set
+`HARLY_ALLOW_PRIVATE_WEBHOOKS=true`.
+
+## Verify the signature
+
+Verify the raw request body before parsing JSON. The signature is a
+Stripe-style HMAC with the endpoint secret; use the exact signing helper in
+your language and reject stale timestamps if your receiver implements a
+replay window.
+
+```ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+const expected = createHmac("sha256", process.env.HARLY_WEBHOOK_SECRET!)
+  .update(rawBody)
+  .digest("hex");
+const valid = timingSafeEqual(
+  Buffer.from(expected),
+  Buffer.from(receivedSignature),
+);
+```
+
+## Receiver contract
+
+- Return `2xx` after durable acceptance, not after completing a slow workflow.
+- Deduplicate by event ID.
+- Persist the event before enqueueing downstream work.
+- Treat unknown event types as accepted and observable.
+- Return `4xx` for an invalid signature and `5xx` for a temporary failure.
+
+Failed deliveries are retried by the scheduler. Owners can inspect delivery
+attempts and use **Replay** after correcting the receiver.
+
+<Note>
+  Webhooks are for durable external reactions. For browser UI updates inside a
+  workspace, use [realtime events](/developers/realtime).
+</Note>

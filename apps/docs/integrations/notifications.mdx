@@ -1,0 +1,43 @@
+---
+title: "Slack, Discord, and Telegram notifications"
+description: "Send recruiting notifications to team channels while keeping secrets and delivery retries controlled."
+---
+
+Notifications are workspace integrations. Configure them in **Settings →
+Integrations**, select the events to deliver, and send a test before enabling
+high-volume alerts.
+
+## Slack
+
+Create a Slack OAuth app with the redirect URI:
+
+```text
+https://hiring.example.com/api/integrations/slack/callback
+```
+
+Add the client ID and secret to the server environment, connect the workspace,
+choose a channel, and run the test notification. Harly stores the workspace
+token encrypted.
+
+## Discord
+
+Create an incoming webhook in the destination channel and paste it into the
+Discord integration card. The URL is encrypted and never returned in status
+responses. Rotate it in Discord if it has been exposed.
+
+## Telegram
+
+Create a bot with BotFather, copy the bot token once, and configure the target
+chat ID in the Telegram integration. Send a test message before enabling
+candidate events.
+
+## Delivery and safety
+
+Notification delivery is asynchronous and at-least-once. A provider outage
+must not block candidate mutations. Harly records the delivery outcome and
+retries eligible failures through the scheduler.
+
+<Warning>
+  Do not send resumes, personal contact data, or full candidate notes to a
+  public channel. Prefer an event summary with a link back to Harly.
+</Warning>

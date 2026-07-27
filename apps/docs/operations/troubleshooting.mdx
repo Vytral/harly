@@ -1,0 +1,60 @@
+---
+title: "Troubleshooting"
+description: "Diagnose installation, proxy, scheduler, email, integrations, API, and realtime failures."
+---
+
+Start with the smallest safe check and preserve the evidence before changing
+configuration.
+
+## First response
+
+```bash
+npx @harly/cli doctor
+docker compose ps
+docker compose logs --tail=100 app scheduler
+curl -fsS https://hiring.example.com/api/health/ready
+```
+
+Do not paste full logs into a public issue without removing domains, emails,
+tokens, candidate names, and database URLs.
+
+## Symptom table
+
+| Symptom | First check | Likely cause |
+| --- | --- | --- |
+| 502 from proxy | `docker compose ps`, `HARLY_PORT` | App unhealthy or upstream port mismatch |
+| Caddy TLS stuck | `dig +short A <domain>`, ports 80/443 | DNS or another process owns the ports |
+| Readiness `503` | `docker compose logs migrate app` | Database unavailable or migration incomplete |
+| Scheduler stale | `docker compose logs scheduler` | Worker stopped, locked, or suspended |
+| Email not sent | Email settings and outbox status | Sender/provider credentials or provider rejection |
+| Calendar `invalid_grant` | Reconnect provider account | Refresh token revoked or expired |
+| API `403` | API key scopes | Key lacks the resource permission |
+| API `429` | Retry headers and backoff | Rate limit reached |
+| UI not updating | Browser network tab, SSE stream | Stream disconnected; reconcile the query |
+
+## Recovery recipes
+
+### Restart only the failed worker
+
+```bash
+docker compose restart scheduler
+docker compose exec -T scheduler node /app/runtime.mjs doctor
+```
+
+### Check the external proxy
+
+Confirm Harly listens on `127.0.0.1:3000` (or `HARLY_PORT`) and that the proxy
+forwards the original `Host` and `X-Forwarded-Proto` headers. In external mode,
+Harly does not manage TLS.
+
+### Reconnect an integration
+
+Disconnect the provider from **Settings → Integrations**, correct credentials
+or redirect URIs, reconnect, and run its test action. Do not create a second
+calendar event to work around a sync warning.
+
+### Capture an actionable issue
+
+Include the Harly version, deployment mode, provider, UTC timestamp, command
+output with secrets redacted, request ID if present, and the last successful
+health check. See [screenshots](/operations/screenshots) for visual evidence.

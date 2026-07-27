@@ -1,0 +1,61 @@
+---
+title: "Integrations overview"
+description: "Understand installation credentials, workspace connections, sync behavior, and provider recovery in Harly."
+---
+
+Harly separates provider setup into two layers:
+
+1. **Installation credentials** live in the server environment and enable an
+   OAuth or API client.
+2. **Workspace connections** are created by an owner or administrator in
+   **Settings → Integrations** and are stored encrypted in PostgreSQL.
+
+This means one Harly installation can serve multiple workspaces without
+sharing a user's refresh token between them.
+
+## Integration map
+
+| Need | Providers | Setup |
+| --- | --- | --- |
+| Calendar | Google Calendar, Microsoft Outlook | OAuth client plus workspace connection |
+| Video interviews | Zoom, Microsoft Teams, Google Meet, Jitsi | Provider connection or meeting URL |
+| Email | Resend, SMTP, IMAP, Postmark inbound | Workspace sender and mailbox settings |
+| Notifications | Slack, Discord, Telegram | OAuth or incoming webhook |
+| E-signature | DocuSeal or Harly Signing | Optional provider connection |
+| Files | Local volume, S3-compatible storage | Deployment configuration |
+
+## Connection lifecycle
+
+<Steps>
+  <Step title="Create provider credentials">
+    Create the provider application with the redirect URI and scopes shown in
+    the provider guide. Keep the client secret server-side.
+  </Step>
+  <Step title="Add installation variables">
+    Add the values to the web process's secret manager, restart Harly, and
+    confirm the integration card no longer reports missing credentials.
+  </Step>
+  <Step title="Connect the workspace">
+    Open **Settings → Integrations**, connect the account, select a calendar or
+    destination where requested, and run the provider test.
+  </Step>
+  <Step title="Exercise failure recovery">
+    Disconnect and reconnect a test account, verify a sample event or message,
+    and record the owner for future token rotation.
+  </Step>
+</Steps>
+
+<Warning>
+  A provider connection is not the source of truth for a Harly record. Harly
+  saves the interview, application, or message first and reports sync warnings
+  when the provider is unavailable.
+</Warning>
+
+## Troubleshooting pattern
+
+1. Open **Settings → Integrations** and check the provider status.
+2. Verify the public origin and exact redirect URI.
+3. Confirm the web process received the current secret variables.
+4. Reconnect the workspace account if the provider returned `invalid_grant`.
+5. Inspect the application or interview warning; retry the sync from its
+   record rather than creating a duplicate external event.

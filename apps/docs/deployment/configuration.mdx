@@ -1,0 +1,81 @@
+---
+title: "Configuration reference"
+description: "Configure Harly's required secrets, storage, email, cron, and optional integrations safely."
+---
+
+`HARLY_URL` is the canonical public origin. Use an origin without a path, for
+example `https://hiring.example.com`. Do not reuse secrets between variables.
+
+## Required runtime values
+
+```dotenv
+HARLY_URL=https://hiring.example.com
+DATABASE_URL=postgresql://user:password@postgres:5432/harly
+BETTER_AUTH_SECRET=<independent-32-byte-secret>
+AI_ENCRYPTION_KEY=<independent-32-byte-secret>
+STORAGE_UPLOAD_SECRET=<independent-32-byte-secret>
+CRON_SECRET=<independent-32-byte-secret>
+METRICS_TOKEN=<independent-32-byte-secret>
+HARLY_SETUP_SECRET=<independent-32-byte-secret>
+HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
+```
+
+`npx @harly/cli` generates independent values and writes `.env` with mode
+`0600`. In a managed platform, store them as secret variables rather than
+plain configuration.
+
+## Storage
+
+Local storage uses `/data/uploads` in the official image and requires the
+`uploads` volume:
+
+```dotenv
+STORAGE_PROVIDER=local
+```
+
+For S3, R2, or MinIO, configure all required values:
+
+```dotenv
+STORAGE_PROVIDER=s3
+S3_BUCKET=harly-production
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=<access-key>
+S3_SECRET_ACCESS_KEY=<secret-key>
+S3_ENDPOINT=https://s3.example.com
+S3_PUBLIC_URL=https://cdn.example.com
+```
+
+`S3_ENDPOINT` and `S3_PUBLIC_URL` are optional for AWS's default endpoint but
+useful for compatible providers and CDNs.
+
+## Scheduler and metrics
+
+The scheduler authenticates private jobs with `CRON_SECRET`. Prometheus uses:
+
+```http
+GET /api/metrics
+Authorization: Bearer <METRICS_TOKEN>
+```
+
+Never put either secret in a URL or query string. The scheduler handles email
+outbox, domain-event replay, webhooks, interview sync, and mailbox sync.
+
+## Optional integration credentials
+
+Installation-level OAuth credentials are optional and only enable their
+corresponding connect flow. Workspace credentials are encrypted in PostgreSQL
+after an administrator connects an account. See [integrations](/integrations/overview)
+for provider-specific setup.
+
+<Note>
+  DocuSeal is optional. `DOCUSEAL_SECRET_KEY_BASE` is only needed when the
+  bundled DocuSeal profile is enabled; a normal Harly deployment can leave it
+  empty.
+</Note>
+
+## Security-sensitive settings
+
+Outbound webhooks must use HTTPS and resolve to public addresses. Private,
+loopback, link-local, and metadata networks are blocked. Set
+`HARLY_ALLOW_PRIVATE_WEBHOOKS=true` only for a controlled internal deployment
+where the risk is understood.

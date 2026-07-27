@@ -1,0 +1,63 @@
+---
+title: "API overview"
+description: "Build integrations against Harly's versioned REST API with scoped keys, pagination, idempotency, and safe retries."
+---
+
+The Harly REST API is available at:
+
+```text
+${HARLY_URL}/api/v1
+```
+
+The OpenAPI document is available from a running installation at
+`/api/v1/openapi.json`. Use it as the source of truth for exact schemas and
+route parameters.
+
+## Authenticate
+
+Create a key from **Settings → Developers → API keys**, copy the raw value once,
+and send it as a bearer token:
+
+```bash
+curl --fail-with-body \
+  -H 'Authorization: Bearer harly_sk_REDACTED' \
+  -H 'Accept: application/json' \
+  'https://hiring.example.com/api/v1/jobs?limit=25'
+```
+
+Keys are scoped. Give an integration only the resources it needs and rotate or
+revoke keys when an owner or vendor changes.
+
+## Response envelopes
+
+Successful responses use `data` and optional `meta`; failures use `error`:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "A job title is required",
+    "details": {}
+  }
+}
+```
+
+Common statuses are `400`, `401`, `403`, `404`, `409`, `422`, and `429`.
+
+## Pagination and retries
+
+Use the `limit` and `cursor` values returned by list endpoints. Do not assume a
+page number or stable ordering. For POST requests that support it, send a
+unique `Idempotency-Key` and retry only after applying exponential backoff.
+
+<Warning>
+  A `409` may mean a real concurrency conflict or an idempotency collision.
+  Inspect the error envelope before retrying a mutation.
+</Warning>
+
+## Main resources
+
+Jobs, candidates, applications, interviews, offers, scorecards, tasks,
+pool entries, activity events, webhooks, and API keys are available through
+the versioned API. The [webhook guide](/developers/webhooks) is the preferred
+way to react to changes instead of polling every resource.

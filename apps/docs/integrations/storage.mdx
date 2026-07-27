@@ -1,0 +1,47 @@
+---
+title: "File storage"
+description: "Choose local volume storage or S3-compatible storage for resumes, documents, and attachments."
+---
+
+Harly stores resumes, candidate attachments, documents, and mailbox files
+through a storage adapter. Choose the adapter based on deployment topology,
+backup requirements, and whether the filesystem is durable.
+
+## Local volume
+
+Use local storage for a single VPS with a durable Docker volume:
+
+```dotenv
+STORAGE_PROVIDER=local
+```
+
+Back up the uploads volume together with PostgreSQL. Do not use local storage
+on a platform whose service filesystem is ephemeral.
+
+## S3-compatible storage
+
+```dotenv
+STORAGE_PROVIDER=s3
+S3_BUCKET=harly-production
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=<access-key>
+S3_SECRET_ACCESS_KEY=<secret-key>
+S3_ENDPOINT=https://s3.example.com
+S3_PUBLIC_URL=https://cdn.example.com
+```
+
+Use a bucket policy that limits Harly to the required prefix and actions. Turn
+on encryption, versioning, and lifecycle rules that match your retention
+policy. Back up the bucket independently from the Harly database.
+
+## Verify an upload
+
+1. Upload a test resume from a candidate record.
+2. Download it through Harly, not directly from a public bucket URL.
+3. Confirm the file appears in the storage provider and the application record.
+4. Run a backup or provider snapshot according to your recovery runbook.
+
+<Warning>
+  Candidate files are personal data. Keep buckets private and let Harly issue
+  authenticated download responses. Do not make the entire bucket public.
+</Warning>
