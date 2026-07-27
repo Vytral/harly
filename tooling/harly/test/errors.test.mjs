@@ -346,7 +346,7 @@ exit 0
     ]) {
       assert.match(
         result.stdout,
-        new RegExp(`\\+ ${file.replace(/\./g, "\\.").replace(/\//g, "\\/")}`),
+        new RegExp(`\\+ ${file.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\\\$&")}`),
         `dry-run output should list ${file}`,
       );
     }
