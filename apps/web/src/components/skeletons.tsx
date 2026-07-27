@@ -374,49 +374,47 @@ export function SettingsSkeleton({
   );
 }
 
-/** Dashboard-specific loading layout. */
+/**
+ * Dashboard home skeleton , mirrors DashboardPage exactly (greeting, triage
+ * strip, then three 3/2-col widget rows) so nothing shifts on mount.
+ */
 export function DashboardSkeleton() {
   return (
-    <SkeletonContainer ariaLabel="Loading dashboard" className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-2">
+    <SkeletonContainer
+      ariaLabel="Loading dashboard"
+      className="mx-auto w-full max-w-[1440px] space-y-5 pb-4"
+    >
+      <header className="flex items-center gap-3">
+        <Skeleton className="size-11 shrink-0 rounded-full" />
         <div className="space-y-2">
-          <Skeleton className="h-8 w-64" />
-          <Skeleton className="h-4 w-80 max-w-full" />
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-3.5 w-64 max-w-full" />
         </div>
-        <Skeleton className="h-4 w-40" />
       </header>
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        <TileSkeleton rows={3} />
-        <TileSkeleton rows={3} />
-        <TileSkeleton rows={2} headerAction />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-border/60 p-4">
+            <Skeleton className="h-7 w-10" />
+            <Skeleton className="mt-2 h-3 w-24" />
+          </div>
+        ))}
+      </div>
+
+      <section className="grid gap-4 lg:grid-cols-5">
+        <TileSkeleton rows={3} className="lg:col-span-3" />
+        <TileSkeleton rows={3} className="lg:col-span-2" />
       </section>
 
       <section className="grid gap-4 lg:grid-cols-5">
-        <TileSkeleton rows={4} className="lg:col-span-3" />
-        <TileSkeleton rows={4} className="lg:col-span-2" />
+        <TileSkeleton rows={3} className="lg:col-span-3" />
+        <TileSkeleton rows={3} className="lg:col-span-2" />
       </section>
 
-      <Card>
-        <CardContent className="space-y-4 p-5">
-          <div className="flex items-center justify-between">
-            <Skeleton className="h-4 w-40" />
-            <Skeleton className="h-8 w-36 rounded-md" />
-          </div>
-          <div className="grid gap-5 lg:grid-cols-[minmax(260px,0.9fr)_1.3fr]">
-            <div className="grid grid-cols-2 gap-3">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-border/60 bg-background/40 p-4">
-                  <Skeleton className="h-3 w-24" />
-                  <Skeleton className="mt-2 h-8 w-16" />
-                  <Skeleton className="mt-1 h-3 w-28" />
-                </div>
-              ))}
-            </div>
-            <Skeleton className="h-48 w-full rounded-xl" />
-          </div>
-        </CardContent>
-      </Card>
+      <section className="grid gap-4 lg:grid-cols-5">
+        <TileSkeleton rows={2} className="lg:col-span-2" />
+        <TileSkeleton rows={2} className="lg:col-span-3" />
+      </section>
     </SkeletonContainer>
   );
 }

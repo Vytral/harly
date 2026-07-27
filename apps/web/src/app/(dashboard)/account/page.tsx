@@ -5,12 +5,14 @@ import { PageTitle } from "@/components/dashboard/PageTitleContext";
 import { AccountSettingsPanel } from "@/features/account/AccountSettingsPanel";
 import { TwoFactorCard } from "@/features/security/TwoFactorCard";
 import { PasskeysCard } from "@/features/security/PasskeysCard";
+import { listMySessionsAction } from "@/features/security/session-actions";
 
 export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
   const { user } = await getWorkspaceContext();
   const profile = await getOwnProfileAction();
+  const sessions = await listMySessionsAction();
 
   let userPasskeys: Awaited<ReturnType<typeof getSecurityPasskeys>> = [];
   try {
@@ -54,6 +56,7 @@ export default async function AccountPage() {
             <PasskeysCard initialPasskeys={userPasskeys} />
           </>
         }
+        sessions={sessions}
       />
     </div>
   );

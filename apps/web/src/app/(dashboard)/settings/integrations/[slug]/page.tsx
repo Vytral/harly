@@ -10,11 +10,12 @@ import {
   HCaptchaLogo,
   ReCaptchaLogo,
 } from "@/components/ui/icons/brands";
-import { CaretLeftIcon } from "@/components/ui/icons/phosphor";
+import { CaretLeftIcon, SealCheckDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
 import { CalConnectPanel } from "@/features/workspaces/CalConnectPanel";
 import { DiscordConnectPanel } from "@/features/workspaces/DiscordConnectPanel";
 import { EsignConnectPanel } from "@/features/workspaces/EsignConnectPanel";
+import { HarlySignConnectPanel } from "@/features/workspaces/HarlySignConnectPanel";
 import { GCalConnectPanel } from "@/features/workspaces/GCalConnectPanel";
 import { GoogleMeetConnectPanel } from "@/features/workspaces/GoogleMeetConnectPanel";
 import { JitsiConnectPanel } from "@/features/workspaces/JitsiConnectPanel";
@@ -78,6 +79,7 @@ const DETAIL_LOGOS: Record<IntegrationSlug, Logo> = {
   linkedin: svgBrand("linkedin", "LinkedIn"),
   zapier: svgBrand("zapier", "Zapier"),
   webhooks: svgBrand("zapier", "Webhooks"),
+  "harly-sign": SealCheckDuotoneIcon,
   docuseal: DocuSealLogo,
   turnstile: CloudflareLogo,
   recaptcha: ReCaptchaLogo,
@@ -306,6 +308,18 @@ async function renderPanel(
           workspaceId={ctx.organizationId}
           tileClassName={integration.tileClassName}
           description={integration.detail}
+        />
+      );
+    }
+    case "harly-sign": {
+      const status = await getWorkspaceEsignStatus(ctx.organizationId);
+      return (
+        <HarlySignConnectPanel
+          status={status}
+          canEdit={ctx.canEdit}
+          tileClassName={integration.tileClassName}
+          description={integration.detail}
+          docusealConnected={status.enabled && status.hasToken}
         />
       );
     }

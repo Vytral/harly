@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { CheckCheck, Eye, EyeOff, Trash2 } from "lucide-react";
@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/popover";
 import { RelativeTime } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
+import { useRealtimeEvent } from "@/components/dashboard/RealtimeProvider";
 
 /** Top-bar bell with unread badge and a quick peek at recent notifications. */
 export function NotificationsBell({
@@ -39,18 +40,27 @@ export function NotificationsBell({
   unreadCount: number;
 }) {
   const router = useRouter();
+  const [items, setItems] = useState(notifications);
+  const [count, setCount] = useState(unreadCount);
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const unread = unreadCount;
+  const unread = count;
 
-  useEffect(() => {
-    const refresh = () => {
-      if (document.visibilityState === "visible") router.refresh();
+  const reloadNotifications = useCallback(async () => {
+    const response = await fetch("/api/notifications?limit=50", {
+      cache: "no-store",
+    });
+    if (!response.ok) return;
+    const data = (await response.json()) as {
+      notifications: NotificationItem[];
+      unreadCount: number;
     };
-    const interval = window.setInterval(refresh, 30_000);
-    return () => window.clearInterval(interval);
-  }, [router]);
+    setItems(data.notifications);
+    setCount(data.unreadCount);
+  }, []);
+
+  useRealtimeEvent("notifications.invalidate", reloadNotifications);
 
   function openItem(item: NotificationItem) {
     setOpen(false);
@@ -69,7 +79,7 @@ export function NotificationsBell({
       if (item.href) {
         router.push(item.href as Route);
       }
-      router.refresh();
+      await reloadNotifications();
     });
   }
 
@@ -89,7 +99,7 @@ export function NotificationsBell({
         setError("Could not update notification.");
         return;
       }
-      router.refresh();
+      await reloadNotifications();
     });
   }
 
@@ -107,7 +117,7 @@ export function NotificationsBell({
         setError("Could not delete notification.");
         return;
       }
-      router.refresh();
+      await reloadNotifications();
     });
   }
 
@@ -124,7 +134,7 @@ export function NotificationsBell({
         setError("Could not mark notifications as read.");
         return;
       }
-      router.refresh();
+      await reloadNotifications();
     });
   }
 
@@ -144,7 +154,7 @@ export function NotificationsBell({
         return;
       }
       setOpen(false);
-      router.refresh();
+      await reloadNotifications();
     });
   }
 
@@ -215,13 +225,13 @@ export function NotificationsBell({
           </p>
         ) : null}
 
-        {notifications.length === 0 ? (
+        {items.length === 0 ? (
           <p className="px-4 py-8 text-center text-sm text-muted-foreground">
             You&apos;re all caught up. No notifications yet.
           </p>
         ) : (
           <div className="max-h-96 overflow-y-auto">
-            {notifications.map((item, index) => (
+            {items.map((item, index) => (
               <button
                 key={item.id}
                 type="button"

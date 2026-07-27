@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { usePathname } from "next/navigation";
 import { Menu, Moon, Search, Sun, X } from "lucide-react";
 import { useTheme } from "next-themes";
 
@@ -8,6 +9,7 @@ import { HarlyAILogoMark } from "@/components/ui/icons/HarlyAILogoMark";
 
 import { CommandMenu } from "@/components/dashboard/CommandMenu";
 import { MobileNav } from "@/components/dashboard/IconRail";
+import { allNavItems, isNavActive } from "@/components/dashboard/nav-items";
 import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
 import { useStickyBar } from "@/components/dashboard/StickyBarContext";
 import { UserMenu } from "@/components/dashboard/UserMenu";
@@ -47,14 +49,13 @@ type TopBarProps = {
 };
 
 /**
- * Quiet chrome (DESIGN.md , Top Bar). One 56px bar: mobile trigger left,
- * workspace pill centered, compact cluster right. That is all.
+ * Quiet chrome (DESIGN.md , Top Bar). Mobile trigger + section label left,
+ * workspace pill centered, compact cluster right.
  *
- * Gone on purpose: the page title + breadcrumb pair (the page names itself in
- * content, so the bar was repeating it), the disabled "Coming soon" Activity
- * button (every one of those burns trust in a public beta), the wide search
- * input (⌘K and an icon do the same job in a fifth of the space), and the
- * standalone theme toggle (folded into the overflow menu).
+ * Gone on purpose: the disabled "Coming soon" Activity button (every one of
+ * those burns trust in a public beta), the wide search input (⌘K and an icon
+ * do the same job in a fifth of the space), and the standalone theme toggle
+ * (folded into the overflow menu).
  */
 export function TopBar({
   user,
@@ -70,6 +71,10 @@ export function TopBar({
   const [commandOpen, setCommandOpen] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { stickyBarVisible } = useStickyBar();
+  const pathname = usePathname();
+
+  const activeNav = allNavItems().find((item) => isNavActive(pathname, item));
+  const SectionIcon = activeNav?.icon;
 
   return (
     <div
@@ -92,6 +97,20 @@ export function TopBar({
         >
           <Menu className="size-[18px]" strokeWidth={1.8} />
         </button>
+
+        {activeNav ? (
+          <div className="z-10 ml-3 hidden min-w-0 items-center gap-1.5 md:flex">
+            {SectionIcon ? (
+              <SectionIcon
+                className="size-[18px] shrink-0 text-soft-ink"
+                strokeWidth={1.5}
+              />
+            ) : null}
+            <h1 className="truncate text-[15px] font-semibold tracking-tight text-near-ink">
+              {activeNav.label}
+            </h1>
+          </div>
+        ) : null}
 
         {/* Centered regardless of how wide the two side clusters are. */}
         <div className="pointer-events-none absolute inset-x-0 flex h-[var(--spacing-topbar)] items-center justify-center">

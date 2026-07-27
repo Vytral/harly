@@ -91,11 +91,11 @@ const sections: SettingsSection[] = [
   },
 ];
 
-export function SettingsNav({ allowedHrefs }: { allowedHrefs: string[] }) {
+export function SettingsNav({ deniedHrefs }: { deniedHrefs: string[] }) {
   const pathname = usePathname();
 
   const visible = sections.filter(
-    (section) => allowedHrefs.includes(section.href),
+    (section) => !deniedHrefs.includes(section.href),
   );
 
   return (

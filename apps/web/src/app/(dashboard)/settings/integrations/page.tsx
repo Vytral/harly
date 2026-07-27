@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/icons/brands";
 import { OAuthFeedback } from "@/components/OAuthFeedback";
 import { PlugIcon } from "@/components/ui/icons/settings";
+import { SealCheckDuotoneIcon } from "@/components/ui/icons/phosphor";
 import {
   IntegrationMarketplace,
   type MarketplaceGroup,
@@ -66,6 +67,7 @@ const INTEGRATION_LOGOS: Record<IntegrationSlug, Logo> = {
   linkedin: svgBrand("linkedin", "LinkedIn"),
   zapier: svgBrand("zapier", "Zapier"),
   webhooks: svgBrand("zapier", "Webhooks"),
+  "harly-sign": SealCheckDuotoneIcon,
   docuseal: DocuSealLogo,
   turnstile: CloudflareLogo,
   recaptcha: ReCaptchaLogo,

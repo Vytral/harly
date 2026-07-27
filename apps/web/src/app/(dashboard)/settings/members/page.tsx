@@ -43,6 +43,7 @@ export default async function MembersSettingsPage() {
       canManageInviteLinks={canManageInviteLinks}
       canManageRoles={canRoles}
       canManageMemberAccounts={canManageMemberAccounts}
+      canEditMemberAccess={canEditMembers}
       emailIdentity={emailIdentity}
     />
   );
