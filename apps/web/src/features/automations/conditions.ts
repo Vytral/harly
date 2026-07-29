@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import { db, aiEvaluations, applications, candidates, jobs } from "@harly/db";
 
@@ -70,6 +70,7 @@ export async function loadConditionContext(input: {
         and(
           eq(candidates.workspaceId, input.workspaceId),
           eq(candidates.id, applications.candidateId),
+          isNull(candidates.deletedAt),
         ),
       )
       .innerJoin(
@@ -77,6 +78,7 @@ export async function loadConditionContext(input: {
         and(
           eq(jobs.workspaceId, input.workspaceId),
           eq(jobs.id, applications.jobId),
+          isNull(jobs.deletedAt),
         ),
       )
       .where(
@@ -113,6 +115,7 @@ export async function loadConditionContext(input: {
         and(
           eq(candidates.workspaceId, input.workspaceId),
           eq(candidates.id, input.candidateId),
+          isNull(candidates.deletedAt),
         ),
       )
       .limit(1);
@@ -128,6 +131,7 @@ export async function loadConditionContext(input: {
         and(
           eq(jobs.workspaceId, input.workspaceId),
           eq(jobs.id, input.jobId),
+          isNull(jobs.deletedAt),
         ),
       )
       .limit(1);

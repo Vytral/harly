@@ -28,6 +28,7 @@ export type ComposerAttachment = {
 };
 
 export type ComposerPayload = {
+  idempotencyKey: string;
   subject: string;
   html: string;
   text: string;
@@ -119,6 +120,7 @@ export function MailComposer({
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const idempotencyKeyRef = useRef(crypto.randomUUID());
 
   function loadBody(next: string) {
     setEditorInitial(next);
@@ -192,11 +194,12 @@ export function MailComposer({
     setNote(null);
     setSending(true);
     try {
-      const result = await onSend({ subject: subject.trim(), html, text, attachments });
+      const result = await onSend({ subject: subject.trim(), html, text, attachments, idempotencyKey: idempotencyKeyRef.current });
       if (result.ok) {
         setHtml("");
         loadBody("");
         setAttachments([]);
+        idempotencyKeyRef.current = crypto.randomUUID();
         setNote(result.note ?? null);
       } else {
         setError(result.error ?? "Could not send.");

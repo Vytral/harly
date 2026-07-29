@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, count, desc, eq, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 
 import {
   applications,
@@ -80,6 +80,18 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
         and(
           eq(applications.workspaceId, workspace.id),
           eq(applications.status, "active"),
+          exists(
+            db
+              .select({ id: candidates.id })
+              .from(candidates)
+              .where(
+                and(
+                  eq(candidates.id, applications.candidateId),
+                  eq(candidates.workspaceId, workspace.id),
+                  isNull(candidates.deletedAt),
+                ),
+              ),
+          ),
         ),
       )
       .groupBy(applications.jobId)
@@ -101,8 +113,21 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
     .leftJoin(
       applications,
       and(
+        eq(applications.workspaceId, workspace.id),
         eq(applications.currentStageId, jobStages.id),
         eq(applications.status, "active"),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, applications.candidateId),
+                eq(candidates.workspaceId, workspace.id),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
       ),
     )
     .where(
@@ -158,11 +183,16 @@ export const getTodayInterviews = cache(async () => {
       and(
         eq(candidates.workspaceId, workspace.id),
         eq(candidates.id, interviews.candidateId),
+        isNull(candidates.deletedAt),
       ),
     )
     .innerJoin(
       jobs,
-      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, interviews.jobId)),
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, interviews.jobId),
+        isNull(jobs.deletedAt),
+      ),
     )
     .leftJoin(user, eq(user.id, interviews.interviewerId))
     .where(
@@ -211,13 +241,18 @@ export const getCandidatesNeedingReview = cache(async () => {
       .innerJoin(
         candidates,
         and(
-          eq(candidates.workspaceId, workspace.id),
-          eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, workspace.id),
+        eq(candidates.id, applications.candidateId),
+        isNull(candidates.deletedAt),
         ),
       )
       .innerJoin(
         jobs,
-        and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
+        and(
+          eq(jobs.workspaceId, workspace.id),
+          eq(jobs.id, applications.jobId),
+          isNull(jobs.deletedAt),
+        ),
       )
       .innerJoin(
         jobStages,
@@ -238,8 +273,9 @@ export const getCandidatesNeedingReview = cache(async () => {
       )
       .where(
         and(
-          eq(applications.workspaceId, workspace.id),
-          eq(applications.status, "active"),
+        eq(applications.workspaceId, workspace.id),
+        eq(applications.status, "active"),
+        isNull(candidates.deletedAt),
         ),
       ),
     db
@@ -295,6 +331,18 @@ export const getJobsAtRisk = cache(async () => {
       and(
         eq(applications.workspaceId, workspace.id),
         eq(applications.jobId, jobs.id),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, applications.candidateId),
+                eq(candidates.workspaceId, workspace.id),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
       ),
     )
     .where(
@@ -391,6 +439,30 @@ export const getHiringPerformance = cache(async () => {
         and(
           eq(applications.workspaceId, workspace.id),
           gte(applications.appliedAt, prevStart),
+          exists(
+            db
+              .select({ id: candidates.id })
+              .from(candidates)
+              .where(
+                and(
+                  eq(candidates.id, applications.candidateId),
+                  eq(candidates.workspaceId, workspace.id),
+                  isNull(candidates.deletedAt),
+                ),
+              ),
+          ),
+          exists(
+            db
+              .select({ id: jobs.id })
+              .from(jobs)
+              .where(
+                and(
+                  eq(jobs.id, applications.jobId),
+                  eq(jobs.workspaceId, workspace.id),
+                  isNull(jobs.deletedAt),
+                ),
+              ),
+          ),
         ),
       ),
     db
@@ -400,6 +472,30 @@ export const getHiringPerformance = cache(async () => {
         and(
           eq(interviews.workspaceId, workspace.id),
           gte(interviews.scheduledAt, prevStart),
+          exists(
+            db
+              .select({ id: candidates.id })
+              .from(candidates)
+              .where(
+                and(
+                  eq(candidates.id, interviews.candidateId),
+                  eq(candidates.workspaceId, workspace.id),
+                  isNull(candidates.deletedAt),
+                ),
+              ),
+          ),
+          exists(
+            db
+              .select({ id: jobs.id })
+              .from(jobs)
+              .where(
+                and(
+                  eq(jobs.id, interviews.jobId),
+                  eq(jobs.workspaceId, workspace.id),
+                  isNull(jobs.deletedAt),
+                ),
+              ),
+          ),
         ),
       ),
     getHiringEvents(workspace.id, { since: prevStart }),
@@ -489,13 +585,18 @@ export const getInbox = cache(async () => {
       .innerJoin(
         candidates,
         and(
-          eq(candidates.workspaceId, workspace.id),
-          eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, workspace.id),
+        eq(candidates.id, applications.candidateId),
+        isNull(candidates.deletedAt),
         ),
       )
       .innerJoin(
         jobs,
-        and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
+        and(
+          eq(jobs.workspaceId, workspace.id),
+          eq(jobs.id, applications.jobId),
+          isNull(jobs.deletedAt),
+        ),
       )
       .innerJoin(
         jobStages,

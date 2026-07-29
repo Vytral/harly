@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@harly/db";
@@ -1240,13 +1240,18 @@ export async function generateEmailDraftAction(input: {
     )
     .leftJoin(
       jobs,
-      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, applications.jobId),
+        isNull(jobs.deletedAt),
+      ),
     )
     .leftJoin(jobStages, eq(jobStages.id, applications.currentStageId))
     .where(
       and(
         eq(candidates.workspaceId, workspace.id),
         eq(candidates.id, parsed.data.candidateId),
+        isNull(candidates.deletedAt),
       ),
     )
     .orderBy(desc(applications.appliedAt))
@@ -1304,10 +1309,7 @@ export async function generateEmailDraftAction(input: {
         ),
       )
       .limit(1);
-    if (
-      !thread ||
-      (thread.candidateId && thread.candidateId !== parsed.data.candidateId)
-    )
+    if (!thread || thread.candidateId !== parsed.data.candidateId)
       return { ok: false, error: "Thread not found." };
     threadSubject = thread.subject;
     const threadMessages = await db
@@ -1401,6 +1403,14 @@ export async function sendCandidateMessage(input: {
     const [latestApplication] = await db
       .select({ id: applications.id })
       .from(applications)
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, applications.jobId),
+          eq(jobs.workspaceId, input.workspaceId),
+          isNull(jobs.deletedAt),
+        ),
+      )
       .where(
         and(
           eq(applications.workspaceId, input.workspaceId),

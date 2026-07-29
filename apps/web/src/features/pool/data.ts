@@ -45,6 +45,7 @@ export async function listPoolCandidates(filters?: {
   const conditions: SQL[] = [
     eq(poolEntries.workspaceId, workspace.id),
     isNull(poolEntries.removedAt),
+    isNull(candidates.deletedAt),
   ];
 
   if (filters?.source) {
@@ -70,7 +71,14 @@ export async function listPoolCandidates(filters?: {
       addedAt: poolEntries.addedAt,
     })
     .from(poolEntries)
-    .innerJoin(candidates, eq(poolEntries.candidateId, candidates.id))
+    .innerJoin(
+      candidates,
+      and(
+        eq(poolEntries.candidateId, candidates.id),
+        eq(candidates.workspaceId, workspace.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(and(...conditions))
     .orderBy(desc(poolEntries.addedAt));
 
@@ -213,11 +221,20 @@ export async function isCandidateInPool(
   const [entry] = await db
     .select({ id: poolEntries.id })
     .from(poolEntries)
+    .innerJoin(
+      candidates,
+      and(
+        eq(poolEntries.candidateId, candidates.id),
+        eq(candidates.workspaceId, workspace.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(poolEntries.workspaceId, workspace.id),
         eq(poolEntries.candidateId, candidateId),
         isNull(poolEntries.removedAt),
+        isNull(candidates.deletedAt),
       ),
     )
     .limit(1);

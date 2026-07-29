@@ -38,6 +38,19 @@ export async function addToPoolAction(input: {
 
   const { user, organization: workspace } = await requirePermission("candidates:edit");
 
+  const [candidate] = await db
+    .select({ id: candidates.id })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.id, parsed.data.candidateId),
+        eq(candidates.workspaceId, workspace.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!candidate) return { success: false, error: "Candidate not found." };
+
   // Check if already in pool
   const [existing] = await db
     .select({ id: poolEntries.id })

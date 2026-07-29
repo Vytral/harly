@@ -72,8 +72,8 @@ What's NOT included:
 ### Update paths
 
 ```bash
-# Update to latest stable release
-npx @harly/cli update /opt/harly --to latest --yes
+# Update to a specific release
+npx @harly/cli update /opt/harly --to 0.1.0-beta.2 --yes
 
 # Update to specific version
 npx @harly/cli update /opt/harly --to 0.3.0 --yes
@@ -82,7 +82,7 @@ npx @harly/cli update /opt/harly --to 0.3.0 --yes
 npx @harly/cli update /opt/harly --to edge --yes
 
 # Update with encrypted backup
-npx @harly/cli update /opt/harly --to latest --yes --encrypt --age-recipient "age1..."
+npx @harly/cli update /opt/harly --to 0.1.0-beta.2 --yes --encrypt --age-recipient "age1..."
 ```
 
 ### Restore process

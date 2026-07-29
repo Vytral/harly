@@ -247,6 +247,7 @@ export async function resolvePortalSession(
         eq(candidatePortalSessions.tokenHash, tokenHash),
         gt(candidatePortalSessions.expiresAt, new Date()),
         eq(candidates.workspaceId, candidatePortalSessions.workspaceId),
+        isNull(candidates.deletedAt),
       ),
     )
     .limit(1);
@@ -280,6 +281,7 @@ export async function findOrCreateCandidateByEmail(
       avatarUrl: candidates.avatarUrl,
       linkedinUrl: candidates.linkedinUrl,
       githubUrl: candidates.githubUrl,
+      deletedAt: candidates.deletedAt,
     })
     .from(candidates)
     .where(
@@ -291,6 +293,9 @@ export async function findOrCreateCandidateByEmail(
     .limit(1);
 
   if (existing) {
+    if (existing.deletedAt) {
+      throw new Error("Candidate portal access is unavailable.");
+    }
     // Sync profile data from OAuth provider on each login
     const updates: Record<string, unknown> = {};
     if (avatarUrl && avatarUrl !== existing.avatarUrl)

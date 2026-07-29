@@ -2,7 +2,7 @@ import "server-only";
 
 import type { Route } from "next";
 import { redirect } from "next/navigation";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -160,7 +160,11 @@ export async function requireJobPermission(
     })
     .from(jobs)
     .where(
-      and(eq(jobs.workspaceId, context.organization.id), eq(jobs.id, jobId)),
+      and(
+        eq(jobs.workspaceId, context.organization.id),
+        eq(jobs.id, jobId),
+        isNull(jobs.deletedAt),
+      ),
     )
     .limit(1);
   if (!job) throw new Error("Job not found.");
@@ -206,6 +210,14 @@ export async function requireApplicationPermission(
   const [application] = await db
     .select({ jobId: applications.jobId })
     .from(applications)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, context.organization.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.workspaceId, context.organization.id),
@@ -246,7 +258,14 @@ export async function requireCandidatePermission(
   const applicationsForCandidate = await db
     .select({ jobId: applications.jobId })
     .from(applications)
-    .innerJoin(candidates, eq(candidates.id, applications.candidateId))
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, context.organization.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.workspaceId, context.organization.id),
@@ -278,6 +297,22 @@ export async function requireInterviewPermission(
   const [interview] = await db
     .select({ jobId: interviews.jobId })
     .from(interviews)
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, interviews.jobId),
+        eq(jobs.workspaceId, context.organization.id),
+        isNull(jobs.deletedAt),
+      ),
+    )
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, interviews.candidateId),
+        eq(candidates.workspaceId, context.organization.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(interviews.workspaceId, context.organization.id),

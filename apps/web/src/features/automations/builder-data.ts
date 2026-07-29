@@ -1,12 +1,13 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 
 import {
   applications,
   candidates,
   db,
   jobStages,
+  jobs,
   member as authMembers,
   user as authUsers,
 } from "@harly/db";
@@ -118,7 +119,7 @@ async function resolveSample(workspaceId: string, candidateId?: string) {
     const [latest] = await db
       .select({ id: candidates.id })
       .from(candidates)
-      .where(eq(candidates.workspaceId, workspaceId))
+      .where(and(eq(candidates.workspaceId, workspaceId), isNull(candidates.deletedAt)))
       .orderBy(desc(candidates.updatedAt))
       .limit(1);
     if (!latest) return null;
@@ -129,6 +130,22 @@ async function resolveSample(workspaceId: string, candidateId?: string) {
   const [app] = await db
     .select({ id: applications.id, jobId: applications.jobId })
     .from(applications)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, applications.jobId),
+        eq(jobs.workspaceId, workspaceId),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.workspaceId, workspaceId),

@@ -38,6 +38,11 @@ ENV NODE_ENV=production \
     UPLOADS_DIR=/data/uploads \
     HARLY_SERVER_PATH=/app/apps/web/server.js
 WORKDIR /app
+# The runtime only executes the bundled Node server. Removing npm keeps the
+# base image's package tree out of the production artifact and avoids shipping
+# a second, independently managed dependency tree.
+RUN rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx
 COPY --from=build --chown=node:node /src/apps/web/.next/standalone/ ./
 COPY --from=build --chown=node:node /src/apps/web/.next/static/ /app/apps/web/.next/static/
 COPY --from=build --chown=node:node /src/apps/web/public/ /app/apps/web/public/

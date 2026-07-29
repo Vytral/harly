@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import {
@@ -167,8 +167,8 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
     listDocumentCategories(),
     listDocumentMembers(),
     getRolePermissions(organization.id, roleKey),
-    db.select({ id: candidates.id, label: candidates.firstName, lastName: candidates.lastName }).from(candidates).where(eq(candidates.workspaceId, organization.id)).orderBy(candidates.lastName, candidates.firstName),
-    db.select({ id: jobs.id, label: jobs.title }).from(jobs).where(eq(jobs.workspaceId, organization.id)).orderBy(jobs.title),
+    db.select({ id: candidates.id, label: candidates.firstName, lastName: candidates.lastName }).from(candidates).where(and(eq(candidates.workspaceId, organization.id), isNull(candidates.deletedAt))).orderBy(candidates.lastName, candidates.firstName),
+    db.select({ id: jobs.id, label: jobs.title }).from(jobs).where(and(eq(jobs.workspaceId, organization.id), isNull(jobs.deletedAt))).orderBy(jobs.title),
     db.select({ documentId: documentVersions.documentId, versionNumber: documentVersions.versionNumber, isCurrent: documentVersions.isCurrent }).from(documentVersions).where(eq(documentVersions.workspaceId, organization.id)),
     getWorkspaceEsignStatus(organization.id),
   ]);

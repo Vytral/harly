@@ -1,4 +1,4 @@
-import { and, desc, eq, ilike, or } from "drizzle-orm";
+import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import { consentRecords, candidates, db } from "@harly/db";
@@ -27,7 +27,14 @@ export async function GET(request: Request) {
       createdAt: consentRecords.createdAt,
     })
     .from(consentRecords)
-    .innerJoin(candidates, eq(candidates.id, consentRecords.candidateId))
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, consentRecords.candidateId),
+        eq(candidates.workspaceId, context.organization.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(and(
       eq(consentRecords.workspaceId, context.organization.id),
       query ? or(ilike(candidates.email, `%${query}%`), ilike(consentRecords.consentType, `%${query}%`)) : undefined,

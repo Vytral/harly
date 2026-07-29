@@ -81,9 +81,9 @@ export async function getApplicationsBoard({
   // Only active applications. Hired and rejected are archive, not daily work,
   // and putting them here is what turned the old list into a CRM dump.
   const activeOnly = and(
-    eq(applications.workspaceId, workspace.id),
-    eq(applications.status, "active"),
-    isNull(candidates.deletedAt),
+        eq(applications.workspaceId, workspace.id),
+        eq(applications.status, "active"),
+        isNull(candidates.deletedAt),
   );
 
   const [rows, jobRows, stageRows] = await Promise.all([
@@ -102,8 +102,22 @@ export async function getApplicationsBoard({
         appliedAt: applications.appliedAt,
       })
       .from(applications)
-      .innerJoin(candidates, eq(candidates.id, applications.candidateId))
-      .innerJoin(jobs, eq(jobs.id, applications.jobId))
+      .innerJoin(
+        candidates,
+        and(
+          eq(candidates.id, applications.candidateId),
+          eq(candidates.workspaceId, workspace.id),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, applications.jobId),
+          eq(jobs.workspaceId, workspace.id),
+          isNull(jobs.deletedAt),
+        ),
+      )
       .leftJoin(jobStages, eq(jobStages.id, applications.currentStageId))
       .where(
         jobId

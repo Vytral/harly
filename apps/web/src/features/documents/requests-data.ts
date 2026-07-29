@@ -1,9 +1,10 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
 import {
   applications,
+  candidates,
   db,
   documentRequests,
   documents,
@@ -80,6 +81,21 @@ export async function listDocumentRequestsForCandidate(
   const rows = await db
     .select(baseColumns)
     .from(documentRequests)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, documentRequests.candidateId),
+        eq(candidates.workspaceId, organization.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
+      applications,
+      and(
+        eq(applications.id, documentRequests.applicationId),
+        eq(applications.workspaceId, organization.id),
+      ),
+    )
     .leftJoin(documents, eq(documents.id, documentRequests.documentId))
     .leftJoin(authUsers, eq(authUsers.id, documentRequests.requestedById))
     .where(
@@ -105,6 +121,21 @@ export async function listDocumentRequestsForPortal(input: {
   const rows = await db
     .select(baseColumns)
     .from(documentRequests)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, documentRequests.candidateId),
+        eq(candidates.workspaceId, input.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
+      applications,
+      and(
+        eq(applications.id, documentRequests.applicationId),
+        eq(applications.workspaceId, input.workspaceId),
+      ),
+    )
     .leftJoin(documents, eq(documents.id, documentRequests.documentId))
     .leftJoin(authUsers, eq(authUsers.id, documentRequests.requestedById))
     .where(
@@ -124,7 +155,22 @@ export async function listCandidateApplicationsForRequest(candidateId: string) {
   return db
     .select({ id: applications.id, jobTitle: jobs.title, status: applications.status })
     .from(applications)
-    .leftJoin(jobs, eq(jobs.id, applications.jobId))
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, organization.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, applications.jobId),
+        eq(jobs.workspaceId, organization.id),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.workspaceId, organization.id),

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, notExists, sql } from "drizzle-orm";
 
 import {
   db,
@@ -104,7 +104,13 @@ async function threadIdForReferences(
   const [row] = await db
     .select({ id: mailThreads.id })
     .from(mailMessages)
-    .innerJoin(mailThreads, eq(mailThreads.id, mailMessages.threadId))
+    .innerJoin(
+      mailThreads,
+      and(
+        eq(mailThreads.id, mailMessages.threadId),
+        eq(mailThreads.workspaceId, workspaceId),
+      ),
+    )
     .where(and(eq(mailMessages.workspaceId, workspaceId), inArray(mailMessages.messageId, ids)))
     .orderBy(desc(mailMessages.createdAt))
     .limit(1);
@@ -123,8 +129,16 @@ export async function findOrCreateCanonicalThread(input: CanonicalThreadInput) {
 
   const relatedThreadId = await threadIdForReferences(input.workspaceId, input);
   if (relatedThreadId) {
-    const [thread] = await db.select({ id: mailThreads.id, conversationId: mailThreads.conversationId })
-      .from(mailThreads).where(eq(mailThreads.id, relatedThreadId)).limit(1);
+    const [thread] = await db
+      .select({ id: mailThreads.id, conversationId: mailThreads.conversationId })
+      .from(mailThreads)
+      .where(
+        and(
+          eq(mailThreads.id, relatedThreadId),
+          eq(mailThreads.workspaceId, input.workspaceId),
+        ),
+      )
+      .limit(1);
     if (thread) return thread;
   }
 
@@ -201,6 +215,25 @@ export async function insertCanonicalMessage(input: CanonicalMessageInput) {
     : await insert.returning({ id: mailMessages.id, threadId: mailMessages.threadId });
   const [created] = createdRows;
   if (!created) {
+    // A concurrent delivery can create a second empty thread before the
+    // unique message identity wins. Remove only the empty thread created by
+    // this attempt; never touch a thread that contains a message.
+    await db.delete(mailThreads).where(
+      and(
+        eq(mailThreads.id, thread.id),
+        eq(mailThreads.workspaceId, input.workspaceId),
+        notExists(
+          db.select({ id: mailMessages.id })
+            .from(mailMessages)
+            .where(
+              and(
+                eq(mailMessages.threadId, thread.id),
+                eq(mailMessages.workspaceId, input.workspaceId),
+              ),
+            ),
+        ),
+      ),
+    );
     return { messageId: input.messageId ?? "", threadId: thread.id, duplicate: true };
   }
   if (input.attachments?.length) {
@@ -221,6 +254,11 @@ export async function insertCanonicalMessage(input: CanonicalMessageInput) {
         ? { unreadCount: sql`${mailThreads.unreadCount} + 1` }
         : {}),
     })
-    .where(eq(mailThreads.id, thread.id));
+    .where(
+      and(
+        eq(mailThreads.id, thread.id),
+        eq(mailThreads.workspaceId, input.workspaceId),
+      ),
+    );
   return { messageId: created.id, threadId: created.threadId, duplicate: false };
 }

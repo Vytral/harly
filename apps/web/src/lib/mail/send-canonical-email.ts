@@ -2,11 +2,12 @@ import "server-only";
 
 import { createElement } from "react";
 import { createHash, randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import {
   applications,
   candidates,
   db,
+  jobs,
   mailIdempotencyKeys,
   mailUnificationMigrations,
 } from "@harly/db";
@@ -195,6 +196,7 @@ export async function sendCanonicalEmail(
         and(
           eq(candidates.id, input.candidateId),
           eq(candidates.workspaceId, input.workspaceId),
+          isNull(candidates.deletedAt),
         ),
       )
       .limit(1);
@@ -205,6 +207,22 @@ export async function sendCanonicalEmail(
     const [application] = await db
       .select({ id: applications.id, candidateId: applications.candidateId })
       .from(applications)
+      .innerJoin(
+        candidates,
+        and(
+          eq(candidates.id, applications.candidateId),
+          eq(candidates.workspaceId, input.workspaceId),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, applications.jobId),
+          eq(jobs.workspaceId, input.workspaceId),
+          isNull(jobs.deletedAt),
+        ),
+      )
       .where(
         and(
           eq(applications.id, input.applicationId),

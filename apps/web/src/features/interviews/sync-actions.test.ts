@@ -23,7 +23,12 @@ function query() {
 
 vi.mock("@harly/db", () => ({
   db: { select: () => query() },
-  candidates: { email: "candidateEmail", id: "candidateId" },
+  candidates: {
+    email: "candidateEmail",
+    id: "candidateId",
+    workspaceId: "candidateWorkspaceId",
+    deletedAt: "candidateDeletedAt",
+  },
   interviewSyncs: {
     id: "syncId",
     workspaceId: "syncWorkspaceId",
@@ -36,7 +41,7 @@ vi.mock("@harly/db", () => ({
     jobId: "interviewJobId",
     interviewerId: "interviewerId",
   },
-  jobs: { id: "jobId" },
+  jobs: { id: "jobId", workspaceId: "jobWorkspaceId", deletedAt: "jobDeletedAt" },
   organization: { id: "organizationId", name: "organizationName" },
   user: { id: "userId" },
 }));
@@ -44,6 +49,7 @@ vi.mock("@harly/db", () => ({
 vi.mock("drizzle-orm", () => ({
   and: (...values: unknown[]) => values,
   eq: (...values: unknown[]) => values,
+  isNull: (...values: unknown[]) => values,
 }));
 
 vi.mock("@/features/workspaces/context", () => ({

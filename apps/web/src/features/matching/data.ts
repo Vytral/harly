@@ -120,7 +120,7 @@ export async function ensureJobEmbedding(
       keywords: jobs.keywords,
     })
     .from(jobs)
-    .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, workspaceId)))
+    .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, workspaceId), isNull(jobs.deletedAt)))
     .limit(1);
 
   if (!job) throw new Error("Job not found.");
@@ -167,7 +167,7 @@ export async function ensureCandidateEmbedding(
       skills: candidates.skills,
     })
     .from(candidates)
-    .where(and(eq(candidates.id, candidateId), eq(candidates.workspaceId, workspaceId)))
+    .where(and(eq(candidates.id, candidateId), eq(candidates.workspaceId, workspaceId), isNull(candidates.deletedAt)))
     .limit(1);
 
   if (!candidate) throw new Error("Candidate not found.");

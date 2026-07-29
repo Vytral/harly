@@ -2,11 +2,12 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { WebClient } from "@slack/web-api";
 
 import {
   db,
+  candidates,
   slackDeliveries,
   slackDeliveryAttempts,
   workspaceSettings,
@@ -37,7 +38,29 @@ const EVENT_EMOJI: Record<WebhookEvent, string> = {
   "job.published": "📣",
 };
 
-type SlackPayload = { text: string; blocks: Array<Record<string, unknown>> };
+type SlackPayload = {
+  text: string;
+  blocks: Array<Record<string, unknown>>;
+  /** Internal routing metadata; stripped before calling Slack. */
+  _harly?: { candidateIds?: string[]; applicationIds?: string[] };
+};
+
+function sourceIds(data: Record<string, unknown>) {
+  const candidate = data.candidate as Record<string, unknown> | undefined;
+  const application = data.application as Record<string, unknown> | undefined;
+  const candidateId =
+    (candidate?.id as string) ??
+    (application?.candidateId as string) ??
+    (data.candidateId as string) ??
+    null;
+  const applicationId =
+    (application?.id as string) ?? (data.applicationId as string) ?? null;
+
+  return {
+    candidateIds: candidateId ? [candidateId] : [],
+    applicationIds: applicationId ? [applicationId] : [],
+  };
+}
 
 function escapeSlackText(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").slice(0, 240);
@@ -126,7 +149,10 @@ export async function notifySlackEvent(
     if (!config || !config.events.includes(event)) return;
 
     const eventId = typeof data.eventId === "string" ? data.eventId : null;
-    const payload = buildSlackPayload(event, data);
+    const payload: SlackPayload = {
+      ...buildSlackPayload(event, data),
+      _harly: sourceIds(data),
+    };
     const [delivery] = await db
       .insert(slackDeliveries)
       .values({
@@ -184,12 +210,36 @@ export async function deliverSlack(
       slackError = "integration_disabled";
       status = "dead_letter";
     } else {
-      const client = new WebClient(config.botToken);
-      await client.chat.postMessage({
-        channel: delivery.channelId,
-        ...(delivery.payload as { text: string; blocks: Array<Record<string, unknown>> }),
-      });
-      status = "success";
+      const payload = delivery.payload as SlackPayload;
+      const candidateIds = payload._harly?.candidateIds ?? [];
+      if (candidateIds.length > 0) {
+        const activeCandidates = await db
+          .select({ id: candidates.id })
+          .from(candidates)
+          .where(
+            and(
+              eq(candidates.workspaceId, delivery.workspaceId),
+              inArray(candidates.id, candidateIds),
+              isNull(candidates.deletedAt),
+            ),
+          );
+        if (activeCandidates.length !== new Set(candidateIds).size) {
+          slackError = "candidate_deleted";
+          status = "dead_letter";
+        }
+      }
+      if (status === "dead_letter") {
+        // Do not send a queued notification for a candidate that is no longer
+        // active. The row remains as an auditable dead-letter outcome.
+      } else {
+        const message = { text: payload.text, blocks: payload.blocks };
+        const client = new WebClient(config.botToken);
+        await client.chat.postMessage({
+          channel: delivery.channelId,
+          ...message,
+        });
+        status = "success";
+      }
     }
   } catch (error) {
     failure = error;

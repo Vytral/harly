@@ -164,6 +164,7 @@ async function getApplicationsForAction(
       and(
         eq(candidates.workspaceId, workspaceId),
         eq(candidates.id, applications.candidateId),
+        isNull(candidates.deletedAt),
       ),
     )
     .innerJoin(
@@ -233,6 +234,7 @@ export async function moveApplicationInPipeline(
               and(
                 eq(candidates.workspaceId, input.workspaceId),
                 eq(candidates.id, applications.candidateId),
+                isNull(candidates.deletedAt),
               ),
             )
             .innerJoin(
@@ -669,6 +671,7 @@ export async function bulkMoveApplications(
               and(
                 eq(candidates.workspaceId, input.workspaceId),
                 eq(candidates.id, applications.candidateId),
+                isNull(candidates.deletedAt),
               ),
             )
             .innerJoin(
@@ -682,6 +685,7 @@ export async function bulkMoveApplications(
             .innerJoin(
               jobStages,
               and(
+                eq(jobStages.workspaceId, input.workspaceId),
                 eq(jobStages.id, input.toStageId),
                 eq(jobStages.jobId, applications.jobId),
               ),
@@ -696,6 +700,15 @@ export async function bulkMoveApplications(
                 inArray(applications.id, uniqueApplicationIds),
               ),
             );
+
+          // A bulk request is atomic: silently skipping a foreign, deleted,
+          // or wrong-job application would otherwise produce a partial move
+          // while still returning success to the recruiter.
+          if (allApplications.length !== uniqueApplicationIds.length) {
+            throw new Error(
+              "One or more applications were not found or cannot use this stage.",
+            );
+          }
 
           const applicationsByStage = new Map<string, string[]>();
           const appDataById = new Map(allApplications.map((a) => [a.id, a]));

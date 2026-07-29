@@ -1,7 +1,7 @@
 import "server-only";
 
 import { and, count, eq, isNull, lt, or } from "drizzle-orm";
-import { candidateDeletionJobs, db, sql } from "@harly/db";
+import { candidateDeletionJobs, db, mailIdempotencyKeys, sql } from "@harly/db";
 
 type Histogram = {
   buckets: number[];
@@ -114,6 +114,36 @@ async function readCandidateDeletionQueue() {
   };
 }
 
+async function readMailDeliveryQueue() {
+  const [byStatus, staleRows] = await Promise.all([
+    db
+      .select({ status: mailIdempotencyKeys.status, count: count() })
+      .from(mailIdempotencyKeys)
+      .groupBy(mailIdempotencyKeys.status),
+    db
+      .select({ count: count() })
+      .from(mailIdempotencyKeys)
+      .where(
+        and(
+          eq(mailIdempotencyKeys.status, "sending"),
+          lt(
+            mailIdempotencyKeys.updatedAt,
+            new Date(Date.now() - 15 * 60_000),
+          ),
+        ),
+      ),
+  ]);
+  const counts = new Map(byStatus.map((row) => [row.status, row.count]));
+  return {
+    pending: counts.get("pending") ?? 0,
+    sending: counts.get("sending") ?? 0,
+    sent: counts.get("sent") ?? 0,
+    failed: counts.get("failed") ?? 0,
+    unknown: counts.get("unknown") ?? 0,
+    stale: staleRows[0]?.count ?? 0,
+  };
+}
+
 function histogramLines(name: string, target: Histogram) {
   return target.buckets
     .map(
@@ -187,6 +217,23 @@ export async function renderPrometheusMetrics() {
     `harly_candidate_deletion_jobs{state="blocked"} ${deletionCurrent.blocked}`,
     `harly_candidate_deletion_jobs{state="stale"} ${deletionCurrent.stale}`,
   );
+  const mailCurrent = await readMailDeliveryQueue().catch(() => ({
+    pending: 0,
+    sending: 0,
+    sent: 0,
+    failed: 0,
+    unknown: 0,
+    stale: 0,
+  }));
+  lines.push(
+    "# TYPE harly_mail_idempotency_keys gauge",
+    `harly_mail_idempotency_keys{state="pending"} ${mailCurrent.pending}`,
+    `harly_mail_idempotency_keys{state="sending"} ${mailCurrent.sending}`,
+    `harly_mail_idempotency_keys{state="sent"} ${mailCurrent.sent}`,
+    `harly_mail_idempotency_keys{state="failed"} ${mailCurrent.failed}`,
+    `harly_mail_idempotency_keys{state="unknown"} ${mailCurrent.unknown}`,
+    `harly_mail_idempotency_keys{state="stale"} ${mailCurrent.stale}`,
+  );
   return `${lines.join("\n")}\n`;
 }
 
@@ -198,6 +245,7 @@ export async function renderOperationalMetrics() {
     slackDeliveries,
     evaluationJobs,
     candidateDeletionJobs,
+    mailIdempotencyQueue,
   ] = await Promise.all([
     sql`select job, status, count(*)::int as count from cron_runs where created_at > now() - interval '24 hours' group by job, status order by job, status`,
     sql`select status, count(*)::int as count from email_outbox group by status`,
@@ -205,6 +253,10 @@ export async function renderOperationalMetrics() {
     sql`select status, count(*)::int as count from slack_deliveries where created_at > now() - interval '24 hours' group by status`,
     sql`select status, count(*)::int as count from evaluation_jobs group by status`,
     sql`select status, count(*)::int as count from candidate_deletion_jobs group by status`,
+    db
+      .select({ status: mailIdempotencyKeys.status, count: count() })
+      .from(mailIdempotencyKeys)
+      .groupBy(mailIdempotencyKeys.status),
   ]);
   return {
     cronRuns,
@@ -213,5 +265,6 @@ export async function renderOperationalMetrics() {
     slackDeliveries,
     evaluationJobs,
     candidateDeletionJobs,
+    mailIdempotencyKeys: mailIdempotencyQueue,
   };
 }

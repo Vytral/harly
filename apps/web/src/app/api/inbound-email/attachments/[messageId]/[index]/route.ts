@@ -1,11 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { and, asc, eq } from "drizzle-orm";
-
-import { db, mailAttachments } from "@harly/db";
-
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { storage } from "@/lib/storage";
+import { listWorkspaceMailboxAttachments } from "@/lib/mailbox/attachment-access";
 
 export async function GET(
   _request: NextRequest,
@@ -23,21 +20,10 @@ export async function GET(
   }
 
   const { organization: workspace } = await getWorkspaceContext();
-  const attachments = await db
-    .select({
-      filename: mailAttachments.filename,
-      contentType: mailAttachments.contentType,
-      size: mailAttachments.size,
-      storageKey: mailAttachments.storageKey,
-    })
-    .from(mailAttachments)
-    .where(
-      and(
-        eq(mailAttachments.messageId, messageId),
-        eq(mailAttachments.workspaceId, workspace.id),
-      ),
-    )
-    .orderBy(asc(mailAttachments.createdAt));
+  const attachments = await listWorkspaceMailboxAttachments({
+    messageId,
+    workspaceId: workspace.id,
+  });
 
   const attachment = attachments[attachmentIndex];
   if (!attachment) {

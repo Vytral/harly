@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
+  select: vi.fn(),
   updates: [] as Array<Record<string, unknown>>,
 }));
 
@@ -13,6 +14,7 @@ vi.mock("@slack/web-api", () => ({
 }));
 vi.mock("@harly/db", () => ({
   db: {
+    select: mocks.select,
     insert: vi.fn(() => ({
       values: vi.fn(() => ({ onConflictDoNothing: vi.fn(async () => undefined) })),
     })),
@@ -28,6 +30,11 @@ vi.mock("@harly/db", () => ({
     workspaceId: "workspace_id",
     status: "status",
     lockedBy: "locked_by",
+  },
+  candidates: {
+    id: "id",
+    workspaceId: "workspace_id",
+    deletedAt: "deleted_at",
   },
   slackDeliveryAttempts: {},
   workspaceSettings: { organizationId: "organization_id" },
@@ -100,5 +107,38 @@ describe("Slack notification payload", () => {
       nextRetryAt: new Date("2026-01-01T00:00:42.000Z"),
     });
     vi.useRealTimers();
+  });
+
+  it("dead-letters a queued candidate notification after deletion", async () => {
+    mocks.select.mockReturnValue({
+      from: () => ({
+        where: async () => [],
+      }),
+    });
+    mocks.postMessage.mockReset();
+    mocks.updates.length = 0;
+
+    const result = await deliverSlack(
+      {
+        id: "delivery-deleted",
+        workspaceId: "workspace-1",
+        event: "candidate.updated",
+        channelId: "C123",
+        payload: {
+          text: "Candidate updated",
+          blocks: [],
+          _harly: { candidateIds: ["candidate-deleted"] },
+        },
+        attempts: 0,
+      } as Parameters<typeof deliverSlack>[0],
+      "worker-1",
+    );
+
+    expect(result).toBe("dead_letter");
+    expect(mocks.postMessage).not.toHaveBeenCalled();
+    expect(mocks.updates[0]).toMatchObject({
+      status: "dead_letter",
+      slackError: "candidate_deleted",
+    });
   });
 });

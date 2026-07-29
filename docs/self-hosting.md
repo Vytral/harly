@@ -139,7 +139,9 @@ eligible again after five minutes.
 
 The scheduler container's healthcheck runs its built-in doctor. It requires a
 recent successful-or-skipped record for **each** scheduled job, not merely a
-running container. By default a job is stale after five minutes; change only
+running container. The configured value is the minimum stale window; slower
+jobs also get a window of two scheduled intervals so daily reconciliation jobs
+are not falsely reported as stale. Change only
 when the instance is intentionally suspended for longer:
 
 ```dotenv

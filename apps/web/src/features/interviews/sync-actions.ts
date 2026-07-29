@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import {
   candidates,
@@ -85,8 +85,22 @@ export async function retryInterviewSyncForWorkspace(input: {
           eq(interviews.workspaceId, workspace.id),
         ),
       )
-      .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
-      .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+      .innerJoin(
+        candidates,
+        and(
+          eq(candidates.id, interviews.candidateId),
+          eq(candidates.workspaceId, workspace.id),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, interviews.jobId),
+          eq(jobs.workspaceId, workspace.id),
+          isNull(jobs.deletedAt),
+        ),
+      )
       .innerJoin(organization, eq(organization.id, workspace.id))
       .leftJoin(authUsers, eq(authUsers.id, interviews.interviewerId))
       .where(

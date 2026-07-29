@@ -85,3 +85,17 @@ groups:
         annotations:
           summary: Slack notification failures are increasing
           description: Check Slack rate limits, network health, and the workspace installation before messages accumulate.
+      - alert: HarlyMailDeliveryUnknown
+        expr: harly_mail_idempotency_keys{state="unknown"} > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Mail delivery outcome requires reconciliation
+          description: A provider outcome was not confirmed. Check the provider before marking the reservation sent or retryable.
+      - alert: HarlyMailDeliveryStale
+        expr: harly_mail_idempotency_keys{state="stale"} > 0
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: Mail delivery worker has stale sends
+          description: A mail reservation has remained sending beyond the lease and should be normalized by mail-reconciliation.

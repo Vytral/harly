@@ -453,8 +453,22 @@ export async function scheduleInterview(
           jobTitle: jobs.title,
         })
         .from(applications)
-        .innerJoin(candidates, eq(candidates.id, applications.candidateId))
-        .innerJoin(jobs, eq(jobs.id, applications.jobId))
+        .innerJoin(
+          candidates,
+          and(
+            eq(candidates.id, applications.candidateId),
+            eq(candidates.workspaceId, workspace.id),
+            isNull(candidates.deletedAt),
+          ),
+        )
+        .innerJoin(
+          jobs,
+          and(
+            eq(jobs.id, applications.jobId),
+            eq(jobs.workspaceId, workspace.id),
+            isNull(jobs.deletedAt),
+          ),
+        )
         .innerJoin(organization, eq(organization.id, applications.workspaceId))
         .where(
           and(
@@ -956,8 +970,22 @@ export async function setInterviewStatus(input: {
           applicationId: interviews.applicationId,
         })
         .from(interviews)
-        .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
-        .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+        .innerJoin(
+          candidates,
+          and(
+            eq(candidates.id, interviews.candidateId),
+            eq(candidates.workspaceId, workspace.id),
+            isNull(candidates.deletedAt),
+          ),
+        )
+        .innerJoin(
+          jobs,
+          and(
+            eq(jobs.id, interviews.jobId),
+            eq(jobs.workspaceId, workspace.id),
+            isNull(jobs.deletedAt),
+          ),
+        )
         .innerJoin(organization, eq(organization.id, interviews.workspaceId))
         .where(
           and(
@@ -1124,8 +1152,22 @@ export async function rescheduleInterview(input: {
         applicationId: interviews.applicationId,
       })
       .from(interviews)
-      .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
-      .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+      .innerJoin(
+        candidates,
+        and(
+          eq(candidates.id, interviews.candidateId),
+          eq(candidates.workspaceId, workspace.id),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, interviews.jobId),
+          eq(jobs.workspaceId, workspace.id),
+          isNull(jobs.deletedAt),
+        ),
+      )
       .innerJoin(organization, eq(organization.id, interviews.workspaceId))
       .where(
         and(
@@ -1535,8 +1577,22 @@ export async function updateInterview(input: {
         applicationId: interviews.applicationId,
       })
       .from(interviews)
-      .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
-      .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+      .innerJoin(
+        candidates,
+        and(
+          eq(candidates.id, interviews.candidateId),
+          eq(candidates.workspaceId, workspace.id),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, interviews.jobId),
+          eq(jobs.workspaceId, workspace.id),
+          isNull(jobs.deletedAt),
+        ),
+      )
       .innerJoin(organization, eq(organization.id, interviews.workspaceId))
       .where(
         and(
@@ -1874,8 +1930,22 @@ export async function generateInterviewBriefAction(input: {
       jobRequirements: jobs.requirements,
     })
     .from(interviews)
-    .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
-    .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, interviews.candidateId),
+        eq(candidates.workspaceId, workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, interviews.jobId),
+        eq(jobs.workspaceId, workspaceId),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(interviews.id, parsed.data.interviewId),
@@ -2065,8 +2135,22 @@ export async function summarizeInterviewNotesAction(input: {
       jobTitle: jobs.title,
     })
     .from(interviews)
-    .innerJoin(candidates, eq(candidates.id, interviews.candidateId))
-    .innerJoin(jobs, eq(jobs.id, interviews.jobId))
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, interviews.candidateId),
+        eq(candidates.workspaceId, workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, interviews.jobId),
+        eq(jobs.workspaceId, workspaceId),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(interviews.id, parsed.data.interviewId),

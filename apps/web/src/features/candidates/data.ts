@@ -46,6 +46,7 @@ import {
   savedSignatures,
   signatureEnvelopes,
   signatureArtifacts,
+  slackDeliveries,
   notifications,
   tasks,
   webhookDeliveries,
@@ -626,7 +627,13 @@ export async function getCandidateProfile(candidateId: string) {
       readAt: mailMessages.readAt,
     })
     .from(mailMessages)
-    .innerJoin(mailThreads, eq(mailThreads.id, mailMessages.threadId))
+    .innerJoin(
+      mailThreads,
+      and(
+        eq(mailThreads.id, mailMessages.threadId),
+        eq(mailThreads.workspaceId, workspace.id),
+      ),
+    )
     .where(
       and(
         eq(mailMessages.workspaceId, workspace.id),
@@ -1282,7 +1289,13 @@ export async function permanentlyDeleteCandidate(
         storageKey: mailAttachments.storageKey,
       })
       .from(mailAttachments)
-      .innerJoin(mailMessages, eq(mailMessages.id, mailAttachments.messageId))
+      .innerJoin(
+        mailMessages,
+        and(
+          eq(mailMessages.id, mailAttachments.messageId),
+          eq(mailMessages.workspaceId, workspace.id),
+        ),
+      )
       .where(
         and(
           eq(mailAttachments.workspaceId, workspace.id),
@@ -1622,7 +1635,7 @@ export async function permanentlyDeleteCandidate(
   // Erase the candidate's AI chat history (IA-02 / GDPR Art. 17). Conversations
   // linked via candidateId also cascade-delete their messages; this explicit
   // delete covers the same rows and is safe to run regardless.
-  await deleteConversationsForCandidate(candidateId);
+  await deleteConversationsForCandidate(candidateId, workspace.id);
 
   const canonicalMessageIds = mailMessageRows.map((row) => row.id);
   const canonicalThreadIds = [
@@ -1693,6 +1706,14 @@ export async function permanentlyDeleteCandidate(
         and(
           eq(webhookDeliveries.workspaceId, workspace.id),
           sql`${webhookDeliveries.payload}::text ~ ${relatedIdsPattern}`,
+        ),
+      );
+    await tx
+      .delete(slackDeliveries)
+      .where(
+        and(
+          eq(slackDeliveries.workspaceId, workspace.id),
+          sql`${slackDeliveries.payload}::text ~ ${relatedIdsPattern}`,
         ),
       );
     await tx

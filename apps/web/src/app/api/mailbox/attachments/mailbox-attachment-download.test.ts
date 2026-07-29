@@ -37,6 +37,9 @@ vi.mock("@/lib/storage", () => ({
 vi.mock("@/lib/audit-log", () => ({
   logAuditEvent: vi.fn(),
 }));
+vi.mock("@/lib/mailbox/attachment-access", () => ({
+  getWorkspaceMailboxAttachment: vi.fn(async () => mocks.attachmentRows[0] ?? null),
+}));
 
 import { GET } from "./[attachmentId]/route";
 

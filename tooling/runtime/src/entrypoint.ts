@@ -7,6 +7,7 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
 import { pruneCache } from "./cache";
+import { describeSchedulerRuns as describeSchedulerRunsForJobs } from "./scheduler-health";
 
 import {
   formatConfigError,
@@ -102,7 +103,12 @@ async function runMigrations() {
   }
 }
 
-type Job = { name: string; path: string; intervalMs: number };
+type Job = {
+  name: string;
+  path: string;
+  intervalMs: number;
+  body?: Record<string, unknown>;
+};
 const jobs: Job[] = [
   {
     name: "domain-events",
@@ -152,6 +158,12 @@ const jobs: Job[] = [
     intervalMs: 24 * 60 * 60_000,
   },
   {
+    name: "mail-reconciliation",
+    path: "/api/cron/mail-reconciliation",
+    intervalMs: 60_000,
+    body: { dryRun: false },
+  },
+  {
     name: "scheduled-reports",
     path: "/api/cron/scheduled-reports",
     intervalMs: 60_000,
@@ -165,24 +177,6 @@ const schedulerStaleAfterMs = Math.max(
     10,
   ) * 1_000 || 300_000,
 );
-
-function describeSchedulerRuns(
-  runs: Record<string, string | null> | null | undefined,
-) {
-  const cutoff = Date.now() - schedulerStaleAfterMs;
-  const details = jobs.map((job) => {
-    const value = runs?.[job.name];
-    const timestamp = value ? new Date(value).getTime() : Number.NaN;
-    if (!value || Number.isNaN(timestamp)) return `${job.name}=never`;
-    return `${job.name}=${new Date(timestamp).toISOString()}${timestamp < cutoff ? " (stale)" : ""}`;
-  });
-  const ok = jobs.every((job) => {
-    const value = runs?.[job.name];
-    const timestamp = value ? new Date(value).getTime() : Number.NaN;
-    return !Number.isNaN(timestamp) && timestamp >= cutoff;
-  });
-  return { ok, detail: details.join(" ") };
-}
 
 async function scheduler() {
   const config = await runtimeConfig({ validateFilesystem: false });
@@ -210,7 +204,11 @@ async function scheduler() {
     try {
       const response = await fetch(`${appOrigin}${job.path}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${config.CRON_SECRET}` },
+        headers: {
+          Authorization: `Bearer ${config.CRON_SECRET}`,
+          ...(job.body ? { "Content-Type": "application/json" } : {}),
+        },
+        body: job.body ? JSON.stringify(job.body) : undefined,
         signal: AbortSignal.timeout(30_000),
       });
       const body = (await response.json().catch(() => ({}))) as Record<
@@ -308,7 +306,7 @@ async function doctor() {
           from (
             select job, max(created_at) filter (where status in ('success', 'skipped')) as last_run
             from cron_runs
-            where job in ('domain-events', 'email-outbox', 'webhooks-dispatch', 'esign-reconciliation', 'interview-sync', 'evaluation-jobs', 'mailbox-sync', 'document-expiry', 'retention-enforcement', 'candidate-deletions', 'candidate-reconciliation', 'scheduled-reports')
+            where job in ('domain-events', 'email-outbox', 'webhooks-dispatch', 'esign-reconciliation', 'interview-sync', 'evaluation-jobs', 'mailbox-sync', 'document-expiry', 'retention-enforcement', 'candidate-deletions', 'candidate-reconciliation', 'mail-reconciliation', 'scheduled-reports')
             group by job
           ) scheduler_runs
         ) as scheduler_runs,
@@ -319,8 +317,10 @@ async function doctor() {
         (select count(*)::int from evaluation_jobs where status = 'running' and locked_at < now() - interval '15 minutes') as evaluation_stale
     `;
     checks.push({ name: "migrations", ok: row?.migrated === true });
-    const scheduler = describeSchedulerRuns(
+    const scheduler = describeSchedulerRunsForJobs(
+      jobs,
       row?.scheduler_runs as Record<string, string | null> | null | undefined,
+      schedulerStaleAfterMs,
     );
     checks.push({ name: "scheduler", ...scheduler });
     const evaluationDeadLetter = Number(row?.evaluation_dead_letter ?? 0);

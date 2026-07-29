@@ -391,6 +391,24 @@ async function recordOutboundConversation(input: {
   }
 }
 
+async function hasActiveCandidateRecipient(
+  workspaceId: string,
+  email: string,
+): Promise<boolean> {
+  const [candidate] = await db
+    .select({ id: candidates.id })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.workspaceId, workspaceId),
+        eq(candidates.email, email.toLowerCase()),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .limit(1);
+  return Boolean(candidate);
+}
+
 async function deliverOffer(row: OutboxRow): Promise<boolean> {
   const offerId = (row.payload as { offerId?: string } | null)?.offerId;
   if (!offerId) {
@@ -440,6 +458,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
       and(
         eq(candidates.id, offer.candidateId),
         eq(candidates.workspaceId, row.workspaceId),
+        isNull(candidates.deletedAt),
       ),
     )
     .limit(1);
@@ -643,6 +662,10 @@ async function deliverApplicationReceived(
       await markFailed(row.id, "Missing candidateEmail in payload.");
       return false;
     }
+    if (!(await hasActiveCandidateRecipient(row.workspaceId, p.candidateEmail))) {
+      await markFailed(row.id, "The candidate is no longer active.");
+      return false;
+    }
     const jobBoardUrl = `${appBaseUrl()}/board/${p.workspaceSlug ?? ""}`;
     const portalUrl = p.portalEnabled && p.applicationId
       ? `${appBaseUrl()}/portal/applications/${p.applicationId}`
@@ -679,6 +702,10 @@ async function deliverApplicationReceived(
   } else {
     if (!p?.ownerEmail) {
       await markFailed(row.id, "Missing ownerEmail in payload.");
+      return false;
+    }
+    if (p.candidateEmail && !(await hasActiveCandidateRecipient(row.workspaceId, p.candidateEmail))) {
+      await markFailed(row.id, "The candidate is no longer active.");
       return false;
     }
     const dashboardUrl = `${appBaseUrl()}/dashboard/candidates`;
@@ -732,6 +759,10 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
 
   if (!p?.candidateEmail) {
     await markFailed(row.id, "Missing candidateEmail in payload.");
+    return false;
+  }
+  if (!(await hasActiveCandidateRecipient(row.workspaceId, p.candidateEmail))) {
+    await markFailed(row.id, "The candidate is no longer active.");
     return false;
   }
 
@@ -875,6 +906,10 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
   const payload = row.payload as InterviewEmailPayload | null;
   if (!payload?.candidateEmail || !payload.companyName || !payload.jobTitle) {
     await markFailed(row.id, "Missing interview email recipient or context.");
+    return false;
+  }
+  if (!(await hasActiveCandidateRecipient(row.workspaceId, payload.candidateEmail))) {
+    await markFailed(row.id, "The candidate is no longer active.");
     return false;
   }
 
@@ -1050,6 +1085,10 @@ async function deliverOfferWithdrawn(row: OutboxRow): Promise<boolean> {
       row.id,
       "Missing withdrawn-offer email recipient or context.",
     );
+    return false;
+  }
+  if (!(await hasActiveCandidateRecipient(row.workspaceId, payload.candidateEmail))) {
+    await markFailed(row.id, "The candidate is no longer active.");
     return false;
   }
   const branding = await getWorkspaceEmailBranding(row.workspaceId);

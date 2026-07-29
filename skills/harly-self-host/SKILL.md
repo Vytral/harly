@@ -65,7 +65,7 @@ export HARLY_INITIAL_ADMIN_EMAIL="admin@example.com"
 export HARLY_PROXY_MODE="caddy"  # caddy | external | local
 export HARLY_ORGANIZATION="My Company"
 export HARLY_RESOURCE_PROFILE="standard"
-export HARLY_IMAGE_REF="ghcr.io/vytral/harly:latest"
+export HARLY_IMAGE_REF="ghcr.io/vytral/harly:0.1.0-beta.2"
 
 npx @harly/cli init /opt/harly --yes
 ```

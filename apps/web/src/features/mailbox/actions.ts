@@ -1,11 +1,10 @@
 "use server";
 
-import { randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { composerAttachmentsSchema, decodeComposerAttachments, richBodyReact } from "@/features/mailbox/compose-shared";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
-import { applications, candidates, db, mailMessages, mailThreads, member } from "@harly/db";
+import { applications, candidates, db, jobs, mailMessages, mailThreads, member } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getMailboxConfig } from "@/lib/mailbox/config";
@@ -20,41 +19,88 @@ import { getInboundReplyTo } from "@/lib/email/inbound-token";
 import { insertCanonicalMessage } from "@/lib/mail/canonical";
 import { sendCanonicalEmail } from "@/lib/mail/send-canonical-email";
 import { isMailUnificationEnabled } from "@/lib/mail/feature-flag";
+import { completeLegacyMailDelivery, failLegacyMailDelivery, reserveLegacyMailDelivery } from "@/lib/mail/legacy-delivery";
 
 const log = createLogger("mailbox");
 
 const threadId = z.string().uuid();
 const inboxThread = z.object({
-  threadId: z.string(),
+  threadId: z.string().uuid(),
   source: z.literal("mailbox"),
 });
+const updateMailboxThreadSchema = z.object({
+  threadId: z.string().uuid(),
+  status: z.enum(["open", "archived", "spam"]).optional(),
+  ownerId: z.string().trim().min(1).max(255).nullable().optional(),
+});
+
+async function getActiveMailboxApplicationId(input: {
+  workspaceId: string;
+  candidateId: string | null;
+  applicationId: string | null;
+}): Promise<string | null> {
+  if (!input.candidateId || !input.applicationId) return null;
+
+  const [application] = await db
+    .select({ id: applications.id })
+    .from(applications)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, input.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, applications.jobId),
+        eq(jobs.workspaceId, input.workspaceId),
+        isNull(jobs.deletedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(applications.id, input.applicationId),
+        eq(applications.workspaceId, input.workspaceId),
+        eq(applications.candidateId, input.candidateId),
+      ),
+    )
+    .limit(1);
+
+  return application?.id ?? null;
+}
+
 export async function updateMailboxThreadAction(input: { threadId: string; status?: "open" | "archived" | "spam"; ownerId?: string | null }) {
-  const parsed = threadId.safeParse(input.threadId); if (!parsed.success) return { ok: false };
+  const parsed = updateMailboxThreadSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid thread update." };
   await requirePermission("collab:write");
   const { organization, user } = await getWorkspaceContext();
-  if (input.ownerId) {
-    const [assignee] = await db.select({ userId: member.userId }).from(member).where(and(eq(member.organizationId, organization.id), eq(member.userId, input.ownerId))).limit(1);
+  if (parsed.data.ownerId) {
+    const [assignee] = await db.select({ userId: member.userId }).from(member).where(and(eq(member.organizationId, organization.id), eq(member.userId, parsed.data.ownerId))).limit(1);
     if (!assignee) return { ok: false, error: "Assignee is not a workspace member." };
   }
-  await db.update(mailThreads).set({ ...(input.status ? { status: input.status } : {}), ...(input.ownerId !== undefined ? { ownerId: input.ownerId } : {}) }).where(and(eq(mailThreads.id, parsed.data), eq(mailThreads.workspaceId, organization.id)));
+  const [updated] = await db.update(mailThreads).set({ ...(parsed.data.status ? { status: parsed.data.status } : {}), ...(parsed.data.ownerId !== undefined ? { ownerId: parsed.data.ownerId } : {}) }).where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, organization.id))).returning({ id: mailThreads.id });
+  if (!updated) return { ok: false, error: "Thread not found." };
   await logAuditEvent({
     workspaceId: organization.id,
     actorId: user.id,
     actorEmail: user.email,
-    action: input.status === "archived"
+    action: parsed.data.status === "archived"
       ? "mailbox.thread.archived"
-      : input.status === "spam"
+      : parsed.data.status === "spam"
         ? "mailbox.thread.marked_spam"
-        : input.ownerId
+        : parsed.data.ownerId
           ? "mailbox.thread.assigned"
-          : input.ownerId === null
+          : parsed.data.ownerId === null
             ? "mailbox.thread.unassigned"
             : "mailbox.thread.updated",
     resourceType: "mail_thread",
-    resourceId: parsed.data,
+    resourceId: parsed.data.threadId,
     metadata: {
-      status: input.status ?? null,
-      ownerId: input.ownerId ?? null,
+      status: parsed.data.status ?? null,
+      ownerId: parsed.data.ownerId ?? null,
     },
   });
   revalidatePath("/dashboard/inbox"); return { ok: true };
@@ -68,8 +114,38 @@ export async function linkMailboxThreadToApplicationAction(input: { threadId: st
   const { organization, user } = await getWorkspaceContext();
   const [thread] = await db.select({ candidateId: mailThreads.candidateId }).from(mailThreads).where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, organization.id))).limit(1);
   if (!thread?.candidateId) return { ok: false, error: "Create or link a candidate before choosing an application." };
+  const [activeCandidate] = await db
+    .select({ id: candidates.id })
+    .from(candidates)
+    .where(
+      and(
+        eq(candidates.id, thread.candidateId),
+        eq(candidates.workspaceId, organization.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!activeCandidate) return { ok: false, error: "The candidate is no longer active." };
   const application = parsed.data.applicationId
-    ? (await db.select({ id: applications.id }).from(applications).where(and(eq(applications.id, parsed.data.applicationId), eq(applications.workspaceId, organization.id), eq(applications.candidateId, thread.candidateId))).limit(1))[0]
+    ? (await db
+        .select({ id: applications.id })
+        .from(applications)
+        .innerJoin(
+          jobs,
+          and(
+            eq(jobs.id, applications.jobId),
+            eq(jobs.workspaceId, organization.id),
+            isNull(jobs.deletedAt),
+          ),
+        )
+        .where(
+          and(
+            eq(applications.id, parsed.data.applicationId),
+            eq(applications.workspaceId, organization.id),
+            eq(applications.candidateId, thread.candidateId),
+          ),
+        )
+        .limit(1))[0]
     : null;
   if (parsed.data.applicationId && !application) return { ok: false, error: "Application does not belong to this candidate." };
   await db.transaction(async (tx) => {
@@ -122,8 +198,12 @@ export async function markMailboxThreadReadAction(input: { threadId: string }) {
   const parsed = threadId.safeParse(input.threadId); if (!parsed.success) return { ok: false };
   await requirePermission("collab:write");
   const { organization } = await getWorkspaceContext();
+  const [updated] = await db.update(mailThreads)
+    .set({ unreadCount: 0 })
+    .where(and(eq(mailThreads.id, parsed.data), eq(mailThreads.workspaceId, organization.id)))
+    .returning({ id: mailThreads.id });
+  if (!updated) return { ok: false, error: "Thread not found." };
   await db.update(mailMessages).set({ readAt: new Date() }).where(and(eq(mailMessages.threadId, parsed.data), eq(mailMessages.workspaceId, organization.id)));
-  await db.update(mailThreads).set({ unreadCount: 0 }).where(and(eq(mailThreads.id, parsed.data), eq(mailThreads.workspaceId, organization.id)));
   revalidatePath("/dashboard/inbox"); return { ok: true };
 }
 
@@ -143,7 +223,7 @@ export async function replyMailboxThreadAction(input: {
   html?: string;
   subject?: string;
   attachments?: Array<{ filename: string; contentType: string; base64: string }>;
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }) {
   const parsed = z
     .object({
@@ -152,7 +232,7 @@ export async function replyMailboxThreadAction(input: {
       html: z.string().max(500_000).optional(),
       subject: z.string().trim().min(1).max(300).optional(),
       attachments: composerAttachmentsSchema,
-      idempotencyKey: z.string().trim().min(1).max(200).optional(),
+      idempotencyKey: z.string().trim().min(1).max(200),
     })
     .safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter a reply." };
@@ -162,21 +242,62 @@ export async function replyMailboxThreadAction(input: {
   const [thread] = await db.select().from(mailThreads).where(and(eq(mailThreads.id, parsed.data.threadId), eq(mailThreads.workspaceId, organization.id))).limit(1);
   if (!thread) return { ok: false, error: "Thread not found." };
   if (!thread.participantEmail) return { ok: false, error: "This thread has no reply address." };
+  if (thread.candidateId) {
+    const [activeCandidate] = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.id, thread.candidateId),
+          eq(candidates.workspaceId, organization.id),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!activeCandidate) return { ok: false, error: "The candidate is no longer active." };
+  }
+
+  const applicationId = await getActiveMailboxApplicationId({
+    workspaceId: organization.id,
+    candidateId: thread.candidateId,
+    applicationId: thread.applicationId,
+  });
+  if (thread.applicationId && !applicationId) {
+    await db.transaction(async (tx) => {
+      await tx
+        .update(mailThreads)
+        .set({ applicationId: null })
+        .where(
+          and(
+            eq(mailThreads.id, thread.id),
+            eq(mailThreads.workspaceId, organization.id),
+          ),
+        );
+      await tx
+        .update(mailMessages)
+        .set({ applicationId: null })
+        .where(
+          and(
+            eq(mailMessages.threadId, thread.id),
+            eq(mailMessages.workspaceId, organization.id),
+          ),
+        );
+    });
+  }
 
   const [lastMessage] = await db.select().from(mailMessages).where(and(eq(mailMessages.threadId, thread.id), eq(mailMessages.workspaceId, organization.id))).orderBy(desc(mailMessages.receivedAt)).limit(1);
   const baseSubject = parsed.data.subject ?? thread.subject;
   const subject = /^re:/i.test(baseSubject) ? baseSubject : `Re: ${baseSubject}`;
-  const messageId = `<${randomUUID()}@harly.local>`;
   const now = new Date();
   const attachments = decodeComposerAttachments(parsed.data.attachments);
 
   if (await isMailUnificationEnabled(organization.id)) {
     const canonical = await sendCanonicalEmail({
       workspaceId: organization.id,
-      idempotencyKey: parsed.data.idempotencyKey ?? `mailbox-reply:${thread.id}:${messageId}`,
+      idempotencyKey: parsed.data.idempotencyKey,
       threadId: thread.id,
       candidateId: thread.candidateId,
-      applicationId: thread.applicationId,
+      applicationId,
       toEmail: thread.participantEmail,
       subject,
       textBody: parsed.data.body,
@@ -194,6 +315,15 @@ export async function replyMailboxThreadAction(input: {
   const mailboxConfig = await getMailboxConfig(organization.id);
 
   if (mailboxConfig) {
+    const delivery = await reserveLegacyMailDelivery({
+      workspaceId: organization.id,
+      idempotencyKey: parsed.data.idempotencyKey,
+      payload: { threadId: thread.id, body: parsed.data.body, html: parsed.data.html ?? null, subject, attachments: parsed.data.attachments },
+      candidateId: thread.candidateId,
+      applicationId,
+      threadId: thread.id,
+    });
+    if (delivery.kind === "replay") return { ok: true, threadId: delivery.threadId ?? thread.id, idempotentReplay: true };
     try {
       const { default: nodemailer } = await import("nodemailer");
       const transport = nodemailer.createTransport({ host: mailboxConfig.smtp.host, port: mailboxConfig.smtp.port, secure: mailboxConfig.smtp.tls, auth: { user: mailboxConfig.smtp.user, pass: mailboxConfig.smtp.password } });
@@ -206,17 +336,18 @@ export async function replyMailboxThreadAction(input: {
         attachments: attachments?.map((file) => ({ filename: file.filename, content: file.content, contentType: file.contentType })),
         inReplyTo: lastMessage?.messageId ?? undefined,
         references: lastMessage?.messageId ?? undefined,
-        messageId,
+        messageId: delivery.messageId,
       });
-      await db.insert(mailMessages).values({ workspaceId: organization.id, threadId: thread.id, candidateId: thread.candidateId, applicationId: thread.applicationId, messageId: info.messageId || messageId, inReplyTo: lastMessage?.messageId ?? null, references: lastMessage?.messageId ?? null, direction: "outbound", fromEmail: mailboxConfig.address, toEmails: [thread.participantEmail], subject, textBody: parsed.data.body, receivedAt: now, readAt: now });
+      const [saved] = await db.insert(mailMessages).values({ workspaceId: organization.id, threadId: thread.id, candidateId: thread.candidateId, applicationId, messageId: info.messageId || delivery.messageId, inReplyTo: lastMessage?.messageId ?? null, references: lastMessage?.messageId ?? null, direction: "outbound", fromEmail: mailboxConfig.address, toEmails: [thread.participantEmail], subject, textBody: parsed.data.body, receivedAt: now, readAt: now }).returning({ id: mailMessages.id });
+      await completeLegacyMailDelivery({ id: delivery.id, threadId: thread.id, mailMessageId: saved.id, providerMessageId: info.messageId });
       let sentCopySaved = true;
       if (mailboxConfig.smtp.sentFolder) {
         const { ImapFlow } = await import("imapflow");
         const client = new ImapFlow({ host: mailboxConfig.imap.host, port: mailboxConfig.imap.port, secure: mailboxConfig.imap.tls, auth: { user: mailboxConfig.imap.user, pass: mailboxConfig.imap.password }, logger: false });
-        const raw = Buffer.from([`From: ${mailboxConfig.address}`, `To: ${thread.participantEmail}`, `Subject: ${subject}`, `Message-ID: ${info.messageId || messageId}`, lastMessage?.messageId ? `In-Reply-To: ${lastMessage.messageId}` : "", "Content-Type: text/plain; charset=utf-8", "", parsed.data.body].filter(Boolean).join("\r\n"));
+        const raw = Buffer.from([`From: ${mailboxConfig.address}`, `To: ${thread.participantEmail}`, `Subject: ${subject}`, `Message-ID: ${info.messageId || delivery.messageId}`, lastMessage?.messageId ? `In-Reply-To: ${lastMessage.messageId}` : "", "Content-Type: text/plain; charset=utf-8", "", parsed.data.body].filter(Boolean).join("\r\n"));
         try { await client.connect(); await client.append(mailboxConfig.smtp.sentFolder, raw); } catch { sentCopySaved = false; } finally { await client.logout().catch(() => undefined); }
       }
-      await db.update(mailThreads).set({ lastMessageAt: now }).where(eq(mailThreads.id, thread.id));
+      await db.update(mailThreads).set({ lastMessageAt: now }).where(and(eq(mailThreads.id, thread.id), eq(mailThreads.workspaceId, organization.id)));
       await logAuditEvent({
         workspaceId: organization.id,
         actorId: user.id,
@@ -228,6 +359,7 @@ export async function replyMailboxThreadAction(input: {
       });
       revalidatePath("/dashboard/inbox"); return { ok: true, sentCopySaved };
     } catch (error) {
+      await failLegacyMailDelivery(delivery.id, error);
       log.error(error, "reply send failed via IMAP");
       return { ok: false, error: "Unable to send reply. Please try again." };
     }
@@ -236,26 +368,37 @@ export async function replyMailboxThreadAction(input: {
   const sender = await getWorkspaceEmailSender(organization.id, user.id);
   if (!sender) return { ok: false, error: "Email sending is not configured. Go to Settings → Email to set up your sender." };
 
-  const replyTo = thread.applicationId
-    ? await getInboundReplyTo(organization.id, thread.applicationId)
+  const delivery = await reserveLegacyMailDelivery({
+    workspaceId: organization.id,
+    idempotencyKey: parsed.data.idempotencyKey,
+    payload: { threadId: thread.id, body: parsed.data.body, html: parsed.data.html ?? null, subject, attachments: parsed.data.attachments },
+    candidateId: thread.candidateId,
+    applicationId,
+    threadId: thread.id,
+  });
+  if (delivery.kind === "replay") return { ok: true, threadId: delivery.threadId ?? thread.id, idempotentReplay: true };
+
+  const replyTo = applicationId
+    ? await getInboundReplyTo(organization.id, applicationId)
     : undefined;
 
   try {
     const result = await sender.send({
       to: thread.participantEmail,
       subject,
-      messageId,
+      messageId: delivery.messageId,
+      idempotencyKey: parsed.data.idempotencyKey,
       replyTo,
       react: richBodyReact(parsed.data.body, parsed.data.html),
       attachments,
     });
 
-    await db.insert(mailMessages).values({
+    const [saved] = await db.insert(mailMessages).values({
       workspaceId: organization.id,
       threadId: thread.id,
       candidateId: thread.candidateId,
-      applicationId: thread.applicationId,
-      messageId: result.messageId || messageId,
+      applicationId,
+      messageId: result.messageId || delivery.messageId,
       inReplyTo: lastMessage?.messageId ?? null,
       references: lastMessage?.messageId ?? null,
       direction: "outbound",
@@ -265,9 +408,10 @@ export async function replyMailboxThreadAction(input: {
       textBody: parsed.data.body,
       receivedAt: now,
       readAt: now,
-    });
+    }).returning({ id: mailMessages.id });
+    await completeLegacyMailDelivery({ id: delivery.id, threadId: thread.id, mailMessageId: saved.id, providerMessageId: result.messageId });
 
-    await db.update(mailThreads).set({ lastMessageAt: now }).where(eq(mailThreads.id, thread.id));
+    await db.update(mailThreads).set({ lastMessageAt: now }).where(and(eq(mailThreads.id, thread.id), eq(mailThreads.workspaceId, organization.id)));
 
     await logAuditEvent({
       workspaceId: organization.id,
@@ -282,6 +426,7 @@ export async function replyMailboxThreadAction(input: {
     revalidatePath("/dashboard/inbox");
     return { ok: true };
   } catch (error) {
+    await failLegacyMailDelivery(delivery.id, error);
     log.error(error, "reply send failed via provider");
     return { ok: false, error: "Unable to send reply. Please try again." };
   }
@@ -293,6 +438,7 @@ export async function createMailboxThreadAction(input: {
   subject: string;
   body: string;
   html?: string;
+  idempotencyKey: string;
   attachments?: Array<{ filename: string; contentType: string; base64: string }>;
 }) {
   const parsed = z.object({
@@ -301,6 +447,7 @@ export async function createMailboxThreadAction(input: {
     subject: z.string().trim().min(1).max(300),
     body: z.string().trim().min(1).max(100_000),
     html: z.string().max(500_000).optional(),
+    idempotencyKey: z.string().trim().min(1).max(200),
     attachments: composerAttachmentsSchema,
   }).safeParse(input);
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter a subject and message." };
@@ -320,17 +467,24 @@ export async function createMailboxThreadAction(input: {
     ? await db
         .select({ id: applications.id })
         .from(applications)
+        .innerJoin(
+          jobs,
+          and(
+            eq(jobs.id, applications.jobId),
+            eq(jobs.workspaceId, organization.id),
+            isNull(jobs.deletedAt),
+          ),
+        )
         .where(and(eq(applications.workspaceId, organization.id), eq(applications.candidateId, candidate.id)))
         .orderBy(desc(applications.appliedAt))
         .limit(1)
     : [];
-  const messageId = `<${randomUUID()}@harly.local>`;
   const attachments = decodeComposerAttachments(parsed.data.attachments);
 
   if (await isMailUnificationEnabled(organization.id)) {
     const canonical = await sendCanonicalEmail({
       workspaceId: organization.id,
-      idempotencyKey: `mailbox-new:${candidate?.id ?? parsed.data.toEmail}:${parsed.data.subject}:${parsed.data.body}`,
+      idempotencyKey: parsed.data.idempotencyKey,
       candidateId: candidate?.id ?? null,
       applicationId: application?.id ?? null,
       toEmail: parsed.data.toEmail,
@@ -349,37 +503,48 @@ export async function createMailboxThreadAction(input: {
     return { ok: false, error: "Email sending is not configured. Go to Settings → Email to set up your sender." };
   }
 
+  const delivery = await reserveLegacyMailDelivery({
+    workspaceId: organization.id,
+    idempotencyKey: parsed.data.idempotencyKey,
+    payload: { toEmail: parsed.data.toEmail, subject: parsed.data.subject, body: parsed.data.body, html: parsed.data.html ?? null, attachments: parsed.data.attachments },
+    candidateId: candidate?.id ?? null,
+    applicationId: application?.id ?? null,
+  });
+  if (delivery.kind === "replay") return { ok: true, threadId: delivery.threadId ?? "", delivered: true, idempotentReplay: true };
+
   try {
-    await sender.send({
+    const result = await sender.send({
       to: parsed.data.toEmail,
       subject: parsed.data.subject,
-      messageId,
+      messageId: delivery.messageId,
+      idempotencyKey: parsed.data.idempotencyKey,
       replyTo: application ? await getInboundReplyTo(organization.id, application.id) : undefined,
       react: richBodyReact(parsed.data.body, parsed.data.html),
       attachments,
     });
-  } catch {
+    const created = await insertCanonicalMessage({
+      workspaceId: organization.id,
+      source: "provider",
+      candidateId: candidate?.id ?? null,
+      applicationId: application?.id ?? null,
+      participantEmail: parsed.data.toEmail,
+      subject: parsed.data.subject,
+      receivedAt: new Date(),
+      messageId: result.messageId || delivery.messageId,
+      direction: "outbound",
+      fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
+      toEmails: [parsed.data.toEmail],
+      textBody: parsed.data.body,
+      htmlBody: parsed.data.html,
+      readAt: new Date(),
+    });
+    await completeLegacyMailDelivery({ id: delivery.id, threadId: created.threadId, mailMessageId: created.messageId, providerMessageId: result.messageId });
+    revalidatePath("/dashboard/inbox");
+    return { ok: true, threadId: created.threadId, delivered: true };
+  } catch (error) {
+    await failLegacyMailDelivery(delivery.id, error);
     return { ok: false, error: "Unable to send the email. Please try again." };
   }
-
-  const created = await insertCanonicalMessage({
-    workspaceId: organization.id,
-    source: "provider",
-    candidateId: candidate?.id ?? null,
-    applicationId: application?.id ?? null,
-    participantEmail: parsed.data.toEmail,
-    subject: parsed.data.subject,
-    receivedAt: new Date(),
-    messageId,
-    direction: "outbound",
-    fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
-    toEmails: [parsed.data.toEmail],
-    textBody: parsed.data.body,
-    htmlBody: parsed.data.html,
-    readAt: new Date(),
-  });
-  revalidatePath("/dashboard/inbox");
-  return { ok: true, threadId: created.threadId, delivered: true };
 }
 
 export async function retryMailboxSyncAction() {
@@ -416,8 +581,22 @@ export async function retryMailboxSyncAction() {
 
 async function getMailboxMessagesForAi(threadId: string) {
   const { organization } = await getWorkspaceContext();
-  const [thread] = await db.select({ id: mailThreads.id, subject: mailThreads.subject, participantEmail: mailThreads.participantEmail }).from(mailThreads).where(and(eq(mailThreads.id, threadId), eq(mailThreads.workspaceId, organization.id))).limit(1);
+  const [thread] = await db.select({ id: mailThreads.id, subject: mailThreads.subject, participantEmail: mailThreads.participantEmail, candidateId: mailThreads.candidateId }).from(mailThreads).where(and(eq(mailThreads.id, threadId), eq(mailThreads.workspaceId, organization.id))).limit(1);
   if (!thread) return null;
+  if (thread.candidateId) {
+    const [activeCandidate] = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.id, thread.candidateId),
+          eq(candidates.workspaceId, organization.id),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!activeCandidate) return null;
+  }
   const rows = await db.select({ direction: mailMessages.direction, fromEmail: mailMessages.fromEmail, toEmails: mailMessages.toEmails, body: mailMessages.textBody, receivedAt: mailMessages.receivedAt }).from(mailMessages).where(and(eq(mailMessages.threadId, thread.id), eq(mailMessages.workspaceId, organization.id))).orderBy(desc(mailMessages.receivedAt)).limit(20);
   return { thread, messages: rows.reverse(), workspaceId: organization.id };
 }
@@ -495,9 +674,10 @@ export async function createCandidateFromMailboxThreadAction(input: { threadId: 
   const { organization, user } = await getWorkspaceContext();
   const [thread] = await db.select().from(mailThreads).where(and(eq(mailThreads.id, parsed.data), eq(mailThreads.workspaceId, organization.id))).limit(1);
   if (!thread?.participantEmail) return { ok: false, error: "This thread has no sender email." };
-  const [existing] = await db.select({ id: candidates.id }).from(candidates).where(and(eq(candidates.workspaceId, organization.id), eq(candidates.email, thread.participantEmail))).limit(1);
+  const [existing] = await db.select({ id: candidates.id, deletedAt: candidates.deletedAt }).from(candidates).where(and(eq(candidates.workspaceId, organization.id), eq(candidates.email, thread.participantEmail))).limit(1);
+  if (existing?.deletedAt) return { ok: false, error: "This sender belongs to a candidate in the trash. Restore or purge that candidate first." };
   const candidateId = existing?.id ?? (await db.insert(candidates).values({ workspaceId: organization.id, firstName: thread.participantEmail.split("@")[0] || "Inbox", lastName: "Candidate", email: thread.participantEmail }).returning({ id: candidates.id }))[0].id;
-  await db.update(mailThreads).set({ candidateId }).where(eq(mailThreads.id, thread.id));
+  await db.update(mailThreads).set({ candidateId }).where(and(eq(mailThreads.id, thread.id), eq(mailThreads.workspaceId, organization.id)));
   await db.update(mailMessages).set({ candidateId }).where(and(eq(mailMessages.threadId, thread.id), eq(mailMessages.workspaceId, organization.id)));
   await logAuditEvent({
     workspaceId: organization.id,

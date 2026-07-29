@@ -122,20 +122,26 @@ export async function getInboxData(input: {
 }> {
   const { organization, user: currentUser } = await getWorkspaceContext();
   const filter = normalizeInboxFilter(input.filter);
-  const page = Math.max(0, Math.floor(input.page ?? 0));
+  const requestedPage = Number.isFinite(input.page) ? Math.floor(input.page as number) : 0;
+  const page = Math.min(100, Math.max(0, requestedPage));
   // `page` is the number of the last loaded page in the client. Return all
   // pages up to it so "Load more" appends from the user's perspective instead
   // of replacing the current list with only the next slice.
   const limit = (page + 1) * PAGE_SIZE + 1;
+  const activeCandidateLink = or(
+    isNull(mailThreads.candidateId),
+    isNotNull(candidates.id),
+  );
   const threadWhere = and(
     eq(mailThreads.workspaceId, organization.id),
+    activeCandidateLink,
     filter === "archived"
       ? eq(mailThreads.status, "archived")
       : filter === "unassigned"
-        ? and(eq(mailThreads.status, "open"), isNull(mailThreads.candidateId))
+        ? and(eq(mailThreads.status, "open"), isNull(candidates.id))
         : eq(mailThreads.status, "open"),
     filter === "unread" ? sql`${mailThreads.unreadCount} > 0` : undefined,
-    filter === "candidates" ? isNotNull(mailThreads.candidateId) : undefined,
+    filter === "candidates" ? isNotNull(candidates.id) : undefined,
     filter === "assigned" || filter === "assigned-to-me" ? isNotNull(mailThreads.ownerId) : undefined,
     filter === "assigned-to-me" ? eq(mailThreads.ownerId, currentUser.id) : undefined,
     filter === "replies"
@@ -160,7 +166,7 @@ export async function getInboxData(input: {
         status: mailThreads.status,
         unreadCount: mailThreads.unreadCount,
         lastMessageAt: mailThreads.lastMessageAt,
-        candidateId: mailThreads.candidateId,
+        activeCandidateId: candidates.id,
         candidateFirstName: candidates.firstName,
         candidateLastName: candidates.lastName,
         candidateAvatarUrl: candidates.avatarUrl,
@@ -190,15 +196,22 @@ export async function getInboxData(input: {
         )`,
       })
       .from(mailThreads)
-      .leftJoin(candidates, and(eq(candidates.id, mailThreads.candidateId), eq(candidates.workspaceId, organization.id)))
-      .leftJoin(user, eq(user.id, mailThreads.ownerId))
-      .leftJoin(workspaceMember, and(eq(workspaceMember.userId, user.id), eq(workspaceMember.organizationId, organization.id)))
-      .leftJoin(applications, and(eq(applications.id, mailThreads.applicationId), eq(applications.workspaceId, organization.id)))
-      .leftJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, organization.id)))
+      .leftJoin(candidates, and(eq(candidates.id, mailThreads.candidateId), eq(candidates.workspaceId, organization.id), isNull(candidates.deletedAt)))
+      .leftJoin(workspaceMember, and(eq(workspaceMember.userId, mailThreads.ownerId), eq(workspaceMember.organizationId, organization.id)))
+      .leftJoin(user, eq(user.id, workspaceMember.userId))
+      .leftJoin(
+        applications,
+        and(
+          eq(applications.id, mailThreads.applicationId),
+          eq(applications.workspaceId, organization.id),
+          eq(applications.candidateId, candidates.id),
+        ),
+      )
+      .leftJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, organization.id), isNull(jobs.deletedAt)))
       .leftJoin(jobStages, and(eq(jobStages.id, applications.currentStageId), eq(jobStages.workspaceId, organization.id)))
       .where(
         input.threadId
-          ? or(threadWhere, and(eq(mailThreads.workspaceId, organization.id), eq(mailThreads.id, input.threadId)))
+          ? or(threadWhere, and(eq(mailThreads.workspaceId, organization.id), eq(mailThreads.id, input.threadId), activeCandidateLink))
           : threadWhere,
       )
       .orderBy(desc(mailThreads.lastMessageAt))
@@ -217,8 +230,9 @@ export async function getInboxData(input: {
     db
       .select({ id: applications.id, candidateId: applications.candidateId, jobId: applications.jobId, jobTitle: jobs.title, status: applications.status })
       .from(applications)
-      .innerJoin(jobs, eq(jobs.id, applications.jobId))
-      .where(and(eq(applications.workspaceId, organization.id), isNull(jobs.deletedAt)))
+      .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, organization.id), isNull(jobs.deletedAt)))
+      .innerJoin(candidates, and(eq(candidates.id, applications.candidateId), eq(candidates.workspaceId, organization.id), isNull(candidates.deletedAt)))
+      .where(eq(applications.workspaceId, organization.id))
       .orderBy(jobs.title),
     db
       .select({ configured: sql<boolean>`true`, enabled: mailboxes.enabled, address: mailboxes.address, lastSyncedAt: mailboxes.lastSyncedAt, lastHealthyAt: mailboxes.lastHealthyAt, lastError: mailboxes.lastError })
@@ -239,7 +253,7 @@ export async function getInboxData(input: {
     status: row.status,
     unreadCount: row.unreadCount,
     lastMessageAt: row.lastMessageAt.toISOString(),
-    candidateId: row.candidateId,
+    candidateId: row.activeCandidateId,
     candidateName: row.candidateFirstName
       ? `${row.candidateFirstName} ${row.candidateLastName}`.trim()
       : null,
@@ -247,11 +261,14 @@ export async function getInboxData(input: {
     ownerId: row.ownerId,
     ownerName: row.ownerName,
     ownerImage: row.ownerImage,
-    applicationId: row.applicationId,
-    jobId: row.jobId,
-    jobTitle: row.jobTitle,
-    applicationStatus: row.applicationStatus,
-    applicationStageName: row.applicationStageName,
+    // A thread may retain a historical application link after its job enters
+    // the trash. Keep the conversation visible, but do not expose the stale
+    // requisition/application association in Inbox.
+    applicationId: row.activeCandidateId && row.jobId ? row.applicationId : null,
+    jobId: row.activeCandidateId && row.jobId ? row.jobId : null,
+    jobTitle: row.activeCandidateId && row.jobId ? row.jobTitle : null,
+    applicationStatus: row.activeCandidateId && row.jobId ? row.applicationStatus : null,
+    applicationStageName: row.activeCandidateId && row.jobId ? row.applicationStageName : null,
     hasInboundReply: Boolean(row.hasInboundReply),
     needsReply: Boolean(row.needsReply),
     preview: row.preview,
@@ -380,9 +397,11 @@ export async function getUnreadInboxThreadCount(): Promise<number> {
   const [row] = await db
     .select({ count: sql<number>`count(*)::int` })
     .from(mailThreads)
+    .leftJoin(candidates, and(eq(candidates.id, mailThreads.candidateId), eq(candidates.workspaceId, organization.id), isNull(candidates.deletedAt)))
     .where(
       and(
         eq(mailThreads.workspaceId, organization.id),
+        or(isNull(mailThreads.candidateId), isNotNull(candidates.id)),
         eq(mailThreads.status, "open"),
         sql`${mailThreads.unreadCount} > 0`,
       ),

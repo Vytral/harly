@@ -1,9 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { and, eq } from "drizzle-orm";
-
-import { db, mailAttachments } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { getWorkspaceMailboxAttachment } from "@/lib/mailbox/attachment-access";
 import { storage } from "@/lib/storage";
 import { logAuditEvent } from "@/lib/audit-log";
 
@@ -21,21 +19,10 @@ export async function GET(
   }
   const { attachmentId } = await params;
   const { organization, user } = await getWorkspaceContext();
-  const [attachment] = await db
-    .select({
-      filename: mailAttachments.filename,
-      contentType: mailAttachments.contentType,
-      size: mailAttachments.size,
-      storageKey: mailAttachments.storageKey,
-    })
-    .from(mailAttachments)
-    .where(
-      and(
-        eq(mailAttachments.id, attachmentId),
-        eq(mailAttachments.workspaceId, organization.id),
-      ),
-    )
-    .limit(1);
+  const attachment = await getWorkspaceMailboxAttachment({
+    attachmentId,
+    workspaceId: organization.id,
+  });
   if (!attachment) return NextResponse.json({ error: "Attachment not found." }, { status: 404 });
 
   try {

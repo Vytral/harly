@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, exists, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -85,18 +85,84 @@ async function targetBelongsToWorkspace(
   if (association.targetType === "workspace") return association.targetId === null;
   if (!association.targetId) return false;
   if (association.targetType === "candidate") {
-    const [row] = await db.select({ id: candidates.id }).from(candidates).where(and(eq(candidates.id, association.targetId), eq(candidates.workspaceId, workspaceId))).limit(1);
+    const [row] = await db.select({ id: candidates.id }).from(candidates).where(and(eq(candidates.id, association.targetId), eq(candidates.workspaceId, workspaceId), isNull(candidates.deletedAt))).limit(1);
     return Boolean(row);
   }
   if (association.targetType === "job") {
-    const [row] = await db.select({ id: jobs.id }).from(jobs).where(and(eq(jobs.id, association.targetId), eq(jobs.workspaceId, workspaceId))).limit(1);
+    const [row] = await db.select({ id: jobs.id }).from(jobs).where(and(eq(jobs.id, association.targetId), eq(jobs.workspaceId, workspaceId), isNull(jobs.deletedAt))).limit(1);
     return Boolean(row);
   }
   if (association.targetType === "application") {
-    const [row] = await db.select({ id: applications.id }).from(applications).where(and(eq(applications.id, association.targetId), eq(applications.workspaceId, workspaceId))).limit(1);
+    const [row] = await db
+      .select({ id: applications.id })
+      .from(applications)
+      .where(
+        and(
+          eq(applications.id, association.targetId),
+          eq(applications.workspaceId, workspaceId),
+          exists(
+            db
+              .select({ id: candidates.id })
+              .from(candidates)
+              .where(
+                and(
+                  eq(candidates.id, applications.candidateId),
+                  eq(candidates.workspaceId, workspaceId),
+                  isNull(candidates.deletedAt),
+                ),
+              ),
+          ),
+          exists(
+            db
+              .select({ id: jobs.id })
+              .from(jobs)
+              .where(
+                and(
+                  eq(jobs.id, applications.jobId),
+                  eq(jobs.workspaceId, workspaceId),
+                  isNull(jobs.deletedAt),
+                ),
+              ),
+          ),
+        ),
+      )
+      .limit(1);
     return Boolean(row);
   }
-  const [row] = await db.select({ id: offers.id }).from(offers).where(and(eq(offers.id, association.targetId), eq(offers.workspaceId, workspaceId))).limit(1);
+  const [row] = await db
+    .select({ id: offers.id })
+    .from(offers)
+    .where(
+      and(
+        eq(offers.id, association.targetId),
+        eq(offers.workspaceId, workspaceId),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, offers.candidateId),
+                eq(candidates.workspaceId, workspaceId),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
+        exists(
+          db
+            .select({ id: jobs.id })
+            .from(jobs)
+            .where(
+              and(
+                eq(jobs.id, offers.jobId),
+                eq(jobs.workspaceId, workspaceId),
+                isNull(jobs.deletedAt),
+              ),
+            ),
+        ),
+      ),
+    )
+    .limit(1);
   return Boolean(row);
 }
 

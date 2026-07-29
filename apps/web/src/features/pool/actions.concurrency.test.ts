@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
-  selectResult: [] as unknown[],
+  selectQueue: [] as unknown[][],
   requirePermission: vi.fn(),
   insert: vi.fn(),
 }));
@@ -19,7 +19,7 @@ vi.mock("@harly/db", () => ({
     select: vi.fn(() => {
       const query: Record<string, unknown> = {
         then: (resolve: (value: unknown) => void) =>
-          Promise.resolve(mocks.selectResult).then(resolve),
+          Promise.resolve(mocks.selectQueue.shift() ?? []).then(resolve),
         from: () => query,
         where: () => query,
         limit: () => query,
@@ -47,7 +47,7 @@ import { addToPoolAction } from "./actions";
 
 describe("addToPoolAction concurrency handling", () => {
   beforeEach(() => {
-    mocks.selectResult = [];
+    mocks.selectQueue = [];
     mocks.requirePermission.mockResolvedValue({
       user: { id: "user-1" },
       organization: { id: "workspace-1" },
@@ -56,7 +56,7 @@ describe("addToPoolAction concurrency handling", () => {
   });
 
   it("returns the shared message when the pre-check finds an active entry", async () => {
-    mocks.selectResult = [{ id: "existing-entry" }];
+    mocks.selectQueue = [[{ id: "candidate-1" }], [{ id: "existing-entry" }]];
 
     const result = await addToPoolAction({
       candidateId: "11111111-1111-4111-8111-111111111111",
@@ -70,6 +70,7 @@ describe("addToPoolAction concurrency handling", () => {
   });
 
   it("returns the same message when a concurrent insert wins the unique index race", async () => {
+    mocks.selectQueue = [[{ id: "candidate-1" }], []];
     mocks.insert.mockReturnValue({
       values: vi.fn().mockRejectedValue({
         code: "23505",

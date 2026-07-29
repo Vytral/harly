@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import { candidates, db, dsarRequests } from "@harly/db";
@@ -61,7 +61,14 @@ export async function getDsarRequests(): Promise<DsarRequestListItem[]> {
       createdAt: dsarRequests.createdAt,
     })
     .from(dsarRequests)
-    .leftJoin(candidates, eq(candidates.id, dsarRequests.candidateId))
+    .leftJoin(
+      candidates,
+      and(
+        eq(candidates.id, dsarRequests.candidateId),
+        eq(candidates.workspaceId, context.organization.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(eq(dsarRequests.workspaceId, context.organization.id))
     .orderBy(desc(dsarRequests.createdAt));
 

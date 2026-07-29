@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
 import { candidates, db, dsarRequests } from "@harly/db";
@@ -34,7 +34,7 @@ export default async function PortalProfilePage() {
       avatarUrl: candidates.avatarUrl,
     })
     .from(candidates)
-    .where(and(eq(candidates.id, session.candidateId), eq(candidates.workspaceId, session.workspaceId)))
+    .where(and(eq(candidates.id, session.candidateId), eq(candidates.workspaceId, session.workspaceId), isNull(candidates.deletedAt)))
     .limit(1);
 
   if (!candidate) redirect("/portal/login" as Route);
