@@ -4,7 +4,7 @@ import type { Job } from "@harly/db";
 import { Archive, FileEdit, Send } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { updateJobStatusAction } from "./actions";
 import { Button } from "@/components/ui/button";

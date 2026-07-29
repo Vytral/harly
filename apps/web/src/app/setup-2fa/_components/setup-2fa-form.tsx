@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { authClient } from "@harly/auth/client";
 import { Button } from "@/components/ui/button";

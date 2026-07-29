@@ -48,9 +48,11 @@ async function calFetch<T>({
     cache: "no-store",
   });
 
-  const json = (await response.json().catch(() => null)) as
-    | { status?: string; data?: T; error?: { message?: string } }
-    | null;
+  const json = (await response.json().catch(() => null)) as {
+    status?: string;
+    data?: T;
+    error?: { message?: string };
+  } | null;
 
   if (!response.ok || json?.status === "error") {
     const message =
@@ -101,6 +103,34 @@ export async function createCalBooking(
     apiVersion: BOOKINGS_API_VERSION,
     body: input,
   });
+}
+
+/** Cancel a booking by UID. Safe to retry when the remote booking is already cancelled. */
+export async function cancelCalBooking(
+  config: WorkspaceCalConfig,
+  bookingUid: string,
+): Promise<boolean> {
+  try {
+    await calFetch<CalBookingResult>({
+      config,
+      path: `/bookings/${encodeURIComponent(bookingUid)}/cancel`,
+      method: "POST",
+      apiVersion: BOOKINGS_API_VERSION,
+      body: { cancellationReason: "Candidate data deletion" },
+    });
+    return true;
+  } catch {
+    try {
+      const current = await calFetch<CalBookingResult>({
+        config,
+        path: `/bookings/${encodeURIComponent(bookingUid)}`,
+        apiVersion: BOOKINGS_API_VERSION,
+      });
+      return current.status.toLowerCase() === "cancelled";
+    } catch {
+      return false;
+    }
+  }
 }
 
 /** Register a webhook so Cal.com pushes booking events back to Harly. */

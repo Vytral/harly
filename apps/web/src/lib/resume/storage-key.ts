@@ -6,6 +6,15 @@
  * Returns null when no resume key can be recovered.
  */
 export function resumeKeyFromUrl(fileUrl: string): string | null {
+  try {
+    const url = new URL(fileUrl, "http://harly.internal");
+    if (url.pathname === "/api/storage/file") {
+      const key = url.searchParams.get("key");
+      return key && isSafeResumeKey(key) ? key : null;
+    }
+  } catch {
+    // Fall through to legacy path parsing.
+  }
   const path = fileUrl.startsWith("/")
     ? fileUrl
     : (() => {
@@ -19,5 +28,17 @@ export function resumeKeyFromUrl(fileUrl: string): string | null {
   const resumeMarker = path.indexOf("resumes/");
   if (resumeMarker === -1) return null;
   const key = workspaceMarker >= 0 ? path.slice(workspaceMarker) : path.slice(resumeMarker);
-  return key.includes("..") ? null : key;
+  return isSafeResumeKey(key) ? key : null;
+}
+
+function isSafeResumeKey(key: string) {
+  return (
+    key.length <= 512 &&
+    !key.includes("..") &&
+    (key.startsWith("resumes/") || /^workspaces\/[^/]+\/resumes\//.test(key))
+  );
+}
+
+export function privateResumeFileUrl(key: string) {
+  return `/api/storage/file?key=${encodeURIComponent(key)}`;
 }

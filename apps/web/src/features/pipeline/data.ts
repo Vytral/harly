@@ -61,6 +61,7 @@ export type PipelineApplication = {
   createdAt: string;
   lastStageMovedAt: string | null;
   aiScore: number | null;
+  evaluationSource: "ai" | "rules" | null;
   aiRecommendation: "strong_yes" | "yes" | "maybe" | "no" | null;
   aiSummary: string | null;
   aiUsedResume: boolean | null;
@@ -254,6 +255,7 @@ export async function getPipelineData(
         createdAt: applications.createdAt,
         lastStageMovedAt: latestStageMove.createdAt,
         aiScore: aiEvaluations.score,
+        evaluationSource: aiEvaluations.source,
         aiRecommendation: aiEvaluations.recommendation,
         aiSummary: aiEvaluations.summary,
         aiUsedResume: aiEvaluations.usedResume,
@@ -297,6 +299,12 @@ export async function getPipelineData(
     selectedJob,
     applications: jobApplications.map(({ candidateGithubUrl, ...application }) => ({
       ...application,
+      evaluationSource:
+        application.evaluationSource === "rules"
+          ? "rules"
+          : application.evaluationSource
+            ? "ai"
+            : null,
       candidateAvatarFallbackSrcs: candidateAvatarFallbackSrcs(
         application.candidateEmail,
         candidateGithubUrl,
@@ -345,6 +353,14 @@ export async function getPipelineSummary(jobId: string): Promise<PipelineSummary
   const [totalsRow] = await db
     .select({ total: count() })
     .from(applications)
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, applications.jobId),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.workspaceId, workspace.id),
@@ -370,6 +386,14 @@ export async function getPipelineSummary(jobId: string): Promise<PipelineSummary
   const [stalledRow] = await db
     .select({ stalled: count() })
     .from(applications)
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, applications.jobId),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .leftJoin(latestStageMove, eq(latestStageMove.applicationId, applications.id))
     .where(
       and(
@@ -389,6 +413,14 @@ export async function getPipelineSummary(jobId: string): Promise<PipelineSummary
   const [unscoredRow] = await db
     .select({ unscored: count() })
     .from(applications)
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, applications.jobId),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.workspaceId, workspace.id),
@@ -412,6 +444,14 @@ export async function getPipelineSummary(jobId: string): Promise<PipelineSummary
         eq(applications.id, aiEvaluations.applicationId),
         eq(applications.jobId, jobId),
         eq(applications.status, "active"),
+      ),
+    )
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, applications.jobId),
+        isNull(jobs.deletedAt),
       ),
     )
     .where(eq(aiEvaluations.workspaceId, workspace.id))

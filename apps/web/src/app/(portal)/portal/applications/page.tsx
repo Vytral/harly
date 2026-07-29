@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
 import { applications, candidates, db, jobs } from "@harly/db";
@@ -34,7 +34,7 @@ export default async function PortalApplicationsPage() {
         jobLocation: jobs.location,
       })
       .from(applications)
-      .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, session.workspaceId)))
+      .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, session.workspaceId), isNull(jobs.deletedAt)))
       .where(and(eq(applications.candidateId, session.candidateId), eq(applications.workspaceId, session.workspaceId)))
       .orderBy(desc(applications.appliedAt)),
     db

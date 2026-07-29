@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 /* eslint-disable @next/next/no-img-element */
 

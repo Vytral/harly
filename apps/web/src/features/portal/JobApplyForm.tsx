@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
 import { applyToJobAction } from "@/features/portal/actions";

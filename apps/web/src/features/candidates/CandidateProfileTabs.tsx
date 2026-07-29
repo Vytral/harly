@@ -252,7 +252,7 @@ export function CandidateProfileTabs({
         )}
       </TabsContent>
 
-      {/* ── Evaluation: AI score + scorecards ── */}
+      {/* ── Evaluation: automatic evaluation + scorecards ── */}
       <TabsContent value="evaluation" className="mt-4 space-y-4">
         <AiScoreCard
           applications={jobOptions}

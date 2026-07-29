@@ -1,6 +1,6 @@
 import type { Job } from "@harly/db";
 import { Plus, Trash2, FileText } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import type { JobContentSection } from "../config";
 import { generateJobDraftAction } from "../actions";

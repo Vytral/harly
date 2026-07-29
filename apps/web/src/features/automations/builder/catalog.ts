@@ -173,7 +173,7 @@ export const FIELD_KIND_CATALOG: FieldKindMeta[] = [
   {
     kind: "ai",
     label: "AI insight",
-    blurb: "The latest AI score / summary for the candidate.",
+    blurb: "The latest automatic evaluation score / summary for the candidate.",
     paths: ["score", "recommendation", "summary", "tags"],
   },
   {

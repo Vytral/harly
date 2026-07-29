@@ -4,7 +4,6 @@ import { and, desc, eq } from "drizzle-orm";
 
 import {
   activityEvents,
-  aiEvaluations,
   applicationAnswers,
   applicationQuestions,
   applications,
@@ -22,6 +21,18 @@ import { maxResumeFileSize } from "@/lib/storage-validation";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { logAiCandidateDecision } from "@/lib/ai/governance";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
+import {
+  evaluateCandidateWithRules,
+  RULES_EVALUATION_VERSION,
+} from "@/lib/evaluation/rules";
+import {
+  enqueueCandidateEvaluationJob,
+  getPublishedRulesRubric,
+  markEvaluationJobCompleted,
+  markEvaluationJobFailed,
+  markEvaluationJobRunning,
+  persistCandidateEvaluation,
+} from "@/features/evaluations/service";
 
 /**
  * Fire-and-forget: score a new application if auto-score is enabled for the
@@ -30,7 +41,9 @@ import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
 export async function scheduleAutoScore(
   applicationId: string,
   workspaceId: string,
+  options?: { jobId?: string; workerId?: string },
 ): Promise<void> {
+  let evaluationJobId: string | null = options?.jobId ?? null;
   try {
     // Check auto-score setting first , cheap query, skip early if disabled.
     const [settings] = await db
@@ -39,10 +52,12 @@ export async function scheduleAutoScore(
       .where(eq(workspaceSettings.organizationId, workspaceId))
       .limit(1);
 
-    if (!settings?.aiAutoScore) return;
+    if (!settings?.aiAutoScore) {
+      if (evaluationJobId) await markEvaluationJobCompleted(evaluationJobId);
+      return;
+    }
 
     const aiConfig = await getWorkspaceAiConfig(workspaceId);
-    if (!aiConfig) return;
 
     const [row] = await db
       .select({
@@ -84,6 +99,19 @@ export async function scheduleAutoScore(
       .limit(1);
 
     if (!row) return;
+
+    const queueJob = evaluationJobId
+      ? { id: evaluationJobId }
+      : await enqueueCandidateEvaluationJob({
+          workspaceId,
+          applicationId: row.applicationId,
+          candidateId: row.candidateId,
+          jobId: row.jobId,
+        });
+    evaluationJobId = queueJob.id;
+    if (!options?.jobId) {
+      await markEvaluationJobRunning(queueJob.id, `inline:${workspaceId}`);
+    }
 
     // Load resume text.
     const [file] = await db
@@ -156,47 +184,59 @@ export async function scheduleAutoScore(
         experienceYears: row.experienceYears,
       },
     };
-    const result = await scoreCandidateWithAI(aiConfig, scoreInput);
+    const source = aiConfig ? "ai" : "rules";
+    const publishedRubric = aiConfig
+      ? null
+      : await getPublishedRulesRubric(workspaceId, row.jobId);
+    const rulesEvaluation = aiConfig
+      ? null
+      : evaluateCandidateWithRules({ ...scoreInput, rubric: publishedRubric ?? undefined });
+    const result = aiConfig
+      ? await scoreCandidateWithAI(aiConfig, scoreInput)
+      : rulesEvaluation!.result;
 
-    const values = {
+    const persisted = await persistCandidateEvaluation({
       workspaceId,
       candidateId: row.candidateId,
       applicationId: row.applicationId,
       jobId: row.jobId,
-      provider: aiConfig.provider,
-      modelId: aiConfig.modelId,
-      score: result.score,
-      recommendation: result.recommendation,
-      summary: result.summary,
-      strengths: result.strengths,
-      gaps: result.gaps,
-      criteria: result.criteria,
+      source,
+      provider: aiConfig?.provider ?? "harly",
+      modelId: aiConfig?.modelId ?? RULES_EVALUATION_VERSION,
+      engine: aiConfig ? "provider-ai" : "harly-rules",
+      engineVersion: aiConfig?.modelId ?? RULES_EVALUATION_VERSION,
+      rubricVersion: rulesEvaluation?.rubric.version ?? "ai-generated",
+      rubricSnapshot: rulesEvaluation?.rubric ?? null,
+      result,
+      criterionResults: rulesEvaluation?.criterionResults,
+      evidenceCoverage: rulesEvaluation?.evidenceCoverage,
+      confidence: rulesEvaluation?.confidence,
+      requiresHumanReview: rulesEvaluation?.requiresHumanReview ?? true,
       usedResume: resumeText !== null,
       generatedById: null,
-    };
-
-    await db
-      .insert(aiEvaluations)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [aiEvaluations.workspaceId, aiEvaluations.applicationId],
-        set: { ...values, updatedAt: new Date() },
-      });
+      inputFingerprintSource: scoreInput,
+    });
 
     await db.insert(activityEvents).values({
       workspaceId,
       actorId: null,
       entityType: "application",
       entityId: row.applicationId,
-      type: "evaluation.ai_generated",
+      type: source === "ai" ? "evaluation.ai_generated" : "evaluation.rules_generated",
       metadata: {
         score: result.score,
         recommendation: result.recommendation,
         jobTitle: row.jobTitle,
+        source,
         auto: true,
+        inputHash: persisted.inputHash,
       },
     });
 
+    if (!aiConfig) {
+      await markEvaluationJobCompleted(queueJob.id);
+      return;
+    }
     await logAiCandidateDecision({
       workspaceId,
       candidateId: row.candidateId,
@@ -217,7 +257,15 @@ export async function scheduleAutoScore(
         criteriaCount: result.criteria.length,
       },
     });
+    await markEvaluationJobCompleted(queueJob.id);
   } catch (error) {
+    if (evaluationJobId) {
+      await markEvaluationJobFailed(
+        evaluationJobId,
+        error instanceof Error ? error.message : "Automatic evaluation failed.",
+      );
+    }
     console.error("Auto-score failed for application", applicationId, error);
+    if (options?.jobId) throw error;
   }
 }

@@ -27,6 +27,12 @@ export async function POST(request: NextRequest) {
   const context = await getWorkspaceContextOrNull();
   if (!context) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   await requirePermission("reports:read");
+  if (context.roleKey !== "owner" && context.roleKey !== "admin") {
+    return NextResponse.json(
+      { error: "Only workspace owners and admins can manage scheduled reports." },
+      { status: 403 },
+    );
+  }
   const parsed = createSchema.safeParse(await request.json());
   if (!parsed.success) return NextResponse.json({ error: "Invalid scheduled report." }, { status: 422 });
   const row = await createScheduledReport({ ...parsed.data, workspaceId: context.organization.id, createdById: context.user.id });

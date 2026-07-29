@@ -1,10 +1,9 @@
 "use client";
 
 import { useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileText } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { generateAiEvaluationAction } from "@/features/candidates/ai-actions";
 import { withKeyLock } from "@/lib/client-mutex";
@@ -92,9 +91,11 @@ function ScoreRing({ score, compact = false }: { score: number; compact?: boolea
 function GenerateButton({
   applicationId,
   hasEvaluation,
+  aiConfigured,
 }: {
   applicationId: string;
   hasEvaluation: boolean;
+  aiConfigured: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -108,7 +109,7 @@ function GenerateButton({
         toast.error(result.error);
         return;
       }
-      toast.success("AI evaluation ready");
+      toast.success(aiConfigured ? "AI evaluation ready" : "Automatic evaluation ready");
       (router as { refresh?: () => void }).refresh?.();
     });
   }
@@ -121,7 +122,7 @@ function GenerateButton({
       loading={isPending}
       loadingText="Scoring"
     >
-      {hasEvaluation ? "Regenerate" : "Score with AI"}
+      {hasEvaluation ? "Regenerate" : aiConfigured ? "Score with AI" : "Evaluate automatically"}
     </AiButton>
   );
 }
@@ -152,29 +153,6 @@ export function AiScoreCard({
 }) {
   if (applications.length === 0) return null;
 
-  if (!aiConfigured) {
-    return (
-      <Card>
-        <CardContent className="flex flex-col items-start gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2.5">
-            <span className="flex size-9 items-center justify-center rounded-lg bg-muted">
-              <HarlyAILogoMark className="size-4.5" />
-            </span>
-            <div>
-              <p className="text-sm font-medium">AI candidate scoring</p>
-              <p className="text-sm text-muted-foreground">
-                Connect an AI provider to score candidates against each job.
-              </p>
-            </div>
-          </div>
-          <Button asChild size="sm" variant="outline">
-            <Link href="/settings/ai">Set up AI</Link>
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   const byApplication = new Map(evaluations.map((e) => [e.applicationId, e]));
 
   if (variant === "condensed") {
@@ -192,10 +170,10 @@ export function AiScoreCard({
                       <HarlyAILogoMark className="size-4" />
                     </span>
                     <p className="truncate text-sm text-muted-foreground">
-                      No AI evaluation yet for {application.jobTitle}.
+                      No automatic evaluation yet for {application.jobTitle}.
                     </p>
                   </div>
-                  <GenerateButton applicationId={application.id} hasEvaluation={false} />
+                  <GenerateButton applicationId={application.id} hasEvaluation={false} aiConfigured={aiConfigured} />
                 </CardContent>
               </Card>
             );
@@ -260,13 +238,14 @@ export function AiScoreCard({
                   <div>
                     <p className="text-sm font-medium">{application.jobTitle}</p>
                     <p className="text-sm text-muted-foreground">
-                      No AI evaluation yet for this application.
+                      No automatic evaluation yet for this application.
                     </p>
                   </div>
                 </div>
                 <GenerateButton
                   applicationId={application.id}
                   hasEvaluation={false}
+                  aiConfigured={aiConfigured}
                 />
               </CardContent>
             </Card>
@@ -298,7 +277,7 @@ export function AiScoreCard({
                     </p>
                   </div>
                 </div>
-                <GenerateButton applicationId={application.id} hasEvaluation />
+                    <GenerateButton applicationId={application.id} hasEvaluation aiConfigured={aiConfigured} />
               </div>
 
               {evaluation.criteria.length > 0 ? (
@@ -376,7 +355,7 @@ export function AiScoreCard({
                     const Logo = PROVIDER_LOGO[evaluation.provider as AiProviderId];
                     return Logo ? <Logo className="size-3.5" /> : null;
                   })()}
-                  {formatModelLabel(evaluation.modelId)}
+                  {evaluation.source === "rules" ? "Harly Algorithm · rules-v2" : formatModelLabel(evaluation.modelId)}
                 </Badge>
                 <span className="inline-flex items-center gap-1">
                   <FileText className="size-3.5" />
@@ -387,9 +366,19 @@ export function AiScoreCard({
                 <span>
                   Updated <RelativeTime value={evaluation.updatedAt} />
                 </span>
+                {evaluation.evidenceCoverage != null ? (
+                  <span>Evidence {evaluation.evidenceCoverage}%</span>
+                ) : null}
+                {evaluation.requiresHumanReview ? (
+                  <Badge variant="outline" className="font-normal text-clay">
+                    Human review required
+                  </Badge>
+                ) : null}
               </div>
               <p className="text-xs leading-5 text-muted-foreground">
-                AI guidance only — review the evidence and make the hiring decision yourself. Do not use this score as the sole basis for a decision.
+                {evaluation.source === "rules"
+                  ? "Evaluación automática basada en reglas y evidencia explícita. Revisa la información faltante y decide con criterio humano."
+                  : "AI guidance only — review the evidence and make the hiring decision yourself. Do not use this score as the sole basis for a decision."}
               </p>
             </CardContent>
           </Card>

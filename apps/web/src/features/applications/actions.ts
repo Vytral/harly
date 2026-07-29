@@ -258,6 +258,22 @@ export async function submitApplicationAction(
       "cf-connecting-ip": requestHeaders.get("cf-connecting-ip") ?? "",
     }),
   } as Request);
+
+  // Keep the hosted anonymous form aligned with the public API. CAPTCHA is an
+  // additional control, but it may be disabled per workspace, so it cannot be
+  // the only protection against application spam.
+  try {
+    await enforceRateLimit(`public:apply:${remoteIp}`, {
+      limit: 10,
+      windowMs: 60_000,
+    });
+  } catch {
+    return {
+      status: "error",
+      message: "Too many attempts. Please try again in a minute.",
+    };
+  }
+
   const captchaValid = await verifyCaptchaToken(
     captchaToken,
     jobContext.workspaceId,

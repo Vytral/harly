@@ -8,7 +8,9 @@ import { apiContracts } from "@/server/api/contracts/registry";
 
 describe("GET /api/v1/openapi.json", () => {
   it("generates a valid OpenAPI 3.1 specification with unique operationIds and resolvable refs", async () => {
-    const response = await GET();
+    const response = await GET(
+      new Request("https://harly.example/api/v1/openapi.json"),
+    );
     expect(response.status).toBe(200);
 
     const spec = await response.json();

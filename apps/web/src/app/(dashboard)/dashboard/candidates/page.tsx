@@ -61,6 +61,7 @@ export default async function CandidatesPage({ searchParams }: CandidatesPagePro
       avatarUrl: candidate.avatarUrl,
       avatarFallbackSrcs: candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl),
       inPool: candidate.inPool,
+      hasOpenPrivacyRequest: candidate.hasOpenPrivacyRequest,
       location: candidate.location,
       role: candidate.latestApplication?.jobTitle ?? null,
       department: candidate.latestApplication?.department ?? null,

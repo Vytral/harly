@@ -4,7 +4,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import { PencilIcon } from "@/components/ui/icons/phosphor";

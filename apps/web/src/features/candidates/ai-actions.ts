@@ -19,6 +19,14 @@ import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { logAiCandidateDecision } from "@/lib/ai/governance";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
+import {
+  evaluateCandidateWithRules,
+  RULES_EVALUATION_VERSION,
+} from "@/lib/evaluation/rules";
+import {
+  getPublishedRulesRubric,
+  persistCandidateEvaluation,
+} from "@/features/evaluations/service";
 import { loadResumeText } from "@/lib/resume/load-resume-text";
 import { enforceRateLimit } from "@/server/api/ratelimit";
 import {
@@ -49,7 +57,7 @@ export async function generateAiEvaluationAction(input: {
   } catch {
     return {
       success: false,
-      error: "You do not have permission to run AI evaluations.",
+      error: "You do not have permission to run automatic evaluations.",
     };
   }
   const workspaceId = context.organization.id;
@@ -63,6 +71,8 @@ export async function generateAiEvaluationAction(input: {
       lastName: candidates.lastName,
       headline: candidates.headline,
       location: candidates.location,
+      skills: candidates.skills,
+      experienceYears: candidates.experienceYears,
       jobTitle: jobs.title,
       jobDescription: jobs.description,
       jobRequirements: jobs.requirements,
@@ -96,14 +106,6 @@ export async function generateAiEvaluationAction(input: {
   }
 
   const aiConfig = await getWorkspaceAiConfig(workspaceId);
-  if (!aiConfig) {
-    return {
-      success: false,
-      error: "AI is not configured for this workspace.",
-      reason: "not_configured",
-    };
-  }
-
   const [resume, answerRows] = await Promise.all([
     loadResumeText({ workspaceId, candidateId: row.candidateId }),
     db
@@ -147,49 +149,59 @@ export async function generateAiEvaluationAction(input: {
         location: row.location,
         resumeText: resume.text,
         answers: answerRows,
+        skills: Array.isArray(row.skills) ? (row.skills as string[]) : [],
+        experienceYears: row.experienceYears,
       },
     };
-    const result = await scoreCandidateWithAI(aiConfig, scoreInput);
+    const source = aiConfig ? "ai" : "rules";
+    const publishedRubric = aiConfig
+      ? null
+      : await getPublishedRulesRubric(workspaceId, row.jobId);
+    const rulesEvaluation = aiConfig
+      ? null
+      : evaluateCandidateWithRules({ ...scoreInput, rubric: publishedRubric ?? undefined });
+    const result = aiConfig
+      ? await scoreCandidateWithAI(aiConfig, scoreInput)
+      : rulesEvaluation!.result;
 
-    const values = {
+    const persisted = await persistCandidateEvaluation({
       workspaceId,
       candidateId: row.candidateId,
       applicationId: row.applicationId,
       jobId: row.jobId,
-      provider: aiConfig.provider,
-      modelId: aiConfig.modelId,
-      score: result.score,
-      recommendation: result.recommendation,
-      summary: result.summary,
-      strengths: result.strengths,
-      gaps: result.gaps,
-      criteria: result.criteria,
+      source,
+      provider: aiConfig?.provider ?? "harly",
+      modelId: aiConfig?.modelId ?? RULES_EVALUATION_VERSION,
+      engine: aiConfig ? "provider-ai" : "harly-rules",
+      engineVersion: aiConfig?.modelId ?? RULES_EVALUATION_VERSION,
+      rubricVersion: rulesEvaluation?.rubric.version ?? "ai-generated",
+      rubricSnapshot: rulesEvaluation?.rubric ?? null,
+      result,
+      criterionResults: rulesEvaluation?.criterionResults,
+      evidenceCoverage: rulesEvaluation?.evidenceCoverage,
+      confidence: rulesEvaluation?.confidence,
+      requiresHumanReview: rulesEvaluation?.requiresHumanReview ?? true,
       usedResume: resume.text !== null,
       generatedById: context.user.id,
-    };
-
-    await db
-      .insert(aiEvaluations)
-      .values(values)
-      .onConflictDoUpdate({
-        target: [aiEvaluations.workspaceId, aiEvaluations.applicationId],
-        set: { ...values, updatedAt: new Date() },
-      });
+      inputFingerprintSource: scoreInput,
+    });
 
     await db.insert(activityEvents).values({
       workspaceId,
       actorId: context.user.id,
       entityType: "application",
       entityId: row.applicationId,
-      type: "evaluation.ai_generated",
+      type: source === "ai" ? "evaluation.ai_generated" : "evaluation.rules_generated",
       metadata: {
         score: result.score,
         recommendation: result.recommendation,
         jobTitle: row.jobTitle,
+        source,
+        inputHash: persisted.inputHash,
       },
     });
 
-    await logAiCandidateDecision({
+    if (aiConfig) await logAiCandidateDecision({
       workspaceId,
       candidateId: row.candidateId,
       applicationId: row.applicationId,
@@ -214,11 +226,11 @@ export async function generateAiEvaluationAction(input: {
     revalidatePath(`/dashboard/candidates/${row.candidateId}`);
     return { success: true };
   } catch (error) {
-    console.error("AI evaluation failed", error);
+    console.error("Automatic evaluation failed", error);
     return {
       success: false,
       error:
-        "The AI evaluation failed. Check the provider key in Settings → AI and try again.",
+        "The automatic evaluation failed. Check the evaluation configuration and try again.",
     };
   }
 }
@@ -264,15 +276,6 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
     return {
       success: false,
       error: "Too many bulk scoring requests. Slow down and try again shortly.",
-    };
-  }
-
-  const aiConfig = await getWorkspaceAiConfig(workspaceId);
-  if (!aiConfig) {
-    return {
-      success: false,
-      error: "AI is not configured for this workspace.",
-      reason: "not_configured",
     };
   }
 

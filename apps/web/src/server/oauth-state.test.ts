@@ -143,4 +143,21 @@ describe("oauth state nonce", () => {
     expect(check.ok).toBe(false);
     if (!check.ok) expect(check.error).toMatch(/actor|mismatch/i);
   });
+
+  it("nonce cannot be redeemed by a different integration callback", async () => {
+    const state = await createInstallState({
+      userId: USER_A,
+      workspaceId: WS,
+      provider: "google",
+    });
+
+    const check = await verifyAndConsumeOauthStateNonce({
+      state,
+      userId: USER_A,
+      workspaceId: WS,
+      provider: "slack",
+    });
+    expect(check.ok).toBe(false);
+    if (!check.ok) expect(check.error).toMatch(/provider/i);
+  });
 });

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
 import { Button } from "@/components/ui/button";

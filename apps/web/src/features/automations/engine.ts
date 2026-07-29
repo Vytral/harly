@@ -126,6 +126,15 @@ function extractTriggerIds(payload: Record<string, unknown>): {
   return { applicationId, candidateId, jobId };
 }
 
+function containsAutomatedEvaluationCondition(conditions: Conditions): boolean {
+  function visit(node: Conditions[number]): boolean {
+    if (node.type === "leaf") return node.field.kind === "ai";
+    if (node.type === "not") return visit(node.child);
+    return node.children.some(visit);
+  }
+  return conditions.some(visit);
+}
+
 /**
  * Execute one action: validate config, check the actor's permission, run the
  * handler, and persist a workflow_run_steps row. Returns the step result.
@@ -280,6 +289,27 @@ export async function runWorkflow(
       dryRun: true,
       plannedActions: actions.map((a) => ({ type: a.type, config: a.config })),
     });
+  }
+
+  // Hiring decisions must remain human-owned. A score or recommendation may
+  // prioritize work, but it cannot directly reject an applicant through an
+  // automation. The guard is deliberately runtime-enforced for workflows
+  // created through old APIs or imported JSON as well as the builder.
+  const usesEvaluation = containsAutomatedEvaluationCondition(conditions);
+  const rejectsAutomatically = actions.some(
+    (action) => action.type === "set_status" && action.config.status === "rejected",
+  );
+  if (
+    usesEvaluation &&
+    rejectsAutomatically &&
+    (ctx.ai?.source === "rules" || ctx.ai?.requiresHumanReview === true)
+  ) {
+    return finishRun(
+      run,
+      "failed",
+      conditionResult,
+      "Automated evaluations cannot reject applicants. Human review is required.",
+    );
   }
 
   const actionCtx: ActionContext = {

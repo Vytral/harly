@@ -4,7 +4,7 @@ import type { ComponentType } from "react";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Download, FileSpreadsheet, Upload } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { importAshbyCandidatesAction, importCandidatesAction, importGreenhouseCandidatesAction, importLeverCandidatesAction, importWorkableCandidatesAction } from "@/features/candidates/import/actions";
 import {

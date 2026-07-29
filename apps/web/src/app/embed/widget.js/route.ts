@@ -1,3 +1,6 @@
+import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
+import { withApi } from "@/server/api/respond";
+
 export const runtime = "nodejs";
 
 /**
@@ -472,7 +475,12 @@ const WIDGET = String.raw`(function () {
 })();
 `;
 
-export function GET() {
+export const GET = withApi(async (request) => {
+  await enforceRateLimit(`public:embed-widget:${clientIp(request)}`, {
+    limit: 120,
+    windowMs: 60_000,
+  });
+
   return new Response(WIDGET, {
     headers: {
       "Content-Type": "application/javascript; charset=utf-8",
@@ -480,4 +488,4 @@ export function GET() {
       "Access-Control-Allow-Origin": "*",
     },
   });
-}
+}, { cors: true });

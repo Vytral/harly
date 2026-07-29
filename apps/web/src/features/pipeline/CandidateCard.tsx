@@ -54,9 +54,11 @@ const recommendationLabel: Record<
 function AiFitNote({
   score,
   recommendation,
+  source,
 }: {
   score: number;
   recommendation: PipelineApplication["aiRecommendation"];
+  source: PipelineApplication["evaluationSource"];
 }) {
   const label = recommendation ? recommendationLabel[recommendation] : "Scored";
 
@@ -77,7 +79,7 @@ function AiFitNote({
         </span>
       </TooltipTrigger>
       <TooltipContent>
-        Harly AI rates this a {score}/100 fit. A suggestion, not a decision.
+        {source === "rules" ? "Harly Algorithm" : "Harly AI"} rates this a {score}/100 fit. A suggestion, not a decision.
       </TooltipContent>
     </Tooltip>
   );
@@ -196,6 +198,7 @@ export function CandidateCard({
               <AiFitNote
                 score={application.aiScore}
                 recommendation={application.aiRecommendation}
+                source={application.evaluationSource}
               />
             ) : null}
             <StageAge value={stageStartedAt} />

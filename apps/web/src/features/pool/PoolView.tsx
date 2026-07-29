@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { removeFromPoolAction, bulkRemoveFromPoolAction } from "@/features/pool/actions";
 import type { PoolCandidate } from "@/features/pool/data";

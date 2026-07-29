@@ -13,7 +13,8 @@ import {
   maxResumeFileSize,
 } from "@/lib/storage-validation";
 import { verifyStorageUploadIntent } from "@/lib/storage-upload-intent";
-import { corsPreflight, withCors } from "@/server/api/respond";
+import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
+import { corsPreflight, withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
@@ -94,13 +95,17 @@ async function handleUpload(request: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
-export async function PUT(request: NextRequest) {
-  return withCors(await handleUpload(request));
+async function rateLimitedUpload(request: Request) {
+  await enforceRateLimit(`public:storage-upload:${clientIp(request)}`, {
+    limit: 30,
+    windowMs: 60_000,
+  });
+  return handleUpload(request as NextRequest);
 }
 
-export async function POST(request: NextRequest) {
-  return withCors(await handleUpload(request));
-}
+export const PUT = withApi(rateLimitedUpload, { cors: true });
+
+export const POST = withApi(rateLimitedUpload, { cors: true });
 
 export function OPTIONS() {
   return corsPreflight();

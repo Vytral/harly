@@ -53,6 +53,7 @@ export async function GET(req: NextRequest) {
     state,
     userId,
     workspaceId,
+    provider: "google",
   });
   if (!nonceCheck.ok) {
     return redirectWithError(`${nonceCheck.error} Please try again.`);

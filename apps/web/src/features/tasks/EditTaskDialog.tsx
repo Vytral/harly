@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { Calendar, Flag, Loader2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";

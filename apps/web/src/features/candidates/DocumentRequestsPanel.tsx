@@ -5,7 +5,7 @@ import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { Check, FileText, Plus, ThumbsDown, ThumbsUp, Trash2, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -31,69 +31,35 @@ import {
   type DocumentRequestItem,
 } from "@/features/documents/requests-shared";
 
+import { EmptySection, SectionHeading } from "./candidate-profile/shared";
+
 type ApplicationOption = { id: string; jobTitle: string };
 
-export function DocumentRequestsPanel({
+/** Body-only list of document requests — header/create action live in the parent DocumentsSection card. */
+export function DocumentRequestsList({
   requests,
-  applications,
   canManage,
 }: {
   requests: DocumentRequestItem[];
-  applications: ApplicationOption[];
   canManage: boolean;
 }) {
-  const [requestOpen, setRequestOpen] = useState(false);
-
+  if (requests.length === 0) {
+    return (
+      <EmptySection
+        icon={FileText}
+        title="Nothing requested yet"
+        hint="Request an ID, signed NDA, or any file — the candidate uploads it from their portal."
+      />
+    );
+  }
   return (
-    <div className="space-y-4">
-      <div className="flex items-start justify-between gap-3 rounded-xl border border-primary/20 bg-primary/[0.03] p-4">
-        <div className="flex min-w-0 gap-3">
-          <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
-            <FileText className="size-4" />
-          </span>
-          <div>
-            <p className="text-sm font-medium">Requested documents</p>
-            <p className="mt-1 text-xs leading-5 text-muted-foreground">
-              Ask the candidate to upload documents through their portal. Uploads land in the Documents hub for review.
-            </p>
-          </div>
-        </div>
-        {canManage ? (
-          <Button
-            size="sm"
-            onClick={() => setRequestOpen(true)}
-            disabled={applications.length === 0}
-            title={applications.length === 0 ? "This candidate has no application to attach a request to." : undefined}
-          >
-            <Plus className="size-4" />
-            Request
-          </Button>
-        ) : null}
+    <div className="space-y-2">
+      <SectionHeading>Requested from candidate</SectionHeading>
+      <div className="divide-y rounded-xl border">
+        {requests.map((request) => (
+          <RequestRow key={request.id} request={request} canManage={canManage} />
+        ))}
       </div>
-
-      {requests.length === 0 ? (
-        <div className="rounded-xl border border-dashed px-6 py-10 text-center">
-          <FileText className="mx-auto size-6 text-muted-foreground" />
-          <p className="mt-3 text-sm font-medium">No document requests yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Request an ID, signed NDA, or any file — the candidate uploads it from their portal.
-          </p>
-        </div>
-      ) : (
-        <div className="divide-y rounded-xl border">
-          {requests.map((request) => (
-            <RequestRow key={request.id} request={request} canManage={canManage} />
-          ))}
-        </div>
-      )}
-
-      {canManage ? (
-        <RequestDialog
-          applications={applications}
-          open={requestOpen}
-          onOpenChange={setRequestOpen}
-        />
-      ) : null}
     </div>
   );
 }
@@ -199,7 +165,7 @@ function RequestRow({ request, canManage }: { request: DocumentRequestItem; canM
   );
 }
 
-function RequestDialog({
+export function RequestDialog({
   applications,
   open,
   onOpenChange,

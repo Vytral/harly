@@ -2,7 +2,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 import Link from "next/link";
 
 import { sendCandidateMessage, generateEmailDraftAction } from "@/features/candidates/actions";

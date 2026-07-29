@@ -3,7 +3,7 @@
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { saveOfferSignatureChannelAction } from "@/features/workspaces/esign-settings-actions";
 import type { WorkspaceEsignStatus } from "@/lib/esign/config";

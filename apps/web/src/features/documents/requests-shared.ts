@@ -5,11 +5,11 @@
  */
 
 export const DOCUMENT_REQUEST_STATUS_META = {
-  pending: { label: "Awaiting upload", className: "bg-amber-500/10 text-amber-700" },
-  submitted: { label: "In review", className: "bg-sky-500/10 text-sky-700" },
-  accepted: { label: "Accepted", className: "bg-primary/10 text-primary" },
-  declined: { label: "Declined", className: "bg-destructive/10 text-destructive" },
-  waived: { label: "Waived", className: "bg-muted text-muted-foreground" },
+  pending: { label: "Awaiting upload", className: "bg-status-quiet text-status-quiet-ink" },
+  submitted: { label: "In review", className: "bg-warning-clay/10 text-warning-clay" },
+  accepted: { label: "Accepted", className: "bg-sage-wash text-success-olive" },
+  declined: { label: "Declined", className: "bg-danger-rust/10 text-danger-rust" },
+  waived: { label: "Waived", className: "bg-status-quiet text-status-quiet-ink" },
 } as const;
 
 export type DocumentRequestStatus = keyof typeof DOCUMENT_REQUEST_STATUS_META;

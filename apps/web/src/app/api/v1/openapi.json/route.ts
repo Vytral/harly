@@ -5,7 +5,8 @@ import { API_SCOPES } from "@harly/api";
 
 import { apiContracts } from "@/server/api/contracts/registry";
 import { jsonSchema } from "@/server/api/contracts";
-import { CORS_HEADERS } from "@/server/api/respond";
+import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
+import { withApi } from "@/server/api/respond";
 
 export const runtime = "nodejs";
 
@@ -61,7 +62,12 @@ function responseEntry(
   };
 }
 
-export const GET = () => {
+export const GET = withApi(async (request) => {
+  await enforceRateLimit(`public:openapi:${clientIp(request)}`, {
+    limit: 60,
+    windowMs: 60_000,
+  });
+
   const paths: Record<string, Record<string, unknown>> = {};
   for (const contract of apiContracts) {
     const method = contract.method.toLowerCase();
@@ -131,5 +137,5 @@ export const GET = () => {
     },
   };
 
-  return NextResponse.json(document, { headers: CORS_HEADERS });
-};
+  return NextResponse.json(document);
+}, { cors: true });

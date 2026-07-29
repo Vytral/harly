@@ -9,6 +9,7 @@ import {
   resumeUploadRequestSchema,
 } from "@/lib/storage-validation";
 import { storage, storageProvider } from "@/lib/storage";
+import { privateResumeFileUrl } from "@/lib/resume/storage-key";
 import {
   appendStorageUploadIntent,
   createStorageUploadIntent,
@@ -61,6 +62,7 @@ export async function POST(request: NextRequest) {
   });
   return NextResponse.json({
     ...result,
+    fileUrl: kind === "resume" ? privateResumeFileUrl(key) : result.fileUrl,
     uploadUrl:
       storageProvider === "local"
         ? appendStorageUploadIntent(result.uploadUrl, intent)

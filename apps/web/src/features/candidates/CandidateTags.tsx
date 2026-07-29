@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Plus, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { addCandidateTag, removeCandidateTag } from "@/features/candidates/actions";
 import { Input } from "@/components/ui/input";

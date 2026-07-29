@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
 import { applications, db, jobs, workspaceSettings } from "@harly/db";
@@ -126,6 +126,7 @@ export default async function ApplicationDetailPage({
         eq(applications.id, applicationId),
         eq(applications.candidateId, session.candidateId),
         eq(applications.workspaceId, session.workspaceId),
+        isNull(jobs.deletedAt),
       ),
     )
     .limit(1);

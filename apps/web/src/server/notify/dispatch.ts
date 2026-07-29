@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getWorkspaceChatConfig, type ChatConfig } from "@/lib/notify/config";
+import { getWorkspaceSlackConfig } from "@/lib/slack/config";
 import { getWorkspaceTelegramConfig } from "@/lib/telegram/config";
 import { sendTelegramMessage } from "@/lib/telegram/client";
 import { WEBHOOK_EVENT_LABELS, type WebhookEvent } from "@/server/webhooks/events";
@@ -39,7 +40,6 @@ function describe(event: WebhookEvent, data: Record<string, unknown>): string | 
 
   const who =
     (candidate?.name as string) ||
-    (candidate?.email as string) ||
     (application?.candidateName as string) ||
     null;
   const role =
@@ -129,6 +129,9 @@ export async function notifyChatEvent(
   try {
     const config = await getWorkspaceChatConfig(workspaceId);
     if (!config || !config.events.includes(event)) return;
+    // OAuth Slack is the canonical Slack path. If both configurations exist,
+    // prefer OAuth so one domain event cannot produce duplicate messages.
+    if (config.provider === "slack" && await getWorkspaceSlackConfig(workspaceId)) return;
     const result = await sendChatMessage(config, event, data);
     if (!result.ok) {
       console.error("[notify] chat send failed", {

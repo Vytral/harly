@@ -10,11 +10,11 @@ export const dynamic = "force-dynamic";
 export default async function DocumentsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ documentId?: string }>;
+  searchParams: Promise<{ documentId?: string; candidateId?: string }>;
 }) {
   await requirePagePermission("documents:read");
-  const { documentId } = await searchParams;
+  const { documentId, candidateId } = await searchParams;
   if (documentId) redirect(`/dashboard/documents/${documentId}` as Route);
   const data = await getDocumentHubData();
-  return <DocumentsHub data={data} />;
+  return <DocumentsHub data={data} initialCandidateId={candidateId} />;
 }

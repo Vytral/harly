@@ -2,10 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Download, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { AlertTriangle } from "lucide-react";
+import { toast } from "@/lib/notification-island/toast";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -23,6 +22,12 @@ import {
   fulfilDsarErasureAction,
   reviewDsarRequestAction,
 } from "@/features/workspaces/dsar-actions";
+import {
+  DSAR_STATUS_META,
+  DSAR_TYPE_META,
+  DsarStatusBadge,
+  isOpenDsarStatus,
+} from "@/features/workspaces/dsar-shared";
 import { RelativeTime, ShortDate } from "@/lib/date-hydration";
 import { cn } from "@/lib/utils";
 
@@ -35,32 +40,13 @@ const INVENTORY_ROWS: Array<{ key: keyof PrivacyInventory; label: string }> = [
   { key: "files", label: "Files & résumés" },
   { key: "notes", label: "Internal notes" },
   { key: "scorecards", label: "Scorecards" },
-  { key: "aiEvaluations", label: "AI evaluations" },
+  { key: "aiEvaluations", label: "Automatic evaluations" },
   { key: "offers", label: "Offers" },
+  { key: "activity", label: "Activity timeline events" },
 ];
 
 // GDPR Art. 12(3): respond to a data-subject request within one month.
 const DSAR_DUE_DAYS = 30;
-
-const PRIVACY_TYPE_META = {
-  export: {
-    label: "Data export request",
-    icon: Download,
-    className: "bg-slate-info/10 text-slate-info",
-  },
-  erasure: {
-    label: "Erasure request",
-    icon: Trash2,
-    className: "bg-destructive/10 text-destructive",
-  },
-} as const;
-
-const PRIVACY_STATUS_ACCENT: Record<string, string> = {
-  warning: "bg-clay",
-  info: "bg-slate-info",
-  success: "bg-lime",
-  danger: "bg-destructive",
-};
 
 export function PrivacyRequestCard({
   request,
@@ -115,29 +101,17 @@ export function PrivacyRequestCard({
     });
   }
 
-  const statusLabel =
-    request.status === "processing"
-      ? "In progress"
-      : request.status[0].toUpperCase() + request.status.slice(1);
-
-  const statusBadge = {
-    pending: "warning",
-    processing: "info",
-    completed: "success",
-    denied: "danger",
-  }[request.status] as "warning" | "info" | "success" | "danger";
-
   const dueDate = new Date(
     new Date(request.createdAt).getTime() + DSAR_DUE_DAYS * 86_400_000,
   );
-  const isOpen = request.status === "pending" || request.status === "processing";
+  const isOpen = isOpenDsarStatus(request.status);
   const isErasure = request.type === "erasure";
   const scoped = INVENTORY_ROWS.filter((row) => inventory[row.key] > 0);
   const emailConfirmed =
     confirmEmail.trim().toLowerCase() === candidateEmail.trim().toLowerCase();
 
   const source = request.requestedBy ? "candidate portal" : null;
-  const typeMeta = PRIVACY_TYPE_META[request.type];
+  const typeMeta = DSAR_TYPE_META[request.type];
 
   return (
     <div className="relative max-w-xl overflow-hidden rounded-2xl border border-border/70 bg-card shadow-sm">
@@ -145,7 +119,7 @@ export function PrivacyRequestCard({
         aria-hidden
         className={cn(
           "absolute inset-y-0 left-0 w-1",
-          PRIVACY_STATUS_ACCENT[statusBadge],
+          DSAR_STATUS_META[request.status].accentClassName,
         )}
       />
       <div className="space-y-5 p-5 pl-6">
@@ -161,7 +135,7 @@ export function PrivacyRequestCard({
               <typeMeta.icon className="size-4" strokeWidth={1.8} />
             </span>
             <h3 className="font-medium">{typeMeta.label}</h3>
-            <Badge variant={statusBadge}>{statusLabel}</Badge>
+            <DsarStatusBadge status={request.status} />
           </div>
           <span className="shrink-0 text-[13px] text-muted-foreground">
             <RelativeTime value={request.createdAt} />
@@ -181,7 +155,9 @@ export function PrivacyRequestCard({
               · respond by <ShortDate value={dueDate} />
             </>
           ) : null}
-          {request.processedBy ? <> · reviewed by {request.processedBy}</> : null}
+          {request.processedBy ? (
+            <> · reviewed by {request.processedBy}</>
+          ) : null}
         </p>
 
         {/* Data in scope , scannable number grid, weighted like the warning it is */}
@@ -230,6 +206,12 @@ export function PrivacyRequestCard({
         {request.notes && request.status !== "pending" ? (
           <p className="whitespace-pre-line text-sm text-muted-foreground">
             {request.notes}
+          </p>
+        ) : null}
+        {request.status === "blocked" && request.reviewDueAt ? (
+          <p className="mt-2 text-xs text-muted-foreground">
+            Legal hold review due{" "}
+            {new Date(request.reviewDueAt).toLocaleDateString()}.
           </p>
         ) : null}
 
@@ -318,7 +300,8 @@ export function PrivacyRequestCard({
         ) : null}
 
         {/* Fulfilment , processing erasure: irreversible confirm */}
-        {request.status === "processing" && isErasure ? (
+        {(request.status === "processing" || request.status === "blocked") &&
+        isErasure ? (
           canFulfilErasure ? (
             <Dialog
               onOpenChange={(open) => {

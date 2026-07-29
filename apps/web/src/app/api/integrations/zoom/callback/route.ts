@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
     state,
     userId: session.user.id,
     workspaceId,
+    provider: "zoom",
   });
   if (!nonceCheck.ok) {
     return redirectWithError(`${nonceCheck.error} Please try again.`);

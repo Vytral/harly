@@ -500,6 +500,7 @@ export function PipelineBoard({
     try {
       const result = await updateStageEmailSettings({
         workspaceId: applications[0]?.workspaceId ?? "",
+        jobId: selectedJob.id,
         stageId,
         candidateUpdatesEnabled: enabled,
       });

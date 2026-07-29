@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, isNull, lt, or, sql } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
 import {
@@ -15,6 +15,7 @@ import {
   workspaceSettings,
   type Application,
 } from "@harly/db";
+import { statusForStageName } from "@/features/pipeline/state";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
@@ -142,6 +143,18 @@ export async function listApplicationsForApi(input: {
     .where(
       and(
         eq(applications.workspaceId, input.workspaceId),
+        exists(
+          db
+            .select({ id: jobs.id })
+            .from(jobs)
+            .where(
+              and(
+                eq(jobs.id, applications.jobId),
+                eq(jobs.workspaceId, input.workspaceId),
+                isNull(jobs.deletedAt),
+              ),
+            ),
+        ),
         input.jobId ? eq(applications.jobId, input.jobId) : undefined,
         input.status ? eq(applications.status, input.status) : undefined,
         cursorWhere(input.cursor),
@@ -162,6 +175,18 @@ export async function getApplicationForApi(input: {
       and(
         eq(applications.id, input.applicationId),
         eq(applications.workspaceId, input.workspaceId),
+        exists(
+          db
+            .select({ id: jobs.id })
+            .from(jobs)
+            .where(
+              and(
+                eq(jobs.id, applications.jobId),
+                eq(jobs.workspaceId, input.workspaceId),
+                isNull(jobs.deletedAt),
+              ),
+            ),
+        ),
       ),
     )
     .limit(1);
@@ -381,6 +406,7 @@ export async function moveApplicationStageForApi(input: {
   workspaceId: string;
   applicationId: string;
   toStageId: string;
+  actorId?: string;
   retryOnConflict?: boolean;
 }): Promise<Application> {
   const attemptMove = async (): Promise<Application> => {
@@ -410,7 +436,8 @@ export async function moveApplicationStageForApi(input: {
 
     const fromStageId = application.currentStageId;
 
-    const { updated, persistedEvent } = await db.transaction(async (tx) => {
+    const { updated, persistedEvents } = await db.transaction(async (tx) => {
+      const nextStatus = statusForStageName(stage.name);
       const [next] = await tx
         .select({
           value: sql<number>`coalesce(max(${applications.pipelineOrder}), 0) + 1`,
@@ -428,9 +455,7 @@ export async function moveApplicationStageForApi(input: {
         .set({
           currentStageId: input.toStageId,
           pipelineOrder: next?.value ?? 1,
-          ...(stage.name.toLowerCase() === "rejected"
-            ? { status: "rejected" }
-            : {}),
+          status: nextStatus,
           updatedAt: new Date(),
         })
         .where(
@@ -451,33 +476,62 @@ export async function moveApplicationStageForApi(input: {
         applicationId: input.applicationId,
         fromStageId,
         toStageId: input.toStageId,
-        movedById: null,
+        movedById: input.actorId ?? null,
       });
 
       const updatedApplication = result[0];
       if (!updatedApplication) throw ApiError.conflict("Application changed; retry request.");
-      return {
-        updated: updatedApplication,
-        persistedEvent: await persistDomainEvent(tx, {
+      const events = [
+        await persistDomainEvent(tx, {
           name: "application.stage_changed",
           workspaceId: input.workspaceId,
+          actorId: input.actorId,
           aggregateType: "application",
           aggregateId: input.applicationId,
           payload: {
             application: serializeApplication(updatedApplication),
             fromStageId,
             toStageId: input.toStageId,
+            status: nextStatus,
           },
         }),
+      ];
+      if (
+        application.status !== nextStatus &&
+        (nextStatus === "hired" || nextStatus === "rejected")
+      ) {
+        events.push(
+          await persistDomainEvent(tx, {
+            name: nextStatus === "hired" ? "application.hired" : "application.rejected",
+            workspaceId: input.workspaceId,
+            actorId: input.actorId,
+            aggregateType: "application",
+            aggregateId: input.applicationId,
+            payload: { application: serializeApplication(updatedApplication) },
+          }),
+        );
+      }
+      return {
+        updated: updatedApplication,
+        persistedEvents: events,
       };
     });
 
-    await publishPersistedDomainEvents([persistedEvent]);
+    await publishPersistedDomainEvents(persistedEvents);
     await emitWebhookEvent(input.workspaceId, "application.stage_changed", {
       application: serializeApplication(updated),
       fromStageId,
       toStageId: input.toStageId,
-    }, { skipDomainEvent: true });
+      status: updated.status,
+    }, { actorId: input.actorId, skipDomainEvent: true });
+    if (
+      application.status !== updated.status &&
+      (updated.status === "hired" || updated.status === "rejected")
+    ) {
+      await emitWebhookEvent(input.workspaceId, `application.${updated.status}`, {
+        application: serializeApplication(updated),
+      }, { actorId: input.actorId, skipDomainEvent: true });
+    }
 
     return updated;
   };
@@ -498,7 +552,12 @@ export async function moveApplicationStageForApi(input: {
 }
 
 async function setApplicationStatus(
-  input: { workspaceId: string; applicationId: string; retryOnConflict?: boolean },
+  input: {
+    workspaceId: string;
+    applicationId: string;
+    actorId?: string;
+    retryOnConflict?: boolean;
+  },
   status: "hired" | "rejected",
   event: "application.hired" | "application.rejected",
 ): Promise<Application> {
@@ -516,6 +575,16 @@ async function setApplicationStatus(
         ),
       )
       .limit(1);
+
+    // Repeating the same command is a no-op. Do not create duplicate domain
+    // events, portal notifications, or rejection emails for a logically
+    // idempotent status transition.
+    if (
+      application.status === status &&
+      (!terminalStage || application.currentStageId === terminalStage.id)
+    ) {
+      return application;
+    }
 
     const { updated, persistedEvent } = await db.transaction(async (tx) => {
       const [next] = await tx
@@ -541,7 +610,7 @@ async function setApplicationStatus(
           applicationId: input.applicationId,
           fromStageId: application.currentStageId,
           toStageId: terminalStage.id,
-          movedById: null,
+          movedById: input.actorId ?? null,
         });
       }
       return {
@@ -549,6 +618,7 @@ async function setApplicationStatus(
         persistedEvent: await persistDomainEvent(tx, {
           name: event,
           workspaceId: input.workspaceId,
+          actorId: input.actorId,
           aggregateType: "application",
           aggregateId: input.applicationId,
           payload: { application: serializeApplication(next) },
@@ -559,7 +629,7 @@ async function setApplicationStatus(
     await publishPersistedDomainEvents([persistedEvent]);
     await emitWebhookEvent(input.workspaceId, event, {
       application: serializeApplication(updated),
-    }, { skipDomainEvent: true });
+    }, { actorId: input.actorId, skipDomainEvent: true });
     if (application.status !== status) {
       await notifyApplicationStatusChange({
         workspaceId: input.workspaceId,
@@ -588,6 +658,7 @@ async function setApplicationStatus(
 export function hireApplicationForApi(input: {
   workspaceId: string;
   applicationId: string;
+  actorId?: string;
 }): Promise<Application> {
   return setApplicationStatus(input, "hired", "application.hired");
 }
@@ -595,6 +666,7 @@ export function hireApplicationForApi(input: {
 export function rejectApplicationForApi(input: {
   workspaceId: string;
   applicationId: string;
+  actorId?: string;
 }): Promise<Application> {
   return setApplicationStatus(input, "rejected", "application.rejected");
 }

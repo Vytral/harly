@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { Bold, Italic, Link2, Heading2, AtSign, MessageSquare } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { createCandidateNote } from "@/features/candidates/actions";
 import type { CandidateNoteItem, NoteMention } from "@/features/candidates/data";

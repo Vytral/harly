@@ -87,6 +87,7 @@
     "shiki": "^4.3.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.6.0",
+    "torph": "^0.0.9",
     "unpdf": "^1.6.2",
     "use-stick-to-bottom": "^1.1.6",
     "vaul": "^1.1.2",

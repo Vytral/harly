@@ -21,6 +21,11 @@ import { safeFetchWebhook } from "@/lib/ssrf";
 import { notifyChatEvent } from "@/server/notify/dispatch";
 
 import type { ActionType, WorkflowEvent } from "./schema";
+import {
+  hireApplicationForApi,
+  moveApplicationStageForApi,
+  rejectApplicationForApi,
+} from "@/features/applications/service";
 
 /**
  * The workflow action registry (§2.5). Each entry maps an ActionType to:
@@ -201,30 +206,18 @@ const moveStageHandler: ActionHandler<z.infer<typeof moveStageSchema>> = {
     const stageId = await resolveStageId(ctx.workspaceId, applicationId, input);
     if (!stageId) return { success: false, error: "Target stage not found for this job." };
 
-    // Optimistic concurrency: update only if the stage actually differs.
-    const [updated] = await db
-      .update(applications)
-      .set({ currentStageId: stageId, updatedAt: new Date() })
-      .where(
-        and(
-          eq(applications.workspaceId, ctx.workspaceId),
-          eq(applications.id, applicationId),
-        ),
-      )
-      .returning({ id: applications.id, currentStageId: applications.currentStageId });
-
-    if (!updated) return { success: false, error: "Application not found." };
-
-    await db.insert(activityEvents).values({
+    const updated = await moveApplicationStageForApi({
       workspaceId: ctx.workspaceId,
+      applicationId,
+      toStageId: stageId,
       actorId: ctx.actorUserId,
-      entityType: "application",
-      entityId: applicationId,
-      type: "stage.changed",
-      metadata: { toStageId: stageId, source: "workflow" },
+      retryOnConflict: true,
     });
 
-    return { success: true, data: { applicationId, toStageId: stageId } };
+    return {
+      success: true,
+      data: { applicationId: updated.id, toStageId: updated.currentStageId },
+    };
   },
 };
 
@@ -244,6 +237,20 @@ const setStatusHandler: ActionHandler<z.infer<typeof setStatusSchema>> = {
   async run(input, ctx) {
     const { applicationId } = targetFromTrigger(ctx.triggerPayload);
     if (!applicationId) return { success: false, error: "No application in trigger payload." };
+
+    if (input.status === "hired" || input.status === "rejected") {
+      const updated = await (input.status === "hired"
+        ? hireApplicationForApi
+        : rejectApplicationForApi)({
+        workspaceId: ctx.workspaceId,
+        applicationId,
+        actorId: ctx.actorUserId,
+      });
+      return {
+        success: true,
+        data: { applicationId: updated.id, status: updated.status },
+      };
+    }
 
     const [updated] = await db
       .update(applications)

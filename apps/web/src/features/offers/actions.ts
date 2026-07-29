@@ -543,6 +543,8 @@ export async function decideOffer(input: {
         .select({
           id: applications.id,
           currentStageId: applications.currentStageId,
+          updatedAt: applications.updatedAt,
+          status: applications.status,
         })
         .from(applications)
         .where(
@@ -554,6 +556,11 @@ export async function decideOffer(input: {
         .limit(1);
 
       if (application) {
+        if (application.status !== "active") {
+          throw new Error(
+            "Application changed by another recruiter. Refresh and try again.",
+          );
+        }
         const [hiredStage] = await tx
           .select({ id: jobStages.id })
           .from(jobStages)
@@ -571,11 +578,14 @@ export async function decideOffer(input: {
           .set({
             status: "hired",
             ...(hiredStage ? { currentStageId: hiredStage.id } : {}),
+            updatedAt: new Date(),
           })
           .where(
             and(
               eq(applications.workspaceId, workspaceId),
               eq(applications.id, application.id),
+              eq(applications.status, "active"),
+              eq(applications.updatedAt, application.updatedAt),
             ),
           );
 
@@ -597,6 +607,8 @@ export async function decideOffer(input: {
           type: "application.hired",
           metadata: { via: "offer", offerId: offer.id },
         });
+      } else {
+        throw new Error("Application not found. Refresh and try again.");
       }
     }
 

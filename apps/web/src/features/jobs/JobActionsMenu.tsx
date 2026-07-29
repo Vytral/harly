@@ -9,7 +9,7 @@ import {
   Pencil,
   Trash2,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { restoreJobAction, trashJobAction } from "./actions";
 import { Button } from "@/components/ui/button";

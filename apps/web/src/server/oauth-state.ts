@@ -103,9 +103,10 @@ export async function verifyAndConsumeOauthStateNonce(input: {
   state: string;
   userId: string;
   workspaceId: string;
+  provider?: string;
 }): Promise<OauthStateCheck> {
   const payload = verifySignedState(input.state);
-  if (!payload || typeof payload.n !== "string") {
+  if (!payload || typeof payload.n !== "string" || typeof payload.p !== "string") {
     return { ok: false, error: "Invalid state." };
   }
   const nonce = payload.n;
@@ -118,6 +119,9 @@ export async function verifyAndConsumeOauthStateNonce(input: {
 
   if (!row) {
     return { ok: false, error: "Unknown or already-used state." };
+  }
+  if (row.provider !== payload.p || (input.provider && input.provider !== row.provider)) {
+    return { ok: false, error: "State provider mismatch." };
   }
   if (row.userId !== input.userId || row.workspaceId !== input.workspaceId) {
     log.warn(
@@ -133,7 +137,7 @@ export async function verifyAndConsumeOauthStateNonce(input: {
     return { ok: false, error: "State expired." };
   }
 
-  await db
+  const consumed = await db
     .update(oauthStateNonces)
     .set({ consumedAt: new Date() })
     .where(
@@ -142,7 +146,12 @@ export async function verifyAndConsumeOauthStateNonce(input: {
         // only consume if still unused, so a concurrent replay fails
         isNull(oauthStateNonces.consumedAt),
       ),
-    );
+    )
+    .returning({ id: oauthStateNonces.id });
+
+  if (consumed.length !== 1) {
+    return { ok: false, error: "State already used." };
+  }
 
   return { ok: true, workspaceId: row.workspaceId };
 }

@@ -1,12 +1,14 @@
 "use server";
 
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { createElement } from "react";
-import { and, eq, asc, count, gt } from "drizzle-orm";
+import { and, eq, asc, count, gt, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import {
   applications,
+  applicationStageHistory,
+  activityEvents,
   applicationAnswers,
   applicationQuestions,
   candidateFiles,
@@ -38,6 +40,7 @@ import { createLogger } from "@/lib/logger";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { validatePortalApplication } from "@/features/portal/application-validation";
 import { sendApplicationReceivedEmails } from "@/features/applications/notifications";
+import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 
 const log = createLogger("portal-actions");
 
@@ -73,6 +76,24 @@ export async function sendPortalMagicLinkAction(
     return { ok: false, error: "This candidate portal is unavailable." };
   }
   const workspaceId = workspace.id;
+
+  const requestHeaders = await headers();
+  const ip = clientIp(
+    new Request("http://harly.local", {
+      headers: {
+        "x-forwarded-for": requestHeaders.get("x-forwarded-for") ?? "",
+        "x-real-ip": requestHeaders.get("x-real-ip") ?? "",
+      },
+    }),
+  );
+  try {
+    await enforceRateLimit(`public:portal-magic:${ip}`, {
+      limit: 10,
+      windowMs: 15 * 60_000,
+    });
+  } catch {
+    return { ok: true };
+  }
 
   // Limit delivery per recipient as well as token creation. Replacing an
   // unconsumed token alone does not stop an unauthenticated caller from
@@ -156,6 +177,7 @@ export async function applyToJobAction(
         and(
           eq(jobs.id, input.jobId),
           eq(jobs.workspaceId, session.workspaceId),
+          isNull(jobs.deletedAt),
         ),
       )
       .limit(1);
@@ -228,7 +250,12 @@ export async function applyToJobAction(
     const [firstStage] = await db
       .select({ id: jobStages.id })
       .from(jobStages)
-      .where(eq(jobStages.jobId, input.jobId))
+      .where(
+        and(
+          eq(jobStages.workspaceId, session.workspaceId),
+          eq(jobStages.jobId, input.jobId),
+        ),
+      )
       .orderBy(asc(jobStages.order))
       .limit(1);
 
@@ -236,61 +263,77 @@ export async function applyToJobAction(
       return { ok: false, error: "Job pipeline not configured." };
     }
 
-    const [application] = await db
-      .insert(applications)
-      .values({
-        workspaceId: session.workspaceId,
-        candidateId: session.candidateId,
-        jobId: input.jobId,
-        currentStageId: firstStage.id,
-        status: "active",
-      })
-      .returning({ id: applications.id });
-
-    if (!application) {
-      return { ok: false, error: "Failed to create application." };
-    }
-
-    // Save only the server-validated, workspace-scoped upload key.
-    if (input.resumeKey) {
-      await db.insert(candidateFiles).values({
-        workspaceId: session.workspaceId,
-        candidateId: session.candidateId,
-        fileName: "Resume",
-        fileUrl: `/uploads/${input.resumeKey}`,
-        fileType: "resume",
-      });
-    }
-
-    if (Object.keys(validation.answers).length > 0) {
-      const questionMap = new Map(questions.map((q) => [q.key, q.id]));
-      const answerValues = Object.keys(validation.answers)
-        .map((key) => ({
+    const application = await db.transaction(async (tx) => {
+      const [created] = await tx
+        .insert(applications)
+        .values({
           workspaceId: session.workspaceId,
-          applicationId: application.id,
-          questionId: questionMap.get(key)!,
-          answer: validation.answers[key],
-        }))
-        .filter((a) => a.questionId);
+          candidateId: session.candidateId,
+          jobId: input.jobId,
+          currentStageId: firstStage.id,
+          status: "active",
+        })
+        .returning({ id: applications.id });
 
-      if (answerValues.length > 0) {
-        await db.insert(applicationAnswers).values(answerValues);
-      }
-    }
+      if (!created) throw new Error("Failed to create application.");
 
-    if (input.consentGiven) {
-      const consentText =
-        settings?.consentCheckboxText ??
-        "I agree to the privacy policy and consent to the processing of my personal data.";
-      await db.insert(consentRecords).values({
+      await tx.insert(applicationStageHistory).values({
         workspaceId: session.workspaceId,
-        candidateId: session.candidateId,
-        applicationId: application.id,
-        consentType: "data_processing",
-        consentText,
-        granted: true,
+        applicationId: created.id,
+        fromStageId: null,
+        toStageId: firstStage.id,
+        movedById: null,
       });
-    }
+      await tx.insert(activityEvents).values({
+        workspaceId: session.workspaceId,
+        actorId: null,
+        entityType: "application",
+        entityId: created.id,
+        type: "application.created",
+        metadata: { source: "portal", jobId: input.jobId },
+      });
+
+      if (input.resumeKey) {
+        await tx.insert(candidateFiles).values({
+          workspaceId: session.workspaceId,
+          candidateId: session.candidateId,
+          fileName: "Resume",
+          fileUrl: `/uploads/${input.resumeKey}`,
+          fileType: "resume",
+        });
+      }
+
+      if (Object.keys(validation.answers).length > 0) {
+        const questionMap = new Map(questions.map((q) => [q.key, q.id]));
+        const answerValues = Object.keys(validation.answers)
+          .map((key) => ({
+            workspaceId: session.workspaceId,
+            applicationId: created.id,
+            questionId: questionMap.get(key)!,
+            answer: validation.answers[key],
+          }))
+          .filter((a) => a.questionId);
+        if (answerValues.length > 0) {
+          await tx.insert(applicationAnswers).values(answerValues);
+        }
+      }
+
+      if (input.consentGiven) {
+        const consentText =
+          settings?.consentCheckboxText ??
+          "I agree to the privacy policy and consent to the processing of my personal data.";
+        await tx.insert(consentRecords).values({
+          workspaceId: session.workspaceId,
+          candidateId: session.candidateId,
+          applicationId: created.id,
+          consentType: "data_processing",
+          consentText,
+          granted: true,
+        });
+      }
+
+      return created;
+    });
 
     // Keep portal submissions on the same durable email path as public
     // applications. Email delivery must never turn a successful application

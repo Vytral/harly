@@ -3,8 +3,10 @@ import "server-only";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import {
+  aiEvaluations,
   activityEvents,
   applications,
+  candidateEmbeddings,
   candidateFiles,
   candidates,
   db,
@@ -12,6 +14,7 @@ import {
   documentLegalHolds,
   documentVersions,
   documents,
+  evaluationJobs,
 } from "@harly/db";
 
 import { storage } from "@/lib/storage";
@@ -163,6 +166,11 @@ export async function anonymizeCandidateForRetention(
       if (documentIds.length > 0) {
         await tx.delete(documents).where(inArray(documents.id, documentIds));
       }
+      // Derived artifacts can retain candidate data even after the raw resume
+      // is removed. They are not needed for anonymized historical metrics.
+      await tx.delete(aiEvaluations).where(eq(aiEvaluations.candidateId, candidateId));
+      await tx.delete(candidateEmbeddings).where(eq(candidateEmbeddings.candidateId, candidateId));
+      await tx.delete(evaluationJobs).where(eq(evaluationJobs.candidateId, candidateId));
       await tx.delete(candidateFiles).where(eq(candidateFiles.candidateId, candidateId));
 
       const now = new Date();

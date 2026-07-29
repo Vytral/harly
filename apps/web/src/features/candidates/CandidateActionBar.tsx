@@ -17,7 +17,7 @@ import {
   Trash2,
   UserMinus,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import {
   EditCandidateDrawer,
@@ -43,7 +43,6 @@ import {
 } from "@/features/candidates/ScheduleDrawer";
 import {
   bulkUpdateCandidateStatusAction,
-  restoreCandidateAction,
   trashCandidateAction,
 } from "@/features/candidates/actions";
 import { CandidatePoolButton } from "@/features/pool/CandidatePoolButton";
@@ -262,17 +261,7 @@ function DeleteCandidateButton({
         return;
       }
       setConfirmOpen(false);
-      toast.success(`${name} moved to trash.`, {
-        action: {
-          label: "Undo",
-          onClick: () => {
-            startTransition(async () => {
-              await restoreCandidateAction(candidateId);
-              (router as { refresh?: () => void }).refresh?.();
-            });
-          },
-        },
-      });
+      toast.success(`${name} deleted permanently.`);
       router.push("/dashboard/candidates");
     });
   }

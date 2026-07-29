@@ -3,9 +3,9 @@
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
 import { MoreHorizontal, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
-import { restoreCandidateAction, trashCandidateAction } from "./actions";
+import { trashCandidateAction } from "./actions";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -16,7 +16,7 @@ import {
 
 type CandidateActionsMenuProps = {
   candidateId: string;
-  /** When true, redirect to the candidates list after trashing (used on the detail page). */
+  /** When true, redirect to the candidates list after deletion. */
   redirectAfterTrash?: boolean;
   align?: "start" | "end";
 };
@@ -29,24 +29,14 @@ export function CandidateActionsMenu({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  function moveToTrash() {
+  function deleteCandidate() {
     startTransition(async () => {
       const result = await trashCandidateAction(candidateId);
       if (!result.success) {
-        toast.error(result.error ?? "Could not move the candidate to trash.");
+        toast.error(result.error ?? "Could not delete the candidate.");
         return;
       }
-      toast.success("Candidate moved to trash.", {
-        action: {
-          label: "Undo",
-          onClick: () => {
-            startTransition(async () => {
-              await restoreCandidateAction(candidateId);
-              router.refresh();
-            });
-          },
-        },
-      });
+      toast.success("Candidate deleted permanently.");
       if (redirectAfterTrash) {
         router.replace("/dashboard/candidates");
       }
@@ -69,9 +59,9 @@ export function CandidateActionsMenu({
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align={align} className="w-48">
-        <DropdownMenuItem variant="destructive" onClick={moveToTrash}>
+        <DropdownMenuItem variant="destructive" onClick={deleteCandidate}>
           <Trash2 />
-          Move to trash
+          Delete permanently
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
