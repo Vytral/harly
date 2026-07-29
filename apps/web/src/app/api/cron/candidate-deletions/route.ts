@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
       const result = await permanentlyDeleteCandidate(
         job.candidateId,
         job.requestedBy ?? "system",
+        job.workspaceId,
       );
       if (result.ok) {
         await markCandidateDeletionCompleted(job.id, result.stats, workerId);
