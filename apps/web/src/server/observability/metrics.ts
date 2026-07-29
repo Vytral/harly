@@ -1,7 +1,13 @@
 import "server-only";
 
 import { and, count, eq, isNull, lt, or } from "drizzle-orm";
-import { candidateDeletionJobs, db, mailIdempotencyKeys, sql } from "@harly/db";
+import {
+  candidateDeletionJobs,
+  db,
+  mailIdempotencyKeys,
+  sql,
+  workflowRuns,
+} from "@harly/db";
 
 type Histogram = {
   buckets: number[];
@@ -144,6 +150,33 @@ async function readMailDeliveryQueue() {
   };
 }
 
+async function readWorkflowQueue() {
+  const [byStatus, staleRows] = await Promise.all([
+    db
+      .select({ status: workflowRuns.status, count: count() })
+      .from(workflowRuns)
+      .groupBy(workflowRuns.status),
+    db
+      .select({ count: count() })
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.status, "running"),
+          lt(workflowRuns.startedAt, new Date(Date.now() - 5 * 60_000)),
+        ),
+      ),
+  ]);
+  const counts = new Map(byStatus.map((row) => [row.status, row.count]));
+  return {
+    running: counts.get("running") ?? 0,
+    succeeded: counts.get("succeeded") ?? 0,
+    failed: counts.get("failed") ?? 0,
+    skipped: counts.get("skipped") ?? 0,
+    deadLetter: counts.get("dead_letter") ?? 0,
+    stale: staleRows[0]?.count ?? 0,
+  };
+}
+
 function histogramLines(name: string, target: Histogram) {
   return target.buckets
     .map(
@@ -234,6 +267,23 @@ export async function renderPrometheusMetrics() {
     `harly_mail_idempotency_keys{state="unknown"} ${mailCurrent.unknown}`,
     `harly_mail_idempotency_keys{state="stale"} ${mailCurrent.stale}`,
   );
+  const workflowCurrent = await readWorkflowQueue().catch(() => ({
+    running: 0,
+    succeeded: 0,
+    failed: 0,
+    skipped: 0,
+    deadLetter: 0,
+    stale: 0,
+  }));
+  lines.push(
+    "# TYPE harly_workflow_runs gauge",
+    `harly_workflow_runs{state="running"} ${workflowCurrent.running}`,
+    `harly_workflow_runs{state="succeeded"} ${workflowCurrent.succeeded}`,
+    `harly_workflow_runs{state="failed"} ${workflowCurrent.failed}`,
+    `harly_workflow_runs{state="skipped"} ${workflowCurrent.skipped}`,
+    `harly_workflow_runs{state="dead_letter"} ${workflowCurrent.deadLetter}`,
+    `harly_workflow_runs{state="stale"} ${workflowCurrent.stale}`,
+  );
   return `${lines.join("\n")}\n`;
 }
 
@@ -246,6 +296,7 @@ export async function renderOperationalMetrics() {
     evaluationJobs,
     candidateDeletionJobs,
     mailIdempotencyQueue,
+    workflowRunsQueue,
   ] = await Promise.all([
     sql`select job, status, count(*)::int as count from cron_runs where created_at > now() - interval '24 hours' group by job, status order by job, status`,
     sql`select status, count(*)::int as count from email_outbox group by status`,
@@ -257,6 +308,10 @@ export async function renderOperationalMetrics() {
       .select({ status: mailIdempotencyKeys.status, count: count() })
       .from(mailIdempotencyKeys)
       .groupBy(mailIdempotencyKeys.status),
+    db
+      .select({ status: workflowRuns.status, count: count() })
+      .from(workflowRuns)
+      .groupBy(workflowRuns.status),
   ]);
   return {
     cronRuns,
@@ -266,5 +321,6 @@ export async function renderOperationalMetrics() {
     evaluationJobs,
     candidateDeletionJobs,
     mailIdempotencyKeys: mailIdempotencyQueue,
+    workflowRuns: workflowRunsQueue,
   };
 }

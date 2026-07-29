@@ -11,8 +11,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dbState: {
   workflows: Array<{ id: string; trigger: { filter?: Record<string, unknown> } | null }>;
-  runsInserted: Array<{ workflowId: string; triggerEvent: string; triggerPayload: unknown }>;
-  runningRuns: Array<{ workflowId: string; triggerEvent: string }>;
+  runsInserted: Array<{ workflowId: string; triggerEvent: string; triggerPayload: unknown; sourceEventId?: string | null }>;
+  runningRuns: Array<{ workflowId: string; triggerEvent: string; triggerPayload?: unknown }>;
 } = { workflows: [], runsInserted: [], runningRuns: [] };
 
 vi.mock("@harly/db", () => ({
@@ -32,7 +32,10 @@ vi.mock("@harly/db", () => ({
         thenable.orderBy = () => ({
           limit: () =>
             Promise.resolve(
-              dbState.runningRuns.map((r) => ({ id: `run-${r.workflowId}` })),
+              dbState.runningRuns.map((r) => ({
+                id: `run-${r.workflowId}`,
+                triggerPayload: r.triggerPayload ?? { application: { id: "app-1" } },
+              })),
             ),
         });
         thenable.limit = () => Promise.resolve(dbState.workflows);
@@ -47,6 +50,7 @@ vi.mock("@harly/db", () => ({
           workflowId: row.workflowId as string,
           triggerEvent: row.triggerEvent as string,
           triggerPayload: row.triggerPayload,
+          sourceEventId: row.sourceEventId as string | null | undefined,
         });
         return { returning: () => Promise.resolve([{ id: `run-${row.workflowId}` }]) };
       }),
@@ -145,6 +149,19 @@ describe("workflow dispatcher — FASE 2.3 trigger matching", () => {
     await dispatchWorkflowEvent("ws-1", "application.created", payload);
 
     expect(dbState.runsInserted[0]?.triggerPayload).toEqual(payload);
+  });
+
+  it("persists the source event id for durable deduplication", async () => {
+    dbState.workflows = [{ id: "wf-a", trigger: null }];
+
+    await dispatchWorkflowEvent(
+      "ws-1",
+      "application.created",
+      { application: { id: "app-1" } },
+      { sourceEventId: "event-123" },
+    );
+
+    expect(dbState.runsInserted[0]?.sourceEventId).toBe("event-123");
   });
 });
 

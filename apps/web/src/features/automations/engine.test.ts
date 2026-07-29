@@ -53,7 +53,10 @@ function selectImpl() {
 function insertImpl(rows: Record<string, unknown> | Record<string, unknown>[]) {
   const arr = Array.isArray(rows) ? rows : [rows];
   dbState.steps.push(...arr);
-  return { returning: () => Promise.resolve([{ id: "step-1" }]) };
+  return {
+    returning: () => Promise.resolve([{ id: "step-1" }]),
+    onConflictDoNothing: () => ({ returning: () => Promise.resolve([{ id: "step-1" }]) }),
+  };
 }
 
 vi.mock("@harly/db", () => ({

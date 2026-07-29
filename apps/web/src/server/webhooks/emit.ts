@@ -38,8 +38,9 @@ export async function emitWebhookEvent(
   data: Record<string, unknown>,
   options: EmitWebhookOptions = {},
 ): Promise<void> {
+  let persistedEventId = options.eventId;
   if (!options.skipDomainEvent) {
-    await emitDomainEvent({
+    const persistedEvent = await emitDomainEvent({
       name: event,
       workspaceId,
       actorId: options.actorId,
@@ -67,6 +68,7 @@ export async function emitWebhookEvent(
     }).catch((error) =>
       log.error({ workspaceId, event, error }, "domain event emit failed"),
     );
+    persistedEventId ??= persistedEvent?.eventId;
   }
 
   try {
@@ -141,7 +143,11 @@ export async function emitWebhookEvent(
   // trigger matches this event and kicks off a best-effort run per match
   // (decision D3 — same pattern as the chat notify above). The run row is
   // persisted before execution, so a crash leaves it reclaimable by the cron.
-  void dispatchWorkflowEvent(workspaceId, event, data).catch((err) =>
+  void dispatchWorkflowEvent(workspaceId, event, data, {
+    sourceEventId:
+      persistedEventId ??
+      (typeof data.eventId === "string" ? data.eventId : undefined),
+  }).catch((err) =>
     log.error(err, "dispatchWorkflowEvent failed"),
   );
 }

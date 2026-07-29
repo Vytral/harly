@@ -142,6 +142,7 @@ function StatusBadge({ status }: { status: SerializedRun["status"] }) {
     succeeded: { icon: CheckCircleIcon, cls: "bg-success/10 text-success", label: "OK" },
     failed: { icon: XCircleIcon, cls: "bg-rust/10 text-rust", label: "Failed" },
     skipped: { icon: ProhibitIcon, cls: "bg-kraft text-ink-soft", label: "Skipped" },
+    dead_letter: { icon: XCircleIcon, cls: "bg-rust/20 text-rust", label: "Dead letter" },
   }[status];
   const Icon = map.icon;
   return (

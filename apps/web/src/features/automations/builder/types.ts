@@ -27,7 +27,14 @@ export type SerializedRun = {
   triggerEvent: WorkflowEvent;
   triggerPayload: unknown;
   conditionResult: unknown;
-  status: "running" | "succeeded" | "failed" | "skipped";
+  status: "running" | "succeeded" | "failed" | "skipped" | "dead_letter";
+  sourceEventId: string | null;
+  attemptCount: number;
+  maxAttempts: number;
+  nextAttemptAt: string;
+  lockedAt: string | null;
+  heartbeatAt: string | null;
+  deadLetteredAt: string | null;
   startedAt: string;
   finishedAt: string | null;
   parentRunId: string | null;
@@ -38,6 +45,7 @@ export type SerializedRun = {
 export type SerializedRunStep = {
   id: string;
   runId: string;
+  stepIndex: number | null;
   actionType: string;
   actionInput: unknown;
   result: unknown;

@@ -1,6 +1,7 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { randomUUID } from "node:crypto";
 
 import {
   db,
@@ -34,6 +35,46 @@ import {
 } from "./schema";
 
 const log = createLogger("automations");
+const RUN_LEASE_MS = 5 * 60_000;
+
+async function claimRun(runId: string, workerId: string): Promise<boolean> {
+  const now = new Date();
+  const [claimed] = await db
+    .update(workflowRuns)
+    .set({
+      attemptCount: sql`${workflowRuns.attemptCount} + 1`,
+      lockedAt: now,
+      lockedBy: workerId,
+      heartbeatAt: now,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(workflowRuns.id, runId),
+        eq(workflowRuns.status, "running"),
+        lte(workflowRuns.nextAttemptAt, now),
+        or(
+          isNull(workflowRuns.lockedAt),
+          lt(workflowRuns.lockedAt, new Date(now.getTime() - RUN_LEASE_MS)),
+        ),
+      ),
+    )
+    .returning({ id: workflowRuns.id });
+  return Boolean(claimed);
+}
+
+async function heartbeatRun(runId: string, workerId: string): Promise<void> {
+  await db
+    .update(workflowRuns)
+    .set({ heartbeatAt: new Date(), lockedAt: new Date(), updatedAt: new Date() })
+    .where(
+      and(
+        eq(workflowRuns.id, runId),
+        eq(workflowRuns.status, "running"),
+        eq(workflowRuns.lockedBy, workerId),
+      ),
+    );
+}
 
 /**
  * The workflow engine (§2.5 / §1.3). runWorkflow loads a persisted run, resolves
@@ -146,21 +187,50 @@ async function executeAction(
   workspaceId: string,
   actionCtx: ActionContext,
 ): Promise<ActionResult> {
+  const [completedStep] = await db
+    .select({ status: workflowRunSteps.status, result: workflowRunSteps.result })
+    .from(workflowRunSteps)
+    .where(
+      and(
+        eq(workflowRunSteps.runId, runId),
+        eq(workflowRunSteps.stepIndex, index),
+        eq(workflowRunSteps.status, "succeeded"),
+      ),
+    )
+    .limit(1);
+  if (completedStep) {
+    return {
+      success: true,
+      data:
+        completedStep.result && typeof completedStep.result === "object"
+          ? (completedStep.result as Record<string, unknown>).data as Record<string, unknown> | undefined
+          : undefined,
+    };
+  }
+
   const handler = getActionHandler(action.type);
   const startedAt = new Date();
 
+  const recordStep = async (result: ActionResult, status: "succeeded" | "failed") => {
+    await db
+      .insert(workflowRunSteps)
+      .values({
+        workspaceId,
+        runId,
+        stepIndex: index,
+        actionType: action.type,
+        actionInput: action.config as Record<string, unknown>,
+        result: result as unknown as Record<string, unknown>,
+        status,
+        startedAt,
+        finishedAt: new Date(),
+      })
+      .onConflictDoNothing();
+  };
+
   if (!handler) {
     const result: ActionResult = { success: false, error: `Unknown action type: ${action.type}` };
-    await db.insert(workflowRunSteps).values({
-      workspaceId,
-      runId,
-      actionType: action.type,
-      actionInput: action.config as Record<string, unknown>,
-      result: result as unknown as Record<string, unknown>,
-      status: "failed",
-      startedAt,
-      finishedAt: new Date(),
-    });
+    await recordStep(result, "failed");
     return result;
   }
 
@@ -170,16 +240,7 @@ async function executeAction(
       success: false,
       error: parsed.error.issues[0]?.message ?? "Invalid action config.",
     };
-    await db.insert(workflowRunSteps).values({
-      workspaceId,
-      runId,
-      actionType: action.type,
-      actionInput: action.config as Record<string, unknown>,
-      result: result as unknown as Record<string, unknown>,
-      status: "failed",
-      startedAt,
-      finishedAt: new Date(),
-    });
+    await recordStep(result, "failed");
     return result;
   }
 
@@ -187,16 +248,7 @@ async function executeAction(
     const allowed = await actorHasPermission(workspaceId, actionCtx.actorUserId, handler.requiresPermission);
     if (!allowed.ok) {
       const result: ActionResult = { success: false, error: allowed.reason };
-      await db.insert(workflowRunSteps).values({
-        workspaceId,
-        runId,
-        actionType: action.type,
-        actionInput: action.config as Record<string, unknown>,
-        result: result as unknown as Record<string, unknown>,
-        status: "failed",
-        startedAt,
-        finishedAt: new Date(),
-      });
+      await recordStep(result, "failed");
       return result;
     }
   }
@@ -209,22 +261,14 @@ async function executeAction(
     result = { success: false, error: "Action failed unexpectedly." };
   }
 
-  await db.insert(workflowRunSteps).values({
-    workspaceId,
-    runId,
-    actionType: action.type,
-    actionInput: action.config as Record<string, unknown>,
-    result: result as unknown as Record<string, unknown>,
-    status: result.success ? "succeeded" : "failed",
-    startedAt,
-    finishedAt: new Date(),
-  });
+  await recordStep(result, result.success ? "succeeded" : "failed");
 
   return result;
 }
 
 export type RunWorkflowOptions = {
   dryRun?: boolean;
+  workerId?: string;
 };
 
 /**
@@ -237,6 +281,11 @@ export async function runWorkflow(
   options: RunWorkflowOptions = {},
 ): Promise<RunOutcome> {
   const { dryRun = false } = options;
+  const workerId = options.workerId ?? `workflow-worker:${randomUUID()}`;
+
+  if (!(await claimRun(runId, workerId))) {
+    throw new Error(`Workflow run ${runId} is already leased or not due.`);
+  }
 
   const [run] = await db
     .select()
@@ -276,8 +325,8 @@ export async function runWorkflow(
   const conditionResult: ConditionsResult = evaluateConditions(conditions, ctx);
   await db
     .update(workflowRuns)
-    .set({ conditionResult: conditionResult as unknown as Record<string, unknown> })
-    .where(eq(workflowRuns.id, runId));
+    .set({ conditionResult: conditionResult as unknown as Record<string, unknown>, heartbeatAt: new Date() })
+    .where(and(eq(workflowRuns.id, runId), eq(workflowRuns.lockedBy, workerId)));
 
   if (!conditionResult.matched) {
     return finishRun(run, "skipped", conditionResult, "Conditions did not match.");
@@ -326,6 +375,7 @@ export async function runWorkflow(
   let failedAction: ActionResult | null = null;
   for (let index = 0; index < actions.length; index += 1) {
     const action = actions[index]!;
+    await heartbeatRun(runId, workerId);
     const result = await executeAction(action, index, runId, run.workspaceId, actionCtx);
     if (!result.success && !action.continueOnError) {
       failedAction = result;
@@ -334,9 +384,9 @@ export async function runWorkflow(
   }
 
   if (failedAction) {
-    return finishRun(run, "failed", conditionResult, failedAction.error);
+    return finishRun({ ...run, lockedBy: workerId }, "failed", conditionResult, failedAction.error);
   }
-  return finishRun(run, "succeeded", conditionResult);
+  return finishRun({ ...run, lockedBy: workerId }, "succeeded", conditionResult);
 }
 
 async function finishRun(
@@ -352,13 +402,20 @@ async function finishRun(
       status,
       finishedAt: new Date(),
       error: error ?? null,
+      lockedAt: null,
+      lockedBy: null,
+      heartbeatAt: null,
       ...(extra
         ? { conditionResult: { ...(conditionResult ?? {}), ...extra } as unknown as Record<string, unknown> }
         : conditionResult
           ? { conditionResult: conditionResult as unknown as Record<string, unknown> }
           : {}),
     })
-    .where(eq(workflowRuns.id, run.id))
+    .where(
+      run.lockedBy
+        ? and(eq(workflowRuns.id, run.id), eq(workflowRuns.lockedBy, run.lockedBy))
+        : eq(workflowRuns.id, run.id),
+    )
     .returning();
 
   return { status, run: updated ?? run };
@@ -371,6 +428,7 @@ export async function createRun(input: {
   workflowId: string;
   triggerEvent: WorkflowEvent;
   triggerPayload: Record<string, unknown>;
+  sourceEventId?: string | null;
   parentRunId?: string | null;
 }): Promise<string> {
   const [run] = await db
@@ -380,6 +438,7 @@ export async function createRun(input: {
       workflowId: input.workflowId,
       triggerEvent: input.triggerEvent,
       triggerPayload: input.triggerPayload,
+      sourceEventId: input.sourceEventId ?? null,
       status: "running",
       parentRunId: input.parentRunId ?? null,
     })
