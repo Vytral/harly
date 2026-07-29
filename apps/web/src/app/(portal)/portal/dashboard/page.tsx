@@ -68,7 +68,7 @@ export default async function PortalDashboardPage() {
         websiteUrl: candidates.websiteUrl,
       })
       .from(candidates)
-      .where(and(eq(candidates.id, session.candidateId), eq(candidates.workspaceId, session.workspaceId)))
+      .where(and(eq(candidates.id, session.candidateId), eq(candidates.workspaceId, session.workspaceId), isNull(candidates.deletedAt)))
       .limit(1),
   ]);
 
@@ -87,6 +87,14 @@ export default async function PortalDashboardPage() {
     })
     .from(applications)
     .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, session.workspaceId), isNull(jobs.deletedAt)))
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, applications.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.candidateId, session.candidateId),

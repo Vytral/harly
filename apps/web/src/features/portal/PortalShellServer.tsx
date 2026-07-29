@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
 import { db, organization, candidates, workspaceSettings } from "@harly/db";
@@ -40,7 +40,13 @@ export async function PortalShell({ children }: { children: React.ReactNode }) {
     db
       .select({ avatarUrl: candidates.avatarUrl })
       .from(candidates)
-      .where(eq(candidates.id, session.candidateId))
+      .where(
+        and(
+          eq(candidates.id, session.candidateId),
+          eq(candidates.workspaceId, session.workspaceId),
+          isNull(candidates.deletedAt),
+        ),
+      )
       .limit(1),
     getCandidatePortalUnreadNotificationCount({
       workspaceId: session.workspaceId,

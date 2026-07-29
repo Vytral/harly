@@ -80,6 +80,7 @@ async function notifyApplicationStatusChange(input: {
       and(
         eq(candidates.id, input.application.candidateId),
         eq(candidates.workspaceId, input.workspaceId),
+        isNull(candidates.deletedAt),
       ),
     )
     .limit(1);
@@ -155,6 +156,18 @@ export async function listApplicationsForApi(input: {
               ),
             ),
         ),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, applications.candidateId),
+                eq(candidates.workspaceId, input.workspaceId),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
         input.jobId ? eq(applications.jobId, input.jobId) : undefined,
         input.status ? eq(applications.status, input.status) : undefined,
         cursorWhere(input.cursor),
@@ -184,6 +197,18 @@ export async function getApplicationForApi(input: {
                 eq(jobs.id, applications.jobId),
                 eq(jobs.workspaceId, input.workspaceId),
                 isNull(jobs.deletedAt),
+              ),
+            ),
+        ),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, applications.candidateId),
+                eq(candidates.workspaceId, input.workspaceId),
+                isNull(candidates.deletedAt),
               ),
             ),
         ),

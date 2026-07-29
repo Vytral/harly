@@ -2,7 +2,7 @@ import "server-only";
 
 import { and, desc, eq, isNull } from "drizzle-orm";
 
-import { candidatePortalNotifications, db } from "@harly/db";
+import { candidatePortalNotifications, candidates, db } from "@harly/db";
 
 export type CandidatePortalNotificationItem = {
   id: string;
@@ -30,6 +30,14 @@ export async function listCandidatePortalNotifications(input: {
       createdAt: candidatePortalNotifications.createdAt,
     })
     .from(candidatePortalNotifications)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, candidatePortalNotifications.candidateId),
+        eq(candidates.workspaceId, candidatePortalNotifications.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(candidatePortalNotifications.workspaceId, input.workspaceId),
@@ -57,6 +65,14 @@ export async function getCandidatePortalUnreadNotificationCount(input: {
   const rows = await db
     .select({ id: candidatePortalNotifications.id })
     .from(candidatePortalNotifications)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, candidatePortalNotifications.candidateId),
+        eq(candidates.workspaceId, candidatePortalNotifications.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(candidatePortalNotifications.workspaceId, input.workspaceId),

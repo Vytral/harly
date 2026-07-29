@@ -1,12 +1,13 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, exists, isNull } from "drizzle-orm";
 
 import {
   db,
   applications,
   candidates,
   interviews,
+  jobs,
   workspaceSettings,
 } from "@harly/db";
 import { verifyCalSignature } from "@/lib/cal/client";
@@ -48,6 +49,21 @@ function inferMode(location: string | null): "video" | "phone" | "onsite" {
   if (lower.includes("person") || lower.includes("office") || lower.includes("address"))
     return "onsite";
   return "video";
+}
+
+function activeCandidateForInterview(workspaceId: string) {
+  return exists(
+    db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.id, interviews.candidateId),
+          eq(candidates.workspaceId, workspaceId),
+          isNull(candidates.deletedAt),
+        ),
+      ),
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -98,6 +114,7 @@ export async function POST(request: NextRequest) {
         and(
           eq(interviews.workspaceId, workspaceId),
           eq(interviews.calBookingUid, uid),
+          activeCandidateForInterview(workspaceId),
         ),
       )
       .returning({ id: interviews.id, gcalEventId: interviews.gcalEventId });
@@ -140,6 +157,7 @@ export async function POST(request: NextRequest) {
         and(
           eq(interviews.workspaceId, workspaceId),
           eq(interviews.calBookingUid, uid),
+          activeCandidateForInterview(workspaceId),
         ),
       )
       .returning({ id: interviews.id, gcalEventId: interviews.gcalEventId });
@@ -173,15 +191,24 @@ export async function POST(request: NextRequest) {
           and(
             eq(candidates.workspaceId, workspaceId),
             eq(candidates.email, attendeeEmail.toLowerCase()),
+            isNull(candidates.deletedAt),
           ),
         )
         .limit(1);
       if (candidate) {
         candidateId = candidate.id;
-        const [application] = await db
-          .select({ id: applications.id })
-          .from(applications)
-          .where(
+          const [application] = await db
+            .select({ id: applications.id })
+            .from(applications)
+            .innerJoin(
+              jobs,
+              and(
+                eq(jobs.id, applications.jobId),
+                eq(jobs.workspaceId, workspaceId),
+                isNull(jobs.deletedAt),
+              ),
+            )
+            .where(
             and(
               eq(applications.workspaceId, workspaceId),
               eq(applications.candidateId, candidate.id),
@@ -202,11 +229,22 @@ export async function POST(request: NextRequest) {
   const [application] = await db
     .select({ id: applications.id, jobId: applications.jobId })
     .from(applications)
+    .innerJoin(candidates, eq(candidates.id, applications.candidateId))
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, applications.jobId),
+        eq(jobs.workspaceId, workspaceId),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.id, applicationId),
         eq(applications.workspaceId, workspaceId),
         eq(applications.candidateId, candidateId),
+        eq(candidates.workspaceId, workspaceId),
+        isNull(candidates.deletedAt),
       ),
     )
     .limit(1);

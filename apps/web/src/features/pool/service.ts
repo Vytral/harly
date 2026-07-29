@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, lt, or } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
 import {
@@ -69,6 +69,18 @@ export async function listPoolEntriesForApi(input: {
       and(
         eq(poolEntries.workspaceId, input.workspaceId),
         isNull(poolEntries.removedAt),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, poolEntries.candidateId),
+                eq(candidates.workspaceId, input.workspaceId),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
         input.candidateId
           ? eq(poolEntries.candidateId, input.candidateId)
           : undefined,
@@ -142,6 +154,18 @@ async function getActivePoolEntryForApi(input: {
         eq(poolEntries.workspaceId, input.workspaceId),
         eq(poolEntries.id, input.poolEntryId),
         isNull(poolEntries.removedAt),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, poolEntries.candidateId),
+                eq(candidates.workspaceId, input.workspaceId),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
       ),
     )
     .orderBy(desc(poolEntries.addedAt), desc(poolEntries.id))

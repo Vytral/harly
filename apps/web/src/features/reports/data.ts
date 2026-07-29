@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, gte, isNull, sql } from "drizzle-orm";
+import { and, eq, exists, gte, isNull, sql } from "drizzle-orm";
 
 import {
   applications,
@@ -114,7 +114,12 @@ export async function getHiringEvents(
         isNull(jobs.deletedAt),
       ),
     )
-    .where(eq(applications.workspaceId, workspaceId))
+    .where(
+      and(
+        eq(applications.workspaceId, workspaceId),
+        activeCandidateForApplication(workspaceId),
+      ),
+    )
     .groupBy(applications.id, applications.appliedAt);
 
   return options.since
@@ -140,6 +145,21 @@ const MONTH_LABELS = [
   "Jan", "Feb", "Mar", "Apr", "May", "Jun",
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
+
+function activeCandidateForApplication(workspaceId: string) {
+  return exists(
+    db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.id, applications.candidateId),
+          eq(candidates.workspaceId, workspaceId),
+          isNull(candidates.deletedAt),
+        ),
+      ),
+  );
+}
 
 /** Period-over-period comparison range, in days. Defaults to 30 (current 30d vs prior 30d). */
 export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
@@ -187,7 +207,13 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
           isNull(jobs.deletedAt),
         ),
       )
-      .where(and(eq(applications.workspaceId, ws), gte(applications.appliedAt, since90))),
+      .where(
+        and(
+          eq(applications.workspaceId, ws),
+          activeCandidateForApplication(ws),
+          gte(applications.appliedAt, since90),
+        ),
+      ),
     getHiringEvents(ws),
     db
       .select({
@@ -221,6 +247,7 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
       .where(
         and(
           eq(applications.workspaceId, ws),
+          activeCandidateForApplication(ws),
           gte(applications.appliedAt, new Date(now.getTime() - 365 * DAY_SECONDS * 1000)),
         ),
       )
@@ -253,7 +280,12 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
           isNull(jobs.deletedAt),
         ),
       )
-      .where(eq(applicationStageHistory.workspaceId, ws))
+      .where(
+        and(
+          eq(applicationStageHistory.workspaceId, ws),
+          activeCandidateForApplication(ws),
+        ),
+      )
       .groupBy(jobStages.name),
     db
       .select({
@@ -270,7 +302,12 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
           isNull(jobs.deletedAt),
         ),
       )
-      .where(eq(applications.workspaceId, ws))
+      .where(
+        and(
+          eq(applications.workspaceId, ws),
+          activeCandidateForApplication(ws),
+        ),
+      )
       .groupBy(sql`coalesce(${applications.source}, 'unknown')`),
     // Current vs previous period-over-period comparison (equal-length windows).
     db
@@ -287,7 +324,12 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
           isNull(jobs.deletedAt),
         ),
       )
-      .where(eq(applications.workspaceId, ws)),
+      .where(
+        and(
+          eq(applications.workspaceId, ws),
+          activeCandidateForApplication(ws),
+        ),
+      ),
   ]);
 
   // Summary

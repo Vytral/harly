@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -26,6 +26,7 @@ import {
   moveApplicationStageForApi,
   rejectApplicationForApi,
 } from "@/features/applications/service";
+import { assertTaskReferences } from "@/features/tasks/service";
 
 /**
  * The workflow action registry (§2.5). Each entry maps an ActionType to:
@@ -300,7 +301,13 @@ const addNoteHandler: ActionHandler<z.infer<typeof addNoteSchema>> = {
     const [candidate] = await db
       .select({ id: candidates.id })
       .from(candidates)
-      .where(and(eq(candidates.workspaceId, ctx.workspaceId), eq(candidates.id, candidateId)))
+      .where(
+        and(
+          eq(candidates.workspaceId, ctx.workspaceId),
+          eq(candidates.id, candidateId),
+          isNull(candidates.deletedAt),
+        ),
+      )
       .limit(1);
     if (!candidate) return { success: false, error: "Candidate not found." };
 
@@ -345,6 +352,19 @@ const addTagHandler: ActionHandler<z.infer<typeof addTagSchema>> = {
     const candidateId = input.candidateId ?? targetFromTrigger(ctx.triggerPayload).candidateId;
     if (!candidateId) return { success: false, error: "No candidate in trigger payload." };
 
+    const [candidate] = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.workspaceId, ctx.workspaceId),
+          eq(candidates.id, candidateId),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!candidate) return { success: false, error: "Candidate not found." };
+
     await db
       .insert(candidateTags)
       .values({
@@ -369,6 +389,19 @@ const removeTagHandler: ActionHandler<z.infer<typeof removeTagSchema>> = {
   async run(input, ctx) {
     const candidateId = input.candidateId ?? targetFromTrigger(ctx.triggerPayload).candidateId;
     if (!candidateId) return { success: false, error: "No candidate in trigger payload." };
+
+    const [candidate] = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.workspaceId, ctx.workspaceId),
+          eq(candidates.id, candidateId),
+          isNull(candidates.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!candidate) return { success: false, error: "Candidate not found." };
 
     await db
       .delete(candidateTags)
@@ -406,6 +439,21 @@ const createTaskHandler: ActionHandler<z.infer<typeof createTaskSchema>> = {
   summarize: (input) => `Create task: ${input.title}`,
   async run(input, ctx) {
     const target = targetFromTrigger(ctx.triggerPayload);
+    const candidateId = input.candidateId ?? target.candidateId ?? null;
+    const applicationId = input.applicationId ?? target.applicationId ?? null;
+    const jobId = input.jobId ?? target.jobId ?? null;
+    try {
+      await assertTaskReferences({
+        workspaceId: ctx.workspaceId,
+        ownerId: input.ownerId ?? ctx.actorUserId,
+        links: { candidateId, applicationId, jobId, interviewId: null },
+      });
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Invalid task references.",
+      };
+    }
     const [created] = await db
       .insert(tasks)
       .values({
@@ -416,9 +464,9 @@ const createTaskHandler: ActionHandler<z.infer<typeof createTaskSchema>> = {
         status: "pending",
         dueDate: input.dueDate ? new Date(input.dueDate) : null,
         ownerId: input.ownerId ?? ctx.actorUserId,
-        candidateId: input.candidateId ?? target.candidateId ?? null,
-        applicationId: input.applicationId ?? target.applicationId ?? null,
-        jobId: input.jobId ?? target.jobId ?? null,
+        candidateId,
+        applicationId,
+        jobId,
         createdById: ctx.actorUserId,
       })
       .returning({ id: tasks.id });

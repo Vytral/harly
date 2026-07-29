@@ -220,6 +220,13 @@ export async function createPublicApplication(
         )
         .limit(1);
 
+      if (existingCandidate?.deletedAt) {
+        return {
+          ok: false,
+          message: "This candidate profile is no longer available.",
+        };
+      }
+
       // A duplicate application must be rejected before updating an existing
       // candidate. A retry should never overwrite contact/profile fields just
       // because the application itself is not accepted.

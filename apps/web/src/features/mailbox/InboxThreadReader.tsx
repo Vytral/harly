@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { MailComposer, type ComposerAttachment } from "@/features/mailbox/MailComposer";
 import type { InboxMessage, InboxThread } from "@/features/mailbox/data";
 
-export type ReplyPayload = { body: string; html: string; subject: string; attachments: ComposerAttachment[] };
+export type ReplyPayload = { body: string; html: string; subject: string; attachments: ComposerAttachment[]; idempotencyKey: string };
 
 function renderAttachmentIcon(contentType: string) {
   const className = "size-4 shrink-0 text-muted-foreground";
@@ -262,8 +262,8 @@ export function InboxThreadReader({
                 sendLabel="Send reply"
                 disabled={isPending}
                 onCancel={() => setComposerOpen(false)}
-                onSend={async ({ subject, text, html, attachments }) => {
-                  const result = await onSendReply({ subject, body: text, html, attachments });
+                onSend={async ({ subject, text, html, attachments, idempotencyKey }) => {
+                  const result = await onSendReply({ subject, body: text, html, attachments, idempotencyKey });
                   if (result.ok) setComposerOpen(false);
                   return {
                     ok: result.ok,

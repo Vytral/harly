@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 
 import { db, aiConversations, aiMessages, candidates } from "@harly/db";
 
@@ -76,7 +76,12 @@ export async function getConversationMessages(
       parts: aiMessages.parts,
     })
     .from(aiMessages)
-    .where(eq(aiMessages.conversationId, conversationId))
+    .where(
+      and(
+        eq(aiMessages.conversationId, conversationId),
+        eq(aiMessages.workspaceId, workspace.id),
+      ),
+    )
     .orderBy(asc(aiMessages.createdAt));
 
   return rows.map((r) => ({
@@ -149,6 +154,7 @@ export async function persistConversation(input: PersistInput): Promise<void> {
               and(
                 eq(candidates.id, candidateId),
                 eq(candidates.workspaceId, workspaceId),
+                isNull(candidates.deletedAt),
               ),
             )
             .limit(1)
@@ -190,8 +196,14 @@ export async function persistConversation(input: PersistInput): Promise<void> {
  */
 export async function deleteConversationsForCandidate(
   candidateId: string,
+  workspaceId: string,
 ): Promise<void> {
   await db
     .delete(aiConversations)
-    .where(eq(aiConversations.candidateId, candidateId));
+    .where(
+      and(
+        eq(aiConversations.candidateId, candidateId),
+        eq(aiConversations.workspaceId, workspaceId),
+      ),
+    );
 }

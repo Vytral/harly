@@ -1,6 +1,6 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, exists, isNull } from "drizzle-orm";
 
-import { db, interviews } from "@harly/db";
+import { candidates, db, interviews } from "@harly/db";
 
 import { createMeeting, deleteMeeting } from "./client";
 
@@ -18,6 +18,10 @@ type SyncInterviewToZoomParams = {
 
 export async function syncInterviewToZoom(params: SyncInterviewToZoomParams) {
   try {
+    if (!(await hasActiveInterview(params.workspaceId, params.interviewId))) {
+      return null;
+    }
+
     const result = await createMeeting(params.workspaceId, {
       topic: params.summary,
       type: 2,
@@ -31,7 +35,13 @@ export async function syncInterviewToZoom(params: SyncInterviewToZoomParams) {
         meetLink: result.join_url,
         zoomMeetingId: String(result.id),
       })
-      .where(eq(interviews.id, params.interviewId));
+      .where(
+        and(
+          eq(interviews.id, params.interviewId),
+          eq(interviews.workspaceId, params.workspaceId),
+          activeCandidateForInterview(params.workspaceId),
+        ),
+      );
 
     return { joinUrl: result.join_url, meetingId: String(result.id) };
   } catch (error) {
@@ -46,8 +56,42 @@ type CancelInterviewZoomParams = {
   zoomMeetingId: string;
 };
 
+function activeCandidateForInterview(workspaceId: string) {
+  return exists(
+    db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.id, interviews.candidateId),
+          eq(candidates.workspaceId, workspaceId),
+          isNull(candidates.deletedAt),
+        ),
+      ),
+  );
+}
+
+async function hasActiveInterview(workspaceId: string, interviewId: string) {
+  const [interview] = await db
+    .select({ id: interviews.id })
+    .from(interviews)
+    .where(
+      and(
+        eq(interviews.id, interviewId),
+        eq(interviews.workspaceId, workspaceId),
+        activeCandidateForInterview(workspaceId),
+      ),
+    )
+    .limit(1);
+  return Boolean(interview);
+}
+
 export async function cancelInterviewZoomMeeting(params: CancelInterviewZoomParams) {
   try {
+    if (!(await hasActiveInterview(params.workspaceId, params.interviewId))) {
+      return false;
+    }
+
     await deleteMeeting(params.workspaceId, params.zoomMeetingId);
 
     await db
@@ -57,6 +101,7 @@ export async function cancelInterviewZoomMeeting(params: CancelInterviewZoomPara
         and(
           eq(interviews.id, params.interviewId),
           eq(interviews.workspaceId, params.workspaceId),
+          activeCandidateForInterview(params.workspaceId),
         ),
       );
     return true;

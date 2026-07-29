@@ -509,7 +509,7 @@ export function RecruitingInbox({
                 suggestedReply={suggestedReply?.threadId === thread.id ? suggestedReply.body : null}
                 onBack={handleBackToThreads}
                 onMarkRead={handleMarkRead}
-                onSendReply={(payload) => replyMailboxThreadAction({ threadId: thread.id, body: payload.body, html: payload.html, subject: payload.subject, attachments: payload.attachments.map((file) => ({ filename: file.filename, contentType: file.contentType, base64: file.base64 })) }).then((result) => { if (result.ok) { setAnnouncement(result.sentCopySaved === false ? "Reply sent, but the copy could not be saved in Sent." : "Reply sent."); router.refresh(); } return result; })}
+                onSendReply={(payload) => replyMailboxThreadAction({ threadId: thread.id, body: payload.body, html: payload.html, subject: payload.subject, idempotencyKey: payload.idempotencyKey, attachments: payload.attachments.map((file) => ({ filename: file.filename, contentType: file.contentType, base64: file.base64 })) }).then((result) => { if (result.ok) { setAnnouncement(result.sentCopySaved === false ? "Reply sent, but the copy could not be saved in Sent." : "Reply sent."); router.refresh(); } return result; })}
                 actionsSlot={actionsPanel}
               />
             ) : (

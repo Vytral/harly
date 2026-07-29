@@ -1,8 +1,9 @@
 import "server-only";
 
-import { and, asc, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import {
   applications,
+  candidates,
   db,
   interviews,
   jobStages,
@@ -34,6 +35,21 @@ export async function getPortalApplicationInterviews(applicationId: string) {
   return db
     .select(portalInterviewSelect)
     .from(interviews)
+    .innerJoin(
+      applications,
+      and(
+        eq(applications.id, interviews.applicationId),
+        eq(applications.workspaceId, interviews.workspaceId),
+      ),
+    )
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, interviews.candidateId),
+        eq(candidates.workspaceId, interviews.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .leftJoin(user, eq(user.id, interviews.interviewerId))
     .where(eq(interviews.applicationId, applicationId))
     .orderBy(asc(interviews.scheduledAt));
@@ -65,6 +81,14 @@ export async function getPortalApplicationRow(applicationId: string) {
       workspaceId: applications.workspaceId,
     })
     .from(applications)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, applications.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(eq(applications.id, applicationId))
     .limit(1);
   return row;
@@ -110,6 +134,14 @@ export async function getPortalApplicationOffer(input: {
       createdAt: offers.createdAt,
     })
     .from(offers)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, offers.candidateId),
+        eq(candidates.workspaceId, offers.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(offers.workspaceId, input.workspaceId),

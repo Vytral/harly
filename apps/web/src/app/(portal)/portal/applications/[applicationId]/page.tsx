@@ -4,7 +4,7 @@ import Link from "next/link";
 import { eq, and, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
-import { applications, db, jobs, workspaceSettings } from "@harly/db";
+import { applications, candidates, db, jobs, workspaceSettings } from "@harly/db";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import {
   getPortalApplicationInterviews,
@@ -121,6 +121,14 @@ export default async function ApplicationDetailPage({
     })
     .from(applications)
     .innerJoin(jobs, eq(jobs.id, applications.jobId))
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, applications.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.id, applicationId),

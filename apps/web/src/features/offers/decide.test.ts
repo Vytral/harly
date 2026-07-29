@@ -43,6 +43,7 @@ vi.mock("drizzle-orm", () => ({
   inArray: (a: unknown, b: unknown) => ({ __inArray: [a, b] }),
   desc: (a: unknown) => ({ __desc: a }),
   lt: (a: unknown, b: unknown) => ({ __lt: [a, b] }),
+  isNull: (a: unknown) => ({ __isNull: a }),
 }));
 
 vi.mock("@harly/db", () => {

@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
-import { and, desc, eq, or, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, or, sql } from "drizzle-orm";
 import { ImapFlow } from "imapflow";
 import { simpleParser } from "mailparser";
 import { getLocalUploadPath } from "@harly/storage";
@@ -58,12 +58,41 @@ async function uploadAttachment(workspaceId: string, messageId: string, attachme
 async function findOrCreateThread(input: { workspaceId: string; mailboxId: string; subject: string; participantEmail: string; inReplyTo?: string | null; references?: string | null; receivedAt: Date }) {
   const referenceIds = [input.inReplyTo, ...(input.references ?? "").split(/\s+/)].filter(Boolean) as string[];
   const referenced = referenceIds.length
-    ? await db.select({ threadId: mailMessages.threadId, source: mailThreads.source, conversationId: mailThreads.conversationId }).from(mailMessages).innerJoin(mailThreads, eq(mailThreads.id, mailMessages.threadId)).where(and(eq(mailMessages.workspaceId, input.workspaceId), or(...referenceIds.map((id) => eq(mailMessages.messageId, id))))).limit(1)
+    ? await db
+        .select({ threadId: mailMessages.threadId, source: mailThreads.source, conversationId: mailThreads.conversationId })
+        .from(mailMessages)
+        .innerJoin(
+          mailThreads,
+          and(
+            eq(mailThreads.id, mailMessages.threadId),
+            eq(mailThreads.workspaceId, input.workspaceId),
+          ),
+        )
+        .where(
+          and(
+            eq(mailMessages.workspaceId, input.workspaceId),
+            or(...referenceIds.map((id) => eq(mailMessages.messageId, id))),
+          ),
+        )
+        .limit(1)
     : [];
-  const [candidate] = await db.select({ id: candidates.id }).from(candidates).where(and(eq(candidates.workspaceId, input.workspaceId), eq(candidates.email, input.participantEmail))).limit(1);
+  const [candidate] = await db.select({ id: candidates.id }).from(candidates).where(and(eq(candidates.workspaceId, input.workspaceId), eq(candidates.email, input.participantEmail), isNull(candidates.deletedAt))).limit(1);
   if (referenced[0]?.source === "imap") return referenced[0].threadId;
   const normalizedSubject = normalizeSubject(input.subject);
-  const [matching] = await db.select({ id: mailThreads.id }).from(mailThreads).where(and(eq(mailThreads.mailboxId, input.mailboxId), eq(mailThreads.normalizedSubject, normalizedSubject), eq(mailThreads.participantEmail, input.participantEmail), eq(mailThreads.status, "open"))).orderBy(desc(mailThreads.lastMessageAt)).limit(1);
+  const [matching] = await db
+    .select({ id: mailThreads.id })
+    .from(mailThreads)
+    .where(
+      and(
+        eq(mailThreads.workspaceId, input.workspaceId),
+        eq(mailThreads.mailboxId, input.mailboxId),
+        eq(mailThreads.normalizedSubject, normalizedSubject),
+        eq(mailThreads.participantEmail, input.participantEmail),
+        eq(mailThreads.status, "open"),
+      ),
+    )
+    .orderBy(desc(mailThreads.lastMessageAt))
+    .limit(1);
   if (matching) return matching.id;
   const [thread] = await db.insert(mailThreads).values({ workspaceId: input.workspaceId, mailboxId: input.mailboxId, source: "imap", conversationId: referenced[0]?.conversationId, subject: input.subject || "(No subject)", normalizedSubject, participantEmail: input.participantEmail || null, candidateId: candidate?.id ?? null, lastMessageAt: input.receivedAt }).returning({ id: mailThreads.id });
   return thread.id;
@@ -87,7 +116,26 @@ async function syncMailboxOnce(workspaceId: string): Promise<{ imported: number;
         if (!message.uid || !message.source) continue;
         const parsed = await simpleParser(message.source);
         const messageId = parsed.messageId?.trim() || null;
-        const [duplicate] = await db.select({ id: mailMessages.id }).from(mailMessages).innerJoin(mailThreads, eq(mailThreads.id, mailMessages.threadId)).where(and(eq(mailMessages.workspaceId, workspaceId), or(and(eq(mailThreads.mailboxId, config.id), eq(mailMessages.imapUid, message.uid)), ...(messageId ? [eq(mailMessages.messageId, messageId)] : [])))).limit(1);
+        const [duplicate] = await db
+          .select({ id: mailMessages.id })
+          .from(mailMessages)
+          .innerJoin(
+            mailThreads,
+            and(
+              eq(mailThreads.id, mailMessages.threadId),
+              eq(mailThreads.workspaceId, workspaceId),
+            ),
+          )
+          .where(
+            and(
+              eq(mailMessages.workspaceId, workspaceId),
+              or(
+                and(eq(mailThreads.mailboxId, config.id), eq(mailMessages.imapUid, message.uid)),
+                ...(messageId ? [eq(mailMessages.messageId, messageId)] : []),
+              ),
+            ),
+          )
+          .limit(1);
         if (duplicate) { skipped++; continue; }
         const receivedAt = parsed.date ?? new Date();
         const fromEmail = address(parsed.from) || "unknown@unknown";
@@ -110,7 +158,15 @@ async function syncMailboxOnce(workspaceId: string): Promise<{ imported: number;
           nonFatalError = error instanceof Error ? `Attachment sync failed: ${error.message.slice(0, 900)}` : "Attachment sync failed.";
           log.warn({ messageId: saved.id, error: nonFatalError }, "mail attachment could not be stored; message was kept");
         }
-        await db.update(mailThreads).set({ lastMessageAt: receivedAt, ...(message.flags?.has("\\Seen") ? {} : { unreadCount: sql`${mailThreads.unreadCount} + 1` }) }).where(eq(mailThreads.id, threadId));
+        await db
+          .update(mailThreads)
+          .set({ lastMessageAt: receivedAt, ...(message.flags?.has("\\Seen") ? {} : { unreadCount: sql`${mailThreads.unreadCount} + 1` }) })
+          .where(
+            and(
+              eq(mailThreads.id, threadId),
+              eq(mailThreads.workspaceId, workspaceId),
+            ),
+          );
         imported++;
       }
       await db.update(mailboxes).set({ uidValidity, lastUid: mailbox.uidNext ? mailbox.uidNext - 1 : config.lastUid, lastSyncedAt: new Date(), lastHealthyAt: new Date(), lastError: nonFatalError }).where(eq(mailboxes.id, config.id));

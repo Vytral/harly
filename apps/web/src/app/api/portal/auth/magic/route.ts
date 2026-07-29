@@ -27,10 +27,15 @@ export async function GET(request: NextRequest) {
     redirect("/portal/login?error=no_workspace" as Route);
   }
 
-  const candidateId = await findOrCreateCandidateByEmail(
-    workspaceId,
-    result!.email,
-  );
+  let candidateId: string;
+  try {
+    candidateId = await findOrCreateCandidateByEmail(
+      workspaceId,
+      result!.email,
+    );
+  } catch {
+    redirect("/portal/login?error=unavailable" as Route);
+  }
 
   const ua = request.headers.get("user-agent") ?? undefined;
   const raw = await createPortalSession(candidateId, workspaceId, ua);

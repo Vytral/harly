@@ -1,12 +1,13 @@
 import "server-only";
 
-import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, lt, or } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
 import {
   applications,
   candidates,
   db,
+  jobs,
   jobStages,
   member,
   scorecards,
@@ -63,6 +64,18 @@ export async function listScorecardsForApi(input: {
     .where(
       and(
         eq(scorecards.workspaceId, input.workspaceId),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, scorecards.candidateId),
+                eq(candidates.workspaceId, input.workspaceId),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
         input.candidateId
           ? eq(scorecards.candidateId, input.candidateId)
           : undefined,
@@ -121,6 +134,30 @@ export async function createScorecardForApi(input: {
         and(
           eq(applications.workspaceId, input.workspaceId),
           eq(applications.id, input.values.applicationId),
+          exists(
+            db
+              .select({ id: candidates.id })
+              .from(candidates)
+              .where(
+                and(
+                  eq(candidates.id, applications.candidateId),
+                  eq(candidates.workspaceId, input.workspaceId),
+                  isNull(candidates.deletedAt),
+                ),
+              ),
+          ),
+          exists(
+            db
+              .select({ id: jobs.id })
+              .from(jobs)
+              .where(
+                and(
+                  eq(jobs.id, applications.jobId),
+                  eq(jobs.workspaceId, input.workspaceId),
+                  isNull(jobs.deletedAt),
+                ),
+              ),
+          ),
         ),
       )
       .limit(1);

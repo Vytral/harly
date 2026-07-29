@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   aiEvaluations,
@@ -42,6 +42,7 @@ export async function buildCandidateDataExport(input: {
       and(
         eq(candidates.id, input.candidateId),
         eq(candidates.workspaceId, input.workspaceId),
+        isNull(candidates.deletedAt),
       ),
     )
     .limit(1);
@@ -61,7 +62,10 @@ export async function buildCandidateDataExport(input: {
       updatedAt: applications.updatedAt,
     })
     .from(applications)
-    .innerJoin(jobs, eq(jobs.id, applications.jobId))
+    .innerJoin(
+      jobs,
+      and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, input.workspaceId)),
+    )
     .where(
       and(
         eq(applications.workspaceId, input.workspaceId),

@@ -20,11 +20,25 @@ export type GCalCalendar = { id: string; name: string; primary: boolean };
 
 const RECONNECT_MESSAGE =
   "Google revoked this connection. Disconnect and reconnect Google Calendar.";
+const INVALID_CLIENT_MESSAGE =
+  "Google OAuth credentials are invalid. Update GOOGLE_CLIENT_ID/GOOGLE_CLIENT_SECRET and reconnect Google Calendar.";
 
 /** True when Google rejected the stored refresh token (revoked/expired). */
 function isInvalidGrant(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.includes("invalid_grant");
+}
+
+/** True when the deployment's Google OAuth client configuration is invalid. */
+function isInvalidClient(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("invalid_client");
+}
+
+function googleAuthFailureMessage(err: unknown): string | null {
+  if (isInvalidClient(err)) return INVALID_CLIENT_MESSAGE;
+  if (isInvalidGrant(err)) return RECONNECT_MESSAGE;
+  return null;
 }
 
 /** Wipe the dead token so status flips back to "not connected". */
@@ -64,9 +78,10 @@ export async function listGCalCalendarsAction(): Promise<
     };
   } catch (err) {
     log.error(err, "listGCalCalendarsAction failed");
-    if (isInvalidGrant(err)) {
+    const authFailure = googleAuthFailureMessage(err);
+    if (authFailure) {
       await clearGCalToken(context.organization.id);
-      return { ok: false, error: RECONNECT_MESSAGE };
+      return { ok: false, error: authFailure };
     }
     return {
       ok: false,
@@ -139,9 +154,10 @@ export async function testGCalConnectionAction(): Promise<GCalActionResult> {
     return { ok: true };
   } catch (err) {
     log.error(err, "testGCalConnectionAction failed");
-    if (isInvalidGrant(err)) {
+    const authFailure = googleAuthFailureMessage(err);
+    if (authFailure) {
       await clearGCalToken(context.organization.id);
-      return { ok: false, error: RECONNECT_MESSAGE };
+      return { ok: false, error: authFailure };
     }
     return {
       ok: false,

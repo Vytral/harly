@@ -188,35 +188,70 @@ export async function reconcileCandidateDeletion(input: {
 
   for (const candidate of deleted) {
     const [applicationRows, counts] = await Promise.all([
-      db
-        .select({ id: applications.id })
-        .from(applications)
-        .where(eq(applications.candidateId, candidate.id)),
+        db
+          .select({ id: applications.id })
+          .from(applications)
+          .where(
+            and(
+              eq(applications.workspaceId, input.workspaceId),
+              eq(applications.candidateId, candidate.id),
+            ),
+          ),
       Promise.all([
         db
           .select({ id: candidateFiles.id })
           .from(candidateFiles)
-          .where(eq(candidateFiles.candidateId, candidate.id)),
+          .where(
+            and(
+              eq(candidateFiles.workspaceId, input.workspaceId),
+              eq(candidateFiles.candidateId, candidate.id),
+            ),
+          ),
         db
           .select({ id: candidateNotes.id })
           .from(candidateNotes)
-          .where(eq(candidateNotes.candidateId, candidate.id)),
+          .where(
+            and(
+              eq(candidateNotes.workspaceId, input.workspaceId),
+              eq(candidateNotes.candidateId, candidate.id),
+            ),
+          ),
         db
           .select({ id: candidateTags.id })
           .from(candidateTags)
-          .where(eq(candidateTags.candidateId, candidate.id)),
+          .where(
+            and(
+              eq(candidateTags.workspaceId, input.workspaceId),
+              eq(candidateTags.candidateId, candidate.id),
+            ),
+          ),
         db
           .select({ id: candidatePortalSessions.id })
           .from(candidatePortalSessions)
-          .where(eq(candidatePortalSessions.candidateId, candidate.id)),
+          .where(
+            and(
+              eq(candidatePortalSessions.workspaceId, input.workspaceId),
+              eq(candidatePortalSessions.candidateId, candidate.id),
+            ),
+          ),
         db
           .select({ id: candidatePortalNotifications.id })
           .from(candidatePortalNotifications)
-          .where(eq(candidatePortalNotifications.candidateId, candidate.id)),
+          .where(
+            and(
+              eq(candidatePortalNotifications.workspaceId, input.workspaceId),
+              eq(candidatePortalNotifications.candidateId, candidate.id),
+            ),
+          ),
         db
           .select({ id: candidateMessages.id })
           .from(candidateMessages)
-          .where(eq(candidateMessages.candidateId, candidate.id)),
+          .where(
+            and(
+              eq(candidateMessages.workspaceId, input.workspaceId),
+              eq(candidateMessages.candidateId, candidate.id),
+            ),
+          ),
         db
           .select({ id: activityEvents.id })
           .from(activityEvents)
@@ -238,11 +273,21 @@ export async function reconcileCandidateDeletion(input: {
         db
           .select({ id: mailMessages.id })
           .from(mailMessages)
-          .where(eq(mailMessages.candidateId, candidate.id)),
+          .where(
+            and(
+              eq(mailMessages.workspaceId, input.workspaceId),
+              eq(mailMessages.candidateId, candidate.id),
+            ),
+          ),
         db
           .select({ id: mailThreads.id })
           .from(mailThreads)
-          .where(eq(mailThreads.candidateId, candidate.id)),
+          .where(
+            and(
+              eq(mailThreads.workspaceId, input.workspaceId),
+              eq(mailThreads.candidateId, candidate.id),
+            ),
+          ),
       ]),
     ]);
     const values = [applicationRows, ...counts];

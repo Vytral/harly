@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, lt, or } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, lt, or } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
 import {
@@ -11,6 +11,7 @@ import {
   db,
   emailOutbox,
   jobStages,
+  jobs,
   offers,
   type Offer,
 } from "@harly/db";
@@ -96,6 +97,30 @@ export async function listOffersForApi(input: {
     .where(
       and(
         eq(offers.workspaceId, input.workspaceId),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, offers.candidateId),
+                eq(candidates.workspaceId, input.workspaceId),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
+        exists(
+          db
+            .select({ id: jobs.id })
+            .from(jobs)
+            .where(
+              and(
+                eq(jobs.id, offers.jobId),
+                eq(jobs.workspaceId, input.workspaceId),
+                isNull(jobs.deletedAt),
+              ),
+            ),
+        ),
         input.candidateId
           ? eq(offers.candidateId, input.candidateId)
           : undefined,
@@ -121,6 +146,30 @@ export async function getOfferForApi(input: {
       and(
         eq(offers.workspaceId, input.workspaceId),
         eq(offers.id, input.offerId),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, offers.candidateId),
+                eq(candidates.workspaceId, input.workspaceId),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
+        exists(
+          db
+            .select({ id: jobs.id })
+            .from(jobs)
+            .where(
+              and(
+                eq(jobs.id, offers.jobId),
+                eq(jobs.workspaceId, input.workspaceId),
+                isNull(jobs.deletedAt),
+              ),
+            ),
+        ),
       ),
     )
     .limit(1);
@@ -148,6 +197,30 @@ export async function createOfferForApi(input: {
         and(
           eq(applications.workspaceId, input.workspaceId),
           eq(applications.id, input.applicationId),
+          exists(
+            db
+              .select({ id: candidates.id })
+              .from(candidates)
+              .where(
+                and(
+                  eq(candidates.id, applications.candidateId),
+                  eq(candidates.workspaceId, input.workspaceId),
+                  isNull(candidates.deletedAt),
+                ),
+              ),
+          ),
+          exists(
+            db
+              .select({ id: jobs.id })
+              .from(jobs)
+              .where(
+                and(
+                  eq(jobs.id, applications.jobId),
+                  eq(jobs.workspaceId, input.workspaceId),
+                  isNull(jobs.deletedAt),
+                ),
+              ),
+          ),
         ),
       )
       .limit(1);
@@ -238,6 +311,7 @@ export async function sendOfferForApi(input: {
       and(
         eq(candidates.workspaceId, input.workspaceId),
         eq(candidates.id, offer.candidateId),
+        isNull(candidates.deletedAt),
       ),
     )
     .limit(1);

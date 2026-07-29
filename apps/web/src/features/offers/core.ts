@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import { candidates, db, organization } from "@harly/db";
 
@@ -91,6 +91,7 @@ export async function getOfferRecipient(
       and(
         eq(candidates.id, candidateId),
         eq(candidates.workspaceId, workspaceId),
+        isNull(candidates.deletedAt),
       ),
     )
     .limit(1);

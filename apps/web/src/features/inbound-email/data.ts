@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, isNull, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import {
   applications,
@@ -39,6 +39,9 @@ export async function listInboundReplies(
   limit = 100,
 ): Promise<InboundReplyItem[]> {
   const { organization: workspace } = await getWorkspaceContext();
+  const safeLimit = Number.isFinite(limit)
+    ? Math.min(500, Math.max(1, Math.floor(limit)))
+    : 100;
 
   const rows = await db
     .select({
@@ -55,20 +58,38 @@ export async function listInboundReplies(
       createdAt: mailMessages.receivedAt,
     })
     .from(mailMessages)
-    .innerJoin(candidates, eq(candidates.id, mailMessages.candidateId))
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, mailMessages.candidateId),
+        eq(candidates.workspaceId, workspace.id),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .leftJoin(
       applications,
-      eq(applications.id, mailMessages.applicationId),
+      and(
+        eq(applications.id, mailMessages.applicationId),
+        eq(applications.workspaceId, workspace.id),
+      ),
     )
-    .leftJoin(jobs, eq(jobs.id, applications.jobId))
+    .leftJoin(
+      jobs,
+      and(
+        eq(jobs.id, applications.jobId),
+        eq(jobs.workspaceId, workspace.id),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(mailMessages.workspaceId, workspace.id),
         eq(mailMessages.direction, "inbound"),
+        isNull(candidates.deletedAt),
       ),
     )
     .orderBy(desc(mailMessages.receivedAt))
-    .limit(limit);
+    .limit(safeLimit);
 
   const attachmentRows = rows.length
     ? await db
@@ -112,17 +133,23 @@ export async function listInboundReplies(
 export async function getUnreadInboundReplyCount(): Promise<number> {
   const { organization: workspace } = await getWorkspaceContext();
 
-  const rows = await db
-    .select({ id: mailMessages.id })
+  const [row] = await db
+    .select({ count: sql<number>`count(*)::int` })
     .from(mailMessages)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, mailMessages.candidateId),
+        eq(candidates.workspaceId, workspace.id),
+      ),
+    )
     .where(
       and(
         eq(mailMessages.workspaceId, workspace.id),
         eq(mailMessages.direction, "inbound"),
+        isNull(candidates.deletedAt),
         isNull(mailMessages.readAt),
       ),
-    )
-    .limit(100);
-
-  return rows.length;
+    );
+  return row?.count ?? 0;
 }

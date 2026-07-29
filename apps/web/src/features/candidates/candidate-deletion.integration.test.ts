@@ -87,6 +87,7 @@ import {
   offers,
   organization,
   scorecards,
+  slackDeliveries,
   tasks,
   user,
 } from "@harly/db";
@@ -327,6 +328,16 @@ integration("permanent candidate deletion", () => {
       candidateId,
       title: "Candidate context",
     });
+    await db.insert(slackDeliveries).values({
+      workspaceId: context.workspaceId,
+      event: "candidate.updated",
+      channelId: "C123",
+      payload: {
+        text: "Candidate updated",
+        _harly: { candidateIds: [candidateId], applicationIds: [applicationId] },
+      },
+      status: "pending",
+    });
   });
 
   afterAll(async () => {
@@ -352,6 +363,12 @@ integration("permanent candidate deletion", () => {
         .select({ id: mailIdempotencyKeys.id })
         .from(mailIdempotencyKeys)
         .where(eq(mailIdempotencyKeys.workspaceId, context.workspaceId)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select({ id: slackDeliveries.id })
+        .from(slackDeliveries)
+        .where(eq(slackDeliveries.workspaceId, context.workspaceId)),
     ).toHaveLength(0);
     expect(
       await db

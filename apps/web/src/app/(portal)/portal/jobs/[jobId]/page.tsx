@@ -7,6 +7,7 @@ import type { Route } from "next";
 import {
   applicationQuestions,
   applications,
+  candidates,
   db,
   jobs,
 } from "@harly/db";
@@ -86,6 +87,14 @@ export default async function JobDetailPage({ params }: PageProps) {
   const [existingApp] = await db
     .select({ id: applications.id })
     .from(applications)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, applications.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.candidateId, session.candidateId),

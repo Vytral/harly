@@ -30,13 +30,14 @@ export function InboxNewThreadSheet({
             placeholder={`Write to ${person.name}…`}
             sendLabel="Send email"
             onCancel={() => onOpenChange(false)}
-            onSend={async ({ subject, text, html, attachments }) => {
+            onSend={async ({ subject, text, html, attachments, idempotencyKey }) => {
               const result = await createMailboxThreadAction({
                 candidateId: person.candidateId,
                 toEmail: person.email!,
                 subject,
                 body: text,
                 html,
+                idempotencyKey,
                 attachments: attachments.map((file) => ({ filename: file.filename, contentType: file.contentType, base64: file.base64 })),
               });
               if (result.ok && result.threadId) {

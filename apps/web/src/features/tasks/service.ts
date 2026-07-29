@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, lt, or } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
 import {
@@ -97,6 +97,36 @@ export async function listTasksForApi(input: {
       and(
         eq(tasks.workspaceId, input.workspaceId),
         isNull(tasks.deletedAt),
+        or(
+          isNull(tasks.candidateId),
+          exists(
+            db
+              .select({ id: candidates.id })
+              .from(candidates)
+              .where(
+                and(
+                  eq(candidates.id, tasks.candidateId),
+                  eq(candidates.workspaceId, input.workspaceId),
+                  isNull(candidates.deletedAt),
+                ),
+              ),
+          ),
+        ),
+        or(
+          isNull(tasks.jobId),
+          exists(
+            db
+              .select({ id: jobs.id })
+              .from(jobs)
+              .where(
+                and(
+                  eq(jobs.id, tasks.jobId),
+                  eq(jobs.workspaceId, input.workspaceId),
+                  isNull(jobs.deletedAt),
+                ),
+              ),
+          ),
+        ),
         input.ownerId ? eq(tasks.ownerId, input.ownerId) : undefined,
         input.status ? eq(tasks.status, input.status) : undefined,
         input.priority ? eq(tasks.priority, input.priority) : undefined,
@@ -125,6 +155,36 @@ export async function getTaskForApi(input: {
         eq(tasks.id, input.taskId),
         eq(tasks.workspaceId, input.workspaceId),
         isNull(tasks.deletedAt),
+        or(
+          isNull(tasks.candidateId),
+          exists(
+            db
+              .select({ id: candidates.id })
+              .from(candidates)
+              .where(
+                and(
+                  eq(candidates.id, tasks.candidateId),
+                  eq(candidates.workspaceId, input.workspaceId),
+                  isNull(candidates.deletedAt),
+                ),
+              ),
+          ),
+        ),
+        or(
+          isNull(tasks.jobId),
+          exists(
+            db
+              .select({ id: jobs.id })
+              .from(jobs)
+              .where(
+                and(
+                  eq(jobs.id, tasks.jobId),
+                  eq(jobs.workspaceId, input.workspaceId),
+                  isNull(jobs.deletedAt),
+                ),
+              ),
+          ),
+        ),
       ),
     )
     .limit(1);

@@ -1,8 +1,8 @@
 import "server-only";
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 
-import { db, jobs, offers, user as authUsers } from "@harly/db";
+import { candidates, db, jobs, offers, user as authUsers } from "@harly/db";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import type { CandidateOfferItem } from "./shared";
@@ -33,14 +33,27 @@ export async function listOffersForCandidate(
     })
     .from(offers)
     .innerJoin(
+      candidates,
+      and(
+        eq(candidates.workspaceId, workspace.id),
+        eq(candidates.id, offers.candidateId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
       jobs,
-      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, offers.jobId)),
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, offers.jobId),
+        isNull(jobs.deletedAt),
+      ),
     )
     .leftJoin(authUsers, eq(authUsers.id, offers.createdById))
     .where(
       and(
         eq(offers.workspaceId, workspace.id),
         eq(offers.candidateId, candidateId),
+        isNull(jobs.deletedAt),
       ),
     )
     .orderBy(desc(offers.createdAt));

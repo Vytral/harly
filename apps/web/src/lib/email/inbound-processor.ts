@@ -1,9 +1,15 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { CanonicalInboundEmail } from "@harly/emails";
 
-import { applications, candidates, db, mailAttachments } from "@harly/db";
+import {
+  applications,
+  candidates,
+  db,
+  jobs,
+  mailAttachments,
+} from "@harly/db";
 
 import { createLogger } from "@/lib/logger";
 import { validateMailboxAttachment } from "@/lib/mailbox/attachments";
@@ -95,6 +101,50 @@ async function storeAttachments(
   return stored;
 }
 
+async function persistInboundAttachments(input: {
+  workspaceId: string;
+  applicationId: string;
+  messageId: string;
+  messageKey: string;
+  email: CanonicalInboundEmail;
+}) {
+  if (input.email.attachments.length === 0) return;
+  const attachments = await storeAttachments(
+    input.workspaceId,
+    input.applicationId,
+    input.email,
+    input.messageKey,
+  );
+  if (attachments.length === 0) return;
+
+  // Provider retries can arrive after the canonical message was committed but
+  // before attachment storage finished. Reconcile only missing deterministic
+  // keys so a retry repairs the message without duplicating its attachments.
+  const existing = await db
+    .select({ storageKey: mailAttachments.storageKey })
+    .from(mailAttachments)
+    .where(
+      and(
+        eq(mailAttachments.workspaceId, input.workspaceId),
+        eq(mailAttachments.messageId, input.messageId),
+      ),
+    )
+    .limit(1_000);
+  const existingKeys = new Set(existing.map((attachment) => attachment.storageKey));
+  const missing = attachments.filter(
+    (attachment) => !existingKeys.has(attachment.storageKey),
+  );
+  if (missing.length > 0) {
+    await db.insert(mailAttachments).values(
+      missing.map((attachment) => ({
+        workspaceId: input.workspaceId,
+        messageId: input.messageId,
+        ...attachment,
+      })),
+    );
+  }
+}
+
 /**
  * Route a canonical inbound email to the application it's replying to (via
  * the reply+{token} plus-address Harly puts in Reply-To on outbound sends)
@@ -121,7 +171,22 @@ export async function processInboundEmail(
       candidateLastName: candidates.lastName,
     })
     .from(applications)
-    .innerJoin(candidates, eq(candidates.id, applications.candidateId))
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, applications.candidateId),
+        eq(candidates.workspaceId, workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, applications.jobId),
+        eq(jobs.workspaceId, workspaceId),
+        isNull(jobs.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(applications.inboundToken, token),
@@ -166,25 +231,24 @@ export async function processInboundEmail(
   });
 
   if (inserted.duplicate) {
+    await persistInboundAttachments({
+      workspaceId,
+      applicationId: application.id,
+      messageId: inserted.messageId,
+      messageKey: messageId,
+      email,
+    });
     log.info({ messageId }, "inbound email: duplicate skipped");
     return;
   }
 
-  const attachments = await storeAttachments(
+  await persistInboundAttachments({
     workspaceId,
-    application.id,
+    applicationId: application.id,
+    messageId: inserted.messageId,
+    messageKey: messageId,
     email,
-    messageId,
-  );
-  if (attachments.length > 0) {
-    await db.insert(mailAttachments).values(
-      attachments.map((attachment) => ({
-        workspaceId,
-        messageId: inserted.messageId,
-        ...attachment,
-      })),
-    );
-  }
+  });
 
   // A notification failure must never make a verified provider retry the
   // inbound message. The reply is already durable at this point.

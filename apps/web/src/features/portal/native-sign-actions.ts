@@ -99,6 +99,14 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
       esignSubmissionId: offers.esignSubmissionId,
     })
     .from(offers)
+    .innerJoin(
+      candidates,
+      and(
+        eq(candidates.id, offers.candidateId),
+        eq(candidates.workspaceId, offers.workspaceId),
+        isNull(candidates.deletedAt),
+      ),
+    )
     .where(
       and(
         eq(offers.id, parsed.data.offerId),
@@ -129,7 +137,7 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
   const [candidate] = await db
     .select({ firstName: candidates.firstName, lastName: candidates.lastName, email: candidates.email })
     .from(candidates)
-    .where(and(eq(candidates.id, session.candidateId), eq(candidates.workspaceId, session.workspaceId)))
+    .where(and(eq(candidates.id, session.candidateId), eq(candidates.workspaceId, session.workspaceId), isNull(candidates.deletedAt)))
     .limit(1);
   if (!candidate) return { ok: false, error: "Candidate profile not found." };
   const signerName = [candidate.firstName, candidate.lastName].filter(Boolean).join(" ") || candidate.email || "Candidate";

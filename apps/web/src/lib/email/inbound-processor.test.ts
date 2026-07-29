@@ -34,6 +34,11 @@ vi.mock("@harly/db", () => ({
     firstName: "candidates.firstName",
     lastName: "candidates.lastName",
   },
+  jobs: {
+    id: "jobs.id",
+    workspaceId: "jobs.workspaceId",
+    deletedAt: "jobs.deletedAt",
+  },
   candidateMessages: {
     id: "candidateMessages.id",
     workspaceId: "candidateMessages.workspaceId",
@@ -60,7 +65,11 @@ vi.mock("@harly/db", () => ({
     messageId: "mailMessages.messageId",
     createdAt: "mailMessages.createdAt",
   },
-  mailAttachments: {},
+  mailAttachments: {
+    workspaceId: "mailAttachments.workspaceId",
+    messageId: "mailAttachments.messageId",
+    storageKey: "mailAttachments.storageKey",
+  },
   db: {
     select: vi.fn(mocks.selectChain),
     insert: vi.fn(() => ({
@@ -102,6 +111,7 @@ vi.mock("@/server/notify/inbox", () => ({
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 import { db } from "@harly/db";
+import { storage } from "@/lib/storage";
 import { processInboundEmail } from "./inbound-processor";
 
 const email = {
@@ -120,6 +130,7 @@ describe("processInboundEmail", () => {
     mocks.values.mockClear();
     mocks.notifyInboundEmail.mockClear();
     vi.mocked(db.insert).mockClear();
+    vi.mocked(storage.getPresignedUploadUrl).mockReset();
   });
 
   it("records a routed reply and alerts the hiring team", async () => {
@@ -167,6 +178,42 @@ describe("processInboundEmail", () => {
     await processInboundEmail(email, "workspace-1");
 
     expect(mocks.notifyInboundEmail).not.toHaveBeenCalled();
+  });
+
+  it("repairs attachments when the provider retries after message commit", async () => {
+    mocks.selectResults.push(
+      [{ id: "application-1", candidateId: "candidate-1", jobId: "job-1" }],
+      [{ id: "message-1", threadId: "thread-1" }],
+      [],
+    );
+    const { storage } = await import("@/lib/storage");
+    vi.mocked(storage.getPresignedUploadUrl).mockResolvedValue({
+      uploadUrl: "https://storage.test/inbound",
+      fileUrl: "https://storage.test/inbound/file.pdf",
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true }));
+
+    await processInboundEmail(
+      {
+        ...email,
+        attachments: [
+          {
+            filename: "resume.pdf",
+            contentType: "application/pdf",
+            content: Buffer.from("resume"),
+          },
+        ],
+      },
+      "workspace-1",
+    );
+
+    expect(mocks.values).toHaveBeenCalledWith([
+      expect.objectContaining({
+        workspaceId: "workspace-1",
+        messageId: "message-1",
+        storageKey: expect.stringContaining("provider-message-1"),
+      }),
+    ]);
   });
 
   it("resolves the existing canonical thread when messageId is new", async () => {

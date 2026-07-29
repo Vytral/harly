@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, between, desc, eq, gte, inArray } from "drizzle-orm";
+import { and, asc, between, desc, eq, gte, inArray, isNull } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -46,8 +46,20 @@ export async function listCandidateInterviews(
     })
     .from(interviews)
     .innerJoin(
+      candidates,
+      and(
+        eq(candidates.workspaceId, workspace.id),
+        eq(candidates.id, interviews.candidateId),
+        isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
       jobs,
-      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, interviews.jobId)),
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, interviews.jobId),
+        isNull(jobs.deletedAt),
+      ),
     )
     .leftJoin(authUsers, eq(authUsers.id, interviews.interviewerId))
     .where(
@@ -160,11 +172,16 @@ export async function listUpcomingInterviews(): Promise<
       and(
         eq(candidates.workspaceId, workspace.id),
         eq(candidates.id, interviews.candidateId),
+        isNull(candidates.deletedAt),
       ),
     )
     .innerJoin(
       jobs,
-      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, interviews.jobId)),
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, interviews.jobId),
+        isNull(jobs.deletedAt),
+      ),
     )
     .leftJoin(authUsers, eq(authUsers.id, interviews.interviewerId))
     .where(
@@ -239,11 +256,16 @@ export async function listInterviewsForRange(
       and(
         eq(candidates.workspaceId, workspace.id),
         eq(candidates.id, interviews.candidateId),
+        isNull(candidates.deletedAt),
       ),
     )
     .innerJoin(
       jobs,
-      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, interviews.jobId)),
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, interviews.jobId),
+        isNull(jobs.deletedAt),
+      ),
     )
     .leftJoin(authUsers, eq(authUsers.id, interviews.interviewerId))
     .where(
