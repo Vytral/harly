@@ -156,6 +156,7 @@ jobs:
       HARLY_SETUP_SECRET: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
       HARLY_INITIAL_ADMIN_EMAIL: owner@example.com
       HARLY_DISABLE_WEBPACK_BUILD_WORKER: "1"
+      NODE_OPTIONS: --max-old-space-size=4096
       NEXT_TELEMETRY_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
