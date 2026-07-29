@@ -1,0 +1,80 @@
+---
+title: "Interviews and scheduling"
+description: "Schedule interviews with calendars and video, run structured scorecards, and recover from provider outages."
+---
+
+Harly schedules interviews against a connected calendar and attaches a video
+link when the interview needs one. The interview is saved in Harly first;
+calendar and video sync happen in the background, so a provider outage never
+loses the interview.
+
+## Before you schedule
+
+Connect the providers you use in **Settings → Integrations**:
+
+- A calendar — [Google Calendar](/integrations/google-calendar) or
+  [Microsoft Outlook](/integrations/microsoft).
+- A video provider — [Zoom, Teams, Meet, or Jitsi](/integrations/video).
+
+Without a calendar connection, Harly still records the interview; it just
+cannot create the external event.
+
+## Schedule an interview
+
+<Steps>
+  <Step title="Open the application">
+    From the [pipeline](/product/candidates-and-pipeline) or candidate record,
+    choose **Schedule interview**.
+  </Step>
+  <Step title="Set the details">
+    Add the attendees, date and time, timezone, and duration. Pick the interview
+    type or template if your workspace uses them.
+  </Step>
+  <Step title="Choose a video provider">
+    Select a provider to attach a meeting link, or enter a location for an
+    on-site interview. When several providers are connected, Harly prefers Zoom,
+    then Teams, then Meet, then Jitsi.
+  </Step>
+  <Step title="Confirm">
+    Save the interview. Harly writes the calendar event, invites attendees, and
+    adds the video link. The interview appears under **Calendars** and on the
+    application.
+  </Step>
+</Steps>
+
+## Reschedule and cancel
+
+Editing or canceling an interview updates the calendar event and the video
+meeting. If the provider is unavailable, Harly keeps the local change and shows
+a sync warning you can retry — do not create a second event to work around a
+warning.
+
+<Warning>
+  If a calendar shows `invalid_grant`, the refresh token was revoked or expired.
+  Reconnect the account in **Settings → Integrations**; existing interviews stay
+  safe and can be synced again.
+</Warning>
+
+## Scorecards
+
+A scorecard turns interview feedback into comparable, structured input. Assign a
+scorecard to an interviewer, and they submit ratings and notes against defined
+criteria instead of free-form impressions.
+
+- Request a scorecard when the interview is completed.
+- Compare scorecards side by side before a stage decision.
+- Treat scores as one signal; a human owns the hiring decision.
+
+See [tasks and scorecards](/product/tasks-and-scorecards) for the feedback
+workflow.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Video providers" icon="video" href="/integrations/video">
+    Connect Zoom, Teams, Meet, or Jitsi.
+  </Card>
+  <Card title="Offers and signatures" icon="file-signature" href="/product/offers-and-signatures">
+    Close the loop after the final interview.
+  </Card>
+</CardGroup>

@@ -1,0 +1,138 @@
+---
+title: "Candidate portal"
+description: "Give candidates a secure place to track applications, upload documents, sign in with magic link or OAuth, and manage their data."
+---
+
+The candidate portal is a self-service area where applicants sign in to see
+their applications, respond to document requests, and manage their personal
+data. It is optional and disabled until you enable it.
+
+## Enable the portal
+
+<Steps>
+  <Step title="Open portal settings">
+    Go to **Settings → Candidate portal** and toggle **Enable portal** on.
+  </Step>
+  <Step title="Choose sign-in methods">
+    Select which methods candidates can use to authenticate:
+
+    | Method | Notes |
+    | --- | --- |
+    | **Magic link** | One-time email link, no password. Requires outbound email configured. |
+    | **Google OAuth** | Candidates sign in with their Google account. |
+    | **GitHub OAuth** | For technical roles where GitHub accounts are common. |
+    | **LinkedIn OAuth** | For roles where candidates are likely to have LinkedIn. |
+
+    At least one method must be enabled. Magic link works without OAuth setup.
+  </Step>
+  <Step title="Test the experience">
+    Submit a test application from the career page, then open the portal at
+    `https://hiring.example.com/portal` and sign in with the test email address.
+    Confirm you can see the application and its status.
+  </Step>
+</Steps>
+
+<Note>
+  Portal sessions are issued to the candidate, not to a workspace member. A
+  candidate only ever sees their own applications, documents, and data. Internal
+  notes, scorecards, and other candidates are never exposed.
+</Note>
+
+## What candidates can do
+
+| Action | Where in the portal |
+| --- | --- |
+| View application status | Applications list |
+| See which stage an application is in | Application detail |
+| Upload requested documents | Document requests section |
+| Download their uploaded documents | Documents section |
+| Request data export | Privacy controls |
+| Request account deletion | Privacy controls |
+
+## Privacy controls for candidates
+
+The portal exposes the privacy controls you have configured in
+**Settings → Legal**. Candidates can request a copy of their data or request
+deletion. Your team receives these requests and must process them according to
+your privacy policy. See [privacy](/security/privacy) for the operational
+workflow.
+
+## OAuth provider setup
+
+Candidates sign in through the portal's own auth endpoints, separate from
+workspace member auth. Register the portal-specific callbacks in each provider.
+
+### Google
+
+1. Follow the [Google Calendar OAuth setup](/integrations/google-calendar) to
+   create or reuse an OAuth client.
+2. Add the portal redirect URI to the allowed callbacks in Google Cloud Console:
+
+   ```text
+   https://hiring.example.com/api/portal/auth/callback/google
+   ```
+
+3. The same `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` used for calendar
+   sync also enables Google sign-in for the portal.
+
+### GitHub
+
+1. Create a GitHub OAuth app at
+   [github.com/settings/developers](https://github.com/settings/developers).
+2. Set the authorization callback URL to:
+
+   ```text
+   https://hiring.example.com/api/portal/auth/callback/github
+   ```
+
+3. Add the credentials to the server environment and restart Harly:
+
+   ```dotenv
+   GITHUB_CLIENT_ID=<your-github-client-id>
+   GITHUB_CLIENT_SECRET=<your-github-client-secret>
+   ```
+
+### LinkedIn
+
+1. Create a LinkedIn OAuth app at the
+   [LinkedIn Developer portal](https://www.linkedin.com/developers/).
+2. Set the authorized redirect URL to:
+
+   ```text
+   https://hiring.example.com/api/portal/auth/callback/linkedin
+   ```
+
+3. Add the credentials to the server environment and restart Harly:
+
+   ```dotenv
+   LINKEDIN_CLIENT_ID=<your-linkedin-client-id>
+   LINKEDIN_CLIENT_SECRET=<your-linkedin-client-secret>
+   ```
+
+## Common issues
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| Portal shows blank page | Portal not enabled | Toggle on in Settings → Candidate portal |
+| Magic link email not received | Outbound email not configured | Configure sender in [email settings](/integrations/email) |
+| Google sign-in fails with `redirect_uri_mismatch` | Portal callback URI not registered | Register `${HARLY_URL}/api/portal/auth/callback/google` in Google Cloud Console |
+| GitHub sign-in fails | Callback URI wrong | Register `${HARLY_URL}/api/portal/auth/callback/github` |
+| Candidate sees "no applications" | Applied with a different email | Candidate must sign in with same email used to apply |
+| OAuth ID and secret must be configured together | Only one of ID/secret set | Set both env vars and restart |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Documents" icon="folder" href="/product/documents">
+    Request files candidates upload in the portal.
+  </Card>
+  <Card title="Privacy" icon="shield" href="/security/privacy">
+    Configure retention, export, and deletion workflows.
+  </Card>
+  <Card title="Email" icon="envelope" href="/integrations/email">
+    Set up the sender identity for magic link emails.
+  </Card>
+  <Card title="Career page" icon="globe" href="/product/career-page">
+    The public job board candidates apply from.
+  </Card>
+</CardGroup>

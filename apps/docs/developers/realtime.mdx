@@ -42,8 +42,84 @@ global `router.refresh()` after every event.
   the affected record from the authenticated API after invalidation.
 </Warning>
 
+## Event types
+
+The SSE stream emits these event types:
+
+| Event type | Payload | When |
+| --- | --- | --- |
+| `application.created` | Application ID, job ID, candidate ID | New application submitted |
+| `application.stage_changed` | Application ID, from stage, to stage | Application moved in pipeline |
+| `application.hired` | Application ID, candidate ID | Application marked as hired |
+| `application.rejected` | Application ID, candidate ID | Application rejected |
+| `candidate.created` | Candidate ID | New candidate profile created |
+| `candidate.updated` | Candidate ID, changed fields | Candidate profile edited |
+| `interview.scheduled` | Interview ID, application ID | Interview created |
+| `interview.canceled` | Interview ID | Interview canceled |
+| `interview.completed` | Interview ID | Interview marked complete |
+| `interview.rescheduled` | Interview ID, old time, new time | Interview time changed |
+| `job.published` | Job ID | Job made public |
+| `candidate.viewed` | Candidate ID, viewer ID | Candidate profile opened (ephemeral) |
+
+Ephemeral events like `candidate.viewed` are not retained in the domain
+event outbox and cannot be replayed.
+
+## Reliability model
+
+- PostgreSQL is authoritative.
+- Durable domain events support automation, audit, and webhooks.
+- Realtime events carry event type, event version, schema version, workspace,
+  sequence, and a compact payload.
+- The client reconnects automatically and performs a focused reconciliation.
+- Ephemeral UI events such as `candidate.viewed` do not need durable domain
+  retention.
+
+<Warning>
+  Never treat receipt of an SSE event as proof that a mutation committed. Read
+  the affected record from the authenticated API after invalidation.
+</Warning>
+
 ## Production guidance
 
-Keep one stream per browser tab, bound concurrent connections per workspace,
-emit heartbeats, and monitor SSE p95 latency and reconnect rates. A broken
-stream must not block a database mutation or background job.
+<Steps>
+  <Step title="One stream per tab">
+    Keep one EventSource connection per browser tab. Multiple streams per
+    workspace waste connections and produce duplicate events.
+  </Step>
+  <Step title="Invalidate precisely">
+    Invalidate the smallest affected query rather than calling a global
+    `router.refresh()` after every event.
+  </Step>
+  <Step title="Monitor health">
+    Track SSE p95 latency and reconnect rates. A broken stream must not block
+    a database mutation or background job.
+  </Step>
+  <Step title="Handle reconnection">
+    After a reconnect, reconcile visible queries by re-fetching the data that
+    changed during the disconnection window.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| Events not arriving | Stream disconnected | Check network, proxy timeouts, and `EventSource` readyState |
+| Duplicate events | At-least-once delivery | Deduplicate by event ID in your query invalidation |
+| Stale data after reconnect | Reconciliation not triggered | Re-fetch affected queries on `onopen` after reconnect |
+| Stream blocked by proxy | Proxy timeout too short | Increase proxy read timeout for `/api/realtime` |
+| High memory in browser | Too many listeners | Unsubscribe from events for components no longer mounted |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" icon="hook" href="/developers/webhooks">
+    Send events to external systems with signed deliveries.
+  </Card>
+  <Card title="Automations" icon="workflow" href="/developers/automations">
+    Trigger internal workflows on domain events.
+  </Card>
+  <Card title="API overview" icon="code" href="/developers/api-overview">
+    Authentication, rate limits, and response formats.
+  </Card>
+</CardGroup>

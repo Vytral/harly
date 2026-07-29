@@ -1,11 +1,11 @@
 ---
 title: "Automations"
-description: "Build safe recruiting automations with triggers, conditions, permissions, retries, and human approval points."
+description: "Build safe recruiting automations with triggers, conditions, actions, retries, and human approval points."
 ---
 
 Automations connect a Harly event to one or more actions. Use them for
 repeatable notifications and task creation, while keeping consequential hiring
-decisions explicit.
+decisions explicit and human-owned.
 
 ## A safe automation shape
 
@@ -15,31 +15,117 @@ Domain event → condition → action → durable run log → retry or failure s
 
 Typical examples:
 
-- candidate applies → notify a recruiting channel;
-- application enters interview → create a coordinator task;
-- interview completed → request a scorecard;
-- offer accepted → notify the hiring team.
+- Candidate applies → notify a recruiting channel.
+- Application enters interview stage → create a coordinator task.
+- Interview completed → request a scorecard from the interviewer.
+- Offer accepted → notify the hiring team.
 
 ## Configure a workflow
 
-1. Open **Automations** and create a workflow.
-2. Choose a supported trigger event.
-3. Add conditions that limit the workspace, job, department, or status.
-4. Configure an action such as a task, Slack/Discord message, or HTTP request.
-5. Run the preview and enable the workflow.
+<Steps>
+  <Step title="Open Automations">
+    Select **Automations** in the left sidebar and choose **New workflow**.
+  </Step>
+  <Step title="Choose a trigger">
+    Select a supported trigger event:
 
-HTTP actions support workspace secret references so credentials do not appear in
-workflow payloads. Outbound requests use the same SSRF protections as webhooks.
+    | Trigger | When it fires |
+    | --- | --- |
+    | `application.created` | Application submitted |
+    | `application.stage_changed` | Application moves to a different stage |
+    | `application.hired` | Application marked as hired |
+    | `application.rejected` | Application rejected |
+    | `candidate.created` | Candidate record created |
+    | `candidate.updated` | Candidate profile updated |
+    | `interview.scheduled` | Interview created |
+    | `interview.rescheduled` | Interview rescheduled |
+    | `interview.canceled` | Interview canceled |
+    | `interview.completed` | Interview marked complete |
+    | `job.published` | Job published to career page |
+  </Step>
+  <Step title="Add conditions">
+    Narrow the trigger with conditions:
 
-## Reliability and permissions
+    - **Job** — only fire for a specific job or department.
+    - **Stage** — only fire when entering a specific pipeline stage.
+    - **Status** — only fire when a field has a specific value.
 
-Each run records its trigger, actions, result, and error. Actions validate their
-configuration before execution and enforce the permission required by the
-workflow actor. Retry transient failures; fix configuration failures before
-replaying.
+    Conditions prevent a notification workflow from firing on every job in the
+    workspace when you only want it for one department.
+  </Step>
+  <Step title="Configure an action">
+    Choose an action:
+
+    | Action | What it does |
+    | --- | --- |
+    | **Create task** | Assigns a task to a workspace member with a due date |
+    | **Slack message** | Posts to a configured Slack channel |
+    | **Discord message** | Posts to a Discord channel via webhook |
+    | **HTTP request** | Calls an external endpoint with the event payload |
+
+    HTTP actions support workspace secret references so credentials do not appear
+    in workflow payloads. Outbound requests use the same SSRF protections as
+    webhooks — loopback, private, and metadata addresses are blocked.
+  </Step>
+  <Step title="Preview and enable">
+    Run the workflow preview to confirm the trigger and action match your intent.
+    Enable the workflow. It begins processing new events immediately.
+  </Step>
+</Steps>
+
+## Reliability and run history
+
+Each run records:
+- The trigger event that fired it
+- The conditions that matched
+- The action configuration
+- The result (success, failure, or skipped)
+- The error message if it failed
+
+Open a workflow to see its run history. Retry transient failures from the run
+detail. Fix configuration failures before replaying — a misconfigured action
+retries successfully once you correct it.
 
 <Warning>
-  Do not build an automation that rejects candidates, deletes records, or
-  sends an offer without a human review step unless your documented governance
-  process explicitly permits it.
+  Do not build an automation that rejects candidates, deletes records, or sends
+  an offer without a human review step. Keep irreversible actions explicitly
+  human — automate the preparation and notification, not the decision.
 </Warning>
+
+## HTTP action details
+
+The HTTP action sends a POST request to the configured URL with a JSON payload
+matching the trigger event's schema. Configure a secret to verify the request:
+
+```json
+{
+  "event": "application.stage_changed",
+  "workspaceId": "ws_01j1abc",
+  "applicationId": "app_01j1abc",
+  "candidateId": "cnd_01j1abc",
+  "jobId": "job_01j1abc",
+  "fromStage": "screen",
+  "toStage": "interview",
+  "changedAt": "2026-07-27T12:00:00Z"
+}
+```
+
+The receiver must return `2xx` within 10 seconds. Failed requests are retried
+by the scheduler using the same retry policy as webhooks.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Webhooks" icon="hook" href="/developers/webhooks">
+    Subscribe to domain events from external systems.
+  </Card>
+  <Card title="API overview" icon="code" href="/developers/api-overview">
+    Build richer integrations against the Harly API.
+  </Card>
+  <Card title="Notifications" icon="bell" href="/integrations/notifications">
+    Connect Slack, Discord, and Telegram.
+  </Card>
+  <Card title="Tasks and scorecards" icon="list-checks" href="/product/tasks-and-scorecards">
+    The task model automations create work for.
+  </Card>
+</CardGroup>

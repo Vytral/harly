@@ -1,47 +1,160 @@
 ---
-title: "Privacy, retention, and AI operations"
-description: "Operate candidate data responsibly with retention, privacy notices, access reviews, and human oversight."
+title: "Privacy and data retention"
+description: "Configure retention, handle data-subject requests, manage consent records, and operate AI features responsibly."
 ---
 
-Harly provides controls for candidate data, but the organisation operating a
-workspace remains responsible for its legal assessment, notices, contracts,
-and regulatory decisions. This page is an operational checklist, not legal
-advice.
+Harly stores candidate data on your infrastructure. You control retention
+periods, deletion, and AI provider access. This page covers the operational
+steps, not legal advice.
 
-## Before collecting candidate data
+## Retention settings
 
-- Publish the workspace privacy policy, candidate privacy notice, cookie policy,
-  terms, and AI transparency notice.
-- Record a lawful basis and retention period for each purpose, including talent
-  pools and optional AI features.
-- Configure candidate and talent-pool retention settings.
-- Keep a current processor and subprocessor register.
-- Assign an owner for data-subject requests and deletion exceptions.
+Set retention periods before you start collecting candidate data. Once a
+retention period expires, the scheduler's `retention-enforcement` job marks the
+affected records for deletion.
 
-## AI review
+<Steps>
+  <Step title="Open retention settings">
+    Go to **Settings → Legal → Retention**.
+  </Step>
+  <Step title="Set periods for each purpose">
+    Configure a retention period for each data category:
 
-For each AI feature, document its purpose, provider, model, input data, output,
-users, risks, and human reviewer. Candidate scoring is advisory and must not
-be the sole basis for a hiring decision.
+    | Category | Recommended starting point |
+    | --- | --- |
+    | Active candidates (hired) | Duration of employment + local legal minimum |
+    | Active candidates (rejected) | 6–12 months (check local law) |
+    | Talent pool entries | 12–24 months with renewal consent |
+    | Application files (CVs, cover letters) | Match the application period |
+
+    These are starting points. Your legal or HR team must confirm the correct
+    periods for your jurisdiction and sector.
+  </Step>
+  <Step title="Test with a sample record">
+    After setting periods, find an old test candidate, manually set their record
+    to expired, and confirm the retention job removes it in the next scheduler
+    cycle (runs every minute).
+  </Step>
+</Steps>
+
+## Data-subject requests (DSARs)
+
+Candidates have the right to request a copy of their data or request deletion.
+The [candidate portal](/product/candidate-portal) surfaces both controls to
+candidates directly.
+
+When a request comes in:
+
+<Steps>
+  <Step title="Verify identity">
+    Confirm the requester is the data subject. Do not process a deletion request
+    without identity verification: deleting the wrong record has no undo.
+  </Step>
+  <Step title="Check for legal holds">
+    Check whether any legal hold, ongoing litigation, or regulatory obligation
+    prevents immediate deletion. If so, document the hold and communicate the
+    delay to the requester with a reason.
+  </Step>
+  <Step title="Export or delete">
+    **Export:** From the candidate record, use **Export data**. Send the export
+    to the requester through a secure channel, not unencrypted email.
+
+    **Delete:** From the candidate record, use **Delete candidate**. This
+    removes the record, applications, files, and personal data. It cannot be
+    undone. Confirm the candidate has no active legal hold before proceeding.
+  </Step>
+  <Step title="Record the outcome">
+    Log the request, the action taken, the date, and the member who processed
+    it in your DSAR register. Harly's audit log captures the deletion event, but
+    maintain your own register for regulatory response.
+  </Step>
+</Steps>
+
+<Warning>
+  Deletion is permanent. It removes the candidate record, all applications,
+  documents, and interview records linked to that candidate. Export a copy
+  first if you need a record for legal or audit purposes.
+</Warning>
+
+## Consent records
+
+Harly tracks consent with timestamps and withdrawal events. Consent records are
+available in **Settings → Legal** and through the API (`activity:read` scope).
+
+| Record | What it captures |
+| --- | --- |
+| Consent granted | Timestamp, version of the notice accepted, IP address |
+| Consent withdrawn | Timestamp and member who processed the withdrawal |
+| Portal export request | Timestamp and requestor |
+| Portal deletion request | Timestamp, requestor, and outcome |
+
+Do not rely solely on Harly's consent records. Maintain your own canonical
+register if your regulatory context requires one.
+
+## AI features and data
+
+## Automatic candidate evaluation without AI
+
+Workspaces without an AI provider can use the governed `rules-v2` evaluator.
+It only evaluates criteria explicitly configured in a published job rubric; it
+does not infer requirements from arbitrary job-description text. Each criterion
+stores its status (`met`, `not_met`, or `unknown`), evidence source, evidence
+coverage, confidence, rubric version, and reproducibility hashes.
+
+An `unknown` result is not a rejection. Low coverage, low confidence, or a
+missing required criterion marks the evaluation for human review. Automated
+workflow conditions cannot reject an applicant from this result.
+
+When a candidate is deleted or anonymized, evaluations, criterion evidence,
+embeddings, and queued evaluation jobs are removed with the candidate. Configure
+retention and legal holds before enabling automatic processing.
+
+When AI features are enabled, candidate data is sent to your configured
+provider. Before enabling:
+
+<Steps>
+  <Step title="Choose a provider with a DPA">
+    Confirm your AI provider has a data processing agreement that covers your
+    jurisdiction and sector. Store a copy.
+  </Step>
+  <Step title="Document each feature">
+    For each enabled AI feature, document: purpose, provider, model, what data
+    is sent, who reviews the output, and what the human override path is.
+
+    | Feature | Data sent to provider |
+    | --- | --- |
+    | Candidate matching | Job description + application answers |
+    | Assisted drafting | Job description + application context |
+    | Scorecard anonymization | Scorecard text (names stripped before send) |
+    | Chat | Current candidate or job context only |
+  </Step>
+  <Step title="Notify candidates">
+    If your jurisdiction or sector requires it, disclose AI use in your candidate
+    privacy notice before collecting applications.
+  </Step>
+  <Step title="Review the usage log">
+    Open **Settings → AI → Usage** periodically to confirm only expected data
+    is being sent and no unexpected features are active.
+  </Step>
+</Steps>
 
 <Info>
-  Do not place provider credentials, private notes, or unnecessary candidate
-  data into prompts. Review the AI usage log and keep a documented override
-  path for every material recommendation.
+  AI output is advisory. Every hiring decision must have a documented human
+  reviewer. Never auto-advance, auto-reject, or send a message based on an AI
+  suggestion without human review.
 </Info>
 
-## Data-subject requests
+## Audit log
 
-The candidate portal provides export and deletion-request controls. Verify the
-requester's identity, assess legal holds and retention duties, record the due
-date and outcome in a separate request register, and communicate the result.
+Every access, mutation, export, and deletion is captured with the acting member,
+timestamp, and affected resource. The audit log is available in
+**Settings → Security → Audit log**.
 
-## Incident response
+Export the audit log before deleting records that may be needed for an active
+investigation or regulatory response.
 
-1. Contain the incident and preserve relevant evidence.
-2. Identify affected systems, data, people, recipients, and time window.
-3. Record the assessment and corrective actions.
-4. Follow the notification obligations that apply to your organisation and
-   jurisdiction.
-5. Revisit access, notices, processor contracts, and the DPIA if the change is
-   material.
+| Severity | Examples |
+| --- | --- |
+| `info` | Candidate viewed, stage changed |
+| `warning` | Failed sign-in attempt, export |
+| `critical` | Candidate deleted, SSO provider added or removed, SCIM token created |

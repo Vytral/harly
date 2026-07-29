@@ -1,0 +1,93 @@
+---
+title: "Using Harly"
+description: "How jobs, candidates, interviews, offers, and the candidate portal connect into one recruiting workflow."
+---
+
+Harly is built around one loop: post a job, collect applications, move
+candidates through a pipeline, schedule and document interviews, send an offer,
+and close the hire. Everything else, the candidate portal, automations, inbox,
+documents, AI, reports, connects into that loop.
+
+## The core loop
+
+```
+Job (open) → Application → Pipeline stage → Interview → Scorecard → Offer → Hired
+```
+
+Each step is a record in Harly. Records link to each other, so you can read
+the full history of a candidate's journey without leaving the application view.
+
+## Where to start
+
+| You want to… | Go to |
+| --- | --- |
+| Post a new role | [Jobs](/product/jobs) |
+| Review applications | [Candidates and pipeline](/product/candidates-and-pipeline) |
+| Schedule an interview | [Interviews and scheduling](/product/interviews-and-scheduling) |
+| Send an offer | [Offers and signatures](/product/offers-and-signatures) |
+| Reply to a candidate | [Inbox and email](/product/inbox-and-email) |
+| Request a document | [Documents](/product/documents) |
+| See the career page | [Career page](/product/career-page) |
+| Let candidates self-track | [Candidate portal](/product/candidate-portal) |
+| Measure pipeline health | [Reports and analytics](/product/reports-and-analytics) |
+
+## How data is organized
+
+**Workspace** — everything belongs to a workspace. Members, jobs, candidates,
+settings, and integrations are all workspace-scoped.
+
+**Job** — a role you are hiring for. A job has a pipeline of stages, a hiring
+team, a public listing on the career page, and an application form.
+
+**Candidate** — a person. One candidate can apply to multiple jobs. Their
+profile, notes, tags, and files are shared across all their applications.
+
+**Application** — the relationship between a candidate and a job. An application
+has a stage, a status, a scorecard set, and an offer. Moving an application
+through stages is how the pipeline works.
+
+**Interview** — a scheduled event on an application. Harly creates calendar
+events for the interviewer and candidate, syncs with Google Calendar or Outlook,
+and generates a video link if you have Zoom or Meet configured.
+
+**Scorecard** — structured feedback an interviewer submits after an interview.
+Scorecards are per-application and roll up into a decision view for the hiring
+team.
+
+**Offer** — a formal offer tied to an application. Harly tracks the state
+(`draft → sent → accepted / declined / withdrawn`) and collects a signature
+through Harly Signing or DocuSeal.
+
+**Talent pool** — a collection of candidates not tied to a specific open role.
+Use it to keep track of strong candidates for future openings.
+
+## Roles and who can do what
+
+| Role | Typical responsibilities |
+| --- | --- |
+| Owner | Full access; configure workspace, security, integrations |
+| Admin | Full explicit permissions, tunable |
+| Recruiter | Run the pipeline end-to-end: jobs, candidates, offers, documents |
+| Hiring manager | Approve jobs, view pipeline, provide interview feedback |
+| Custom role | Any combination of permissions you define |
+
+See [access control](/security/access-control) for the full permission list and
+how to scope roles by department, region, or assigned jobs only.
+
+## What the candidate sees
+
+Candidates interact with Harly through two surfaces:
+
+1. **Career page** — public job board where they browse and apply.
+2. **Candidate portal** — authenticated self-service area to track applications,
+   upload documents, and manage their data.
+
+Neither surface exposes internal notes, scorecards, other candidates, or
+workspace configuration.
+
+## Next steps
+
+If you are new, follow the [first-hire tutorial](/tutorials/first-hire) — it
+walks through the entire loop from posting a job to marking a hire in one
+linear sequence. If a specific area is unclear, jump to its page directly from
+the table above.

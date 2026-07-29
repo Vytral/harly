@@ -1,0 +1,102 @@
+---
+title: "Reports and analytics"
+description: "Measure pipeline health, hiring velocity, source effectiveness, and where candidates drop off."
+---
+
+Reports turn the activity on your pipeline into numbers you can act on. They
+read from the same records you work every day, so figures match what you see
+in the pipeline. No separate data warehouse or export required.
+
+## What you can measure
+
+### Pipeline health
+
+Pipeline health shows how many applications sit in each stage per job, so
+you can see bottlenecks before they become stale candidates.
+
+| Metric | What it tells you |
+| --- | --- |
+| Applications per stage | Where the pipeline is congested |
+| Age in stage | Which applications have been stuck longest |
+| Open vs. closed applications | Overall recruiting load |
+
+### Hiring velocity
+
+| Metric | What it tells you |
+| --- | --- |
+| Time to hire | How long from first application to offer accepted |
+| Time in stage | Which stage is the slowest step |
+| Offer acceptance rate | How often candidates accept |
+
+### Source and outcome
+
+| Metric | What it tells you |
+| --- | --- |
+| Applications by source | Where candidates come from |
+| Rejection reasons | Why candidates are not advancing |
+| Stage conversion rate | What percentage of candidates advance from each stage |
+
+## Reading a report
+
+<Steps>
+  <Step title="Choose a report">
+    Open **Reports** in the sidebar and select the report type.
+  </Step>
+  <Step title="Apply filters">
+    Filter by job, department, date range, or owner to scope the view. A
+    narrow filter is usually more useful than a workspace-wide aggregate.
+  </Step>
+  <Step title="Interpret the data">
+    A number is a prompt to look, not a verdict. High age-in-stage means you
+    should look at what is blocking those applications — it does not mean
+    those candidates are unqualified.
+  </Step>
+  <Step title="Act on the record">
+    Open the underlying applications from the report view. A report is read-only;
+    changes happen on the pipeline.
+  </Step>
+</Steps>
+
+<Tip>
+  Reject with a consistent reason on every application. Reporting is only as
+  useful as the reasons behind it — clean reasons make drop-off analysis
+  trustworthy. Train every recruiter to use the same set of rejection reasons
+  rather than free-form text.
+</Tip>
+
+## Export and API
+
+For custom analysis or dashboards outside Harly, use the API:
+
+```bash
+curl --fail-with-body \
+  -H 'Authorization: Bearer harly_sk_YOUR_KEY' \
+  -H 'Accept: application/json' \
+  'https://hiring.example.com/api/v1/applications?jobId=job_01j1abc&limit=100'
+```
+
+See [API overview](/developers/api-overview) for pagination, scopes, and
+available filters.
+
+<Warning>
+  Candidate data is personal data. Export only what is necessary for a specific
+  analysis, store exports securely, and delete them when the purpose is
+  complete. See [privacy](/security/privacy) for the full retention workflow.
+</Warning>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Candidates and pipeline" icon="users" href="/product/candidates-and-pipeline">
+    The records reports are built from.
+  </Card>
+  <Card title="API overview" icon="code" href="/developers/api-overview">
+    Export data programmatically for custom dashboards.
+  </Card>
+  <Card title="Privacy" icon="shield" href="/security/privacy">
+    Handle exports and retention compliantly.
+  </Card>
+  <Card title="Automations" icon="workflow" href="/developers/automations">
+    Automate actions triggered by pipeline events.
+  </Card>
+</CardGroup>

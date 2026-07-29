@@ -7,44 +7,140 @@ The live OpenAPI document at `/api/v1/openapi.json` defines the exact request
 and response schema. This page helps you choose the right resource and scope
 before opening the generated reference.
 
+## API key format
+
+API keys have the format `harly_{type}_{env}_{secret}`:
+
+| Part | Values | Meaning |
+| --- | --- | --- |
+| `type` | `sk` (secret), `pk` (publishable) | Key type — secret keys hold all scopes, publishable keys are browser-safe |
+| `env` | `live`, `test` | Environment |
+| `secret` | 43-char base64url | Cryptographically random, stored only as a SHA-256 hash |
+
+Example secret key: `harly_sk_live_AbCdEf123...`
+
+Publishable keys (`pk`) are limited to `jobs:read` and `applications:write` —
+the subset safe to expose in a browser. Use secret keys for all server-side
+integrations.
+
 ## Resources
 
 | Area | Common operations | Required scopes |
 | --- | --- | --- |
-| Jobs | List, create drafts, read and update stages | `jobs:read`, `jobs:create`, `stages:read`, `stages:write` |
-| Candidates | List, create, update, delete, notes, tags, files | `candidates:read`, `candidates:write`, `notes:*`, `tags:*`, `files:read` |
+| Jobs | List, read, publish, close | `jobs:read`, `jobs:write` |
+| Candidates | List, create, update, delete, notes, tags, files | `candidates:read`, `candidates:write`, `notes:read`, `notes:write`, `tags:read`, `tags:write`, `files:read` |
 | Applications | List, create, move, reject, hire, bulk create | `applications:read`, `applications:write` |
 | Interviews | List, create, update, cancel, complete | `interviews:read`, `interviews:write` |
 | Offers | Draft, send, decide, withdraw | `offers:read`, `offers:write` |
-| Work tracking | Scorecards, tasks, pool entries | `scorecards:*`, `tasks:*`, `pool:*` |
-| Events | Activity timeline, webhook endpoints, deliveries | `activity:read`, `webhooks:*` |
-| Access | API key lifecycle and current identity | `api_keys:*` |
+| Scorecards | Create, read | `scorecards:read`, `scorecards:write` |
+| Tasks | List, create, update | `tasks:read`, `tasks:write` |
+| Talent pool | List, create, assign | `pool:read`, `pool:write` |
+| Activity events | Read timeline | `activity:read` |
+| Stages | Read, update pipeline stages | `stages:read`, `stages:write` |
+| Webhooks | CRUD endpoints, view deliveries, replay | `webhooks:read`, `webhooks:write` |
+| API keys | List, create, rotate, delete | `api_keys:read`, `api_keys:write` |
+| Automations | List, read runs | `automations:read`, `automations:write` |
 
 ## Mutation examples
 
-Move an application with an idempotency key:
+### List jobs
 
 ```bash
-curl --fail-with-body -X POST \
-  'https://hiring.example.com/api/v1/applications/app_123/move' \
-  -H 'Authorization: Bearer harly_sk_REDACTED' \
-  -H 'Content-Type: application/json' \
-  -H 'Idempotency-Key: move-app-123-2026-07-27T12:00:00Z' \
-  --data '{"stageId":"stage_interview"}'
+curl --fail-with-body \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
+  -H 'Accept: application/json' \
+  'https://hiring.example.com/api/v1/jobs?limit=25'
 ```
 
-Create a candidate:
+```json
+{
+  "data": [
+    {
+      "id": "job_01j1abc",
+      "title": "Product Designer",
+      "status": "open",
+      "department": "Design",
+      "location": "Remote"
+    }
+  ],
+  "meta": {
+    "pagination": {
+      "hasMore": true,
+      "limit": 25,
+      "nextCursor": "eyJjcmVhdGVkQXQiOiIyMDI2LTA3LTI3VDEyOjAwOjAwWiIsImlkIjoiam9iXzAxajFhYmMifQ"
+    }
+  }
+}
+```
+
+### Create a candidate
 
 ```bash
 curl --fail-with-body -X POST \
   'https://hiring.example.com/api/v1/candidates' \
-  -H 'Authorization: Bearer harly_sk_REDACTED' \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
   -H 'Content-Type: application/json' \
-  --data '{"firstName":"Test","lastName":"Candidate","email":"test@example.com"}'
+  --data '{
+    "firstName": "Test",
+    "lastName": "Candidate",
+    "email": "test@example.com"
+  }'
 ```
 
-Use synthetic data in examples and integration tests. Never place a real resume
-or candidate email in a public README or issue.
+### Move an application
+
+Use `toStageId` (not `stageId`) and always include an idempotency key on mutations:
+
+```bash
+curl --fail-with-body -X POST \
+  'https://hiring.example.com/api/v1/applications/app_01j1abc/move' \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: move-app_01j1abc-2026-07-27T12:00:00Z' \
+  --data '{"toStageId":"stage_interview"}'
+```
+
+### Reject an application
+
+```bash
+curl --fail-with-body -X POST \
+  'https://hiring.example.com/api/v1/applications/app_01j1abc/reject' \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
+  -H 'Content-Type: application/json' \
+  --data '{"reason":"Not a fit at this time"}'
+```
+
+### Rotate an API key
+
+```bash
+curl --fail-with-body -X POST \
+  'https://hiring.example.com/api/v1/api-keys/key_01j1abc/rotate' \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY'
+```
+
+A rotation issues a new raw key value and invalidates the previous one. The
+response includes `key` — the new raw value, shown once.
+
+## All scopes
+
+```text
+jobs:read          jobs:write
+candidates:read    candidates:write
+applications:read  applications:write
+interviews:read    interviews:write
+offers:read        offers:write
+scorecards:read    scorecards:write
+tasks:read         tasks:write
+notes:read         notes:write
+tags:read          tags:write
+stages:read        stages:write
+activity:read
+pool:read          pool:write
+files:read
+webhooks:read      webhooks:write
+api_keys:read      api_keys:write
+automations:read   automations:write
+```
 
 ## Errors
 
@@ -56,8 +152,11 @@ or candidate email in a public README or issue.
 | `404` | Resource not found in the workspace | Reconcile IDs and workspace |
 | `409` | Conflict or idempotency collision | Inspect the error before retrying |
 | `422` | Valid JSON with invalid fields | Show validation details to the operator |
-| `429` | Rate limited | Back off and respect retry metadata |
+| `429` | Rate limited | Back off and respect `Retry-After` |
+
+Use synthetic data in examples and integration tests. Never place a real resume
+or candidate email in a public README or issue.
 
 <Card title="OpenAPI document" icon="brackets-curly" href="/developers/api-overview">
-  Open `/api/v1/openapi.json` on your Harly instance for the generated contract.
+  Fetch `/api/v1/openapi.json` from your Harly instance for the full generated contract.
 </Card>

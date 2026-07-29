@@ -31,7 +31,25 @@ HARLY_CACHE_MAX_AGE_DAYS=7
 
 ## Scheduler and queue runbook
 
-The scheduler is a single, restartable worker. It calls the email outbox and webhook retry routes every minute, and mailbox sync every two minutes. Each route uses a PostgreSQL advisory lock, so an accidental second scheduler or a retry after a container restart receives `409 Already running` instead of doing the same work concurrently. Queue rows left `processing` by a crash become eligible again after five minutes.
+The scheduler is a single, restartable worker. It runs the following jobs on
+fixed intervals using PostgreSQL advisory locks — a second scheduler container
+or restart receives `409 Already running` and skips rather than doing duplicate
+work:
+
+| Job | Interval |
+| --- | --- |
+| `domain-events` | 15 seconds |
+| `email-outbox` | 1 minute |
+| `webhooks-dispatch` | 1 minute |
+| `esign-reconciliation` | 1 minute |
+| `interview-sync` | 1 minute |
+| `evaluation-jobs` | 1 minute |
+| `document-expiry` | 1 minute |
+| `retention-enforcement` | 1 minute |
+| `scheduled-reports` | 1 minute |
+| `mailbox-sync` | 2 minutes |
+
+Queue rows left `processing` by a crash become eligible again after five minutes.
 
 The scheduler container's healthcheck runs its built-in doctor. It requires a recent successful-or-skipped record for **each** scheduled job, not merely a running container. By default a job is stale after five minutes:
 

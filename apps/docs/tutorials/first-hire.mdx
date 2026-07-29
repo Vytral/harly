@@ -1,0 +1,256 @@
+---
+title: "Tutorial: your first hire"
+description: "End-to-end walkthrough — open a job, collect applications, run interviews, send an offer, and close the hire."
+---
+
+This tutorial takes a fresh Harly workspace from the first job to a signed
+offer. It assumes you have completed the [quickstart](/quickstart) and claimed
+the owner account.
+
+## What you will do
+
+- Create and publish a job with an application form
+- Collect and review the first applications
+- Schedule an interview and complete a scorecard
+- Send an offer for signature
+- Mark the hire final
+
+## Before you begin
+
+- A running Harly installation at a public URL
+- An owner account (created during `/setup`)
+- A test email account you can submit applications from
+
+---
+
+## Step 1 — Create a job
+
+<Steps>
+  <Step title="Open Jobs">
+    Select **Jobs** in the left sidebar, then **New job**.
+  </Step>
+  <Step title="Fill the basics">
+    Enter a job title (for example **Product Designer**), department, location,
+    and employment type. Save as draft — it will not be public yet.
+  </Step>
+  <Step title="Write the description">
+    Add a role summary, responsibilities, and requirements. This is the text
+    candidates read on your career page.
+
+    ```text
+    We are looking for a Product Designer to join our team.
+    You will own end-to-end design for our core product.
+
+    Requirements:
+    - 3+ years of product design experience
+    - Proficiency with Figma
+    - Experience with user research
+    ```
+  </Step>
+  <Step title="Set the pipeline">
+    Assign pipeline stages. A practical default for this tutorial is:
+
+    | Stage | Purpose |
+    | --- | --- |
+    | Applied | Where every new application lands |
+    | Screen | Initial review call |
+    | Interview | Full panel interview |
+    | Offer | Offer sent, awaiting decision |
+    | Hired | Signed and closed |
+  </Step>
+  <Step title="Build the application form">
+    Add the questions you need. For this tutorial keep it minimal:
+
+    - Portfolio link (URL, required)
+    - Why this role? (long text, optional)
+  </Step>
+  <Step title="Assign the hiring team">
+    Add yourself as hiring manager. For a real role, add the relevant recruiters
+    and interviewers.
+  </Step>
+  <Step title="Publish">
+    Review the public preview, then select **Publish**. The job now appears on
+    your career page at `https://hiring.example.com/careers`.
+  </Step>
+</Steps>
+
+---
+
+## Step 2 — Submit a test application
+
+Open your career page in a private browser window and submit an application
+using your test email account. Check that:
+
+- The job listing shows your description.
+- The application form includes the questions you built.
+- After submission you receive a confirmation email.
+- The application appears in the **Applied** stage on the pipeline.
+
+<Tip>
+  Submit a second application from a different test address so you can practice
+  rejecting one and advancing the other.
+</Tip>
+
+---
+
+## Step 3 — Review and advance
+
+<Steps>
+  <Step title="Open the pipeline">
+    Go to **Jobs → Product Designer → Pipeline**. You will see the test
+    applications in the **Applied** stage.
+  </Step>
+  <Step title="Review the candidate record">
+    Open the application. Read the answers, check the portfolio link, and look
+    at the activity timeline. Add a note to record your assessment:
+
+    ```text
+    Strong portfolio. Move to Screen to verify compensation expectations.
+    Owner: @you
+    ```
+  </Step>
+  <Step title="Advance to Screen">
+    Drag the card to **Screen**, or open the application and change the stage.
+  </Step>
+  <Step title="Reject the second application">
+    Open the other test application. Select **Reject**, choose a reason such as
+    **Not a fit at this time**, and confirm. The candidate receives a rejection
+    email if you configured one in your email templates.
+  </Step>
+</Steps>
+
+---
+
+## Step 4 — Schedule an interview
+
+<Steps>
+  <Step title="Connect a calendar (if not done)">
+    If you have not connected a calendar, open **Settings → Integrations →
+    Google Calendar** or **Microsoft Outlook** and follow the provider guide.
+    You can skip calendar sync and still record an interview; Harly just
+    will not create the external event.
+  </Step>
+  <Step title="Schedule">
+    From the application, select **Schedule interview**. Set:
+
+    - Attendees: yourself and the candidate
+    - Date, time, and timezone
+    - Duration: 60 minutes
+    - Video provider: whichever you have connected
+  </Step>
+  <Step title="Confirm">
+    Save. Harly creates the calendar event and attaches the video link. The
+    interview appears under **Interviews** in the sidebar.
+  </Step>
+</Steps>
+
+---
+
+## Step 5 — Complete a scorecard
+
+After the interview, record structured feedback.
+
+<Steps>
+  <Step title="Open the interview">
+    Go to **Interviews**, find the interview, and select **Add scorecard**.
+  </Step>
+  <Step title="Rate the criteria">
+    Score the candidate on the criteria your workspace defines. Add notes for
+    each rating.
+  </Step>
+  <Step title="Submit">
+    Submit the scorecard. It is now part of the candidate record and cannot be
+    changed. If you are the hiring manager, you can view submitted scorecards
+    before the stage decision.
+  </Step>
+  <Step title="Advance to Interview stage">
+    Satisfied with the screen? Move the application to **Interview** and record
+    a note summarizing the screen call outcome.
+  </Step>
+</Steps>
+
+---
+
+## Step 6 — Send an offer
+
+<Steps>
+  <Step title="Advance to Offer stage">
+    After the panel interview and scorecard review, move the application to
+    **Offer**.
+  </Step>
+  <Step title="Create the offer">
+    Open the application and select **Create offer**. Fill in:
+
+    | Field | Example value |
+    | --- | --- |
+    | Title | Product Designer |
+    | Compensation | $120,000 / year |
+    | Start date | 2026-09-01 |
+  </Step>
+  <Step title="Attach a letter">
+    Upload a PDF offer letter or generate one from a template.
+  </Step>
+  <Step title="Place signature fields">
+    Add a **Signature** field where the candidate signs and a **Date** field.
+    Add a countersign field for your company if required.
+  </Step>
+  <Step title="Send">
+    Send the offer. The candidate receives a secure signing link. No account
+    required on their side.
+  </Step>
+</Steps>
+
+---
+
+## Step 7 — Confirm accepted state and close the hire
+
+<Steps>
+  <Step title="Wait for the candidate to sign">
+    When the candidate signs, Harly updates the offer state to **Accepted**
+    (after the signing ceremony completes). You receive a notification if you
+    have configured one.
+  </Step>
+  <Step title="Countersign if required">
+    Open the offer record and countersign your company's fields if your workflow
+    requires it.
+  </Step>
+  <Step title="Verify from the offer record">
+    Before marking the hire, open the offer on the application and confirm the
+    state is **Accepted**.
+
+    <Warning>
+      Do not mark a hire on the strength of a forwarded PDF or a verbal yes.
+      Confirm the offer state is **Accepted** on the offer record in Harly.
+    </Warning>
+  </Step>
+  <Step title="Mark hired">
+    From the application, select **Mark as hired**. This closes the loop on the
+    application and records the outcome for reporting.
+  </Step>
+</Steps>
+
+---
+
+## What you built
+
+- A published job with a pipeline, form, and hiring team
+- A full application lifecycle from applied to hired
+- A scheduled interview with a structured scorecard
+- A verified signed offer
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Set up integrations" icon="plug" href="/tutorials/setup-integrations">
+    Connect calendars, video, email, notifications, and signatures.
+  </Card>
+  <Card title="Daily recruiting workflow" icon="list-checks" href="/getting-started/daily-workflow">
+    The daily operating rhythm for a live recruiting team.
+  </Card>
+  <Card title="Automations" icon="workflow" href="/developers/automations">
+    Automate notifications and tasks on stage changes.
+  </Card>
+  <Card title="API overview" icon="code" href="/developers/api-overview">
+    Build integrations against the Harly API.
+  </Card>
+</CardGroup>

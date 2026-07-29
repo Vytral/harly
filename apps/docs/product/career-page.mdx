@@ -1,0 +1,85 @@
+---
+title: "Career page"
+description: "Publish your public job board, brand it, embed it, and control which jobs appear."
+---
+
+The career page is your public job board, served from your own Harly domain.
+Published jobs appear on it; candidates apply directly from it. Nothing
+requires a separate service or third-party hosting.
+
+## What appears
+
+Only [published jobs](/product/jobs) show on the career page. Drafts, closed,
+and archived jobs stay off it. Each listing shows the title, department,
+location, and the description you wrote on the job.
+
+## Branding
+
+Set the workspace name, logo, and public origin in **Settings → Workspace**.
+The career page uses these automatically.
+
+- **Logo and name** — shown in the header of the board and each listing.
+- **Public origin** — the domain candidates see and the base for application
+  links. Must match `HARLY_URL` so email links and the candidate portal use
+  the same origin.
+
+## Applying
+
+A candidate opens a listing, fills the [application form](/product/jobs) you
+built, and submits. Each submission becomes an application in the job's first
+pipeline stage, ready to work in the [pipeline](/product/candidates-and-pipeline).
+
+<Tip>
+  Keep application forms short. Ask only for what you need to make the first
+  decision. Request additional documents later through
+  [document requests](/product/documents) — not through the application form.
+</Tip>
+
+## Test the candidate experience
+
+Before announcing the career page to candidates, submit a test application:
+
+<Steps>
+  <Step title="Open in a private window">
+    Navigate to `https://hiring.example.com/careers` in a private browser window
+    to see it as a candidate would.
+  </Step>
+  <Step title="Submit a test application">
+    Choose a published job and submit using a test email address. Fill all
+    required fields with representative data.
+  </Step>
+  <Step title="Verify the confirmation email">
+    Check the test inbox for the acknowledgement email. Confirm the sender name,
+    domain, and link are correct.
+  </Step>
+  <Step title="Check the pipeline">
+    Open **Jobs → [Job name] → Pipeline** and confirm the test application
+    landed in the first stage.
+  </Step>
+</Steps>
+
+## Common issues
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| No jobs listed | Jobs are in draft or closed state | Publish at least one job |
+| Logo missing | Logo not set in Settings → Workspace | Upload logo file |
+| Confirmation email not received | Outbound email not configured | Configure sender in [email settings](/integrations/email) |
+| Application lands in wrong stage | Pipeline misconfigured | Check pipeline stage order in Settings → Pipelines |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Jobs" icon="briefcase" href="/product/jobs">
+    Publish the roles the career page lists.
+  </Card>
+  <Card title="Candidate portal" icon="id-card" href="/product/candidate-portal">
+    Let applicants track their applications after applying.
+  </Card>
+  <Card title="Email" icon="envelope" href="/integrations/email">
+    Configure the sender identity for confirmation emails.
+  </Card>
+  <Card title="Candidates and pipeline" icon="users" href="/product/candidates-and-pipeline">
+    Work the applications the career page collects.
+  </Card>
+</CardGroup>

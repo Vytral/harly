@@ -21,11 +21,39 @@
         ]
       },
       {
+        "group": "Tutorials",
+        "icon": "graduation-cap",
+        "pages": [
+          "tutorials/first-hire",
+          "tutorials/setup-integrations",
+          "tutorials/api-integration"
+        ]
+      },
+      {
+        "group": "Using Harly",
+        "icon": "compass",
+        "pages": [
+          "product/overview",
+          "product/jobs",
+          "product/candidates-and-pipeline",
+          "product/interviews-and-scheduling",
+          "product/offers-and-signatures",
+          "product/inbox-and-email",
+          "product/tasks-and-scorecards",
+          "product/documents",
+          "product/career-page",
+          "product/candidate-portal",
+          "product/reports-and-analytics",
+          "product/ai-features"
+        ]
+      },
+      {
         "group": "Deploy Harly",
         "icon": "server",
         "pages": [
           "self-hosting/overview",
           "self-hosting/proxy-modes",
+          "deployment/cli",
           "deployment/cloud",
           "deployment/configuration"
         ]
@@ -35,17 +63,17 @@
         "icon": "plug",
         "pages": [
           "integrations/overview",
+          "integrations/email",
           "integrations/google-calendar",
           "integrations/microsoft",
           "integrations/video",
-          "integrations/email",
           "integrations/notifications",
           "integrations/signatures",
           "integrations/storage"
         ]
       },
       {
-        "group": "Security and governance",
+        "group": "Security",
         "icon": "shield-check",
         "pages": [
           "security/access-control",
@@ -87,5 +115,17 @@
         "href": "https://github.com/vytral/harly"
       }
     ]
+  },
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/vytral/harly"
+    }
+  ],
+  "footer": {
+    "socials": {
+      "github": "https://github.com/vytral/harly"
+    }
   }
 }

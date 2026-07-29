@@ -1,0 +1,100 @@
+---
+title: "Offers and signatures"
+description: "Generate an offer, send it for signature with Harly Signing or DocuSeal, and confirm the accepted state before you close a hire."
+---
+
+An offer turns a hiring decision into a document the candidate can accept and
+sign. Harly generates the offer, tracks its state, and collects a signature
+through Harly Signing (built-in) or DocuSeal (self-hosted external service).
+
+## Offer states
+
+| State | Meaning |
+| --- | --- |
+| Draft | Created, editable, not sent. |
+| Sent | Delivered to the candidate for review. |
+| Accepted | Candidate accepted — includes a signed document if signing was configured. |
+| Declined | Candidate declined. |
+| Withdrawn | Offer withdrawn by your team before a decision. |
+
+## Generate an offer
+
+<Steps>
+  <Step title="Open the application">
+    From the candidate's application, choose **Create offer**. An offer is always
+    tied to one application, so the record stays linked to the role.
+  </Step>
+  <Step title="Fill the offer">
+    Set the title, compensation, start date, and any custom fields your workspace
+    uses. Attach or generate an offer letter.
+  </Step>
+  <Step title="Review">
+    Preview the rendered document. An offer stays a **draft** until you send it —
+    edit freely before this step.
+  </Step>
+</Steps>
+
+## Send for signature — Harly Signing
+
+Harly Signing is the built-in native flow. No external account required.
+
+<Steps>
+  <Step title="Enable signing">
+    Confirm **Settings → Signature → Harly Signing** is enabled before sending.
+  </Step>
+  <Step title="Place fields">
+    Add signature and date fields where the candidate signs. Add countersign
+    fields for your team if required.
+  </Step>
+  <Step title="Send">
+    Send the offer. The candidate receives a secure link to review and sign.
+    No account required on their side.
+  </Step>
+  <Step title="Countersign">
+    When the candidate signs, sign the company's countersign fields to complete
+    the signing ceremony.
+  </Step>
+  <Step title="Confirm accepted state">
+    After signing, the offer transitions to **Accepted**. Verify this on the
+    offer record before marking the hire.
+
+    <Warning>
+      Do not mark a hire on the strength of a forwarded PDF or a verbal yes.
+      Confirm the offer state is **Accepted** on the offer record in Harly.
+    </Warning>
+  </Step>
+</Steps>
+
+## Send for signature — DocuSeal
+
+If you prefer to use a self-hosted DocuSeal instance, configure it in
+**Settings → Integrations → DocuSeal** before sending. See
+[signatures](/integrations/signatures) for provider setup.
+
+When DocuSeal is configured, the offer sending flow routes signing through
+DocuSeal instead of Harly Signing. DocuSeal calls back via a webhook;
+Harly reconciles the signing status asynchronously.
+
+<Warning>
+  A browser redirect after signing may show `pending` while the webhook
+  reconciliation is running. Wait for the offer record to update — do not
+  manually change the state.
+</Warning>
+
+## Decline and withdraw
+
+- **Decline:** The candidate declines. The application stays open for you to
+  decide the next step (typically reject or reconsider).
+- **Withdraw:** Your team withdraws the offer before the candidate decides.
+  This is the only team-side state change available after an offer is sent.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Signatures" icon="file-signature" href="/integrations/signatures">
+    Configure Harly Signing or DocuSeal.
+  </Card>
+  <Card title="Candidates and pipeline" icon="users" href="/product/candidates-and-pipeline">
+    Mark the hire on the application after the offer is accepted.
+  </Card>
+</CardGroup>

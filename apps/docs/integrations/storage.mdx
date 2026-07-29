@@ -34,14 +34,96 @@ Use a bucket policy that limits Harly to the required prefix and actions. Turn
 on encryption, versioning, and lifecycle rules that match your retention
 policy. Back up the bucket independently from the Harly database.
 
+## Provider-specific notes
+
+### Cloudflare R2
+
+R2 is S3-compatible with zero egress fees. Use the S3 adapter with R2
+endpoints:
+
+```dotenv
+STORAGE_PROVIDER=s3
+S3_BUCKET=harly-uploads
+S3_REGION=auto
+S3_ACCESS_KEY_ID=<r2-access-key>
+S3_SECRET_ACCESS_KEY=<r2-secret-key>
+S3_ENDPOINT=https://<account-id>.r2.cloudflarestorage.com
+S3_PUBLIC_URL=https://pub-<hash>.r2.dev
+```
+
+Enable **Public Access** on the bucket only if you want direct file URLs.
+Otherwise, let Harly issue presigned download responses.
+
+### AWS S3
+
+```dotenv
+STORAGE_PROVIDER=s3
+S3_BUCKET=harly-production
+S3_REGION=us-east-1
+S3_ACCESS_KEY_ID=<access-key>
+S3_SECRET_ACCESS_KEY=<secret-key>
+```
+
+Leave `S3_ENDPOINT` empty for standard AWS S3. Use a bucket policy that
+limits Harly to `s3:PutObject`, `s3:GetObject`, and `s3:DeleteObject` on
+the uploads prefix.
+
+### MinIO
+
+MinIO works for local or on-premises S3-compatible storage:
+
+```dotenv
+STORAGE_PROVIDER=s3
+S3_BUCKET=harly
+S3_REGION=auto
+S3_ACCESS_KEY_ID=<minio-access-key>
+S3_SECRET_ACCESS_KEY=<minio-secret-key>
+S3_ENDPOINT=http://minio:9000
+S3_PUBLIC_URL=http://minio:9000
+```
+
+MinIO does not enforce HTTPS by default. Use it only on trusted networks.
+
 ## Verify an upload
 
-1. Upload a test resume from a candidate record.
-2. Download it through Harly, not directly from a public bucket URL.
-3. Confirm the file appears in the storage provider and the application record.
-4. Run a backup or provider snapshot according to your recovery runbook.
+<Steps>
+  <Step title="Upload a test file">
+    Upload a test resume from a candidate record.
+  </Step>
+  <Step title="Download through Harly">
+    Download the file through Harly, not directly from a public bucket URL.
+  </Step>
+  <Step title="Confirm storage">
+    Check that the file appears in the storage provider and the application
+    record.
+  </Step>
+  <Step title="Verify backup">
+    Run a backup or provider snapshot according to your recovery runbook.
+  </Step>
+</Steps>
 
 <Warning>
   Candidate files are personal data. Keep buckets private and let Harly issue
   authenticated download responses. Do not make the entire bucket public.
 </Warning>
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| Upload fails with 403 | Wrong credentials or bucket policy | Check `S3_ACCESS_KEY_ID` and bucket permissions |
+| Files not accessible after upload | `S3_PUBLIC_URL` not set | Set the public URL or use presigned download |
+| Slow uploads | Large files or high latency | Increase `maxBodySize` or use a closer region |
+| Backup missing files | Bucket not included in backup | Add S3 bucket to your backup runbook |
+| Local files lost | Ephemeral filesystem | Switch to S3 for production |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Backups" icon="hard-drive" href="/operations/backups">
+    Protect candidate files and database together.
+  </Card>
+  <Card title="Configuration" icon="sliders" href="/deployment/configuration">
+    Full environment variable reference.
+  </Card>
+</CardGroup>
