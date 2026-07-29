@@ -1,8 +1,8 @@
 # Changelog
 
 All notable changes are documented here. Releases follow semantic versioning;
-pre-releases remain explicitly tagged and `latest` is promoted only from a
-passing release candidate digest.
+pre-releases remain explicitly tagged, and production deployments use a pinned
+version or image digest. Harly does not publish a floating `latest` tag.
 
 ## @harly/cli 0.3.0
 

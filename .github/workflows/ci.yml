@@ -54,7 +54,30 @@ jobs:
           key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
 
   # ─────────────────────────────────────────────────────────────────────────────
-  # 2. Lint
+  # 2. Dependency audit (informational while the dependency tree is baselined)
+  # ─────────────────────────────────────────────────────────────────────────────
+  audit:
+    name: Audit dependencies
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Audit dependencies
+        continue-on-error: true
+        run: pnpm audit --audit-level=high
+
+  # ─────────────────────────────────────────────────────────────────────────────
+  # 3. Lint
   # ─────────────────────────────────────────────────────────────────────────────
   lint:
     name: Lint
@@ -116,6 +139,106 @@ jobs:
 
       - name: Type-check
         run: pnpm typecheck
+
+  build:
+    name: Production web build
+    runs-on: ubuntu-latest
+    needs: install
+    env:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://harly:harly@localhost:5432/harly
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      HARLY_URL: http://localhost:3000
+      BETTER_AUTH_SECRET: ci-test-secret-do-not-use-in-production
+      AI_ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      STORAGE_UPLOAD_SECRET: cccccccccccccccccccccccccccccccc
+      CRON_SECRET: dddddddddddddddddddddddddddddddd
+      HARLY_SETUP_SECRET: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+      HARLY_INITIAL_ADMIN_EMAIL: owner@example.com
+      HARLY_DISABLE_WEBPACK_BUILD_WORKER: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+            tooling/*/node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Production build
+        run: pnpm build
+
+  integration:
+    name: Enterprise integration flows
+    runs-on: ubuntu-latest
+    needs: install
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_USER: harly
+          POSTGRES_PASSWORD: harly
+          POSTGRES_DB: harly
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U harly -d harly"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://harly:harly@localhost:5432/harly
+      BETTER_AUTH_SECRET: ci-test-secret-do-not-use-in-production
+      AI_ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+      STORAGE_UPLOAD_SECRET: cccccccccccccccccccccccccccccccc
+      CRON_SECRET: dddddddddddddddddddddddddddddddd
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+            tooling/*/node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      - name: Apply migrations
+        run: pnpm --filter @harly/db db:migrate:local
+
+      - name: Run deletion, Inbox isolation, RBAC and pipeline-load flows
+        run: >-
+          RUN_CANDIDATE_DELETION_INTEGRATION=1
+          RUN_MAILBOX_INTEGRATION=1
+          RUN_RBAC_INTEGRATION=1
+          RUN_PIPELINE_LOAD_INTEGRATION=1
+          pnpm --filter web exec vitest run
+          src/features/candidates/candidate-deletion.integration.test.ts
+          src/features/mailbox/mailbox-isolation.integration.test.ts
+          src/features/workspaces/permissions-rbac.integration.test.ts
+          src/features/pipeline/pipeline-large-load.integration.test.ts
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 4. Unit tests
@@ -245,6 +368,22 @@ jobs:
           COMPOSE_PROFILES=proxy docker compose config --quiet
       - name: Build runtime image
         run: docker build -t harly:ci .
+      - name: Scan image for HIGH and CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: harly:ci
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+      - name: Block fixed CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: harly:ci
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
       - name: Reject runtime toolchain and TypeScript sources
         run: |
           docker run --rm --entrypoint sh harly:ci -c '! command -v pnpm && ! find /app -name "*.ts" -o -name "drizzle-kit" -o -name "tsx" | grep -q .'

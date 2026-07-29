@@ -70,9 +70,13 @@ The scheduler calls these private endpoints with
 - `POST /api/cron/webhooks/dispatch` every 60 seconds
 - `POST /api/cron/interview-sync` every 60 seconds
 - `POST /api/cron/mailbox-sync` every 120 seconds
+- `POST /api/cron/mail-reconciliation` every 60 seconds
 
-GET and query-string secrets are rejected. Email, SMTP, and webhook delivery
-are at-least-once; provider idempotency and durable queue keys reduce duplicate
+GET and query-string secrets are rejected. Mail reconciliation is report-only
+by default; the bundled worker runs it in controlled mode and safely
+normalizes stale `sending` rows to `unknown`. It never retries an outcome that
+may already have reached the provider. Email, SMTP, and webhook delivery are
+at-least-once; provider idempotency and durable queue keys reduce duplicate
 delivery after crashes.
 
 ## Enterprise access control

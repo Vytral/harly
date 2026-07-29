@@ -23,7 +23,10 @@ const nextConfig: NextConfig = {
           memoryBasedWorkersCount: false,
           parallelServerBuildTraces: false,
           parallelServerCompiles: false,
-          webpackBuildWorker: true,
+          // Some constrained runners can leave the isolated worker waiting
+          // indefinitely. CI keeps the faster worker by default, while this
+          // escape hatch makes the build recoverable for those environments.
+          webpackBuildWorker: process.env.HARLY_DISABLE_WEBPACK_BUILD_WORKER !== "1",
           webpackMemoryOptimizations: true,
         }
       : {

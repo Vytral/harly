@@ -20,8 +20,8 @@ so `BETTER_AUTH_SECRET`, `AI_ENCRYPTION_KEY`, `STORAGE_UPLOAD_SECRET`,
 `CRON_SECRET`, and `HARLY_SETUP_SECRET` are prompted on both services during
 setup — generate each with `openssl rand -base64 32` and paste the **same**
 value into both prompts. Bump `render.yaml`'s pinned image tag when
-upgrading, or delete the pin and use `dockerCommand: serve/scheduler` with
-Render's manual redeploy for the latest release.
+upgrading. Keep the image pinned so a redeploy does not silently move to a
+different Harly release.
 
 **Finishing setup:** once both services are live, visit
 `https://<your-app>.onrender.com/setup` and enter the `HARLY_SETUP_SECRET`

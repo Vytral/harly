@@ -46,12 +46,18 @@ work:
 | `evaluation-jobs` | 1 minute |
 | `document-expiry` | 1 minute |
 | `retention-enforcement` | 1 minute |
+| `candidate-reconciliation` | daily |
+| `mail-reconciliation` | 1 minute |
 | `scheduled-reports` | 1 minute |
 | `mailbox-sync` | 2 minutes |
 
 Queue rows left `processing` by a crash become eligible again after five minutes.
+Mail deliveries left `sending` beyond the reconciliation lease become
+`unknown`; they are never resent automatically because SMTP/IMAP may have
+accepted the message before the process lost its response. Investigate the
+provider outcome before resolving them.
 
-The scheduler container's healthcheck runs its built-in doctor. It requires a recent successful-or-skipped record for **each** scheduled job, not merely a running container. By default a job is stale after five minutes:
+The scheduler container's healthcheck runs its built-in doctor. It requires a recent successful-or-skipped record for **each** scheduled job, not merely a running container. The configured value is the minimum stale window; slower jobs also get a window of two scheduled intervals so daily reconciliation jobs are not falsely reported as stale:
 
 ```dotenv
 HARLY_SCHEDULER_STALE_AFTER_SECONDS=300
