@@ -1196,8 +1196,11 @@ export async function restoreCandidate(candidateId: string) {
 export async function permanentlyDeleteCandidate(
   candidateId: string,
   processedBy: string,
+  workspaceId?: string,
 ) {
-  const { organization: workspace } = await getWorkspaceContext();
+  const workspace = workspaceId
+    ? { id: workspaceId }
+    : (await getWorkspaceContext()).organization;
 
   const [candidate] = await db
     .select({ avatarUrl: candidates.avatarUrl, email: candidates.email })
