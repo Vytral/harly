@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { RotateCcw, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { permanentlyDeleteCandidateAction, restoreCandidateAction } from "./actions";
 import { Button } from "@/components/ui/button";

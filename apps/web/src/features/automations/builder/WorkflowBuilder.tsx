@@ -3,7 +3,7 @@
 import { useCallback, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
 import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, ne, sql } from "drizzle-orm";
+import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
 import { Output, generateText } from "ai";
 import { z } from "zod";
 
@@ -325,6 +325,15 @@ export async function scheduleInterview(
           and(
             eq(candidates.id, applications.candidateId),
             eq(candidates.workspaceId, workspace.id),
+            isNull(candidates.deletedAt),
+          ),
+        )
+        .innerJoin(
+          jobs,
+          and(
+            eq(jobs.id, applications.jobId),
+            eq(jobs.workspaceId, workspace.id),
+            isNull(jobs.deletedAt),
           ),
         )
         .where(

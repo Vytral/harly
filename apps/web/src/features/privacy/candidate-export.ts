@@ -13,6 +13,7 @@ import {
   consentRecords,
   db,
   dsarRequests,
+  evaluationCriterionResults,
   jobs,
   mailMessages,
 } from "@harly/db";
@@ -98,7 +99,7 @@ export async function buildCandidateDataExport(input: {
     answersByApplication.set(answer.applicationId, list);
   }
 
-  const [files, tags, consents, evaluations, messages] = await Promise.all([
+  const [files, tags, consents, evaluations, evaluationEvidence, messages] = await Promise.all([
     db
       .select({
         fileName: candidateFiles.fileName,
@@ -149,6 +150,15 @@ export async function buildCandidateDataExport(input: {
     db
       .select({
         applicationId: aiEvaluations.applicationId,
+        source: aiEvaluations.source,
+        engine: aiEvaluations.engine,
+        engineVersion: aiEvaluations.engineVersion,
+        rubricVersion: aiEvaluations.rubricVersion,
+        inputHash: aiEvaluations.inputHash,
+        outputHash: aiEvaluations.outputHash,
+        evidenceCoverage: aiEvaluations.evidenceCoverage,
+        confidence: aiEvaluations.confidence,
+        requiresHumanReview: aiEvaluations.requiresHumanReview,
         provider: aiEvaluations.provider,
         modelId: aiEvaluations.modelId,
         score: aiEvaluations.score,
@@ -169,6 +179,27 @@ export async function buildCandidateDataExport(input: {
         ),
       )
       .orderBy(desc(aiEvaluations.updatedAt)),
+    db
+      .select({
+        evaluationId: evaluationCriterionResults.evaluationId,
+        criterionKey: evaluationCriterionResults.criterionKey,
+        label: evaluationCriterionResults.label,
+        status: evaluationCriterionResults.status,
+        score: evaluationCriterionResults.score,
+        weight: evaluationCriterionResults.weight,
+        evidence: evaluationCriterionResults.evidence,
+        evidenceSource: evaluationCriterionResults.evidenceSource,
+        confidence: evaluationCriterionResults.confidence,
+        missingReason: evaluationCriterionResults.missingReason,
+      })
+      .from(evaluationCriterionResults)
+      .innerJoin(aiEvaluations, eq(aiEvaluations.id, evaluationCriterionResults.evaluationId))
+      .where(
+        and(
+          eq(aiEvaluations.workspaceId, input.workspaceId),
+          eq(aiEvaluations.candidateId, input.candidateId),
+        ),
+      ),
     db
       .select({
         direction: mailMessages.direction,
@@ -218,6 +249,7 @@ export async function buildCandidateDataExport(input: {
     tags,
     consents,
     aiEvaluations: evaluations,
+    evaluationEvidence,
     messages,
   };
 }

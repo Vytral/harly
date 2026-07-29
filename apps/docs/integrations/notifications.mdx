@@ -15,9 +15,10 @@ Create a Slack OAuth app with the redirect URI:
 https://hiring.example.com/api/integrations/slack/callback
 ```
 
-Add the client ID and secret to the server environment, connect the workspace,
-choose a channel, and run the test notification. Harly stores the workspace
-token encrypted.
+Configure the client ID and secret in the server environment or per workspace
+in the Slack settings card. Connect the workspace, choose a channel where the
+Harly bot is a member, and run the test notification. Harly stores credentials
+and the workspace token encrypted.
 
 ## Discord
 
@@ -31,13 +32,122 @@ Create a bot with BotFather, copy the bot token once, and configure the target
 chat ID in the Telegram integration. Send a test message before enabling
 candidate events.
 
+## Slack setup in detail
+
+<Steps>
+  <Step title="Create the OAuth app">
+    Go to [api.slack.com/apps](https://api.slack.com/apps) and create an app
+    for your workspace. Add the redirect URI:
+
+    ```text
+    https://hiring.example.com/api/integrations/slack/callback
+    ```
+
+    Copy the **Client ID** and **Client Secret** from Basic Information.
+  </Step>
+  <Step title="Add installation variables">
+    For self-hosted single-tenant deployments, add both values to your server
+    environment and restart Harly. Multi-tenant operators can enter encrypted
+    credentials directly in the Slack settings card:
+
+    ```dotenv
+    SLACK_CLIENT_ID=<client-id>
+    SLACK_CLIENT_SECRET=<client-secret>
+    ```
+  </Step>
+  <Step title="Connect the workspace">
+    Open **Settings → Integrations → Slack**, select **Connect**, and approve
+    the Slack authorization. Choose the channel where recruiting notifications
+    should appear. The Harly bot must already be invited to that channel; Harly
+    only lists channels where the bot can post.
+  </Step>
+  <Step title="Choose events">
+    Enable the events you want. Most teams enable only the highest-signal
+    events to keep channel volume manageable:
+
+    - Application received
+    - Candidate stage change
+    - Offer accepted
+    - Interview scheduled or canceled
+  </Step>
+  <Step title="Test">
+    Select **Send test notification**. Confirm the message appears in the
+    configured channel.
+  </Step>
+</Steps>
+
+## Discord setup in detail
+
+<Steps>
+  <Step title="Create an incoming webhook">
+    In Discord, open the destination channel, go to **Settings → Integrations →
+    Webhooks**, and create a new webhook. Copy the webhook URL.
+  </Step>
+  <Step title="Paste into Harly">
+    Open **Settings → Integrations → Discord** and paste the webhook URL. The
+    URL is encrypted at rest and never returned in API responses.
+  </Step>
+  <Step title="Test">
+    Select **Send test notification**. Confirm the embed appears in the channel.
+  </Step>
+</Steps>
+
+<Note>
+  Rotate the webhook URL in Discord if it has been exposed. Harly does not
+  support webhook URL rotation from the UI.
+</Note>
+
+## Telegram setup in detail
+
+<Steps>
+  <Step title="Create a bot">
+    Open BotFather on Telegram, send `/newbot`, and follow the prompts. Copy
+    the bot token once.
+  </Step>
+  <Step title="Find the chat ID">
+    Add the bot to the target channel or group, send a test message, and
+    retrieve the chat ID from the Telegram API.
+  </Step>
+  <Step title="Configure in Harly">
+    Open **Settings → Integrations → Telegram**, paste the bot token and chat
+    ID, and save.
+  </Step>
+  <Step title="Test">
+    Select **Send test notification**. Confirm the message appears in the chat.
+  </Step>
+</Steps>
+
 ## Delivery and safety
 
 Notification delivery is asynchronous and at-least-once. A provider outage
-must not block candidate mutations. Harly records the delivery outcome and
-retries eligible failures through the scheduler.
+must not block candidate mutations. Harly persists Slack deliveries, retries
+transient failures through the scheduler, honors Slack rate-limit backoff, and
+dead-letters permanent failures for operator review.
 
 <Warning>
-  Do not send resumes, personal contact data, or full candidate notes to a
-  public channel. Prefer an event summary with a link back to Harly.
+  Slack messages contain event summaries, candidate names, and job titles only.
+  Harly does not send resumes, email addresses, phone numbers, personal contact
+  data, or full candidate notes to Slack. Prefer a private channel and links
+  back to Harly.
 </Warning>
+
+## Troubleshooting
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| Slack test fails silently | Token expired or revoked | Disconnect and reconnect the workspace |
+| Discord embeds not appearing | Webhook URL rotated or deleted | Create a new webhook and update in Harly |
+| Telegram messages delayed | Bot kicked from the channel | Re-add the bot and verify chat ID |
+| Notifications not sending | Integration not connected | Check **Settings → Integrations** for connection status |
+| Duplicate notifications | At-least-once delivery | Use event deduplication in your channel workflow |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Email" icon="mail" href="/integrations/email">
+    Configure outbound and inbound email.
+  </Card>
+  <Card title="Calendar sync" icon="calendar" href="/integrations/google-calendar">
+    Connect Google Calendar or Outlook for interview scheduling.
+  </Card>
+</CardGroup>

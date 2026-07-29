@@ -15,7 +15,7 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { AiButton } from "@/components/ui/AiButton";
 import { Badge } from "@/components/ui/badge";

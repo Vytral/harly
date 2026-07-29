@@ -9,17 +9,17 @@ import {
   MoreHorizontal,
   RotateCcw,
   Search,
+  ShieldAlert,
   Trash2,
   User,
   Users,
   XCircle,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import {
   bulkTrashCandidatesAction,
   bulkUpdateCandidateStatusAction,
-  restoreCandidateAction,
   trashCandidateAction,
 } from "@/features/candidates/actions";
 import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
@@ -71,14 +71,16 @@ export type CandidateRow = {
   /** Epoch millis of last candidate update. */
   updatedAt: number;
   inPool: boolean;
+  /** Has a pending or in-progress data-export/erasure request awaiting review. */
+  hasOpenPrivacyRequest: boolean;
 };
 
 type SortKey = "recent" | "oldest" | "modified" | "name";
 
 function uniqueSorted(values: (string | null)[]) {
-  return Array.from(new Set(values.filter((v): v is string => Boolean(v)))).sort(
-    (a, b) => a.localeCompare(b),
-  );
+  return Array.from(
+    new Set(values.filter((v): v is string => Boolean(v))),
+  ).sort((a, b) => a.localeCompare(b));
 }
 
 const CSV_HEADERS = [
@@ -149,10 +151,16 @@ export function CandidatesTable({
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  const departments = useMemo(() => uniqueSorted(rows.map((r) => r.department)), [rows]);
+  const departments = useMemo(
+    () => uniqueSorted(rows.map((r) => r.department)),
+    [rows],
+  );
   const roles = useMemo(() => uniqueSorted(rows.map((r) => r.role)), [rows]);
   const stages = useMemo(() => uniqueSorted(rows.map((r) => r.stage)), [rows]);
-  const sources = useMemo(() => uniqueSorted(rows.map((r) => r.source)), [rows]);
+  const sources = useMemo(
+    () => uniqueSorted(rows.map((r) => r.source)),
+    [rows],
+  );
   const tagOptions = useMemo(
     () => uniqueSorted(rows.flatMap((r) => r.tags)),
     [rows],
@@ -255,7 +263,10 @@ export function CandidatesTable({
     });
   }
 
-  function runRowStatus(row: CandidateRow, next: "hired" | "rejected" | "active") {
+  function runRowStatus(
+    row: CandidateRow,
+    next: "hired" | "rejected" | "active",
+  ) {
     if (!row.applicationId) {
       toast.error("This candidate has no application to update.");
       return;
@@ -277,7 +288,7 @@ export function CandidatesTable({
   function runDelete(row: CandidateRow) {
     if (
       !window.confirm(
-        `Move ${row.fullName} to trash? You can restore them later from the Trash tab.`,
+        `Delete ${row.fullName} permanently? This removes their profile and related records.`,
       )
     ) {
       return;
@@ -285,17 +296,7 @@ export function CandidatesTable({
     startTransition(async () => {
       const result = await trashCandidateAction(row.id);
       if (result.success) {
-        toast.success(`${row.fullName} moved to trash.`, {
-          action: {
-            label: "Undo",
-            onClick: () => {
-              startTransition(async () => {
-                await restoreCandidateAction(row.id);
-                router.refresh();
-              });
-            },
-          },
-        });
+        toast.success(`${row.fullName} deleted permanently.`);
         setSelected((prev) => {
           const next = new Set(prev);
           next.delete(row.id);
@@ -323,7 +324,9 @@ export function CandidatesTable({
       } else {
         toast.error(
           result.error ??
-            (row.inPool ? "Could not remove from pool." : "Could not add to pool."),
+            (row.inPool
+              ? "Could not remove from pool."
+              : "Could not add to pool."),
         );
         router.refresh();
       }
@@ -335,7 +338,7 @@ export function CandidatesTable({
     if (ids.length === 0) return;
     if (
       !window.confirm(
-        `Move ${ids.length} candidate${ids.length === 1 ? "" : "s"} to trash? You can restore them later from the Trash tab.`,
+        `Delete ${ids.length} candidate${ids.length === 1 ? "" : "s"} permanently? This cannot be undone.`,
       )
     ) {
       return;
@@ -344,17 +347,9 @@ export function CandidatesTable({
       const result = await bulkTrashCandidatesAction(ids);
       if (result.success) {
         const count = result.count ?? ids.length;
-        toast.success(`Moved ${count} candidate${count === 1 ? "" : "s"} to trash.`, {
-          action: {
-            label: "Undo",
-            onClick: () => {
-              startTransition(async () => {
-                await Promise.all(ids.map((id) => restoreCandidateAction(id)));
-                router.refresh();
-              });
-            },
-          },
-        });
+        toast.success(
+          `Deleted ${count} candidate${count === 1 ? "" : "s"} permanently.`,
+        );
         setSelected(new Set());
         router.refresh();
       } else {
@@ -366,7 +361,8 @@ export function CandidatesTable({
   const selectedCount = filtered.filter((r) => selected.has(r.id)).length;
 
   function exportCsv() {
-    const exportRows = selectedCount > 0 ? filtered.filter((r) => selected.has(r.id)) : filtered;
+    const exportRows =
+      selectedCount > 0 ? filtered.filter((r) => selected.has(r.id)) : filtered;
     if (exportRows.length === 0) {
       toast.error("No candidates to export.");
       return;
@@ -390,10 +386,20 @@ export function CandidatesTable({
             className="h-11 rounded-full pl-11"
           />
         </div>
-        <Button variant="outline" className="h-11 rounded-lg" onClick={exportCsv}>
+        <Button
+          variant="outline"
+          className="h-11 rounded-lg"
+          onClick={exportCsv}
+        >
           <Download className="size-4" />
-          <span className="hidden sm:inline">{selectedCount > 0 ? `Export selected (${selectedCount})` : "Export CSV"}</span>
-          <span className="sm:hidden">{selectedCount > 0 ? `(${selectedCount})` : "CSV"}</span>
+          <span className="hidden sm:inline">
+            {selectedCount > 0
+              ? `Export selected (${selectedCount})`
+              : "Export CSV"}
+          </span>
+          <span className="sm:hidden">
+            {selectedCount > 0 ? `(${selectedCount})` : "CSV"}
+          </span>
         </Button>
         <ImportCandidatesDrawer
           jobs={importJobs}
@@ -403,28 +409,63 @@ export function CandidatesTable({
 
       {/* Filter pills */}
       <div className="flex flex-wrap items-center gap-2">
-        <FilterPill label="Department" value={dept} onChange={setDept} options={departments} />
-        <FilterPill label="Job" value={role} onChange={setRole} options={roles} />
-        <FilterPill label="Stage" value={stage} onChange={setStage} options={stages} />
+        <FilterPill
+          label="Department"
+          value={dept}
+          onChange={setDept}
+          options={departments}
+        />
+        <FilterPill
+          label="Job"
+          value={role}
+          onChange={setRole}
+          options={roles}
+        />
+        <FilterPill
+          label="Stage"
+          value={stage}
+          onChange={setStage}
+          options={stages}
+        />
         <FilterPill
           label="Status"
           value={status}
           onChange={setStatus}
           options={["active", "hired", "rejected", "withdrawn"]}
-          labelMap={{ active: "Active", hired: "Hired", rejected: "Rejected", withdrawn: "Withdrawn" }}
+          labelMap={{
+            active: "Active",
+            hired: "Hired",
+            rejected: "Rejected",
+            withdrawn: "Withdrawn",
+          }}
         />
         {sources.length > 0 ? (
-          <FilterPill label="Source" value={source} onChange={setSource} options={sources} />
+          <FilterPill
+            label="Source"
+            value={source}
+            onChange={setSource}
+            options={sources}
+          />
         ) : null}
         {tagOptions.length > 0 ? (
-          <FilterPill label="Tag" value={tag} onChange={setTag} options={tagOptions} />
+          <FilterPill
+            label="Tag"
+            value={tag}
+            onChange={setTag}
+            options={tagOptions}
+          />
         ) : null}
         <FilterPill
           label="Sort"
           value={sortKey}
           onChange={(v) => setSortKey(v as SortKey)}
           options={["recent", "oldest", "modified", "name"]}
-          labelMap={{ recent: "Most recent", oldest: "Oldest", modified: "Last modified", name: "Name A–Z" }}
+          labelMap={{
+            recent: "Most recent",
+            oldest: "Oldest",
+            modified: "Last modified",
+            name: "Name A–Z",
+          }}
           allValue="recent"
         />
         {filtersActive ? (
@@ -438,7 +479,9 @@ export function CandidatesTable({
           </Button>
         ) : null}
         <p className="ml-auto text-sm text-muted-foreground">
-          <span className="font-semibold tabular-nums text-foreground">{filtered.length}</span>{" "}
+          <span className="font-semibold tabular-nums text-foreground">
+            {filtered.length}
+          </span>{" "}
           {filtered.length === 1 ? "candidate" : "candidates"}
         </p>
       </div>
@@ -457,15 +500,30 @@ export function CandidatesTable({
               <Mail className="size-4" />
               Email
             </Button>
-            <Button size="sm" variant="outline" disabled={isPending} onClick={() => runBulk("hired")}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => runBulk("hired")}
+            >
               <CheckCircle2 className="size-4 text-primary" />
               Mark hired
             </Button>
-            <Button size="sm" variant="outline" disabled={isPending} onClick={() => runBulk("rejected")}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => runBulk("rejected")}
+            >
               <XCircle className="size-4 text-destructive" />
               Reject
             </Button>
-            <Button size="sm" variant="outline" disabled={isPending} onClick={() => runBulk("active")}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={isPending}
+              onClick={() => runBulk("active")}
+            >
               <RotateCcw className="size-4" />
               Reactivate
             </Button>
@@ -479,7 +537,11 @@ export function CandidatesTable({
               <Trash2 className="size-4" />
               Delete
             </Button>
-            <Button size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setSelected(new Set())}
+            >
               Clear
             </Button>
           </div>
@@ -519,7 +581,8 @@ export function CandidatesTable({
                   data-state={isSelected ? "selected" : undefined}
                   onClick={() => router.push(`/dashboard/candidates/${row.id}`)}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") router.push(`/dashboard/candidates/${row.id}`);
+                    if (e.key === "Enter")
+                      router.push(`/dashboard/candidates/${row.id}`);
                   }}
                   className={cn(
                     "group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 rounded-xl border-b border-border/40 px-4 py-4 transition-all sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_2.25rem]",
@@ -565,9 +628,19 @@ export function CandidatesTable({
                             In Pool
                           </span>
                         ) : null}
+                        {row.hasOpenPrivacyRequest ? (
+                          <span
+                            title="Has a pending privacy request awaiting review"
+                            className="inline-flex items-center gap-1 rounded-full bg-clay/10 px-1.5 py-0.5 text-[11px] font-semibold text-clay"
+                          >
+                            <ShieldAlert className="size-3" />
+                            Privacy request
+                          </span>
+                        ) : null}
                       </div>
                       <p className="truncate text-sm text-muted-foreground">
-                        {[row.role, row.location].filter(Boolean).join(" · ") || row.email}
+                        {[row.role, row.location].filter(Boolean).join(" · ") ||
+                          row.email}
                       </p>
                       {row.tags.length > 0 ? (
                         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
@@ -593,8 +666,13 @@ export function CandidatesTable({
                   <div className="col-start-2 min-w-0 sm:col-auto">
                     {row.stage ? (
                       <>
-                        <p className="text-xs font-medium text-foreground">{row.stage}</p>
-                        <PipelineSpine current={row.stage} className="mt-1.5 max-w-40" />
+                        <p className="text-xs font-medium text-foreground">
+                          {row.stage}
+                        </p>
+                        <PipelineSpine
+                          current={row.stage}
+                          className="mt-1.5 max-w-40"
+                        />
                         {row.appliedLabel ? (
                           <p className="mt-1.5 text-xs text-muted-foreground">
                             {row.appliedLabel}
@@ -602,13 +680,17 @@ export function CandidatesTable({
                         ) : null}
                       </>
                     ) : (
-                      <p className="text-xs text-muted-foreground">No application</p>
+                      <p className="text-xs text-muted-foreground">
+                        No application
+                      </p>
                     )}
                   </div>
 
                   {/* Status */}
                   <div className="col-start-2 sm:col-auto">
-                    {row.status ? <ApplicationStatusBadge status={row.status} /> : null}
+                    {row.status ? (
+                      <ApplicationStatusBadge status={row.status} />
+                    ) : null}
                   </div>
 
                   {/* Row actions */}
@@ -619,7 +701,9 @@ export function CandidatesTable({
                     <RowActions
                       row={row}
                       disabled={isPending}
-                      onView={() => router.push(`/dashboard/candidates/${row.id}`)}
+                      onView={() =>
+                        router.push(`/dashboard/candidates/${row.id}`)
+                      }
                       onStatus={(next) => runRowStatus(row, next)}
                       onDelete={() => runDelete(row)}
                       onTogglePool={() => runTogglePool(row)}
@@ -685,7 +769,9 @@ function departmentChipClass(department: string) {
   for (let i = 0; i < department.length; i++) {
     hash = (hash * 31 + department.charCodeAt(i)) | 0;
   }
-  return DEPARTMENT_CHIP_CLASSES[Math.abs(hash) % DEPARTMENT_CHIP_CLASSES.length];
+  return DEPARTMENT_CHIP_CLASSES[
+    Math.abs(hash) % DEPARTMENT_CHIP_CLASSES.length
+  ];
 }
 
 function RowActions({
@@ -726,7 +812,10 @@ function RowActions({
           <CheckCircle2 className="size-4 text-primary" />
           Mark hired
         </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onSelect={() => onStatus("rejected")}>
+        <DropdownMenuItem
+          variant="destructive"
+          onSelect={() => onStatus("rejected")}
+        >
           <XCircle className="size-4" />
           Reject
         </DropdownMenuItem>
@@ -736,7 +825,9 @@ function RowActions({
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={onTogglePool}>
-          <BookmarkSimpleIcon className={cn("size-4", row.inPool && "fill-current")} />
+          <BookmarkSimpleIcon
+            className={cn("size-4", row.inPool && "fill-current")}
+          />
           {row.inPool ? "Remove from Pool" : "Add to Pool"}
         </DropdownMenuItem>
         <DropdownMenuSeparator />

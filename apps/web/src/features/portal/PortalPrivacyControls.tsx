@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { Download } from "lucide-react";
+import { toast } from "@/lib/notification-island/toast";
 
 import { requestPortalErasureAction } from "./profile-actions";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
@@ -13,17 +15,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DSAR_TYPE_META,
+  DsarStatusBadge,
+  isOpenDsarStatus,
+  type DsarStatus,
+} from "@/features/workspaces/dsar-shared";
 
 type ErasureRequest = {
-  status: "pending" | "processing" | "completed" | "denied";
+  status: DsarStatus;
   createdAt: Date;
 } | null;
+
+const STATUS_COPY: Record<DsarStatus, string> = {
+  pending: "Your deletion request is awaiting review.",
+  processing: "Your deletion request is being processed.",
+  blocked: "Your deletion request is temporarily blocked by a legal hold.",
+  completed: "Your deletion request has been completed.",
+  denied: "Your deletion request was not approved. Contact the hiring team if you have questions.",
+};
 
 export function PortalPrivacyControls({ erasureRequest }: { erasureRequest: ErasureRequest }) {
   const [isPending, startTransition] = useTransition();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const [requestStatus, setRequestStatus] = useState(erasureRequest?.status ?? null);
-  const hasOpenRequest = requestStatus === "pending" || requestStatus === "processing";
+  const [requestStatus, setRequestStatus] = useState<DsarStatus | null>(erasureRequest?.status ?? null);
+  const hasOpenRequest = requestStatus !== null && isOpenDsarStatus(requestStatus);
+  const erasureMeta = DSAR_TYPE_META.erasure;
 
   function requestErasure() {
     startTransition(async () => {
@@ -44,30 +61,56 @@ export function PortalPrivacyControls({ erasureRequest }: { erasureRequest: Eras
       <p className="mt-1 text-sm text-muted-foreground">
         Download a portable copy of your profile and applications, or request deletion.
       </p>
-      {requestStatus && (
-        <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground" role="status">
-          {requestStatus === "pending" && "Your deletion request is awaiting review."}
-          {requestStatus === "processing" && "Your deletion request is being processed."}
-          {requestStatus === "completed" && "Your deletion request has been completed."}
-          {requestStatus === "denied" && "Your deletion request was not approved. Contact the hiring team if you have questions."}
-        </p>
-      )}
-      <div className="mt-4 flex flex-wrap gap-3">
-        <a className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted" href="/api/portal/privacy/export?format=json">
-          Download JSON
-        </a>
-        <a className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted" href="/api/portal/privacy/export?format=csv">
-          Download CSV
-        </a>
-        <button
-          type="button"
+
+      {requestStatus ? (
+        <div className="mt-4 flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-3.5 dark:border-zinc-800 dark:bg-zinc-800/60">
+          <span
+            className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${erasureMeta.className}`}
+          >
+            <erasureMeta.icon className="size-4" strokeWidth={1.8} />
+          </span>
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-sm font-medium text-foreground">{erasureMeta.label}</p>
+              <DsarStatusBadge status={requestStatus} />
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground" role="status">
+              {STATUS_COPY[requestStatus]}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex flex-wrap gap-2.5">
+        <Button variant="outline" size="sm" asChild>
+          <a href="/api/portal/privacy/export?format=json">
+            <Download className="size-4" />
+            Download JSON
+          </a>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <a href="/api/portal/privacy/export?format=csv">
+            <Download className="size-4" />
+            Download CSV
+          </a>
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
           onClick={() => setConfirmOpen(true)}
           disabled={isPending || hasOpenRequest || requestStatus === "completed"}
-          className="rounded-lg px-4 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50"
+          className="ml-auto text-destructive hover:bg-destructive/10 hover:text-destructive"
         >
-          {isPending ? "Submitting…" : hasOpenRequest ? "Deletion requested" : requestStatus === "completed" ? "Deletion completed" : "Request deletion"}
-        </button>
+          {isPending
+            ? "Submitting…"
+            : hasOpenRequest
+              ? "Deletion requested"
+              : requestStatus === "completed"
+                ? "Deletion completed"
+                : "Request deletion"}
+        </Button>
       </div>
+
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
@@ -78,13 +121,13 @@ export function PortalPrivacyControls({ erasureRequest }: { erasureRequest: Eras
           </DialogHeader>
           <DialogFooter>
             <DialogClose asChild>
-              <button type="button" className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted" disabled={isPending}>
+              <Button variant="outline" disabled={isPending}>
                 Cancel
-              </button>
+              </Button>
             </DialogClose>
-            <button type="button" onClick={requestErasure} disabled={isPending} className="rounded-lg bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground disabled:opacity-50">
+            <Button variant="destructive" onClick={requestErasure} disabled={isPending}>
               {isPending ? "Submitting…" : "Request deletion"}
-            </button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

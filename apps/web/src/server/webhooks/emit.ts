@@ -110,14 +110,15 @@ export async function emitWebhookEvent(
     log.error({ workspaceId, event, error }, "[webhooks] emit failed");
   }
 
-  // Fire-and-forget: chat webhook (Slack/Discord incoming-webhook) + Slack OAuth API
+  // Chat webhooks remain best-effort. OAuth Slack is durably queued before the
+  // event returns, and its dispatcher owns retries/dead-lettering.
   void notifyChatEvent(workspaceId, event, data).catch((err) =>
     log.error(err, "notifyChatEvent failed"),
   );
   void notifyTelegramEvent(workspaceId, event, data).catch((err) =>
     log.error(err, "notifyTelegramEvent failed"),
   );
-  void notifySlackEvent(workspaceId, event, data).catch((err) =>
+  await notifySlackEvent(workspaceId, event, data).catch((err) =>
     log.error(err, "notifySlackEvent failed"),
   );
   void notifyInboxEvent(

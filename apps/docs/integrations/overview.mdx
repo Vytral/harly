@@ -17,11 +17,13 @@ sharing a user's refresh token between them.
 
 | Need | Providers | Setup |
 | --- | --- | --- |
-| Calendar | Google Calendar, Microsoft Outlook | OAuth client plus workspace connection |
+| Calendar | Google Calendar, Microsoft Outlook | OAuth client + workspace connection |
 | Video interviews | Zoom, Microsoft Teams, Google Meet, Jitsi | Provider connection or meeting URL |
-| Email | Resend, SMTP, IMAP, Postmark inbound | Workspace sender and mailbox settings |
+| Email outbound | Resend, SMTP | Workspace sender and mailbox settings |
+| Email inbound (reply threading) | Postmark, Resend inbound | MX records + inbound webhook |
+| Mailbox sync (send and receive) | IMAP | Workspace mailbox connection |
 | Notifications | Slack, Discord, Telegram | OAuth or incoming webhook |
-| E-signature | DocuSeal or Harly Signing | Optional provider connection |
+| E-signature | DocuSeal, Harly Signing | Optional provider connection |
 | Files | Local volume, S3-compatible storage | Deployment configuration |
 
 ## Connection lifecycle
@@ -29,15 +31,17 @@ sharing a user's refresh token between them.
 <Steps>
   <Step title="Create provider credentials">
     Create the provider application with the redirect URI and scopes shown in
-    the provider guide. Keep the client secret server-side.
+    the provider guide. Keep the client secret server-side, never in source
+    control or client-facing code.
   </Step>
   <Step title="Add installation variables">
-    Add the values to the web process's secret manager, restart Harly, and
-    confirm the integration card no longer reports missing credentials.
+    Add the values to the web process's secret manager and restart Harly.
+    Confirm the integration card in **Settings → Integrations** no longer
+    reports missing credentials.
   </Step>
   <Step title="Connect the workspace">
     Open **Settings → Integrations**, connect the account, select a calendar or
-    destination where requested, and run the provider test.
+    channel where requested, and run the provider test.
   </Step>
   <Step title="Exercise failure recovery">
     Disconnect and reconnect a test account, verify a sample event or message,
@@ -48,14 +52,45 @@ sharing a user's refresh token between them.
 <Warning>
   A provider connection is not the source of truth for a Harly record. Harly
   saves the interview, application, or message first and reports sync warnings
-  when the provider is unavailable.
+  when the provider is unavailable. Never create a duplicate record to work
+  around a sync warning. Use the retry action on the existing record instead.
 </Warning>
+
+## Integration-specific guides
+
+<CardGroup cols={2}>
+  <Card title="Email" icon="envelope" href="/integrations/email">
+    Resend, SMTP, inbound replies, and mailboxes.
+  </Card>
+  <Card title="Google Calendar and Meet" icon="calendar" href="/integrations/google-calendar">
+    OAuth setup, callback registration, and common errors.
+  </Card>
+  <Card title="Microsoft Outlook and Teams" icon="microsoft" href="/integrations/microsoft">
+    Entra app registration and calendar sync.
+  </Card>
+  <Card title="Video providers" icon="video" href="/integrations/video">
+    Zoom, Teams, Meet, and Jitsi.
+  </Card>
+  <Card title="Notifications" icon="bell" href="/integrations/notifications">
+    Slack, Discord, and Telegram.
+  </Card>
+  <Card title="Signatures" icon="file-signature" href="/integrations/signatures">
+    DocuSeal and Harly Signing.
+  </Card>
+  <Card title="Storage" icon="folder" href="/integrations/storage">
+    Local volume and S3-compatible providers.
+  </Card>
+</CardGroup>
 
 ## Troubleshooting pattern
 
-1. Open **Settings → Integrations** and check the provider status.
-2. Verify the public origin and exact redirect URI.
-3. Confirm the web process received the current secret variables.
+1. Open **Settings → Integrations** and check the provider status indicator.
+2. Verify the public origin and exact redirect URI match what is registered in
+   the provider.
+3. Confirm the web process received the current secret variables after the
+   last restart.
 4. Reconnect the workspace account if the provider returned `invalid_grant`.
-5. Inspect the application or interview warning; retry the sync from its
+5. Inspect the application or interview warning and retry the sync from its
    record rather than creating a duplicate external event.
+
+For detailed symptoms and fixes, see [troubleshooting](/operations/troubleshooting).

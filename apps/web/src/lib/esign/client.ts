@@ -198,6 +198,24 @@ export async function archiveSubmission(
   );
 }
 
+/** Archive a submission and treat a remote already-archived response as success. */
+export async function archiveSubmissionIdempotent(
+  ctx: EsignConfig,
+  submissionId: string | number,
+): Promise<boolean> {
+  try {
+    await archiveSubmission(ctx, submissionId);
+    return true;
+  } catch {
+    try {
+      const current = await getSubmission(ctx, submissionId);
+      return Boolean(current.archived_at) || current.status === "archived";
+    } catch {
+      return false;
+    }
+  }
+}
+
 /**
  * Download a signed/audit PDF from its DocuSeal URL. On self-hosted instances
  * the file host is the same origin as the API, so no extra auth is required for
@@ -210,13 +228,18 @@ export async function downloadDocusealFile(
   const res = await fetch(url, { headers: { [AUTH_HEADER]: ctx.apiToken } });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`DocuSeal file download ${res.status}: ${body.slice(0, 300)}`);
+    throw new Error(
+      `DocuSeal file download ${res.status}: ${body.slice(0, 300)}`,
+    );
   }
   return Buffer.from(await res.arrayBuffer());
 }
 
 /** Sender-facing submission link in the DocuSeal admin UI. */
-export function getDocusealSubmissionUrl(baseUrl: string, submissionId: string | number) {
+export function getDocusealSubmissionUrl(
+  baseUrl: string,
+  submissionId: string | number,
+) {
   return `${baseUrl}/submissions/${encodeURIComponent(String(submissionId))}`;
 }
 

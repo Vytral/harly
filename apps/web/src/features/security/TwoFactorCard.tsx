@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "motion/react";
 import { QRCodeSVG } from "qrcode.react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { authClient } from "@harly/auth/client";
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";

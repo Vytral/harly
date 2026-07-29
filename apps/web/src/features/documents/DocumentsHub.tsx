@@ -15,7 +15,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -127,13 +127,30 @@ function FilterSelect({
   );
 }
 
-export function DocumentsHub({ data }: { data: DocumentHubData }) {
+export function DocumentsHub({
+  data,
+  initialCandidateId,
+}: {
+  data: DocumentHubData;
+  initialCandidateId?: string;
+}) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [category, setCategory] = useState("all");
   const [section, setSection] = useState<"active" | "archived">("active");
   const [signature, setSignature] = useState("all");
   const [association, setAssociation] = useState("all");
+  const [candidateFilter, setCandidateFilter] = useState(initialCandidateId ?? null);
+  const candidateFilterName = candidateFilter
+    ? data.associationOptions.find(
+        (option) => option.type === "candidate" && option.id === candidateFilter,
+      )?.label ?? "this candidate"
+    : null;
+
+  function clearCandidateFilter() {
+    setCandidateFilter(null);
+    router.replace("/dashboard/documents" as Route);
+  }
   const [uploadOpen, setUploadOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [view, setView] = useState<"list" | "grid">("list");
@@ -145,6 +162,8 @@ export function DocumentsHub({ data }: { data: DocumentHubData }) {
     const needle = query.trim().toLowerCase();
     return data.documents.filter((document) => {
       if (document.status !== section) return false;
+      if (candidateFilter && !document.candidateIds.includes(candidateFilter))
+        return false;
       if (
         needle &&
         !`${document.name} ${document.originalName} ${document.ownerName ?? ""}`
@@ -165,7 +184,7 @@ export function DocumentsHub({ data }: { data: DocumentHubData }) {
         return false;
       return true;
     });
-  }, [data.documents, query, category, section, signature, association]);
+  }, [data.documents, query, category, section, signature, association, candidateFilter]);
   const active = data.documents.filter(
     (document) => document.status === "active",
   ).length;
@@ -356,6 +375,19 @@ export function DocumentsHub({ data }: { data: DocumentHubData }) {
           ) : null}
         </div>
       </header>
+      {candidateFilterName ? (
+        <div className="flex items-center gap-2 rounded-full border border-primary/25 bg-primary/[0.04] px-3 py-1.5 text-xs font-medium text-foreground">
+          Showing documents for {candidateFilterName}
+          <button
+            type="button"
+            onClick={clearCandidateFilter}
+            aria-label="Clear candidate filter"
+            className="rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            <X className="size-3.5" />
+          </button>
+        </div>
+      ) : null}
       <section className="flex flex-wrap gap-x-8 gap-y-4 border-b border-border/70 pb-5 duration-500 animate-in fade-in slide-in-from-bottom-2">
         <Stat label="Active documents" value={active} tone="text-primary" />
         <Stat label="Archived" value={archived} />

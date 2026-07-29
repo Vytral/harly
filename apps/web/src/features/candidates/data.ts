@@ -1,6 +1,15 @@
 import "server-only";
 
-import { and, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -14,15 +23,32 @@ import {
   candidateNotes,
   candidateTags,
   candidateMessages,
+  candidatePortalMagicLinks,
+  documentAssociations,
+  documentLegalHolds,
+  documentRequests,
+  documentVersions,
+  documents,
+  domainEventOutbox,
   dsarRequests,
+  emailOutbox,
   interviews,
   jobs,
   jobStages,
   mailAttachments,
   mailMessages,
+  mailIdempotencyKeys,
+  mailUnificationMigrations,
   mailThreads,
   poolEntries,
   scorecards,
+  offers,
+  savedSignatures,
+  signatureEnvelopes,
+  signatureArtifacts,
+  notifications,
+  tasks,
+  webhookDeliveries,
   user as authUsers,
 } from "@harly/db";
 import type {
@@ -35,8 +61,18 @@ import {
   interviewTypeLabel,
   interviewModeLabel,
 } from "@/features/interviews/shared";
-import type { InterviewType, InterviewMode } from "@/features/interviews/shared";
+import type {
+  InterviewType,
+  InterviewMode,
+} from "@/features/interviews/shared";
 import { cancelInterviewGCalEvent } from "@/lib/gcal/sync";
+import { cancelInterviewTeamsMeeting } from "@/lib/outlook/teams-sync";
+import { cancelInterviewZoomMeeting } from "@/lib/zoom/sync";
+import { cancelInterviewJitsiMeeting } from "@/lib/jitsi/sync";
+import { getWorkspaceCalConfig } from "@/lib/cal/config";
+import { cancelCalBooking } from "@/lib/cal/client";
+import { getWorkspaceEsignConfig } from "@/lib/esign/config";
+import { archiveSubmissionIdempotent } from "@/lib/esign/client";
 import { storage } from "@/lib/storage";
 import { isWorkspaceStorageKey } from "@/lib/storage-validation";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
@@ -60,6 +96,7 @@ export type CandidateListItem = {
   githubUrl: string | null;
   applicationCount: number;
   inPool: boolean;
+  hasOpenPrivacyRequest: boolean;
   latestApplication: {
     applicationId: string;
     jobId: string;
@@ -83,6 +120,12 @@ export type AiEvaluationCriterion = {
 export type CandidateAiEvaluationItem = {
   id: string;
   applicationId: string;
+  source: "ai" | "rules";
+  engineVersion: string;
+  rubricVersion: string;
+  evidenceCoverage: number | null;
+  confidence: number | null;
+  requiresHumanReview: boolean;
   provider: string;
   modelId: string;
   score: number;
@@ -122,10 +165,13 @@ export type CandidateActivityItem = {
 export type CandidatePrivacyRequestItem = {
   id: string;
   type: "export" | "erasure";
-  status: "pending" | "processing" | "completed" | "denied";
+  status: "pending" | "processing" | "blocked" | "completed" | "denied";
   requestedBy: string | null;
   processedBy: string | null;
   notes: string | null;
+  blockedReason: string | null;
+  blockedAt: Date | null;
+  reviewDueAt: Date | null;
   createdAt: Date;
   completedAt: Date | null;
 };
@@ -143,7 +189,10 @@ function textFromMetadata(value: unknown, key: string) {
   return typeof entry === "string" ? entry : null;
 }
 
-export function workspaceStorageKeyFromUrl(workspaceId: string, fileUrl: string) {
+export function workspaceStorageKeyFromUrl(
+  workspaceId: string,
+  fileUrl: string,
+) {
   const resumeKey = resumeKeyFromUrl(fileUrl);
   if (resumeKey && isWorkspaceStorageKey(workspaceId, resumeKey, "resumes")) {
     return resumeKey;
@@ -173,7 +222,9 @@ export async function listCandidates() {
       lastName: candidates.lastName,
       email: candidates.email,
       phone: candidates.phone,
-      location: sql<string | null>`coalesce(${candidates.address}, ${candidates.location})`,
+      location: sql<
+        string | null
+      >`coalesce(${candidates.address}, ${candidates.location})`,
       avatarUrl: candidates.avatarUrl,
       githubUrl: candidates.githubUrl,
       candidateCreatedAt: candidates.createdAt,
@@ -207,32 +258,37 @@ export async function listCandidates() {
       ),
     )
     .where(
-      and(eq(candidates.workspaceId, workspace.id), isNull(candidates.deletedAt)),
+      and(
+        eq(candidates.workspaceId, workspace.id),
+        isNull(candidates.deletedAt),
+      ),
     )
     .orderBy(desc(candidates.createdAt), desc(applications.appliedAt));
 
-  const candidateMap = new Map<string, CandidateListItem & { createdAt: Date; updatedAt: Date }>();
+  const candidateMap = new Map<
+    string,
+    CandidateListItem & { createdAt: Date; updatedAt: Date }
+  >();
 
   for (const row of rows) {
     const existing = candidateMap.get(row.candidateId);
-    const candidate =
-      existing ??
-      {
-        id: row.candidateId,
-        firstName: row.firstName,
-        lastName: row.lastName,
-        fullName: `${row.firstName} ${row.lastName}`,
-        email: row.email,
-        phone: row.phone,
-        location: row.location,
-        avatarUrl: row.avatarUrl,
-        githubUrl: row.githubUrl,
-        applicationCount: 0,
-        inPool: false,
-        latestApplication: null,
-        createdAt: row.candidateCreatedAt,
-        updatedAt: row.candidateUpdatedAt,
-      };
+    const candidate = existing ?? {
+      id: row.candidateId,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      fullName: `${row.firstName} ${row.lastName}`,
+      email: row.email,
+      phone: row.phone,
+      location: row.location,
+      avatarUrl: row.avatarUrl,
+      githubUrl: row.githubUrl,
+      applicationCount: 0,
+      inPool: false,
+      hasOpenPrivacyRequest: false,
+      latestApplication: null,
+      createdAt: row.candidateCreatedAt,
+      updatedAt: row.candidateUpdatedAt,
+    };
 
     if (row.applicationId) {
       candidate.applicationCount += 1;
@@ -263,7 +319,10 @@ export async function listCandidates() {
 
   // Tags for every candidate in the workspace, grouped by candidate.
   const tagRows = await db
-    .select({ candidateId: candidateTags.candidateId, label: candidateTags.label })
+    .select({
+      candidateId: candidateTags.candidateId,
+      label: candidateTags.label,
+    })
     .from(candidateTags)
     .where(eq(candidateTags.workspaceId, workspace.id))
     .orderBy(candidateTags.label);
@@ -291,8 +350,33 @@ export async function listCandidates() {
       : [];
   const inPoolIds = new Set(activePoolRows.map((row) => row.candidateId));
 
+  const openPrivacyRows =
+    candidateIds.length > 0
+      ? await db
+          .select({ candidateId: dsarRequests.candidateId })
+          .from(dsarRequests)
+          .where(
+            and(
+              eq(dsarRequests.workspaceId, workspace.id),
+              inArray(dsarRequests.status, [
+                "pending",
+                "processing",
+                "blocked",
+              ]),
+              inArray(dsarRequests.candidateId, candidateIds),
+            ),
+          )
+      : [];
+  const openPrivacyRequestIds = new Set(
+    openPrivacyRows
+      .map((row) => row.candidateId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
   return Array.from(candidateMap.values())
-    .sort((first, second) => second.createdAt.getTime() - first.createdAt.getTime())
+    .sort(
+      (first, second) => second.createdAt.getTime() - first.createdAt.getTime(),
+    )
     .map((candidate) => ({
       id: candidate.id,
       firstName: candidate.firstName,
@@ -306,6 +390,7 @@ export async function listCandidates() {
       updatedAt: candidate.updatedAt,
       applicationCount: candidate.applicationCount,
       inPool: inPoolIds.has(candidate.id),
+      hasOpenPrivacyRequest: openPrivacyRequestIds.has(candidate.id),
       latestApplication: candidate.latestApplication,
       tags: tagsByCandidate.get(candidate.id) ?? [],
     }));
@@ -318,7 +403,10 @@ export async function getCandidateProfile(candidateId: string) {
     .select()
     .from(candidates)
     .where(
-      and(eq(candidates.workspaceId, workspace.id), eq(candidates.id, candidateId)),
+      and(
+        eq(candidates.workspaceId, workspace.id),
+        eq(candidates.id, candidateId),
+      ),
     )
     .limit(1);
 
@@ -390,7 +478,10 @@ export async function getCandidateProfile(candidateId: string) {
           .where(
             and(
               eq(applicationAnswers.workspaceId, workspace.id),
-              inArray(applicationAnswers.applicationId, applicationIdsForAnswers),
+              inArray(
+                applicationAnswers.applicationId,
+                applicationIdsForAnswers,
+              ),
             ),
           )
           .orderBy(applicationQuestions.order)
@@ -482,6 +573,12 @@ export async function getCandidateProfile(candidateId: string) {
     .select({
       id: aiEvaluations.id,
       applicationId: aiEvaluations.applicationId,
+      source: aiEvaluations.source,
+      engineVersion: aiEvaluations.engineVersion,
+      rubricVersion: aiEvaluations.rubricVersion,
+      evidenceCoverage: aiEvaluations.evidenceCoverage,
+      confidence: aiEvaluations.confidence,
+      requiresHumanReview: aiEvaluations.requiresHumanReview,
       provider: aiEvaluations.provider,
       modelId: aiEvaluations.modelId,
       score: aiEvaluations.score,
@@ -551,7 +648,10 @@ export async function getCandidateProfile(candidateId: string) {
         .where(
           and(
             eq(mailAttachments.workspaceId, workspace.id),
-            inArray(mailAttachments.messageId, canonicalMessageRows.map((message) => message.id)),
+            inArray(
+              mailAttachments.messageId,
+              canonicalMessageRows.map((message) => message.id),
+            ),
           ),
         )
     : [];
@@ -562,8 +662,15 @@ export async function getCandidateProfile(candidateId: string) {
     attachmentsByMessage.set(attachment.messageId, list);
   }
   const legacyMessageRows = !mailUnificationEnabled
-    ? await db.select().from(candidateMessages)
-        .where(and(eq(candidateMessages.workspaceId, workspace.id), eq(candidateMessages.candidateId, candidate.id)))
+    ? await db
+        .select()
+        .from(candidateMessages)
+        .where(
+          and(
+            eq(candidateMessages.workspaceId, workspace.id),
+            eq(candidateMessages.candidateId, candidate.id),
+          ),
+        )
         .orderBy(desc(candidateMessages.createdAt))
     : [];
   const messageRows = mailUnificationEnabled
@@ -580,7 +687,9 @@ export async function getCandidateProfile(candidateId: string) {
         threadId: null,
         applicationId: message.applicationId,
         readAt: message.readAt,
-        legacyAttachments: Array.isArray(message.attachments) ? message.attachments : [],
+        legacyAttachments: Array.isArray(message.attachments)
+          ? message.attachments
+          : [],
       }));
 
   const applicationIds = candidateApplications.map(
@@ -661,9 +770,7 @@ export async function getCandidateProfile(candidateId: string) {
             ),
           )
       : [];
-  const stageNames = new Map(
-    stageRows.map((stage) => [stage.id, stage.name]),
-  );
+  const stageNames = new Map(stageRows.map((stage) => [stage.id, stage.name]));
 
   const activity: CandidateActivityItem[] = events.map((event) => {
     if (event.type === "application.created") {
@@ -686,7 +793,7 @@ export async function getCandidateProfile(candidateId: string) {
       return {
         id: event.id,
         type: event.type,
-        label: `Moved to ${toStageId ? stageNames.get(toStageId) ?? "another stage" : "another stage"}`,
+        label: `Moved to ${toStageId ? (stageNames.get(toStageId) ?? "another stage") : "another stage"}`,
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -743,14 +850,22 @@ export async function getCandidateProfile(candidateId: string) {
       };
     }
 
-    if (event.type === "evaluation.ai_generated") {
-      const score = event.metadata && typeof event.metadata === "object"
-        ? (event.metadata as Record<string, unknown>).score
-        : null;
+    if (
+      event.type === "evaluation.ai_generated" ||
+      event.type === "evaluation.rules_generated"
+    ) {
+      const score =
+        event.metadata && typeof event.metadata === "object"
+          ? (event.metadata as Record<string, unknown>).score
+          : null;
+      const source =
+        event.metadata && typeof event.metadata === "object"
+          ? (event.metadata as Record<string, unknown>).source
+          : null;
       return {
         id: event.id,
         type: event.type,
-        label: `AI evaluation generated${typeof score === "number" ? ` · ${score}/100` : ""}`,
+        label: `${source === "rules" || event.type === "evaluation.rules_generated" ? "Automatic evaluation generated" : "AI evaluation generated"}${typeof score === "number" ? ` · ${score}/100` : ""}`,
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -774,10 +889,20 @@ export async function getCandidateProfile(candidateId: string) {
         "interview.rescheduled": "Interview rescheduled",
       };
       const meta = isRecord(event.metadata) ? event.metadata : null;
-      const interviewType = meta && typeof meta.type === "string" ? (meta.type as InterviewType) : null;
-      const interviewMode = meta && typeof meta.mode === "string" ? (meta.mode as InterviewMode) : null;
-      const typeLabel = interviewType ? interviewTypeLabel(interviewType) : null;
-      const modeLabel = interviewMode ? interviewModeLabel(interviewMode) : null;
+      const interviewType =
+        meta && typeof meta.type === "string"
+          ? (meta.type as InterviewType)
+          : null;
+      const interviewMode =
+        meta && typeof meta.mode === "string"
+          ? (meta.mode as InterviewMode)
+          : null;
+      const typeLabel = interviewType
+        ? interviewTypeLabel(interviewType)
+        : null;
+      const modeLabel = interviewMode
+        ? interviewModeLabel(interviewMode)
+        : null;
       const suffix = [typeLabel, modeLabel].filter(Boolean).join(" · ");
       return {
         id: event.id,
@@ -868,6 +993,9 @@ export async function getCandidateProfile(candidateId: string) {
       requestedBy: dsarRequests.requestedBy,
       processedBy: dsarRequests.processedBy,
       notes: dsarRequests.notes,
+      blockedReason: dsarRequests.blockedReason,
+      blockedAt: dsarRequests.blockedAt,
+      reviewDueAt: dsarRequests.reviewDueAt,
       createdAt: dsarRequests.createdAt,
       completedAt: dsarRequests.completedAt,
     })
@@ -916,12 +1044,20 @@ export async function getCandidateProfile(candidateId: string) {
     aiEvaluations: aiEvaluationRows.map((row) => ({
       id: row.id,
       applicationId: row.applicationId,
+      source: (row.source === "rules" ? "rules" : "ai") as "ai" | "rules",
+      engineVersion: row.engineVersion,
+      rubricVersion: row.rubricVersion,
+      evidenceCoverage: row.evidenceCoverage,
+      confidence: row.confidence,
+      requiresHumanReview: row.requiresHumanReview,
       provider: row.provider,
       modelId: row.modelId,
       score: row.score,
       recommendation: row.recommendation,
       summary: row.summary,
-      strengths: Array.isArray(row.strengths) ? (row.strengths as string[]) : [],
+      strengths: Array.isArray(row.strengths)
+        ? (row.strengths as string[])
+        : [],
       gaps: Array.isArray(row.gaps) ? (row.gaps as string[]) : [],
       criteria: Array.isArray(row.criteria)
         ? (row.criteria as AiEvaluationCriterion[])
@@ -944,7 +1080,14 @@ export async function getCandidateProfile(candidateId: string) {
       status: "sent" as const,
       read: row.readAt !== null,
       authorName: null,
-      attachments: ("legacyAttachments" in row ? row.legacyAttachments : attachmentsByMessage.get(row.id) ?? []) as Array<{ filename: string; contentType: string; size: number; storageKey: string }>,
+      attachments: ("legacyAttachments" in row
+        ? row.legacyAttachments
+        : (attachmentsByMessage.get(row.id) ?? [])) as Array<{
+        filename: string;
+        contentType: string;
+        size: number;
+        storageKey: string;
+      }>,
       createdAt: row.createdAt.toISOString(),
     })),
   };
@@ -973,7 +1116,10 @@ export async function listTrashedCandidates(): Promise<TrashedCandidateItem[]> {
     })
     .from(candidates)
     .where(
-      and(eq(candidates.workspaceId, workspace.id), isNotNull(candidates.deletedAt)),
+      and(
+        eq(candidates.workspaceId, workspace.id),
+        isNotNull(candidates.deletedAt),
+      ),
     )
     .orderBy(desc(candidates.deletedAt));
 
@@ -1033,7 +1179,12 @@ export async function restoreCandidate(candidateId: string) {
   const [candidate] = await db
     .update(candidates)
     .set({ deletedAt: null })
-    .where(and(eq(candidates.id, candidateId), eq(candidates.workspaceId, workspace.id)))
+    .where(
+      and(
+        eq(candidates.id, candidateId),
+        eq(candidates.workspaceId, workspace.id),
+      ),
+    )
     .returning({ id: candidates.id });
 
   return candidate
@@ -1049,7 +1200,7 @@ export async function permanentlyDeleteCandidate(
   const { organization: workspace } = await getWorkspaceContext();
 
   const [candidate] = await db
-    .select({ avatarUrl: candidates.avatarUrl })
+    .select({ avatarUrl: candidates.avatarUrl, email: candidates.email })
     .from(candidates)
     .where(
       and(
@@ -1059,53 +1210,409 @@ export async function permanentlyDeleteCandidate(
       ),
     )
     .limit(1);
-  if (!candidate) return { ok: false, error: "Candidate not found in trash." } as const;
+  if (!candidate)
+    return { ok: false, error: "Candidate not found in trash." } as const;
+  const purgeStartedAt = Date.now();
 
-  // Candidate rows cascade-delete, but object storage does not. Remove every
-  // workspace-owned resume and avatar first; fail closed if any object cannot
-  // be erased so the request can be retried instead of claiming completion.
-  const fileRows = await db
-    .select({ fileUrl: candidateFiles.fileUrl })
-    .from(candidateFiles)
+  const applicationRows = await db
+    .select({ id: applications.id })
+    .from(applications)
     .where(
       and(
-        eq(candidateFiles.workspaceId, workspace.id),
-        eq(candidateFiles.candidateId, candidateId),
+        eq(applications.workspaceId, workspace.id),
+        eq(applications.candidateId, candidateId),
       ),
     );
+  const applicationIds = applicationRows.map((row) => row.id);
+
+  // Candidate rows cascade-delete most ATS data, but several historical and
+  // hub tables intentionally use SET NULL or have polymorphic links. Collect
+  // those records explicitly so a deleted candidate cannot reappear in other
+  // sections of the product.
+  const [
+    associatedDocuments,
+    requestedDocuments,
+    mailAttachmentRows,
+    mailMessageRows,
+    mailThreadRows,
+    legacyMessageRows,
+    candidateFileRows,
+    candidateSignatureRows,
+  ] = await Promise.all([
+    db
+      .select({ documentId: documentAssociations.documentId })
+      .from(documentAssociations)
+      .where(
+        and(
+          eq(documentAssociations.workspaceId, workspace.id),
+          or(
+            and(
+              eq(documentAssociations.targetType, "candidate"),
+              eq(documentAssociations.targetId, candidateId),
+            ),
+            applicationIds.length > 0
+              ? and(
+                  eq(documentAssociations.targetType, "application"),
+                  inArray(documentAssociations.targetId, applicationIds),
+                )
+              : undefined,
+          ),
+        ),
+      ),
+    db
+      .select({ documentId: documentRequests.documentId })
+      .from(documentRequests)
+      .where(
+        and(
+          eq(documentRequests.workspaceId, workspace.id),
+          or(
+            eq(documentRequests.candidateId, candidateId),
+            applicationIds.length > 0
+              ? inArray(documentRequests.applicationId, applicationIds)
+              : undefined,
+          ),
+        ),
+      ),
+    db
+      .select({
+        messageId: mailAttachments.messageId,
+        storageKey: mailAttachments.storageKey,
+      })
+      .from(mailAttachments)
+      .innerJoin(mailMessages, eq(mailMessages.id, mailAttachments.messageId))
+      .where(
+        and(
+          eq(mailAttachments.workspaceId, workspace.id),
+          or(
+            eq(mailMessages.candidateId, candidateId),
+            applicationIds.length > 0
+              ? inArray(mailMessages.applicationId, applicationIds)
+              : undefined,
+          ),
+        ),
+      ),
+    db
+      .select({ id: mailMessages.id, threadId: mailMessages.threadId })
+      .from(mailMessages)
+      .where(
+        and(
+          eq(mailMessages.workspaceId, workspace.id),
+          or(
+            eq(mailMessages.candidateId, candidateId),
+            applicationIds.length > 0
+              ? inArray(mailMessages.applicationId, applicationIds)
+              : undefined,
+          ),
+        ),
+      ),
+    db
+      .select({ id: mailThreads.id })
+      .from(mailThreads)
+      .where(
+        and(
+          eq(mailThreads.workspaceId, workspace.id),
+          or(
+            eq(mailThreads.candidateId, candidateId),
+            applicationIds.length > 0
+              ? inArray(mailThreads.applicationId, applicationIds)
+              : undefined,
+          ),
+        ),
+      ),
+    db
+      .select({
+        id: candidateMessages.id,
+        attachments: candidateMessages.attachments,
+      })
+      .from(candidateMessages)
+      .where(
+        and(
+          eq(candidateMessages.workspaceId, workspace.id),
+          eq(candidateMessages.candidateId, candidateId),
+        ),
+      ),
+    db
+      .select({ id: candidateFiles.id, fileUrl: candidateFiles.fileUrl })
+      .from(candidateFiles)
+      .where(
+        and(
+          eq(candidateFiles.workspaceId, workspace.id),
+          eq(candidateFiles.candidateId, candidateId),
+        ),
+      ),
+    db
+      .select({ storageKey: savedSignatures.storageKey })
+      .from(savedSignatures)
+      .where(
+        and(
+          eq(savedSignatures.workspaceId, workspace.id),
+          eq(savedSignatures.ownerType, "candidate"),
+          eq(savedSignatures.ownerId, candidateId),
+        ),
+      ),
+  ]);
+
+  const documentIds = [
+    ...associatedDocuments.map((row) => row.documentId),
+    ...requestedDocuments.map((row) => row.documentId),
+  ].filter((id): id is string => Boolean(id));
+  const legacyCandidateFileIds = candidateFileRows.map((row) => row.id);
+  const legacyDocuments =
+    legacyCandidateFileIds.length > 0
+      ? await db
+          .select({ id: documents.id })
+          .from(documents)
+          .where(
+            and(
+              eq(documents.workspaceId, workspace.id),
+              inArray(documents.legacyCandidateFileId, legacyCandidateFileIds),
+            ),
+          )
+      : [];
+  const uniqueDocumentIds = [
+    ...new Set([...documentIds, ...legacyDocuments.map((row) => row.id)]),
+  ];
+
+  const [documentRows, versionRows, signatureArtifactRows, fileRows] =
+    await Promise.all([
+      uniqueDocumentIds.length > 0
+        ? db
+            .select({
+              storageKey: documents.storageKey,
+              signatureEnvelopeRefId: documents.signatureEnvelopeRefId,
+            })
+            .from(documents)
+            .where(
+              and(
+                eq(documents.workspaceId, workspace.id),
+                inArray(documents.id, uniqueDocumentIds),
+              ),
+            )
+        : Promise.resolve([]),
+      uniqueDocumentIds.length > 0
+        ? db
+            .select({ storageKey: documentVersions.storageKey })
+            .from(documentVersions)
+            .where(
+              and(
+                eq(documentVersions.workspaceId, workspace.id),
+                inArray(documentVersions.documentId, uniqueDocumentIds),
+              ),
+            )
+        : Promise.resolve([]),
+      uniqueDocumentIds.length > 0
+        ? db
+            .select({ storageKey: signatureArtifacts.storageKey })
+            .from(signatureArtifacts)
+            .where(
+              and(
+                eq(signatureArtifacts.workspaceId, workspace.id),
+                inArray(signatureArtifacts.documentId, uniqueDocumentIds),
+              ),
+            )
+        : Promise.resolve([]),
+      Promise.resolve(candidateFileRows),
+    ]);
+
+  const candidateOfferRows = await db
+    .select({ signatureEnvelopeRefId: offers.signatureEnvelopeRefId })
+    .from(offers)
+    .where(
+      and(
+        eq(offers.workspaceId, workspace.id),
+        or(
+          eq(offers.candidateId, candidateId),
+          applicationIds.length > 0
+            ? inArray(offers.applicationId, applicationIds)
+            : undefined,
+        ),
+      ),
+    );
+  const signatureEnvelopeIds = [
+    ...new Set(
+      [
+        ...documentRows.map((row) => row.signatureEnvelopeRefId),
+        ...candidateOfferRows.map((row) => row.signatureEnvelopeRefId),
+      ].filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const signatureEnvelopeRows =
+    signatureEnvelopeIds.length > 0
+      ? await db
+          .select({
+            id: signatureEnvelopes.id,
+            provider: signatureEnvelopes.provider,
+            providerEnvelopeId: signatureEnvelopes.providerEnvelopeId,
+            status: signatureEnvelopes.status,
+          })
+          .from(signatureEnvelopes)
+          .where(
+            and(
+              eq(signatureEnvelopes.workspaceId, workspace.id),
+              inArray(signatureEnvelopes.id, signatureEnvelopeIds),
+            ),
+          )
+      : [];
+
+  const legacyAttachmentKeys = legacyMessageRows.flatMap((row) =>
+    Array.isArray(row.attachments)
+      ? row.attachments.flatMap((attachment) =>
+          typeof attachment === "object" &&
+          attachment !== null &&
+          "storageKey" in attachment &&
+          typeof attachment.storageKey === "string"
+            ? [attachment.storageKey]
+            : [],
+        )
+      : [],
+  );
+
+  const [heldDocument] =
+    uniqueDocumentIds.length > 0
+      ? await db
+          .select({ id: documentLegalHolds.id })
+          .from(documentLegalHolds)
+          .where(inArray(documentLegalHolds.documentId, uniqueDocumentIds))
+          .limit(1)
+      : [];
+  if (heldDocument) {
+    return {
+      ok: false,
+      error:
+        "This candidate has documents under legal hold and cannot be erased yet.",
+    } as const;
+  }
+
+  // Candidate rows cascade-delete, but object storage does not. Remove every
+  // workspace-owned resume, hub document, mail attachment, and avatar first;
+  // fail closed if any object cannot be erased so the request can be retried.
   const storageKeys = new Set(
-    [...fileRows.map((file) => file.fileUrl), candidate.avatarUrl]
+    [
+      ...fileRows.map((file) => file.fileUrl),
+      ...documentRows.map((file) => file.storageKey),
+      ...versionRows.map((file) => file.storageKey),
+      ...signatureArtifactRows.map((file) => file.storageKey),
+      ...candidateSignatureRows.map((file) => file.storageKey),
+      ...mailAttachmentRows.map((file) => file.storageKey),
+      ...legacyAttachmentKeys.filter((key) =>
+        key.startsWith(`mailboxes/${workspace.id}/`),
+      ),
+      candidate.avatarUrl,
+    ]
       .filter((url): url is string => Boolean(url))
-      .map((url) => workspaceStorageKeyFromUrl(workspace.id, url))
+      .map((url) => workspaceStorageKeyFromUrl(workspace.id, url) ?? url)
+      .filter(
+        (key) =>
+          key.startsWith(`workspaces/${workspace.id}/`) ||
+          key.startsWith(`mailboxes/${workspace.id}/`),
+      )
       .filter((key): key is string => Boolean(key)),
   );
   const storageResults = await Promise.allSettled(
     [...storageKeys].map((key) => storage.delete(key)),
   );
   if (storageResults.some((result) => result.status === "rejected")) {
-    return { ok: false, error: "Could not erase every stored candidate file. Please retry." } as const;
+    return {
+      ok: false,
+      error: "Could not erase every stored candidate file. Please retry.",
+    } as const;
+  }
+
+  const activeExternalSignatures = signatureEnvelopeRows.filter(
+    (row) => !["voided", "archived"].includes(row.status.toLowerCase()),
+  );
+  if (activeExternalSignatures.length > 0) {
+    const esignConfig = await getWorkspaceEsignConfig(workspace.id);
+    if (!esignConfig) {
+      return {
+        ok: false,
+        error: "Could not reach the external signature provider. Please retry.",
+      } as const;
+    }
+    const signatureResults = await Promise.all(
+      activeExternalSignatures.map((row) =>
+        row.provider.toLowerCase() === "docuseal"
+          ? archiveSubmissionIdempotent(esignConfig, row.providerEnvelopeId)
+          : Promise.resolve(false),
+      ),
+    );
+    if (signatureResults.some((result) => !result)) {
+      return {
+        ok: false,
+        error:
+          "Could not cancel every external signature request. Please retry.",
+      } as const;
+    }
   }
 
   // Cancel any Google Calendar events for this candidate's interviews before
   // the cascade delete removes the rows (and we lose the gcalEventId refs).
   const linkedInterviews = await db
-    .select({ id: interviews.id, gcalEventId: interviews.gcalEventId })
+    .select({
+      id: interviews.id,
+      gcalEventId: interviews.gcalEventId,
+      teamsMeetingId: interviews.teamsMeetingId,
+      zoomMeetingId: interviews.zoomMeetingId,
+      jitsiRoom: interviews.jitsiRoom,
+      calBookingUid: interviews.calBookingUid,
+    })
     .from(interviews)
     .where(
       and(
         eq(interviews.candidateId, candidateId),
         eq(interviews.workspaceId, workspace.id),
-        isNotNull(interviews.gcalEventId),
+        or(
+          isNotNull(interviews.gcalEventId),
+          isNotNull(interviews.teamsMeetingId),
+          isNotNull(interviews.zoomMeetingId),
+          isNotNull(interviews.jitsiRoom),
+          isNotNull(interviews.calBookingUid),
+        ),
       ),
     );
 
   for (const iv of linkedInterviews) {
-    if (iv.gcalEventId) {
-      void cancelInterviewGCalEvent({
-        workspaceId: workspace.id,
-        interviewId: iv.id,
-        gcalEventId: iv.gcalEventId,
-      });
+    const cancellations = [
+      iv.gcalEventId
+        ? cancelInterviewGCalEvent({
+            workspaceId: workspace.id,
+            interviewId: iv.id,
+            gcalEventId: iv.gcalEventId,
+          })
+        : Promise.resolve(true),
+      iv.teamsMeetingId
+        ? cancelInterviewTeamsMeeting({
+            workspaceId: workspace.id,
+            interviewId: iv.id,
+            teamsMeetingId: iv.teamsMeetingId,
+          })
+        : Promise.resolve(true),
+      iv.zoomMeetingId
+        ? cancelInterviewZoomMeeting({
+            workspaceId: workspace.id,
+            interviewId: iv.id,
+            zoomMeetingId: iv.zoomMeetingId,
+          })
+        : Promise.resolve(true),
+      iv.jitsiRoom
+        ? cancelInterviewJitsiMeeting({
+            workspaceId: workspace.id,
+            interviewId: iv.id,
+          })
+        : Promise.resolve(true),
+      iv.calBookingUid
+        ? getWorkspaceCalConfig(workspace.id).then((config) =>
+            config ? cancelCalBooking(config, iv.calBookingUid!) : false,
+          )
+        : Promise.resolve(true),
+    ];
+    const results = await Promise.all(cancellations);
+    if (results.some((result) => !result)) {
+      return {
+        ok: false,
+        error:
+          "Could not cancel every external interview resource. Please retry.",
+      } as const;
     }
   }
 
@@ -1114,57 +1621,278 @@ export async function permanentlyDeleteCandidate(
   // delete covers the same rows and is safe to run regardless.
   await deleteConversationsForCandidate(candidateId);
 
-  // The destructive action in Trash is the staff approval to fulfil an open
-  // erasure request. Complete it before the FK is set to null by deletion.
+  const canonicalMessageIds = mailMessageRows.map((row) => row.id);
+  const canonicalThreadIds = [
+    ...new Set([
+      ...mailThreadRows.map((row) => row.id),
+      ...mailMessageRows.map((row) => row.threadId),
+    ]),
+  ];
+  const legacyMessageIds = legacyMessageRows.map((row) => row.id);
+
   const now = new Date();
-  const [openErasure] = await db
-    .select({ notes: dsarRequests.notes })
-    .from(dsarRequests)
-    .where(
-      and(
-        eq(dsarRequests.workspaceId, workspace.id),
-        eq(dsarRequests.candidateId, candidateId),
-        eq(dsarRequests.type, "erasure"),
-        inArray(dsarRequests.status, ["pending", "processing"]),
-      ),
-    )
-    .orderBy(desc(dsarRequests.createdAt))
-    .limit(1);
+  const [deleted] = await db.transaction(async (tx) => {
+    // Remove polymorphic/history rows before the candidate FK is gone. These
+    // are the records that previously survived as orphaned traces.
+    await tx
+      .delete(activityEvents)
+      .where(
+        and(
+          eq(activityEvents.workspaceId, workspace.id),
+          or(
+            and(
+              eq(activityEvents.entityType, "candidate"),
+              eq(activityEvents.entityId, candidateId),
+            ),
+            applicationIds.length > 0
+              ? and(
+                  eq(activityEvents.entityType, "application"),
+                  inArray(activityEvents.entityId, applicationIds),
+                )
+              : undefined,
+          ),
+        ),
+      );
+    const relatedEntityIds = [candidateId, ...applicationIds];
+    const relatedIdsPattern = relatedEntityIds.join("|");
+    await tx
+      .delete(tasks)
+      .where(
+        and(
+          eq(tasks.workspaceId, workspace.id),
+          or(
+            eq(tasks.candidateId, candidateId),
+            applicationIds.length > 0
+              ? inArray(tasks.applicationId, applicationIds)
+              : undefined,
+          ),
+        ),
+      );
+    await tx
+      .delete(notifications)
+      .where(
+        and(
+          eq(notifications.workspaceId, workspace.id),
+          sql`coalesce(${notifications.metadata}::text, '') ~ ${relatedIdsPattern}`,
+        ),
+      );
+    await tx
+      .delete(emailOutbox)
+      .where(
+        and(
+          eq(emailOutbox.workspaceId, workspace.id),
+          sql`${emailOutbox.payload}::text ~ ${relatedIdsPattern}`,
+        ),
+      );
+    await tx
+      .delete(webhookDeliveries)
+      .where(
+        and(
+          eq(webhookDeliveries.workspaceId, workspace.id),
+          sql`${webhookDeliveries.payload}::text ~ ${relatedIdsPattern}`,
+        ),
+      );
+    await tx
+      .delete(domainEventOutbox)
+      .where(
+        and(
+          eq(domainEventOutbox.workspaceId, workspace.id),
+          or(
+            inArray(domainEventOutbox.aggregateId, relatedEntityIds),
+            sql`${domainEventOutbox.payload}::text ~ ${relatedIdsPattern}`,
+          ),
+        ),
+      );
+    if (legacyMessageIds.length > 0 || canonicalMessageIds.length > 0) {
+      await tx
+        .delete(mailUnificationMigrations)
+        .where(
+          and(
+            eq(mailUnificationMigrations.workspaceId, workspace.id),
+            or(
+              legacyMessageIds.length > 0
+                ? inArray(
+                    mailUnificationMigrations.candidateMessageId,
+                    legacyMessageIds,
+                  )
+                : undefined,
+              canonicalMessageIds.length > 0
+                ? inArray(
+                    mailUnificationMigrations.mailMessageId,
+                    canonicalMessageIds,
+                  )
+                : undefined,
+            ),
+          ),
+        );
+    }
+    if (canonicalThreadIds.length > 0 || canonicalMessageIds.length > 0) {
+      await tx
+        .delete(mailIdempotencyKeys)
+        .where(
+          and(
+            eq(mailIdempotencyKeys.workspaceId, workspace.id),
+            or(
+              canonicalThreadIds.length > 0
+                ? inArray(mailIdempotencyKeys.threadId, canonicalThreadIds)
+                : undefined,
+              canonicalMessageIds.length > 0
+                ? inArray(
+                    mailIdempotencyKeys.mailMessageId,
+                    canonicalMessageIds,
+                  )
+                : undefined,
+              eq(mailIdempotencyKeys.candidateId, candidateId),
+              applicationIds.length > 0
+                ? inArray(mailIdempotencyKeys.applicationId, applicationIds)
+                : undefined,
+            ),
+          ),
+        );
+    }
+    await tx
+      .delete(mailMessages)
+      .where(
+        and(
+          eq(mailMessages.workspaceId, workspace.id),
+          or(
+            eq(mailMessages.candidateId, candidateId),
+            applicationIds.length > 0
+              ? inArray(mailMessages.applicationId, applicationIds)
+              : undefined,
+          ),
+        ),
+      );
+    await tx
+      .delete(mailThreads)
+      .where(
+        and(
+          eq(mailThreads.workspaceId, workspace.id),
+          or(
+            eq(mailThreads.candidateId, candidateId),
+            applicationIds.length > 0
+              ? inArray(mailThreads.applicationId, applicationIds)
+              : undefined,
+            canonicalThreadIds.length > 0
+              ? inArray(mailThreads.id, canonicalThreadIds)
+              : undefined,
+          ),
+        ),
+      );
+    await tx
+      .delete(candidatePortalMagicLinks)
+      .where(
+        and(
+          eq(candidatePortalMagicLinks.workspaceId, workspace.id),
+          sql`lower(${candidatePortalMagicLinks.email}) = lower(${candidate.email})`,
+        ),
+      );
+    if (uniqueDocumentIds.length > 0) {
+      await tx
+        .delete(documents)
+        .where(
+          and(
+            eq(documents.workspaceId, workspace.id),
+            inArray(documents.id, uniqueDocumentIds),
+          ),
+        );
+    }
+    await tx
+      .delete(savedSignatures)
+      .where(
+        and(
+          eq(savedSignatures.workspaceId, workspace.id),
+          eq(savedSignatures.ownerType, "candidate"),
+          eq(savedSignatures.ownerId, candidateId),
+        ),
+      );
+    await tx
+      .update(dsarRequests)
+      .set({
+        status: "completed",
+        processedBy,
+        notes: sql`concat_ws(E'\\n\\n', ${dsarRequests.notes}, 'Erasure fulfilled by permanent candidate deletion.')`,
+        completedAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(dsarRequests.workspaceId, workspace.id),
+          eq(dsarRequests.candidateId, candidateId),
+          eq(dsarRequests.type, "erasure"),
+          inArray(dsarRequests.status, ["pending", "processing", "blocked"]),
+        ),
+      );
+    return tx
+      .delete(candidates)
+      .where(
+        and(
+          eq(candidates.id, candidateId),
+          eq(candidates.workspaceId, workspace.id),
+          isNotNull(candidates.deletedAt),
+        ),
+      )
+      .returning({ id: candidates.id });
+  });
 
-  await db
-    .update(dsarRequests)
-    .set({
-      status: "completed",
-      processedBy,
-      notes: [openErasure?.notes, "Erasure fulfilled by permanent candidate deletion."]
-        .filter(Boolean)
-        .join("\n\n"),
-      completedAt: now,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(dsarRequests.workspaceId, workspace.id),
-        eq(dsarRequests.candidateId, candidateId),
-        eq(dsarRequests.type, "erasure"),
-        inArray(dsarRequests.status, ["pending", "processing"]),
-      ),
+  if (deleted) {
+    const externalInterviewResources = linkedInterviews.reduce(
+      (count, interview) =>
+        count +
+        Number(Boolean(interview.gcalEventId)) +
+        Number(Boolean(interview.teamsMeetingId)) +
+        Number(Boolean(interview.zoomMeetingId)) +
+        Number(Boolean(interview.jitsiRoom)) +
+        Number(Boolean(interview.calBookingUid)),
+      0,
     );
+    return {
+      ok: true,
+      stats: {
+        applications: applicationIds.length,
+        candidateFiles: candidateFileRows.length,
+        legacyMessages: legacyMessageRows.length,
+        mailAttachments: mailAttachmentRows.length,
+        mailMessages: mailMessageRows.length,
+        mailThreads: canonicalThreadIds.length,
+        documents: uniqueDocumentIds.length,
+        documentVersions: versionRows.length,
+        signatureArtifacts: signatureArtifactRows.length,
+        savedSignatures: candidateSignatureRows.length,
+        interviews: linkedInterviews.length,
+        externalInterviewResources,
+        externalSignatureRequests: activeExternalSignatures.length,
+        storageObjects: storageKeys.size,
+        durationMs: Date.now() - purgeStartedAt,
+      },
+    } as const;
+  }
+  return { ok: false, error: "Candidate not found in trash." } as const;
+}
 
-  const [deleted] = await db
-    .delete(candidates)
+/** Permanently delete an active candidate from the normal delete action. */
+export async function deleteCandidate(
+  candidateId: string,
+  processedBy: string,
+) {
+  const { organization: workspace } = await getWorkspaceContext();
+  const [movedToTrash] = await db
+    .update(candidates)
+    .set({ deletedAt: new Date() })
     .where(
       and(
         eq(candidates.id, candidateId),
         eq(candidates.workspaceId, workspace.id),
-        isNotNull(candidates.deletedAt),
+        isNull(candidates.deletedAt),
       ),
     )
     .returning({ id: candidates.id });
 
-  return deleted
-    ? ({ ok: true } as const)
-    : ({ ok: false, error: "Candidate not found in trash." } as const);
+  if (!movedToTrash) {
+    return { ok: false, error: "Candidate not found." } as const;
+  }
+
+  return permanentlyDeleteCandidate(candidateId, processedBy);
 }
 
 // ── Duplicate detection helpers ──────────────────────────────────────────────

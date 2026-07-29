@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { moveApplicationStage } from "@/features/pipeline/actions";
 import { withKeyLock } from "@/lib/client-mutex";

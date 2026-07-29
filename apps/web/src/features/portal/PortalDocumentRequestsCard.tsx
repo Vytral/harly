@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useTransition } from "react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";

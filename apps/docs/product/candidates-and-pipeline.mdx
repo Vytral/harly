@@ -1,0 +1,85 @@
+---
+title: "Candidates and pipeline"
+description: "Review candidate records, move applications through stages, and reject or hire with a clear reason."
+---
+
+The **Candidates** view lists people and their applications; the **Pipeline**
+view shows one job's applications by stage. Both read from the same records, so
+a change in one is reflected in the other.
+
+## The candidate record
+
+Open a candidate to see their profile, resume, application answers, tags,
+notes, interviews, documents, email thread, and a full activity timeline. Read
+this before you change a stage — the timeline shows who did what and when.
+
+- **Tags** group candidates across jobs (for example `referral` or `senior`).
+- **Notes** record a decision and the next owner. Prefer a note over a chat
+  message so the reasoning stays on the record.
+- **Activity** is append-only and feeds the audit trail.
+
+<Warning>
+  Candidate records are personal data. Do not export or forward resumes to
+  personal accounts. Use an [approved privacy workflow](/security/privacy) for
+  deletion and export.
+</Warning>
+
+## Move an application
+
+From the pipeline, drag an application to the next stage, or open it and choose
+a stage. Each move is recorded on the timeline and can trigger an
+[automation](/developers/automations) such as a notification or a task.
+
+<Steps>
+  <Step title="Work from the oldest actionable application">
+    Filter by owner, stage, department, or region. Avoid exporting to a personal
+    spreadsheet — the pipeline is the shared source of truth.
+  </Step>
+  <Step title="Record the decision">
+    Add a note explaining why the application advances or stops, and name the
+    next owner.
+  </Step>
+  <Step title="Advance, reject, or request more">
+    Move to the next stage, reject with a reason, or request a document or
+    scorecard before deciding.
+  </Step>
+</Steps>
+
+## Reject and hire
+
+Reject with a reason so reporting and candidate communication stay consistent.
+Rejection is a per-application outcome; a candidate rejected for one role can
+still be active for another.
+
+Hiring an application marks the role filled for that candidate and closes the
+loop for the hiring team. Confirm any signed offer from the [document
+record](/product/offers-and-signatures) — not from an email or screenshot —
+before you mark a hire final.
+
+<Tip>
+  Keep irreversible actions — rejection, deletion, offer withdrawal — behind an
+  explicit human step, even when an automation prepares the rest.
+</Tip>
+
+## Bulk actions and search
+
+Select multiple applications to move or tag them together. Global search finds
+candidates by name, email, role, or location. Bulk moves still record one
+timeline entry per application, so history stays complete.
+
+## Talent pool
+
+Candidates you want to revisit later can be kept in the talent pool rather than
+left in a closed job. Add them with a tag and a note describing why, and respect
+the retention period recorded in your [privacy settings](/security/privacy).
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Interviews and scheduling" icon="calendar" href="/product/interviews-and-scheduling">
+    Schedule the next conversation.
+  </Card>
+  <Card title="Inbox and email" icon="inbox" href="/product/inbox-and-email">
+    Message the candidate from the record.
+  </Card>
+</CardGroup>

@@ -3,7 +3,7 @@
 import { useMemo, useState, useTransition, type ComponentType, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNow, format } from "date-fns";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import {
   createApiKeyAction,

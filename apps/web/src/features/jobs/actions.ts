@@ -177,12 +177,22 @@ export async function trashJobAction(jobId: string): Promise<JobActionState> {
 }
 
 export async function restoreJobAction(jobId: string): Promise<JobActionState> {
-  await requirePermission("jobs:delete");
+  const ctx = await requirePermission("jobs:delete");
   const result = await restoreJob(jobId);
 
   if (!result.ok) {
     return { success: false, error: result.error };
   }
+
+  await logAuditEvent({
+    workspaceId: ctx.organization.id,
+    actorId: ctx.user.id,
+    actorEmail: ctx.user.email,
+    action: "job.restored",
+    resourceType: "job",
+    resourceId: jobId,
+    severity: "info",
+  });
 
   revalidatePath("/dashboard/jobs");
   revalidatePath("/dashboard");

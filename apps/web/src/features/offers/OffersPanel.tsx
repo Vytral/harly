@@ -10,7 +10,7 @@ import {
   ThumbsDown,
   Undo2,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { decideOffer, sendOffer, withdrawOffer } from "@/features/offers/actions";
 import { OfferDrawer } from "@/features/offers/OfferDrawer";

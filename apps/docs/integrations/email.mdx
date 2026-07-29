@@ -1,58 +1,119 @@
 ---
 title: "Email, inbound replies, and mailboxes"
-description: "Configure outbound email, reply routing, SMTP, Resend, IMAP, and provider webhooks."
+description: "Configure outbound email with Resend or SMTP, and route candidate replies back to the application record."
 ---
 
-Harly can send candidate email through Resend or SMTP and can attach replies to
-the correct application through an inbound provider or mailbox connection.
+Harly can send candidate email through Resend or SMTP and can route inbound
+replies back to the correct application through Resend or Postmark webhooks.
 
 ## Outbound email
 
 Open **Settings → Email**, choose a provider, configure the sender identity,
-and send a test message to a controlled mailbox.
+and send a test message to a controlled mailbox before inviting any candidates.
 
 ### Resend
 
-Use a verified domain and an API key with the minimum permissions required by
-your provider policy. A deployment-level `RESEND_API_KEY` can act as a default,
-but workspace configuration is preferred for multi-tenant operation.
+1. Create a [Resend](https://resend.com) account and verify your sending domain.
+2. Create an API key.
+3. Open **Settings → Email → Outbound** and choose **Resend**.
+4. Paste the API key and set the sender identity:
+
+   ```text
+   Sender name:  Hiring Team
+   Sender email: recruiting@example.com
+   ```
+
+5. Select **Send test** and confirm delivery.
 
 ### SMTP
 
-Configure the SMTP host, port, TLS mode, username, password, and sender. Use
-port `465` for implicit TLS or `587` for STARTTLS according to your provider.
-Never test with a real candidate until the sender domain passes authentication.
+Open **Settings → Email → Outbound → SMTP** and configure:
+
+```text
+Host:     smtp.example.com
+Port:     587   (STARTTLS) or 465 (implicit TLS)
+Username: recruiting@example.com
+Password: <app-password>
+From:     recruiting@example.com
+```
+
+Use port `465` for implicit TLS or `587` for STARTTLS. Never test with a real
+candidate address until the sender domain passes authentication.
 
 ## Inbound replies
 
-Configure a receiving hostname such as `replies.example.com` in **Settings →
-Email**. Enter only the hostname—not a URL, port, or localhost address.
+Inbound replies route candidate responses back to the application thread
+automatically. Harly generates a unique `reply+token@domain` address for each
+application. Supported providers: **Resend** and **Postmark**.
 
-The provider webhook points to Harly's inbound-email endpoint and includes the
-workspace webhook secret. Harly generates a unique `reply+token@domain`
-address for each application.
+### Inbound endpoint
+
+The provider webhook must POST to:
+
+```text
+https://hiring.example.com/api/webhooks/email/{provider}?ws={workspaceId}
+```
+
+Where `{provider}` is `resend` or `postmark`, and `{workspaceId}` is the
+workspace ID shown in **Settings → Email → Inbound**.
+
+Harly verifies the provider signature using the webhook secret you configure
+in the settings screen.
+
+### Setup steps
 
 <Steps>
   <Step title="Configure the receiving domain">
-    Add the provider's MX or inbound-routing records and verify the domain.
+    In **Settings → Email → Inbound**, enter the receiving hostname — only the
+    hostname, not a URL:
+
+    ```text
+    replies.example.com
+    ```
+
+    Add the provider's MX records for this domain. For Resend inbound, follow
+    [Resend's inbound routing guide](https://resend.com/docs). For Postmark,
+    create an inbound server and point its MX records at your domain.
   </Step>
-  <Step title="Set the Harly inbound endpoint">
-    Use the endpoint shown in the workspace email settings and keep its secret
-    in the provider's secret field.
+  <Step title="Register the webhook endpoint">
+    In the provider dashboard, set the inbound webhook destination to:
+
+    ```text
+    https://hiring.example.com/api/webhooks/email/resend?ws=ws_YOUR_WORKSPACE_ID
+    ```
+
+    Or for Postmark:
+
+    ```text
+    https://hiring.example.com/api/webhooks/email/postmark?ws=ws_YOUR_WORKSPACE_ID
+    ```
+
+    Include the webhook secret shown in Harly's inbound email settings.
   </Step>
-  <Step title="Send a controlled reply">
-    Reply to a test candidate message, then confirm the message appears in the
-    application thread with the correct sender and attachments.
+  <Step title="Verify">
+    Send a message to a test candidate from the Harly inbox. Reply to it from
+    an external mailbox. Confirm the reply threads back onto the application
+    within one minute.
   </Step>
 </Steps>
 
 ## Troubleshooting
 
-- No outbound email: check the sender domain, provider credentials, and the
-  email outbox status in the operations view.
-- Reply not attached: verify the reply domain is a hostname and that the
-  provider preserved the `Reply-To` address.
-- Duplicate delivery: email is at-least-once; use provider message IDs and the
-  Harly delivery log to identify retries.
-- Invalid old domain: Harly omits the Reply-To address rather than rejecting an
-  entire message. Correct the workspace setting and resend.
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| No outbound delivery | Invalid sender domain or credentials | Check email outbox status in operations |
+| Reply not threaded | Receiving domain set as URL instead of hostname | Set only `replies.example.com`, not `https://…` |
+| Webhook returns 404 | Wrong workspace ID in query param | Copy exact workspace ID from Settings → Email → Inbound |
+| Webhook returns 401 | Secret mismatch | Verify the provider has the current secret from Harly settings |
+| Duplicate delivery | At-least-once delivery is expected | Use provider message IDs to deduplicate at the processor level |
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Inbox and email" icon="inbox" href="/product/inbox-and-email">
+    How the workspace inbox and candidate threads work.
+  </Card>
+  <Card title="Automations" icon="workflow" href="/developers/automations">
+    Send messages automatically on stage changes.
+  </Card>
+</CardGroup>

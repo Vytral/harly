@@ -2,11 +2,9 @@
 
 import { useRef, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
-import { Button } from "@/components/ui/button";
 import { createDocument } from "@/features/documents/actions";
-import { FileArrowUpIcon, SpinnerIcon } from "@/components/ui/icons/phosphor";
 
 const ACCEPT = ".pdf,.doc,.docx,.png,.jpg,.jpeg,.gif,.webp";
 const MAX_BYTES = 25 * 1024 * 1024;
@@ -40,8 +38,12 @@ function isPresign(value: unknown): value is PresignResponse {
   );
 }
 
-/** Upload a document straight from the candidate profile, associated to them in the Documents hub. */
-export function CandidateDocumentUploadButton({ candidateId }: { candidateId: string }) {
+/**
+ * Shared upload logic for a document dropped straight onto a candidate,
+ * associated to them in the Documents hub. Returns an input ref so callers
+ * can trigger the native file picker from any control (button, menu item).
+ */
+export function useCandidateDocumentUpload(candidateId: string) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPending, start] = useTransition();
@@ -103,19 +105,17 @@ export function CandidateDocumentUploadButton({ candidateId }: { candidateId: st
     });
   }
 
-  return (
-    <>
-      <input
-        ref={inputRef}
-        type="file"
-        accept={ACCEPT}
-        className="sr-only"
-        onChange={(event) => onFile(event.target.files?.[0] ?? null)}
-      />
-      <Button size="sm" variant="outline" disabled={isPending} onClick={() => inputRef.current?.click()}>
-        {isPending ? <SpinnerIcon className="size-4 animate-spin" /> : <FileArrowUpIcon className="size-4" />}
-        {isPending ? "Uploading…" : "Upload document"}
-      </Button>
-    </>
-  );
+  return {
+    inputRef,
+    isPending,
+    openPicker: () => inputRef.current?.click(),
+    inputProps: {
+      ref: inputRef,
+      type: "file" as const,
+      accept: ACCEPT,
+      className: "sr-only",
+      onChange: (event: React.ChangeEvent<HTMLInputElement>) =>
+        onFile(event.target.files?.[0] ?? null),
+    },
+  };
 }

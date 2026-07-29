@@ -1,0 +1,116 @@
+---
+title: "AI features"
+description: "Optional, provider-backed assistance for matching, drafting, and anonymized review — always advisory."
+---
+
+Harly's AI features are optional and off until you configure a provider. They
+assist the hiring team; they never make a hiring decision. Every AI output is a
+suggestion a human reviews and owns.
+
+## Enable AI
+
+<Steps>
+  <Step title="Choose a provider">
+    Open **Settings → AI** and select a provider. Harly supports OpenAI-compatible
+    APIs. You bring your own API key — Harly does not proxy through a shared key.
+  </Step>
+  <Step title="Add the API key">
+    Paste the API key from your provider. It is stored encrypted and never
+    returned to the browser.
+  </Step>
+  <Step title="Enable specific features">
+    Turn on only the features you want. Nothing is sent to the provider until a
+    feature is both enabled and actively used.
+  </Step>
+</Steps>
+
+<Warning>
+  AI output is advisory. Never auto-advance, auto-reject, or send a message on
+  an AI suggestion without a human review. A person owns every hiring decision.
+</Warning>
+
+## What AI can do
+
+### Candidate matching
+
+Rank or summarize how an application fits a job's requirements, as a starting
+point for review. The output appears alongside the application — the recruiter
+reads it and decides.
+
+This is a triage signal, not a filter. Use it to prioritize which applications
+to open first, not to skip reading them.
+
+### Assisted drafting
+
+Draft candidate messages and job descriptions you review and edit before
+sending. The draft is editable from the moment it appears; you own the final
+text.
+
+Common uses:
+- First outreach message after an application
+- Rejection email with a reason
+- Interview invitation with agenda
+
+### Scorecard anonymization
+
+Strip identifying details from interview feedback before reviewers compare
+scorecards. Reduces the effect of name-based or background-based bias when
+comparing candidates side by side.
+
+Anonymization runs before the comparison view. The original, unredacted
+scorecard remains on the candidate record for audit.
+
+### Chat
+
+Ask questions about a candidate or pipeline in context. The assistant sees only
+the data for the current candidate or job, not the entire workspace.
+
+Examples:
+- "Summarize this candidate's relevant experience."
+- "What questions has this candidate not answered yet?"
+
+## Data and privacy
+
+| Data sent to provider | When it is sent |
+| --- | --- |
+| Job description text | Matching and draft features |
+| Application answers | Matching and chat features |
+| Scorecard text | Anonymization feature |
+| Candidate name/email | Only if anonymization is off |
+
+What is sent to a provider is limited to the feature you enabled. Candidate
+data is personal data, so:
+
+- Choose a provider with a data processing agreement that fits your obligations.
+- Tell candidates if AI is part of your review process.
+- Review the AI usage log in **Settings → AI → Usage** periodically.
+- Keep a documented override path for every material recommendation.
+
+<Info>
+  Do not place provider credentials, private notes, or unnecessary candidate
+  data into prompts. If you configure a custom system prompt, treat it as
+  infrastructure code — review it before enabling.
+</Info>
+
+## Turn off AI
+
+Disable individual features in **Settings → AI** without removing the provider.
+Remove the API key entirely to disable all AI features and prevent any data
+from reaching the provider.
+
+Disabling AI does not affect any other part of Harly. All records, pipelines,
+interviews, and offers remain unchanged.
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Tasks and scorecards" icon="list-checks" href="/product/tasks-and-scorecards">
+    Structured feedback AI can anonymize.
+  </Card>
+  <Card title="Privacy" icon="shield" href="/security/privacy">
+    Data obligations to understand before enabling AI.
+  </Card>
+  <Card title="Inbox and email" icon="inbox" href="/product/inbox-and-email">
+    Where AI drafts land before you send them.
+  </Card>
+</CardGroup>

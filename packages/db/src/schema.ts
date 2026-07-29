@@ -756,6 +756,16 @@ export const workspaceSettings = pgTable("workspace_settings", {
   slackEnabled: boolean("slack_enabled").default(false).notNull(),
   slackTeamId: text("slack_team_id"),
   slackTeamName: text("slack_team_name"),
+  slackAppId: text("slack_app_id"),
+  slackBotUserId: text("slack_bot_user_id"),
+  slackEnterpriseId: text("slack_enterprise_id"),
+  slackScopes: jsonb("slack_scopes").default(sql`'[]'::jsonb`),
+  slackInstallerUserId: text("slack_installer_user_id"),
+  slackInstalledAt: timestamp("slack_installed_at", { withTimezone: true }),
+  slackLastValidatedAt: timestamp("slack_last_validated_at", {
+    withTimezone: true,
+  }),
+  slackRevokedAt: timestamp("slack_revoked_at", { withTimezone: true }),
   slackChannelId: text("slack_channel_id"),
   slackChannelName: text("slack_channel_name"),
   slackBotTokenCiphertext: text("slack_bot_token_ciphertext"),
@@ -926,6 +936,89 @@ export const workspaceSettings = pgTable("workspace_settings", {
     .notNull(),
   ...timestamps(),
 });
+
+/**
+ * Durable Slack notification queue. Slack is an external side effect, so the
+ * hiring transaction only needs to persist this row; the cron dispatcher owns
+ * retries and delivery state.
+ */
+export const slackDeliveries = pgTable(
+  "slack_deliveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    event: text("event").notNull(),
+    channelId: text("channel_id").notNull(),
+    payload: jsonb("payload")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
+    dedupeKey: text("dedupe_key"),
+    // pending | processing | success | failed | dead_letter
+    status: text("status").default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    responseStatus: integer("response_status"),
+    slackError: text("slack_error"),
+    lastError: text("last_error"),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
+    deadLetteredAt: timestamp("dead_lettered_at", { withTimezone: true }),
+    replayOfId: uuid("replay_of_id"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("slack_deliveries_workspace_dedupe_idx").on(
+      table.workspaceId,
+      table.dedupeKey,
+    ),
+    index("slack_deliveries_status_next_retry_idx").on(
+      table.status,
+      table.nextRetryAt,
+    ),
+    index("slack_deliveries_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+    index("slack_deliveries_workspace_channel_updated_idx").on(
+      table.workspaceId,
+      table.channelId,
+      table.updatedAt,
+    ),
+  ],
+);
+
+export const slackDeliveryAttempts = pgTable(
+  "slack_delivery_attempts",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    deliveryId: uuid("delivery_id")
+      .notNull()
+      .references(() => slackDeliveries.id, { onDelete: "cascade" }),
+    attempt: integer("attempt").notNull(),
+    status: text("status").notNull(),
+    responseStatus: integer("response_status"),
+    slackError: text("slack_error"),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true }).notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("slack_delivery_attempts_delivery_attempt_idx").on(
+      table.deliveryId,
+      table.attempt,
+    ),
+    index("slack_delivery_attempts_workspace_started_idx").on(
+      table.workspaceId,
+      table.startedAt,
+    ),
+  ],
+);
 
 /**
  * One shared recruiting mailbox per workspace in v1. Secrets are kept as
@@ -1365,6 +1458,67 @@ export const candidates = pgTable(
   ],
 );
 
+/**
+ * Durable candidate erasure queue. Database rows and object storage are two
+ * separate systems, so candidate deletion must survive process restarts and
+ * be safely retried instead of relying on an in-process request.
+ */
+export const candidateDeletionJobs = pgTable(
+  "candidate_deletion_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id").references(() => candidates.id, {
+      onDelete: "set null",
+    }),
+    requestId: uuid("request_id"),
+    // The generated fallback keeps an in-flight migration safe if a worker
+    // inserts a row between the table and column migrations.
+    dedupeKey: text("dedupe_key")
+      .default(sql`'legacy:' || gen_random_uuid()::text`)
+      .notNull(),
+    requestType: text("request_type").default("candidate_delete").notNull(),
+    status: text("status").default("pending").notNull(),
+    phase: text("phase").default("queued").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    lastError: text("last_error"),
+    blockedReason: text("blocked_reason"),
+    requestedBy: text("requested_by"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    stats: jsonb("stats").$type<Record<string, number>>(),
+    durationMs: integer("duration_ms"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("candidate_deletion_jobs_workspace_request_idx").on(
+      table.workspaceId,
+      table.requestId,
+    ),
+    uniqueIndex("candidate_deletion_jobs_workspace_dedupe_idx").on(
+      table.workspaceId,
+      table.dedupeKey,
+    ),
+    index("candidate_deletion_jobs_due_idx").on(
+      table.status,
+      table.nextRetryAt,
+      table.lockedAt,
+    ),
+    index("candidate_deletion_jobs_workspace_candidate_idx").on(
+      table.workspaceId,
+      table.candidateId,
+    ),
+  ],
+);
+
+export type CandidateDeletionJob = typeof candidateDeletionJobs.$inferSelect;
+export type NewCandidateDeletionJob = typeof candidateDeletionJobs.$inferInsert;
+
 export const applications = pgTable(
   "applications",
   {
@@ -1443,7 +1597,8 @@ export const candidateDemographics = pgTable(
 );
 
 export type CandidateDemographics = typeof candidateDemographics.$inferSelect;
-export type NewCandidateDemographics = typeof candidateDemographics.$inferInsert;
+export type NewCandidateDemographics =
+  typeof candidateDemographics.$inferInsert;
 
 export const applicationAnswers = pgTable(
   "application_answers",
@@ -2632,7 +2787,77 @@ export const notifications = pgTable(
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
 
-// AI candidate-vs-job evaluations — one latest row per application, regenerating upserts.
+// Versioned, recruiter-approved evaluation rubric. AI and deterministic rules
+// are both consumers of this neutral contract.
+export const evaluationRubrics = pgTable(
+  "evaluation_rubrics",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    status: text("status").default("draft").notNull(),
+    // Immutable snapshot of the rubric metadata and weights.
+    configHash: text("config_hash").notNull(),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("evaluation_rubrics_workspace_job_version_idx").on(
+      table.workspaceId,
+      table.jobId,
+      table.version,
+    ),
+    uniqueIndex("evaluation_rubrics_workspace_job_hash_idx").on(
+      table.workspaceId,
+      table.jobId,
+      table.configHash,
+    ),
+    index("evaluation_rubrics_workspace_job_status_idx").on(
+      table.workspaceId,
+      table.jobId,
+      table.status,
+    ),
+  ],
+);
+
+export const evaluationCriteria = pgTable(
+  "evaluation_criteria",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    rubricId: uuid("rubric_id")
+      .notNull()
+      .references(() => evaluationRubrics.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    type: text("type").notNull(),
+    importance: text("importance").default("preferred").notNull(),
+    weight: integer("weight").notNull(),
+    aliases: jsonb("aliases")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    minimumValue: integer("minimum_value"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("evaluation_criteria_rubric_key_idx").on(
+      table.rubricId,
+      table.key,
+    ),
+    index("evaluation_criteria_rubric_idx").on(table.rubricId),
+  ],
+);
+
+// Candidate-vs-job evaluations. The legacy table name is retained for a
+// backwards-compatible rollout; the source/engine fields make the contract
+// explicitly neutral to AI.
 export const aiEvaluations = pgTable(
   "ai_evaluations",
   {
@@ -2649,6 +2874,24 @@ export const aiEvaluations = pgTable(
     jobId: uuid("job_id")
       .notNull()
       .references(() => jobs.id, { onDelete: "cascade" }),
+    rubricId: uuid("rubric_id").references(() => evaluationRubrics.id, {
+      onDelete: "set null",
+    }),
+    engine: text("engine").default("harly").notNull(),
+    engineVersion: text("engine_version").default("legacy").notNull(),
+    rubricVersion: text("rubric_version").default("legacy").notNull(),
+    inputHash: text("input_hash"),
+    outputHash: text("output_hash"),
+    evidenceCoverage: integer("evidence_coverage"),
+    confidence: integer("confidence"),
+    requiresHumanReview: boolean("requires_human_review")
+      .default(true)
+      .notNull(),
+    evaluationStatus: text("evaluation_status").default("completed").notNull(),
+    rubricSnapshot: jsonb("rubric_snapshot"),
+    // Evaluation engine: "ai" for provider-backed scoring, "rules" for the
+    // deterministic, explainable Harly Algorithm.
+    source: text("source").default("ai").notNull(),
     provider: text("provider").notNull(),
     modelId: text("model_id").notNull(),
     score: integer("score").notNull(),
@@ -2681,6 +2924,79 @@ export const aiEvaluations = pgTable(
     index("ai_evaluations_candidate_idx").on(table.candidateId),
     index("ai_evaluations_workspace_idx").on(table.workspaceId),
     index("ai_evaluations_job_idx").on(table.jobId),
+  ],
+);
+
+export const evaluationCriterionResults = pgTable(
+  "evaluation_criterion_results",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    evaluationId: uuid("evaluation_id")
+      .notNull()
+      .references(() => aiEvaluations.id, { onDelete: "cascade" }),
+    criterionKey: text("criterion_key").notNull(),
+    label: text("label").notNull(),
+    status: text("status").notNull(),
+    score: integer("score"),
+    weight: integer("weight"),
+    evidence: text("evidence"),
+    evidenceSource: text("evidence_source"),
+    confidence: integer("confidence"),
+    missingReason: text("missing_reason"),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("evaluation_criterion_results_evaluation_key_idx").on(
+      table.evaluationId,
+      table.criterionKey,
+    ),
+    index("evaluation_criterion_results_evaluation_idx").on(table.evaluationId),
+  ],
+);
+
+// Durable evaluation work queue. Application writes enqueue work; workers may
+// claim/retry it without relying on an in-process promise surviving a restart.
+export const evaluationJobs = pgTable(
+  "evaluation_jobs",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    applicationId: uuid("application_id")
+      .notNull()
+      .references(() => applications.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    jobId: uuid("job_id")
+      .notNull()
+      .references(() => jobs.id, { onDelete: "cascade" }),
+    status: text("status").default("pending").notNull(),
+    attempts: integer("attempts").default(0).notNull(),
+    nextRetryAt: timestamp("next_retry_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    startedAt: timestamp("started_at", { withTimezone: true }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    dedupeKey: text("dedupe_key").notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("evaluation_jobs_workspace_dedupe_idx").on(
+      table.workspaceId,
+      table.dedupeKey,
+    ),
+    index("evaluation_jobs_due_idx").on(
+      table.status,
+      table.nextRetryAt,
+      table.lockedAt,
+    ),
+    index("evaluation_jobs_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
+    ),
   ],
 );
 
@@ -2931,6 +3247,12 @@ export const mailIdempotencyKeys = pgTable(
     idempotencyKey: text("idempotency_key").notNull(),
     messageId: text("message_id").notNull(),
     status: mailIdempotencyStatusEnum("status").default("pending").notNull(),
+    candidateId: uuid("candidate_id").references(() => candidates.id, {
+      onDelete: "set null",
+    }),
+    applicationId: uuid("application_id").references(() => applications.id, {
+      onDelete: "set null",
+    }),
     threadId: uuid("thread_id").references(() => mailThreads.id, {
       onDelete: "set null",
     }),
@@ -3083,8 +3405,18 @@ export const interviewSyncs = pgTable(
 
 export type Scorecard = typeof scorecards.$inferSelect;
 export type NewScorecard = typeof scorecards.$inferInsert;
+export type EvaluationRubric = typeof evaluationRubrics.$inferSelect;
+export type NewEvaluationRubric = typeof evaluationRubrics.$inferInsert;
+export type EvaluationCriterion = typeof evaluationCriteria.$inferSelect;
+export type NewEvaluationCriterion = typeof evaluationCriteria.$inferInsert;
 export type AiEvaluation = typeof aiEvaluations.$inferSelect;
 export type NewAiEvaluation = typeof aiEvaluations.$inferInsert;
+export type EvaluationCriterionResult =
+  typeof evaluationCriterionResults.$inferSelect;
+export type NewEvaluationCriterionResult =
+  typeof evaluationCriterionResults.$inferInsert;
+export type EvaluationJob = typeof evaluationJobs.$inferSelect;
+export type NewEvaluationJob = typeof evaluationJobs.$inferInsert;
 export type CandidateEmbedding = typeof candidateEmbeddings.$inferSelect;
 export type NewCandidateEmbedding = typeof candidateEmbeddings.$inferInsert;
 export type JobEmbedding = typeof jobEmbeddings.$inferSelect;
@@ -3379,6 +3711,9 @@ export type WebhookEndpoint = typeof webhookEndpoints.$inferSelect;
 export type NewWebhookEndpoint = typeof webhookEndpoints.$inferInsert;
 export type WebhookDelivery = typeof webhookDeliveries.$inferSelect;
 export type NewWebhookDelivery = typeof webhookDeliveries.$inferInsert;
+export type SlackDelivery = typeof slackDeliveries.$inferSelect;
+export type NewSlackDelivery = typeof slackDeliveries.$inferInsert;
+export type SlackDeliveryAttempt = typeof slackDeliveryAttempts.$inferSelect;
 
 /** Immutable per-attempt audit trail for outbound webhook delivery. */
 export const webhookDeliveryAttempts = pgTable(
@@ -3411,7 +3746,8 @@ export const webhookDeliveryAttempts = pgTable(
   ],
 );
 
-export type WebhookDeliveryAttempt = typeof webhookDeliveryAttempts.$inferSelect;
+export type WebhookDeliveryAttempt =
+  typeof webhookDeliveryAttempts.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Reporting: durable scheduled reports and delivery history
@@ -3427,8 +3763,12 @@ export const scheduledReports = pgTable(
     name: text("name").notNull(),
     reportType: text("report_type").notNull().default("hiring_overview"),
     frequency: text("frequency").notNull().default("monthly"),
-    recipients: jsonb("recipients").default(sql`'[]'::jsonb`).notNull(),
-    filters: jsonb("filters").default(sql`'{}'::jsonb`).notNull(),
+    recipients: jsonb("recipients")
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    filters: jsonb("filters")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     enabled: boolean("enabled").default(true).notNull(),
     nextRunAt: timestamp("next_run_at", { withTimezone: true }),
     lastRunAt: timestamp("last_run_at", { withTimezone: true }),
@@ -3490,21 +3830,33 @@ export const securityReauthChallenges = pgTable(
   "security_reauth_challenges",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    userId: text("user_id").notNull().references(() => user.id, { onDelete: "cascade" }),
-    workspaceId: text("workspace_id").notNull().references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
     purpose: text("purpose").notNull(),
     tokenHash: text("token_hash").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     consumedAt: timestamp("consumed_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
   },
   (table) => [
-    uniqueIndex("security_reauth_challenges_token_hash_idx").on(table.tokenHash),
-    index("security_reauth_challenges_user_workspace_idx").on(table.userId, table.workspaceId),
+    uniqueIndex("security_reauth_challenges_token_hash_idx").on(
+      table.tokenHash,
+    ),
+    index("security_reauth_challenges_user_workspace_idx").on(
+      table.userId,
+      table.workspaceId,
+    ),
   ],
 );
 
-export type SecurityReauthChallenge = typeof securityReauthChallenges.$inferSelect;
+export type SecurityReauthChallenge =
+  typeof securityReauthChallenges.$inferSelect;
 
 // ---------------------------------------------------------------------------
 // Security: WebAuthn passkeys + audit logs
@@ -3747,6 +4099,7 @@ export const consentRecords = pgTable(
 export const dsarStatusEnum = pgEnum("dsar_status", [
   "pending",
   "processing",
+  "blocked",
   "completed",
   "denied",
 ]);
@@ -3770,6 +4123,10 @@ export const dsarRequests = pgTable(
     requestedBy: text("requested_by"),
     processedBy: text("processed_by"),
     notes: text("notes"),
+    blockedReason: text("blocked_reason"),
+    blockedBy: text("blocked_by"),
+    blockedAt: timestamp("blocked_at", { withTimezone: true }),
+    reviewDueAt: timestamp("review_due_at", { withTimezone: true }),
     completedAt: timestamp("completed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()

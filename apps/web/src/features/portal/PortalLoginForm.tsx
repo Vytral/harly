@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useSearchParams } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import {
   sendPortalMagicLinkAction,

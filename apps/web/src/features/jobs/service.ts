@@ -250,7 +250,9 @@ export async function updateJobForApi(input: {
     const [pending] = await db.select({ id: jobApprovalRequests.id }).from(jobApprovalRequests).where(and(eq(jobApprovalRequests.workspaceId, input.workspaceId), eq(jobApprovalRequests.jobId, input.jobId), eq(jobApprovalRequests.status, "pending"))).limit(1);
     if (pending) throw ApiError.conflict("Job has a pending approval request.");
   }
-  const becomesPublished = nextStatus === "open" && !existing.publishedAt;
+  const becomesPublished =
+    nextStatus === "open" &&
+    (existing.status !== "open" || !existing.publishedAt);
 
   const { updated, event } = await db.transaction(async (tx) => {
     const [next] = await tx
@@ -270,7 +272,12 @@ export async function updateJobForApi(input: {
       currency: input.values.currency ?? existing.currency,
       salaryPeriod: input.values.salaryPeriod ?? existing.salaryPeriod,
       status: nextStatus,
-      publishedAt: becomesPublished ? new Date() : existing.publishedAt,
+      publishedAt:
+        nextStatus === "open"
+          ? becomesPublished
+            ? new Date()
+            : existing.publishedAt
+          : null,
       updatedAt: new Date(),
       })
       .where(
@@ -320,8 +327,17 @@ export async function deleteJobForApi(input: {
   await getJobForApi({ workspaceId: input.workspaceId, jobId: input.jobId });
   await db
     .update(jobs)
-    .set({ deletedAt: new Date(), status: "closed", updatedAt: new Date() })
+    .set({
+      deletedAt: new Date(),
+      status: "closed",
+      publishedAt: null,
+      updatedAt: new Date(),
+    })
     .where(
-      and(eq(jobs.id, input.jobId), eq(jobs.workspaceId, input.workspaceId)),
+      and(
+        eq(jobs.id, input.jobId),
+        eq(jobs.workspaceId, input.workspaceId),
+        isNull(jobs.deletedAt),
+      ),
     );
 }

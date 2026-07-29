@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { createOffer, updateOffer } from "@/features/offers/actions";
 import type { CandidateOfferItem } from "@/features/offers/shared";

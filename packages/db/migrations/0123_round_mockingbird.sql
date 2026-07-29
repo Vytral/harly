@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "evaluation_rubrics_workspace_job_hash_idx" ON "evaluation_rubrics" USING btree ("workspace_id","job_id","config_hash");

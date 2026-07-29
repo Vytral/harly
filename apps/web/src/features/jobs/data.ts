@@ -279,7 +279,13 @@ export async function restoreJob(jobId: string) {
   const [job] = await db
     .update(jobs)
     .set({ deletedAt: null })
-    .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, workspace.id)))
+    .where(
+      and(
+        eq(jobs.id, jobId),
+        eq(jobs.workspaceId, workspace.id),
+        isNotNull(jobs.deletedAt),
+      ),
+    )
     .returning({ id: jobs.id });
 
   return job
@@ -565,46 +571,58 @@ export async function updateJob(jobId: string, values: JobFormValues) {
   return job ?? null;
 }
 
-/** Permanently delete a job (used from the trash). Blocked if it has applications. */
+/** Permanently delete a trashed job. Blocked if it has applications. */
 export async function permanentlyDeleteJob(jobId: string) {
   const { organization: workspace } = await getWorkspaceContext();
 
-  const [job] = await db
-    .select({
-      id: jobs.id,
-      title: jobs.title,
-      slug: jobs.slug,
-    })
-    .from(jobs)
-    .where(and(eq(jobs.id, jobId), eq(jobs.workspaceId, workspace.id)))
-    .limit(1);
+  return db.transaction(async (tx) => {
+    // Lock the parent row while checking applications. PostgreSQL foreign-key
+    // inserts must wait for this lock, so a concurrent application cannot slip
+    // between the check and the destructive delete.
+    const [job] = await tx
+      .select({
+        id: jobs.id,
+        slug: jobs.slug,
+      })
+      .from(jobs)
+      .where(
+        and(
+          eq(jobs.id, jobId),
+          eq(jobs.workspaceId, workspace.id),
+          isNotNull(jobs.deletedAt),
+        ),
+      )
+      .for("update")
+      .limit(1);
 
-  if (!job) {
-    return { ok: false, error: "Job not found." } as const;
-  }
+    if (!job) {
+      return { ok: false, error: "Job must be in the trash." } as const;
+    }
 
-  const [applicationCount] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(applications)
-    .where(
-      and(
-        eq(applications.workspaceId, workspace.id),
-        eq(applications.jobId, job.id),
-      ),
-    );
+    const [application] = await tx
+      .select({ id: applications.id })
+      .from(applications)
+      .where(
+        and(
+          eq(applications.workspaceId, workspace.id),
+          eq(applications.jobId, job.id),
+        ),
+      )
+      .limit(1);
 
-  if ((applicationCount?.count ?? 0) > 0) {
-    return {
-      ok: false,
-      error: "This job has applications. Close it instead of deleting it.",
-    } as const;
-  }
+    if (application) {
+      return {
+        ok: false,
+        error: "This job has applications. Close it instead of deleting it.",
+      } as const;
+    }
 
-  await db
-    .delete(jobs)
-    .where(and(eq(jobs.id, job.id), eq(jobs.workspaceId, workspace.id)));
+    await tx
+      .delete(jobs)
+      .where(and(eq(jobs.id, job.id), eq(jobs.workspaceId, workspace.id)));
 
-  return { ok: true, slug: job.slug } as const;
+    return { ok: true, slug: job.slug } as const;
+  });
 }
 
 export async function updateJobStatus(jobId: string, status: JobStatus) {

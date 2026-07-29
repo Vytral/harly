@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { authClient } from "@/lib/auth-client";
 import { acceptWorkspaceInvitationAction } from "@/features/workspaces/actions";

@@ -80,6 +80,11 @@ vi.mock("@harly/db", () => {
       }),
     },
     applications,
+    jobs: {
+      id: "jobs.id",
+      workspaceId: "jobs.workspaceId",
+      deletedAt: "jobs.deletedAt",
+    },
     jobStages: { id: "jobStages.id", name: "jobStages.name" },
     applicationStageHistory: { id: "applicationStageHistory.id" },
   };

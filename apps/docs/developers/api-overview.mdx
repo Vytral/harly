@@ -6,7 +6,7 @@ description: "Build integrations against Harly's versioned REST API with scoped 
 The Harly REST API is available at:
 
 ```text
-${HARLY_URL}/api/v1
+https://hiring.example.com/api/v1
 ```
 
 The OpenAPI document is available from a running installation at
@@ -15,49 +15,131 @@ route parameters.
 
 ## Authenticate
 
-Create a key from **Settings → Developers → API keys**, copy the raw value once,
-and send it as a bearer token:
+Create a key from **Settings → Developers → API keys**, copy the raw value
+once, and send it as a bearer token:
 
 ```bash
 curl --fail-with-body \
-  -H 'Authorization: Bearer harly_sk_REDACTED' \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
   -H 'Accept: application/json' \
   'https://hiring.example.com/api/v1/jobs?limit=25'
 ```
 
-Keys are scoped. Give an integration only the resources it needs and rotate or
+Keys are scoped. Give an integration only the resources it needs. Rotate or
 revoke keys when an owner or vendor changes.
 
 ## Response envelopes
 
-Successful responses use `data` and optional `meta`; failures use `error`:
+### Success
+
+```json
+{
+  "data": { ... },
+  "meta": {
+    "nextCursor": "cursor_01j1abc"
+  }
+}
+```
+
+### Error
 
 ```json
 {
   "error": {
     "code": "validation_error",
     "message": "A job title is required",
-    "details": {}
+    "details": { "field": "title" }
   }
 }
 ```
 
-Common statuses are `400`, `401`, `403`, `404`, `409`, `422`, and `429`.
+Common error codes: `validation_error`, `not_found`, `forbidden`,
+`conflict`, `rate_limited`.
 
-## Pagination and retries
+## Pagination
 
-Use the `limit` and `cursor` values returned by list endpoints. Do not assume a
-page number or stable ordering. For POST requests that support it, send a
-unique `Idempotency-Key` and retry only after applying exponential backoff.
+List endpoints use cursor-based pagination:
+
+```bash
+# First page
+curl 'https://hiring.example.com/api/v1/candidates?limit=50'
+
+# Next page — use the cursor from meta.nextCursor
+curl 'https://hiring.example.com/api/v1/candidates?limit=50&cursor=cursor_01j1abc'
+```
+
+- Do not assume a stable sort order or page number.
+- `meta.nextCursor` is absent when you have reached the last page.
+- `limit` defaults to `25` and caps at `100`.
+
+## Idempotency
+
+POST requests that support it accept an `Idempotency-Key` header. Use a
+unique value per logical operation — for example a UUID or a stable key
+derived from the operation's inputs:
+
+```bash
+curl -X POST \
+  'https://hiring.example.com/api/v1/applications/app_123/move' \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: move-app_123-2026-07-27T12:00:00Z' \
+  --data '{"stageId":"stage_interview"}'
+```
 
 <Warning>
   A `409` may mean a real concurrency conflict or an idempotency collision.
-  Inspect the error envelope before retrying a mutation.
+  Inspect the error envelope before retrying a mutation. Do not retry a `409`
+  blindly — the operation may have already succeeded.
 </Warning>
+
+## Rate limits
+
+The API applies per-key rate limits. When a response returns `429`, back off
+using the `Retry-After` header value before retrying. Do not hammer the API
+with immediate retries.
+
+```bash
+# Check the Retry-After header
+curl -I 'https://hiring.example.com/api/v1/jobs'
+# Retry-After: 30
+```
+
+## HTTP status codes
+
+| Status | Meaning | Client action |
+| ---: | --- | --- |
+| `200` | Success | Process the response |
+| `201` | Created | Record the new resource ID |
+| `204` | No content (delete) | Success, no body |
+| `400` | Malformed request | Fix the request body or params |
+| `401` | Missing or invalid key | Rotate or replace the key |
+| `403` | Missing scope or workspace access | Request the narrowest required scope |
+| `404` | Resource not found | Reconcile IDs and workspace |
+| `409` | Conflict or idempotency collision | Inspect the error before retrying |
+| `422` | Valid JSON with invalid fields | Show validation details to the operator |
+| `429` | Rate limited | Back off and respect `Retry-After` |
+| `5xx` | Server error | Retry with exponential backoff |
 
 ## Main resources
 
 Jobs, candidates, applications, interviews, offers, scorecards, tasks,
 pool entries, activity events, webhooks, and API keys are available through
-the versioned API. The [webhook guide](/developers/webhooks) is the preferred
-way to react to changes instead of polling every resource.
+the versioned API.
+
+Use [webhooks](/developers/webhooks) to react to changes instead of polling
+every resource. See [API resource reference](/developers/api-reference) for
+the full scope and operation inventory.
+
+## Try it
+
+The OpenAPI document at `/api/v1/openapi.json` is importable into Insomnia,
+Postman, or any OpenAPI-compatible tool:
+
+```bash
+curl -o harly-openapi.json \
+  'https://hiring.example.com/api/v1/openapi.json'
+```
+
+See the [API integration tutorial](/tutorials/api-integration) for an
+end-to-end walkthrough with webhook verification.

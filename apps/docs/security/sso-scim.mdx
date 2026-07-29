@@ -1,55 +1,180 @@
 ---
 title: "SSO and SCIM provisioning"
-description: "Configure SAML, OIDC, and SCIM lifecycle management for enterprise workspaces."
+description: "Connect your identity provider for single sign-on and automate member provisioning with SCIM 2.0."
 ---
 
-SSO controls authentication; SCIM controls member lifecycle. Configure them
-independently so a temporary identity-provider outage does not silently delete
-recruiting history.
+SSO lets your team sign in through your identity provider (IdP) instead of
+passwords. SCIM lets your IdP create, update, and deprovision Harly workspace
+members automatically. Both are optional; you can use SSO without SCIM or
+neither.
 
-## SAML 2.0 or OIDC
+## SSO
 
-Open **Settings → Security → Single sign-on** and add a provider.
+Harly supports **OIDC** (OpenID Connect) providers. This covers Okta, Entra ID
+(Azure AD), Google Workspace, Auth0, and most modern IdPs.
 
-### OIDC values
+### Set up SSO
 
-Provide the issuer, client ID, client secret, scopes, and claim mapping required
-by your identity provider. The callback must use the public Harly origin shown
-by the setup screen.
+<Steps>
+  <Step title="Create an OIDC app in your IdP">
+    In your IdP, create a new OIDC application and copy the values you will
+    need in the next step:
 
-### SAML values
+    - **Client ID**
+    - **Client secret**
+    - **Issuer URL** (also called Discovery URL or well-known URL)
+    - **Domain**: the email domain that triggers SSO (for example `example.com`)
 
-Provide the IdP entry point, entity identifier, certificate, and claim mapping.
-Copy Harly's ACS URL and entity ID into the provider configuration exactly.
+    Set the authorized redirect URI in your IdP to:
 
-<Warning>
-  Test SSO with a second owner or a break-glass account before enforcing it.
-  Keep the break-glass credentials outside the identity provider and review
-  their use in the audit log.
-</Warning>
+    ```text
+    https://hiring.example.com/api/auth/sso/callback/{providerId}
+    ```
 
-## SCIM 2.0
+    You will get the `providerId` after saving the provider in Harly. For the
+    initial setup, use a placeholder and update it once Harly returns the ID.
+  </Step>
+  <Step title="Register the provider in Harly">
+    Open **Settings → Security → SSO**, select **Add provider**, and enter:
 
-Only workspace owners can create SCIM tokens. In **Settings → Security → SCIM
-provisioning**, create a named token and copy it immediately; the raw token is
-shown once.
+    - Provider type: OIDC
+    - Issuer URL
+    - Client ID
+    - Client secret
+    - Domain (the email domain to enforce SSO on)
 
-Configure the identity provider with:
+    Harly saves the provider and returns a `providerId`. Update the redirect URI
+    in your IdP with this ID.
+  </Step>
+  <Step title="Test sign-in">
+    Open a private browser window and sign in with an email address on the
+    configured domain. You should be redirected to your IdP, authenticate, and
+    land back in Harly.
+  </Step>
+  <Step title="Enforce SSO (optional)">
+    Once you have confirmed SSO works, turn on **Enforce SSO** in
+    **Settings → Security → SSO**. Members on the configured domain will be
+    required to sign in through the IdP. Password sign-in is blocked for those
+    email domains.
+
+    <Warning>
+      Have at least one owner signed in and confirm SSO works before enforcing.
+      An owner can disable enforcement from Settings if a member is locked out.
+    </Warning>
+  </Step>
+</Steps>
+
+### Provider configuration reference
+
+| Field | Where to find it in your IdP |
+| --- | --- |
+| Issuer URL | Okta: `https://{yourDomain}.okta.com` · Entra: `https://login.microsoftonline.com/{tenantId}/v2.0` · Google: `https://accounts.google.com` |
+| Client ID | App registration → Client ID |
+| Client secret | App registration → Client secrets (generate one) |
+| Domain | The email domain your members use (e.g. `example.com`) |
+
+### Remove a provider
+
+Open **Settings → Security → SSO**, select the provider, and choose **Delete**.
+Members on that domain revert to password sign-in immediately. This action is
+logged in the audit log at severity `critical`.
+
+---
+
+## SCIM provisioning
+
+SCIM 2.0 lets your IdP push member changes to Harly automatically. New hires
+are provisioned, terminated employees are deprovisioned, and role assignments
+stay in sync without manual work.
+
+### SCIM base URL
 
 ```text
-Base URL: ${HARLY_URL}/api/scim/v2.0/<workspace-id>
-Users:    ${HARLY_URL}/api/scim/v2.0/<workspace-id>/Users
-Auth:     HTTP Bearer token
+https://hiring.example.com/api/scim/v2.0/{workspaceId}
 ```
 
-Harly supports idempotent create/update, active/inactive lifecycle, department,
-region, team, manager, title, and safe role mapping. Deactivation revokes the
-member's Harly sessions without deleting recruiting history.
+Your workspace ID is visible in **Settings → Security → SCIM**.
 
-## Rollout checklist
+### Supported endpoints
 
-1. Create a test group in the identity provider.
-2. Map one test user to a least-privilege Harly role.
-3. Verify create, update, deactivate, and reactivation behavior.
-4. Review the audit log and session revocation.
-5. Roll out by group and keep a documented token rotation owner.
+| Method | Path | What it does |
+| --- | --- | --- |
+| `GET` | `/Users` | List members (supports `filter`, `startIndex`, `count`) |
+| `POST` | `/Users` | Provision a new member |
+| `GET` | `/Users/{id}` | Read a member |
+| `PUT` | `/Users/{id}` | Replace a member |
+| `PATCH` | `/Users/{id}` | Update a member (active flag for deprovisioning) |
+| `DELETE` | `/Users/{id}` | Remove a member |
+| `GET` | `/ServiceProviderConfig` | SCIM capability declaration |
+| `GET` | `/Schemas` | Schema definitions |
+| `GET` | `/ResourceTypes` | Resource type declarations |
+
+### Supported SCIM attributes
+
+| SCIM attribute | Maps to |
+| --- | --- |
+| `userName` | Member email address |
+| `name.givenName`, `name.familyName` | First and last name |
+| `active` | Active / deprovisioned status |
+| `displayName` | Display name |
+| `title` | Job title |
+| `department` | Department scope |
+| `region` | Region scope |
+| `team` | Team |
+| `roles[0].value` | Harly role key (e.g. `recruiter`, `hiring_manager`) |
+
+### Create a SCIM token
+
+SCIM requests authenticate with a bearer token. Only owners can create SCIM
+tokens.
+
+<Steps>
+  <Step title="Open SCIM settings">
+    Open **Settings → Security → SCIM** and select **Create token**.
+  </Step>
+  <Step title="Name and optionally set an expiry">
+    Give the token a descriptive name (for example `okta-scim-prod`) and
+    optionally set an expiration date.
+  </Step>
+  <Step title="Copy the token">
+    Copy the raw token value. It starts with `harly_scim_` and is shown only
+    once. Store it in your IdP's SCIM configuration as the bearer token.
+  </Step>
+</Steps>
+
+### Configure your IdP
+
+<Tabs>
+  <Tab title="Okta">
+    1. In Okta, open the application → **Provisioning** tab.
+    2. Set **SCIM connector base URL** to `https://hiring.example.com/api/scim/v2.0/{workspaceId}`.
+    3. Set **Unique identifier field for users** to `userName`.
+    4. Enable **Import Users** and **Push Users**.
+    5. Set **Authentication mode** to **HTTP Header** and paste the `harly_scim_…` token.
+    6. Click **Test Connector Configuration**. It should return success.
+    7. Assign the Okta app to the groups or people you want provisioned in Harly.
+  </Tab>
+  <Tab title="Entra ID (Azure AD)">
+    1. In Entra ID, open your enterprise application → **Provisioning**.
+    2. Set **Provisioning mode** to **Automatic**.
+    3. Set **Tenant URL** to `https://hiring.example.com/api/scim/v2.0/{workspaceId}`.
+    4. Set **Secret token** to your `harly_scim_…` token.
+    5. Click **Test Connection**. It should return success.
+    6. Set **Scope** to sync only assigned users.
+    7. Map the attributes you want synced (email, name, department, title) and click **Save**.
+  </Tab>
+</Tabs>
+
+### Revoke and reissue a token
+
+Harly does not support rotating a SCIM token in place. To replace one, create
+a new token, update the IdP configuration to use it, and only then revoke the
+old token from **Settings → Security → SCIM**. Doing it in this order avoids a
+provisioning gap. Token activity (last used timestamp) is visible on the token
+list.
+
+<Note>
+  Deleting a SCIM-provisioned member in Harly does not push a deprovisioning
+  event back to the IdP. Always initiate deprovisioning from the IdP so the
+  IdP and Harly stay in sync.
+</Note>

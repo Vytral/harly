@@ -1,10 +1,11 @@
 ---
 title: "Configuration reference"
-description: "Configure Harly's required secrets, storage, email, cron, and optional integrations safely."
+description: "Configure Harly's required secrets, storage, email, scheduler, and optional integrations."
 ---
 
-`HARLY_URL` is the canonical public origin. Use an origin without a path, for
-example `https://hiring.example.com`. Do not reuse secrets between variables.
+`HARLY_URL` is the canonical public origin. Use a bare origin without a path:
+`https://hiring.example.com`. Every secret must be independent — do not reuse
+values between variables.
 
 ## Required runtime values
 
@@ -21,19 +22,26 @@ HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
 ```
 
 `npx @harly/cli` generates independent values and writes `.env` with mode
-`0600`. In a managed platform, store them as secret variables rather than
+`0600`. On managed platforms, store all values as secret variables rather than
 plain configuration.
+
+Secrets for `BETTER_AUTH_SECRET`, `AI_ENCRYPTION_KEY`, `STORAGE_UPLOAD_SECRET`,
+`CRON_SECRET`, and `HARLY_SETUP_SECRET` must contain at least 32 bytes (or
+32+ bytes when base64-decoded).
 
 ## Storage
 
-Local storage uses `/data/uploads` in the official image and requires the
-`uploads` volume:
+### Local volume
 
 ```dotenv
 STORAGE_PROVIDER=local
+UPLOADS_DIR=uploads   # default — relative to the installation directory
 ```
 
-For S3, R2, or MinIO, configure all required values:
+Back up the `uploads` volume together with PostgreSQL. Do not use local storage
+on platforms with ephemeral filesystems (Render, Railway, Fly.io).
+
+### S3-compatible storage
 
 ```dotenv
 STORAGE_PROVIDER=s3
@@ -41,41 +49,92 @@ S3_BUCKET=harly-production
 S3_REGION=us-east-1
 S3_ACCESS_KEY_ID=<access-key>
 S3_SECRET_ACCESS_KEY=<secret-key>
-S3_ENDPOINT=https://s3.example.com
-S3_PUBLIC_URL=https://cdn.example.com
+S3_ENDPOINT=https://s3.example.com    # optional — for R2, MinIO, or other providers
+S3_PUBLIC_URL=https://cdn.example.com  # images only; never expose resumes publicly
 ```
 
-`S3_ENDPOINT` and `S3_PUBLIC_URL` are optional for AWS's default endpoint but
-useful for compatible providers and CDNs.
+`S3_ENDPOINT` and `S3_PUBLIC_URL` are optional for AWS but required for
+Cloudflare R2, MinIO, and other S3-compatible providers. All four core S3
+variables (`S3_BUCKET`, `S3_REGION`, `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`)
+are required when `STORAGE_PROVIDER=s3`.
+
+Candidate files must live in a private bucket. Disable public access, object ACLs,
+anonymous `GetObject`, and public CDN origins. Harly serves resumes through an
+authenticated application route with `Cache-Control: private, no-store`; do not
+configure a public CDN path for `workspaces/*/resumes/*`.
 
 ## Scheduler and metrics
 
-The scheduler authenticates private jobs with `CRON_SECRET`. Prometheus uses:
+The scheduler authenticates private cron routes using `CRON_SECRET`. Harly
+exposes a Prometheus-compatible metrics endpoint:
 
 ```http
 GET /api/metrics
 Authorization: Bearer <METRICS_TOKEN>
 ```
 
-Never put either secret in a URL or query string. The scheduler handles email
-outbox, domain-event replay, webhooks, interview sync, and mailbox sync.
+Never put either secret in a URL or query string.
+
+The scheduler handles the email outbox, domain-event replay, webhooks dispatch,
+interview calendar sync, mailbox sync, document expiry, retention enforcement,
+e-sign reconciliation, scheduled reports, and governed evaluation jobs.
+
+## Resource profiles
+
+The CLI selects a resource profile based on the available free memory at
+install time. You can override any value in `.env`.
+
+| Profile | When selected | App RAM | PostgreSQL | Scheduler | Caddy |
+| --- | --- | --- | --- | --- | --- |
+| `compact` | Free RAM < 1.5 GB | 1024 MB | 384 MB | 192 MB | 128 MB |
+| `standard` | Free RAM 1.5–3.5 GB | 1536 MB | 768 MB | 256 MB | 256 MB |
+| `performance` | Free RAM > 3.5 GB | 3072 MB | 1536 MB | 512 MB | 256 MB |
+
+Override individual limits in `.env`:
+
+```dotenv
+# Compact profile overrides (2 GB VPS):
+HARLY_APP_MEMORY=1024m
+HARLY_APP_NODE_OPTIONS=--max-old-space-size=640
+HARLY_POSTGRES_MEMORY=384m
+HARLY_MIGRATE_MEMORY=512m
+HARLY_SCHEDULER_MEMORY=192m
+HARLY_CADDY_MEMORY=128m
+```
 
 ## Optional integration credentials
 
-Installation-level OAuth credentials are optional and only enable their
-corresponding connect flow. Workspace credentials are encrypted in PostgreSQL
-after an administrator connects an account. See [integrations](/integrations/overview)
-for provider-specific setup.
+Installation-level OAuth credentials enable each integration's connect flow.
+All are optional. Workspace credentials are encrypted in PostgreSQL after an
+administrator connects an account.
 
-<Note>
-  DocuSeal is optional. `DOCUSEAL_SECRET_KEY_BASE` is only needed when the
-  bundled DocuSeal profile is enabled; a normal Harly deployment can leave it
-  empty.
-</Note>
+| Variable | Integration |
+| --- | --- |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Calendar and Google Meet |
+| `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` | Microsoft Outlook and Teams |
+| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | GitHub OAuth for the candidate portal |
+| `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` | LinkedIn OAuth (candidate portal) |
+| `ZOOM_CLIENT_ID` / `ZOOM_CLIENT_SECRET` | Zoom video interviews |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | Slack notifications |
+
+Slack delivery history is retained for 90 days by default. Operators may set
+`SLACK_DELIVERY_RETENTION_DAYS` between 30 and 730 days; the protected
+webhooks-dispatch cron purges completed and dead-lettered records outside that
+window.
+
+ID and secret must always be set together — configuring only one causes a
+startup validation error.
+
+See [integrations overview](/integrations/overview) for provider-specific
+redirect URIs and setup steps.
 
 ## Security-sensitive settings
 
-Outbound webhooks must use HTTPS and resolve to public addresses. Private,
-loopback, link-local, and metadata networks are blocked. Set
-`HARLY_ALLOW_PRIVATE_WEBHOOKS=true` only for a controlled internal deployment
-where the risk is understood.
+```dotenv
+HARLY_ALLOW_PRIVATE_WEBHOOKS=false  # default
+```
+
+Set to `true` only for a controlled internal deployment where outbound webhooks
+must reach loopback or private addresses. In all other deployments, leave at
+the default — Harly blocks loopback, private, link-local, and cloud-metadata
+addresses on all outbound HTTP actions.

@@ -175,7 +175,11 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
   const [associationRows, accessRoleRows, accessMemberRows, assignmentRows, activityRows, legalHoldRows] = rows.length
     ? await Promise.all([
       db
-        .select({ documentId: documentAssociations.documentId, targetType: documentAssociations.targetType })
+        .select({
+          documentId: documentAssociations.documentId,
+          targetType: documentAssociations.targetType,
+          targetId: documentAssociations.targetId,
+        })
         .from(documentAssociations)
         .where(
           and(
@@ -191,10 +195,16 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
     ])
     : [[], [], [], [], [], []];
   const labels = new Map<string, string[]>();
+  const candidateIdsByDocument = new Map<string, string[]>();
   for (const row of associationRows) {
     const current = labels.get(row.documentId) ?? [];
     current.push(row.targetType[0]?.toUpperCase() + row.targetType.slice(1));
     labels.set(row.documentId, current);
+    if (row.targetType === "candidate" && row.targetId) {
+      const candidateIds = candidateIdsByDocument.get(row.documentId) ?? [];
+      candidateIds.push(row.targetId);
+      candidateIdsByDocument.set(row.documentId, candidateIds);
+    }
   }
   const categoryById = new Map(categories.map((category) => [category.id, category]));
   const accessRolesByDocument = new Map<string, Array<{ roleKey: string; accessLevel: "read" | "manage" }>>();
@@ -254,6 +264,7 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
         signatureStatus: row.signatureStatus as DocumentListItem["signatureStatus"],
         category: row.categoryId ? categoryById.get(row.categoryId) ?? null : null,
         associationLabels: [...new Set(labels.get(row.id) ?? ["Workspace"])],
+        candidateIds: candidateIdsByDocument.get(row.id) ?? [],
         accessRoles: accessRolesByDocument.get(row.id) ?? [],
         accessMembers: accessMembersByDocument.get(row.id) ?? [],
         assignments: assignmentsByDocument.get(row.id) ?? [],

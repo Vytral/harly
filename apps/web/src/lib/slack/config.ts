@@ -1,8 +1,8 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, count, desc, eq } from "drizzle-orm";
 
-import { db, workspaceSettings } from "@harly/db";
+import { db, slackDeliveries, workspaceSettings } from "@harly/db";
 
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { isWebhookEvent, type WebhookEvent } from "@/server/webhooks/events";
@@ -17,6 +17,13 @@ export type WorkspaceSlackStatus = {
   hasCredentials: boolean;
   events: WebhookEvent[];
   encryptionReady: boolean;
+  pendingDeliveries: number;
+  lastDelivery: {
+    status: string;
+    attempts: number;
+    error: string | null;
+    createdAt: string;
+  } | null;
 };
 
 export type SlackConfig = {
@@ -30,6 +37,28 @@ export type SlackCredentials = {
   clientSecret: string;
 };
 
+/** Resolve the encrypted bot token for setup operations before a channel exists. */
+export async function getWorkspaceSlackBotToken(
+  workspaceId: string,
+): Promise<string | null> {
+  if (!isEncryptionConfigured()) return null;
+  const [row] = await db
+    .select({
+      token: workspaceSettings.slackBotTokenCiphertext,
+      iv: workspaceSettings.slackBotTokenIv,
+      tag: workspaceSettings.slackBotTokenTag,
+    })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, workspaceId))
+    .limit(1);
+  if (!row?.token || !row.iv || !row.tag) return null;
+  try {
+    return decryptSecret({ ciphertext: row.token, iv: row.iv, tag: row.tag });
+  } catch {
+    return null;
+  }
+}
+
 function toEvents(raw: unknown): WebhookEvent[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter(
@@ -41,21 +70,41 @@ function toEvents(raw: unknown): WebhookEvent[] {
 export async function getWorkspaceSlackStatus(
   workspaceId: string,
 ): Promise<WorkspaceSlackStatus> {
-  const [row] = await db
-    .select({
-      slackEnabled: workspaceSettings.slackEnabled,
-      slackTeamId: workspaceSettings.slackTeamId,
-      slackTeamName: workspaceSettings.slackTeamName,
-      slackChannelId: workspaceSettings.slackChannelId,
-      slackChannelName: workspaceSettings.slackChannelName,
-      slackBotTokenCiphertext: workspaceSettings.slackBotTokenCiphertext,
-      slackClientId: workspaceSettings.slackClientId,
-      slackClientSecretCiphertext: workspaceSettings.slackClientSecretCiphertext,
-      slackEvents: workspaceSettings.slackEvents,
-    })
-    .from(workspaceSettings)
-    .where(eq(workspaceSettings.organizationId, workspaceId))
-    .limit(1);
+  const [[row], [latest], [pending]] = await Promise.all([
+    db
+      .select({
+        slackEnabled: workspaceSettings.slackEnabled,
+        slackTeamId: workspaceSettings.slackTeamId,
+        slackTeamName: workspaceSettings.slackTeamName,
+        slackChannelId: workspaceSettings.slackChannelId,
+        slackChannelName: workspaceSettings.slackChannelName,
+        slackBotTokenCiphertext: workspaceSettings.slackBotTokenCiphertext,
+        slackClientId: workspaceSettings.slackClientId,
+        slackClientSecretCiphertext: workspaceSettings.slackClientSecretCiphertext,
+        slackEvents: workspaceSettings.slackEvents,
+      })
+      .from(workspaceSettings)
+      .where(eq(workspaceSettings.organizationId, workspaceId))
+      .limit(1),
+    db
+      .select({
+        status: slackDeliveries.status,
+        attempts: slackDeliveries.attempts,
+        error: slackDeliveries.lastError,
+        createdAt: slackDeliveries.createdAt,
+      })
+      .from(slackDeliveries)
+      .where(eq(slackDeliveries.workspaceId, workspaceId))
+      .orderBy(desc(slackDeliveries.createdAt))
+      .limit(1),
+    db
+      .select({ value: count() })
+      .from(slackDeliveries)
+      .where(and(
+        eq(slackDeliveries.workspaceId, workspaceId),
+        eq(slackDeliveries.status, "pending"),
+      )),
+  ]);
 
   const hasDbCredentials = Boolean(
     row?.slackClientId && row?.slackClientSecretCiphertext,
@@ -74,6 +123,15 @@ export async function getWorkspaceSlackStatus(
     hasCredentials: hasDbCredentials || hasEnvCredentials,
     events: toEvents(row?.slackEvents),
     encryptionReady: isEncryptionConfigured(),
+    pendingDeliveries: Number(pending?.value ?? 0),
+    lastDelivery: latest
+      ? {
+          status: latest.status,
+          attempts: latest.attempts,
+          error: latest.error,
+          createdAt: latest.createdAt.toISOString(),
+        }
+      : null,
   };
 }
 

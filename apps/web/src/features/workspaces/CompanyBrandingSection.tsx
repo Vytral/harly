@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import {
   updateWorkspaceBoardBrandingAction,

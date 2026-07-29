@@ -5,6 +5,7 @@ import {
   SetupError,
   setupClaimCookieName,
 } from "@harly/auth/setup";
+import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +20,18 @@ function publicUrl(): string {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  try {
+    await enforceRateLimit(`public:setup-claim:${clientIp(request)}`, {
+      limit: 10,
+      windowMs: 60_000,
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Too many attempts. Please try again later." },
+      { status: 429 },
+    );
+  }
+
   let token: string;
   try {
     const body = (await request.json()) as { token?: unknown };

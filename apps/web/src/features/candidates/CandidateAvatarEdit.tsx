@@ -4,7 +4,7 @@ import { useRef, useTransition } from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Pencil, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { AvatarCropDialog } from "@/components/ui/AvatarCropDialog";
 import { UserAvatar } from "@/components/ui/UserAvatar";

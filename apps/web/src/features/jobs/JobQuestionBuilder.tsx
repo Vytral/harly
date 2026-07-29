@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 import { useRouter } from "next/navigation";
 
 import type { JobApplicationQuestion, JobQuestionType } from "./config";

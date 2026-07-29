@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDown as CaretDown, FileText, Users } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { bulkGenerateAiEvaluationsForJobAction } from "@/features/candidates/ai-actions";
 import type { PipelineApplication, PipelineStage } from "@/features/pipeline/data";
@@ -85,7 +85,7 @@ export function JobCandidateRanking({
         if (!result.success) {
           toast.error(
             result.reason === "not_configured"
-              ? "Connect an AI provider in Settings → AI first."
+              ? "Automatic evaluation is unavailable right now."
               : result.error ?? "Could not rank applicants.",
           );
           return;
@@ -127,7 +127,7 @@ export function JobCandidateRanking({
           <div className="min-w-0">
             {/* Framed as a suggestion from a colleague, not a verdict. */}
             <p className="text-[14px] font-medium text-near-ink">
-              Harly AI can suggest an order
+              Harly can suggest an order
             </p>
             <p className="truncate text-[12px] text-soft-ink">
               {unscored === 0
@@ -135,8 +135,7 @@ export function JobCandidateRanking({
                 : `${unscored} of ${activeApplications.length} not rated yet for ${jobTitle}.`}
             </p>
           </div>
-          {aiConfigured ? (
-            unscored === 0 ? null : (
+          {unscored === 0 ? null : (
               <Button
                 size="sm"
                 variant="outline"
@@ -149,14 +148,9 @@ export function JobCandidateRanking({
                     ranking && "animate-pulse motion-reduce:animate-none",
                   )}
                 />
-                {ranking ? "Rating…" : "Rate the rest"}
+                {ranking ? "Evaluating…" : aiConfigured ? "Rate the rest" : "Evaluate the rest"}
               </Button>
-            )
-          ) : (
-            <Button asChild size="sm" variant="outline">
-              <Link href="/settings/ai">Set up AI</Link>
-            </Button>
-          )}
+            )}
         </div>
 
         {/*
@@ -238,18 +232,14 @@ export function JobCandidateRanking({
                             "text-base font-semibold tabular-nums",
                             scoreTone(application.aiScore),
                           )}
-                          title={
-                            application.aiUsedResume
-                              ? "Based on resume + profile"
-                              : "Profile only. No readable resume"
-                          }
+                          title={`${application.evaluationSource === "rules" ? "Harly Algorithm rules-v2" : "Automatic evaluation"}. ${application.aiUsedResume ? "Based on resume + profile" : "Profile only. No readable resume"}`}
                         >
                           {application.aiScore}
                         </span>
                       </>
                     ) : (
                       <Badge variant="outline" className="font-normal text-muted-foreground">
-                        Not scored
+                        Not evaluated
                       </Badge>
                     )}
                   </div>

@@ -47,7 +47,10 @@ const requiredResumeUrlSchema = z
   .trim()
   .min(1, "Resume is required.")
   .refine(
-    (value) => value.startsWith("/uploads/") || URL.canParse(value),
+    (value) =>
+      value.startsWith("/uploads/") ||
+      value.startsWith("/api/storage/file?key=") ||
+      URL.canParse(value),
     "Resume upload is invalid.",
   );
 

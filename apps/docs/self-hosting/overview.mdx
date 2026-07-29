@@ -47,11 +47,26 @@ For automatic Caddy mode, no other service or Docker container may publish TCP p
 
 If Nginx, Apache, Traefik, or another Caddy instance already owns those ports, keep it and select the [external proxy mode](/self-hosting/proxy-modes) instead; it must forward the hostname to `127.0.0.1:3000`.
 
-## Memory profile for small VPS instances
+## Resource profiles and memory
 
-The generated defaults target the recommended 4 GB profile: app 1536 MB, PostgreSQL 768 MB, scheduler 256 MB, and Caddy 256 MB. These are hard container ceilings, not reservations.
+The CLI selects a resource profile automatically based on free memory at
+install time. You can override with `HARLY_RESOURCE_PROFILE` or by setting
+individual limits in `.env`.
 
-On a 2 GB VPS, set the following in `.env` and enable 1 GB of swap:
+| Profile | When auto-selected | App | PostgreSQL | Scheduler | Caddy |
+| --- | --- | --- | --- | --- | --- |
+| `compact` | Free RAM < 1.5 GB | 1024 MB | 384 MB | 192 MB | 128 MB |
+| `standard` | Free RAM 1.5–3.5 GB | 1536 MB | 768 MB | 256 MB | 256 MB |
+| `performance` | Free RAM > 3.5 GB | 3072 MB | 1536 MB | 512 MB | 256 MB |
+
+On a 2 GB VPS, enable 1 GB of swap and the installer will select `compact`
+automatically, or set it explicitly:
+
+```dotenv
+HARLY_RESOURCE_PROFILE=compact
+```
+
+To override individual limits after installation:
 
 ```dotenv
 HARLY_APP_MEMORY=1024m
@@ -61,6 +76,8 @@ HARLY_MIGRATE_MEMORY=512m
 HARLY_SCHEDULER_MEMORY=192m
 HARLY_CADDY_MEMORY=128m
 ```
+
+These are hard container ceilings, not reservations.
 
 ## Managed cloud deployments
 

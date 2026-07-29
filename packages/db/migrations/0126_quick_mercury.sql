@@ -1,0 +1,1 @@
+CREATE INDEX "slack_deliveries_workspace_channel_updated_idx" ON "slack_deliveries" USING btree ("workspace_id","channel_id","updated_at");

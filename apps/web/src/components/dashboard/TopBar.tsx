@@ -14,7 +14,7 @@ import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
 import { useStickyBar } from "@/components/dashboard/StickyBarContext";
 import { UserMenu } from "@/components/dashboard/UserMenu";
 import { useHarlyAI } from "@/components/dashboard/HarlyAIWidget";
-import { WorkspacePill } from "@/components/dashboard/WorkspaceSwitcher";
+import { NotificationIsland } from "@/components/dashboard/NotificationIsland";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -115,7 +115,7 @@ export function TopBar({
         {/* Centered regardless of how wide the two side clusters are. */}
         <div className="pointer-events-none absolute inset-x-0 flex h-[var(--spacing-topbar)] items-center justify-center">
           <div className="pointer-events-auto">
-            <WorkspacePill
+            <NotificationIsland
               workspace={workspace}
               workspaceOptions={workspaceOptions}
             />

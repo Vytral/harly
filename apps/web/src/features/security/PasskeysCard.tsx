@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { startRegistration } from "@simplewebauthn/browser";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 import { formatDistanceToNow } from "date-fns";
 
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";

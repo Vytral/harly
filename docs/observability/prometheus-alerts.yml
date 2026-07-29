@@ -22,3 +22,66 @@ groups:
         annotations:
           summary: Harly HTTP error rate is high
           description: More than five percent of requests are returning 5xx responses.
+      - alert: HarlyEvaluationDeadLetter
+        expr: harly_evaluation_jobs{state="dead_letter"} > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Candidate evaluations are in dead letter
+          description: Investigate the evaluation job error and replay only after human review.
+      - alert: HarlyEvaluationQueueStale
+        expr: harly_evaluation_jobs{state="stale"} > 0
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: Candidate evaluation worker is stale
+          description: A running evaluation has held its lock for more than 15 minutes.
+      - alert: HarlyCandidateDeletionDeadLetter
+        expr: harly_candidate_deletion_jobs{state="dead_letter"} > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Candidate deletion jobs are in dead letter
+          description: Investigate the recorded deletion error and replay only after the underlying issue is fixed.
+      - alert: HarlyCandidateDeletionBlocked
+        expr: harly_candidate_deletion_jobs{state="blocked"} > 0
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: Candidate deletion is blocked
+          description: Review the legal hold owner and deadline before replaying the erasure.
+      - alert: HarlyCandidateDeletionFailures
+        expr: harly_candidate_deletion_jobs{state="failed"} > 10
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Candidate deletion failures are accumulating
+          description: Inspect storage, database, or external-provider errors before the queue reaches dead letter.
+      - alert: HarlyCandidateDeletionQueueStale
+        expr: harly_candidate_deletion_jobs{state="stale"} > 0
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: Candidate deletion worker is stale
+          description: A deletion worker has held its lock for more than 15 minutes and should be recovered automatically.
+      - alert: HarlyRetentionCronFailure
+        expr: increase(harly_http_requests_total{route="/api/cron/retention-enforcement",status="5xx"}[15m]) > 0 or increase(harly_cron_runs_failed_total[15m]) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Retention enforcement failed
+          description: Check retention job logs before changing retention settings or deleting records manually.
+      - alert: HarlySlackDeliveryDeadLetter
+        expr: increase(harly_slack_deliveries_total{status="dead_letter"}[15m]) > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Slack notification was dead-lettered
+          description: Inspect the Slack delivery history, correct the channel or installation, then replay intentionally.
+      - alert: HarlySlackDeliveryFailures
+        expr: increase(harly_slack_deliveries_total{status="failed"}[10m]) > 10
+        for: 10m
+        labels: { severity: warning }
+        annotations:
+          summary: Slack notification failures are increasing
+          description: Check Slack rate limits, network health, and the workspace installation before messages accumulate.

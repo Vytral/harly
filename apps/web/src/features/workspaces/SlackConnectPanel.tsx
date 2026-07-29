@@ -2,15 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import {
   disconnectSlackAction,
+  listSlackDeliveriesAction,
   listSlackChannelsAction,
+  replaySlackDeliveryAction,
   saveSlackCredentialsAction,
   saveSlackSettingsAction,
   testSlackAction,
   type SlackChannel,
+  type SlackDeliveryView,
 } from "@/features/workspaces/slack-settings-actions";
 import type { WorkspaceSlackStatus } from "@/lib/slack/config";
 import {
@@ -184,6 +187,27 @@ export function SlackConnectPanel({
         </Card>
       ) : null}
 
+      {isConnected && status.lastDelivery ? (
+        <Card className="p-4 text-sm">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-medium">Delivery health</span>
+            <span className="text-muted-foreground">
+              {status.lastDelivery.status === "success"
+                ? "Healthy"
+                : status.lastDelivery.status === "dead_letter"
+                  ? "Action required"
+                  : "Retrying"}
+            </span>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {status.pendingDeliveries > 0
+              ? `${status.pendingDeliveries} notification${status.pendingDeliveries === 1 ? "" : "s"} pending.`
+              : `Last delivery attempt: ${status.lastDelivery.attempts}.`}
+            {status.lastDelivery.error ? ` ${status.lastDelivery.error}` : ""}
+          </p>
+        </Card>
+      ) : null}
+
       {canEdit ? (
         <InlineReveal open={open}>
           {isConnected ? (
@@ -341,6 +365,9 @@ function SlackConfigForm({
   const [testing, startTest] = useTransition();
   const [saving, startSave] = useTransition();
   const [loaded, setLoaded] = useState(false);
+  const [deliveries, setDeliveries] = useState<SlackDeliveryView[]>([]);
+  const [loadingDeliveries, startLoadDeliveries] = useTransition();
+  const [replaying, setReplaying] = useState<string | null>(null);
 
   function loadChannels() {
     startLoadChannels(async () => {
@@ -374,6 +401,26 @@ function SlackConfigForm({
         return;
       }
       toast.success("Test message sent to Slack!");
+    });
+  }
+
+  function loadDeliveries() {
+    startLoadDeliveries(async () => {
+      const result = await listSlackDeliveriesAction();
+      if (!result.ok) toast.error(result.error);
+      else setDeliveries(result.deliveries);
+    });
+  }
+
+  function replay(id: string) {
+    setReplaying(id);
+    void replaySlackDeliveryAction(id).then((result) => {
+      if (!result.ok) toast.error(result.error ?? "Could not replay delivery.");
+      else {
+        toast.success("Slack delivery replay queued");
+        loadDeliveries();
+      }
+      setReplaying(null);
     });
   }
 
@@ -518,6 +565,42 @@ function SlackConfigForm({
             Save
           </Button>
         </div>
+      </div>
+
+      <div className="mt-5 border-t pt-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-medium">Recent deliveries</p>
+            <p className="text-xs text-muted-foreground">
+              Inspect failures and replay safe summaries without exposing payloads.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={loadDeliveries} disabled={loadingDeliveries}>
+            {loadingDeliveries ? <SpinnerIcon className="size-3.5" /> : null}
+            Load history
+          </Button>
+        </div>
+        {deliveries.length > 0 ? (
+          <div className="mt-3 space-y-1.5">
+            {deliveries.map((delivery) => (
+              <div key={delivery.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs">
+                <div className="min-w-0">
+                  <p className="truncate font-medium">{delivery.event}</p>
+                  <p className="text-muted-foreground">
+                    {delivery.status} · {delivery.attempts} attempt{delivery.attempts === 1 ? "" : "s"}
+                    {delivery.lastError ? ` · ${delivery.lastError}` : ""}
+                  </p>
+                </div>
+                {delivery.status === "dead_letter" || delivery.status === "failed" ? (
+                  <Button size="sm" variant="outline" onClick={() => replay(delivery.id)} disabled={replaying === delivery.id}>
+                    {replaying === delivery.id ? <SpinnerIcon className="size-3.5" /> : null}
+                    Replay
+                  </Button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
     </Card>
   );

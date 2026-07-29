@@ -8,6 +8,7 @@ import { db, passkeys } from "@harly/db";
 import { auth } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { RP_ID, ORIGIN } from "@/lib/passkey";
+import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 
 const log = createLogger("api-passkey-login");
 
@@ -27,7 +28,16 @@ setInterval(() => {
 }, 60_000);
 
 // GET , generate authentication options for passkey login (no session required).
-export async function GET() {
+export async function GET(req: NextRequest) {
+  try {
+    await enforceRateLimit(`public:passkey-login:${clientIp(req)}`, {
+      limit: 30,
+      windowMs: 60_000,
+    });
+  } catch {
+    return NextResponse.json({ error: "Too many attempts." }, { status: 429 });
+  }
+
   // Get all passkeys to allow the browser to check if any are available.
   const allPasskeys = await db
     .select({ credentialId: passkeys.credentialId, transports: passkeys.transports })
@@ -57,6 +67,15 @@ export async function GET() {
 
 // POST , verify authentication response and create session for passkey login.
 export async function POST(req: NextRequest) {
+  try {
+    await enforceRateLimit(`public:passkey-login:${clientIp(req)}`, {
+      limit: 30,
+      windowMs: 60_000,
+    });
+  } catch {
+    return NextResponse.json({ error: "Too many attempts." }, { status: 429 });
+  }
+
   const body = await req.json();
 
   // Get and consume the challenge using the challenge ID.
@@ -141,7 +160,11 @@ export async function POST(req: NextRequest) {
   }
 
   // Set session cookie manually.
-  const response = NextResponse.json({ verified: true, token: session.token });
+  // The session token is already issued in the HTTP-only cookie below. Never
+  // return it in the response body: doing so exposes a bearer credential to
+  // page JavaScript, browser extensions, logs, and any intermediary that
+  // records response bodies.
+  const response = NextResponse.json({ verified: true });
 
   // Get cookie configuration from auth context.
   const cookieName = ctx.authCookies.sessionToken.name;

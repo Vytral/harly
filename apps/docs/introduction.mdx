@@ -3,22 +3,33 @@ title: "Introduction"
 description: "Harly is an open-source applicant tracking system for modern teams."
 ---
 
+<Frame caption="Harly — the open-source applicant tracking system, running a candidate pipeline.">
+  <img src="/images/banner-harly.webp" alt="Harly dashboard showing a candidate list with pipeline stages, filters, and departments." />
+</Frame>
+
 Harly is an applicant tracking system for teams that want their recruiting
 workflow, candidate data, and integrations in one workspace. It covers
 pipelines, candidate portals, interviews, offers, e-signature, career pages,
-automations, and a versioned API.
-
-![Harly deployment architecture: web, PostgreSQL, scheduler, storage, and integrations](/images/architecture.svg)
+automations, and a versioned API. You run it yourself: one Docker Compose
+stack, one PostgreSQL database, and your own domain.
 
 <Info>
-  This documentation is organized around outcomes. Start with the quickstart
-  if you are deploying Harly, or jump to integrations and the API if your
-  workspace is already running.
+  This documentation is organized around outcomes. Start with the
+  [quickstart](/quickstart) if you are deploying Harly for the first time,
+  follow the [tutorials](/tutorials/first-hire) for end-to-end walkthroughs,
+  or jump to [integrations](/integrations/overview) and the
+  [API](/developers/api-overview) if your workspace is already running.
 </Info>
 
 <CardGroup cols={2}>
   <Card title="Quickstart" icon="rocket" href="/quickstart">
     Install Harly on a VPS with the guided CLI in one command.
+  </Card>
+  <Card title="Tutorials" icon="graduation-cap" href="/tutorials/first-hire">
+    End-to-end walkthroughs from first job to signed offer.
+  </Card>
+  <Card title="Using Harly" icon="compass" href="/product/overview">
+    Learn jobs, pipelines, interviews, offers, and the candidate portal.
   </Card>
   <Card title="Self-hosting overview" icon="server" href="/self-hosting/overview">
     VPS requirements, memory profiles, and DNS setup.
@@ -32,7 +43,25 @@ automations, and a versioned API.
   <Card title="API and webhooks" icon="code" href="/developers/api-overview">
     Automate Harly with scoped keys, idempotency, and signed events.
   </Card>
-  <Card title="Troubleshooting" icon="circle-help" href="/operations/troubleshooting">
-    Diagnose setup, delivery, scheduling, and realtime issues.
+  <Card title="Security" icon="shield-check" href="/security/access-control">
+    Access control, SSO, SCIM, and privacy.
   </Card>
 </CardGroup>
+
+## How Harly is deployed
+
+A Harly installation is a single Docker Compose stack: the Next.js app, a
+PostgreSQL 16 database, a background scheduler, file storage, and an optional
+Caddy proxy that manages HTTPS. Integrations connect out from the app; nothing
+else needs a public port.
+
+<Frame caption="Harly runs as one app process, one database, one scheduler, and optional Caddy.">
+  <img src="/images/architecture.svg" alt="Harly deployment architecture: the web app and scheduler talk to PostgreSQL and storage, with Caddy terminating HTTPS and integrations connecting outbound." />
+</Frame>
+
+## What is open source
+
+Harly is MIT-licensed. The source is on
+[GitHub](https://github.com/vytral/harly). You run the official image or
+build from source. Candidate data stays on your infrastructure — no Harly
+cloud, no data sharing.

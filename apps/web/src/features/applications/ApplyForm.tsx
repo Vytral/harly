@@ -1063,15 +1063,21 @@ export function ApplyForm({
   }
 
   async function uploadResume(file: File) {
-    const presignResponse = await fetch("/api/applications/resume/presign", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        filename: file.name,
-        contentType: file.type,
-        contentLength: file.size,
-      }),
-    });
+    const workspaceParam = workspaceSlug
+      ? `?workspace=${encodeURIComponent(workspaceSlug)}`
+      : "";
+    const presignResponse = await fetch(
+      `/api/public/v1/resume/presign${workspaceParam}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          contentType: file.type,
+          contentLength: file.size,
+        }),
+      },
+    );
 
     const presignPayload = parseStoragePresignResponse(
       await presignResponse.json(),

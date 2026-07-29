@@ -26,7 +26,7 @@ import {
   UserRound,
   XCircle,
 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { authClient, signOut } from "@/lib/auth-client";
 import { getImageFileValidationError } from "@/lib/storage-validation";

@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { desc, eq, and, asc } from "drizzle-orm";
+import { desc, eq, and, asc, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
 import {
@@ -86,7 +86,7 @@ export default async function PortalDashboardPage() {
       currentStageId: applications.currentStageId,
     })
     .from(applications)
-    .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, session.workspaceId)))
+    .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, session.workspaceId), isNull(jobs.deletedAt)))
     .where(
       and(
         eq(applications.candidateId, session.candidateId),

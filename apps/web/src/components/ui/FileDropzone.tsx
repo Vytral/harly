@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ImageUp, Loader2, Pencil, RefreshCw, UploadCloud, X } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { getImageFileValidationError } from "@/lib/storage-validation";
 import { cn } from "@/lib/utils";

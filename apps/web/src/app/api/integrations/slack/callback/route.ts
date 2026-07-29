@@ -7,6 +7,7 @@ import { encryptSecret } from "@/lib/crypto";
 import { getWorkspaceSlackCredentials } from "@/lib/slack/config";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
+import { logAuditEvent } from "@/lib/audit-log";
 
 export const runtime = "nodejs";
 
@@ -48,6 +49,7 @@ export async function GET(req: NextRequest) {
     state,
     userId: session.user.id,
     workspaceId,
+    provider: "slack",
   });
   if (!nonceCheck.ok) {
     return redirectWithError(`${nonceCheck.error} Please try again.`);
@@ -68,22 +70,37 @@ export async function GET(req: NextRequest) {
   ).replace(/\/$/, "");
   const redirectUri = `${appUrl}/api/integrations/slack/callback`;
 
-  const tokenRes = await fetch("https://slack.com/api/oauth.v2.access", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: credentials.clientId,
-      client_secret: credentials.clientSecret,
-      code,
-      redirect_uri: redirectUri,
-    }),
-  });
+  let tokenRes: Response;
+  try {
+    tokenRes = await fetch("https://slack.com/api/oauth.v2.access", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        client_id: credentials.clientId,
+        client_secret: credentials.clientSecret,
+        code,
+        redirect_uri: redirectUri,
+      }),
+      signal: AbortSignal.timeout(10_000),
+    });
+  } catch {
+    return redirectWithError("Slack token exchange timed out. Please try again.");
+  }
+
+  if (!tokenRes.ok) {
+    return redirectWithError(`Slack token exchange failed (HTTP ${tokenRes.status}).`);
+  }
 
   const tokenData = (await tokenRes.json()) as {
     ok: boolean;
     error?: string;
-    access_token?: string;
-    team?: { id?: string; name?: string };
+  access_token?: string;
+  app_id?: string;
+  bot_user_id?: string;
+  scope?: string;
+  team?: { id?: string; name?: string };
+  enterprise?: { id?: string };
+  authed_user?: { id?: string };
   };
 
   if (!tokenData.ok || !tokenData.access_token) {
@@ -99,6 +116,14 @@ export async function GET(req: NextRequest) {
     slackEnabled: true,
     slackTeamId: tokenData.team?.id ?? null,
     slackTeamName: tokenData.team?.name ?? null,
+    slackAppId: tokenData.app_id ?? null,
+    slackBotUserId: tokenData.bot_user_id ?? null,
+    slackEnterpriseId: tokenData.enterprise?.id ?? null,
+    slackScopes: tokenData.scope?.split(",").filter(Boolean) ?? [],
+    slackInstallerUserId: tokenData.authed_user?.id ?? session.user.id,
+    slackInstalledAt: new Date(),
+    slackLastValidatedAt: new Date(),
+    slackRevokedAt: null,
     slackBotTokenCiphertext: encrypted.ciphertext,
     slackBotTokenIv: encrypted.iv,
     slackBotTokenTag: encrypted.tag,
@@ -115,6 +140,19 @@ export async function GET(req: NextRequest) {
     .insert(workspaceSettings)
     .values({ organizationId: wsId, ...set })
     .onConflictDoUpdate({ target: workspaceSettings.organizationId, set });
+
+  await logAuditEvent({
+    workspaceId: wsId,
+    actorId: session.user.id,
+    actorEmail: session.user.email,
+    action: "integration.slack.connected",
+    resourceType: "slack_installation",
+    metadata: {
+      teamId: tokenData.team?.id ?? null,
+      enterpriseId: tokenData.enterprise?.id ?? null,
+      scopeCount: tokenData.scope?.split(",").filter(Boolean).length ?? 0,
+    },
+  });
 
   return NextResponse.redirect(
     `${appUrl}/settings/integrations?slack=connected`,

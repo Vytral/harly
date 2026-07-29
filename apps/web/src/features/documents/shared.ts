@@ -70,6 +70,8 @@ export type DocumentListItem = {
   createdByName: string | null;
   category: DocumentCategoryItem | null;
   associationLabels: string[];
+  /** Candidate ids this document is linked to, so a candidate-scoped hub view can filter precisely. */
+  candidateIds: string[];
   accessRoles: Array<{ roleKey: string; accessLevel: "read" | "manage" }>;
   accessMembers: Array<{ userId: string; accessLevel: "read" | "manage" }>;
   assignments: Array<{ userId: string; assignmentType: "owner" | "reviewer" }>;

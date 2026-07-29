@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import {
   disableAiAction,

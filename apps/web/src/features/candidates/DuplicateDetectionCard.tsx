@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { AlertTriangle, Users } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { detectCandidateDuplicatesAction, type DuplicateMatch } from "@/features/candidates/ai-actions";
 import { AiButton } from "@/components/ui/AiButton";

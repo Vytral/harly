@@ -1,0 +1,282 @@
+---
+title: "Tutorial: build an API integration"
+description: "Create a scoped API key, call the Harly REST API, verify webhook signatures, and handle retries safely."
+---
+
+This tutorial builds a minimal integration that listens for Harly events and
+reads candidate data from the API. It assumes Harly is running and accessible
+at a public URL.
+
+## What you will do
+
+- Create a scoped API key
+- List jobs and candidates with the REST API
+- Register a webhook endpoint and verify its signature
+- Handle retries idempotently
+
+## Prerequisites
+
+- A running Harly installation at `https://hiring.example.com`
+- Owner access to **Settings → Developers**
+- Node.js 20+ for the webhook receiver
+
+---
+
+## Step 1 — Create a scoped API key
+
+<Steps>
+  <Step title="Open Developers settings">
+    Open **Settings → Developers → API keys** and select **Create key**.
+  </Step>
+  <Step title="Name and scope the key">
+    Name it descriptively (for example `ci-pipeline-sync`) and select only
+    the scopes the integration needs:
+
+    | Scope | When you need it |
+    | --- | --- |
+    | `jobs:read` | List and read jobs |
+    | `candidates:read` | Read candidate profiles |
+    | `applications:read` | Read application state and stage |
+    | `applications:write` | Move or update applications |
+    | `webhooks:read` | Read webhook delivery history |
+    | `webhooks:write` | Create and manage webhook endpoints |
+
+    Choose **Secret key** (`sk`) — publishable keys are limited to
+    `jobs:read` and `applications:write`.
+  </Step>
+  <Step title="Copy the key">
+    Copy the raw value immediately — it starts with `harly_sk_live_` and is
+    shown only once. Store it in your secret manager, never in source control.
+  </Step>
+</Steps>
+
+---
+
+## Step 2 — Call the API
+
+The base URL is `https://hiring.example.com/api/v1`. Every request requires a
+bearer token.
+
+### List published jobs
+
+```bash
+curl --fail-with-body \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
+  -H 'Accept: application/json' \
+  'https://hiring.example.com/api/v1/jobs?limit=25'
+```
+
+```json
+{
+  "data": [
+    {
+      "id": "job_01j1abc",
+      "title": "Product Designer",
+      "status": "open",
+      "department": "Design",
+      "location": "Remote"
+    }
+  ],
+  "meta": {
+    "pagination": {
+      "hasMore": true,
+      "limit": 25,
+      "nextCursor": "eyJjcmVhdGVkQXQiOiIyMDI2LTA3LTI3VDEyOjAwOjAwWiIsImlkIjoiam9iXzAxajFhYmMifQ"
+    }
+  }
+}
+```
+
+Use `meta.pagination.nextCursor` for the next page:
+
+```bash
+curl --fail-with-body \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
+  -H 'Accept: application/json' \
+  'https://hiring.example.com/api/v1/jobs?limit=25&cursor=eyJj...'
+```
+
+### Read a candidate
+
+```bash
+curl --fail-with-body \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
+  -H 'Accept: application/json' \
+  'https://hiring.example.com/api/v1/candidates/cnd_01j1xyz'
+```
+
+### Move an application
+
+The move body uses `toStageId`. Always include an idempotency key on mutations:
+
+```bash
+curl --fail-with-body -X POST \
+  'https://hiring.example.com/api/v1/applications/app_01j1abc/move' \
+  -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
+  -H 'Content-Type: application/json' \
+  -H 'Idempotency-Key: move-app_01j1abc-2026-07-27T12:00:00Z' \
+  --data '{"toStageId":"stage_interview"}'
+```
+
+<Warning>
+  A `409` may be a real conflict or an idempotency collision. Read the error
+  envelope before retrying a mutation.
+</Warning>
+
+---
+
+## Step 3 — Register a webhook
+
+<Steps>
+  <Step title="Create the endpoint">
+    Open **Settings → Developers → Webhooks** and select **Create endpoint**.
+
+    - URL: `https://your-receiver.example.com/harly/events`
+    - Events: choose the events your integration cares about
+  </Step>
+  <Step title="Store the signing secret">
+    Copy the signing secret — it starts with `whsec_` — and save it in your
+    secret manager as `HARLY_WEBHOOK_SECRET`. It is shown once.
+  </Step>
+  <Step title="Send a test delivery">
+    Select **Send test** and confirm your receiver returns `2xx`.
+  </Step>
+</Steps>
+
+### Verify the signature
+
+Harly signs every delivery with an `x-harly-signature-256` header in the format:
+
+```text
+t=<unix-seconds>,v1=<hex-hmac>
+```
+
+The HMAC-SHA256 is computed over `${t}.${rawBody}` keyed by the endpoint secret.
+Always verify against the **raw request body** before parsing JSON.
+
+```ts
+import { createHmac, timingSafeEqual } from "node:crypto";
+
+function verifyHarlyWebhook(
+  rawBody: string,
+  signatureHeader: string | null,
+  secret: string,
+  toleranceSeconds = 300,
+): boolean {
+  if (!signatureHeader) return false;
+
+  // Parse t=<unix>,v1=<hex>
+  const parts = Object.fromEntries(
+    signatureHeader.split(",").map((kv) => kv.split("=") as [string, string]),
+  );
+  const t = Number.parseInt(parts.t ?? "", 10);
+  const v1 = parts.v1;
+  if (Number.isNaN(t) || !v1) return false;
+
+  // Reject stale timestamps (default window: 5 minutes)
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - t) > toleranceSeconds) return false;
+
+  // Constant-time comparison
+  const expected = createHmac("sha256", secret)
+    .update(`${t}.${rawBody}`)
+    .digest("hex");
+
+  const a = Buffer.from(expected, "utf8");
+  const b = Buffer.from(v1, "utf8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}
+```
+
+### Receiver contract
+
+```ts
+import express from "express";
+
+const app = express();
+
+app.post(
+  "/harly/events",
+  express.raw({ type: "application/json" }),
+  async (req, res) => {
+    const valid = verifyHarlyWebhook(
+      req.body.toString(),
+      req.headers["x-harly-signature-256"] as string ?? null,
+      process.env.HARLY_WEBHOOK_SECRET!,
+    );
+    if (!valid) return res.status(400).json({ error: "invalid_signature" });
+
+    const event = JSON.parse(req.body.toString());
+
+    // Return 200 before doing slow work
+    res.status(200).json({ received: true });
+
+    // Deduplicate by event ID
+    if (await alreadyProcessed(event.id)) return;
+    await processEvent(event);
+  },
+);
+```
+
+Receiver rules:
+- Return `2xx` after durable acceptance, not after completing downstream work.
+- Deduplicate by `event.id` — delivery is at-least-once.
+- Return `4xx` for an invalid signature, `5xx` for a transient failure.
+- Treat unknown event types as accepted and observable.
+
+---
+
+## Step 4 — Handle retries
+
+Design the receiver so reprocessing the same event is safe:
+
+```ts
+async function processEvent(event: HarlyEvent): Promise<void> {
+  // Check if already processed
+  const processed = await db.events.findUnique({ where: { id: event.id } });
+  if (processed) return;
+
+  // Process
+  if (event.type === "application.stage_changed") {
+    await syncApplicationStage(event.data);
+  }
+
+  // Record completion to prevent double-processing
+  await db.events.create({ data: { id: event.id, processedAt: new Date() } });
+}
+```
+
+Replay failed deliveries from **Settings → Developers → Webhooks → Delivery
+history** after correcting the receiver.
+
+---
+
+## Verification checklist
+
+<Check>API key scoped to only the resources the integration reads or writes.</Check>
+<Check>API key starts with `harly_sk_live_` for production.</Check>
+<Check>Webhook secret stored in secret manager, not in source.</Check>
+<Check>Receiver reads `x-harly-signature-256` header before parsing body.</Check>
+<Check>Receiver deduplicates by event ID.</Check>
+<Check>Mutations use idempotency keys.</Check>
+<Check>Test delivery returns 2xx from the receiver.</Check>
+
+---
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="API resource reference" icon="brackets-curly" href="/developers/api-reference">
+    All resources, scopes, and error codes.
+  </Card>
+  <Card title="Webhooks" icon="hook" href="/developers/webhooks">
+    Complete webhook delivery and signature reference.
+  </Card>
+  <Card title="Automations" icon="workflow" href="/developers/automations">
+    No-code event-driven workflows inside Harly.
+  </Card>
+  <Card title="Realtime events" icon="bolt" href="/developers/realtime">
+    Server-sent events for live browser updates.
+  </Card>
+</CardGroup>

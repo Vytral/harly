@@ -45,9 +45,8 @@ import {
 import { updateApplicationStatus } from "@/features/pipeline/actions";
 import {
   permanentlyDeleteCandidate,
+  deleteCandidate,
   restoreCandidate,
-  trashCandidate,
-  trashCandidates,
 } from "./data";
 import {
   allowedResumeContentTypes,
@@ -59,6 +58,14 @@ import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { isWorkspaceStorageKey } from "@/lib/storage-validation";
 import { storage } from "@/lib/storage";
 import { createLogger } from "@/lib/logger";
+import {
+  enqueueCandidateDeletionJob,
+  markCandidateDeletionBlocked,
+  markCandidateDeletionCompleted,
+  markCandidateDeletionFailed,
+  requeueCandidateDeletionJob,
+  startCandidateDeletionJob,
+} from "./deletion-jobs";
 
 export type CandidateActionState = {
   success: boolean;
@@ -1528,30 +1535,69 @@ export async function sendCandidateMessage(input: {
   }
 }
 
-// ── Candidate trash (soft delete) ──
+// ── Candidate permanent deletion ──
 
 const candidateIdsSchema = z.array(z.string().min(1)).min(1).max(200);
 
-/** Move a candidate to the trash , reversible. */
+/** Permanently delete a candidate and all related records. */
 export async function trashCandidateAction(
   candidateId: string,
 ): Promise<CandidateActionState> {
   await requireCandidatePermission("candidates:delete", candidateId);
-  const result = await trashCandidate(candidateId);
+  const { user, organization } = await getWorkspaceContext();
+  const job = await enqueueCandidateDeletionJob({
+    workspaceId: organization.id,
+    candidateId,
+    requestedBy: user.email,
+  });
+  if (!job)
+    return { success: false, error: "Could not queue candidate deletion." };
+  if (job.status === "completed") return { success: true };
+  if (["processing", "blocked", "dead_letter"].includes(job.status)) {
+    return {
+      success: false,
+      error: "Candidate deletion is already being processed or blocked.",
+    };
+  }
+  const claimed = await startCandidateDeletionJob(job.id, `request:${user.id}`);
+  if (!claimed) {
+    return {
+      success: false,
+      error: "Candidate deletion is already being processed.",
+    };
+  }
+  const result = await deleteCandidate(candidateId, user.email);
 
   if (!result.ok) {
+    if (result.error.includes("legal hold")) {
+      await markCandidateDeletionBlocked(
+        job.id,
+        result.error,
+        `request:${user.id}`,
+      );
+    } else {
+      await markCandidateDeletionFailed(
+        job.id,
+        result.error,
+        `request:${user.id}`,
+      );
+    }
     return { success: false, error: result.error };
   }
+  await markCandidateDeletionCompleted(
+    job.id,
+    result.stats,
+    `request:${user.id}`,
+  );
 
-  const { organization, user } = await getWorkspaceContext();
   await logAuditEvent({
     workspaceId: organization.id,
     actorId: user.id,
     actorEmail: user.email,
-    action: "candidate.trashed",
+    action: "candidate.deleted",
     resourceType: "candidate",
     resourceId: candidateId,
-    severity: "warning",
+    severity: "critical",
   });
 
   revalidatePath("/dashboard/candidates");
@@ -1561,7 +1607,7 @@ export async function trashCandidateAction(
   return { success: true };
 }
 
-/** Move multiple candidates to the trash , reversible. */
+/** Permanently delete multiple candidates and all related records. */
 export async function bulkTrashCandidatesAction(
   candidateIds: string[],
 ): Promise<CandidateActionState & { count?: number }> {
@@ -1571,12 +1617,71 @@ export async function bulkTrashCandidatesAction(
   }
 
   await requirePermission("candidates:delete");
-  const result = await trashCandidates(parsed.data);
+  const { user, organization } = await getWorkspaceContext();
+  const results = [];
+  for (const candidateId of parsed.data) {
+    const job = await enqueueCandidateDeletionJob({
+      workspaceId: organization.id,
+      candidateId,
+      requestedBy: user.email,
+    });
+    if (!job) {
+      results.push({ ok: false, error: "Could not queue candidate deletion." });
+      continue;
+    }
+    if (job.status === "completed") {
+      results.push({ ok: true });
+      continue;
+    }
+    if (["processing", "blocked", "dead_letter"].includes(job.status)) {
+      results.push({
+        ok: false,
+        error: "Candidate deletion is already being processed or blocked.",
+      });
+      continue;
+    }
+    const claimed = await startCandidateDeletionJob(job.id, `bulk:${user.id}`);
+    if (!claimed) {
+      results.push({
+        ok: false,
+        error: "Candidate deletion is already being processed.",
+      });
+      continue;
+    }
+    const result = await deleteCandidate(candidateId, user.email);
+    if (result.ok)
+      await markCandidateDeletionCompleted(
+        job.id,
+        result.stats,
+        `bulk:${user.id}`,
+      );
+    else if (result.error.includes("legal hold"))
+      await markCandidateDeletionBlocked(
+        job.id,
+        result.error,
+        `bulk:${user.id}`,
+      );
+    else
+      await markCandidateDeletionFailed(
+        job.id,
+        result.error,
+        `bulk:${user.id}`,
+      );
+    results.push(result);
+  }
+  const count = results.filter((result) => result.ok).length;
+  if (count !== results.length) {
+    return {
+      success: false,
+      error: "Some candidates could not be deleted.",
+      count,
+    };
+  }
 
   revalidatePath("/dashboard/candidates");
   revalidatePath("/dashboard/pipeline");
   revalidatePath("/dashboard");
-  return { success: true, count: result.count };
+  return { success: true, count };
 }
 
 /** Restore a candidate out of the trash. */
@@ -1603,11 +1708,49 @@ export async function permanentlyDeleteCandidateAction(
 ): Promise<CandidateActionState> {
   await requireCandidatePermission("candidates:delete", candidateId);
   const { organization, user } = await getWorkspaceContext();
+  const job = await enqueueCandidateDeletionJob({
+    workspaceId: organization.id,
+    candidateId,
+    requestedBy: user.email,
+  });
+  if (!job)
+    return { success: false, error: "Could not queue candidate deletion." };
+  if (job.status === "completed") return { success: true };
+  if (["processing", "blocked", "dead_letter"].includes(job.status)) {
+    return {
+      success: false,
+      error: "Candidate deletion is already being processed or blocked.",
+    };
+  }
+  const claimed = await startCandidateDeletionJob(job.id, `trash:${user.id}`);
+  if (!claimed) {
+    return {
+      success: false,
+      error: "Candidate deletion is already being processed.",
+    };
+  }
   const result = await permanentlyDeleteCandidate(candidateId, user.email);
 
   if (!result.ok) {
+    if (result.error.includes("legal hold"))
+      await markCandidateDeletionBlocked(
+        job.id,
+        result.error,
+        `trash:${user.id}`,
+      );
+    else
+      await markCandidateDeletionFailed(
+        job.id,
+        result.error,
+        `trash:${user.id}`,
+      );
     return { success: false, error: result.error };
   }
+  await markCandidateDeletionCompleted(
+    job.id,
+    result.stats,
+    `trash:${user.id}`,
+  );
 
   await logAuditEvent({
     workspaceId: organization.id,
@@ -1622,6 +1765,28 @@ export async function permanentlyDeleteCandidateAction(
   revalidatePath("/dashboard/candidates");
   revalidatePath("/dashboard/pipeline");
   revalidatePath("/dashboard");
+  return { success: true };
+}
+
+/** Replays a blocked/failed candidate purge after an operator fixes its cause. */
+export async function requeueCandidateDeletionJobAction(
+  jobId: string,
+): Promise<CandidateActionState> {
+  await requirePermission("candidates:delete");
+  const { organization, user } = await getWorkspaceContext();
+  const job = await requeueCandidateDeletionJob({
+    workspaceId: organization.id,
+    jobId,
+    requestedBy: user.email,
+  });
+  if (!job) {
+    return {
+      success: false,
+      error: "Deletion job is not blocked, failed, or dead-lettered.",
+    };
+  }
+  revalidatePath("/dashboard/candidates");
+  revalidatePath("/settings/legal");
   return { success: true };
 }
 

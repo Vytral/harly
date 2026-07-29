@@ -1,7 +1,7 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
 import {
@@ -76,6 +76,7 @@ export default async function JobDetailPage({ params }: PageProps) {
         eq(jobs.id, jobId),
         eq(jobs.workspaceId, session.workspaceId),
         eq(jobs.status, "open"),
+        isNull(jobs.deletedAt),
       ),
     )
     .limit(1);

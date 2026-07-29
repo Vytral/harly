@@ -1,0 +1,4 @@
+ALTER TABLE "mail_idempotency_keys" ADD COLUMN "candidate_id" uuid;--> statement-breakpoint
+ALTER TABLE "mail_idempotency_keys" ADD COLUMN "application_id" uuid;--> statement-breakpoint
+ALTER TABLE "mail_idempotency_keys" ADD CONSTRAINT "mail_idempotency_keys_candidate_id_candidates_id_fk" FOREIGN KEY ("candidate_id") REFERENCES "public"."candidates"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "mail_idempotency_keys" ADD CONSTRAINT "mail_idempotency_keys_application_id_applications_id_fk" FOREIGN KEY ("application_id") REFERENCES "public"."applications"("id") ON DELETE set null ON UPDATE no action;

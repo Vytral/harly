@@ -1,0 +1,266 @@
+---
+title: "Tutorial: set up integrations"
+description: "Connect Google Calendar, email, Slack notifications, and Harly Signing in a single session."
+---
+
+This tutorial walks through connecting the integrations most teams configure
+after the first install: calendar sync, email with inbound replies, team
+notifications, and offer signing. Complete the [quickstart](/quickstart) and
+[first-hire tutorial](/tutorials/first-hire) before starting.
+
+## What you will do
+
+- Connect a Google Calendar for interview scheduling
+- Configure outbound email and inbound reply routing
+- Set up Slack notifications for recruiting events
+- Enable Harly Signing for offer documents
+
+Each integration is independent. You can complete them in any order or skip
+ones you do not need.
+
+---
+
+## Before you begin
+
+| Integration | What you need |
+| --- | --- |
+| Google Calendar | A Google Cloud project with Calendar API enabled, OAuth client |
+| Email | A sending domain, Resend API key or SMTP credentials |
+| Slack | A Slack OAuth app, workspace admin approval |
+| Harly Signing | Nothing extra — it is built in |
+
+---
+
+## Part 1 — Google Calendar
+
+### 1.1 Create the OAuth client
+
+In [Google Cloud Console](https://console.cloud.google.com/):
+
+1. Create or select a project.
+2. Enable **Google Calendar API** under APIs & Services.
+3. Configure the **OAuth consent screen**. For an internal tool, choose
+   **Internal**. For production connecting external accounts, choose
+   **External** and submit for verification.
+4. Add test users while the app is in Testing status.
+5. Go to **Credentials → Create credentials → OAuth 2.0 Client ID**.
+6. Choose **Web application** and register the redirect URI:
+
+   ```text
+   https://hiring.example.com/api/integrations/google/callback
+   ```
+
+7. Copy the **Client ID** and **Client Secret**.
+
+### 1.2 Add installation variables
+
+Add both values to your server environment and restart Harly:
+
+```dotenv
+GOOGLE_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=your-client-secret
+```
+
+On a VPS deployment, edit `.env` in the installation directory and run:
+
+```bash
+docker compose up -d app
+npx @harly/cli doctor
+```
+
+### 1.3 Connect the workspace
+
+<Steps>
+  <Step title="Open the integration">
+    Sign in as an owner and open **Settings → Integrations → Google Calendar**.
+  </Step>
+  <Step title="Authorize">
+    Select **Connect**, sign in with the Google account that can edit the
+    interview calendar, and approve the Calendar permissions.
+  </Step>
+  <Step title="Select a calendar">
+    Choose a writable calendar from the list. Save.
+  </Step>
+  <Step title="Test">
+    Select **Test connection**. Schedule a test interview from any application
+    and verify the event and Meet link appear on the calendar.
+  </Step>
+</Steps>
+
+### Common errors
+
+| Error | Cause | Fix |
+| --- | --- | --- |
+| `redirect_uri_mismatch` | URI in Google does not match Harly's | Register exact `${HARLY_URL}/api/integrations/google/callback` |
+| `invalid_grant` | Refresh token revoked | Disconnect, reconnect, and reauthorize |
+| No refresh token on reconnect | App lacks offline consent | Revoke in [Google account permissions](https://myaccount.google.com/permissions), reconnect |
+
+---
+
+## Part 2 — Email
+
+### 2.1 Outbound with Resend
+
+1. Create a [Resend](https://resend.com) account and verify your sending domain.
+2. Create an API key.
+3. Open **Settings → Email → Outbound** in Harly and choose **Resend**.
+4. Paste the API key and set the sender identity:
+   - Sender name: `Hiring Team`
+   - Sender email: `recruiting@example.com`
+5. Select **Send test** and confirm delivery to a controlled mailbox.
+
+### 2.1 Outbound with SMTP
+
+If you prefer SMTP, open **Settings → Email → Outbound → SMTP** and enter:
+
+```text
+Host:      smtp.example.com
+Port:      587  (STARTTLS) or 465 (implicit TLS)
+Username:  recruiting@example.com
+Password:  <your-app-password>
+From:      recruiting@example.com
+```
+
+Never use a production candidate address for testing.
+
+### 2.2 Inbound replies
+
+Inbound replies let candidate responses thread back onto the application
+record automatically.
+
+<Steps>
+  <Step title="Configure the receiving domain">
+    In **Settings → Email → Inbound**, enter only the hostname — not a URL:
+
+    ```text
+    replies.example.com
+    ```
+
+    Add the provider's MX records for this hostname. For Resend inbound,
+    follow their [inbound email guide](https://resend.com/docs).
+  </Step>
+  <Step title="Register the Harly webhook">
+    Point the provider webhook to:
+
+    ```text
+    https://hiring.example.com/api/email/inbound/webhook
+    ```
+
+    Include the workspace inbound secret shown in the settings screen.
+  </Step>
+  <Step title="Verify">
+    Reply to a test candidate message from an external account. Confirm the
+    reply appears in the application thread under the candidate's name within
+    one minute.
+  </Step>
+</Steps>
+
+### Common errors
+
+| Symptom | Likely cause | Fix |
+| --- | --- | --- |
+| No outbound delivery | Invalid sender domain or API key | Check email outbox status in operations |
+| Reply not threaded | Reply domain is a URL not a hostname | Set only `replies.example.com`, not `https://…` |
+| Duplicate messages | At-least-once delivery | Use provider message IDs to deduplicate |
+
+---
+
+## Part 3 — Slack notifications
+
+<Steps>
+  <Step title="Create a Slack app">
+    In [api.slack.com/apps](https://api.slack.com/apps), create an app for
+    your workspace and add the redirect URI:
+
+    ```text
+    https://hiring.example.com/api/integrations/slack/callback
+    ```
+
+    Copy the **Client ID** and **Client Secret**.
+  </Step>
+  <Step title="Add installation variables">
+    Add both values to your server environment and restart for a
+    self-hosted/single-tenant deployment. Multi-tenant operators may enter
+    encrypted credentials per workspace in the Slack settings card:
+
+    ```dotenv
+    SLACK_CLIENT_ID=<client-id>
+    SLACK_CLIENT_SECRET=<client-secret>
+    ```
+  </Step>
+  <Step title="Connect the workspace">
+    Open **Settings → Integrations → Slack**, select **Connect**, and approve
+    the Slack authorization. Choose the channel where recruiting notifications
+    should appear. Invite the Harly bot to the destination channel first;
+    Harly lists only channels where the bot can post.
+  </Step>
+  <Step title="Test">
+    Select **Send test notification**. Confirm the message appears in the channel.
+  </Step>
+  <Step title="Choose events">
+    Enable the events you want — for example application received, stage change,
+    or offer accepted. Keep channel volume manageable; most teams enable only
+    the highest-signal events.
+
+    <Warning>
+      Do not send resumes, candidate email, phone numbers, or full notes to a
+      Slack channel. Harly sends only an event summary with a link back to
+      Harly.
+    </Warning>
+  </Step>
+</Steps>
+
+---
+
+## Part 4 — Harly Signing
+
+Harly Signing is built in and requires no external account. Configure it
+in **Settings → Signature**.
+
+<Steps>
+  <Step title="Enable signing">
+    Open **Settings → Signature → Harly Signing** and toggle it on.
+  </Step>
+  <Step title="Configure sender details">
+    Set the organization name and the email address that appears on signing
+    requests.
+  </Step>
+  <Step title="Test with an offer">
+    Create a test offer on a test application. Place a signature field and date
+    field, then send to a test email address. Open the signing link from the
+    email, complete the signature, and confirm the offer state updates to
+    **Signed** in Harly.
+  </Step>
+</Steps>
+
+For remote signing with a third-party provider, see
+[signatures](/integrations/signatures) for DocuSeal setup.
+
+---
+
+## Verification checklist
+
+<Check>Google Calendar: test interview creates event and Meet link.</Check>
+<Check>Outbound email: test message arrives in controlled mailbox.</Check>
+<Check>Inbound email: test reply threads back onto the application.</Check>
+<Check>Slack: test notification appears in the configured channel.</Check>
+<Check>Signing: test offer reaches Signed state from the offer record.</Check>
+
+---
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Video providers" icon="video" href="/integrations/video">
+    Connect Zoom, Teams, Meet, or Jitsi.
+  </Card>
+  <Card title="Storage" icon="folder" href="/integrations/storage">
+    Configure S3 for durable file storage.
+  </Card>
+  <Card title="Notifications" icon="bell" href="/integrations/notifications">
+    Add Discord or Telegram alongside Slack.
+  </Card>
+  <Card title="Operations" icon="wrench" href="/self-hosting/operations">
+    Health checks, backups, and upgrades.
+  </Card>
+</CardGroup>

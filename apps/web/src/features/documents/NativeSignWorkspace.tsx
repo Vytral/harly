@@ -4,7 +4,7 @@ import { useEffect, useState, useTransition } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, PenLine, Plus, Trash2 } from "lucide-react";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";

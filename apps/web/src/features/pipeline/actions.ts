@@ -64,6 +64,7 @@ type UpdateApplicationStatusInput = {
 
 type UpdateStageEmailSettingsInput = {
   workspaceId: string;
+  jobId: string;
   stageId: string;
   candidateUpdatesEnabled: boolean;
 };
@@ -550,6 +551,16 @@ export async function bulkMoveApplications(
   input: BulkMoveApplicationsInput,
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    if (
+      !Array.isArray(input.applicationIds) ||
+      input.applicationIds.length === 0 ||
+      input.applicationIds.length > 100 ||
+      new Set(input.applicationIds).size !== input.applicationIds.length
+    ) {
+      return { success: false, error: "Invalid application move request." };
+    }
+    const uniqueApplicationIds = [...new Set(input.applicationIds)];
+
     await requirePermission("candidates:move");
     const { organization: workspace, user } = await getWorkspaceContext();
 
@@ -581,6 +592,14 @@ export async function bulkMoveApplications(
               emailConfig: jobStages.emailConfig,
             })
             .from(jobStages)
+            .innerJoin(
+              jobs,
+              and(
+                eq(jobs.workspaceId, input.workspaceId),
+                eq(jobs.id, jobStages.jobId),
+                isNull(jobs.deletedAt),
+              ),
+            )
             .where(
               and(
                 eq(jobStages.workspaceId, input.workspaceId),
@@ -601,6 +620,14 @@ export async function bulkMoveApplications(
           const targetStageApplications = await tx
             .select({ id: applications.id, updatedAt: applications.updatedAt })
             .from(applications)
+            .innerJoin(
+              jobs,
+              and(
+                eq(jobs.workspaceId, input.workspaceId),
+                eq(jobs.id, applications.jobId),
+                isNull(jobs.deletedAt),
+              ),
+            )
             .where(
               and(
                 eq(applications.workspaceId, input.workspaceId),
@@ -666,7 +693,7 @@ export async function bulkMoveApplications(
             .where(
               and(
                 eq(applications.workspaceId, input.workspaceId),
-                inArray(applications.id, input.applicationIds),
+                inArray(applications.id, uniqueApplicationIds),
               ),
             );
 
@@ -939,6 +966,8 @@ export async function updateApplicationStatus(
       !input ||
       !Array.isArray(input.applicationIds) ||
       input.applicationIds.length === 0 ||
+      input.applicationIds.length > 100 ||
+      new Set(input.applicationIds).size !== input.applicationIds.length ||
       !["active", "hired", "rejected", "withdrawn"].includes(input.status)
     ) {
       return { success: false, error: "Invalid application status request." };
@@ -951,7 +980,7 @@ export async function updateApplicationStatus(
       return { success: false, error: "Workspace access denied." };
     }
 
-    const applicationRows = await getApplicationsForAction(
+    let applicationRows = await getApplicationsForAction(
       input.applicationIds,
       input.workspaceId,
     );
@@ -978,6 +1007,13 @@ export async function updateApplicationStatus(
     const domainEvents: PersistedDomainEvent[] = [];
     const emails = await withConcurrencyRetry(
       async () => {
+        applicationRows = await getApplicationsForAction(
+          input.applicationIds,
+          input.workspaceId,
+        );
+        if (applicationRows.length !== input.applicationIds.length) {
+          throw new Error("One or more applications were not found.");
+        }
         stageEvents.length = 0;
         statusEvents.length = 0;
         domainEvents.length = 0;
@@ -1333,6 +1369,7 @@ export async function updateStageEmailSettings(
         and(
           eq(jobStages.id, input.stageId),
           eq(jobStages.workspaceId, input.workspaceId),
+          eq(jobStages.jobId, input.jobId),
         ),
       )
       .returning({ id: jobStages.id });

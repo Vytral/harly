@@ -2,7 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { toast } from "sonner";
+import { toast } from "@/lib/notification-island/toast";
 
 import { SectionHeader, StatusPill } from "@/features/workspaces/settings-ui";
 import { UsersThreeDuotoneIcon } from "@/components/ui/icons/phosphor";

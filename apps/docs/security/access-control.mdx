@@ -3,46 +3,84 @@ title: "Access control and workspace security"
 description: "Design least-privilege roles, contextual access, MFA, and audit reviews for recruiting teams."
 ---
 
-Harly uses workspace-scoped RBAC. A role combines module permissions with an
-optional context such as assigned jobs, departments, or regions.
+Harly uses workspace-scoped RBAC. A role combines a set of permissions with an
+optional scope (job access, departments, regions).
 
-## Role design
+## Built-in roles
 
-Start with job responsibilities, not with a copy of your organisation chart:
-
-| Role | Typical access |
+| Role | What it can do |
 | --- | --- |
-| Owner | Workspace, billing, security, integrations, and all recruiting data |
-| Hiring manager | Assigned jobs, applications, interviews, and feedback |
-| Recruiter | Candidate and application workflow for allowed jobs or regions |
-| Interviewer | Assigned interviews and scorecards |
-| Coordinator | Scheduling and candidate communications without role administration |
+| **Owner** | All-powerful. Unconditionally has every permission. One per workspace. |
+| **Admin** | Full explicit permission set, same as owner, but editable and non-exclusive. |
+| **Recruiter** | Full recruiting workflow: create and publish jobs, manage candidates, offers, interviews, documents, and automations. |
+| **Hiring manager** | Approve and edit jobs, view candidates and applications, move candidates, provide interview feedback, read reports. |
 
-The exact permission set depends on your workspace policy. Keep administrative
-permissions separate from candidate-data permissions.
-
-## Contextual scopes
-
-Use `assigned` jobs when a member should work only on their requisitions. Add
-department or region constraints for larger teams. The server resolves the
-active workspace and applies the role policy before returning candidates,
-applications, interviews, or offers.
+Custom roles can be created in **Settings → Roles** with any combination of
+the available permissions. Only the `owner` role is non-editable.
 
 <Warning>
-  A scoped administrator cannot create a role broader than its own privilege
+  A scoped administrator cannot create a role broader than its own permission
   ceiling. Review role changes in the audit log after every organisational
   change.
 </Warning>
 
+## Permissions
+
+Permissions follow the pattern `resource:action`. The available permissions are:
+
+| Permission | What it controls |
+| --- | --- |
+| `jobs:create` `jobs:view` `jobs:edit` `jobs:delete` `jobs:publish` `jobs:approve` | Job lifecycle |
+| `candidates:view` `candidates:edit` `candidates:delete` `candidates:move` | Candidate records |
+| `hiring_team:manage` | Add or remove hiring team members for a job |
+| `collab:write` | Notes, scorecards, interview scheduling, candidate messaging |
+| `interviews:manage` `interviews:feedback` | Schedule interviews, submit feedback |
+| `tasks:read` `tasks:write` | Task management |
+| `offers:manage` `offers:approve` | Draft, send, approve, and withdraw offers |
+| `templates:manage` | Email and offer templates |
+| `reports:read` | Pipeline and analytics reports |
+| `members:read` `members:invite` `members:edit` `members:remove` | Team management |
+| `invite_links:manage` | Invite link lifecycle |
+| `settings:edit` | Workspace settings |
+| `integrations:manage` | Integration credentials and connections |
+| `roles:manage` | Role and permission management |
+| `security:manage` | MFA enforcement, SSO, audit log |
+| `documents:read` `documents:manage` `documents:share` | Candidate documents |
+| `automations:manage` | Workflow automation rules |
+| `dsar:manage` | Data subject access requests |
+
+## Contextual scopes
+
+Layer scopes on top of a role's permissions to restrict what data a member sees:
+
+- **Job access: all**: member sees all jobs and their candidates.
+- **Job access: assigned**: member sees only jobs they are on the hiring team for.
+- **Departments**: restrict to specific departments.
+- **Regions**: restrict to specific regions.
+
+Use `assigned` for recruiters who should work only on their requisitions. Add
+department or region constraints for larger teams with geographic or functional
+divisions.
+
 ## MFA and session controls
 
-Owners can enforce MFA from **Settings → Security**. For higher-risk teams,
-also configure passkeys, trusted domains, IP allowlists, and risk detection
-according to the deployment environment.
+Owners can enforce MFA from **Settings → Security**. When MFA is enforced,
+members without a configured factor are blocked from the workspace until they
+enroll.
+
+Additional controls available in **Settings → Security**:
+- Passkeys
+- Trusted domains
+- IP allowlists
+- Risk detection
 
 ## Audit review
 
-Review security and administrative events monthly and after an incident. Export
-the audit log before deleting or anonymising records required for an active
-investigation. A candidate's deletion request is not a substitute for an
-incident record.
+Review security and administrative events periodically and after any incident.
+Export the audit log before deleting or anonymizing records that may be needed
+for an active investigation.
+
+<Note>
+  A candidate's deletion request is not a security incident. Handle it through
+  the [privacy workflow](/security/privacy), not the audit log.
+</Note>
