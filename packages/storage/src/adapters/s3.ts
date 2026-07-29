@@ -1,6 +1,7 @@
 import {
   DeleteObjectCommand,
   GetObjectCommand,
+  ListObjectsV2Command,
   PutObjectCommand,
   S3Client,
 } from "@aws-sdk/client-s3";
@@ -95,5 +96,28 @@ export class S3Adapter implements StorageAdapter {
         Key: key,
       }),
     );
+  }
+
+  async list(prefix: string) {
+    const keys: string[] = [];
+    let continuationToken: string | undefined;
+    do {
+      const page = await this.client.send(
+        new ListObjectsV2Command({
+          Bucket: this.config.bucket,
+          Prefix: prefix,
+          ContinuationToken: continuationToken,
+        }),
+      );
+      keys.push(
+        ...(page.Contents ?? []).flatMap((object) =>
+          object.Key ? [object.Key] : [],
+        ),
+      );
+      continuationToken = page.IsTruncated
+        ? page.NextContinuationToken
+        : undefined;
+    } while (continuationToken);
+    return keys;
   }
 }

@@ -27,6 +27,9 @@ export type StorageAdapter = {
    * Delete a file by key.
    */
   delete(key: string): Promise<void>;
+
+  /** List keys below a trusted namespace for reconciliation/maintenance jobs. */
+  list(prefix: string): Promise<string[]>;
 };
 
 export type StorageConfig =
