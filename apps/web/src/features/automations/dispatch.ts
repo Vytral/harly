@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, gt, lt } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lte, lt, or } from "drizzle-orm";
 
 import { db, workflowDefinitions, workflowRuns } from "@harly/db";
 
@@ -31,11 +31,20 @@ const log = createLogger("automations");
  */
 
 const ANTI_LOOP_WINDOW_MS = 30_000;
+const WORKFLOW_LEASE_MS = 5 * 60_000;
+const WORKFLOW_RETRY_DELAY_MS = 60_000;
+
+export type WorkflowDispatchOptions = {
+  /** Durable domain-event identity. Duplicate deliveries become no-ops. */
+  sourceEventId?: string;
+  parentRunId?: string | null;
+};
 
 export async function dispatchWorkflowEvent(
   workspaceId: string,
   event: WebhookEvent,
   data: Record<string, unknown>,
+  options: WorkflowDispatchOptions = {},
 ): Promise<void> {
   // Only a subset of webhook events are valid workflow triggers.
   if (!isWorkflowEvent(event)) return;
@@ -75,7 +84,7 @@ export async function dispatchWorkflowEvent(
     // Anti-loop: if this workflow has a very recent running run from the same
     // trigger, skip. This catches the case where an action (e.g. move_stage)
     // emits application.stage_changed which re-triggers the same workflow.
-    if (await hasRecentRunningRun(workspaceId, workflow.id, triggerEvent)) {
+    if (await hasRecentRunningRun(workspaceId, workflow.id, triggerEvent, data)) {
       log.warn(
         { workspaceId, workflowId: workflow.id, event },
         "[automations] anti-loop: skipping re-entrant run",
@@ -91,8 +100,11 @@ export async function dispatchWorkflowEvent(
           workflowId: workflow.id,
           triggerEvent,
           triggerPayload: data,
+          sourceEventId: options.sourceEventId ?? null,
           status: "running",
+          parentRunId: options.parentRunId ?? null,
         })
+        .onConflictDoNothing()
         .returning({ id: workflowRuns.id });
 
       if (!run) continue;
@@ -125,11 +137,12 @@ async function hasRecentRunningRun(
   workspaceId: string,
   workflowId: string,
   triggerEvent: WorkflowEvent,
+  payload: Record<string, unknown>,
 ): Promise<boolean> {
   const since = new Date(Date.now() - ANTI_LOOP_WINDOW_MS);
   try {
     const recent = await db
-      .select({ id: workflowRuns.id })
+      .select({ id: workflowRuns.id, triggerPayload: workflowRuns.triggerPayload })
       .from(workflowRuns)
       .where(
         and(
@@ -143,10 +156,27 @@ async function hasRecentRunningRun(
       .orderBy(desc(workflowRuns.startedAt))
       .limit(1);
     if (recent.length === 0) return false;
-    // The window check: a run still 'running' after 30s is either in progress
-    // (legit) or stalled (the cron will reclaim it). Either way, re-entering
-    // now would be a loop — skip.
-    return true;
+    const identity = (value: Record<string, unknown>) =>
+      ["application", "candidate", "job", "interview"]
+        .map((key) => {
+          const nested = value[key];
+          return typeof nested === "object" && nested && "id" in nested
+            ? `${key}:${String((nested as { id: unknown }).id)}`
+            : null;
+        })
+        .concat(
+          ["applicationId", "candidateId", "jobId", "interviewId"].map((key) =>
+            typeof value[key] === "string" ? `${key}:${value[key]}` : null,
+          ),
+        )
+        .filter((value): value is string => Boolean(value));
+    const currentIdentity = identity(payload);
+    // A running action that emits the same event for the same aggregate is a
+    // loop; an event for another candidate/application remains independent.
+    return recent.some((run) => {
+      const previousIdentity = identity((run.triggerPayload ?? {}) as Record<string, unknown>);
+      return currentIdentity.length === 0 || previousIdentity.some((value) => currentIdentity.includes(value));
+    });
   } catch (error) {
     log.error(error, "[automations] anti-loop check failed");
     // On check failure, fail open (don't block) but we'd rather drop a loop
@@ -164,28 +194,94 @@ async function hasRecentRunningRun(
  */
 const STALLED_RUN_THRESHOLD_MS = 5 * 60_000;
 
-export async function reclaimStalledWorkflowRuns(): Promise<{ reclaimed: number }> {
+export async function reclaimStalledWorkflowRuns(): Promise<{
+  reclaimed: number;
+  deadLettered: number;
+}> {
   const cutoff = new Date(Date.now() - STALLED_RUN_THRESHOLD_MS);
-  try {
-    const stalled = await db
+  const stale = await db
+    .select({
+      id: workflowRuns.id,
+      attemptCount: workflowRuns.attemptCount,
+      maxAttempts: workflowRuns.maxAttempts,
+    })
+    .from(workflowRuns)
+    .where(
+      and(
+        eq(workflowRuns.status, "running"),
+        lt(workflowRuns.startedAt, cutoff),
+        lte(workflowRuns.nextAttemptAt, new Date()),
+        or(isNull(workflowRuns.lockedAt), lt(workflowRuns.lockedAt, cutoff)),
+      ),
+    )
+    .limit(100);
+
+  let reclaimed = 0;
+  let deadLettered = 0;
+  for (const run of stale) {
+    const exhausted = run.attemptCount >= run.maxAttempts;
+    const [updated] = await db
       .update(workflowRuns)
       .set({
-        status: "failed",
-        finishedAt: new Date(),
-        error: "Run stalled (process did not complete).",
+        status: exhausted ? "dead_letter" : "running",
+        finishedAt: exhausted ? new Date() : null,
+        error: exhausted
+          ? "Run exhausted its retry budget after becoming stale."
+          : "Run lease expired; queued for retry.",
+        nextAttemptAt: exhausted
+          ? new Date()
+          : new Date(Date.now() + WORKFLOW_RETRY_DELAY_MS),
+        lockedAt: null,
+        lockedBy: null,
+        heartbeatAt: null,
+        deadLetteredAt: exhausted ? new Date() : null,
         updatedAt: new Date(),
       })
       .where(
         and(
+          eq(workflowRuns.id, run.id),
           eq(workflowRuns.status, "running"),
           lt(workflowRuns.startedAt, cutoff),
+          lte(workflowRuns.nextAttemptAt, new Date()),
         ),
       )
       .returning({ id: workflowRuns.id });
+    if (!updated) continue;
+    reclaimed += 1;
+    if (exhausted) deadLettered += 1;
+  }
 
-    return { reclaimed: stalled.length };
+  return { reclaimed, deadLettered };
+}
+
+/**
+ * Pick due runs without claiming them. `runWorkflow` performs the atomic
+ * lease claim, so multiple scheduler replicas can safely call this function.
+ */
+export async function dispatchDueWorkflowRuns(limit = 50): Promise<{
+  queued: number;
+}> {
+  const now = new Date();
+  try {
+    const due = await db
+      .select({ id: workflowRuns.id })
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.status, "running"),
+          lte(workflowRuns.nextAttemptAt, now),
+          or(
+            isNull(workflowRuns.lockedAt),
+            lt(workflowRuns.lockedAt, new Date(now.getTime() - WORKFLOW_LEASE_MS)),
+          ),
+        ),
+      )
+      .orderBy(workflowRuns.nextAttemptAt)
+      .limit(limit);
+    await Promise.allSettled(due.map(({ id }) => runWorkflow(id)));
+    return { queued: due.length };
   } catch (error) {
-    log.error(error, "[automations] reclaim stalled runs failed");
-    return { reclaimed: 0 };
+    log.error(error, "[automations] dispatch due runs failed");
+    return { queued: 0 };
   }
 }

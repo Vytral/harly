@@ -136,9 +136,10 @@ export type DomainEventInput = {
   payload: Record<string, unknown>;
 };
 
-export async function emitDomainEvent(input: DomainEventInput): Promise<void> {
+export async function emitDomainEvent(input: DomainEventInput): Promise<PersistedDomainEvent> {
   const event = await db.transaction((tx) => persistDomainEvent(tx, input));
   await publishPersistedDomainEvents([event]);
+  return event;
 }
 
 export async function emitRealtimeInvalidation(input: {

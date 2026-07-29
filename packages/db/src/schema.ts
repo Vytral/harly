@@ -175,6 +175,7 @@ export const workflowRunStatusEnum = pgEnum("workflow_run_status", [
   "succeeded",
   "failed",
   "skipped",
+  "dead_letter",
 ]);
 
 export const memberStatusEnum = pgEnum("member_status", [
@@ -4463,6 +4464,20 @@ export const workflowRuns = pgTable(
     // { matched, evaluated: [...] } — what the condition evaluator produced.
     conditionResult: jsonb("condition_result"),
     status: workflowRunStatusEnum("status").default("running").notNull(),
+    // Stable source event identity prevents duplicate runs when a domain event
+    // is delivered more than once or multiple web replicas race to dispatch it.
+    sourceEventId: text("source_event_id"),
+    // Durable worker state. A run is leased, heartbeated, and retried instead
+    // of being executed optimistically by whichever process sees it first.
+    attemptCount: integer("attempt_count").default(0).notNull(),
+    maxAttempts: integer("max_attempts").default(3).notNull(),
+    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    lockedBy: text("locked_by"),
+    heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
+    deadLetteredAt: timestamp("dead_lettered_at", { withTimezone: true }),
     // Best-effort async: a stalled `running` row is reclaimed by the cron,
     // mirroring dispatchDueWebhooks. Used to detect re-entrant loops too.
     startedAt: timestamp("started_at", { withTimezone: true })
@@ -4483,6 +4498,16 @@ export const workflowRuns = pgTable(
     ),
     index("workflow_runs_status_started_idx").on(table.status, table.startedAt),
     index("workflow_runs_parent_idx").on(table.parentRunId),
+    index("workflow_runs_queue_idx").on(
+      table.status,
+      table.nextAttemptAt,
+      table.lockedAt,
+    ),
+    uniqueIndex("workflow_runs_source_event_uidx").on(
+      table.workspaceId,
+      table.workflowId,
+      table.sourceEventId,
+    ),
   ],
 );
 
@@ -4500,6 +4525,9 @@ export const workflowRunSteps = pgTable(
     runId: uuid("run_id")
       .notNull()
       .references(() => workflowRuns.id, { onDelete: "cascade" }),
+    // Nullable for backwards-compatible migration of historical steps. New
+    // steps always set this deterministic action position.
+    stepIndex: integer("step_index"),
     actionType: text("action_type").notNull(),
     actionInput: jsonb("action_input")
       .default(sql`'{}'::jsonb`)
@@ -4512,7 +4540,13 @@ export const workflowRunSteps = pgTable(
       .notNull(),
     finishedAt: timestamp("finished_at", { withTimezone: true }),
   },
-  (table) => [index("workflow_run_steps_run_idx").on(table.runId)],
+  (table) => [
+    index("workflow_run_steps_run_idx").on(table.runId),
+    uniqueIndex("workflow_run_steps_run_step_uidx").on(
+      table.runId,
+      table.stepIndex,
+    ),
+  ],
 );
 
 /**
