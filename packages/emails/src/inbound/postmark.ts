@@ -48,10 +48,19 @@ function verifySignature(
   const auth = headers.get("authorization");
   if (!auth?.startsWith("Basic ")) return false;
 
-  const decoded = Buffer.from(auth.slice(6), "base64").toString("utf8");
-  const [, password] = decoded.split(":");
+  let decoded: string;
+  try {
+    decoded = Buffer.from(auth.slice(6), "base64").toString("utf8");
+  } catch {
+    return false;
+  }
+  const separator = decoded.indexOf(":");
+  const password = separator >= 0 ? decoded.slice(separator + 1) : "";
   if (!password || !secret) return false;
-  return timingSafeEqual(Buffer.from(password), Buffer.from(secret));
+  const actual = Buffer.from(password);
+  const expected = Buffer.from(secret);
+  if (actual.length !== expected.length) return false;
+  return timingSafeEqual(actual, expected);
 }
 
 async function parse(rawBody: string): Promise<CanonicalInboundEmail> {
