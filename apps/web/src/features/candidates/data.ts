@@ -3,8 +3,12 @@ import "server-only";
 import {
   and,
   desc,
+  asc,
+  count,
   eq,
+  exists,
   inArray,
+  ilike,
   isNotNull,
   isNull,
   or,
@@ -98,6 +102,7 @@ export type CandidateListItem = {
   applicationCount: number;
   inPool: boolean;
   hasOpenPrivacyRequest: boolean;
+  updatedAt: Date;
   latestApplication: {
     applicationId: string;
     jobId: string;
@@ -108,6 +113,35 @@ export type CandidateListItem = {
     source: string | null;
     appliedAt: Date;
   } | null;
+};
+
+export type CandidateDirectoryFilters = {
+  query?: string;
+  department?: string;
+  role?: string;
+  stage?: string;
+  status?: CandidateApplicationStatus;
+  source?: string;
+  tag?: string;
+  sort?: "recent" | "oldest" | "modified" | "name";
+  page?: number;
+  pageSize?: number;
+};
+
+export type CandidateDirectoryPage = {
+  rows: (CandidateListItem & { tags: string[] })[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasNextPage: boolean;
+};
+
+export type CandidateDirectoryFacets = {
+  departments: string[];
+  roles: string[];
+  stages: string[];
+  sources: string[];
+  tags: string[];
 };
 
 export type NoteMention = { userId: string; name: string };
@@ -395,6 +429,307 @@ export async function listCandidates() {
       latestApplication: candidate.latestApplication,
       tags: tagsByCandidate.get(candidate.id) ?? [],
     }));
+}
+
+/**
+ * Server-side candidate directory query. The legacy listCandidates function
+ * remains for profile/agent consumers; the dashboard directory uses this
+ * bounded path so filters, counts and pagination share one SQL predicate.
+ */
+export async function listCandidateDirectory(
+  input: CandidateDirectoryFilters = {},
+): Promise<CandidateDirectoryPage> {
+  const { organization: workspace } = await getWorkspaceContext();
+  const pageSize = Math.min(Math.max(input.pageSize ?? 50, 10), 100);
+  const page = Math.max(Math.floor(input.page ?? 1), 1);
+  const query = input.query?.trim().replace(/\s+/g, " ").slice(0, 100) ?? "";
+  const escapedQuery = query.replace(/[\\%_]/g, "\\$&");
+  const like = `%${escapedQuery}%`;
+
+  const latestApplication = db
+    .selectDistinctOn([applications.candidateId], {
+      id: applications.id,
+      candidateId: applications.candidateId,
+      jobId: applications.jobId,
+      status: applications.status,
+      source: applications.source,
+      appliedAt: applications.appliedAt,
+      currentStageId: applications.currentStageId,
+    })
+    .from(applications)
+    .where(eq(applications.workspaceId, workspace.id))
+    .orderBy(
+      asc(applications.candidateId),
+      desc(applications.appliedAt),
+      desc(applications.id),
+    )
+    .as("latest_application");
+
+  const applicationCounts = db
+    .select({
+      candidateId: applications.candidateId,
+      value: sql<number>`count(*)::int`,
+    })
+    .from(applications)
+    .where(eq(applications.workspaceId, workspace.id))
+    .groupBy(applications.candidateId)
+    .as("application_counts");
+
+  const predicates = [
+    eq(candidates.workspaceId, workspace.id),
+    isNull(candidates.deletedAt),
+  ];
+
+  if (query) {
+    predicates.push(
+      or(
+        ilike(candidates.firstName, like),
+        ilike(candidates.lastName, like),
+        ilike(candidates.email, like),
+        ilike(candidates.phone, like),
+        ilike(candidates.headline, like),
+        ilike(candidates.location, like),
+        ilike(jobs.title, like),
+        ilike(jobs.department, like),
+      )!,
+    );
+  }
+  if (input.department) predicates.push(eq(jobs.department, input.department));
+  if (input.role) predicates.push(eq(jobs.title, input.role));
+  if (input.stage) predicates.push(eq(jobStages.name, input.stage));
+  if (input.status) predicates.push(eq(latestApplication.status, input.status));
+  if (input.source) predicates.push(eq(latestApplication.source, input.source));
+  if (input.tag) {
+    predicates.push(
+      exists(
+        db
+          .select({ id: candidateTags.id })
+          .from(candidateTags)
+          .where(
+            and(
+              eq(candidateTags.workspaceId, workspace.id),
+              eq(candidateTags.candidateId, candidates.id),
+              eq(candidateTags.label, input.tag),
+            ),
+          ),
+      ),
+    );
+  }
+  const where = and(...predicates);
+
+  const [totalRow, rows] = await Promise.all([
+    db
+      .select({ total: count() })
+      .from(candidates)
+      .leftJoin(
+        latestApplication,
+        eq(latestApplication.candidateId, candidates.id),
+      )
+      .leftJoin(
+        jobs,
+        and(
+          eq(jobs.id, latestApplication.jobId),
+          eq(jobs.workspaceId, workspace.id),
+          isNull(jobs.deletedAt),
+        ),
+      )
+      .leftJoin(
+        jobStages,
+        and(
+          eq(jobStages.id, latestApplication.currentStageId),
+          eq(jobStages.workspaceId, workspace.id),
+        ),
+      )
+      .leftJoin(
+        applicationCounts,
+        eq(applicationCounts.candidateId, candidates.id),
+      )
+      .where(where),
+    db
+      .select({
+          id: candidates.id,
+          firstName: candidates.firstName,
+          lastName: candidates.lastName,
+          email: candidates.email,
+          phone: candidates.phone,
+          location: sql<string | null>`coalesce(${candidates.address}, ${candidates.location})`,
+          avatarUrl: candidates.avatarUrl,
+          githubUrl: candidates.githubUrl,
+          updatedAt: candidates.updatedAt,
+          applicationCount: sql<number>`coalesce(${applicationCounts.value}, 0)::int`,
+          applicationId: latestApplication.id,
+          applicationJobId: latestApplication.jobId,
+          applicationStatus: latestApplication.status,
+          applicationSource: latestApplication.source,
+          appliedAt: latestApplication.appliedAt,
+          jobTitle: jobs.title,
+          jobDepartment: jobs.department,
+          currentStageName: jobStages.name,
+        })
+      .from(candidates)
+      .leftJoin(
+        latestApplication,
+        eq(latestApplication.candidateId, candidates.id),
+      )
+      .leftJoin(
+        jobs,
+        and(
+          eq(jobs.id, latestApplication.jobId),
+          eq(jobs.workspaceId, workspace.id),
+          isNull(jobs.deletedAt),
+        ),
+      )
+      .leftJoin(
+        jobStages,
+        and(
+          eq(jobStages.id, latestApplication.currentStageId),
+          eq(jobStages.workspaceId, workspace.id),
+        ),
+      )
+      .leftJoin(
+        applicationCounts,
+        eq(applicationCounts.candidateId, candidates.id),
+      )
+      .where(where)
+      .orderBy(
+        ...(input.sort === "name"
+          ? [asc(candidates.lastName), asc(candidates.firstName), asc(candidates.id)]
+          : input.sort === "oldest"
+            ? [asc(latestApplication.appliedAt), asc(candidates.id)]
+            : input.sort === "modified"
+              ? [desc(candidates.updatedAt), desc(candidates.id)]
+              : [
+                  desc(sql`greatest(${candidates.updatedAt}, coalesce(${latestApplication.appliedAt}, ${candidates.updatedAt}))`),
+                  desc(candidates.id),
+                ]),
+      )
+      .limit(pageSize)
+      .offset((page - 1) * pageSize),
+  ]);
+
+  const candidateIds = rows.map((row) => row.id);
+  const [tagRows, poolRows, privacyRows] = candidateIds.length
+    ? await Promise.all([
+        db
+          .select({ candidateId: candidateTags.candidateId, label: candidateTags.label })
+          .from(candidateTags)
+          .where(
+            and(eq(candidateTags.workspaceId, workspace.id), inArray(candidateTags.candidateId, candidateIds)),
+          )
+          .orderBy(asc(candidateTags.label)),
+        db
+          .select({ candidateId: poolEntries.candidateId })
+          .from(poolEntries)
+          .where(
+            and(
+              eq(poolEntries.workspaceId, workspace.id),
+              isNull(poolEntries.removedAt),
+              inArray(poolEntries.candidateId, candidateIds),
+            ),
+          ),
+        db
+          .select({ candidateId: dsarRequests.candidateId })
+          .from(dsarRequests)
+          .where(
+            and(
+              eq(dsarRequests.workspaceId, workspace.id),
+              inArray(dsarRequests.status, ["pending", "processing", "blocked"]),
+              inArray(dsarRequests.candidateId, candidateIds),
+            ),
+          ),
+      ])
+    : [[], [], []];
+
+  const tagsByCandidate = new Map<string, string[]>();
+  for (const row of tagRows) {
+    const list = tagsByCandidate.get(row.candidateId) ?? [];
+    list.push(row.label);
+    tagsByCandidate.set(row.candidateId, list);
+  }
+  const poolIds = new Set(poolRows.map((row) => row.candidateId));
+  const privacyIds = new Set(
+    privacyRows
+      .map((row) => row.candidateId)
+      .filter((id): id is string => Boolean(id)),
+  );
+
+  return {
+    rows: rows.map((row) => ({
+      id: row.id,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      fullName: `${row.firstName} ${row.lastName}`,
+      email: row.email,
+      phone: row.phone,
+      location: row.location,
+      avatarUrl: row.avatarUrl,
+      githubUrl: row.githubUrl,
+      applicationCount: row.applicationCount,
+      inPool: poolIds.has(row.id),
+      hasOpenPrivacyRequest: privacyIds.has(row.id),
+      tags: tagsByCandidate.get(row.id) ?? [],
+      latestApplication:
+        row.applicationId && row.applicationJobId && row.jobTitle && row.appliedAt && row.applicationStatus
+          ? {
+              applicationId: row.applicationId,
+              jobId: row.applicationJobId,
+              jobTitle: row.jobTitle,
+              department: row.jobDepartment ?? null,
+              currentStageName: row.currentStageName,
+              status: row.applicationStatus,
+              source: row.applicationSource ?? null,
+              appliedAt: row.appliedAt,
+            }
+          : null,
+      updatedAt: row.updatedAt,
+    })),
+    total: Number(totalRow[0]?.total ?? 0),
+    page,
+    pageSize,
+    hasNextPage: page * pageSize < Number(totalRow[0]?.total ?? 0),
+  };
+}
+
+export async function listCandidateDirectoryFacets(): Promise<CandidateDirectoryFacets> {
+  const { organization: workspace } = await getWorkspaceContext();
+  const [departmentRows, roleRows, stageRows, sourceRows, tagRows] = await Promise.all([
+    db
+      .selectDistinct({ value: jobs.department })
+      .from(jobs)
+      .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt), isNotNull(jobs.department)))
+      .orderBy(asc(jobs.department)),
+    db
+      .selectDistinct({ value: jobs.title })
+      .from(jobs)
+      .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)))
+      .orderBy(asc(jobs.title)),
+    db
+      .selectDistinct({ value: jobStages.name })
+      .from(jobStages)
+      .where(eq(jobStages.workspaceId, workspace.id))
+      .orderBy(asc(jobStages.name)),
+    db
+      .selectDistinct({ value: applications.source })
+      .from(applications)
+      .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)))
+      .where(and(eq(applications.workspaceId, workspace.id), isNotNull(applications.source)))
+      .orderBy(asc(applications.source)),
+    db
+      .selectDistinct({ value: candidateTags.label })
+      .from(candidateTags)
+      .where(and(eq(candidateTags.workspaceId, workspace.id), isNotNull(candidateTags.label)))
+      .orderBy(asc(candidateTags.label)),
+  ]);
+
+  const values = (rows: { value: string | null }[]) =>
+    rows.map((row) => row.value?.trim()).filter((value): value is string => Boolean(value));
+  return {
+    departments: values(departmentRows),
+    roles: values(roleRows),
+    stages: values(stageRows),
+    sources: values(sourceRows),
+    tags: values(tagRows),
+  };
 }
 
 export async function getCandidateProfile(candidateId: string) {

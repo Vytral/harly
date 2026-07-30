@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { parseCsv, toCsv } from "./csv";
+import { parseCsv, toCsv, toSafeCsv } from "./csv";
 
 describe("parseCsv", () => {
   it("parses a simple CSV", () => {
@@ -78,5 +78,13 @@ describe("toCsv", () => {
       ["Jane, Doe", 'Said "hi" on\nday one'],
     ];
     expect(parseCsv(toCsv(rows))).toEqual(rows);
+  });
+});
+
+describe("toSafeCsv", () => {
+  it("neutralizes spreadsheet formulas without changing ordinary values", () => {
+    expect(toSafeCsv([["=1+1", "+name", "-tag", "@handle", "plain"]])).toBe(
+      "'=1+1,'+name,'-tag,'@handle,plain",
+    );
   });
 });

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import {
   CheckCircle2,
   Download,
@@ -20,10 +21,11 @@ import { toast } from "@/lib/notification-island/toast";
 import {
   bulkTrashCandidatesAction,
   bulkUpdateCandidateStatusAction,
+  exportCandidateDirectoryAction,
   trashCandidateAction,
 } from "@/features/candidates/actions";
 import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
-import { toCsv } from "@/lib/csv";
+import { toSafeCsv } from "@/lib/csv";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
 import {
@@ -117,7 +119,7 @@ function candidateToCsvRow(row: CandidateRow): string[] {
 const UTF8_BOM = String.fromCharCode(0xfeff);
 
 function downloadCsv(filename: string, rows: string[][]) {
-  const csv = toCsv(rows);
+  const csv = toSafeCsv(rows);
   const blob = new Blob([UTF8_BOM + csv], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -129,41 +131,71 @@ function downloadCsv(filename: string, rows: string[][]) {
 
 export function CandidatesTable({
   rows,
+  pageInfo,
+  initialFilters,
+  filterOptions,
   emailTemplates = [],
   importJobs = [],
   initialImportSource,
 }: {
   rows: CandidateRow[];
+  pageInfo?: { page: number; pageSize: number; total: number; hasNextPage: boolean };
+  filterOptions?: {
+    departments: string[];
+    roles: string[];
+    stages: string[];
+    sources: string[];
+    tags: string[];
+  };
+  initialFilters?: {
+    query: string;
+    dept: string;
+    role: string;
+    stage: string;
+    status: string;
+    source: string;
+    tag: string;
+    sort: string;
+  };
   emailTemplates?: EmailTemplateOption[];
   importJobs?: ImportJobOption[];
   initialImportSource?: ImportSource;
 }) {
   const router = useRouter();
-  const [query, setQuery] = useState("");
-  const [sortKey, setSortKey] = useState<SortKey>("recent");
-  const [dept, setDept] = useState(FILTER_ALL);
-  const [role, setRole] = useState(FILTER_ALL);
-  const [stage, setStage] = useState(FILTER_ALL);
-  const [status, setStatus] = useState(FILTER_ALL);
-  const [source, setSource] = useState(FILTER_ALL);
-  const [tag, setTag] = useState(FILTER_ALL);
+  const [query, setQuery] = useState(initialFilters?.query ?? "");
+  const [sortKey, setSortKey] = useState<SortKey>((initialFilters?.sort as SortKey) ?? "recent");
+  const [dept, setDept] = useState(initialFilters?.dept ?? FILTER_ALL);
+  const [role, setRole] = useState(initialFilters?.role ?? FILTER_ALL);
+  const [stage, setStage] = useState(initialFilters?.stage ?? FILTER_ALL);
+  const [status, setStatus] = useState(initialFilters?.status ?? FILTER_ALL);
+  const [source, setSource] = useState(initialFilters?.source ?? FILTER_ALL);
+  const [tag, setTag] = useState(initialFilters?.tag ?? FILTER_ALL);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
+  function navigateWithFilter(key: string, value: string) {
+    const params = new URLSearchParams(window.location.search);
+    if (!value || value === FILTER_ALL || (key === "sort" && value === "recent")) params.delete(key);
+    else params.set(key, value);
+    params.delete("page");
+    const queryString = params.toString();
+    router.push(`/dashboard/candidates${queryString ? `?${queryString}` : ""}` as Route);
+  }
+
   const departments = useMemo(
-    () => uniqueSorted(rows.map((r) => r.department)),
-    [rows],
+    () => filterOptions?.departments ?? uniqueSorted(rows.map((r) => r.department)),
+    [filterOptions?.departments, rows],
   );
-  const roles = useMemo(() => uniqueSorted(rows.map((r) => r.role)), [rows]);
-  const stages = useMemo(() => uniqueSorted(rows.map((r) => r.stage)), [rows]);
+  const roles = useMemo(() => filterOptions?.roles ?? uniqueSorted(rows.map((r) => r.role)), [filterOptions?.roles, rows]);
+  const stages = useMemo(() => filterOptions?.stages ?? uniqueSorted(rows.map((r) => r.stage)), [filterOptions?.stages, rows]);
   const sources = useMemo(
-    () => uniqueSorted(rows.map((r) => r.source)),
-    [rows],
+    () => filterOptions?.sources ?? uniqueSorted(rows.map((r) => r.source)),
+    [filterOptions?.sources, rows],
   );
   const tagOptions = useMemo(
-    () => uniqueSorted(rows.flatMap((r) => r.tags)),
-    [rows],
+    () => filterOptions?.tags ?? uniqueSorted(rows.flatMap((r) => r.tags)),
+    [filterOptions?.tags, rows],
   );
 
   const filtered = useMemo(() => {
@@ -214,6 +246,7 @@ export function CandidatesTable({
     setStatus(FILTER_ALL);
     setSource(FILTER_ALL);
     setTag(FILTER_ALL);
+    router.push("/dashboard/candidates");
   }
 
   const allVisibleSelected =
@@ -361,16 +394,50 @@ export function CandidatesTable({
   const selectedCount = filtered.filter((r) => selected.has(r.id)).length;
 
   function exportCsv() {
-    const exportRows =
-      selectedCount > 0 ? filtered.filter((r) => selected.has(r.id)) : filtered;
-    if (exportRows.length === 0) {
+    const exportRows = filtered.filter((r) => selected.has(r.id));
+    if (selectedCount > 0 && exportRows.length === 0) {
       toast.error("No candidates to export.");
       return;
     }
-    downloadCsv(`candidates-${new Date().toISOString().slice(0, 10)}.csv`, [
-      CSV_HEADERS,
-      ...exportRows.map(candidateToCsvRow),
-    ]);
+    if (selectedCount > 0) {
+      downloadCsv(`candidates-${new Date().toISOString().slice(0, 10)}.csv`, [
+        CSV_HEADERS,
+        ...exportRows.map(candidateToCsvRow),
+      ]);
+      return;
+    }
+
+    startTransition(async () => {
+      const exportStatus =
+        status === "active" ||
+        status === "hired" ||
+        status === "rejected" ||
+        status === "withdrawn"
+          ? status
+          : undefined;
+      const result = await exportCandidateDirectoryAction({
+        query,
+        department: dept === FILTER_ALL ? undefined : dept,
+        role: role === FILTER_ALL ? undefined : role,
+        stage: stage === FILTER_ALL ? undefined : stage,
+        status: exportStatus,
+        source: source === FILTER_ALL ? undefined : source,
+        tag: tag === FILTER_ALL ? undefined : tag,
+        sort: sortKey,
+      });
+      if (!result.success) {
+        toast.error(result.error ?? "Could not export candidates.");
+        return;
+      }
+      const blob = new Blob([UTF8_BOM + result.csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `candidates-${new Date().toISOString().slice(0, 10)}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      toast.success(`Exported ${result.count.toLocaleString()} candidates.`);
+    });
   }
 
   return (
@@ -382,6 +449,9 @@ export function CandidatesTable({
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") navigateWithFilter("q", query.trim());
+            }}
             placeholder="Search candidates by name, email, role or location…"
             className="h-11 rounded-full pl-11"
           />
@@ -412,25 +482,25 @@ export function CandidatesTable({
         <FilterPill
           label="Department"
           value={dept}
-          onChange={setDept}
+          onChange={(value) => { setDept(value); navigateWithFilter("dept", value); }}
           options={departments}
         />
         <FilterPill
           label="Job"
           value={role}
-          onChange={setRole}
+          onChange={(value) => { setRole(value); navigateWithFilter("role", value); }}
           options={roles}
         />
         <FilterPill
           label="Stage"
           value={stage}
-          onChange={setStage}
+          onChange={(value) => { setStage(value); navigateWithFilter("stage", value); }}
           options={stages}
         />
         <FilterPill
           label="Status"
           value={status}
-          onChange={setStatus}
+          onChange={(value) => { setStatus(value); navigateWithFilter("status", value); }}
           options={["active", "hired", "rejected", "withdrawn"]}
           labelMap={{
             active: "Active",
@@ -443,7 +513,7 @@ export function CandidatesTable({
           <FilterPill
             label="Source"
             value={source}
-            onChange={setSource}
+            onChange={(value) => { setSource(value); navigateWithFilter("source", value); }}
             options={sources}
           />
         ) : null}
@@ -451,14 +521,14 @@ export function CandidatesTable({
           <FilterPill
             label="Tag"
             value={tag}
-            onChange={setTag}
+            onChange={(value) => { setTag(value); navigateWithFilter("tag", value); }}
             options={tagOptions}
           />
         ) : null}
         <FilterPill
           label="Sort"
           value={sortKey}
-          onChange={(v) => setSortKey(v as SortKey)}
+          onChange={(v) => { setSortKey(v as SortKey); navigateWithFilter("sort", v); }}
           options={["recent", "oldest", "modified", "name"]}
           labelMap={{
             recent: "Most recent",
@@ -480,11 +550,31 @@ export function CandidatesTable({
         ) : null}
         <p className="ml-auto text-sm text-muted-foreground">
           <span className="font-semibold tabular-nums text-foreground">
-            {filtered.length}
+            {pageInfo?.total ?? filtered.length}
           </span>{" "}
           {filtered.length === 1 ? "candidate" : "candidates"}
         </p>
       </div>
+
+      {pageInfo && (pageInfo.page > 1 || pageInfo.hasNextPage) ? (
+        <div className="flex items-center justify-between border-t pt-3 text-sm text-muted-foreground">
+          <span>Page {pageInfo.page} · {pageInfo.total.toLocaleString()} candidates</span>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={pageInfo.page <= 1 || isPending}
+              onClick={() => navigateWithFilter("page", String(pageInfo.page - 1))}
+            >Previous</Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!pageInfo.hasNextPage || isPending}
+              onClick={() => navigateWithFilter("page", String(pageInfo.page + 1))}
+            >Next</Button>
+          </div>
+        </div>
+      ) : null}
 
       {/* Bulk bar */}
       {selectedCount > 0 ? (

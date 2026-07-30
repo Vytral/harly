@@ -1,10 +1,17 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
 
-import { db, scheduledReportRuns, scheduledReports } from "@harly/db";
+import {
+  applications,
+  db,
+  jobs,
+  scheduledReportRuns,
+  scheduledReports,
+} from "@harly/db";
 import { enqueueEmailOutbox } from "@/lib/email/outbox-processor";
+import { getHiringEvents } from "@/features/reports/data";
 import { getAdvancedHiringAnalytics } from "@/features/reports/advanced";
 
 function escapeHtml(value: unknown): string {
@@ -95,13 +102,32 @@ export async function runDueScheduledReports(limit = 25) {
 async function getReportsDataForWorkspace(workspaceId: string, rangeDays: number) {
   // The existing page loader is session-gated. Scheduled workers use this
   // narrow, workspace-scoped aggregate instead of impersonating a user.
-  const [row] = await db.execute(sql`
-    select count(*) filter (where a.applied_at >= now() - (${rangeDays} || ' days')::interval)::int as applications,
-           count(*) filter (where a.status = 'hired')::int as hires
-    from applications a inner join jobs j on j.id = a.job_id and j.workspace_id = ${workspaceId} and j.deleted_at is null
-    where a.workspace_id = ${workspaceId}
-  `) as unknown as Array<{ applications: number; hires: number }>;
-  return { applications: Number(row?.applications ?? 0), hires: Number(row?.hires ?? 0) };
+  const periodStart = new Date(Date.now() - rangeDays * 86_400_000);
+  const [applicationRows, hireRows] = await Promise.all([
+    db
+      .select({ appliedAt: applications.appliedAt })
+      .from(applications)
+      .innerJoin(
+        jobs,
+        and(
+          eq(jobs.id, applications.jobId),
+          eq(jobs.workspaceId, workspaceId),
+          isNull(jobs.deletedAt),
+        ),
+      )
+      .where(
+        and(
+          eq(applications.workspaceId, workspaceId),
+          gte(applications.appliedAt, periodStart),
+        ),
+    ),
+    getHiringEvents(workspaceId, { since: periodStart }),
+  ]);
+
+  return {
+    applications: applicationRows.length,
+    hires: hireRows.length,
+  };
 }
 
 function renderReportHtml(name: string, overview: { applications: number; hires: number }, advanced: Awaited<ReturnType<typeof getAdvancedHiringAnalytics>> | null) {

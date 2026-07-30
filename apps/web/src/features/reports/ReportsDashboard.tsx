@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
+import { Download } from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
 import { Tile } from "@/components/dashboard/widgets/primitives";
@@ -25,6 +26,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { toSafeCsv } from "@/lib/csv";
+import { Button } from "@/components/ui/button";
 import {
   FunnelChart,
   Histogram,
@@ -174,6 +177,34 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
     RANGE_OPTIONS.find((o) => Number(o.value) === comparison.rangeDays)?.label ??
     `Last ${comparison.rangeDays} days`;
 
+  function exportReportCsv() {
+    const rows: string[][] = [
+      ["Metric", "Period", "Value"],
+      ["Applications", rangeLabel, String(comparison.applications.current)],
+      ["Applications", "Previous period", String(comparison.applications.previous)],
+      ["Hires", rangeLabel, String(comparison.hires.current)],
+      ["Hires", "Previous period", String(comparison.hires.previous)],
+      ["Average time to hire (days)", rangeLabel, String(comparison.avgTimeToHireDays.current)],
+      ["Offer acceptance (%)", "All time", String(data.summary.offerAcceptRate ?? "")],
+      [],
+      ["Applications by month", "Month", "Count"],
+      ...data.applicationsByMonth.map((point) => ["Applications", point.month, String(point.count)]),
+      [],
+      ["Hires by month", "Month", "Count"],
+      ...data.hiresByMonth.map((point) => ["Hires", point.month, String(point.count)]),
+      [],
+      ["Source", "Candidates", "Hires", "Conversion (%)"],
+      ...data.sources.map((source) => [source.source, String(source.candidates), String(source.hires), String(source.conversion)]),
+    ];
+    const blob = new Blob([String.fromCharCode(0xfeff) + toSafeCsv(rows)], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `harly-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }
+
   const stats = [
     {
       icon: UsersIcon,
@@ -211,7 +242,11 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={exportReportCsv}>
+          <Download className="size-4" />
+          Export CSV
+        </Button>
         <Select
           value={String(comparison.rangeDays)}
           onValueChange={(v) => router.push(`/dashboard/reports?range=${v}`)}

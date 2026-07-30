@@ -1301,6 +1301,11 @@ export const jobs = pgTable(
       table.workspaceId,
       table.createdAt,
     ),
+    index("jobs_workspace_deleted_created_idx").on(
+      table.workspaceId,
+      table.deletedAt,
+      table.createdAt,
+    ),
     index("jobs_created_by_idx").on(table.createdById),
   ],
 );
@@ -1451,6 +1456,11 @@ export const candidates = pgTable(
       table.workspaceId,
       table.deletedAt,
     ),
+    index("candidates_workspace_deleted_updated_idx").on(
+      table.workspaceId,
+      table.deletedAt,
+      table.updatedAt,
+    ),
     index("candidates_workspace_anonymized_idx").on(
       table.workspaceId,
       table.anonymizedAt,
@@ -1569,6 +1579,11 @@ export const applications = pgTable(
       table.pipelineOrder,
     ),
     index("applications_applied_at_idx").on(table.workspaceId, table.appliedAt),
+    index("applications_workspace_job_applied_idx").on(
+      table.workspaceId,
+      table.jobId,
+      table.appliedAt,
+    ),
   ],
 );
 
@@ -1655,6 +1670,10 @@ export const applicationStageHistory = pgTable(
     index("application_stage_history_workspace_idx").on(table.workspaceId),
     index("application_stage_history_application_idx").on(table.applicationId),
     index("application_stage_history_to_stage_idx").on(table.toStageId),
+    index("application_stage_history_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
     index("application_stage_history_moved_by_idx").on(table.movedById),
   ],
 );
@@ -3086,6 +3105,11 @@ export const candidateTags = pgTable(
     index("candidate_tags_label_idx").on(
       table.workspaceId,
       sql`lower(${table.label})`,
+    ),
+    index("candidate_tags_workspace_label_candidate_idx").on(
+      table.workspaceId,
+      sql`lower(${table.label})`,
+      table.candidateId,
     ),
   ],
 );
