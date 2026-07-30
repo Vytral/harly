@@ -92,6 +92,14 @@ export async function createJobAction(formData: FormData) {
     metadata: { title: values.title, slug: values.slug },
   });
 
+  // The "Publish" button submits intent="continue" (same as "Save & continue"
+  // on the edit form); "Save as draft" is the only path that should leave the
+  // job unpublished. Without this, a new job always sat in draft regardless
+  // of which button was pressed.
+  if (formData.get("intent") !== "draft") {
+    await updateJobStatus(job.id, "open");
+  }
+
   revalidatePath("/dashboard/jobs");
   redirect(`/dashboard/jobs/${job.id}`);
 }
