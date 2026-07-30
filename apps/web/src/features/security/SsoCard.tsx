@@ -205,6 +205,9 @@ export function SsoCard({
                   <StatusPill tone={provider.enabled ? "on" : "off"}>
                     {provider.enabled ? "Active" : "Disabled"}
                   </StatusPill>
+                  <StatusPill tone={provider.domainVerified ? "on" : "off"}>
+                    {provider.domainVerified ? "Domain verified" : "Domain unverified"}
+                  </StatusPill>
                   <SsoProviderDrawer existingProvider={provider} />
                 </div>
               </div>
