@@ -3,7 +3,7 @@
 import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import type { Route } from "next";
-import { ArrowRight, Check, ChevronDown, Rocket } from "lucide-react";
+import { ArrowRight, Check, ChevronDown, Rocket, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import { tileClass } from "@/components/dashboard/widgets/primitives";
@@ -12,6 +12,56 @@ import type { SetupChecklist } from "@/features/dashboard/setup-checklist";
 
 const DISMISS_KEY = "harly:setup-checklist-dismissed";
 const COLLAPSE_KEY = "harly:setup-checklist-collapsed";
+const SKIPPED_KEY = "harly:setup-checklist-skipped-items";
+
+/** Set of item keys the user skipped (e.g. "Invite your team" for a solo
+ *  workspace) , same localStorage/useSyncExternalStore pattern as the flags
+ *  above, just storing a JSON array of keys instead of a boolean. */
+function makeSkippedStore() {
+  const listeners = new Set<() => void>();
+  const read = (): string[] => {
+    try {
+      const raw = window.localStorage.getItem(SKIPPED_KEY);
+      return raw ? (JSON.parse(raw) as string[]) : [];
+    } catch {
+      return [];
+    }
+  };
+  let cached: string[] = [];
+  let cachedRaw: string | null = null;
+  return {
+    subscribe(cb: () => void) {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    get(): string[] {
+      const raw = (() => {
+        try {
+          return window.localStorage.getItem(SKIPPED_KEY);
+        } catch {
+          return null;
+        }
+      })();
+      if (raw !== cachedRaw) {
+        cachedRaw = raw;
+        cached = read();
+      }
+      return cached;
+    },
+    skip(key: string) {
+      const next = Array.from(new Set([...read(), key]));
+      try {
+        window.localStorage.setItem(SKIPPED_KEY, JSON.stringify(next));
+      } catch {
+        // Private mode / storage disabled , falls back to session-only state.
+      }
+      listeners.forEach((l) => l());
+    },
+  };
+}
+
+const skippedStore = makeSkippedStore();
+const serverEmptyArray = () => [] as string[];
 
 /**
  * A localStorage-backed boolean shared with React via useSyncExternalStore.
@@ -69,9 +119,16 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
     collapseStore.get,
     serverTrue,
   );
-  const pendingItems = checklist.items.filter((item) => !item.done);
+  const skipped = useSyncExternalStore(
+    skippedStore.subscribe,
+    skippedStore.get,
+    serverEmptyArray,
+  );
+  const pendingItems = checklist.items.filter(
+    (item) => !item.done && !skipped.includes(item.key),
+  );
 
-  if (dismissed) return null;
+  if (dismissed || pendingItems.length === 0) return null;
 
   // The 100%-complete celebration panel used to live here. Home's hero surface
   // is the human table, and a full-width card congratulating you on finishing
@@ -186,6 +243,17 @@ export function SetupChecklistCard({ checklist }: { checklist: SetupChecklist })
                   {item.ctaLabel}
                   <ArrowRight className="size-4" />
                 </Link>
+                {item.optional && !item.done ? (
+                  <button
+                    type="button"
+                    onClick={() => skippedStore.skip(item.key)}
+                    aria-label={`Skip "${item.title}"`}
+                    title="Skip this step"
+                    className="shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  >
+                    <X className="size-4" />
+                  </button>
+                ) : null}
               </div>
             </li>
           ))}
