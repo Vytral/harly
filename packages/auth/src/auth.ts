@@ -351,6 +351,10 @@ export const auth = betterAuth({
           await authorizeUserCreation({
             email: newUser.email,
             claimId: context?.getCookie(setupClaimCookieName(appUrl)),
+            allowSsoProvisioning:
+              context?.path === "/sign-in/sso" ||
+              context?.path?.startsWith("/sso/callback/") === true ||
+              context?.path?.startsWith("/sso/saml2/") === true,
           });
           return { data: newUser };
         },
@@ -375,7 +379,20 @@ export const auth = betterAuth({
         await sendMagicLinkEmail(email, url);
       },
     }),
-    sso(),
+    sso({
+      providersLimit: 10,
+      domainVerification: { enabled: true },
+      saml: {
+        enableInResponseToValidation: true,
+        allowIdpInitiated: false,
+        requestTTL: 5 * 60 * 1000,
+        clockSkew: 2 * 60 * 1000,
+        requireTimestamps: true,
+        algorithms: { onDeprecated: "reject" },
+        maxResponseSize: 256 * 1024,
+        maxMetadataSize: 100 * 1024,
+      },
+    }),
     nextCookies(),
   ],
   socialProviders: await getSocialProviders(),
