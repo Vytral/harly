@@ -114,7 +114,8 @@ export function AvatarCropDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-md gap-0 p-0 overflow-hidden">
+      <DialogContent className="flex max-h-[90vh] max-w-md flex-col gap-0 overflow-hidden p-0">
+        <div className="min-h-0 overflow-y-auto">
         <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle>Adjust photo</DialogTitle>
           <DialogDescription>
@@ -197,8 +198,9 @@ export function AvatarCropDialog({
             <RotateCcw className="size-3.5" />
           </button>
         </div>
+        </div>
 
-        <DialogFooter className="border-t px-6 py-4">
+        <DialogFooter className="shrink-0 border-t px-6 py-4">
           <Button
             variant="outline"
             onClick={() => handleOpenChange(false)}
