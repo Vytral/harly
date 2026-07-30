@@ -38,11 +38,14 @@ export function CareerPageBuilder({
   jobs: Job[];
   availableLegalPages?: string[];
 }) {
-  const [config, setConfig] = useState<CareerPageConfig>(initialConfig);
+  const [config, setConfig] = useState<CareerPageConfig>(() =>
+    initialConfig.template === "" ? CAREER_PRESETS.minimal() : initialConfig,
+  );
   const [activeSection, setActiveSection] = useState<BuilderSection>("template");
   const [device, setDevice] = useState<"desktop" | "mobile">("desktop");
   const [saving, startSave] = useTransition();
   const [dirty, setDirty] = useState(false);
+  const [justSaved, setJustSaved] = useState(false);
   const { confirmDiscard, discardDialogProps } = useUnsavedChangesGuard(dirty);
 
   const update = useCallback((producer: (draft: CareerPageConfig) => void) => {
@@ -52,6 +55,7 @@ export function CareerPageBuilder({
       return next;
     });
     setDirty(true);
+    setJustSaved(false);
   }, []);
 
   function handleTemplateChange(t: CareerTemplate) {
@@ -63,6 +67,7 @@ export function CareerPageBuilder({
       });
     }
     setDirty(true);
+    setJustSaved(false);
   }
 
   async function handleExit() {
@@ -77,6 +82,8 @@ export function CareerPageBuilder({
       if (result.success) {
         toast.success("Career page saved. It's live.");
         setDirty(false);
+        setJustSaved(true);
+        window.setTimeout(() => setJustSaved(false), 2000);
       } else {
         toast.error(result.error ?? "Could not save.");
       }
@@ -97,6 +104,7 @@ export function CareerPageBuilder({
           onSave={handleSave}
           saving={saving}
           dirty={dirty}
+          justSaved={justSaved}
           boardUrl={`/board/${workspace.slug}`}
         />
       }
