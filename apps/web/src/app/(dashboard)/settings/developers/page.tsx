@@ -52,7 +52,7 @@ export default async function DevelopersSettingsPage() {
       appUrl={appUrl}
       apiKeys={keys.map(serializeApiKey)}
       webhooks={webhooks}
-      scopes={API_SCOPES.filter((scope) => !scope.startsWith("automations:"))}
+      scopes={[...API_SCOPES]}
       publishableScopes={[...PUBLISHABLE_SCOPES]}
       webhookEvents={WEBHOOK_EVENTS.map((event) => ({
         value: event,
