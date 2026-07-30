@@ -129,7 +129,7 @@ function Header({ count, onCreate }: { count: number; onCreate: () => void }) {
       <button
         type="button"
         onClick={onCreate}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-pine px-3.5 py-2 text-sm font-medium text-white transition-all hover:bg-pine-strong active:scale-[0.97]"
+        className="inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2 text-sm font-medium text-white transition-all hover:bg-foreground/85 active:scale-[0.97]"
       >
         <PlusIcon className="size-4" /> New automation
       </button>
@@ -157,22 +157,24 @@ function WorkflowCard({
   return (
     <div
       className={cn(
-        "group flex flex-col rounded-2xl border bg-paper-raised p-4 shadow-sm transition-all hover:shadow-md",
-        workflow.enabled ? "border-border" : "border-border/60 opacity-75",
+        "group flex flex-col rounded-lg border bg-paper-raised p-4 shadow-soft transition-colors",
+        workflow.enabled ? "border-mist-border hover:border-foreground/15" : "border-hairline opacity-70",
       )}
     >
       <div className="flex items-start justify-between gap-3">
-        <Link
-          href={`/dashboard/automations/${workflow.id}` as Route}
-          className="min-w-0 flex-1"
-        >
-          <div className="flex items-center gap-2">
-            <LightningIcon className={cn("size-4 shrink-0", workflow.enabled ? "text-pine" : "text-ink-soft/50")} />
-            <h3 className="truncate font-cal text-base font-semibold text-foreground group-hover:text-pine">
-              {workflow.name}
-            </h3>
-          </div>
-          <p className="mt-1.5 line-clamp-2 text-sm leading-relaxed text-ink-soft">{nl}</p>
+        <Link href={`/dashboard/automations/${workflow.id}` as Route} className="flex min-w-0 flex-1 items-start gap-3">
+          <span
+            className={cn(
+              "mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg",
+              workflow.enabled ? "bg-sage text-sage-ink" : "bg-kraft text-ink-soft",
+            )}
+          >
+            <LightningIcon className="size-4" />
+          </span>
+          <span className="min-w-0">
+            <h3 className="truncate font-display text-base font-semibold text-foreground">{workflow.name}</h3>
+            <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-ink-soft">{nl}</p>
+          </span>
         </Link>
         <Switch
           checked={workflow.enabled}
@@ -182,8 +184,8 @@ function WorkflowCard({
         />
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
-        <span className="inline-flex items-center gap-1 rounded-full bg-sage/50 px-2 py-0.5 text-[11px] font-medium text-sage-ink">
+      <div className="mt-3 flex flex-wrap items-center gap-1.5 pl-11">
+        <span className="inline-flex items-center gap-1 rounded-full bg-kraft px-2 py-0.5 text-[11px] font-medium text-ink-soft">
           {meta.label}
         </span>
         <span className="inline-flex items-center rounded-full bg-kraft px-2 py-0.5 text-[11px] font-medium text-ink-soft">
@@ -194,10 +196,10 @@ function WorkflowCard({
         </span>
       </div>
 
-      <div className="mt-3 flex items-center justify-between border-t border-border/60 pt-3">
+      <div className="mt-3 flex items-center justify-between border-t border-hairline pt-3 pl-11">
         <Link
           href={`/dashboard/automations/${workflow.id}` as Route}
-          className="inline-flex items-center gap-1.5 text-xs font-medium text-pine hover:underline"
+          className="inline-flex items-center gap-1.5 text-xs font-medium text-foreground hover:underline"
         >
           <PencilIcon className="size-3.5" /> Edit
         </Link>
@@ -217,10 +219,10 @@ function WorkflowCard({
 function EmptyState({ onShowTemplates }: { onShowTemplates: () => void }) {
   return (
     <div className="mx-auto flex min-h-[60vh] w-full max-w-2xl flex-col items-center justify-center px-6 text-center">
-      <span className="inline-flex size-14 items-center justify-center rounded-2xl bg-sage/50 text-pine">
+      <span className="inline-flex size-14 items-center justify-center rounded-xl bg-sage text-sage-ink">
         <MagicWandDuotoneIcon className="size-7" />
       </span>
-      <h2 className="font-cal mt-5 text-xl font-semibold text-foreground">Automate your hiring busywork</h2>
+      <h2 className="font-display mt-5 text-xl font-semibold text-foreground">Automate your hiring busywork</h2>
       <p className="mt-2 max-w-md text-sm leading-relaxed text-ink-soft">
         Build a workflow once: <strong className="text-foreground">when</strong> something happens (a candidate applies, a stage changes),
         <strong className="text-foreground"> if</strong> a condition holds,
@@ -229,7 +231,7 @@ function EmptyState({ onShowTemplates }: { onShowTemplates: () => void }) {
       <button
         type="button"
         onClick={onShowTemplates}
-        className="mt-6 inline-flex items-center gap-1.5 rounded-lg bg-pine px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-pine-strong active:scale-[0.97]"
+        className="mt-6 inline-flex items-center gap-1.5 rounded-full bg-foreground px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-foreground/85 active:scale-[0.97]"
       >
         <MagicWandDuotoneIcon className="size-4" /> Start from a template
       </button>
@@ -247,10 +249,10 @@ function TemplateGallery({
   pending: boolean;
 }) {
   return (
-    <div className="mt-6 rounded-2xl border border-border bg-paper-raised p-5 shadow-sm">
+    <div className="mt-6 rounded-lg border border-mist-border bg-paper-raised p-5 shadow-soft">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-cal text-lg font-semibold text-foreground">Start from a template</h2>
+          <h2 className="font-display text-lg font-semibold text-foreground">Start from a template</h2>
           <p className="mt-0.5 text-sm text-ink-soft">Pick a starter. You can edit everything in the builder.</p>
         </div>
         <button type="button" onClick={onClose} className="text-sm text-ink-soft hover:text-foreground">Close</button>
@@ -262,13 +264,13 @@ function TemplateGallery({
             type="button"
             onClick={() => onPick(t)}
             disabled={pending}
-            className="group flex flex-col rounded-xl border border-border bg-kraft/20 p-3.5 text-left transition-all hover:border-pine/30 hover:bg-kraft/50 disabled:opacity-60"
+            className="group flex flex-col rounded-lg border border-mist-border bg-paper-raised p-3.5 text-left transition-all hover:border-foreground/20 hover:bg-row-wash/60 disabled:opacity-60"
           >
             <div className="flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wide text-ink-soft">{t.category}</span>
-              <span className="text-pine opacity-0 transition-opacity group-hover:opacity-100">→</span>
+              <span className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">{t.category}</span>
+              <span className="text-foreground opacity-0 transition-opacity group-hover:opacity-100">→</span>
             </div>
-            <span className="font-cal mt-1 text-sm font-semibold text-foreground">{t.name}</span>
+            <span className="font-display mt-1 text-sm font-semibold text-foreground">{t.name}</span>
             <span className="mt-1 text-xs leading-relaxed text-ink-soft">{t.description}</span>
           </button>
         ))}
