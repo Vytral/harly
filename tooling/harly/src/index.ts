@@ -200,7 +200,9 @@ async function portAvailable(port: number): Promise<boolean> {
     server.once("error", (error: NodeJS.ErrnoException) => {
       // Docker can publish privileged ports even when this unprivileged Node
       // process cannot bind them directly. EADDRINUSE is the conflict signal.
-      resolve(error.code === "EACCES");
+      // A restricted runner may deny bind() with EACCES/EPERM even when the
+      // port is free. Docker performs the real publish check during startup.
+      resolve(error.code === "EACCES" || error.code === "EPERM");
     });
     server.listen(port, "127.0.0.1", () => server.close(() => resolve(true)));
   });
@@ -787,14 +789,11 @@ async function collectInteractiveAnswers(
   showBrand("Install", cliVersion);
   p.note(
     [
-      "Before continuing, prepare a public URL for this VPS.",
-      "Recommended: a subdomain such as careers.example.com.",
-      "Create an A record pointing to the VPS public IPv4 (and an AAAA record only if IPv6 is configured).",
-      "With Caddy, TCP 80 and TCP/UDP 443 must be free and allowed by the firewall/security group.",
-      "If Nginx/Traefik already uses those ports, choose external proxy and point it to 127.0.0.1:3000.",
-      "Guide: https://github.com/Vytral/harly/blob/main/docs/self-hosting.md#vps-requirements",
+      "Point a public domain to this server.",
+      "For automatic HTTPS, allow TCP 80/443 and UDP 443.",
+      soft("Guide: github.com/Vytral/harly/blob/main/docs/self-hosting.md#vps-requirements"),
     ].join("\n"),
-    "Pre-install checklist",
+    "Before you begin",
   );
 
   const publicOrigin = unwrapPrompt(
@@ -858,8 +857,8 @@ async function collectInteractiveAnswers(
     }
     preflightSpinner.stop(
       dnsAnswers.length > 0
-        ? `Host preflight passed · DNS: ${dnsAnswers.join(", ")}`
-        : "Host preflight passed",
+        ? `Server ready  ${soft(`· DNS resolved · ${dnsAnswers.length} address${dnsAnswers.length === 1 ? "" : "es"}`)}`
+        : "Server ready",
     );
   } catch (error) {
     preflightSpinner.stop("Host preflight failed");
@@ -950,7 +949,9 @@ async function collectInteractiveAnswers(
       : null;
 
   const detectedProfile = detectResourceProfile();
-  p.note(hostSummary(host), `Detected host · ${detectedProfile}`);
+  p.log.success(
+    `Server detected  ${soft(`· ${hostSummary(host)} · ${detectedProfile}`)}`,
+  );
   const resourceProfile = unwrapPrompt(
     await p.select<ResourceProfile>({
       message: "Resource profile",
@@ -982,19 +983,18 @@ async function collectInteractiveAnswers(
     [
       `Directory   ${directory}`,
       `URL         ${url.origin}`,
-      `Image       ${image}`,
       `Services    ${services}`,
       `Ports       ${mode === "caddy" ? "80, 443" : `127.0.0.1:${localPort}`}`,
-      `Storage     ${storage === "local" ? "Local persistent volume" : "S3-compatible"}`,
-      `Resources   ${resourceProfile}`,
+      `Storage     ${storage === "local" ? "Local" : "S3-compatible"}`,
+      `Profile     ${resourceProfile}`,
       `HTTPS       ${mode === "caddy" ? "Managed automatically by Caddy" : mode === "external" ? "Managed by external proxy" : "Disabled"}`,
     ].join("\n"),
-    "Installation plan",
+    "Installation summary",
   );
 
   const approved = unwrapPrompt(
     await p.confirm({
-      message: "Generate this installation?",
+      message: "Continue with this configuration?",
       initialValue: true,
     }),
   );
@@ -1265,13 +1265,12 @@ async function init() {
     if (interactive) p.outro("Re-run without --dry-run to write these files.");
     return;
   }
-  generationSpinner?.stop("Configuration generated");
+  generationSpinner?.stop("Configuration ready");
 
   if (interactive) {
-    p.log.success(`${pc.bold(directory)} is ready`);
     const launchNow = unwrapPrompt(
       await p.confirm({
-        message: "Pull the image and launch Harly now?",
+        message: "Install and launch Harly now?",
         initialValue: true,
       }),
     );
@@ -1615,8 +1614,8 @@ async function launch(explicitDirectory?: string, confirmed = false) {
     throw new CliError("Launch cancelled.", 2);
   }
   progressStep(
-    "Validating Docker Compose",
-    "Compose configuration is valid",
+    "Validating configuration",
+    "Configuration validated",
     () => compose(directory, ["config", "--quiet"]),
   );
   await pullWithProgress(directory, [], interactive);
@@ -1693,7 +1692,7 @@ async function launch(explicitDirectory?: string, confirmed = false) {
   }
   if (interactive && !confirmed) {
     p.outro(
-      `Harly is ready at ${accent(config.publicUrl)} · run ${accent("harly doctor")}`,
+      `Harly is ready\n\n${accent(config.publicUrl)}\n${soft(`Run ${accent("harly doctor")} to verify the installation.`)}`,
     );
   } else if (!interactive) {
     process.stdout.write(
