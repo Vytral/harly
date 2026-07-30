@@ -140,17 +140,19 @@ export function JoinTemplate({
           )}
 
           <h1 className="mt-5 text-3xl font-bold tracking-tight sm:text-4xl">
-            {workspace.name}
+            {config.hero.headline || workspace.name}
           </h1>
 
-          {(stats.length > 0 || workspace.tagline) && (
+          {(stats.length > 0 || config.hero.subhead || workspace.tagline) && (
             <div className="mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-zinc-500 dark:text-zinc-400">
-              {workspace.tagline && <span>{workspace.tagline}</span>}
+              {(config.hero.subhead || workspace.tagline) && (
+                <span>{config.hero.subhead || workspace.tagline}</span>
+              )}
               {stats.map((st, i) => {
                 const Icon = careerIcon(st.icon || fallbackStatIcon(st.label));
                 return (
                   <span key={`${st.label}-${i}`} className="flex items-center gap-1.5">
-                    {(workspace.tagline || i > 0) && (
+                    {(config.hero.subhead || workspace.tagline || i > 0) && (
                       <span className="text-zinc-300 dark:text-zinc-600">·</span>
                     )}
                     {Icon && (
