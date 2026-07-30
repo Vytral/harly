@@ -1,6 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq } from "drizzle-orm";
-import { randomUUID } from "node:crypto";
 
 import { applications, candidates, db, jobStages, jobs, organization, user } from "@harly/db";
 
