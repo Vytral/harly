@@ -498,6 +498,7 @@ export const ssoProvider = pgTable(
     organizationId: text("organization_id").references(() => organization.id, {
       onDelete: "set null",
     }),
+    domainVerified: boolean("domain_verified").default(false).notNull(),
     enabled: boolean("enabled").default(true).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
