@@ -94,3 +94,51 @@ export function GroupIcon(props: IconProps) {
     </svg>
   );
 }
+
+/** Chevron up — move-step-up control. */
+export function ChevronUpIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M6 15l6-6 6 6" />
+    </svg>
+  );
+}
+
+/** Chevron down — move-step-down control. */
+export function ChevronDownIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M6 9l6 6 6-6" />
+    </svg>
+  );
+}
+
+/** Small close glyph — remove-step control. */
+export function CloseIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M6 6l12 12M18 6L6 18" />
+    </svg>
+  );
+}
+
+/** Small filled node dot — the joint marker on a flow connector line. */
+export function NodeDotIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 8 8" fill="currentColor" {...props}>
+      <circle cx="4" cy="4" r="4" />
+    </svg>
+  );
+}
+
+/** Branch/merge glyph for the AND/OR tree connector rail. */
+export function BranchIcon(props: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="6" cy="6" r="2.2" />
+      <circle cx="6" cy="18" r="2.2" />
+      <circle cx="18" cy="12" r="2.2" />
+      <path d="M6 8.2V18M8.2 6H14a4 4 0 0 1 4 4v0" />
+    </svg>
+  );
+}
