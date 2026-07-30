@@ -7,7 +7,10 @@ import { Eye, EyeOff, Trash2, ExternalLink, Plus } from "lucide-react";
 
 import {
   registerSSOProviderAction,
+  updateSSOProviderAction,
   deleteSSOProviderAction,
+  requestSSODomainVerificationAction,
+  verifySSODomainAction,
   type SSOProviderConfig,
   type SSORegisterInput,
 } from "@/features/security/sso-actions";
@@ -30,12 +33,14 @@ export function SsoProviderDrawer({
   const [open, setOpen] = useState(false);
   const [saving, startSave] = useTransition();
   const [deleting, startDelete] = useTransition();
+  const [verifying, startVerify] = useTransition();
+  const [requestingVerification, startRequestVerification] = useTransition();
 
   // Common fields
   const [providerId, setProviderId] = useState(existingProvider?.providerId ?? "");
   const [issuer, setIssuer] = useState(existingProvider?.issuer ?? "");
   const [domain, setDomain] = useState(existingProvider?.domain ?? "");
-  const [providerType, setProviderType] = useState<SSOProviderType>("oidc");
+  const [providerType, setProviderType] = useState<SSOProviderType>(existingProvider?.type ?? "oidc");
 
   // OIDC fields
   const [oidcClientId, setOidcClientId] = useState("");
@@ -46,6 +51,9 @@ export function SsoProviderDrawer({
   const [samlEntryPoint, setSamlEntryPoint] = useState("");
   const [samlCert, setSamlCert] = useState("");
   const [samlAudience, setSamlAudience] = useState("");
+  const [samlMetadata, setSamlMetadata] = useState("");
+  const [samlPrivateKey, setSamlPrivateKey] = useState("");
+  const [verificationToken, setVerificationToken] = useState("");
 
   const isEditing = Boolean(existingProvider);
 
@@ -53,13 +61,16 @@ export function SsoProviderDrawer({
     setProviderId(existingProvider?.providerId ?? "");
     setIssuer(existingProvider?.issuer ?? "");
     setDomain(existingProvider?.domain ?? "");
-    setProviderType("oidc");
+    setProviderType(existingProvider?.type ?? "oidc");
     setOidcClientId("");
     setOidcClientSecret("");
     setShowOidcSecret(false);
     setSamlEntryPoint("");
     setSamlCert("");
     setSamlAudience("");
+    setSamlMetadata("");
+    setSamlPrivateKey("");
+    setVerificationToken("");
   }
 
   function handleOpenChange(next: boolean) {
@@ -74,7 +85,7 @@ export function SsoProviderDrawer({
         toast.error("Provider ID is required.");
         return;
       }
-      if (!issuer.trim()) {
+      if (providerType === "oidc" && !issuer.trim()) {
         toast.error("Issuer URL is required.");
         return;
       }
@@ -85,13 +96,13 @@ export function SsoProviderDrawer({
 
       // Validate based on type
       if (providerType === "oidc") {
-        if (!oidcClientId.trim() || !oidcClientSecret.trim()) {
+        if (!isEditing && (!oidcClientId.trim() || !oidcClientSecret.trim())) {
           toast.error("Client ID and Client Secret are required for OIDC.");
           return;
         }
       } else {
-        if (!samlEntryPoint.trim() || !samlCert.trim()) {
-          toast.error("Entry Point and Certificate are required for SAML.");
+        if (!isEditing && !samlMetadata.trim() && (!samlEntryPoint.trim() || !samlCert.trim())) {
+          toast.error("Provide IdP metadata XML, or both Entry Point and Certificate.");
           return;
         }
       }
@@ -107,26 +118,57 @@ export function SsoProviderDrawer({
           clientId: oidcClientId.trim(),
           clientSecret: oidcClientSecret.trim(),
         };
-      } else {
+      } else if (!isEditing || samlMetadata.trim() || samlEntryPoint.trim() || samlCert.trim() || samlPrivateKey.trim()) {
         const origin = typeof window !== "undefined" ? window.location.origin : "";
-        const spEntityId = `${origin}/api/auth/sso/saml2/sp/metadata`;
+        const spEntityId = origin;
         input.samlConfig = {
           entryPoint: samlEntryPoint.trim(),
           cert: samlCert.trim(),
+          metadata: samlMetadata.trim() || undefined,
+          privateKey: samlPrivateKey.trim() || undefined,
           audience: samlAudience.trim() || spEntityId,
           callbackUrl: `${origin}/api/auth/sso/saml2/sp/acs/${providerId.trim()}`,
           spMetadata: { entityID: spEntityId },
         };
       }
 
-      const result = await registerSSOProviderAction(input);
+      const result = isEditing
+        ? await updateSSOProviderAction({ ...input, providerId: existingProvider!.providerId })
+        : await registerSSOProviderAction(input);
 
       if (!result.ok) {
         toast.error(result.error ?? "Failed to register SSO provider.");
         return;
       }
 
-      toast.success("SSO provider registered successfully.");
+      toast.success(isEditing ? "SSO provider updated successfully." : "SSO provider registered successfully.");
+      handleOpenChange(false);
+      router.refresh();
+    });
+  }
+
+  function requestDomainVerification() {
+    if (!existingProvider) return;
+    startRequestVerification(async () => {
+      const result = await requestSSODomainVerificationAction(existingProvider.providerId);
+      if (!result.ok) {
+        toast.error(result.error ?? "Failed to request domain verification.");
+        return;
+      }
+      setVerificationToken(result.token ?? "");
+      toast.success("DNS verification record generated.");
+    });
+  }
+
+  function verifyDomain() {
+    if (!existingProvider) return;
+    startVerify(async () => {
+      const result = await verifySSODomainAction(existingProvider.providerId);
+      if (!result.ok) {
+        toast.error(result.error ?? "Domain verification failed.");
+        return;
+      }
+      toast.success("SSO domain verified.");
       handleOpenChange(false);
       router.refresh();
     });
@@ -179,7 +221,7 @@ export function SsoProviderDrawer({
               <Button variant="outline" disabled={saving} onClick={() => handleOpenChange(false)}>
                 Cancel
               </Button>
-              <Button onClick={save} disabled={saving || !providerId.trim() || !issuer.trim() || !domain.trim()}>
+              <Button onClick={save} disabled={saving || !providerId.trim() || !domain.trim()}>
                 {saving ? <SpinnerIcon className="size-4" /> : null}
                 Save
               </Button>
@@ -194,10 +236,10 @@ export function SsoProviderDrawer({
                 disabled={
                   saving ||
                   !providerId.trim() ||
-                  !issuer.trim() ||
+                  (providerType === "oidc" && !issuer.trim()) ||
                   !domain.trim() ||
                   (providerType === "oidc" && (!oidcClientId.trim() || !oidcClientSecret.trim())) ||
-                  (providerType === "saml" && (!samlEntryPoint.trim() || !samlCert.trim()))
+                  (providerType === "saml" && !samlMetadata.trim() && (!samlEntryPoint.trim() || !samlCert.trim()))
                 }
               >
                 {saving ? <SpinnerIcon className="size-4" /> : null}
@@ -312,6 +354,21 @@ export function SsoProviderDrawer({
               </p>
 
               <div className="space-y-2">
+                <Label htmlFor="saml-metadata">IdP Metadata XML (Recommended)</Label>
+                <textarea
+                  id="saml-metadata"
+                  value={samlMetadata}
+                  onChange={(e) => setSamlMetadata(e.target.value)}
+                  placeholder="Paste the EntityDescriptor XML from your identity provider"
+                  className="w-full rounded-md border bg-transparent px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  rows={7}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Harly derives the issuer, SSO URL, and signing certificate from this document.
+                </p>
+              </div>
+
+              <div className="space-y-2">
                 <Label htmlFor="saml-entry-point">Entry Point (SSO URL)</Label>
                 <Input
                   id="saml-entry-point"
@@ -320,6 +377,22 @@ export function SsoProviderDrawer({
                   placeholder="https://idp.example.com/sso"
                   autoComplete="off"
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="saml-private-key">SP Private Key (Only if required by IdP)</Label>
+                <textarea
+                  id="saml-private-key"
+                  value={samlPrivateKey}
+                  onChange={(e) => setSamlPrivateKey(e.target.value)}
+                  placeholder="-----BEGIN PRIVATE KEY-----"
+                  className="w-full rounded-md border bg-transparent px-3 py-2 text-sm font-mono placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                  rows={5}
+                  spellCheck={false}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Stored only in the SSO provider configuration. Required when metadata sets WantAuthnRequestsSigned.
+                </p>
               </div>
 
               <div className="space-y-2">
@@ -364,6 +437,35 @@ export function SsoProviderDrawer({
               {typeof window !== "undefined" ? window.location.origin : ""}/api/auth/sso/saml2/sp/acs/{providerId || "<provider-id>"}
             </code>
           </div>
+
+          {isEditing && (
+            <div className="space-y-3 rounded-lg border p-4">
+              <div>
+                <p className="text-sm font-medium">Domain verification</p>
+                <p className="text-xs text-muted-foreground">
+                  Publish the generated TXT record before allowing sign-in for this email domain.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" disabled={requestingVerification} onClick={requestDomainVerification}>
+                  {requestingVerification ? <SpinnerIcon className="size-4" /> : null}
+                  Get DNS record
+                </Button>
+                <Button size="sm" disabled={verifying} onClick={verifyDomain}>
+                  {verifying ? <SpinnerIcon className="size-4" /> : null}
+                  Verify DNS
+                </Button>
+              </div>
+              {verificationToken && (
+                <div className="rounded-md bg-muted/50 p-3 text-xs">
+                  <p className="font-medium">TXT host</p>
+                  <code className="break-all">_better-auth-token-{existingProvider?.providerId}</code>
+                  <p className="mt-2 font-medium">TXT value</p>
+                  <code className="break-all">{verificationToken}</code>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Docs link */}
           <a
