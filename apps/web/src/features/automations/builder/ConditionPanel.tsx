@@ -45,28 +45,25 @@ export function ConditionPanel({
       {value.length === 0 ? (
         <EmptyConditions onAdd={addRoot} />
       ) : (
-        <div className="space-y-2.5">
+        <TreeList>
           {value.map((node, i) => (
-            <div key={i}>
-              <NodeEditor
-                node={node}
-                onChange={(n) => update(i, n)}
-                onRemove={() => remove(i)}
-                depth={0}
-              />
-              {i < value.length - 1 && (
-                <div className="my-1 pl-4 text-xs font-semibold uppercase tracking-wide text-ink-soft">and</div>
-              )}
-            </div>
+            <NodeEditor
+              key={i}
+              node={node}
+              onChange={(n) => update(i, n)}
+              onRemove={() => remove(i)}
+              depth={0}
+              joiner={i < value.length - 1 ? "and" : undefined}
+            />
           ))}
-        </div>
+        </TreeList>
       )}
 
       {value.length > 0 && (
         <button
           type="button"
           onClick={addRoot}
-          className="w-full rounded-lg border border-dashed border-border py-2 text-xs font-medium text-ink-soft transition-colors hover:border-pine/30 hover:bg-kraft/30 hover:text-foreground"
+          className="w-full rounded-md border border-dashed border-mist-border py-2 text-xs font-medium text-ink-soft transition-colors hover:border-foreground/20 hover:bg-row-wash/50 hover:text-foreground"
         >
           + add another condition
         </button>
@@ -77,18 +74,34 @@ export function ConditionPanel({
 
 function EmptyConditions({ onAdd }: { onAdd: () => void }) {
   return (
-    <div className="rounded-xl border border-dashed border-border bg-kraft/20 px-4 py-6 text-center">
+    <div className="rounded-lg border border-dashed border-mist-border bg-kraft/30 px-4 py-6 text-center">
       <p className="text-sm font-medium text-foreground">No conditions — runs every time.</p>
       <p className="mt-1 text-xs text-ink-soft">Add an IF to only run when something is true.</p>
       <button
         type="button"
         onClick={onAdd}
-        className="mt-3 rounded-lg bg-pine px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-pine-strong"
+        className="mt-3 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/85"
       >
         + add condition
       </button>
     </div>
   );
+}
+
+/** A joiner pill ("and" / "or") that sits centered on the tree's connector rail. */
+function Joiner({ word }: { word: "and" | "or" }) {
+  return (
+    <div className="relative flex h-6 items-center pl-[15px]" aria-hidden>
+      <span className="rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft ring-4 ring-paper">
+        {word}
+      </span>
+    </div>
+  );
+}
+
+/** Vertical rail connecting sibling nodes at the top level — no group chrome, just a tree guide. */
+function TreeList({ children }: { children: React.ReactNode }) {
+  return <div className="relative space-y-0 border-l border-dashed border-mist-border pl-4">{children}</div>;
 }
 
 // ---------------------------------------------------------------------------
@@ -100,25 +113,48 @@ function NodeEditor({
   onChange,
   onRemove,
   depth,
+  joiner,
 }: {
   node: ConditionNode;
   onChange: (n: ConditionNode) => void;
   onRemove: () => void;
   depth: number;
+  joiner?: "and" | "or";
 }) {
-  if (node.type === "leaf") return <LeafEditor node={node} onChange={onChange} onRemove={onRemove} />;
+  return (
+    <div className="relative">
+      <div className="absolute -left-4 top-4 h-px w-4 border-t border-dashed border-mist-border" aria-hidden />
+      {node.type === "leaf" ? (
+        <LeafEditor node={node} onChange={onChange} onRemove={onRemove} />
+      ) : (
+        <GroupEditor node={node} onChange={onChange} onRemove={onRemove} depth={depth} />
+      )}
+      {joiner && <Joiner word={joiner} />}
+    </div>
+  );
+}
 
+function GroupEditor({
+  node,
+  onChange,
+  onRemove,
+  depth,
+}: {
+  node: Extract<ConditionNode, { type: "and" | "or" | "not" }>;
+  onChange: (n: ConditionNode) => void;
+  onRemove: () => void;
+  depth: number;
+}) {
   const groupLabel = node.type === "and" ? "All of" : node.type === "or" ? "Any of" : "Not";
-  const groupClass = {
-    and: "border-pine/20 bg-sage/20",
-    or: "border-chart-2/30 bg-chart-2/10",
-    not: "border-rust/20 bg-rust/5",
-  }[node.type];
+  const badgeClass =
+    node.type === "or" ? "bg-sage text-sage-ink" : node.type === "not" ? "bg-rust/10 text-rust" : "bg-kraft text-ink-soft";
 
   return (
-    <div className={cn("rounded-xl border p-2.5", groupClass)}>
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-xs font-bold uppercase tracking-wide text-ink-soft">{groupLabel}</span>
+    <div className="rounded-lg border border-mist-border bg-paper-raised p-3 shadow-soft">
+      <div className="mb-2.5 flex items-center justify-between">
+        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide", badgeClass)}>
+          {groupLabel}
+        </span>
         <div className="flex items-center gap-1">
           {(node.type === "and" || node.type === "or") && (
             <>
@@ -130,15 +166,16 @@ function NodeEditor({
                     children: [...node.children, { type: "leaf", field: { kind: "candidate", path: "firstName" }, op: "eq", value: "" }],
                   })
                 }
-                className="rounded px-2 py-0.5 text-xs font-medium text-pine hover:bg-pine/10"
+                className="rounded px-2 py-1 text-xs font-medium text-foreground hover:bg-row-wash"
               >
                 + add
               </button>
               <button
                 type="button"
                 onClick={() => onChange({ ...node, type: node.type === "and" ? "or" : "and" })}
-                className="rounded px-2 py-0.5 text-xs text-ink-soft hover:bg-kraft"
+                className="rounded px-1.5 py-1 text-xs text-ink-soft hover:bg-kraft hover:text-foreground"
                 title="Switch AND / OR"
+                aria-label="Switch AND / OR"
               >
                 ⇄
               </button>
@@ -147,7 +184,7 @@ function NodeEditor({
           <button
             type="button"
             onClick={onRemove}
-            className="rounded px-1.5 py-0.5 text-xs text-ink-soft hover:text-rust"
+            className="rounded px-1.5 py-1 text-xs text-ink-soft hover:text-rust"
             aria-label="Remove group"
           >
             ✕
@@ -156,39 +193,31 @@ function NodeEditor({
       </div>
 
       {node.type === "not" ? (
-        <NodeEditor
-          node={node.child}
-          onChange={(child) => onChange({ ...node, child })}
-          onRemove={onRemove}
-          depth={depth + 1}
-        />
+        <TreeList>
+          <NodeEditor node={node.child} onChange={(child) => onChange({ ...node, child })} onRemove={onRemove} depth={depth + 1} />
+        </TreeList>
       ) : node.children.length === 0 ? (
         <p className="px-2 py-1 text-xs italic text-ink-soft">{node.type === "and" ? "always true" : "never"}</p>
       ) : (
-        <div className="space-y-2">
+        <TreeList>
           {node.children.map((child, i) => (
-            <div key={i}>
-              <NodeEditor
-                node={child}
-                onChange={(n) => {
-                  const children = node.children.slice();
-                  children[i] = n;
-                  onChange({ ...node, children });
-                }}
-                onRemove={() => {
-                  const children = node.children.filter((_, j) => j !== i);
-                  onChange({ ...node, children });
-                }}
-                depth={depth + 1}
-              />
-              {i < node.children.length - 1 && (
-                <div className="my-1 pl-3 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
-                  {node.type === "and" ? "and" : "or"}
-                </div>
-              )}
-            </div>
+            <NodeEditor
+              key={i}
+              node={child}
+              onChange={(n) => {
+                const children = node.children.slice();
+                children[i] = n;
+                onChange({ ...node, children });
+              }}
+              onRemove={() => {
+                const children = node.children.filter((_, j) => j !== i);
+                onChange({ ...node, children });
+              }}
+              depth={depth + 1}
+              joiner={i < node.children.length - 1 ? (node.type === "and" ? "and" : "or") : undefined}
+            />
           ))}
-        </div>
+        </TreeList>
       )}
     </div>
   );
@@ -220,7 +249,7 @@ function LeafEditor({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-paper-raised p-2.5">
+    <div className="rounded-lg border border-mist-border bg-paper-raised p-3 shadow-soft">
       <div className="flex items-start gap-2">
         <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr]">
           {/* Field */}
@@ -232,7 +261,7 @@ function LeafEditor({
                 if (kind === "literal") setField({ kind, value: "" } as FieldRef);
                 else setField({ kind, path: fieldKindMeta(kind).paths[0] ?? "" } as FieldRef);
               }}
-              className="h-8 w-[42%] rounded-md border border-border bg-kraft/30 px-1.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
+              className="h-9 w-[42%] rounded-md border border-mist-border bg-kraft/40 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
             >
               {FIELD_KIND_CATALOG.map((f) => (
                 <option key={f.kind} value={f.kind}>{f.label}</option>
@@ -243,13 +272,13 @@ function LeafEditor({
                 value={String((field as Extract<FieldRef, { kind: "literal" }>).value ?? "")}
                 onChange={(e) => setField({ kind: "literal", value: e.target.value } as FieldRef)}
                 placeholder="value"
-                className="h-8 flex-1 rounded-md border border-border bg-kraft/30 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
+                className="h-9 flex-1 rounded-md border border-mist-border bg-kraft/40 px-2.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
               />
             ) : (
               <select
                 value={(field as Extract<FieldRef, { kind: "candidate" }>).path}
                 onChange={(e) => setField({ path: e.target.value } as FieldRef)}
-                className="h-8 flex-1 rounded-md border border-border bg-kraft/30 px-1.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
+                className="h-9 flex-1 rounded-md border border-mist-border bg-kraft/40 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
               >
                 {(fieldKindMeta(field.kind).paths.length ? fieldKindMeta(field.kind).paths : ["custom"]).map((p) => (
                   <option key={p} value={p}>{p}</option>
@@ -269,7 +298,7 @@ function LeafEditor({
           <select
             value={node.op}
             onChange={(e) => setOp(e.target.value as Operator)}
-            className="h-8 rounded-md border border-border bg-kraft/30 px-1.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
+            className="h-9 rounded-md border border-mist-border bg-kraft/40 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
           >
             {OPERATORS.map((op) => (
               <option key={op} value={op}>{operatorMeta(op).label}</option>
@@ -283,7 +312,7 @@ function LeafEditor({
         <button
           type="button"
           onClick={onRemove}
-          className="mt-0.5 shrink-0 rounded p-1 text-ink-soft hover:text-rust"
+          className="mt-0.5 shrink-0 rounded p-1.5 text-ink-soft hover:text-rust"
           aria-label="Remove condition"
         >
           ✕
@@ -314,7 +343,7 @@ function ValueInput({
         type="number"
         value={typeof value === "number" ? value : Number(value) || 0}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="h-8 w-full rounded-md border border-border bg-kraft/30 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
+        className="h-9 w-full rounded-md border border-mist-border bg-kraft/40 px-2.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
       />
     );
   }
@@ -324,7 +353,7 @@ function ValueInput({
         value={Array.isArray(value) ? value.join(", ") : String(value ?? "")}
         onChange={(e) => onChange(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
         placeholder="one, two, three"
-        className="h-8 w-full rounded-md border border-border bg-kraft/30 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
+        className="h-9 w-full rounded-md border border-mist-border bg-kraft/40 px-2.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
       />
     );
   }
@@ -333,7 +362,7 @@ function ValueInput({
       value={typeof value === "string" ? value : String(value ?? "")}
       onChange={(e) => onChange(e.target.value)}
       placeholder="value"
-      className="h-8 w-full rounded-md border border-border bg-kraft/30 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
+      className="h-9 w-full rounded-md border border-mist-border bg-kraft/40 px-2.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
     />
   );
 }
