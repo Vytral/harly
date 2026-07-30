@@ -262,6 +262,7 @@ export function JobForm({
     const form = formRef.current;
     if (!form) return;
     let raf = 0;
+    let isInitialSync = true;
     const sync = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
@@ -280,7 +281,10 @@ export function JobForm({
           officeAddress: String(fd.get("officeAddress") ?? ""),
         });
       });
-      setDirty(true);
+      // Skip the sync triggered by mounting/hydration , only real user edits
+      // should flip the "unsaved changes" guard on.
+      if (!isInitialSync) setDirty(true);
+      isInitialSync = false;
     };
     form.addEventListener("input", sync);
     form.addEventListener("change", sync);
@@ -561,7 +565,7 @@ export function JobForm({
               ))}
             </div>
 
-            <div className="mt-auto flex items-center justify-end gap-2 border-t border-border/60 pt-6">
+            <div className="mt-10 flex items-center justify-end gap-2 border-t border-border/60 pt-6">
               {primaryActions}
             </div>
           </div>
