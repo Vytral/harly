@@ -1,5 +1,7 @@
 "use client";
 
+import { useSyncExternalStore } from "react";
+
 import { FileDropzone } from "@/components/ui/FileDropzone";
 import { Input } from "@/components/ui/input";
 import type { CareerPageConfig } from "@/features/career-page/config";
@@ -20,6 +22,12 @@ export function DiscoveryPanel({
 }) {
   const title = config.seo.title || workspace.name || "Careers";
   const description = config.seo.description || workspace.description || workspace.tagline || "Explore open roles and build your next chapter with us.";
+  const host = useSyncExternalStore(
+    () => () => {},
+    () => window.location.host,
+    () => "",
+  );
+  const previewUrl = host ? `${host}/board/${workspace.slug}` : `/board/${workspace.slug}`;
 
   return (
     <div className="space-y-6">
@@ -60,7 +68,7 @@ export function DiscoveryPanel({
 
       <Section title="Search preview">
         <div className="space-y-1.5 rounded-lg border border-border bg-paper px-3 py-3">
-          <p className="truncate text-xs text-success">careers.your-domain.com / board / {workspace.slug}</p>
+          <p className="truncate text-xs text-success">{previewUrl}</p>
           <p className="line-clamp-2 text-sm font-medium text-pine">{title}</p>
           <p className="line-clamp-3 text-xs leading-5 text-ink-soft">{description}</p>
         </div>
