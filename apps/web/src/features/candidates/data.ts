@@ -468,7 +468,7 @@ export async function listCandidateDirectory(
   const applicationCounts = db
     .select({
       candidateId: applications.candidateId,
-      value: sql<number>`count(*)::int`,
+      value: sql<number>`count(*)::int`.as("value"),
     })
     .from(applications)
     .where(eq(applications.workspaceId, workspace.id))

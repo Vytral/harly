@@ -47,6 +47,8 @@ flujos sobre datos grandes:
 - `pnpm lint`: correcto
 - `pnpm test`: 701 tests pasados; 22 omitidos por requerir fixtures/integraciones
 - pruebas focalizadas de métricas, búsqueda y CSV: 19 tests pasados
+- fixture local de 1.000 candidatos / 1.000 aplicaciones: filtros, total,
+  paginación y aislamiento verificados en 511 ms
 
 El estado “Pendiente” es intencional: evita declarar enterprise una experiencia
 que todavía puede cargar demasiados datos en el navegador.
