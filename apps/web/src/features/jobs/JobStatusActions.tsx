@@ -15,6 +15,12 @@ const actionMeta: Record<string, { label: string; icon: typeof Send }> = {
   closed: { label: "Close", icon: Archive },
 };
 
+const statusLabel: Record<string, string> = {
+  draft: "Draft",
+  open: "Open",
+  closed: "Closed",
+};
+
 export function JobStatusActions({ job }: { job: Job }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -29,6 +35,7 @@ export function JobStatusActions({ job }: { job: Job }) {
       formData.set("status", status);
       try {
         await updateJobStatusAction(formData);
+        toast.success(`Job status updated to ${statusLabel[status] ?? status}.`);
         router.refresh();
       } catch (error) {
         toast.error(
