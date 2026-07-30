@@ -466,34 +466,23 @@ function soft(text3) {
   return truecolor ? rgb(kraft, text3) : pc.gray(text3);
 }
 var ink = (text3) => pc.bold(text3);
-var logo = [
-  "\u2588\u2588\u2557  \u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557     \u2588\u2588\u2557   \u2588\u2588\u2557",
-  "\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551     \u255A\u2588\u2588\u2557 \u2588\u2588\u2554\u255D",
-  "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255D\u2588\u2588\u2551      \u255A\u2588\u2588\u2588\u2588\u2554\u255D",
-  "\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2551       \u255A\u2588\u2588\u2554\u255D",
-  "\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2557   \u2588\u2588\u2551",
-  "\u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u255D  \u255A\u2550\u255D\u255A\u2550\u2550\u2550\u2550\u2550\u2550\u255D   \u255A\u2550\u255D"
-];
 var brandShown = false;
 function showBrand(context, version = "") {
   const suffix = version ? ` ${soft(`\xB7 v${version}`)}` : "";
   if (brandShown) {
-    process2.stdout.write(
-      `
-${accent("\u25CF")} ${ink("harly")}${context ? `  ${soft(context)}` : ""}${suffix}
+    if (context) process2.stdout.write(`
+  ${ink(context)}${suffix}
 
-`
-    );
+`);
     return;
   }
   brandShown = true;
-  const mark = logo.map((line) => `  ${accent(line)}`).join("\n");
-  process2.stdout.write(`
-${mark}
+  process2.stdout.write(
+    `
+  ${accent(ink("harly"))}  ${soft("Self-hosted ATS")}${suffix}
 
-  ${ink("Self-hosted ATS")}${suffix}
-
-`);
+`
+  );
 }
 var spinnerStyle = { styleFrame: accent };
 
@@ -729,7 +718,7 @@ async function portAvailable(port) {
   return new Promise((resolve) => {
     const server = createServer();
     server.once("error", (error) => {
-      resolve(error.code === "EACCES");
+      resolve(error.code === "EACCES" || error.code === "EPERM");
     });
     server.listen(port, "127.0.0.1", () => server.close(() => resolve(true)));
   });
@@ -1140,14 +1129,11 @@ async function collectInteractiveAnswers(directory) {
   showBrand("Install", cliVersion);
   p3.note(
     [
-      "Before continuing, prepare a public URL for this VPS.",
-      "Recommended: a subdomain such as careers.example.com.",
-      "Create an A record pointing to the VPS public IPv4 (and an AAAA record only if IPv6 is configured).",
-      "With Caddy, TCP 80 and TCP/UDP 443 must be free and allowed by the firewall/security group.",
-      "If Nginx/Traefik already uses those ports, choose external proxy and point it to 127.0.0.1:3000.",
-      "Guide: https://github.com/Vytral/harly/blob/main/docs/self-hosting.md#vps-requirements"
+      "Point a public domain to this server.",
+      "For automatic HTTPS, allow TCP 80/443 and UDP 443.",
+      soft("Guide: github.com/Vytral/harly/blob/main/docs/self-hosting.md#vps-requirements")
     ].join("\n"),
-    "Pre-install checklist"
+    "Before you begin"
   );
   const publicOrigin = unwrapPrompt(
     await p3.text({
@@ -1207,7 +1193,7 @@ async function collectInteractiveAnswers(directory) {
       );
     }
     preflightSpinner.stop(
-      dnsAnswers.length > 0 ? `Host preflight passed \xB7 DNS: ${dnsAnswers.join(", ")}` : "Host preflight passed"
+      dnsAnswers.length > 0 ? `Server ready  ${soft(`\xB7 DNS resolved \xB7 ${dnsAnswers.length} address${dnsAnswers.length === 1 ? "" : "es"}`)}` : "Server ready"
     );
   } catch (error) {
     preflightSpinner.stop("Host preflight failed");
@@ -1287,7 +1273,9 @@ async function collectInteractiveAnswers(directory) {
     )
   } : null;
   const detectedProfile = detectResourceProfile();
-  p3.note(hostSummary(host), `Detected host \xB7 ${detectedProfile}`);
+  p3.log.success(
+    `Server detected  ${soft(`\xB7 ${hostSummary(host)} \xB7 ${detectedProfile}`)}`
+  );
   const resourceProfile = unwrapPrompt(
     await p3.select({
       message: "Resource profile",
@@ -1315,18 +1303,17 @@ async function collectInteractiveAnswers(directory) {
     [
       `Directory   ${directory}`,
       `URL         ${url.origin}`,
-      `Image       ${image}`,
       `Services    ${services}`,
       `Ports       ${mode === "caddy" ? "80, 443" : `127.0.0.1:${localPort}`}`,
-      `Storage     ${storage === "local" ? "Local persistent volume" : "S3-compatible"}`,
-      `Resources   ${resourceProfile}`,
+      `Storage     ${storage === "local" ? "Local" : "S3-compatible"}`,
+      `Profile     ${resourceProfile}`,
       `HTTPS       ${mode === "caddy" ? "Managed automatically by Caddy" : mode === "external" ? "Managed by external proxy" : "Disabled"}`
     ].join("\n"),
-    "Installation plan"
+    "Installation summary"
   );
   const approved = unwrapPrompt(
     await p3.confirm({
-      message: "Generate this installation?",
+      message: "Continue with this configuration?",
       initialValue: true
     })
   );
@@ -1628,12 +1615,11 @@ Before launching Caddy, make sure ${url.hostname} has an A record pointing to th
     if (interactive) p3.outro("Re-run without --dry-run to write these files.");
     return;
   }
-  generationSpinner?.stop("Configuration generated");
+  generationSpinner?.stop("Configuration ready");
   if (interactive) {
-    p3.log.success(`${pc2.bold(directory)} is ready`);
     const launchNow = unwrapPrompt(
       await p3.confirm({
-        message: "Pull the image and launch Harly now?",
+        message: "Install and launch Harly now?",
         initialValue: true
       })
     );
@@ -1948,8 +1934,8 @@ Commands: docker compose pull; docker compose up -d --wait
     throw new CliError("Launch cancelled.", 2);
   }
   progressStep(
-    "Validating Docker Compose",
-    "Compose configuration is valid",
+    "Validating configuration",
+    "Configuration validated",
     () => compose(directory, ["config", "--quiet"])
   );
   await pullWithProgress(directory, [], interactive);
@@ -2018,7 +2004,10 @@ Run \`harly doctor ${directory}\` to inspect.`,
   }
   if (interactive && !confirmed) {
     p3.outro(
-      `Harly is ready at ${accent(config.publicUrl)} \xB7 run ${accent("harly doctor")}`
+      `Harly is ready
+
+${accent(config.publicUrl)}
+${soft(`Run ${accent("harly doctor")} to verify the installation.`)}`
     );
   } else if (!interactive) {
     process3.stdout.write(
