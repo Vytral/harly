@@ -23,6 +23,9 @@ export type SetupChecklistItem = {
   done: boolean;
   /** CTA label: "Start" when pending, "Edit" once done (we keep it visible). */
   ctaLabel: string;
+  /** Optional steps can be dismissed by the user instead of completed , not
+   *  every workspace needs them (e.g. a solo recruiter working alone). */
+  optional?: boolean;
 };
 
 export type SetupChecklist = {
@@ -62,6 +65,7 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
         heroImageUrl: workspaceSettings.heroImageUrl,
         careerPageConfig: workspaceSettings.careerPageConfig,
         legalConfigured: workspaceSettings.legalConfigured,
+        captchaEnabled: workspaceSettings.captchaEnabled,
         gcalEnabled: workspaceSettings.gcalEnabled,
         zoomEnabled: workspaceSettings.zoomEnabled,
         calEnabled: workspaceSettings.calEnabled,
@@ -155,25 +159,12 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
       ctaLabel: item.ctaLabel ?? (item.done ? "Edit" : "Start"),
     });
 
-  // 1. Logo , trust first.
-  push({
-    key: "logo",
-    title: "Add your logo",
-    value: "Build trust with candidates from the first click.",
-    href: "/settings",
-    done: Boolean(context.organization.logo),
-  });
+  // Priority order: get a working, safe hiring pipeline live first (job,
+  // email, anti-abuse captcha, careers page, legal), then the nice-to-haves
+  // (branding, scheduling, other integrations), then team invites last , not
+  // every workspace is more than one person, so that step is optional/dismissible.
 
-  // 2. Company profile.
-  push({
-    key: "profile",
-    title: "Complete your company profile",
-    value: "Show candidates who you are and why to join.",
-    href: "/settings",
-    done: profileDone,
-  });
-
-  // 3. First job → swaps to reviewing applicants once they arrive.
+  // 1. First job → swaps to reviewing applicants once they arrive.
   if (hasJob && hasApplicants) {
     push({
       key: "applicants",
@@ -193,6 +184,24 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     });
   }
 
+  // 2. Email , recruiters can't run a pipeline without candidate email.
+  push({
+    key: "email",
+    title: "Connect your email",
+    value: "Send and track candidate emails from one inbox.",
+    href: "/settings/integrations",
+    done: Boolean(settings?.emailEnabled),
+  });
+
+  // 3. Captcha , protects the public application form from abuse/spam.
+  push({
+    key: "captcha",
+    title: "Turn on captcha protection",
+    value: "Stop bots and spam from flooding your application form.",
+    href: "/settings/integrations",
+    done: Boolean(settings?.captchaEnabled),
+  });
+
   // 4. Careers page.
   push({
     key: "careers",
@@ -202,16 +211,34 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     done: careersDone,
   });
 
-  // 5. Invite the team.
+  // 5. Legal , compliance is essential, not an afterthought.
   push({
-    key: "team",
-    title: "Invite your team",
-    value: "Hire together for faster, shared decisions.",
-    href: "/settings/members",
-    done: memberCount > 1 || inviteCount > 0,
+    key: "legal",
+    title: "Set up legal info",
+    value: "Stay compliant. GDPR-ready in a few clicks.",
+    href: "/settings/legal",
+    done: Boolean(settings?.legalConfigured),
   });
 
-  // 6. Scheduling is a separate critical step: an email integration alone
+  // 6. Logo , branding polish.
+  push({
+    key: "logo",
+    title: "Add your logo",
+    value: "Build trust with candidates from the first click.",
+    href: "/settings",
+    done: Boolean(context.organization.logo),
+  });
+
+  // 7. Company profile.
+  push({
+    key: "profile",
+    title: "Complete your company profile",
+    value: "Show candidates who you are and why to join.",
+    href: "/settings",
+    done: profileDone,
+  });
+
+  // 8. Scheduling , a separate critical step: an email integration alone
   // does not let a recruiter book interviews.
   if (!hasCalendar) {
     push({
@@ -223,7 +250,7 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     });
   }
 
-  // 7. Other integrations , only surfaced while nothing's connected.
+  // 9. Other integrations , only surfaced while nothing's connected.
   if (!hasIntegration) {
     push({
       key: "integrations",
@@ -234,13 +261,15 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
     });
   }
 
-  // 8. Legal , last; important, but not what gets you hiring.
+  // 10. Invite the team , last, and dismissible: plenty of workspaces are a
+  // single recruiter working alone or still evaluating Harly solo.
   push({
-    key: "legal",
-    title: "Set up legal info",
-    value: "Stay compliant. GDPR-ready in a few clicks.",
-    href: "/settings/legal",
-    done: Boolean(settings?.legalConfigured),
+    key: "team",
+    title: "Invite your team",
+    value: "Hire together for faster, shared decisions.",
+    href: "/settings/members",
+    done: memberCount > 1 || inviteCount > 0,
+    optional: true,
   });
 
   const total = items.length;
