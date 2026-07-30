@@ -113,6 +113,7 @@ async function hasPendingInvitation(email: string): Promise<boolean> {
 export async function authorizeUserCreation(input: {
   email: string;
   claimId?: string | null;
+  allowSsoProvisioning?: boolean;
 }): Promise<void> {
   const normalizedEmail = normalizeSetupEmail(input.email);
   const [bootstrap] = await db
@@ -134,6 +135,12 @@ export async function authorizeUserCreation(input: {
   }
 
   if (await hasPendingInvitation(normalizedEmail)) return;
+
+  // SSO registration is owner-controlled and the SSO plugin assigns the new
+  // account to the configured organization after this hook returns. Without
+  // this narrow route exception, enterprise SSO can never provision its first
+  // user because the global invite-only gate runs before SSO provisioning.
+  if (input.allowSsoProvisioning) return;
 
   throw new APIError("BAD_REQUEST", {
     message: bootstrap?.completedAt
