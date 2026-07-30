@@ -36,31 +36,21 @@ export function accentBadge(text: string): string {
   return `${esc}[48;2;${r};${g};${b}m${esc}[38;2;23;23;23m${text}${esc}[0m`;
 }
 
-const logo = [
-  "██╗  ██╗ █████╗ ██████╗ ██╗     ██╗   ██╗",
-  "██║  ██║██╔══██╗██╔══██╗██║     ╚██╗ ██╔╝",
-  "███████║███████║██████╔╝██║      ╚████╔╝",
-  "██╔══██║██╔══██║██╔══██╗██║       ╚██╔╝",
-  "██║  ██║██║  ██║██║  ██║███████╗   ██║",
-  "╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝",
-];
-
 let brandShown = false;
 
-/** The full mark is a first-contact moment, not page furniture. Every later
- * surface in the same run gets the one-line wordmark instead, so a single
- * session never repeats the logo. */
+/** Keep the CLI identity compact. The installer is often run in narrow SSH
+ * sessions, where a large ASCII mark competes with the task instead of
+ * supporting it. Later surfaces become quiet section labels. */
 export function showBrand(context?: string, version = "") {
   const suffix = version ? ` ${soft(`· v${version}`)}` : "";
   if (brandShown) {
-    process.stdout.write(
-      `\n${accent("●")} ${ink("harly")}${context ? `  ${soft(context)}` : ""}${suffix}\n\n`,
-    );
+    if (context) process.stdout.write(`\n  ${ink(context)}${suffix}\n\n`);
     return;
   }
   brandShown = true;
-  const mark = logo.map((line) => `  ${accent(line)}`).join("\n");
-  process.stdout.write(`\n${mark}\n\n  ${ink("Self-hosted ATS")}${suffix}\n\n`);
+  process.stdout.write(
+    `\n  ${accent(ink("harly"))}  ${soft("Self-hosted ATS")}${suffix}\n\n`,
+  );
 }
 
 /** Spinner frames tinted with the brand pulse. */
