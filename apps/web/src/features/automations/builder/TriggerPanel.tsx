@@ -40,13 +40,13 @@ export function TriggerPanel({
         onClick={() => setPickerOpen((o) => !o)}
         className={cn(
           "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition-colors",
-          pickerOpen ? "border-pine/30 bg-sage/40" : "border-border bg-kraft/30 hover:bg-kraft/60",
+          pickerOpen ? "border-foreground/20 bg-row-wash" : "border-mist-border bg-paper-raised hover:bg-row-wash/60",
         )}
       >
         <span className="flex items-center gap-3">
-          <ToneIcon tone={meta.tone} />
+          <ToneIcon tone={meta.tone} active />
           <span>
-            <span className="block text-sm font-semibold text-foreground">{meta.label}</span>
+            <span className="block text-sm font-medium text-foreground">{meta.label}</span>
             <span className="block text-xs text-ink-soft">{meta.blurb}</span>
           </span>
         </span>
@@ -68,10 +68,12 @@ export function TriggerPanel({
                 }}
                 className={cn(
                   "flex items-start gap-2.5 rounded-xl border p-3 text-left transition-all",
-                  active ? "border-pine/40 bg-sage/50" : "border-border bg-paper-raised hover:border-pine/20 hover:bg-kraft/40",
+                  active
+                    ? "border-foreground/25 bg-row-wash"
+                    : "border-mist-border bg-paper-raised hover:border-foreground/15 hover:bg-row-wash/50",
                 )}
               >
-                <ToneIcon tone={m.tone} />
+                <ToneIcon tone={m.tone} active={active} />
                 <span className="min-w-0">
                   <span className="block text-sm font-medium text-foreground">{m.label}</span>
                   <span className="block truncate text-xs text-ink-soft">{m.blurb}</span>
@@ -83,13 +85,13 @@ export function TriggerPanel({
       )}
 
       {/* Trigger filter */}
-      <div className="rounded-xl border border-border bg-kraft/20 p-3">
+      <div className="rounded-xl border border-mist-border bg-kraft/40 p-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-ink-soft">Run only when</span>
+          <span className="text-[11px] font-medium uppercase tracking-wide text-ink-soft">Run only when</span>
           <button
             type="button"
             onClick={() => setFilterEntry(`key${filterEntries.length}`, "")}
-            className="text-xs font-medium text-pine hover:underline"
+            className="text-xs font-medium text-foreground hover:underline"
           >
             + add filter
           </button>
@@ -114,14 +116,14 @@ export function TriggerPanel({
                   onChange({ ...value, filter: next });
                 }}
                 placeholder="field"
-                className="h-8 w-[40%] rounded-md border border-border bg-paper-raised px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
+                className="h-9 w-[40%] rounded-md border border-mist-border bg-paper-raised px-2.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
               />
               <span className="text-xs text-ink-soft">=</span>
               <input
                 value={String(val)}
                 onChange={(e) => setFilterEntry(key, e.target.value)}
                 placeholder="value"
-                className="h-8 flex-1 rounded-md border border-border bg-paper-raised px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-pine/30"
+                className="h-9 flex-1 rounded-md border border-mist-border bg-paper-raised px-2.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
               />
               <button
                 type="button"
@@ -139,18 +141,21 @@ export function TriggerPanel({
   );
 }
 
-/** Tone-tinted glyph for a trigger category. */
-function ToneIcon({ tone }: { tone: "apply" | "stage" | "outcome" | "candidate" | "interview" | "job" }) {
-  const cls = {
-    apply: "bg-pine/10 text-pine",
-    stage: "bg-chart-2/15 text-[color:var(--lime-ink)]",
-    outcome: "bg-success/10 text-success",
-    candidate: "bg-slate-info/10 text-slate-info",
-    interview: "bg-clay/10 text-clay",
-    job: "bg-rust/10 text-rust",
-  }[tone];
+/** Neutral icon tile for a trigger category — chrome stays quiet, glyph carries the meaning. */
+function ToneIcon({
+  tone,
+  active,
+}: {
+  tone: "apply" | "stage" | "outcome" | "candidate" | "interview" | "job";
+  active?: boolean;
+}) {
   return (
-    <span className={cn("inline-flex size-7 shrink-0 items-center justify-center rounded-lg", cls)}>
+    <span
+      className={cn(
+        "inline-flex size-8 shrink-0 items-center justify-center rounded-lg",
+        active ? "bg-paper-raised text-foreground shadow-soft" : "bg-kraft text-ink-soft",
+      )}
+    >
       <ToneGlyph tone={tone} />
     </span>
   );
