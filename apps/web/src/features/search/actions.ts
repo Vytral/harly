@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { emptySearchResults, searchWorkspace, type SearchResults } from "./data";
 
-const querySchema = z.string().min(1).max(100);
+const querySchema = z.string().trim().min(1).max(100);
 
 /** Workspace-scoped quick search over jobs and candidates for the ⌘K palette. */
 export async function searchWorkspaceAction(

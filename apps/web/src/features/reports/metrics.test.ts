@@ -7,6 +7,7 @@ import {
   timeToHireDays,
   type HiringEvent,
 } from "./metrics";
+import { normalizeReportRange } from "./ranges";
 
 const event = (applicationId: string, appliedAt: string, hiredAt: string): HiringEvent => ({
   applicationId,
@@ -15,6 +16,11 @@ const event = (applicationId: string, appliedAt: string, hiredAt: string): Hirin
 });
 
 describe("report hiring metrics", () => {
+  it("normalizes unsupported report windows to the safe default", () => {
+    expect(normalizeReportRange(90)).toBe(90);
+    expect(normalizeReportRange(7)).toBe(30);
+    expect(normalizeReportRange(Number.NaN)).toBe(30);
+  });
   it("measures time to hire from application to the Hired transition", () => {
     expect(
       timeToHireDays(

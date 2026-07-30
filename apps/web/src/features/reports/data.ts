@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, exists, gte, isNull, sql } from "drizzle-orm";
+import { and, countDistinct, eq, exists, gte, isNull, sql } from "drizzle-orm";
 
 import {
   applications,
@@ -18,6 +18,7 @@ import {
   countEventsBetween,
   type HiringEvent,
 } from "./metrics";
+import { normalizeReportRange } from "./ranges";
 
 /**
  * Hiring analytics for the Reports page. All queries are workspace-scoped and
@@ -132,6 +133,48 @@ export async function getHiringEvents(
     : query;
 }
 
+/**
+ * Counts applications that have reached Hired without materialising the
+ * event history. This is intentionally the same relational definition used
+ * by getHiringEvents, but keeps summary cards bounded for large workspaces.
+ */
+export async function countHiringEvents(workspaceId: string): Promise<number> {
+  const [row] = await db
+    .select({ count: countDistinct(applications.id) })
+    .from(applications)
+    .innerJoin(
+      applicationStageHistory,
+      and(
+        eq(applicationStageHistory.applicationId, applications.id),
+        eq(applicationStageHistory.workspaceId, workspaceId),
+      ),
+    )
+    .innerJoin(
+      jobStages,
+      and(
+        eq(jobStages.id, applicationStageHistory.toStageId),
+        eq(jobStages.workspaceId, workspaceId),
+        sql`lower(trim(${jobStages.name})) = 'hired'`,
+      ),
+    )
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, applications.jobId),
+        eq(jobs.workspaceId, workspaceId),
+        isNull(jobs.deletedAt),
+      ),
+    )
+    .where(
+      and(
+        eq(applications.workspaceId, workspaceId),
+        activeCandidateForApplication(workspaceId),
+      ),
+    );
+
+  return Number(row?.count ?? 0);
+}
+
 function deltaPct(current: number, previous: number): number | null {
   if (previous <= 0) return null;
   return Math.round(((current - previous) / previous) * 100);
@@ -163,10 +206,18 @@ function activeCandidateForApplication(workspaceId: string) {
 
 /** Period-over-period comparison range, in days. Defaults to 30 (current 30d vs prior 30d). */
 export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
+  rangeDays = normalizeReportRange(rangeDays);
   const { organization } = await requirePermission("reports:read");
   const ws = organization.id;
   const now = new Date();
   const since90 = new Date(now.getTime() - 90 * DAY_SECONDS * 1000);
+  const yearStart = new Date(now.getTime() - 365 * DAY_SECONDS * 1000);
+  // The comparison can span two full periods (up to 730 days), while charts
+  // only need the trailing year. Keep the event materialisation bounded to
+  // the largest requested comparison window.
+  const eventStart = new Date(
+    now.getTime() - Math.max(365, rangeDays * 2) * DAY_SECONDS * 1000,
+  );
 
   const curStart = new Date(now.getTime() - rangeDays * DAY_SECONDS * 1000).toISOString();
   const prevStart = new Date(now.getTime() - 2 * rangeDays * DAY_SECONDS * 1000).toISOString();
@@ -176,6 +227,7 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
     candidatesRow,
     apps90Row,
     hiringEvents,
+    allTimeHires,
     offerRow,
     monthRows,
     funnelRows,
@@ -214,7 +266,8 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
           gte(applications.appliedAt, since90),
         ),
       ),
-    getHiringEvents(ws),
+    getHiringEvents(ws, { since: eventStart }),
+    countHiringEvents(ws),
     db
       .select({
         accepted: sql<number>`count(*) filter (where ${offers.status} = 'accepted')::int`,
@@ -338,7 +391,7 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
     openRoles: openRolesRow[0]?.n ?? 0,
     totalCandidates: candidatesRow[0]?.n ?? 0,
     applications90d: apps90Row[0]?.n ?? 0,
-    hires: hiringEvents.length,
+    hires: allTimeHires,
     avgTimeToHireDays: averageTimeToHireDays(hiringEvents),
     offerAcceptRate:
       decided > 0 ? Math.round(((offerRow[0]?.accepted ?? 0) / decided) * 100) : null,
@@ -378,7 +431,6 @@ export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
   // Hires by month, trailing 12, zero-filled. The month is the first Hired
   // transition, not whichever later edit happened to touch the application.
   const hireCounts = new Map<string, number>();
-  const yearStart = new Date(now.getTime() - 365 * DAY_SECONDS * 1000);
   for (const event of hiringEvents) {
     const hiredAt = new Date(event.hiredAt);
     if (hiredAt >= yearStart) {

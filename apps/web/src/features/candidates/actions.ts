@@ -49,6 +49,11 @@ import {
   restoreCandidate,
 } from "./data";
 import {
+  listCandidateDirectory,
+  type CandidateDirectoryFilters,
+} from "./data";
+import { toSafeCsv } from "@/lib/csv";
+import {
   allowedResumeContentTypes,
   maxResumeFileSize,
 } from "@/lib/storage-validation";
@@ -78,6 +83,68 @@ const bulkStatusSchema = z.object({
 });
 
 const emailLog = createLogger("candidate-email");
+
+const directoryExportSchema = z.object({
+  query: z.string().trim().max(100).optional(),
+  department: z.string().trim().max(120).optional(),
+  role: z.string().trim().max(200).optional(),
+  stage: z.string().trim().max(120).optional(),
+  status: z.enum(["active", "hired", "rejected", "withdrawn"]).optional(),
+  source: z.string().trim().max(120).optional(),
+  tag: z.string().trim().max(120).optional(),
+  sort: z.enum(["recent", "oldest", "modified", "name"]).optional(),
+});
+
+export async function exportCandidateDirectoryAction(input: CandidateDirectoryFilters) {
+  const parsed = directoryExportSchema.safeParse(input);
+  if (!parsed.success) return { success: false as const, error: "Invalid export filters." };
+
+  const context = await requirePermission("candidates:view");
+  const pageSize = 100;
+  const first = await listCandidateDirectory({ ...parsed.data, page: 1, pageSize });
+  const maxRows = 10_000;
+  if (first.total > maxRows) {
+    return {
+      success: false as const,
+      error: `This export contains ${first.total.toLocaleString()} rows. Narrow the filters to ${maxRows.toLocaleString()} or fewer candidates.`,
+    };
+  }
+
+  const rows = [...first.rows];
+  for (let page = 2; page <= Math.ceil(first.total / pageSize); page++) {
+    const next = await listCandidateDirectory({ ...parsed.data, page, pageSize });
+    rows.push(...next.rows);
+  }
+
+  const csv = toSafeCsv([
+    ["Full name", "Email", "Phone", "Location", "Role", "Department", "Stage", "Status", "Source", "Tags", "Applied at"],
+    ...rows.map((row) => [
+      row.fullName,
+      row.email,
+      row.phone ?? "",
+      row.location ?? "",
+      row.latestApplication?.jobTitle ?? "",
+      row.latestApplication?.department ?? "",
+      row.latestApplication?.currentStageName ?? "",
+      row.latestApplication?.status ?? "",
+      row.latestApplication?.source ?? "",
+      row.tags.join("; "),
+      row.latestApplication?.appliedAt.toISOString().slice(0, 10) ?? "",
+    ]),
+  ]);
+
+  await logAuditEvent({
+    workspaceId: context.organization.id,
+    actorId: context.user.id,
+    actorEmail: context.user.email,
+    action: "candidates.exported",
+    resourceType: "candidate_directory",
+    severity: "info",
+    metadata: { count: rows.length, filters: parsed.data },
+  });
+
+  return { success: true as const, csv, count: rows.length };
+}
 
 /** Apply a status to many applications at once from the candidates list. */
 export async function bulkUpdateCandidateStatusAction(input: {

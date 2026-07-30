@@ -13,7 +13,13 @@ import {
   ImportCandidatesDrawer,
   type ImportSource,
 } from "@/features/candidates/import/ImportCandidatesDrawer";
-import { listCandidates, listTrashedCandidates } from "@/features/candidates/data";
+import {
+  listCandidateDirectory,
+  listCandidateDirectoryFacets,
+  listTrashedCandidates,
+  type CandidateApplicationStatus,
+  type CandidateDirectoryFilters,
+} from "@/features/candidates/data";
 import { TrashCandidateActions } from "@/features/candidates/TrashCandidateActions";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listJobOptions } from "@/features/jobs/data";
@@ -29,13 +35,25 @@ function appliedLabel(value: Date) {
 }
 
 type CandidatesPageProps = {
-  searchParams: Promise<{ view?: string; import?: string }>;
+  searchParams: Promise<{
+    view?: string;
+    import?: string;
+    q?: string;
+    dept?: string;
+    role?: string;
+    stage?: string;
+    status?: string;
+    source?: string;
+    tag?: string;
+    sort?: string;
+    page?: string;
+  }>;
 };
 
 export default async function CandidatesPage({ searchParams }: CandidatesPageProps) {
-  const { view, import: importSource } = await searchParams;
+  const { view, import: importSource, q, dept, role, stage, status, source, tag, sort, page: pageRaw } = await searchParams;
   const isTrash = view === "trash";
-  const initialImportSource: ImportSource | undefined =
+const initialImportSource: ImportSource | undefined =
     importSource === "csv" ||
     importSource === "greenhouse" ||
     importSource === "workable" ||
@@ -44,14 +62,39 @@ export default async function CandidatesPage({ searchParams }: CandidatesPagePro
       ? importSource
       : undefined;
 
-  const [candidates, trashed, emailTemplates, jobOptions] = await Promise.all([
-    listCandidates(),
+  const candidateStatus =
+    status === "active" ||
+    status === "hired" ||
+    status === "rejected" ||
+    status === "withdrawn"
+      ? status
+      : undefined;
+  const candidateSort: CandidateDirectoryFilters["sort"] =
+    sort === "oldest" || sort === "modified" || sort === "name"
+      ? sort
+      : "recent";
+
+  const directoryFilters = {
+    query: q,
+    department: dept,
+    role,
+    stage,
+    status: candidateStatus as CandidateApplicationStatus | undefined,
+    source,
+    tag,
+    sort: candidateSort,
+    page: Number.isFinite(Number(pageRaw)) ? Number(pageRaw) : 1,
+    pageSize: 50,
+  };
+  const [directory, facets, trashed, emailTemplates, jobOptions] = await Promise.all([
+    listCandidateDirectory(directoryFilters),
+    listCandidateDirectoryFacets(),
     listTrashedCandidates(),
     listEmailTemplates(),
     listJobOptions(),
   ]);
 
-  const rows: CandidateRow[] = candidates.map((candidate) => {
+  const rows: CandidateRow[] = directory.rows.map((candidate) => {
     const applied = candidate.latestApplication?.appliedAt ?? null;
     return {
       id: candidate.id,
@@ -144,7 +187,11 @@ export default async function CandidatesPage({ searchParams }: CandidatesPagePro
         </div>
       ) : (
         <CandidatesTable
+          key={JSON.stringify(directoryFilters)}
           rows={rows}
+          pageInfo={{ page: directory.page, pageSize: directory.pageSize, total: directory.total, hasNextPage: directory.hasNextPage }}
+          filterOptions={facets}
+          initialFilters={{ query: q ?? "", dept: dept ?? "__all__", role: role ?? "__all__", stage: stage ?? "__all__", status: candidateStatus ?? "__all__", source: source ?? "__all__", tag: tag ?? "__all__", sort: candidateSort }}
           emailTemplates={emailTemplates}
           importJobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
           initialImportSource={initialImportSource}

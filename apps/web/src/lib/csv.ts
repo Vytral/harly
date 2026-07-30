@@ -58,6 +58,20 @@ export function toCsv(rows: string[][]): string {
   return rows.map((row) => row.map(escapeCsvField).join(",")).join("\r\n");
 }
 
+/**
+ * CSV variant safe for spreadsheet applications. A leading formula operator
+ * can turn an exported candidate name, email or note into executable content
+ * when opened in Excel/Sheets. Prefixing an apostrophe preserves the visible
+ * value while preventing formula evaluation.
+ */
+export function toSafeCsv(rows: string[][]): string {
+  return toCsv(rows.map((row) => row.map(sanitizeSpreadsheetCell)));
+}
+
+function sanitizeSpreadsheetCell(value: string): string {
+  return /^[=+\-@]/.test(value) ? `'${value}` : value;
+}
+
 function escapeCsvField(value: string): string {
   if (/[",\r\n]/.test(value)) {
     return `"${value.replace(/"/g, '""')}"`;

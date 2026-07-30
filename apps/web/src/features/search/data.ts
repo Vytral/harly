@@ -5,6 +5,7 @@ import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 import { candidates, db, jobs } from "@harly/db";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { escapeLikePattern } from "./patterns";
 
 export type SearchResults = {
   jobs: { id: string; title: string; slug: string; department: string | null }[];
@@ -25,8 +26,14 @@ export const emptySearchResults: SearchResults = { jobs: [], candidates: [] };
  */
 export async function searchWorkspace(query: string): Promise<SearchResults> {
   const { organization: workspace } = await getWorkspaceContext();
-  const like = `%${query}%`;
-  const nameTokens = query.trim().split(/\s+/).filter(Boolean).slice(0, 6);
+  const normalizedQuery = query.trim().replace(/\s+/g, " ").slice(0, 100);
+  if (!normalizedQuery) return emptySearchResults;
+  const like = `%${escapeLikePattern(normalizedQuery)}%`;
+  const nameTokens = normalizedQuery
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 6)
+    .map(escapeLikePattern);
   const tokenNameMatch =
     nameTokens.length > 1
       ? and(
@@ -61,7 +68,7 @@ export async function searchWorkspace(query: string): Promise<SearchResults> {
           ),
         ),
       )
-      .orderBy(desc(jobs.createdAt))
+      .orderBy(desc(jobs.createdAt), desc(jobs.id))
       .limit(6),
     db
       .select({
@@ -88,7 +95,7 @@ export async function searchWorkspace(query: string): Promise<SearchResults> {
           ),
         ),
       )
-      .orderBy(desc(candidates.createdAt))
+      .orderBy(desc(candidates.createdAt), desc(candidates.id))
       .limit(6),
   ]);
 
