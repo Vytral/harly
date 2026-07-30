@@ -197,6 +197,16 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ],
   },
   {
+    label: "Automations",
+    permissions: [
+      {
+        key: "automations:manage",
+        label: "Manage automations",
+        hint: "Create, edit, toggle, and delete workflows",
+      },
+    ],
+  },
+  {
     label: "Administration",
     permissions: [
       { key: "members:read", label: "View members & invitations" },
@@ -259,6 +269,7 @@ export const BUILTIN_ROLE_PERMISSIONS: Record<BuiltinRole, Permission[]> = {
     "documents:read",
     "documents:manage",
     "documents:share",
+    "automations:manage",
   ],
   hiring_manager: [
     "jobs:view",
