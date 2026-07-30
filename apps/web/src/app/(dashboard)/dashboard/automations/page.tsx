@@ -1,11 +1,14 @@
-// The visual automations builder (WHEN → IF → DO) is paused for launch.
-// The implementation under /features/automations/* is preserved verbatim
-// so the feature can be re-enabled without rebuilding. See AGENTS.md in
-// this directory for the full context and the re-enablement steps.
-import { notFound } from "next/navigation";
+import { AutomationsManager } from "@/features/automations/AutomationsManager";
+import { listWorkflows, serializeWorkflow } from "@/features/automations/data";
+import { requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
-export default function AutomationsPage() {
-  notFound();
+export default async function AutomationsPage() {
+  const workspace = await requirePagePermission("automations:manage");
+  const workflows = await listWorkflows(workspace.organization.id);
+
+  return (
+    <AutomationsManager initialWorkflows={workflows.map(serializeWorkflow)} />
+  );
 }
