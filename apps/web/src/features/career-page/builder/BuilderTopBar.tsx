@@ -31,6 +31,7 @@ export function BuilderTopBar({
   onSave,
   saving,
   dirty,
+  justSaved,
   boardUrl,
 }: {
   activeTemplate: CareerTemplate;
@@ -39,6 +40,7 @@ export function BuilderTopBar({
   onSave: () => void;
   saving: boolean;
   dirty: boolean;
+  justSaved: boolean;
   boardUrl: string;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
@@ -145,17 +147,17 @@ export function BuilderTopBar({
             className={cn(
               "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-all duration-150",
               dirty && !saving
-                ? "bg-pine text-white hover:bg-pine-strong active:scale-[0.97]"
+                ? "bg-pine text-primary-foreground hover:bg-pine-strong active:scale-[0.97]"
                 : "bg-kraft text-ink-soft",
               saving && "cursor-wait opacity-70",
             )}
           >
             {saving ? (
               <LoaderIcon className="size-4 animate-spin" />
-            ) : dirty ? null : (
+            ) : justSaved ? (
               <CheckIcon className="size-4" />
-            )}
-            {saving ? "Saving…" : dirty ? "Save changes" : "Saved"}
+            ) : null}
+            {saving ? "Saving…" : justSaved ? "Saved" : "Save changes"}
           </button>
         </>
       }
