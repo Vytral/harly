@@ -35,7 +35,7 @@ import { TriggerPanel } from "./TriggerPanel";
 import { ConditionPanel } from "./ConditionPanel";
 import { ActionsPanel } from "./ActionsPanel";
 import { DryRunPanel } from "./DryRunPanel";
-import { AddNodeIcon, BeakerIcon, WhenGlyph } from "./builder-icons";
+import { AddNodeIcon, BeakerIcon, NodeDotIcon, WhenGlyph } from "./builder-icons";
 import { triggerMeta } from "./catalog";
 import { describeWorkflow } from "./preview";
 
@@ -299,19 +299,38 @@ function BuildView({
     <div className="space-y-5">
       <PreviewStrip text={nl} />
 
-      <FlowStep marker={<WhenGlyph className="size-4" />} label="WHEN" tone="pine">
+      <FlowStep
+        marker={<WhenGlyph className="size-4" />}
+        label="WHEN"
+        caption="Trigger"
+        summary={triggerMeta(draft.trigger.event).label}
+      >
         <TriggerPanel value={draft.trigger} onChange={onTrigger} />
       </FlowStep>
 
       <Connector />
 
-      <FlowStep marker={<IfGlyphSmall />} label="IF" tone="slate">
+      <FlowStep
+        marker={<IfGlyphSmall />}
+        label="IF"
+        caption="Condition"
+        summary={
+          (draft.conditions ?? []).length === 0
+            ? "Always runs"
+            : `${(draft.conditions ?? []).length} ${(draft.conditions ?? []).length === 1 ? "condition" : "conditions"}`
+        }
+      >
         <ConditionPanel value={draft.conditions ?? []} onChange={onConditions} />
       </FlowStep>
 
       <Connector />
 
-      <FlowStep marker={<DoGlyphSmall />} label="DO" tone="lime">
+      <FlowStep
+        marker={<DoGlyphSmall />}
+        label="DO"
+        caption="Actions"
+        summary={`${draft.actions.length} ${draft.actions.length === 1 ? "step" : "steps"}`}
+      >
         <ActionsPanel
           value={draft.actions}
           onChange={onActions}
@@ -325,9 +344,11 @@ function BuildView({
 
 function PreviewStrip({ text }: { text: string }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-2xl border border-pine/20 bg-sage/40 px-4 py-3">
-      <EyeIcon className="mt-0.5 size-4 shrink-0 text-pine" />
-      <p className="text-sm leading-relaxed text-sage-ink">{text}</p>
+    <div className="flex items-start gap-2.5 rounded-2xl border border-mist-border bg-paper-raised px-4 py-3 shadow-soft">
+      <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-sage text-sage-ink">
+        <EyeIcon className="size-3.5" />
+      </span>
+      <p className="text-sm leading-relaxed text-foreground">{text}</p>
     </div>
   );
 }
@@ -335,31 +356,29 @@ function PreviewStrip({ text }: { text: string }) {
 function FlowStep({
   marker,
   label,
-  tone,
+  caption,
+  summary,
   children,
 }: {
   marker: React.ReactNode;
   label: string;
-  tone: "pine" | "slate" | "lime";
+  caption: string;
+  summary: string;
   children: React.ReactNode;
 }) {
-  const toneClass = {
-    pine: "border-pine/25 bg-paper-raised",
-    slate: "border-slate-info/25 bg-paper-raised",
-    lime: "border-chart-2/40 bg-paper-raised",
-  }[tone];
-  const badgeClass = {
-    pine: "bg-pine/10 text-pine",
-    slate: "bg-slate-info/10 text-slate-info",
-    lime: "bg-chart-2/15 text-[color:var(--lime-ink)]",
-  }[tone];
   return (
-    <section className={cn("overflow-hidden rounded-2xl border shadow-sm", toneClass)}>
-      <header className={cn("flex items-center gap-2.5 border-b border-border/70 px-4 py-3")}>
-        <span className={cn("inline-flex size-7 items-center justify-center rounded-lg", badgeClass)}>
+    <section className="overflow-hidden rounded-2xl border border-border bg-paper-raised shadow-soft">
+      <header className="flex items-center gap-3 border-b border-hairline px-4 py-3">
+        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-kraft text-foreground">
           {marker}
         </span>
-        <span className="font-cal text-sm font-bold tracking-wide text-foreground">{label}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-display text-sm font-bold tracking-wide text-foreground">{label}</span>
+          <span className="block truncate text-xs text-ink-soft">{caption}</span>
+        </span>
+        <span className="shrink-0 rounded-full bg-kraft px-2.5 py-1 text-[11px] font-medium tracking-wide text-ink-soft">
+          {summary}
+        </span>
       </header>
       <div className="px-4 py-4">{children}</div>
     </section>
@@ -368,10 +387,11 @@ function FlowStep({
 
 function Connector() {
   return (
-    <div className="flex justify-center py-1" aria-hidden>
-      <svg width="2" height="28" className="text-border">
-        <line x1="1" y1="0" x2="1" y2="28" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3" />
+    <div className="relative flex h-6 justify-center" aria-hidden>
+      <svg width="2" height="24" className="text-mist-border">
+        <line x1="1" y1="0" x2="1" y2="24" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3" />
       </svg>
+      <NodeDotIcon className="absolute top-1/2 size-1.5 -translate-y-1/2 text-quiet-mist" />
     </div>
   );
 }
