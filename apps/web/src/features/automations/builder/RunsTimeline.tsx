@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { RelativeTime } from "@/lib/date-hydration";
 import { CheckCircleIcon, XCircleIcon, ClockIcon, ProhibitIcon } from "@/components/ui/icons/phosphor";
 
-import { getRunAction, listRunsAction } from "../actions";
+import { cancelRunAction, getRunAction, listRunsAction, replayRunFromStepAction, retryRunAction } from "../actions";
 import { actionMeta } from "./catalog";
 import type { SerializedRun, SerializedRunStep } from "./types";
 
@@ -57,6 +57,27 @@ function RunRow({ run }: { run: SerializedRun }) {
   const [steps, setSteps] = useState<SerializedRunStep[] | null>(null);
   const [pending, startLoad] = useTransition();
 
+  function retry() {
+    startLoad(async () => {
+      const result = await retryRunAction(run.id);
+      if (result.ok) window.location.reload();
+    });
+  }
+
+  function cancel() {
+    startLoad(async () => {
+      const result = await cancelRunAction(run.id);
+      if (result.ok) window.location.reload();
+    });
+  }
+
+  function replayFrom(stepIndex: number) {
+    startLoad(async () => {
+      const result = await replayRunFromStepAction(run.id, stepIndex);
+      if (result.ok) window.location.reload();
+    });
+  }
+
   function toggle() {
     const next = !open;
     setOpen(next);
@@ -89,14 +110,28 @@ function RunRow({ run }: { run: SerializedRun }) {
         <span className={cn("text-xs text-ink-soft transition-transform", open && "rotate-180")}>▾</span>
       </button>
 
+      {(run.status === "failed" || run.status === "dead_letter" || run.status === "running") && (
+        <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-2">
+          {run.status === "running" ? (
+            <button type="button" onClick={cancel} disabled={pending} className="text-xs font-medium text-ink-soft hover:text-rust disabled:opacity-50">
+              Cancel run
+            </button>
+          ) : (
+            <button type="button" onClick={retry} disabled={pending} className="text-xs font-medium text-foreground hover:underline disabled:opacity-50">
+              Retry run
+            </button>
+          )}
+        </div>
+      )}
+
       {open && (
         <div className="border-t border-border px-4 py-3">
           {pending && steps === null ? (
             <p className="text-xs text-ink-soft">Loading steps…</p>
           ) : steps && steps.length > 0 ? (
             <ol className="space-y-2">
-              {steps.map((step, i) => (
-                <StepRow key={step.id} index={i} step={step} />
+                {steps.map((step, i) => (
+                <StepRow key={step.id} index={i} step={step} onReplay={() => replayFrom(step.stepIndex ?? i)} />
               ))}
             </ol>
           ) : (
@@ -108,7 +143,7 @@ function RunRow({ run }: { run: SerializedRun }) {
   );
 }
 
-function StepRow({ index, step }: { index: number; step: SerializedRunStep }) {
+function StepRow({ index, step, onReplay }: { index: number; step: SerializedRunStep; onReplay: () => void }) {
   const meta = actionMeta(step.actionType as never);
   const duration = step.finishedAt
     ? `${Math.round(new Date(step.finishedAt).getTime() - new Date(step.startedAt).getTime())}ms`
@@ -132,6 +167,9 @@ function StepRow({ index, step }: { index: number; step: SerializedRunStep }) {
           </p>
         )}
       </div>
+      {(step.status === "failed" || step.status === "running") && (
+        <button type="button" onClick={onReplay} className="shrink-0 text-[11px] font-medium text-foreground hover:underline">Replay</button>
+      )}
     </li>
   );
 }
@@ -143,6 +181,7 @@ function StatusBadge({ status }: { status: SerializedRun["status"] }) {
     failed: { icon: XCircleIcon, cls: "bg-rust/10 text-rust", label: "Failed" },
     skipped: { icon: ProhibitIcon, cls: "bg-kraft text-ink-soft", label: "Skipped" },
     dead_letter: { icon: XCircleIcon, cls: "bg-rust/20 text-rust", label: "Dead letter" },
+    cancelled: { icon: ProhibitIcon, cls: "bg-kraft text-ink-soft", label: "Cancelled" },
   }[status];
   const Icon = map.icon;
   return (

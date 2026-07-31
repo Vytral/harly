@@ -1,0 +1,2 @@
+ALTER TABLE "workflow_definitions" ADD COLUMN "consecutive_failure_count" integer DEFAULT 0 NOT NULL;--> statement-breakpoint
+ALTER TABLE "workflow_definitions" ADD COLUMN "auto_paused_at" timestamp with time zone;

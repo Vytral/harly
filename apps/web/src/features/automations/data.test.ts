@@ -60,8 +60,29 @@ vi.mock("@harly/db", () => ({
         returning: () => Promise.resolve([{ id: "wf-1" }]),
       })),
     })),
+    transaction: vi.fn(async (callback: (tx: unknown) => unknown) =>
+      callback({
+        insert: vi.fn(() => ({
+          values: vi.fn((row: Record<string, unknown>) => {
+            dbState.inserted.push(row);
+            return { returning: () => Promise.resolve([row]) };
+          }),
+        })),
+        update: vi.fn(() => ({
+          set: vi.fn((set: Record<string, unknown>) => ({
+            where: vi.fn(() => ({
+              returning: () => {
+                dbState.updated.push({ id: "wf-1", set });
+                return Promise.resolve([{ ...dbState.workflows[0], ...set, id: "wf-1" }]);
+              },
+            })),
+          })),
+        })),
+      }),
+    ),
   },
   workflowDefinitions: {},
+  workflowDefinitionVersions: {},
   workflowRuns: {},
   workflowRunSteps: {},
 }));
@@ -96,14 +117,15 @@ describe("automations data — createWorkflow re-validates jsonb (§3.4)", () =>
       createdById: "user-1",
     });
 
-    expect(dbState.inserted).toHaveLength(1);
+    expect(dbState.inserted).toHaveLength(2);
     const row = dbState.inserted[0]!;
     expect(row).toMatchObject({
       workspaceId: "ws-1",
       name: "Auto-reject juniors",
       triggerEvent: "application.created",
       createdById: "user-1",
-      enabled: true,
+      enabled: false,
+      status: "draft",
     });
     // The trigger jsonb is the parsed, validated object.
     expect(row.trigger).toEqual({ event: "application.created", filter: undefined });

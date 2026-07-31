@@ -1,12 +1,13 @@
 import "server-only";
 
-import { and, eq, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import {
   db,
   member as authMembers,
   workflowDefinitions,
+  workflowActionEffects,
   workflowRunSteps,
   workflowRuns,
   type WorkflowDefinition,
@@ -94,10 +95,13 @@ async function heartbeatRun(runId: string, workerId: string): Promise<void> {
 export type RunOutcome =
   | { status: "succeeded"; run: WorkflowRun }
   | { status: "failed"; run: WorkflowRun }
-  | { status: "skipped"; run: WorkflowRun };
+  | { status: "skipped"; run: WorkflowRun }
+  | { status: "running"; run: WorkflowRun }
+  | { status: "dead_letter"; run: WorkflowRun }
+  | { status: "cancelled"; run: WorkflowRun };
 
 /** Parse the jsonb columns of a definition into typed values. */
-function parseDefinitionJson(def: WorkflowDefinition): {
+function parseDefinitionJson(def: WorkflowDefinition | Record<string, unknown>): {
   trigger: Trigger;
   conditions: Conditions;
   actions: Action[];
@@ -176,6 +180,40 @@ function containsAutomatedEvaluationCondition(conditions: Conditions): boolean {
   return conditions.some(visit);
 }
 
+const SENSITIVE_LOG_KEYS = /secret|token|password|authorization|cookie|credential|body/i;
+const EXTERNAL_ACTION_TYPES = ["send_slack", "send_email", "http_request"] as const;
+
+async function externalActionBudgetExceeded(actionCtx: ActionContext, actionType: string): Promise<boolean> {
+  if (!actionCtx.workflowId || !EXTERNAL_ACTION_TYPES.includes(actionType as (typeof EXTERNAL_ACTION_TYPES)[number])) return false;
+  const [recent] = await db
+    .select({ total: count() })
+    .from(workflowRunSteps)
+    .innerJoin(workflowRuns, eq(workflowRuns.id, workflowRunSteps.runId))
+    .where(
+      and(
+        eq(workflowRuns.workspaceId, actionCtx.workspaceId),
+        eq(workflowRuns.workflowId, actionCtx.workflowId),
+        gte(workflowRunSteps.startedAt, new Date(Date.now() - 60_000)),
+        inArray(workflowRunSteps.actionType, [...EXTERNAL_ACTION_TYPES]),
+      ),
+    );
+  return Number(recent?.total ?? 0) >= (actionCtx.maxExternalActionsPerMinute ?? 30);
+}
+
+function sanitizeLogValue(value: unknown, depth = 0): unknown {
+  if (typeof value === "string") return value.length > 1_000 ? `${value.slice(0, 1_000)}…` : value;
+  if (value === null || typeof value === "number" || typeof value === "boolean") return value;
+  if (depth >= 2 || typeof value !== "object") return undefined;
+  if (Array.isArray(value)) return value.slice(0, 20).map((item) => sanitizeLogValue(item, depth + 1));
+  const output: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    output[key] = SENSITIVE_LOG_KEYS.test(key)
+      ? "[REDACTED]"
+      : sanitizeLogValue(child, depth + 1);
+  }
+  return output;
+}
+
 /**
  * Execute one action: validate config, check the actor's permission, run the
  * handler, and persist a workflow_run_steps row. Returns the step result.
@@ -187,6 +225,39 @@ async function executeAction(
   workspaceId: string,
   actionCtx: ActionContext,
 ): Promise<ActionResult> {
+  const effectKey = actionCtx.effectKey;
+  const [existingEffect] = await db
+    .select({ status: workflowActionEffects.status, result: workflowActionEffects.result })
+    .from(workflowActionEffects)
+    .where(
+      and(
+        eq(workflowActionEffects.runId, runId),
+        eq(workflowActionEffects.stepIndex, index),
+      ),
+    )
+    .limit(1);
+  if (existingEffect?.status === "succeeded") {
+    const result = existingEffect.result;
+    return {
+      success: true,
+      data:
+        result && typeof result === "object" && "data" in result
+          ? ((result as { data?: Record<string, unknown> }).data ?? undefined)
+          : undefined,
+    };
+  }
+
+  await db
+    .insert(workflowActionEffects)
+    .values({
+      workspaceId,
+      runId,
+      stepIndex: index,
+      effectKey,
+      status: "pending",
+    })
+    .onConflictDoNothing();
+
   const [completedStep] = await db
     .select({ status: workflowRunSteps.status, result: workflowRunSteps.result })
     .from(workflowRunSteps)
@@ -219,13 +290,32 @@ async function executeAction(
         runId,
         stepIndex: index,
         actionType: action.type,
-        actionInput: action.config as Record<string, unknown>,
-        result: result as unknown as Record<string, unknown>,
+        actionInput: sanitizeLogValue(action.config) as Record<string, unknown>,
+        result: sanitizeLogValue(result) as Record<string, unknown>,
         status,
+        effectKey: actionCtx.effectKey,
+        retryable: result.retryable ?? false,
+        errorCode: result.errorCode ?? null,
         startedAt,
         finishedAt: new Date(),
       })
       .onConflictDoNothing();
+    await db
+      .update(workflowActionEffects)
+      .set({
+        status,
+        result: sanitizeLogValue(result) as Record<string, unknown>,
+        error: result.error ?? null,
+        finishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(workflowActionEffects.runId, runId),
+          eq(workflowActionEffects.stepIndex, index),
+          eq(workflowActionEffects.effectKey, effectKey),
+        ),
+      );
   };
 
   if (!handler) {
@@ -253,12 +343,28 @@ async function executeAction(
     }
   }
 
+  if (await externalActionBudgetExceeded(actionCtx, action.type)) {
+    const result: ActionResult = {
+      success: false,
+      error: "External action rate limit exceeded; retrying later.",
+      errorCode: "external_rate_limited",
+      retryable: true,
+    };
+    await recordStep(result, "failed");
+    return result;
+  }
+
   let result: ActionResult;
   try {
     result = await handler.run(parsed.data, actionCtx);
   } catch (error) {
     log.error(error, "[automations] action threw", { actionType: action.type, index });
-    result = { success: false, error: "Action failed unexpectedly." };
+    result = {
+      success: false,
+      error: "Action failed unexpectedly.",
+      errorCode: "unexpected_action_error",
+      retryable: true,
+    };
   }
 
   await recordStep(result, result.success ? "succeeded" : "failed");
@@ -305,9 +411,16 @@ export async function runWorkflow(
     return finishRun(run, "failed", undefined, "Workflow definition was deleted.");
   }
 
+  const snapshot =
+    run.definitionSnapshot &&
+    typeof run.definitionSnapshot === "object" &&
+    Object.keys(run.definitionSnapshot as Record<string, unknown>).length > 0
+      ? (run.definitionSnapshot as Record<string, unknown>)
+      : definition;
+
   // The trigger filter is a cheap pre-check the dispatcher should already have
   // done, but re-check defensively in case the run was created out of band.
-  const { trigger, conditions, actions } = parseDefinitionJson(definition);
+  const { trigger, conditions, actions } = parseDefinitionJson(snapshot);
   const payload = (run.triggerPayload ?? {}) as Record<string, unknown>;
   if (!matchesTriggerFilter(trigger.filter, payload)) {
     return finishRun(run, "skipped", { matched: false, evaluated: [] }, "Trigger filter did not match.");
@@ -363,9 +476,19 @@ export async function runWorkflow(
 
   const actionCtx: ActionContext = {
     workspaceId: run.workspaceId,
-    actorUserId: definition.createdById ?? "",
+    actorUserId:
+      typeof snapshot.createdById === "string"
+        ? snapshot.createdById
+        : definition.createdById ?? "",
     triggerEvent: run.triggerEvent as WorkflowEvent,
     triggerPayload: payload,
+    effectKey: "",
+    runId,
+    workflowId: run.workflowId,
+    maxExternalActionsPerMinute:
+      typeof snapshot.maxExternalActionsPerMinute === "number"
+        ? snapshot.maxExternalActionsPerMinute
+        : definition.maxExternalActionsPerMinute,
   };
 
   if (!actionCtx.actorUserId) {
@@ -373,10 +496,24 @@ export async function runWorkflow(
   }
 
   let failedAction: ActionResult | null = null;
-  for (let index = 0; index < actions.length; index += 1) {
+  for (let index = run.startStepIndex ?? 0; index < actions.length; index += 1) {
     const action = actions[index]!;
+    const [cancelRequested] = await db
+      .select({ cancelRequestedAt: workflowRuns.cancelRequestedAt })
+      .from(workflowRuns)
+      .where(eq(workflowRuns.id, runId))
+      .limit(1);
+    if (cancelRequested?.cancelRequestedAt) {
+      return finishRun({ ...run, lockedBy: workerId }, "cancelled", conditionResult);
+    }
     await heartbeatRun(runId, workerId);
-    const result = await executeAction(action, index, runId, run.workspaceId, actionCtx);
+    const result = await executeAction(
+      action,
+      index,
+      runId,
+      run.workspaceId,
+      { ...actionCtx, effectKey: `workflow:${runId}:step:${index}` },
+    );
     if (!result.success && !action.continueOnError) {
       failedAction = result;
       break;
@@ -384,6 +521,17 @@ export async function runWorkflow(
   }
 
   if (failedAction) {
+    if (failedAction.retryable && run.attemptCount < run.maxAttempts) {
+      return scheduleRetry(run, conditionResult, failedAction);
+    }
+    if (failedAction.retryable) {
+      return finishRun(
+        { ...run, lockedBy: workerId },
+        "dead_letter",
+        conditionResult,
+        failedAction.error,
+      );
+    }
     return finishRun({ ...run, lockedBy: workerId }, "failed", conditionResult, failedAction.error);
   }
   return finishRun({ ...run, lockedBy: workerId }, "succeeded", conditionResult);
@@ -391,17 +539,21 @@ export async function runWorkflow(
 
 async function finishRun(
   run: WorkflowRun,
-  status: "succeeded" | "failed" | "skipped",
+  status: "succeeded" | "failed" | "skipped" | "dead_letter" | "cancelled",
   conditionResult: ConditionsResult | undefined,
   error?: string,
   extra?: Record<string, unknown>,
 ): Promise<RunOutcome> {
+  const finishedAt = new Date();
   const [updated] = await db
     .update(workflowRuns)
     .set({
       status,
-      finishedAt: new Date(),
       error: error ?? null,
+      deadLetteredAt: status === "dead_letter" ? new Date() : null,
+      cancelledAt: status === "cancelled" ? new Date() : null,
+      finishedAt,
+      durationMs: Math.max(0, finishedAt.getTime() - run.startedAt.getTime()),
       lockedAt: null,
       lockedBy: null,
       heartbeatAt: null,
@@ -418,7 +570,71 @@ async function finishRun(
     )
     .returning();
 
+  if (status === "succeeded") {
+    await db
+      .update(workflowDefinitions)
+      .set({ consecutiveFailureCount: 0, autoPausedAt: null, circuitOpenUntil: null, updatedAt: new Date() })
+      .where(eq(workflowDefinitions.id, run.workflowId));
+  } else if (status === "failed" || status === "dead_letter") {
+    const [definitionState] = await db
+    .select({
+      consecutiveFailureCount: workflowDefinitions.consecutiveFailureCount,
+      circuitBreakerThreshold: workflowDefinitions.circuitBreakerThreshold,
+      circuitBreakerCooldownSeconds: workflowDefinitions.circuitBreakerCooldownSeconds,
+    })
+      .from(workflowDefinitions)
+      .where(eq(workflowDefinitions.id, run.workflowId))
+      .limit(1);
+    const failures = (definitionState?.consecutiveFailureCount ?? 0) + 1;
+    const shouldPause = failures >= 5;
+    const shouldOpenCircuit = failures >= (definitionState?.circuitBreakerThreshold ?? 5);
+    const circuitOpenUntil = shouldOpenCircuit
+      ? new Date(Date.now() + (definitionState?.circuitBreakerCooldownSeconds ?? 300) * 1000)
+      : undefined;
+    await db
+      .update(workflowDefinitions)
+      .set({
+        consecutiveFailureCount: failures,
+        ...(shouldPause ? { enabled: false, status: "paused" as const, autoPausedAt: new Date() } : {}),
+        ...(circuitOpenUntil ? { circuitOpenUntil } : {}),
+        updatedAt: new Date(),
+      })
+      .where(eq(workflowDefinitions.id, run.workflowId));
+    if (shouldPause) {
+      log.warn(
+        { workflowId: run.workflowId, failures },
+        "[automations] workflow auto-paused after repeated failures",
+      );
+    }
+  }
+
   return { status, run: updated ?? run };
+}
+
+async function scheduleRetry(
+  run: WorkflowRun,
+  conditionResult: ConditionsResult,
+  failure: ActionResult,
+): Promise<RunOutcome> {
+  const delayMs = Math.min(
+    15 * 60_000,
+    60_000 * 2 ** Math.max(0, run.attemptCount - 1),
+  );
+  const [updated] = await db
+    .update(workflowRuns)
+    .set({
+      status: "running",
+      conditionResult: conditionResult as unknown as Record<string, unknown>,
+      error: failure.error ?? "Retryable action failed.",
+      nextAttemptAt: new Date(Date.now() + delayMs),
+      lockedAt: null,
+      lockedBy: null,
+      heartbeatAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(workflowRuns.id, run.id))
+    .returning();
+  return { status: "running", run: updated ?? run };
 }
 
 // Exposed for the dispatcher (FASE 2): create a run row and kick off execution

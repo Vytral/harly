@@ -4,21 +4,38 @@ import { revalidatePath } from "next/cache";
 
 import {
   createWorkflow,
+  approveWorkflow,
   deleteWorkflow,
   getRun,
+  getWorkflowMetrics,
   getWorkflow,
   listRunSteps,
   listRuns,
+  listWorkflowVersions,
+  pauseWorkflow,
+  publishWorkflow,
+  requestWorkflowApproval,
+  resumeWorkflow,
+  rollbackWorkflow,
+  requestCancelRun,
+  replayRunFromStep,
+  retryRun,
   listWorkflows,
   serializeRun,
   serializeRunStep,
   serializeWorkflow,
+  serializeWorkflowVersion,
   updateWorkflow,
 } from "./data";
 import { workflowInputSchema, type WorkflowDefinitionInput } from "./schema";
-import { dryRunWorkflow } from "./builder-data";
+import { dryRunWorkflow, previewWorkflowPayload } from "./builder-data";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
+import { logAuditEvent } from "@/lib/audit-log";
+import {
+  AUTOMATIONS_DISABLED_MESSAGE,
+  AUTOMATIONS_ENABLED,
+} from "./status";
 
 const log = createLogger("automations");
 
@@ -37,11 +54,20 @@ function errorMessage(error: unknown, fallback: string): string {
 
 export type AutomationsActionResult = { ok: boolean; error?: string };
 
+function assertAutomationsEnabled() {
+  if (!AUTOMATIONS_ENABLED) throw new Error(AUTOMATIONS_DISABLED_MESSAGE);
+}
+
+async function requireAutomationsPermission() {
+  assertAutomationsEnabled();
+  return requirePermission("automations:manage");
+}
+
 // ----- Reads (the list page + builder + run history) -----------------------
 
 export async function listWorkflowsAction() {
   try {
-    const { organization } = await requirePermission("automations:manage");
+    const { organization } = await requireAutomationsPermission();
     const workflows = await listWorkflows(organization.id);
     return { ok: true, workflows: workflows.map(serializeWorkflow) };
   } catch (error) {
@@ -51,7 +77,7 @@ export async function listWorkflowsAction() {
 
 export async function getWorkflowAction(id: string) {
   try {
-    const { organization } = await requirePermission("automations:manage");
+    const { organization } = await requireAutomationsPermission();
     const workflow = await getWorkflow({ workspaceId: organization.id, id });
     return { ok: true, workflow: serializeWorkflow(workflow) };
   } catch (error) {
@@ -59,9 +85,28 @@ export async function getWorkflowAction(id: string) {
   }
 }
 
+export async function listWorkflowVersionsAction(id: string) {
+  try {
+    const { organization } = await requireAutomationsPermission();
+    const versions = await listWorkflowVersions({ workspaceId: organization.id, workflowId: id });
+    return { ok: true, versions: versions.map(serializeWorkflowVersion) };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not load workflow history.") };
+  }
+}
+
+export async function getWorkflowMetricsAction(id: string) {
+  try {
+    const { organization } = await requireAutomationsPermission();
+    return { ok: true, metrics: await getWorkflowMetrics({ workspaceId: organization.id, workflowId: id }) };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not load workflow metrics.") };
+  }
+}
+
 export async function listRunsAction(input: { workflowId?: string; limit?: number }) {
   try {
-    const { organization } = await requirePermission("automations:manage");
+    const { organization } = await requireAutomationsPermission();
     const runs = await listRuns({
       workspaceId: organization.id,
       workflowId: input.workflowId,
@@ -75,7 +120,7 @@ export async function listRunsAction(input: { workflowId?: string; limit?: numbe
 
 export async function getRunAction(id: string) {
   try {
-    const { organization } = await requirePermission("automations:manage");
+    const { organization } = await requireAutomationsPermission();
     const run = await getRun({ workspaceId: organization.id, id });
     const steps = await listRunSteps({
       workspaceId: organization.id,
@@ -91,18 +136,179 @@ export async function getRunAction(id: string) {
   }
 }
 
+export async function cancelRunAction(id: string): Promise<AutomationsActionResult> {
+  try {
+    const { organization, user } = await requireAutomationsPermission();
+    await requestCancelRun({ workspaceId: organization.id, id });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.run.cancel_requested",
+      resourceType: "workflow_run",
+      resourceId: id,
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not cancel run.") };
+  }
+}
+
+export async function retryRunAction(id: string): Promise<AutomationsActionResult> {
+  try {
+    const { organization, user } = await requireAutomationsPermission();
+    await retryRun({ workspaceId: organization.id, id });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.run.retry_requested",
+      resourceType: "workflow_run",
+      resourceId: id,
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not retry run.") };
+  }
+}
+
+export async function replayRunFromStepAction(id: string, stepIndex: number): Promise<AutomationsActionResult & { runId?: string }> {
+  try {
+    const { organization, user } = await requireAutomationsPermission();
+    const run = await replayRunFromStep({ workspaceId: organization.id, id, stepIndex });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.run.replayed",
+      resourceType: "workflow_run",
+      resourceId: id,
+      metadata: { replayRunId: run.id, stepIndex },
+    });
+    return { ok: true, runId: run.id };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not replay run.") };
+  }
+}
+
+export async function requestWorkflowApprovalAction(id: string): Promise<AutomationsActionResult> {
+  try {
+    const { organization, user } = await requireAutomationsPermission();
+    await requestWorkflowApproval({ workspaceId: organization.id, id });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.approval_requested",
+      resourceType: "workflow",
+      resourceId: id,
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not request approval.") };
+  }
+}
+
+export async function approveWorkflowAction(id: string): Promise<AutomationsActionResult> {
+  try {
+    const { organization, user } = await requireAutomationsPermission();
+    await approveWorkflow({ workspaceId: organization.id, id, approverId: user.id });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.approved",
+      resourceType: "workflow",
+      resourceId: id,
+    });
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not approve workflow.") };
+  }
+}
+
+export async function publishWorkflowAction(id: string): Promise<AutomationsActionResult> {
+  try {
+    const { organization, user } = await requireAutomationsPermission();
+    await publishWorkflow({ workspaceId: organization.id, id, publisherId: user.id });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.published",
+      resourceType: "workflow",
+      resourceId: id,
+    });
+    revalidatePath(AUTOMATIONS_PATH);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not publish workflow.") };
+  }
+}
+
+export async function pauseWorkflowAction(id: string): Promise<AutomationsActionResult> {
+  try {
+    const { organization, user } = await requireAutomationsPermission();
+    await pauseWorkflow({ workspaceId: organization.id, id });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.paused",
+      resourceType: "workflow",
+      resourceId: id,
+    });
+    revalidatePath(AUTOMATIONS_PATH);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not pause workflow.") };
+  }
+}
+
+export async function resumeWorkflowAction(id: string): Promise<AutomationsActionResult> {
+  try {
+    const { organization, user } = await requireAutomationsPermission();
+    await resumeWorkflow({ workspaceId: organization.id, id });
+    await logAuditEvent({ workspaceId: organization.id, actorId: user.id, action: "automation.resumed", resourceType: "workflow", resourceId: id });
+    revalidatePath(AUTOMATIONS_PATH);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not resume workflow.") };
+  }
+}
+
+export async function rollbackWorkflowAction(id: string, version: number): Promise<AutomationsActionResult> {
+  try {
+    const { organization, user } = await requireAutomationsPermission();
+    await rollbackWorkflow({ workspaceId: organization.id, workflowId: id, version });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.rolled_back",
+      resourceType: "workflow",
+      resourceId: id,
+      metadata: { version },
+    });
+    revalidatePath(AUTOMATIONS_PATH);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not roll back workflow.") };
+  }
+}
+
 // ----- Writes (create / update / delete / toggle) --------------------------
 
 export async function createWorkflowAction(
   values: WorkflowDefinitionInput,
 ): Promise<AutomationsActionResult & { workflow?: ReturnType<typeof serializeWorkflow> }> {
   try {
-    const { organization, user } = await requirePermission("automations:manage");
+    const { organization, user } = await requireAutomationsPermission();
     const parsed = workflowInputSchema.parse(values);
     const workflow = await createWorkflow({
       workspaceId: organization.id,
       values: parsed,
       createdById: user.id,
+    });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.created",
+      resourceType: "workflow",
+      resourceId: workflow.id,
+      metadata: { version: workflow.definitionVersion, triggerEvent: workflow.triggerEvent },
     });
     revalidatePath(AUTOMATIONS_PATH);
     return { ok: true, workflow: serializeWorkflow(workflow) };
@@ -117,11 +323,19 @@ export async function updateWorkflowAction(
   patch: Partial<WorkflowDefinitionInput>,
 ): Promise<AutomationsActionResult & { workflow?: ReturnType<typeof serializeWorkflow> }> {
   try {
-    const { organization } = await requirePermission("automations:manage");
+    const { organization, user } = await requireAutomationsPermission();
     const workflow = await updateWorkflow({
       workspaceId: organization.id,
       id,
       patch,
+    });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.updated",
+      resourceType: "workflow",
+      resourceId: workflow.id,
+      metadata: { version: workflow.definitionVersion },
     });
     revalidatePath(AUTOMATIONS_PATH);
     return { ok: true, workflow: serializeWorkflow(workflow) };
@@ -137,11 +351,18 @@ export async function toggleWorkflowAction(
   enabled: boolean,
 ): Promise<AutomationsActionResult> {
   try {
-    const { organization } = await requirePermission("automations:manage");
-    await updateWorkflow({
+    const { organization, user } = await requireAutomationsPermission();
+    if (enabled) {
+      await publishWorkflow({ workspaceId: organization.id, id, publisherId: user.id });
+    } else {
+      await pauseWorkflow({ workspaceId: organization.id, id });
+    }
+    await logAuditEvent({
       workspaceId: organization.id,
-      id,
-      patch: { enabled },
+      actorId: user.id,
+      action: enabled ? "automation.enabled" : "automation.disabled",
+      resourceType: "workflow",
+      resourceId: id,
     });
     revalidatePath(AUTOMATIONS_PATH);
     return { ok: true };
@@ -152,8 +373,16 @@ export async function toggleWorkflowAction(
 
 export async function deleteWorkflowAction(id: string): Promise<AutomationsActionResult> {
   try {
-    const { organization } = await requirePermission("automations:manage");
+    const { organization, user } = await requireAutomationsPermission();
     await deleteWorkflow({ workspaceId: organization.id, id });
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      action: "automation.deleted",
+      resourceType: "workflow",
+      resourceId: id,
+      severity: "warning",
+    });
     revalidatePath(AUTOMATIONS_PATH);
     return { ok: true };
   } catch (error) {
@@ -178,11 +407,23 @@ export async function dryRunWorkflowAction(input: {
   evaluated?: Array<{ text: string; matched: boolean }>;
 }> {
   try {
-    await requirePermission("automations:manage");
+    await requireAutomationsPermission();
     const result = await dryRunWorkflow(input);
     return { ok: true, ...result };
   } catch (error) {
     return { ok: false, error: errorMessage(error, "Could not run dry-run.") };
+  }
+}
+
+export async function previewWorkflowPayloadAction(input: {
+  trigger: WorkflowDefinitionInput["trigger"];
+  candidateId?: string;
+}): Promise<AutomationsActionResult & { payload?: Record<string, unknown> }> {
+  try {
+    await requireAutomationsPermission();
+    return { ok: true, payload: await previewWorkflowPayload(input) };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error, "Could not preview payload.") };
   }
 }
 
@@ -196,7 +437,7 @@ export async function createWorkflowFromTemplateAction(
   values: WorkflowDefinitionInput,
 ): Promise<AutomationsActionResult & { workflow?: ReturnType<typeof serializeWorkflow> }> {
   try {
-    const { organization, user } = await requirePermission("automations:manage");
+    const { organization, user } = await requireAutomationsPermission();
     const parsed = workflowInputSchema.parse(values);
     const workflow = await createWorkflow({
       workspaceId: organization.id,

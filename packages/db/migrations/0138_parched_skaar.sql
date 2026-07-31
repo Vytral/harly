@@ -1,0 +1,1 @@
+ALTER TABLE "domain_event_outbox" ADD COLUMN "automation_parent_run_id" uuid;

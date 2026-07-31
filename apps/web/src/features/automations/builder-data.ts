@@ -40,7 +40,7 @@ export async function getBuilderData() {
   const context = await getWorkspaceContext();
   const workspaceId = context.organization.id;
 
-  const [members, stageRows] = await Promise.all([
+  const [members, stageRows, candidateRows] = await Promise.all([
     db
       .select({
         id: authUsers.id,
@@ -60,6 +60,12 @@ export async function getBuilderData() {
       .from(jobStages)
       .where(eq(jobStages.workspaceId, workspaceId))
       .orderBy(asc(jobStages.name)),
+    db
+      .select({ id: candidates.id, firstName: candidates.firstName, lastName: candidates.lastName, email: candidates.email })
+      .from(candidates)
+      .where(and(eq(candidates.workspaceId, workspaceId), isNull(candidates.deletedAt)))
+      .orderBy(desc(candidates.updatedAt))
+      .limit(100),
   ]);
 
   // Distinct stage names (a name can recur across jobs).
@@ -68,10 +74,44 @@ export async function getBuilderData() {
   return {
     members: members.map((m) => ({ id: m.id, name: m.name || m.email })),
     stageNames,
+    candidates: candidateRows.map((candidate) => ({
+      id: candidate.id,
+      name: `${candidate.firstName} ${candidate.lastName}`.trim() || candidate.email,
+      email: candidate.email,
+    })),
   };
 }
 
 export type BuilderData = Awaited<ReturnType<typeof getBuilderData>>;
+
+export async function previewWorkflowPayload(input: {
+  candidateId?: string;
+  trigger: Trigger;
+}): Promise<Record<string, unknown>> {
+  const context = await getWorkspaceContext();
+  const sample = await resolveSample(context.organization.id, input.candidateId);
+  if (!sample) throw new Error("No candidate found to preview.");
+
+  const [candidate] = await db
+    .select({ id: candidates.id, firstName: candidates.firstName, lastName: candidates.lastName, email: candidates.email })
+    .from(candidates)
+    .where(and(eq(candidates.workspaceId, context.organization.id), eq(candidates.id, sample.candidateId), isNull(candidates.deletedAt)))
+    .limit(1);
+  if (!candidate) throw new Error("Candidate not found.");
+
+  const payload: Record<string, unknown> = {
+    event: input.trigger.event,
+    workspaceId: context.organization.id,
+    candidate: {
+      id: candidate.id,
+      firstName: candidate.firstName,
+      lastName: candidate.lastName,
+      email: candidate.email,
+    },
+  };
+  if (sample.applicationId) payload.application = { id: sample.applicationId, jobId: sample.jobId };
+  return payload;
+}
 
 // ---------------------------------------------------------------------------
 // Dry-run (T5) — evaluate a draft against a sample candidate, no side effects

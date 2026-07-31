@@ -173,6 +173,7 @@ async function readWorkflowQueue() {
     failed: counts.get("failed") ?? 0,
     skipped: counts.get("skipped") ?? 0,
     deadLetter: counts.get("dead_letter") ?? 0,
+    cancelled: counts.get("cancelled") ?? 0,
     stale: staleRows[0]?.count ?? 0,
   };
 }
@@ -273,6 +274,7 @@ export async function renderPrometheusMetrics() {
     failed: 0,
     skipped: 0,
     deadLetter: 0,
+    cancelled: 0,
     stale: 0,
   }));
   lines.push(
@@ -282,6 +284,7 @@ export async function renderPrometheusMetrics() {
     `harly_workflow_runs{state="failed"} ${workflowCurrent.failed}`,
     `harly_workflow_runs{state="skipped"} ${workflowCurrent.skipped}`,
     `harly_workflow_runs{state="dead_letter"} ${workflowCurrent.deadLetter}`,
+    `harly_workflow_runs{state="cancelled"} ${workflowCurrent.cancelled}`,
     `harly_workflow_runs{state="stale"} ${workflowCurrent.stale}`,
   );
   return `${lines.join("\n")}\n`;

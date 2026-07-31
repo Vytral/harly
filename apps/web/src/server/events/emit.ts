@@ -63,6 +63,7 @@ export async function persistDomainEvent(
         aggregateId: event.aggregateId ?? null,
         actorId: event.actorId ?? null,
         payload: event.payload,
+        automationParentRunId: input.automationParentRunId ?? null,
       });
     } catch (error) {
       // Some isolated unit tests intentionally provide a minimal DB mock. A
@@ -134,6 +135,7 @@ export type DomainEventInput = {
   aggregateType?: string;
   aggregateId?: string;
   payload: Record<string, unknown>;
+  automationParentRunId?: string;
 };
 
 export async function emitDomainEvent(input: DomainEventInput): Promise<PersistedDomainEvent> {

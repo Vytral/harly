@@ -10,11 +10,23 @@ const workflowSchema = z.object({
   name: z.string(),
   description: z.string().nullable(),
   enabled: z.boolean(),
+  status: z.enum(["draft", "published", "paused"]),
   triggerEvent: z.string(),
   trigger: z.unknown(),
   conditions: z.unknown(),
   actions: z.unknown(),
-  createdById: z.string().uuid(),
+  createdById: z.string().uuid().nullable(),
+  definitionVersion: z.number().int().positive(),
+  approvalRequestedAt: z.string().nullable(),
+  approvedById: z.string().uuid().nullable(),
+  approvedAt: z.string().nullable(),
+  publishedById: z.string().uuid().nullable(),
+  publishedAt: z.string().nullable(),
+  maxRunsPerMinute: z.number().int().positive(),
+  maxExternalActionsPerMinute: z.number().int().positive(),
+  circuitBreakerThreshold: z.number().int().positive(),
+  circuitBreakerCooldownSeconds: z.number().int().positive(),
+  circuitOpenUntil: z.string().nullable(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });
@@ -26,6 +38,18 @@ const runSchema = z.object({
   triggerPayload: z.unknown(),
   conditionResult: z.unknown(),
   status: z.string(),
+  definitionVersion: z.number().int().positive(),
+  attemptCount: z.number().int().nonnegative(),
+  maxAttempts: z.number().int().positive(),
+  nextAttemptAt: z.string(),
+  lockedAt: z.string().nullable(),
+  heartbeatAt: z.string().nullable(),
+  deadLetteredAt: z.string().nullable(),
+  cancelRequestedAt: z.string().nullable(),
+  cancelledAt: z.string().nullable(),
+  durationMs: z.number().int().nonnegative().nullable(),
+  startStepIndex: z.number().int().nonnegative(),
+  replayOfRunId: z.string().uuid().nullable(),
   startedAt: z.string(),
   finishedAt: z.string().nullable(),
   parentRunId: z.string().uuid().nullable(),
@@ -41,6 +65,7 @@ const runLimit = z.preprocess((value) => {
 }, z.number().int().min(1).max(100));
 const runQuery = z.object({
   limit: runLimit.optional(),
+  cursor: z.string().min(1).optional(),
 });
 
 export const listAutomationsContract = defineContract({
@@ -87,6 +112,43 @@ export const listAutomationRunsContract = defineContract({
     401: errorEnvelopeSchema,
     403: errorEnvelopeSchema,
     404: errorEnvelopeSchema,
+  },
+});
+
+const automationRunActionPath = z.object({
+  id: z.string().uuid(),
+  runId: z.string().uuid(),
+});
+
+export const retryAutomationRunContract = defineContract({
+  method: "POST",
+  path: "/api/v1/automations/{id}/runs/{runId}/retry",
+  operationId: "retryAutomationRun",
+  summary: "Retry automation run",
+  tags: ["Automations"],
+  auth: { scopes: ["automations:write"] },
+  parameters: { path: automationRunActionPath },
+  responses: {
+    200: successEnvelopeSchema(runSchema),
+    401: errorEnvelopeSchema,
+    403: errorEnvelopeSchema,
+    409: errorEnvelopeSchema,
+  },
+});
+
+export const cancelAutomationRunContract = defineContract({
+  method: "POST",
+  path: "/api/v1/automations/{id}/runs/{runId}/cancel",
+  operationId: "cancelAutomationRun",
+  summary: "Cancel automation run",
+  tags: ["Automations"],
+  auth: { scopes: ["automations:write"] },
+  parameters: { path: automationRunActionPath },
+  responses: {
+    200: successEnvelopeSchema(runSchema),
+    401: errorEnvelopeSchema,
+    403: errorEnvelopeSchema,
+    409: errorEnvelopeSchema,
   },
 });
 
@@ -147,4 +209,6 @@ export const automationsContracts = [
   updateAutomationByIdContract,
   deleteAutomationByIdContract,
   listAutomationRunsContract,
+  retryAutomationRunContract,
+  cancelAutomationRunContract,
 ] as const;

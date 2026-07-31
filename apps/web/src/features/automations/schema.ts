@@ -280,6 +280,10 @@ export const workflowInputSchema = workflowDefinitionSchema
   .extend({
     // `conditions` is optional on input; normalize to [] when absent.
     conditions: conditionsSchema.optional(),
+    maxRunsPerMinute: z.number().int().min(1).max(10_000).optional(),
+    maxExternalActionsPerMinute: z.number().int().min(1).max(10_000).optional(),
+    circuitBreakerThreshold: z.number().int().min(1).max(100).optional(),
+    circuitBreakerCooldownSeconds: z.number().int().min(30).max(86_400).optional(),
   });
 
 export type WorkflowDefinitionInput = z.infer<typeof workflowInputSchema>;

@@ -45,11 +45,11 @@ export function AutomationsManager({
 
   function toggle(id: string, enabled: boolean, i: number) {
     // Optimistic flip; revert on error.
-    setWorkflows((prev) => prev.map((w, j) => (j === i ? { ...w, enabled } : w)));
+    setWorkflows((prev) => prev.map((w, j) => (j === i ? { ...w, enabled, status: enabled ? "published" : "paused" } : w)));
     startTransition(async () => {
       const r = await toggleWorkflowAction(id, enabled);
       if (!r.ok) {
-        setWorkflows((prev) => prev.map((w, j) => (j === i ? { ...w, enabled: !enabled } : w)));
+        setWorkflows((prev) => prev.map((w, j) => (j === i ? { ...w, enabled: !enabled, status: enabled ? "paused" : "published" } : w)));
         toast.error(r.error ?? "Could not toggle.");
       }
     });
@@ -108,7 +108,7 @@ export function AutomationsManager({
             key={w.id}
             workflow={w}
             onToggle={(enabled) => toggle(w.id, enabled, i)}
-            onDelete={() => remove(w.id, i)}
+          onDelete={() => remove(w.id, i)}
             disabled={pending}
           />
         ))}
@@ -179,7 +179,7 @@ function WorkflowCard({
         <Switch
           checked={workflow.enabled}
           onCheckedChange={onToggle}
-          disabled={disabled}
+          disabled={disabled || workflow.status !== "published"}
           aria-label={workflow.enabled ? "Disable automation" : "Enable automation"}
         />
       </div>
@@ -190,6 +190,9 @@ function WorkflowCard({
         </span>
         <span className="inline-flex items-center rounded-full bg-kraft px-2 py-0.5 text-[11px] font-medium text-ink-soft">
           {workflow.actions.length} {workflow.actions.length === 1 ? "action" : "actions"}
+        </span>
+        <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium", workflow.status === "published" ? "bg-sage text-sage-ink" : "bg-kraft text-ink-soft")}>
+          {workflow.status}
         </span>
         <span className="text-[11px] text-ink-soft">
           edited <RelativeTime value={workflow.updatedAt} />

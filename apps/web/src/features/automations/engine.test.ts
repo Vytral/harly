@@ -13,13 +13,15 @@ const dbState: {
   runs: Record<string, unknown>[];
   definitions: Record<string, unknown>[];
   steps: Record<string, unknown>[];
-} = { runs: [], definitions: [], steps: [] };
+  effects: Record<string, unknown>[];
+} = { runs: [], definitions: [], steps: [], effects: [] };
 
 // Distinguishable table markers so db.select() can route to the right state.
 // Declared with vi.hoisted so they exist when the vi.mock factory runs.
-const { RUNS, DEFS } = vi.hoisted(() => ({
+const { RUNS, DEFS, EFFECTS } = vi.hoisted(() => ({
   RUNS: { __table: "runs" } as unknown,
   DEFS: { __table: "definitions" } as unknown,
+  EFFECTS: { __table: "effects" } as unknown,
 }));
 
 // Stable implementations so vi.clearAllMocks() doesn't wipe them between tests.
@@ -41,6 +43,8 @@ function selectImpl() {
           ? dbState.runs
           : table?.__table === "definitions"
             ? dbState.definitions
+            : table?.__table === "effects"
+              ? dbState.effects
             : [];
       return {
         where: () => ({
@@ -69,11 +73,21 @@ vi.mock("@harly/db", () => ({
         })),
       })),
     })),
-    insert: vi.fn(() => ({ values: vi.fn(insertImpl) })),
+    insert: vi.fn((table: { __table?: string }) => ({
+      values: vi.fn((rows: Record<string, unknown> | Record<string, unknown>[]) => {
+        if (table?.__table === "effects") {
+          const values = Array.isArray(rows) ? rows : [rows];
+          dbState.effects.push(...values);
+          return { onConflictDoNothing: () => ({ returning: () => Promise.resolve([{ id: "effect-1" }]) }) };
+        }
+        return insertImpl(rows);
+      }),
+    })),
   },
   workflowRuns: RUNS,
   workflowDefinitions: DEFS,
   workflowRunSteps: {},
+  workflowActionEffects: EFFECTS,
   member: { __table: "member" },
 }));
 
@@ -162,11 +176,18 @@ describe("workflow engine — end-to-end", () => {
     dbState.runs = [{ ...baseRun }];
     dbState.definitions = [{ ...baseDefinition }];
     dbState.steps = [];
+    dbState.effects = [];
     // clearAllMocks wipes implementations; re-install the stable ones so the
     // engine can read runs/definitions, record steps, and resolve handlers.
     vi.clearAllMocks();
     (db.select as ReturnType<typeof vi.fn>).mockImplementation(selectImpl);
-    (db.insert as ReturnType<typeof vi.fn>).mockImplementation(() => ({ values: vi.fn(insertImpl) }));
+    (db.insert as ReturnType<typeof vi.fn>).mockImplementation((table: { __table?: string }) => ({
+      values: vi.fn((rows: Record<string, unknown> | Record<string, unknown>[]) =>
+        table?.__table === "effects"
+          ? { onConflictDoNothing: () => ({ returning: () => Promise.resolve([{ id: "effect-1" }]) }) }
+          : insertImpl(rows),
+      ),
+    }));
     (getActionHandler as ReturnType<typeof vi.fn>).mockImplementation(getActionHandlerImpl);
     (getRolePermissions as ReturnType<typeof vi.fn>).mockResolvedValue([
       "candidates:edit",

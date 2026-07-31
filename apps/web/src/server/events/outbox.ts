@@ -1,13 +1,14 @@
 import "server-only";
 
 import { db, domainEventOutbox } from "@harly/db";
-import { and, asc, eq, isNull, lt } from "drizzle-orm";
+import { and, asc, eq, isNull, lt, notInArray, or } from "drizzle-orm";
 
 import {
   EVENT_REGISTRY,
   REALTIME_EVENTS,
   type DomainEventName,
 } from "./registry";
+import { WORKFLOW_EVENTS } from "@/features/automations/schema";
 import { publishRealtimeEvent } from "./realtime";
 
 /** Keep the durable domain log bounded. Realtime delivery is ephemeral and
@@ -18,7 +19,15 @@ export async function pruneDomainEventOutbox(
   const cutoff = new Date(Date.now() - retentionDays * 24 * 60 * 60 * 1_000);
   const deleted = await db
     .delete(domainEventOutbox)
-    .where(lt(domainEventOutbox.createdAt, cutoff))
+    .where(
+      and(
+        lt(domainEventOutbox.createdAt, cutoff),
+        or(
+          isNull(domainEventOutbox.automationsDispatchedAt),
+          notInArray(domainEventOutbox.eventName, [...WORKFLOW_EVENTS]),
+        ),
+      ),
+    )
     .returning({ id: domainEventOutbox.id });
   return deleted.length;
 }

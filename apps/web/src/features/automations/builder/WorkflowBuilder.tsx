@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import type { Route } from "next";
 import { toast } from "@/lib/notification-island/toast";
@@ -18,8 +18,17 @@ import {
 } from "@/features/career-page/builder/builder-icons";
 
 import {
+  approveWorkflowAction,
   createWorkflowAction,
   dryRunWorkflowAction,
+  getWorkflowMetricsAction,
+  listWorkflowVersionsAction,
+  pauseWorkflowAction,
+  publishWorkflowAction,
+  requestWorkflowApprovalAction,
+  resumeWorkflowAction,
+  rollbackWorkflowAction,
+  previewWorkflowPayloadAction,
   updateWorkflowAction,
 } from "../actions";
 import type { SerializedWorkflow } from "./types";
@@ -61,6 +70,10 @@ function toDraft(w: SerializedWorkflow): WorkflowDraft {
     trigger: w.trigger,
     conditions: w.conditions,
     actions: w.actions,
+    maxRunsPerMinute: w.maxRunsPerMinute,
+    maxExternalActionsPerMinute: w.maxExternalActionsPerMinute,
+    circuitBreakerThreshold: w.circuitBreakerThreshold,
+    circuitBreakerCooldownSeconds: w.circuitBreakerCooldownSeconds,
   };
 }
 
@@ -70,7 +83,7 @@ export function WorkflowBuilder({
   isNew,
 }: {
   initial: SerializedWorkflow | null;
-  builderData: { members: { id: string; name: string }[]; stageNames: string[] };
+  builderData: { members: { id: string; name: string }[]; stageNames: string[]; candidates: { id: string; name: string; email: string }[] };
   isNew: boolean;
 }) {
   const [draft, setDraft] = useState<WorkflowDraft>(() =>
@@ -82,9 +95,15 @@ export function WorkflowBuilder({
           trigger: { event: "application.created" as WorkflowEvent },
           conditions: [],
           actions: [{ type: "send_slack", config: { message: "New application received." }, continueOnError: true }],
+          maxRunsPerMinute: 60,
+          maxExternalActionsPerMinute: 30,
+          circuitBreakerThreshold: 5,
+          circuitBreakerCooldownSeconds: 300,
         },
   );
   const [dirty, setDirty] = useState(isNew);
+  const [status, setStatus] = useState<SerializedWorkflow["status"]>(initial?.status ?? "draft");
+  const [approved, setApproved] = useState(Boolean(initial?.approvedAt));
   const [saving, startSave] = useTransition();
   const [tab, setTab] = useState<"build" | "test">("build");
   const { confirmDiscard, discardDialogProps } = useUnsavedChangesGuard(dirty);
@@ -126,6 +145,10 @@ export function WorkflowBuilder({
         trigger: draft.trigger,
         conditions: draft.conditions,
         actions: draft.actions,
+        maxRunsPerMinute: draft.maxRunsPerMinute,
+        maxExternalActionsPerMinute: draft.maxExternalActionsPerMinute,
+        circuitBreakerThreshold: draft.circuitBreakerThreshold,
+        circuitBreakerCooldownSeconds: draft.circuitBreakerCooldownSeconds,
       };
       const result = draft.id
         ? await updateWorkflowAction(draft.id, payload)
@@ -133,6 +156,8 @@ export function WorkflowBuilder({
       if (result.ok && result.workflow) {
         toast.success("Automation saved.");
         setDirty(false);
+        setStatus(result.workflow.status);
+        setApproved(Boolean(result.workflow.approvedAt));
         // After a create, switch the draft to edit mode so subsequent saves update.
         if (!draft.id) {
           setDraft((d) => ({ ...d, id: result.workflow!.id }));
@@ -140,6 +165,24 @@ export function WorkflowBuilder({
       } else {
         toast.error(result.error ?? "Could not save.");
       }
+    });
+  }
+
+  function runGovernanceAction(
+    action: () => Promise<{ ok: boolean; error?: string }>,
+    success: string,
+    nextStatus: SerializedWorkflow["status"],
+    nextApproved = approved,
+  ) {
+    startSave(async () => {
+      const result = await action();
+      if (!result.ok) {
+        toast.error(result.error ?? "Could not update workflow state.");
+        return;
+      }
+      toast.success(success);
+      setStatus(nextStatus);
+      setApproved(nextApproved);
     });
   }
 
@@ -181,6 +224,44 @@ export function WorkflowBuilder({
           }
           right={
             <>
+              <span className={cn(
+                "hidden rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide sm:inline",
+                status === "published" ? "bg-sage text-sage-ink" : status === "paused" ? "bg-kraft text-ink-soft" : "bg-amber-100 text-amber-900",
+              )}>
+                {status}
+              </span>
+              {draft.id && status === "draft" && !approved && (
+                <button type="button" onClick={() => runGovernanceAction(
+                  () => requestWorkflowApprovalAction(draft.id!),
+                  "Approval requested.", "draft",
+                )} disabled={saving} className="hidden text-xs font-medium text-ink-soft hover:text-foreground lg:inline">
+                  Request approval
+                </button>
+              )}
+              {draft.id && status === "draft" && approved && (
+                <button type="button" onClick={() => runGovernanceAction(
+                  () => publishWorkflowAction(draft.id!),
+                  "Workflow published.", "published",
+                )} disabled={saving} className="hidden rounded-lg bg-pine px-3 py-1.5 text-xs font-semibold text-white hover:bg-pine-strong lg:inline">
+                  Publish
+                </button>
+              )}
+              {draft.id && status === "published" && (
+                <button type="button" onClick={() => runGovernanceAction(
+                  () => pauseWorkflowAction(draft.id!),
+                  "Workflow paused.", "paused",
+                )} disabled={saving} className="hidden text-xs font-medium text-ink-soft hover:text-rust lg:inline">
+                  Pause
+                </button>
+              )}
+              {draft.id && status === "paused" && (
+                <button type="button" onClick={() => runGovernanceAction(
+                  () => resumeWorkflowAction(draft.id!),
+                  "Workflow resumed as a draft.", "draft", false,
+                )} disabled={saving} className="hidden text-xs font-medium text-ink-soft hover:text-foreground lg:inline">
+                  Resume editing
+                </button>
+              )}
               <div className="hidden items-center gap-1 rounded-lg border border-border bg-kraft/40 p-0.5 sm:flex">
                 <TabButton active={tab === "build"} onClick={() => setTab("build")}>
                   <AddNodeIcon className="size-3.5" /> Build
@@ -218,18 +299,137 @@ export function WorkflowBuilder({
             onTrigger={setTrigger}
             onConditions={setConditions}
             onActions={setActions}
+            onGuardrails={(patch) => update((d) => Object.assign(d, patch))}
           />
         ) : (
-          <TestView draft={draft} />
+          <TestView draft={draft} candidates={builderData.candidates} />
         )}
       </BuilderCanvas>
     </FocusModeShell>
+    {draft.id && <VersionHistory workflowId={draft.id} currentVersion={initial?.definitionVersion ?? 1} draft={draft} />}
+    {draft.id && <WorkflowMetrics workflowId={draft.id} />}
     <UnsavedChangesDialog
       open={discardDialogProps.open}
       onConfirm={discardDialogProps.onConfirm}
       onCancel={discardDialogProps.onCancel}
     />
     </>
+  );
+}
+
+function WorkflowMetrics({ workflowId }: { workflowId: string }) {
+  const [metrics, setMetrics] = useState<{
+    total: number; succeeded: number; failed: number; running: number; deadLetters: number; retries: number; successRate: number; averageDurationMs: number;
+  } | null>(null);
+  useEffect(() => {
+    let active = true;
+    void getWorkflowMetricsAction(workflowId).then((result) => {
+      if (active && result.ok) setMetrics(result.metrics);
+    });
+    return () => { active = false; };
+  }, [workflowId]);
+  if (!metrics) return null;
+  return (
+    <section className="mx-auto w-full max-w-3xl border-t border-hairline px-5 py-8 sm:px-8">
+      <h2 className="font-display text-sm font-semibold text-foreground">Operational metrics</h2>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {[
+          ["Runs", metrics.total],
+          ["Success", `${Math.round(metrics.successRate * 100)}%`],
+          ["Retries", metrics.retries],
+          ["Dead letters", metrics.deadLetters],
+          ["Failed", metrics.failed],
+          ["Running", metrics.running],
+          ["Avg duration", `${metrics.averageDurationMs}ms`],
+        ].map(([label, value]) => (
+          <div key={String(label)} className="rounded-lg border border-hairline bg-paper-raised px-3 py-2">
+            <p className="text-[11px] text-ink-soft">{label}</p>
+            <p className="mt-0.5 text-sm font-semibold text-foreground">{value}</p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+type WorkflowVersionRow = {
+  id: string;
+  version: number;
+  name: string;
+  triggerEvent: string;
+  trigger: unknown;
+  conditions: unknown;
+  actions: unknown;
+  createdAt: string;
+  publishedAt: string | null;
+};
+
+function VersionHistory({
+  workflowId,
+  currentVersion,
+  draft,
+}: {
+  workflowId: string;
+  currentVersion: number;
+  draft: WorkflowDraft;
+}) {
+  const [versions, setVersions] = useState<WorkflowVersionRow[]>([]);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  useEffect(() => {
+    let active = true;
+    void listWorkflowVersionsAction(workflowId).then((result) => {
+      if (active && result.ok) setVersions((result.versions ?? []) as WorkflowVersionRow[]);
+    });
+    return () => { active = false; };
+  }, [workflowId]);
+
+  const selectedVersion = versions.find((version) => version.version === selected);
+  const differs = selectedVersion
+    ? JSON.stringify({ trigger: draft.trigger, conditions: draft.conditions, actions: draft.actions }) !==
+      JSON.stringify({ trigger: selectedVersion.trigger, conditions: selectedVersion.conditions, actions: selectedVersion.actions })
+    : false;
+
+  if (versions.length < 2) return null;
+  return (
+    <section className="mx-auto w-full max-w-3xl border-t border-hairline px-5 py-8 sm:px-8">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="font-display text-sm font-semibold text-foreground">Version history</h2>
+          <p className="mt-1 text-xs text-ink-soft">Immutable definitions used for audit and rollback.</p>
+        </div>
+        <span className="text-xs text-ink-soft">Current v{currentVersion}</span>
+      </div>
+      <div className="mt-4 space-y-2">
+        {versions.map((version) => (
+          <div key={version.id} className="rounded-lg border border-hairline bg-paper-raised p-3">
+            <button type="button" onClick={() => setSelected(selected === version.version ? null : version.version)} className="flex w-full items-center justify-between text-left">
+              <span className="text-sm font-medium text-foreground">v{version.version} · {version.triggerEvent}</span>
+              <span className="text-xs text-ink-soft">{version.publishedAt ? "Published" : "Draft"}</span>
+            </button>
+            {selected === version.version && (
+              <div className="mt-3 border-t border-hairline pt-3 text-xs text-ink-soft">
+                <p>{Array.isArray(version.actions) ? version.actions.length : 0} actions · {Array.isArray(version.conditions) ? version.conditions.length : 0} conditions · created {new Date(version.createdAt).toLocaleString()}</p>
+                <p className={cn("mt-1 font-medium", differs ? "text-rust" : "text-pine")}>{differs ? "Differs from current draft" : "Matches current draft"}</p>
+                {version.version !== currentVersion && (
+                  <button type="button" disabled={pending} onClick={() => {
+                    if (!window.confirm(`Rollback to version ${version.version}? This creates a new draft version.`)) return;
+                    startTransition(async () => {
+                      const result = await rollbackWorkflowAction(workflowId, version.version);
+                      if (result.ok) window.location.reload();
+                      else toast.error(result.error ?? "Could not roll back.");
+                    });
+                  }} className="mt-2 rounded-md border border-border px-2.5 py-1.5 font-medium text-foreground hover:bg-kraft disabled:opacity-50">
+                    Roll back to v{version.version}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -287,13 +487,15 @@ function BuildView({
   onTrigger,
   onConditions,
   onActions,
+  onGuardrails,
 }: {
   draft: WorkflowDraft;
-  builderData: { members: { id: string; name: string }[]; stageNames: string[] };
+  builderData: { members: { id: string; name: string }[]; stageNames: string[]; candidates: { id: string; name: string; email: string }[] };
   nl: string;
   onTrigger: (t: Trigger) => void;
   onConditions: (c: ConditionNode[]) => void;
   onActions: (a: Action[]) => void;
+  onGuardrails: (patch: Partial<Pick<WorkflowDraft, "maxRunsPerMinute" | "maxExternalActionsPerMinute" | "circuitBreakerThreshold" | "circuitBreakerCooldownSeconds">>) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -338,6 +540,7 @@ function BuildView({
           members={builderData.members}
         />
       </FlowStep>
+      <GuardrailsPanel draft={draft} onChange={onGuardrails} />
     </div>
   );
 }
@@ -350,6 +553,36 @@ function PreviewStrip({ text }: { text: string }) {
       </span>
       <p className="text-sm leading-relaxed text-foreground">{text}</p>
     </div>
+  );
+}
+
+function GuardrailsPanel({
+  draft,
+  onChange,
+}: {
+  draft: WorkflowDraft;
+  onChange: (patch: Partial<Pick<WorkflowDraft, "maxRunsPerMinute" | "maxExternalActionsPerMinute" | "circuitBreakerThreshold" | "circuitBreakerCooldownSeconds">>) => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-border bg-paper-raised p-4 shadow-soft">
+      <div>
+        <h2 className="font-display text-sm font-semibold text-foreground">Operational guardrails</h2>
+        <p className="mt-1 text-xs text-ink-soft">Protect providers and pause noisy workflows automatically.</p>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {([
+          ["maxRunsPerMinute", "Runs / min"],
+          ["maxExternalActionsPerMinute", "External / min"],
+          ["circuitBreakerThreshold", "Failures"],
+          ["circuitBreakerCooldownSeconds", "Cooldown (s)"],
+        ] as const).map(([key, label]) => (
+          <label key={key} className="text-xs text-ink-soft">
+            {label}
+            <input type="number" min={1} value={draft[key] ?? ""} onChange={(event) => onChange({ [key]: Number(event.target.value) })} className="mt-1 w-full rounded-lg border border-border bg-paper px-2.5 py-1.5 text-sm text-foreground" />
+          </label>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -418,18 +651,20 @@ function DoGlyphSmall() {
 // Test view — dry-run against a sample candidate
 // ---------------------------------------------------------------------------
 
-function TestView({ draft }: { draft: WorkflowDraft }) {
+function TestView({ draft, candidates }: { draft: WorkflowDraft; candidates: Array<{ id: string; name: string; email: string }> }) {
   return (
     <div className="space-y-5">
       <div className="rounded-2xl border border-border bg-paper-raised px-4 py-3">
         <h2 className="font-cal text-sm font-bold text-foreground">Test this automation</h2>
         <p className="mt-1 text-sm text-ink-soft">
-          Evaluate your conditions against the workspace&apos;s most recently updated candidate. No actions run, nothing is saved.
+          Choose a real workspace candidate and inspect the event payload. No actions run, nothing is saved.
         </p>
       </div>
       <DryRunPanel
         trigger={draft.trigger}
         conditions={draft.conditions ?? []}
+        candidates={candidates}
+        preview={previewWorkflowPayloadAction}
         run={dryRunWorkflowAction}
       />
       <p className="text-center text-xs text-ink-soft">

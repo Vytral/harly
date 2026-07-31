@@ -1,0 +1,2 @@
+ALTER TABLE "candidate_tags" ADD COLUMN "workflow_effect_id" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "candidate_tags_workflow_effect_uidx" ON "candidate_tags" USING btree ("workflow_effect_id");

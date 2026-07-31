@@ -433,6 +433,7 @@ export async function moveApplicationStageForApi(input: {
   toStageId: string;
   actorId?: string;
   retryOnConflict?: boolean;
+  automationRunId?: string;
 }): Promise<Application> {
   const attemptMove = async (): Promise<Application> => {
     const application = await getApplicationForApi({
@@ -548,14 +549,14 @@ export async function moveApplicationStageForApi(input: {
       fromStageId,
       toStageId: input.toStageId,
       status: updated.status,
-    }, { actorId: input.actorId, skipDomainEvent: true });
+    }, { actorId: input.actorId, skipDomainEvent: true, parentRunId: input.automationRunId });
     if (
       application.status !== updated.status &&
       (updated.status === "hired" || updated.status === "rejected")
     ) {
       await emitWebhookEvent(input.workspaceId, `application.${updated.status}`, {
         application: serializeApplication(updated),
-      }, { actorId: input.actorId, skipDomainEvent: true });
+      }, { actorId: input.actorId, skipDomainEvent: true, parentRunId: input.automationRunId });
     }
 
     return updated;

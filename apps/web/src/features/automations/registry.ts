@@ -19,6 +19,7 @@ import { decryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { safeFetchWebhook } from "@/lib/ssrf";
 import { notifyChatEvent } from "@/server/notify/dispatch";
+import { enqueueEmailOutbox } from "@/lib/email/outbox-processor";
 
 import type { ActionType, WorkflowEvent } from "./schema";
 import {
@@ -62,11 +63,20 @@ export type ActionContext = {
   triggerEvent: WorkflowEvent;
   /** The raw trigger payload (the `data` of emitWebhookEvent). */
   triggerPayload: Record<string, unknown>;
+  /** Stable idempotency key for this effect across process retries. */
+  effectKey: string;
+  /** Current run id, propagated to domain events caused by this action. */
+  runId: string;
+  workflowId?: string;
+  maxExternalActionsPerMinute?: number;
 };
 
 export type ActionResult = {
   success: boolean;
   error?: string;
+  errorCode?: string;
+  /** Whether the worker should retry this action after a backoff. */
+  retryable?: boolean;
   /** Arbitrary data for the run-step log (ids, counts, etc.). */
   data?: Record<string, unknown>;
 };
@@ -213,6 +223,7 @@ const moveStageHandler: ActionHandler<z.infer<typeof moveStageSchema>> = {
       toStageId: stageId,
       actorId: ctx.actorUserId,
       retryOnConflict: true,
+      automationRunId: ctx.runId,
     });
 
     return {
@@ -311,6 +322,18 @@ const addNoteHandler: ActionHandler<z.infer<typeof addNoteSchema>> = {
       .limit(1);
     if (!candidate) return { success: false, error: "Candidate not found." };
 
+    const [existingNote] = await db
+      .select({ id: candidateNotes.id })
+      .from(candidateNotes)
+      .where(
+        and(
+          eq(candidateNotes.workspaceId, ctx.workspaceId),
+          eq(candidateNotes.workflowEffectId, ctx.effectKey),
+        ),
+      )
+      .limit(1);
+    if (existingNote) return { success: true, data: { noteId: existingNote.id, candidateId } };
+
     const [note] = await db
       .insert(candidateNotes)
       .values({
@@ -318,6 +341,7 @@ const addNoteHandler: ActionHandler<z.infer<typeof addNoteSchema>> = {
         candidateId,
         authorId: ctx.actorUserId,
         body: input.body,
+        workflowEffectId: ctx.effectKey,
       })
       .returning({ id: candidateNotes.id });
 
@@ -372,6 +396,7 @@ const addTagHandler: ActionHandler<z.infer<typeof addTagSchema>> = {
         candidateId,
         label: input.label,
         createdById: ctx.actorUserId,
+        workflowEffectId: ctx.effectKey,
       })
       .onConflictDoNothing();
 
@@ -454,6 +479,17 @@ const createTaskHandler: ActionHandler<z.infer<typeof createTaskSchema>> = {
         error: error instanceof Error ? error.message : "Invalid task references.",
       };
     }
+    const [existingTask] = await db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(
+        and(
+          eq(tasks.workspaceId, ctx.workspaceId),
+          eq(tasks.workflowEffectId, ctx.effectKey),
+        ),
+      )
+      .limit(1);
+    if (existingTask) return { success: true, data: { taskId: existingTask.id } };
     const [created] = await db
       .insert(tasks)
       .values({
@@ -468,6 +504,7 @@ const createTaskHandler: ActionHandler<z.infer<typeof createTaskSchema>> = {
         applicationId,
         jobId,
         createdById: ctx.actorUserId,
+        workflowEffectId: ctx.effectKey,
       })
       .returning({ id: tasks.id });
 
@@ -510,7 +547,7 @@ const sendSlackHandler: ActionHandler<z.infer<typeof sendSlackSchema>> = {
       return { success: true };
     } catch (error) {
       log.error(error, "[automations] send_slack failed");
-      return { success: false, error: "Chat notification failed." };
+      return { success: false, error: "Chat notification failed.", retryable: true, errorCode: "chat_delivery_failed" };
     }
   },
 };
@@ -531,15 +568,20 @@ const sendEmailHandler: ActionHandler<z.infer<typeof sendEmailSchema>> = {
   requiresPermission: "collab:write",
   label: "Send email",
   summarize: (input) => `Send email: ${input.subject}`,
-  async run(input, _ctx) {
-    // Deferred to FASE 1.5+ — enqueueEmailOutbox requires a template type and
-    // a resolved sender. The v1 handler delegates to the candidate-message
-    // service once wired; for now it fails loud so the run records the gap.
-    void _ctx;
-    return {
-      success: false,
-      error: "send_email is not wired in v1 of the registry.",
-    };
+  async run(input, ctx) {
+    const outboxId = await enqueueEmailOutbox(
+      ctx.workspaceId,
+      "automation.email",
+      {
+        to: input.toEmail,
+        subject: input.subject,
+        bodyHtml: input.body,
+        candidateId: input.candidateId ?? null,
+      },
+      ctx.effectKey,
+      ctx.actorUserId,
+    );
+    return { success: true, data: { outboxId, queued: true } };
   },
 };
 
@@ -611,6 +653,7 @@ const httpRequestHandler: ActionHandler<z.infer<typeof httpRequestSchema>> = {
       for (const entry of headerEntries) {
         if (entry.val !== null) headers.set(entry.key, entry.val);
       }
+      if (!headers.has("Idempotency-Key")) headers.set("Idempotency-Key", ctx.effectKey);
 
       const response = await safeFetchWebhook(input.url, {
         method: input.method,
@@ -622,11 +665,13 @@ const httpRequestHandler: ActionHandler<z.infer<typeof httpRequestSchema>> = {
       return {
         success: response.ok,
         error: response.ok ? undefined : `HTTP ${response.status}`,
+        errorCode: response.ok ? undefined : response.status === 429 ? "rate_limited" : response.status >= 500 ? "provider_5xx" : "provider_4xx",
+        retryable: !response.ok && (response.status === 429 || response.status >= 500),
         data: { status: response.status, body: responseBody },
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Request failed";
-      return { success: false, error: message };
+      return { success: false, error: message, errorCode: "network_error", retryable: true };
     }
   },
 };

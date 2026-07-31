@@ -16,11 +16,19 @@ import { describeConditions, describeTrigger } from "./preview";
 export function DryRunPanel({
   trigger,
   conditions,
+  candidates,
+  preview,
   run,
 }: {
   trigger: Trigger;
   conditions: Conditions;
-  run: (input: { trigger: Trigger; conditions: Conditions }) => Promise<{
+  candidates: Array<{ id: string; name: string; email: string }>;
+  preview: (input: { trigger: Trigger; candidateId?: string }) => Promise<{
+    ok: boolean;
+    error?: string;
+    payload?: Record<string, unknown>;
+  }>;
+  run: (input: { trigger: Trigger; conditions: Conditions; candidateId?: string }) => Promise<{
     ok: boolean;
     error?: string;
     matched?: boolean;
@@ -28,6 +36,8 @@ export function DryRunPanel({
   }>;
 }) {
   const [pending, startRun] = useTransition();
+  const [candidateId, setCandidateId] = useState(candidates[0]?.id ?? "");
+  const [payload, setPayload] = useState<Record<string, unknown> | null>(null);
   const [result, setResult] = useState<{
     matched: boolean;
     evaluated: Array<{ text: string; matched: boolean }>;
@@ -36,12 +46,19 @@ export function DryRunPanel({
 
   function handleRun() {
     startRun(async () => {
-      const r = await run({ trigger, conditions });
+      const r = await run({ trigger, conditions, candidateId: candidateId || undefined });
       if (r.ok) {
         setResult({ matched: Boolean(r.matched), evaluated: r.evaluated ?? [], error: r.error });
       } else {
         setResult({ matched: false, evaluated: [], error: r.error ?? "Could not run dry-run." });
       }
+    });
+  }
+
+  function handlePreview() {
+    startRun(async () => {
+      const r = await preview({ trigger, candidateId: candidateId || undefined });
+      setPayload(r.ok ? r.payload ?? null : { error: r.error ?? "Could not preview payload." });
     });
   }
 
@@ -70,6 +87,18 @@ export function DryRunPanel({
       >
         {pending ? "Testing…" : "Test conditions"}
       </button>
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <label className="text-xs font-medium text-ink-soft" htmlFor="dry-run-candidate">Test candidate</label>
+        <select id="dry-run-candidate" value={candidateId} onChange={(event) => setCandidateId(event.target.value)} className="min-w-56 rounded-lg border border-border bg-paper px-2.5 py-1.5 text-xs text-foreground">
+          <option value="">Most recently updated</option>
+          {candidates.map((candidate) => <option key={candidate.id} value={candidate.id}>{candidate.name} · {candidate.email}</option>)}
+        </select>
+        <button type="button" onClick={handlePreview} disabled={pending} className="rounded-lg border border-border px-3 py-1.5 text-xs font-medium text-foreground hover:bg-kraft disabled:opacity-50">
+          Preview event payload
+        </button>
+      </div>
+      {payload && <pre className="mt-3 max-h-64 overflow-auto rounded-lg border border-border bg-kraft/30 p-3 text-[11px] leading-relaxed text-ink-soft">{JSON.stringify(payload, null, 2)}</pre>}
 
       {result && (
         <div className="mt-4 space-y-2.5">

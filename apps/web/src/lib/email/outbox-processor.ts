@@ -181,6 +181,8 @@ async function deliverRow(row: OutboxRow): Promise<boolean> {
         return await deliverNativeSignatureOtp(row);
       case "report.scheduled":
         return await deliverScheduledReport(row);
+      case "automation.email":
+        return await deliverAutomationEmail(row);
       default:
         log.warn({ kind: row.kind }, "unknown email_outbox kind");
         await db
@@ -203,6 +205,42 @@ async function deliverRow(row: OutboxRow): Promise<boolean> {
     );
     return false;
   }
+}
+
+async function deliverAutomationEmail(row: OutboxRow): Promise<boolean> {
+  const payload = row.payload as {
+    to?: string;
+    subject?: string;
+    bodyHtml?: string;
+    candidateId?: string | null;
+  };
+  if (!payload.to || !payload.subject || !payload.bodyHtml) {
+    await markFailed(row.id, "Automation email payload is incomplete.");
+    return false;
+  }
+  const delivered = await sendWorkspaceEmail(row.workspaceId, {
+    to: payload.to,
+    subject: payload.subject,
+    react: createElement(CustomTemplateEmail, {
+      bodyHtml: payload.bodyHtml,
+      companyName: "Harly",
+    }),
+    ...deliveryOptions(row),
+  }, row.actorId ?? undefined);
+  if (!delivered) {
+    await markFailed(row.id, "No configured workspace email sender.");
+    return false;
+  }
+  await markSent(row.id, delivered);
+  await recordOutboundConversation({
+    workspaceId: row.workspaceId,
+    toEmail: payload.to,
+    subject: payload.subject,
+    textBody: payload.bodyHtml.replaceAll(/<[^>]*>/g, " "),
+    outboxRowId: row.id,
+    candidateId: payload.candidateId,
+  });
+  return true;
 }
 
 async function deliverScheduledReport(row: OutboxRow): Promise<boolean> {

@@ -293,6 +293,27 @@ describe("automations schema — workflow input", () => {
     expect(parsed.conditions).toHaveLength(1);
   });
 
+  it("accepts bounded operational guardrails", () => {
+    const parsed = workflowInputSchema.parse({
+      ...validInput,
+      maxRunsPerMinute: 120,
+      maxExternalActionsPerMinute: 40,
+      circuitBreakerThreshold: 6,
+      circuitBreakerCooldownSeconds: 600,
+    });
+    expect(parsed.maxRunsPerMinute).toBe(120);
+    expect(parsed.circuitBreakerCooldownSeconds).toBe(600);
+  });
+
+  it("rejects unsafe operational guardrail values", () => {
+    const res = workflowInputSchema.safeParse({
+      ...validInput,
+      maxRunsPerMinute: 0,
+      circuitBreakerCooldownSeconds: 1,
+    });
+    expect(res.success).toBe(false);
+  });
+
   it("rejects an empty name", () => {
     const res = workflowInputSchema.safeParse({ ...validInput, name: "" });
     expect(res.success).toBe(false);

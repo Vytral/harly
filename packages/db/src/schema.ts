@@ -176,6 +176,14 @@ export const workflowRunStatusEnum = pgEnum("workflow_run_status", [
   "failed",
   "skipped",
   "dead_letter",
+  "cancelled",
+]);
+
+/** Lifecycle of a workflow definition, independent from an execution run. */
+export const workflowDefinitionStatusEnum = pgEnum("workflow_definition_status", [
+  "draft",
+  "published",
+  "paused",
 ]);
 
 export const memberStatusEnum = pgEnum("member_status", [
@@ -1715,6 +1723,8 @@ export const candidateNotes = pgTable(
     mentions: jsonb("mentions")
       .default(sql`'[]'::jsonb`)
       .notNull(),
+    // Stable effect identity used by workflow retries. Nullable for human-authored notes.
+    workflowEffectId: text("workflow_effect_id"),
     ...timestamps(),
   },
   (table) => [
@@ -1724,6 +1734,7 @@ export const candidateNotes = pgTable(
       table.createdAt,
     ),
     index("candidate_notes_author_idx").on(table.authorId),
+    uniqueIndex("candidate_notes_workflow_effect_uidx").on(table.workflowEffectId),
   ],
 );
 
@@ -2686,6 +2697,12 @@ export const domainEventOutbox = pgTable(
     publishedAt: timestamp("published_at", { withTimezone: true }),
     attempts: integer("attempts").default(0).notNull(),
     lastError: text("last_error"),
+    // Durable consumer checkpoint for workflow dispatch. Realtime publication
+    // and automation dispatch are independent consumers of this event log.
+    automationsDispatchedAt: timestamp("automations_dispatched_at", { withTimezone: true }),
+    automationAttempts: integer("automation_attempts").default(0).notNull(),
+    automationLastError: text("automation_last_error"),
+    automationParentRunId: uuid("automation_parent_run_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -2697,6 +2714,10 @@ export const domainEventOutbox = pgTable(
     ),
     index("domain_event_outbox_pending_idx").on(
       table.publishedAt,
+      table.createdAt,
+    ),
+    index("domain_event_outbox_automations_pending_idx").on(
+      table.automationsDispatchedAt,
       table.createdAt,
     ),
   ],
@@ -3092,6 +3113,7 @@ export const candidateTags = pgTable(
     createdById: text("created_by_id").references(() => user.id, {
       onDelete: "set null",
     }),
+    workflowEffectId: text("workflow_effect_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -3112,6 +3134,7 @@ export const candidateTags = pgTable(
       sql`lower(${table.label})`,
       table.candidateId,
     ),
+    uniqueIndex("candidate_tags_workflow_effect_uidx").on(table.workflowEffectId),
   ],
 );
 
@@ -3547,6 +3570,7 @@ export const tasks = pgTable(
     createdById: text("created_by_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    workflowEffectId: text("workflow_effect_id"),
     ...timestamps(),
   },
   (table) => [
@@ -3554,6 +3578,7 @@ export const tasks = pgTable(
     index("tasks_owner_idx").on(table.ownerId),
     index("tasks_workspace_status_idx").on(table.workspaceId, table.status),
     index("tasks_workspace_deleted_idx").on(table.workspaceId, table.deletedAt),
+    uniqueIndex("tasks_workflow_effect_uidx").on(table.workflowEffectId),
   ],
 );
 
@@ -4434,6 +4459,21 @@ export const workflowDefinitions = pgTable(
     name: text("name").notNull(),
     description: text("description"),
     enabled: boolean("enabled").default(true).notNull(),
+    status: workflowDefinitionStatusEnum("status").default("published").notNull(),
+    definitionVersion: integer("definition_version").default(1).notNull(),
+    consecutiveFailureCount: integer("consecutive_failure_count").default(0).notNull(),
+    autoPausedAt: timestamp("auto_paused_at", { withTimezone: true }),
+    approvalRequestedAt: timestamp("approval_requested_at", { withTimezone: true }),
+    approvedById: text("approved_by_id").references(() => user.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    publishedById: text("published_by_id").references(() => user.id, { onDelete: "set null" }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    maxRunsPerMinute: integer("max_runs_per_minute").default(60).notNull(),
+    maxExternalActionsPerMinute: integer("max_external_actions_per_minute").default(30).notNull(),
+    circuitBreakerThreshold: integer("circuit_breaker_threshold").default(5).notNull(),
+    circuitBreakerCooldownSeconds: integer("circuit_breaker_cooldown_seconds").default(300).notNull(),
+    circuitOpenUntil: timestamp("circuit_open_until", { withTimezone: true }),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
     // The triggering webhook event, promoted to a column for the dispatch index.
     // Kept in sync with `trigger.event` (validated at write time).
     triggerEvent: text("trigger_event").notNull(),
@@ -4466,6 +4506,51 @@ export const workflowDefinitions = pgTable(
   ],
 );
 
+/** Immutable published/edit history for a workflow definition. */
+export const workflowDefinitionVersions = pgTable(
+  "workflow_definition_versions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    workflowId: uuid("workflow_id")
+      .notNull()
+      .references(() => workflowDefinitions.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    name: text("name").notNull(),
+    description: text("description"),
+    triggerEvent: text("trigger_event").notNull(),
+    trigger: jsonb("trigger").notNull(),
+    conditions: jsonb("conditions").notNull(),
+    actions: jsonb("actions").notNull(),
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    approvedById: text("approved_by_id").references(() => user.id, { onDelete: "set null" }),
+    approvedAt: timestamp("approved_at", { withTimezone: true }),
+    publishedById: text("published_by_id").references(() => user.id, { onDelete: "set null" }),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    maxRunsPerMinute: integer("max_runs_per_minute").default(60).notNull(),
+    maxExternalActionsPerMinute: integer("max_external_actions_per_minute").default(30).notNull(),
+    circuitBreakerThreshold: integer("circuit_breaker_threshold").default(5).notNull(),
+    circuitBreakerCooldownSeconds: integer("circuit_breaker_cooldown_seconds").default(300).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("workflow_definition_versions_workflow_version_uidx").on(
+      table.workflowId,
+      table.version,
+    ),
+    index("workflow_definition_versions_workspace_created_idx").on(
+      table.workspaceId,
+      table.createdAt,
+    ),
+  ],
+);
+
 /**
  * Each execution of a workflow — the audit + debug + replay record. Inserted
  * with `status = 'running'` before the engine runs, so a crashed process leaves
@@ -4489,6 +4574,11 @@ export const workflowRuns = pgTable(
     // { matched, evaluated: [...] } — what the condition evaluator produced.
     conditionResult: jsonb("condition_result"),
     status: workflowRunStatusEnum("status").default("running").notNull(),
+    definitionVersion: integer("definition_version").default(1).notNull(),
+    // Immutable definition used by this run. Never execute a live mutable row.
+    definitionSnapshot: jsonb("definition_snapshot")
+      .default(sql`'{}'::jsonb`)
+      .notNull(),
     // Stable source event identity prevents duplicate runs when a domain event
     // is delivered more than once or multiple web replicas race to dispatch it.
     sourceEventId: text("source_event_id"),
@@ -4503,6 +4593,11 @@ export const workflowRuns = pgTable(
     lockedBy: text("locked_by"),
     heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
     deadLetteredAt: timestamp("dead_lettered_at", { withTimezone: true }),
+    cancelRequestedAt: timestamp("cancel_requested_at", { withTimezone: true }),
+    cancelledAt: timestamp("cancelled_at", { withTimezone: true }),
+    durationMs: integer("duration_ms"),
+    startStepIndex: integer("start_step_index").default(0).notNull(),
+    replayOfRunId: uuid("replay_of_run_id"),
     // Best-effort async: a stalled `running` row is reclaimed by the cron,
     // mirroring dispatchDueWebhooks. Used to detect re-entrant loops too.
     startedAt: timestamp("started_at", { withTimezone: true })
@@ -4523,6 +4618,7 @@ export const workflowRuns = pgTable(
     ),
     index("workflow_runs_status_started_idx").on(table.status, table.startedAt),
     index("workflow_runs_parent_idx").on(table.parentRunId),
+    index("workflow_runs_replay_idx").on(table.replayOfRunId),
     index("workflow_runs_queue_idx").on(
       table.status,
       table.nextAttemptAt,
@@ -4560,6 +4656,10 @@ export const workflowRunSteps = pgTable(
     // { success, error?, data? } — the action's normalized result.
     result: jsonb("result"),
     status: text("status").default("pending").notNull(),
+    effectKey: text("effect_key"),
+    retryable: boolean("retryable").default(false).notNull(),
+    attemptCount: integer("attempt_count").default(1).notNull(),
+    errorCode: text("error_code"),
     startedAt: timestamp("started_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -4570,6 +4670,46 @@ export const workflowRunSteps = pgTable(
     uniqueIndex("workflow_run_steps_run_step_uidx").on(
       table.runId,
       table.stepIndex,
+    ),
+  ],
+);
+
+/**
+ * Durable effect ledger for workflow actions. The unique run/step key lets a
+ * retry resume a completed action without executing it again. External
+ * providers still receive the same effect key so they can offer idempotency
+ * at their boundary as well.
+ */
+export const workflowActionEffects = pgTable(
+  "workflow_action_effects",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    runId: uuid("run_id")
+      .notNull()
+      .references(() => workflowRuns.id, { onDelete: "cascade" }),
+    stepIndex: integer("step_index").notNull(),
+    effectKey: text("effect_key").notNull(),
+    status: text("status").default("pending").notNull(),
+    result: jsonb("result"),
+    error: text("error"),
+    startedAt: timestamp("started_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    finishedAt: timestamp("finished_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    uniqueIndex("workflow_action_effects_run_step_uidx").on(
+      table.runId,
+      table.stepIndex,
+    ),
+    uniqueIndex("workflow_action_effects_effect_key_uidx").on(table.effectKey),
+    index("workflow_action_effects_workspace_status_idx").on(
+      table.workspaceId,
+      table.status,
     ),
   ],
 );
@@ -4608,10 +4748,14 @@ export const workspaceSecrets = pgTable(
 
 export type WorkflowDefinition = typeof workflowDefinitions.$inferSelect;
 export type NewWorkflowDefinition = typeof workflowDefinitions.$inferInsert;
+export type WorkflowDefinitionVersion = typeof workflowDefinitionVersions.$inferSelect;
+export type NewWorkflowDefinitionVersion = typeof workflowDefinitionVersions.$inferInsert;
 export type WorkflowRun = typeof workflowRuns.$inferSelect;
 export type NewWorkflowRun = typeof workflowRuns.$inferInsert;
 export type WorkflowRunStep = typeof workflowRunSteps.$inferSelect;
 export type NewWorkflowRunStep = typeof workflowRunSteps.$inferInsert;
+export type WorkflowActionEffect = typeof workflowActionEffects.$inferSelect;
+export type NewWorkflowActionEffect = typeof workflowActionEffects.$inferInsert;
 export type WorkspaceSecret = typeof workspaceSecrets.$inferSelect;
 export type NewWorkspaceSecret = typeof workspaceSecrets.$inferInsert;
 

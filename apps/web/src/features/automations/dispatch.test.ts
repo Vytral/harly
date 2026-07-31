@@ -70,6 +70,10 @@ vi.mock("./engine", () => ({
   runWorkflow: vi.fn().mockResolvedValue({ status: "succeeded", run: { id: "x" } }),
 }));
 
+// Exercise the dispatcher internals explicitly; production is disabled by the
+// kill switch in `status.ts` until the creator is ready again.
+vi.mock("./status", () => ({ AUTOMATIONS_ENABLED: true }));
+
 vi.mock("@/lib/logger", () => ({
   createLogger: () => ({
     error: vi.fn(),

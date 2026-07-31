@@ -22,6 +22,8 @@ type EmitWebhookOptions = {
   eventId?: string;
   /** The durable event was inserted in the business transaction already. */
   skipDomainEvent?: boolean;
+  /** Workflow run that caused this event; used for deterministic loop control. */
+  parentRunId?: string;
 };
 
 /**
@@ -65,6 +67,7 @@ export async function emitWebhookEvent(
               ? String(data.job.id)
               : undefined,
       payload: data,
+      automationParentRunId: options.parentRunId,
     }).catch((error) =>
       log.error({ workspaceId, event, error }, "domain event emit failed"),
     );
@@ -147,6 +150,7 @@ export async function emitWebhookEvent(
     sourceEventId:
       persistedEventId ??
       (typeof data.eventId === "string" ? data.eventId : undefined),
+    parentRunId: options.parentRunId,
   }).catch((err) =>
     log.error(err, "dispatchWorkflowEvent failed"),
   );
