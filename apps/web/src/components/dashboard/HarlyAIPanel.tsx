@@ -37,7 +37,9 @@ import {
 } from "@/components/ui/prompt-input";
 import {
   confirmAgentWriteAction,
+  prepareAgentWriteAction,
   undoAgentWriteAction,
+  type AgentWritePreview,
 } from "@/lib/ai/agent/write-actions";
 import { isAgentWriteTool } from "@/lib/ai/agent/write-tool-names";
 import {
@@ -54,41 +56,105 @@ import type {
 // ─── Phosphor icons ────────────────────────────────────────────────────────────
 
 const PhFunnel = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 256 256" aria-hidden="true">
-    <path fill="currentColor" d="M230.6 49.53A15.81 15.81 0 0 0 216 40H40a16 16 0 0 0-11.81 26.76l.08.09L96 139.17V216a16 16 0 0 0 24.87 13.32l32-21.34a16 16 0 0 0 7.13-13.32v-55.49l67.74-72.32l.08-.09a15.8 15.8 0 0 0 2.78-17.23m-84.42 81.05A8 8 0 0 0 144 136v58.66L112 216v-80a8 8 0 0 0-2.16-5.47L40 56h176Z"/>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="13"
+    height="13"
+    viewBox="0 0 256 256"
+    aria-hidden="true"
+  >
+    <path
+      fill="currentColor"
+      d="M230.6 49.53A15.81 15.81 0 0 0 216 40H40a16 16 0 0 0-11.81 26.76l.08.09L96 139.17V216a16 16 0 0 0 24.87 13.32l32-21.34a16 16 0 0 0 7.13-13.32v-55.49l67.74-72.32l.08-.09a15.8 15.8 0 0 0 2.78-17.23m-84.42 81.05A8 8 0 0 0 144 136v58.66L112 216v-80a8 8 0 0 0-2.16-5.47L40 56h176Z"
+    />
   </svg>
 );
 const PhEnvelope = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 256 256" aria-hidden="true">
-    <path fill="currentColor" d="M224 48H32a8 8 0 0 0-8 8v136a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a8 8 0 0 0-8-8m-96 85.15L52.57 64h150.86ZM98.71 128L40 181.81V74.19Zm11.84 10.85l12 11.05a8 8 0 0 0 10.82 0l12-11.05l58 53.15H52.57ZM157.29 128L216 74.18v107.64Z"/>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="13"
+    height="13"
+    viewBox="0 0 256 256"
+    aria-hidden="true"
+  >
+    <path
+      fill="currentColor"
+      d="M224 48H32a8 8 0 0 0-8 8v136a16 16 0 0 0 16 16h176a16 16 0 0 0 16-16V56a8 8 0 0 0-8-8m-96 85.15L52.57 64h150.86ZM98.71 128L40 181.81V74.19Zm11.84 10.85l12 11.05a8 8 0 0 0 10.82 0l12-11.05l58 53.15H52.57ZM157.29 128L216 74.18v107.64Z"
+    />
   </svg>
 );
 const PhUserCheck = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 256 256" aria-hidden="true">
-    <path fill="currentColor" d="M144 157.68a68 68 0 1 0-71.9 0c-20.65 6.76-39.23 19.39-54.17 37.17a8 8 0 0 0 12.25 10.3C50.25 181.19 77.91 168 108 168s57.75 13.19 77.87 37.15a8 8 0 0 0 12.25-10.3c-14.94-17.78-33.52-30.41-54.12-37.17M56 100a52 52 0 1 1 52 52a52.06 52.06 0 0 1-52-52m197.66 33.66l-32 32a8 8 0 0 1-11.32 0l-16-16a8 8 0 0 1 11.32-11.32L216 148.69l26.34-26.35a8 8 0 0 1 11.32 11.32"/>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="13"
+    height="13"
+    viewBox="0 0 256 256"
+    aria-hidden="true"
+  >
+    <path
+      fill="currentColor"
+      d="M144 157.68a68 68 0 1 0-71.9 0c-20.65 6.76-39.23 19.39-54.17 37.17a8 8 0 0 0 12.25 10.3C50.25 181.19 77.91 168 108 168s57.75 13.19 77.87 37.15a8 8 0 0 0 12.25-10.3c-14.94-17.78-33.52-30.41-54.12-37.17M56 100a52 52 0 1 1 52 52a52.06 52.06 0 0 1-52-52m197.66 33.66l-32 32a8 8 0 0 1-11.32 0l-16-16a8 8 0 0 1 11.32-11.32L216 148.69l26.34-26.35a8 8 0 0 1 11.32 11.32"
+    />
   </svg>
 );
 const PhChartBar = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 256 256" aria-hidden="true">
-    <path fill="currentColor" d="M224 200h-8V40a8 8 0 0 0-8-8h-56a8 8 0 0 0-8 8v40H96a8 8 0 0 0-8 8v40H48a8 8 0 0 0-8 8v64h-8a8 8 0 0 0 0 16h192a8 8 0 0 0 0-16M160 48h40v152h-40Zm-56 48h40v104h-40Zm-48 48h32v56H56Z"/>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="13"
+    height="13"
+    viewBox="0 0 256 256"
+    aria-hidden="true"
+  >
+    <path
+      fill="currentColor"
+      d="M224 200h-8V40a8 8 0 0 0-8-8h-56a8 8 0 0 0-8 8v40H96a8 8 0 0 0-8 8v40H48a8 8 0 0 0-8 8v64h-8a8 8 0 0 0 0 16h192a8 8 0 0 0 0-16M160 48h40v152h-40Zm-56 48h40v104h-40Zm-48 48h32v56H56Z"
+    />
   </svg>
 );
 const PhCheck = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 256 256" aria-hidden="true" className={className}>
-    <path fill="currentColor" d="M173.66 98.34a8 8 0 0 1 0 11.32l-56 56a8 8 0 0 1-11.32 0l-24-24a8 8 0 0 1 11.32-11.32L112 148.69l50.34-50.35a8 8 0 0 1 11.32 0M232 128A104 104 0 1 1 128 24a104.11 104.11 0 0 1 104 104m-16 0a88 88 0 1 0-88 88a88.1 88.1 0 0 0 88-88"/>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="13"
+    height="13"
+    viewBox="0 0 256 256"
+    aria-hidden="true"
+    className={className}
+  >
+    <path
+      fill="currentColor"
+      d="M173.66 98.34a8 8 0 0 1 0 11.32l-56 56a8 8 0 0 1-11.32 0l-24-24a8 8 0 0 1 11.32-11.32L112 148.69l50.34-50.35a8 8 0 0 1 11.32 0M232 128A104 104 0 1 1 128 24a104.11 104.11 0 0 1 104 104m-16 0a88 88 0 1 0-88 88a88.1 88.1 0 0 0 88-88"
+    />
   </svg>
 );
 const PhWarning = ({ className }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 256 256" aria-hidden="true" className={className}>
-    <path fill="currentColor" d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m-8-80V80a8 8 0 0 1 16 0v56a8 8 0 0 1-16 0m20 36a12 12 0 1 1-12-12a12 12 0 0 1 12 12"/>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    width="13"
+    height="13"
+    viewBox="0 0 256 256"
+    aria-hidden="true"
+    className={className}
+  >
+    <path
+      fill="currentColor"
+      d="M128 24a104 104 0 1 0 104 104A104.11 104.11 0 0 0 128 24m0 192a88 88 0 1 1 88-88a88.1 88.1 0 0 1-88 88m-8-80V80a8 8 0 0 1 16 0v56a8 8 0 0 1-16 0m20 36a12 12 0 1 1-12-12a12 12 0 0 1 12 12"
+    />
   </svg>
 );
 
 const QUICK_PROMPTS = [
-  { icon: PhFunnel,    label: "How's my pipeline?",     color: "text-blue-500" },
-  { icon: PhUserCheck, label: "Who needs review?",      color: "text-green-500" },
-  { icon: PhChartBar,  label: "Show my hiring report",  color: "text-purple-500" },
-  { icon: PhEnvelope,  label: "Which jobs are at risk?", color: "text-orange-500" },
+  { icon: PhFunnel, label: "How's my pipeline?", color: "text-blue-500" },
+  { icon: PhUserCheck, label: "Who needs review?", color: "text-green-500" },
+  {
+    icon: PhChartBar,
+    label: "Show my hiring report",
+    color: "text-purple-500",
+  },
+  {
+    icon: PhEnvelope,
+    label: "Which jobs are at risk?",
+    color: "text-orange-500",
+  },
 ];
 
 // Human labels for the "calling a tool" inline state.
@@ -241,7 +307,15 @@ function initials(name: string): string {
     .join("");
 }
 
-function CardAvatar({ name, src, className }: { name: string; src?: string | null; className?: string }) {
+function CardAvatar({
+  name,
+  src,
+  className,
+}: {
+  name: string;
+  src?: string | null;
+  className?: string;
+}) {
   if (src) {
     return (
       // eslint-disable-next-line @next/next/no-img-element -- avatar from external URL
@@ -265,7 +339,15 @@ function CardAvatar({ name, src, className }: { name: string; src?: string | nul
 }
 
 // A list row that staggers in. `i` drives the entrance delay.
-function Row({ i, children, onClick }: { i: number; children: React.ReactNode; onClick?: () => void }) {
+function Row({
+  i,
+  children,
+  onClick,
+}: {
+  i: number;
+  children: React.ReactNode;
+  onClick?: () => void;
+}) {
   return (
     <div
       className={cn(
@@ -298,7 +380,13 @@ const SEVERITY_TONE: Record<string, string> = {
   warning: "bg-yellow-500",
 };
 
-function ToolResultCard({ toolName, output }: { toolName: string; output: unknown }) {
+function ToolResultCard({
+  toolName,
+  output,
+}: {
+  toolName: string;
+  output: unknown;
+}) {
   if (!output || typeof output !== "object") return null;
   const o = output as Record<string, unknown>;
 
@@ -330,7 +418,9 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
     return (
       <Card className="gap-0 border-border/70 p-2 shadow-none">
         {actions.length === 0 ? (
-          <span className="px-1 py-0.5 text-[12px] text-muted-foreground">No recent actions.</span>
+          <span className="px-1 py-0.5 text-[12px] text-muted-foreground">
+            No recent actions.
+          </span>
         ) : (
           actions.map((action, index) => {
             const success = action.success;
@@ -350,20 +440,37 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
                     : "Unknown";
             return (
               <div
-                key={typeof action.receiptId === "string" ? action.receiptId : index}
+                key={
+                  typeof action.receiptId === "string"
+                    ? action.receiptId
+                    : index
+                }
                 className="flex items-center gap-2 border-b border-border/50 px-1 py-2 last:border-0"
               >
-                <span className={cn("size-1.5 shrink-0 rounded-full bg-current", tone)} />
+                <span
+                  className={cn(
+                    "size-1.5 shrink-0 rounded-full bg-current",
+                    tone,
+                  )}
+                />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-[12px] font-medium">{labelFor(action.toolName)}</p>
+                  <p className="truncate text-[12px] font-medium">
+                    {labelFor(action.toolName)}
+                  </p>
                   {typeof action.message === "string" && (
-                    <p className="truncate text-[11px] text-muted-foreground">{action.message}</p>
+                    <p className="truncate text-[11px] text-muted-foreground">
+                      {action.message}
+                    </p>
                   )}
                 </div>
                 {action.undoable === true && (
-                  <span className="shrink-0 text-[10px] text-muted-foreground">Undo available</span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    Undo available
+                  </span>
                 )}
-                <span className={cn("shrink-0 text-[10px]", tone)}>{stateLabel}</span>
+                <span className={cn("shrink-0 text-[10px]", tone)}>
+                  {stateLabel}
+                </span>
               </div>
             );
           })
@@ -395,7 +502,10 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
               </span>
               <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                 <div
-                  className={cn("h-full rounded-full transition-all", STAGE_BAR_COLORS[i % STAGE_BAR_COLORS.length])}
+                  className={cn(
+                    "h-full rounded-full transition-all",
+                    STAGE_BAR_COLORS[i % STAGE_BAR_COLORS.length],
+                  )}
                   style={{ width: `${(s.count / max) * 100}%` }}
                 />
               </div>
@@ -412,12 +522,15 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
   // Candidate AI score → score chip + recommendation. Covers both the read
   // tool and the generate tool (both return the same scored shape).
   if (
-    (toolName === "getCandidateScore" || toolName === "generateCandidateScore") &&
+    (toolName === "getCandidateScore" ||
+      toolName === "generateCandidateScore") &&
     o.scored === true
   ) {
     const rec = String(o.recommendation ?? "");
     const score = Number(o.score ?? 0);
-    const strengths = Array.isArray(o.strengths) ? (o.strengths as string[]) : [];
+    const strengths = Array.isArray(o.strengths)
+      ? (o.strengths as string[])
+      : [];
     const gaps = Array.isArray(o.gaps) ? (o.gaps as string[]) : [];
     const tone =
       score >= 80
@@ -439,25 +552,40 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
             {score}
           </div>
           <div className="flex min-w-0 flex-col">
-            <span className={cn("text-[13px] font-semibold capitalize", REC_TONE[rec] ?? "")}>
+            <span
+              className={cn(
+                "text-[13px] font-semibold capitalize",
+                REC_TONE[rec] ?? "",
+              )}
+            >
               {rec.replace(/_/g, " ") || "Scored"}
             </span>
-            <span className="text-[11px] text-muted-foreground">AI fit score · out of 100</span>
+            <span className="text-[11px] text-muted-foreground">
+              AI fit score · out of 100
+            </span>
           </div>
         </div>
         {typeof o.summary === "string" && (
-          <p className="text-[12px] leading-snug text-muted-foreground">{o.summary as string}</p>
+          <p className="text-[12px] leading-snug text-muted-foreground">
+            {o.summary as string}
+          </p>
         )}
         {(strengths.length > 0 || gaps.length > 0) && (
           <div className="flex flex-col gap-1.5 border-t border-border/50 pt-2">
             {strengths.slice(0, 3).map((s, i) => (
-              <div key={`st-${i}`} className="flex items-start gap-1.5 text-[11px]">
+              <div
+                key={`st-${i}`}
+                className="flex items-start gap-1.5 text-[11px]"
+              >
                 <PhCheck className="mt-0.5 shrink-0 text-emerald-500" />
                 <span className="text-foreground/80">{s}</span>
               </div>
             ))}
             {gaps.slice(0, 2).map((g, i) => (
-              <div key={`gp-${i}`} className="flex items-start gap-1.5 text-[11px]">
+              <div
+                key={`gp-${i}`}
+                className="flex items-start gap-1.5 text-[11px]"
+              >
                 <PhWarning className="mt-0.5 shrink-0 text-amber-500" />
                 <span className="text-foreground/80">{g}</span>
               </div>
@@ -469,8 +597,15 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
   }
 
   // Hiring report → KPI grid
-  if (toolName === "hiringReport" && o.metrics && typeof o.metrics === "object") {
-    const metrics = o.metrics as Record<string, { value: number; deltaPct: number; positive: boolean; isRate: boolean }>;
+  if (
+    toolName === "hiringReport" &&
+    o.metrics &&
+    typeof o.metrics === "object"
+  ) {
+    const metrics = o.metrics as Record<
+      string,
+      { value: number; deltaPct: number; positive: boolean; isRate: boolean }
+    >;
     const labels: Record<string, string> = {
       applications: "Applications",
       interviews: "Interviews",
@@ -481,7 +616,9 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
       <Card className="grid grid-cols-2 gap-2 border-border/70 p-3 shadow-none">
         {Object.entries(metrics).map(([key, m]) => (
           <div key={key} className="flex flex-col gap-0.5">
-            <span className="text-[11px] text-muted-foreground">{labels[key] ?? key}</span>
+            <span className="text-[11px] text-muted-foreground">
+              {labels[key] ?? key}
+            </span>
             <div className="flex items-baseline gap-1.5">
               <span className="text-[15px] font-semibold tabular-nums">
                 {m.value}
@@ -490,7 +627,9 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
               <span
                 className={cn(
                   "text-[10px] font-medium tabular-nums",
-                  m.positive ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400",
+                  m.positive
+                    ? "text-emerald-600 dark:text-emerald-400"
+                    : "text-rose-600 dark:text-rose-400",
                 )}
               >
                 {m.deltaPct > 0 ? "+" : ""}
@@ -520,13 +659,19 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
           <Row key={c.candidateId} i={i}>
             <CardAvatar name={c.name} src={c.avatarUrl} />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[12px] font-medium text-foreground">{c.name}</span>
-              <span className="truncate text-[11px] text-muted-foreground">{c.job} · {c.stage}</span>
+              <span className="truncate text-[12px] font-medium text-foreground">
+                {c.name}
+              </span>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {c.job} · {c.stage}
+              </span>
             </div>
             <span
               className={cn(
                 "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium tabular-nums",
-                c.waitingDays >= 6 ? "bg-rose-500/10 text-rose-600 dark:text-rose-400" : "bg-muted text-muted-foreground",
+                c.waitingDays >= 6
+                  ? "bg-rose-500/10 text-rose-600 dark:text-rose-400"
+                  : "bg-muted text-muted-foreground",
               )}
             >
               {c.waitingDays}d
@@ -539,7 +684,13 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
 
   // Candidate list → avatar list
   if (toolName === "listCandidates" && Array.isArray(o.candidates)) {
-    const list = o.candidates as Array<{ candidateId: string; name: string; avatarUrl?: string | null; email: string; location: string | null }>;
+    const list = o.candidates as Array<{
+      candidateId: string;
+      name: string;
+      avatarUrl?: string | null;
+      email: string;
+      location: string | null;
+    }>;
     if (list.length === 0) return null;
     return (
       <Card className="gap-0.5 border-border/70 p-2 shadow-none">
@@ -547,13 +698,19 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
           <Row key={c.candidateId} i={i}>
             <CardAvatar name={c.name} src={c.avatarUrl} />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[12px] font-medium text-foreground">{c.name}</span>
-              <span className="truncate text-[11px] text-muted-foreground">{c.location ?? c.email}</span>
+              <span className="truncate text-[12px] font-medium text-foreground">
+                {c.name}
+              </span>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {c.location ?? c.email}
+              </span>
             </div>
           </Row>
         ))}
         {list.length > 8 && (
-          <p className="px-2 pt-1 text-[10px] text-muted-foreground">+{list.length - 8} more</p>
+          <p className="px-2 pt-1 text-[10px] text-muted-foreground">
+            +{list.length - 8} more
+          </p>
         )}
       </Card>
     );
@@ -562,28 +719,50 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
   // Candidate profile → header + applications
   if (toolName === "candidateProfile" && o.found === true) {
     const apps = Array.isArray(o.applications)
-      ? (o.applications as Array<{ job: string; stage: string | null; status: string }>)
+      ? (o.applications as Array<{
+          job: string;
+          stage: string | null;
+          status: string;
+        }>)
       : [];
     const tags = Array.isArray(o.tags) ? (o.tags as string[]) : [];
     return (
       <Card className="gap-2.5 border-border/70 p-3 shadow-none">
         <div className="flex items-center gap-2.5">
-          <CardAvatar name={String(o.name ?? "")} src={typeof o.avatarUrl === "string" ? o.avatarUrl : null} className="size-9" />
+          <CardAvatar
+            name={String(o.name ?? "")}
+            src={typeof o.avatarUrl === "string" ? o.avatarUrl : null}
+            className="size-9"
+          />
           <div className="flex min-w-0 flex-col">
-            <span className="truncate text-[13px] font-semibold tracking-tight">{String(o.name ?? "")}</span>
+            <span className="truncate text-[13px] font-semibold tracking-tight">
+              {String(o.name ?? "")}
+            </span>
             {o.headline ? (
-              <span className="truncate text-[11px] text-muted-foreground">{String(o.headline)}</span>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {String(o.headline)}
+              </span>
             ) : o.location ? (
-              <span className="truncate text-[11px] text-muted-foreground">{String(o.location)}</span>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {String(o.location)}
+              </span>
             ) : null}
           </div>
         </div>
         {apps.length > 0 && (
           <div className="flex flex-col gap-1 border-t border-border/50 pt-2">
             {apps.map((a, i) => (
-              <div key={i} className="flex items-center justify-between gap-2 text-[11px]">
+              <div
+                key={i}
+                className="flex items-center justify-between gap-2 text-[11px]"
+              >
                 <span className="truncate text-foreground/80">{a.job}</span>
-                <span className={cn("shrink-0 font-medium", STATUS_TONE[a.status] ?? "text-muted-foreground")}>
+                <span
+                  className={cn(
+                    "shrink-0 font-medium",
+                    STATUS_TONE[a.status] ?? "text-muted-foreground",
+                  )}
+                >
                   {a.stage ?? a.status}
                 </span>
               </div>
@@ -593,7 +772,12 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
         {tags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {tags.slice(0, 6).map((t) => (
-              <span key={t} className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{t}</span>
+              <span
+                key={t}
+                className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground"
+              >
+                {t}
+              </span>
             ))}
           </div>
         )}
@@ -603,16 +787,30 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
 
   // Jobs at risk → severity dots
   if (toolName === "jobsAtRisk" && Array.isArray(o.jobs)) {
-    const list = o.jobs as Array<{ id: string; title: string; reason: string; severity: string }>;
+    const list = o.jobs as Array<{
+      id: string;
+      title: string;
+      reason: string;
+      severity: string;
+    }>;
     if (list.length === 0) return null;
     return (
       <Card className="gap-0.5 border-border/70 p-2 shadow-none">
         {list.map((j, i) => (
           <Row key={j.id} i={i}>
-            <span className={cn("size-2 shrink-0 rounded-full", SEVERITY_TONE[j.severity] ?? "bg-muted-foreground")} />
+            <span
+              className={cn(
+                "size-2 shrink-0 rounded-full",
+                SEVERITY_TONE[j.severity] ?? "bg-muted-foreground",
+              )}
+            />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[12px] font-medium text-foreground">{j.title}</span>
-              <span className="truncate text-[11px] text-muted-foreground">{j.reason}</span>
+              <span className="truncate text-[12px] font-medium text-foreground">
+                {j.title}
+              </span>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {j.reason}
+              </span>
             </div>
           </Row>
         ))}
@@ -622,20 +820,37 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
 
   // Job list → title + counts
   if (toolName === "listJobs" && Array.isArray(o.jobs)) {
-    const list = o.jobs as Array<{ id: string; title: string; status: string; activeApplicants: number; newThisWeek: number }>;
+    const list = o.jobs as Array<{
+      id: string;
+      title: string;
+      status: string;
+      activeApplicants: number;
+      newThisWeek: number;
+    }>;
     if (list.length === 0) return null;
     return (
       <Card className="gap-0.5 border-border/70 p-2 shadow-none">
         {list.slice(0, 8).map((j, i) => (
           <Row key={j.id} i={i}>
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[12px] font-medium text-foreground">{j.title}</span>
-              <span className={cn("text-[11px] font-medium capitalize", STATUS_TONE[j.status] ?? "text-muted-foreground")}>{j.status}</span>
+              <span className="truncate text-[12px] font-medium text-foreground">
+                {j.title}
+              </span>
+              <span
+                className={cn(
+                  "text-[11px] font-medium capitalize",
+                  STATUS_TONE[j.status] ?? "text-muted-foreground",
+                )}
+              >
+                {j.status}
+              </span>
             </div>
             <div className="flex shrink-0 items-center gap-2 text-[11px] tabular-nums text-muted-foreground">
               <span>{j.activeApplicants} active</span>
               {j.newThisWeek > 0 && (
-                <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600 dark:text-emerald-400">+{j.newThisWeek}</span>
+                <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-emerald-600 dark:text-emerald-400">
+                  +{j.newThisWeek}
+                </span>
               )}
             </div>
           </Row>
@@ -645,24 +860,44 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
   }
 
   // Interviews (today / upcoming) → time + candidate
-  if ((toolName === "todayInterviews" || toolName === "upcomingInterviews") && Array.isArray(o.interviews)) {
-    const list = o.interviews as Array<{ id: string; candidate: string | null; job: string | null; label?: string; type?: string | null; scheduledAt: string | Date | null }>;
+  if (
+    (toolName === "todayInterviews" || toolName === "upcomingInterviews") &&
+    Array.isArray(o.interviews)
+  ) {
+    const list = o.interviews as Array<{
+      id: string;
+      candidate: string | null;
+      job: string | null;
+      label?: string;
+      type?: string | null;
+      scheduledAt: string | Date | null;
+    }>;
     if (list.length === 0) return null;
     const fmt = (d: string | Date | null) => {
       if (!d) return "";
       const date = new Date(d);
       return toolName === "todayInterviews"
-        ? date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+        ? date.toLocaleTimeString("en-US", {
+            hour: "numeric",
+            minute: "2-digit",
+          })
         : date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     };
     return (
       <Card className="gap-0.5 border-border/70 p-2 shadow-none">
         {list.slice(0, 8).map((iv, i) => (
           <Row key={iv.id} i={i}>
-            <span className="w-14 shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">{fmt(iv.scheduledAt)}</span>
+            <span className="w-14 shrink-0 text-[11px] font-medium tabular-nums text-muted-foreground">
+              {fmt(iv.scheduledAt)}
+            </span>
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[12px] font-medium text-foreground">{iv.candidate ?? "Unknown candidate"}</span>
-              <span className="truncate text-[11px] text-muted-foreground">{iv.label ?? iv.type ?? ""}{iv.job ? ` · ${iv.job}` : ""}</span>
+              <span className="truncate text-[12px] font-medium text-foreground">
+                {iv.candidate ?? "Unknown candidate"}
+              </span>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {iv.label ?? iv.type ?? ""}
+                {iv.job ? ` · ${iv.job}` : ""}
+              </span>
             </div>
           </Row>
         ))}
@@ -672,21 +907,44 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
 
   // Task list → status dot + title
   if (toolName === "listTasks" && Array.isArray(o.tasks)) {
-    const list = o.tasks as Array<{ id: string; title: string; status: string; priority: string; dueDate: string | null; owner: string | null }>;
+    const list = o.tasks as Array<{
+      id: string;
+      title: string;
+      status: string;
+      priority: string;
+      dueDate: string | null;
+      owner: string | null;
+    }>;
     if (list.length === 0) return null;
     const PRIORITY_TONE: Record<string, string> = {
-      urgent: "bg-rose-500", high: "bg-amber-500", medium: "bg-blue-500", low: "bg-muted-foreground/40",
+      urgent: "bg-rose-500",
+      high: "bg-amber-500",
+      medium: "bg-blue-500",
+      low: "bg-muted-foreground/40",
     };
     return (
       <Card className="gap-0.5 border-border/70 p-2 shadow-none">
         {list.slice(0, 8).map((t, i) => (
           <Row key={t.id} i={i}>
-            <span className={cn("size-2 shrink-0 rounded-full", PRIORITY_TONE[t.priority] ?? "bg-muted-foreground/40")} />
+            <span
+              className={cn(
+                "size-2 shrink-0 rounded-full",
+                PRIORITY_TONE[t.priority] ?? "bg-muted-foreground/40",
+              )}
+            />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[12px] font-medium text-foreground">{t.title}</span>
-              {t.owner && <span className="truncate text-[11px] text-muted-foreground">{t.owner}</span>}
+              <span className="truncate text-[12px] font-medium text-foreground">
+                {t.title}
+              </span>
+              {t.owner && (
+                <span className="truncate text-[11px] text-muted-foreground">
+                  {t.owner}
+                </span>
+              )}
             </div>
-            <span className="shrink-0 text-[10px] capitalize text-muted-foreground">{t.status.replace(/_/g, " ")}</span>
+            <span className="shrink-0 text-[10px] capitalize text-muted-foreground">
+              {t.status.replace(/_/g, " ")}
+            </span>
           </Row>
         ))}
       </Card>
@@ -694,15 +952,24 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
   }
 
   // Task counts → pill grid
-  if (toolName === "taskCounts" && o && typeof o === "object" && !Array.isArray(o)) {
-    const entries = Object.entries(o).filter(([, v]) => typeof v === "number") as [string, number][];
+  if (
+    toolName === "taskCounts" &&
+    o &&
+    typeof o === "object" &&
+    !Array.isArray(o)
+  ) {
+    const entries = Object.entries(o).filter(
+      ([, v]) => typeof v === "number",
+    ) as [string, number][];
     if (entries.length === 0) return null;
     return (
       <Card className="flex-row flex-wrap gap-2 border-border/70 p-3 shadow-none">
         {entries.map(([k, v]) => (
           <div key={k} className="flex items-baseline gap-1.5">
             <span className="text-[15px] font-semibold tabular-nums">{v}</span>
-            <span className="text-[11px] capitalize text-muted-foreground">{k.replace(/_/g, " ")}</span>
+            <span className="text-[11px] capitalize text-muted-foreground">
+              {k.replace(/_/g, " ")}
+            </span>
           </div>
         ))}
       </Card>
@@ -721,10 +988,25 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
           const due = String(it.due ?? it.dueState ?? "");
           return (
             <Row key={i} i={i}>
-              <span className={cn("size-2 shrink-0 rounded-full", due === "overdue" ? "bg-rose-500" : due === "today" ? "bg-amber-500" : "bg-blue-500")} />
+              <span
+                className={cn(
+                  "size-2 shrink-0 rounded-full",
+                  due === "overdue"
+                    ? "bg-rose-500"
+                    : due === "today"
+                      ? "bg-amber-500"
+                      : "bg-blue-500",
+                )}
+              />
               <div className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate text-[12px] font-medium text-foreground">{title}</span>
-                {sub && <span className="truncate text-[11px] text-muted-foreground">{sub}</span>}
+                <span className="truncate text-[12px] font-medium text-foreground">
+                  {title}
+                </span>
+                {sub && (
+                  <span className="truncate text-[11px] text-muted-foreground">
+                    {sub}
+                  </span>
+                )}
               </div>
             </Row>
           );
@@ -734,8 +1016,17 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
   }
 
   // Scorecards → rating rows
-  if (toolName === "candidateScorecards" && o.found === true && Array.isArray(o.scorecards)) {
-    const list = o.scorecards as Array<{ rating: string; stage: string | null; author: string | null; comment: string | null }>;
+  if (
+    toolName === "candidateScorecards" &&
+    o.found === true &&
+    Array.isArray(o.scorecards)
+  ) {
+    const list = o.scorecards as Array<{
+      rating: string;
+      stage: string | null;
+      author: string | null;
+      comment: string | null;
+    }>;
     if (list.length === 0) return null;
     const RATING_TONE: Record<string, string> = {
       strong: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
@@ -745,12 +1036,30 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
     return (
       <Card className="gap-1.5 border-border/70 p-2.5 shadow-none">
         {list.slice(0, 5).map((s, i) => (
-          <div key={i} className="flex flex-col gap-1 duration-300 animate-in fade-in slide-in-from-bottom-1 fill-mode-both" style={{ animationDelay: `${i * 40}ms` }}>
+          <div
+            key={i}
+            className="flex flex-col gap-1 duration-300 animate-in fade-in slide-in-from-bottom-1 fill-mode-both"
+            style={{ animationDelay: `${i * 40}ms` }}
+          >
             <div className="flex items-center gap-2">
-              <span className={cn("rounded-md px-1.5 py-0.5 text-[10px] font-semibold capitalize", RATING_TONE[s.rating] ?? "bg-muted text-muted-foreground")}>{s.rating}</span>
-              <span className="truncate text-[11px] text-muted-foreground">{s.author ?? ""}{s.stage ? ` · ${s.stage}` : ""}</span>
+              <span
+                className={cn(
+                  "rounded-md px-1.5 py-0.5 text-[10px] font-semibold capitalize",
+                  RATING_TONE[s.rating] ?? "bg-muted text-muted-foreground",
+                )}
+              >
+                {s.rating}
+              </span>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {s.author ?? ""}
+                {s.stage ? ` · ${s.stage}` : ""}
+              </span>
             </div>
-            {s.comment && <p className="text-[11px] leading-snug text-foreground/80">{s.comment}</p>}
+            {s.comment && (
+              <p className="text-[11px] leading-snug text-foreground/80">
+                {s.comment}
+              </p>
+            )}
           </div>
         ))}
       </Card>
@@ -759,21 +1068,40 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
 
   // Offers → status + salary
   if (toolName === "listCandidateOffers" && Array.isArray(o.offers)) {
-    const list = o.offers as Array<{ offerId: string; job: string; status: string; salaryAmount: number | null; currency: string | null; salaryPeriod: string | null }>;
+    const list = o.offers as Array<{
+      offerId: string;
+      job: string;
+      status: string;
+      salaryAmount: number | null;
+      currency: string | null;
+      salaryPeriod: string | null;
+    }>;
     if (list.length === 0) return null;
     return (
       <Card className="gap-0.5 border-border/70 p-2 shadow-none">
         {list.map((of, i) => (
           <Row key={of.offerId} i={i}>
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[12px] font-medium text-foreground">{of.job}</span>
+              <span className="truncate text-[12px] font-medium text-foreground">
+                {of.job}
+              </span>
               {of.salaryAmount != null && (
                 <span className="truncate text-[11px] text-muted-foreground">
-                  {of.currency ?? ""} {of.salaryAmount.toLocaleString()}{of.salaryPeriod ? `/${of.salaryPeriod === "annual" ? "yr" : "mo"}` : ""}
+                  {of.currency ?? ""} {of.salaryAmount.toLocaleString()}
+                  {of.salaryPeriod
+                    ? `/${of.salaryPeriod === "annual" ? "yr" : "mo"}`
+                    : ""}
                 </span>
               )}
             </div>
-            <span className={cn("shrink-0 text-[11px] font-medium capitalize", STATUS_TONE[of.status] ?? "text-muted-foreground")}>{of.status}</span>
+            <span
+              className={cn(
+                "shrink-0 text-[11px] font-medium capitalize",
+                STATUS_TONE[of.status] ?? "text-muted-foreground",
+              )}
+            >
+              {of.status}
+            </span>
           </Row>
         ))}
       </Card>
@@ -782,12 +1110,22 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
 
   // Talent pool → total + by-source + avatars
   if (toolName === "talentPool" && Array.isArray(o.candidates)) {
-    const list = o.candidates as Array<{ candidateId: string; name: string; avatarUrl?: string | null; headline: string | null; source: string }>;
+    const list = o.candidates as Array<{
+      candidateId: string;
+      name: string;
+      avatarUrl?: string | null;
+      headline: string | null;
+      source: string;
+    }>;
     return (
       <Card className="gap-2 border-border/70 p-3 shadow-none">
         <div className="flex items-baseline justify-between">
-          <span className="text-[12px] font-semibold tracking-tight">Talent pool</span>
-          <span className="text-[11px] text-muted-foreground">{String(o.total ?? list.length)} total</span>
+          <span className="text-[12px] font-semibold tracking-tight">
+            Talent pool
+          </span>
+          <span className="text-[11px] text-muted-foreground">
+            {String(o.total ?? list.length)} total
+          </span>
         </div>
         {list.length > 0 && (
           <div className="flex flex-col gap-0.5">
@@ -795,8 +1133,12 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
               <Row key={c.candidateId} i={i}>
                 <CardAvatar name={c.name} src={c.avatarUrl} />
                 <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate text-[12px] font-medium text-foreground">{c.name}</span>
-                  <span className="truncate text-[11px] text-muted-foreground">{c.headline ?? c.source}</span>
+                  <span className="truncate text-[12px] font-medium text-foreground">
+                    {c.name}
+                  </span>
+                  <span className="truncate text-[11px] text-muted-foreground">
+                    {c.headline ?? c.source}
+                  </span>
                 </div>
               </Row>
             ))}
@@ -807,9 +1149,15 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
   }
 
   // Reports overview → summary KPIs + funnel
-  if (toolName === "reportsOverview" && o.summary && typeof o.summary === "object") {
+  if (
+    toolName === "reportsOverview" &&
+    o.summary &&
+    typeof o.summary === "object"
+  ) {
     const s = o.summary as Record<string, number | null>;
-    const funnel = Array.isArray(o.funnel) ? (o.funnel as Array<{ name: string; count: number; pct: number }>) : [];
+    const funnel = Array.isArray(o.funnel)
+      ? (o.funnel as Array<{ name: string; count: number; pct: number }>)
+      : [];
     return (
       <Card className="gap-3 border-border/70 p-3 shadow-none">
         <div className="grid grid-cols-2 gap-2">
@@ -820,8 +1168,12 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
             ["Hires", s.hires],
           ].map(([label, val]) => (
             <div key={String(label)} className="flex flex-col">
-              <span className="text-[15px] font-semibold tabular-nums">{val ?? 0}</span>
-              <span className="text-[11px] text-muted-foreground">{String(label)}</span>
+              <span className="text-[15px] font-semibold tabular-nums">
+                {val ?? 0}
+              </span>
+              <span className="text-[11px] text-muted-foreground">
+                {String(label)}
+              </span>
             </div>
           ))}
         </div>
@@ -829,14 +1181,21 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
           <div className="flex flex-col gap-1.5 border-t border-border/50 pt-2">
             {funnel.map((f, i) => (
               <div key={f.name} className="flex items-center gap-2">
-                <span className="w-16 shrink-0 truncate text-[11px] text-muted-foreground">{f.name}</span>
+                <span className="w-16 shrink-0 truncate text-[11px] text-muted-foreground">
+                  {f.name}
+                </span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
                   <div
-                    className={cn("h-full rounded-full duration-500 animate-in slide-in-from-left", STAGE_BAR_COLORS[i % STAGE_BAR_COLORS.length])}
+                    className={cn(
+                      "h-full rounded-full duration-500 animate-in slide-in-from-left",
+                      STAGE_BAR_COLORS[i % STAGE_BAR_COLORS.length],
+                    )}
                     style={{ width: `${f.pct}%` }}
                   />
                 </div>
-                <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">{f.count}</span>
+                <span className="w-7 shrink-0 text-right text-[11px] tabular-nums text-muted-foreground">
+                  {f.count}
+                </span>
               </div>
             ))}
           </div>
@@ -847,13 +1206,21 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
 
   // Compare candidates → score columns
   if (toolName === "compareCandidates" && Array.isArray(o.compared)) {
-    const list = o.compared as Array<{ applicationId: string; score: number; recommendation: string; summary: string }>;
+    const list = o.compared as Array<{
+      applicationId: string;
+      score: number;
+      recommendation: string;
+      summary: string;
+    }>;
     if (list.length === 0) return null;
     const tone = (score: number) =>
-      score >= 80 ? "text-emerald-600 dark:text-emerald-400"
-      : score >= 60 ? "text-blue-600 dark:text-blue-400"
-      : score >= 40 ? "text-amber-600 dark:text-amber-400"
-      : "text-rose-600 dark:text-rose-400";
+      score >= 80
+        ? "text-emerald-600 dark:text-emerald-400"
+        : score >= 60
+          ? "text-blue-600 dark:text-blue-400"
+          : score >= 40
+            ? "text-amber-600 dark:text-amber-400"
+            : "text-rose-600 dark:text-rose-400";
     return (
       <Card className="gap-2 border-border/70 p-3 shadow-none">
         {list.map((c, i) => (
@@ -862,14 +1229,26 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
             className="flex items-start gap-2.5 duration-300 animate-in fade-in slide-in-from-bottom-1 fill-mode-both"
             style={{ animationDelay: `${i * 50}ms` }}
           >
-            <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-[14px] font-bold tabular-nums", tone(c.score))}>
+            <div
+              className={cn(
+                "flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-[14px] font-bold tabular-nums",
+                tone(c.score),
+              )}
+            >
               {c.score}
             </div>
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className={cn("text-[12px] font-semibold capitalize", REC_TONE[c.recommendation] ?? "")}>
+              <span
+                className={cn(
+                  "text-[12px] font-semibold capitalize",
+                  REC_TONE[c.recommendation] ?? "",
+                )}
+              >
                 {c.recommendation.replace(/_/g, " ")}
               </span>
-              <span className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">{c.summary}</span>
+              <span className="line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                {c.summary}
+              </span>
             </div>
           </div>
         ))}
@@ -882,8 +1261,12 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
     return (
       <Card className="gap-0 overflow-hidden border-border/70 p-0 shadow-none">
         <div className="border-b border-border/50 bg-muted/40 px-3 py-2">
-          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Subject</span>
-          <p className="text-[12px] font-medium text-foreground">{String(o.subject ?? "")}</p>
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Subject
+          </span>
+          <p className="text-[12px] font-medium text-foreground">
+            {String(o.subject ?? "")}
+          </p>
         </div>
         <p className="whitespace-pre-wrap px-3 py-2.5 text-[12px] leading-snug text-foreground/85">
           {String(o.body ?? "")}
@@ -893,8 +1276,17 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
   }
 
   // Duplicate matches → confidence rows
-  if (toolName === "detectDuplicates" && o.ok === true && Array.isArray(o.matches)) {
-    const list = o.matches as Array<{ fullName: string; email: string; confidence: string; reason: string }>;
+  if (
+    toolName === "detectDuplicates" &&
+    o.ok === true &&
+    Array.isArray(o.matches)
+  ) {
+    const list = o.matches as Array<{
+      fullName: string;
+      email: string;
+      confidence: string;
+      reason: string;
+    }>;
     if (list.length === 0) {
       return (
         <Card className="border-border/70 p-3 shadow-none">
@@ -908,12 +1300,23 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
       <Card className="gap-0.5 border-border/70 p-2 shadow-none">
         {list.map((m, i) => (
           <Row key={i} i={i}>
-            <span className={cn("size-2 shrink-0 rounded-full", m.confidence === "high" ? "bg-rose-500" : "bg-amber-500")} />
+            <span
+              className={cn(
+                "size-2 shrink-0 rounded-full",
+                m.confidence === "high" ? "bg-rose-500" : "bg-amber-500",
+              )}
+            />
             <div className="flex min-w-0 flex-1 flex-col">
-              <span className="truncate text-[12px] font-medium text-foreground">{m.fullName}</span>
-              <span className="truncate text-[11px] text-muted-foreground">{m.reason}</span>
+              <span className="truncate text-[12px] font-medium text-foreground">
+                {m.fullName}
+              </span>
+              <span className="truncate text-[11px] text-muted-foreground">
+                {m.reason}
+              </span>
             </div>
-            <span className="shrink-0 text-[10px] capitalize text-muted-foreground">{m.confidence}</span>
+            <span className="shrink-0 text-[10px] capitalize text-muted-foreground">
+              {m.confidence}
+            </span>
           </Row>
         ))}
       </Card>
@@ -925,18 +1328,24 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
     return (
       <Card className="flex-row flex-wrap gap-3 border-border/70 p-3 shadow-none">
         <div className="flex items-baseline gap-1.5">
-          <span className="text-[15px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{String(o.succeeded ?? 0)}</span>
+          <span className="text-[15px] font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">
+            {String(o.succeeded ?? 0)}
+          </span>
           <span className="text-[11px] text-muted-foreground">scored</span>
         </div>
         {Number(o.failed ?? 0) > 0 && (
           <div className="flex items-baseline gap-1.5">
-            <span className="text-[15px] font-semibold tabular-nums text-rose-600 dark:text-rose-400">{String(o.failed)}</span>
+            <span className="text-[15px] font-semibold tabular-nums text-rose-600 dark:text-rose-400">
+              {String(o.failed)}
+            </span>
             <span className="text-[11px] text-muted-foreground">failed</span>
           </div>
         )}
         {Number(o.remaining ?? 0) > 0 && (
           <div className="flex items-baseline gap-1.5">
-            <span className="text-[15px] font-semibold tabular-nums">{String(o.remaining)}</span>
+            <span className="text-[15px] font-semibold tabular-nums">
+              {String(o.remaining)}
+            </span>
             <span className="text-[11px] text-muted-foreground">remaining</span>
           </div>
         )}
@@ -945,6 +1354,41 @@ function ToolResultCard({ toolName, output }: { toolName: string; output: unknow
   }
 
   return null;
+}
+
+function EvidenceMeta({ output }: { output: unknown }) {
+  if (!output || typeof output !== "object") return null;
+  const value = output as Record<string, unknown>;
+  if (
+    typeof value.source !== "string" ||
+    typeof value.observedAt !== "string"
+  ) {
+    return null;
+  }
+
+  const observed = new Date(value.observedAt);
+  const observedLabel = Number.isNaN(observed.getTime())
+    ? value.observedAt
+    : observed.toLocaleString();
+  const confidence =
+    typeof value.confidence === "string" ? value.confidence : null;
+  const limitations = Array.isArray(value.limitations)
+    ? value.limitations.filter(
+        (item): item is string => typeof item === "string",
+      )
+    : [];
+
+  return (
+    <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-1 text-[10px] text-muted-foreground">
+      <span>Fuente: {value.source}</span>
+      <span aria-hidden="true">·</span>
+      <span>Observado: {observedLabel}</span>
+      {confidence ? <span>· Confianza: {confidence}</span> : null}
+      {limitations.length > 0 ? (
+        <span title={limitations.join(" ")}>· Tiene límites</span>
+      ) : null}
+    </div>
+  );
 }
 
 // ─── Generic confirm card for ANY write tool ──────────────────────────────────
@@ -964,7 +1408,9 @@ function formatDateTime(value: unknown): string | null {
 
   // Date-only values are task due dates. Parse them as local calendar dates so
   // they do not shift back one day in time zones west of UTC.
-  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text}T00:00:00` : text);
+  const date = new Date(
+    /^\d{4}-\d{2}-\d{2}$/.test(text) ? `${text}T00:00:00` : text,
+  );
   if (Number.isNaN(date.getTime())) return text;
 
   return date.toLocaleString(undefined, {
@@ -978,7 +1424,12 @@ function formatMoney(input: Record<string, unknown>): string | null {
   if (typeof amount !== "number") return null;
 
   const currency = optionalText(input.currency) ?? "";
-  const period = input.salaryPeriod === "annual" ? "/ year" : input.salaryPeriod === "monthly" ? "/ month" : "";
+  const period =
+    input.salaryPeriod === "annual"
+      ? "/ year"
+      : input.salaryPeriod === "monthly"
+        ? "/ month"
+        : "";
   return `${currency ? `${currency} ` : ""}${amount.toLocaleString()}${period}`;
 }
 
@@ -989,7 +1440,9 @@ function getWriteActionPreview(
   const detail = (label: string, value: string | null): WriteActionDetail[] =>
     value ? [{ label, value }] : [];
   const taskIds = Array.isArray(input.taskIds)
-    ? input.taskIds.filter((id): id is string => typeof id === "string" && id.length > 0)
+    ? input.taskIds.filter(
+        (id): id is string => typeof id === "string" && id.length > 0,
+      )
     : [];
 
   switch (toolName) {
@@ -1018,16 +1471,27 @@ function getWriteActionPreview(
     case "updateTask": {
       const count = taskIds.length || (optionalText(input.taskId) ? 1 : 0);
       const changes = [
-        input.status ? `Status: ${String(input.status).replace(/_/g, " ")}` : null,
-        optionalText(input.title) ? `Title: ${optionalText(input.title)}` : null,
+        input.status
+          ? `Status: ${String(input.status).replace(/_/g, " ")}`
+          : null,
+        optionalText(input.title)
+          ? `Title: ${optionalText(input.title)}`
+          : null,
         input.priority ? `Priority: ${String(input.priority)}` : null,
-        input.clearDueDate === true ? "Due date: remove" : formatDateTime(input.dueDate) ? `Due date: ${formatDateTime(input.dueDate)}` : null,
+        input.clearDueDate === true
+          ? "Due date: remove"
+          : formatDateTime(input.dueDate)
+            ? `Due date: ${formatDateTime(input.dueDate)}`
+            : null,
         optionalText(input.ownerId) ? "Owner: change" : null,
       ].filter((change): change is string => Boolean(change));
       return {
         title: count > 1 ? `Update ${count} tasks` : "Update task",
         details: [
-          ...detail("Affected", count ? `${count} task${count === 1 ? "" : "s"}` : null),
+          ...detail(
+            "Affected",
+            count ? `${count} task${count === 1 ? "" : "s"}` : null,
+          ),
           ...detail("Changes", changes.join(", ") || null),
         ],
       };
@@ -1038,17 +1502,26 @@ function getWriteActionPreview(
         details: [
           ...detail("Role", optionalText(input.title)),
           ...detail("Workplace", optionalText(input.workplaceType)),
-          ...detail("Employment", optionalText(input.employmentType)?.replace(/_/g, " ") ?? null),
+          ...detail(
+            "Employment",
+            optionalText(input.employmentType)?.replace(/_/g, " ") ?? null,
+          ),
           ...detail("Location", optionalText(input.location)),
         ],
       };
     case "addCandidateNote":
       return {
         title: "Add candidate note",
-        details: detail("Note", optionalText(input.body)?.slice(0, 180) ?? null),
+        details: detail(
+          "Note",
+          optionalText(input.body)?.slice(0, 180) ?? null,
+        ),
       };
     case "addCandidateTag":
-      return { title: "Add candidate tag", details: detail("Tag", optionalText(input.label)) };
+      return {
+        title: "Add candidate tag",
+        details: detail("Tag", optionalText(input.label)),
+      };
     case "createOffer":
       return {
         title: "Create draft offer",
@@ -1062,14 +1535,25 @@ function getWriteActionPreview(
     case "sendOffer":
       return { title: "Send offer", details: [] };
     case "decideOffer":
-      return { title: "Record offer decision", details: detail("Decision", optionalText(input.decision)) };
+      return {
+        title: "Record offer decision",
+        details: detail("Decision", optionalText(input.decision)),
+      };
     case "scheduleInterview":
       return {
         title: "Schedule interview",
         details: [
-          ...detail("Type", optionalText(input.type)?.replace(/_/g, " ") ?? null),
+          ...detail(
+            "Type",
+            optionalText(input.type)?.replace(/_/g, " ") ?? null,
+          ),
           ...detail("When", formatDateTime(input.scheduledAt)),
-          ...detail("Duration", typeof input.durationMins === "number" ? `${input.durationMins} minutes` : null),
+          ...detail(
+            "Duration",
+            typeof input.durationMins === "number"
+              ? `${input.durationMins} minutes`
+              : null,
+          ),
           ...detail("Mode", optionalText(input.mode)),
         ],
       };
@@ -1089,7 +1573,10 @@ function getWriteActionPreview(
         details: [
           ...detail("Rating", optionalText(input.rating)),
           ...detail("Stage", optionalText(input.stageName)),
-          ...detail("Comment", optionalText(input.comment)?.slice(0, 180) ?? null),
+          ...detail(
+            "Comment",
+            optionalText(input.comment)?.slice(0, 180) ?? null,
+          ),
         ],
       };
     case "sendCandidateEmail":
@@ -1098,6 +1585,24 @@ function getWriteActionPreview(
         details: [
           ...detail("To", optionalText(input.toEmail)),
           ...detail("Subject", optionalText(input.subject)),
+        ],
+      };
+    case "generateCandidateScore":
+      return {
+        title: "Generate candidate evaluation",
+        details: [
+          ...detail("Candidate", optionalText(input.candidateName)),
+          ...detail("Role", optionalText(input.jobTitle)),
+          { label: "Data sent", value: "Resume and application answers" },
+        ],
+      };
+    case "bulkScoreJob":
+      return {
+        title: "Evaluate applicants",
+        details: [
+          ...detail("Role", optionalText(input.jobTitle)),
+          { label: "Scope", value: "All currently unscored applicants" },
+          { label: "Data sent", value: "Resumes and application answers" },
         ],
       };
     default:
@@ -1110,6 +1615,7 @@ function WriteConfirmCard({
   toolName,
   summary,
   input,
+  serverPreview,
   done,
   pending,
   onConfirm,
@@ -1120,6 +1626,7 @@ function WriteConfirmCard({
   toolName: string;
   summary: string;
   input: Record<string, unknown>;
+  serverPreview?: AgentWritePreview;
   done: {
     confirmed: boolean;
     error?: string;
@@ -1138,7 +1645,26 @@ function WriteConfirmCard({
   const from = String(input.fromStageName ?? "");
   const to = String(input.toStageName ?? "");
   const who = String(input.candidateName ?? "");
-  const preview = getWriteActionPreview(toolName, input);
+  const localPreview = getWriteActionPreview(toolName, input);
+  const requiresCanonicalPreview = [
+    "moveCandidateStage",
+    "rejectCandidate",
+    "sendCandidateEmail",
+    "sendOffer",
+    "decideOffer",
+    "scheduleInterview",
+    "createOffer",
+    "generateCandidateScore",
+    "bulkScoreJob",
+  ].includes(toolName);
+  const verifying =
+    requiresCanonicalPreview &&
+    (!serverPreview || serverPreview.title === "Verifying action…");
+  const preview = verifying
+    ? { title: "Verifying action…", details: [] }
+    : serverPreview?.canonical && serverPreview.ok
+      ? serverPreview
+      : localPreview;
   const titleId = `write-action-${toolCallId}`;
 
   if (done) {
@@ -1187,26 +1713,49 @@ function WriteConfirmCard({
     >
       <div className="space-y-2.5 px-3 py-2.5">
         <div className="space-y-0.5">
-          <h3 id={titleId} className="text-[13px] font-semibold leading-snug text-foreground">
+          <h3
+            id={titleId}
+            className="text-[13px] font-semibold leading-snug text-foreground"
+          >
             {preview.title}
           </h3>
           <p className="text-[11px] leading-snug text-muted-foreground">
             Review the exact changes below before confirming.
           </p>
         </div>
-        {preview.details.length > 0 && (
-          <dl className="space-y-1.5 rounded-lg bg-muted/45 px-2.5 py-2 text-[11px] leading-snug">
-            {preview.details.map((item) => (
-              <div key={item.label} className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2">
-                <dt className="text-muted-foreground">{item.label}</dt>
-                <dd className="min-w-0 break-words font-medium text-foreground">{item.value}</dd>
-              </div>
-            ))}
-          </dl>
+        {requiresCanonicalPreview &&
+        serverPreview &&
+        !serverPreview.ok &&
+        !verifying ? (
+          <p
+            className="rounded-lg bg-destructive/10 px-2.5 py-2 text-[11px] leading-snug text-destructive"
+            role="alert"
+          >
+            {serverPreview.error ?? "The action could not be verified."}
+          </p>
+        ) : (
+          preview.details.length > 0 && (
+            <dl className="space-y-1.5 rounded-lg bg-muted/45 px-2.5 py-2 text-[11px] leading-snug">
+              {preview.details.map((item) => (
+                <div
+                  key={item.label}
+                  className="grid grid-cols-[5.5rem_minmax(0,1fr)] gap-2"
+                >
+                  <dt className="text-muted-foreground">{item.label}</dt>
+                  <dd className="min-w-0 break-words font-medium text-foreground">
+                    {item.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          )
         )}
         {summary && (
           <p className="text-[11px] leading-snug text-muted-foreground">
-            <span className="font-medium text-foreground/80">Agent summary:</span> {summary}
+            <span className="font-medium text-foreground/80">
+              Agent summary:
+            </span>{" "}
+            {summary}
           </p>
         )}
         {isMove && who && from && to && (
@@ -1220,7 +1769,9 @@ function WriteConfirmCard({
           size="sm"
           className="h-7 flex-1 px-3 text-xs"
           onClick={onConfirm}
-          disabled={pending}
+          disabled={
+            pending || verifying || Boolean(serverPreview && !serverPreview.ok)
+          }
           aria-label={`Confirm: ${preview.title}`}
         >
           {pending ? "Working…" : "Confirm"}
@@ -1241,7 +1792,15 @@ function WriteConfirmCard({
 }
 
 // Visual before→after stage path. Animates the arrow + destination on confirm.
-function StagePath({ from, to, animate }: { from: string; to: string; animate?: boolean }) {
+function StagePath({
+  from,
+  to,
+  animate,
+}: {
+  from: string;
+  to: string;
+  animate?: boolean;
+}) {
   return (
     <div className="flex items-center gap-2 text-[11px]">
       <span className="rounded-md bg-muted px-2 py-1 font-medium text-muted-foreground">
@@ -1255,7 +1814,10 @@ function StagePath({ from, to, animate }: { from: string; to: string; animate?: 
         aria-hidden="true"
         className="shrink-0 text-muted-foreground/50"
       >
-        <path fill="currentColor" d="m221.66 133.66l-72 72a8 8 0 0 1-11.32-11.32L196.69 136H40a8 8 0 0 1 0-16h156.69l-58.35-58.34a8 8 0 0 1 11.32-11.32l72 72a8 8 0 0 1 0 11.32" />
+        <path
+          fill="currentColor"
+          d="m221.66 133.66l-72 72a8 8 0 0 1-11.32-11.32L196.69 136H40a8 8 0 0 1 0-16h156.69l-58.35-58.34a8 8 0 0 1 11.32-11.32l72 72a8 8 0 0 1 0 11.32"
+        />
       </svg>
       <span
         className={cn(
@@ -1319,9 +1881,18 @@ function EmptyState({
 function NotConfiguredState() {
   return (
     <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
-      <Image src="/harly-ai-animado.svg" alt="Harly AI" width={72} height={72} unoptimized priority />
+      <Image
+        src="/harly-ai-animado.svg"
+        alt="Harly AI"
+        width={72}
+        height={72}
+        unoptimized
+        priority
+      />
       <div className="flex flex-col gap-1">
-        <h2 className="text-[16px] font-semibold tracking-tight">Harly AI isn&apos;t set up yet</h2>
+        <h2 className="text-[16px] font-semibold tracking-tight">
+          Harly AI isn&apos;t set up yet
+        </h2>
         <p className="text-[13px] leading-relaxed text-muted-foreground">
           Connect an AI provider key to start chatting with your hiring copilot.
         </p>
@@ -1346,7 +1917,11 @@ type HarlyChatProps = {
   userName: string;
   /** Candidate currently visible in the dashboard. */
   candidateId?: string;
-  surfaceContext?: { kind: "candidate" | "section"; label: string; path: string };
+  surfaceContext?: {
+    kind: "candidate" | "section";
+    label: string;
+    path: string;
+  };
   onConversationActivity: () => void;
 };
 
@@ -1380,7 +1955,12 @@ function HarlyChat({
       }
     >
   >({});
-  const [pendingWriteIds, setPendingWriteIds] = useState<Set<string>>(() => new Set());
+  const [pendingWriteIds, setPendingWriteIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [preparedWritePreviews, setPreparedWritePreviews] = useState<
+    Record<string, AgentWritePreview>
+  >({});
   const pendingWriteIdsRef = useRef(new Set<string>());
   const firstName = userName.split(" ")[0] ?? userName;
   const notifiedRef = useRef(false);
@@ -1404,9 +1984,47 @@ function HarlyChat({
   const isBusy = status === "submitted" || status === "streaming";
 
   useEffect(() => {
+    const pending: Array<{
+      id: string;
+      tool: string;
+      input: Record<string, unknown>;
+    }> = [];
+    for (const message of messages) {
+      if (message.role !== "assistant") continue;
+      for (const part of message.parts as Array<{
+        type?: string;
+        toolCallId?: string;
+        input?: Record<string, unknown>;
+      }>) {
+        const tool = part.type?.startsWith("tool-")
+          ? part.type.slice("tool-".length)
+          : "";
+        if (tool && part.toolCallId && part.input && isAgentWriteTool(tool)) {
+          pending.push({ id: part.toolCallId, tool, input: part.input });
+        }
+      }
+    }
+    for (const item of pending) {
+      if (preparedWritePreviews[item.id]) continue;
+      setPreparedWritePreviews((previous) => ({
+        ...previous,
+        [item.id]: { ok: false, title: "Verifying action…", details: [] },
+      }));
+      void prepareAgentWriteAction(item.tool, item.input).then((preview) => {
+        setPreparedWritePreviews((previous) => ({
+          ...previous,
+          [item.id]: preview,
+        }));
+      });
+    }
+  }, [messages, preparedWritePreviews]);
+
+  useEffect(() => {
     if (mentionQuery === null || mentionQuery.length === 0) return;
     const timer = window.setTimeout(() => {
-      void searchCandidateMentionsAction(mentionQuery).then(setMentionCandidates);
+      void searchCandidateMentionsAction(mentionQuery).then(
+        setMentionCandidates,
+      );
     }, 140);
     return () => window.clearTimeout(timer);
   }, [mentionQuery]);
@@ -1489,7 +2107,7 @@ function HarlyChat({
         tool: toolName,
         toolCallId,
         output: res.success
-          ? { confirmed: true, result: res.message ?? "Done." }
+          ? { confirmed: true, ...res }
           : { confirmed: true, error: res.error ?? "Action failed." },
       });
     } finally {
@@ -1518,7 +2136,9 @@ function HarlyChat({
         undone: result.success,
         undoable: result.success ? false : current.undoable,
         error: result.success ? undefined : result.error,
-        message: result.success ? result.message ?? "Action undone." : current.message,
+        message: result.success
+          ? (result.message ?? "Action undone.")
+          : current.message,
       },
     }));
   }
@@ -1528,288 +2148,313 @@ function HarlyChat({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <>
-            {/* Chat area */}
-            <ChatContainerRoot className="h-0 min-h-0 flex-1 px-4">
-              <ChatContainerContent className="gap-4 py-4">
-                {!hasMessages && (
-                  <EmptyState firstName={firstName} onPromptClick={(p) => setInput(p)} />
-                )}
+        {/* Chat area */}
+        <ChatContainerRoot className="h-0 min-h-0 flex-1 px-4">
+          <ChatContainerContent className="gap-4 py-4">
+            {!hasMessages && (
+              <EmptyState
+                firstName={firstName}
+                onPromptClick={(p) => setInput(p)}
+              />
+            )}
 
-                {messages.map((message) => {
-                  if (message.role === "user") {
-                    const text = message.parts
-                      .filter((p) => p.type === "text")
-                      .map((p) => (p as { text: string }).text)
-                      .join("");
-                    return (
-                      <div key={message.id} className="flex justify-end">
-                        <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-[13px] leading-[22px] text-primary-foreground">
-                          {text}
-                        </div>
+            {messages.map((message) => {
+              if (message.role === "user") {
+                const text = message.parts
+                  .filter((p) => p.type === "text")
+                  .map((p) => (p as { text: string }).text)
+                  .join("");
+                return (
+                  <div key={message.id} className="flex justify-end">
+                    <div className="max-w-[80%] rounded-2xl rounded-br-sm bg-primary px-3.5 py-2 text-[13px] leading-[22px] text-primary-foreground">
+                      {text}
+                    </div>
+                  </div>
+                );
+              }
+
+              // Assistant message , render in a clean order regardless of
+              // the part sequence: tool-status lines first (collapsed once
+              // done), then the streamed text, then any rich result cards.
+              const parts = message.parts as Array<{
+                type: string;
+                text?: string;
+                toolCallId?: string;
+                state?: string;
+                input?: { summary?: string } & Record<string, unknown>;
+                output?: unknown;
+              }>;
+              const statusEls: React.ReactNode[] = [];
+              const textEls: React.ReactNode[] = [];
+              const writeEls: React.ReactNode[] = [];
+              // Collect pending updateTask confirmations so we can offer a
+              // single "Confirm all" when the agent batches several.
+              const pendingUpdateTasks: {
+                toolName: string;
+                callId: string;
+                input: Record<string, unknown>;
+              }[] = [];
+              // Read tools chain (search → list → profile), each emitting a
+              // card. Rendering one per call floods the message, so we keep
+              // only the LAST completed read card , the one that actually
+              // answers the turn. Status lines still show every step.
+              let lastReadCard: React.ReactNode = null;
+
+              parts.forEach((part, i) => {
+                if (part.type === "text") {
+                  textEls.push(
+                    <Markdown
+                      key={`t-${i}`}
+                      className="prose prose-sm max-w-none text-[13px] leading-[22px] text-foreground prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1.5"
+                      components={MARKDOWN_COMPONENTS}
+                    >
+                      {part.text ?? ""}
+                    </Markdown>,
+                  );
+                  return;
+                }
+                if (!part.type.startsWith("tool-")) return;
+
+                const toolName = part.type.slice("tool-".length);
+
+                // Write tool → confirm card (inline with text flow).
+                if (isAgentWriteTool(toolName)) {
+                  if (!part.input || !part.toolCallId) return;
+                  const callId = part.toolCallId;
+                  const inputData = part.input;
+                  writeEls.push(
+                    <WriteConfirmCard
+                      key={callId}
+                      toolCallId={callId}
+                      toolName={toolName}
+                      summary={inputData.summary ?? "Confirm this action?"}
+                      input={inputData}
+                      serverPreview={preparedWritePreviews[callId]}
+                      done={writeResults[callId] ?? null}
+                      pending={pendingWriteIds.has(callId)}
+                      onConfirm={() =>
+                        handleWriteConfirm(toolName, callId, inputData, true)
+                      }
+                      onCancel={() =>
+                        handleWriteConfirm(toolName, callId, inputData, false)
+                      }
+                      onUndo={() => handleWriteUndo(callId)}
+                    />,
+                  );
+                  if (
+                    toolName === "updateTask" &&
+                    !writeResults[callId] &&
+                    inputData.taskId
+                  ) {
+                    pendingUpdateTasks.push({
+                      toolName,
+                      callId,
+                      input: inputData,
+                    });
+                  }
+                  return;
+                }
+
+                // Read tool → status line + (when done) a rich card.
+                const label = TOOL_LABELS[part.type] ?? "Working";
+                if (part.state === "output-available" && part.output) {
+                  const errored =
+                    typeof part.output === "object" &&
+                    part.output !== null &&
+                    "error" in (part.output as Record<string, unknown>);
+                  statusEls.push(
+                    <ToolStatus
+                      key={`s-${part.toolCallId}`}
+                      label={label}
+                      state={errored ? "error" : "done"}
+                    />,
+                  );
+                  if (!errored) {
+                    lastReadCard = (
+                      <div key={`c-${part.toolCallId}`}>
+                        <EvidenceMeta output={part.output} />
+                        <ToolResultCard
+                          toolName={toolName}
+                          output={part.output}
+                        />
                       </div>
                     );
                   }
-
-                  // Assistant message , render in a clean order regardless of
-                  // the part sequence: tool-status lines first (collapsed once
-                  // done), then the streamed text, then any rich result cards.
-                  const parts = message.parts as Array<{
-                    type: string;
-                    text?: string;
-                    toolCallId?: string;
-                    state?: string;
-                    input?: { summary?: string } & Record<string, unknown>;
-                    output?: unknown;
-                  }>;
-                  const statusEls: React.ReactNode[] = [];
-                  const textEls: React.ReactNode[] = [];
-                  const writeEls: React.ReactNode[] = [];
-                  // Collect pending updateTask confirmations so we can offer a
-                  // single "Confirm all" when the agent batches several.
-                  const pendingUpdateTasks: {
-                    toolName: string;
-                    callId: string;
-                    input: Record<string, unknown>;
-                  }[] = [];
-                  // Read tools chain (search → list → profile), each emitting a
-                  // card. Rendering one per call floods the message, so we keep
-                  // only the LAST completed read card , the one that actually
-                  // answers the turn. Status lines still show every step.
-                  let lastReadCard: React.ReactNode = null;
-
-                  parts.forEach((part, i) => {
-                    if (part.type === "text") {
-                      textEls.push(
-                        <Markdown
-                          key={`t-${i}`}
-                          className="prose prose-sm max-w-none text-[13px] leading-[22px] text-foreground prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1.5"
-                          components={MARKDOWN_COMPONENTS}
-                        >
-                          {part.text ?? ""}
-                        </Markdown>,
-                      );
-                      return;
-                    }
-                    if (!part.type.startsWith("tool-")) return;
-
-                    const toolName = part.type.slice("tool-".length);
-
-                    // Write tool → confirm card (inline with text flow).
-                    if (isAgentWriteTool(toolName)) {
-                      if (!part.input || !part.toolCallId) return;
-                      const callId = part.toolCallId;
-                      const inputData = part.input;
-                      writeEls.push(
-                        <WriteConfirmCard
-                          key={callId}
-                          toolCallId={callId}
-                          toolName={toolName}
-                          summary={inputData.summary ?? "Confirm this action?"}
-                          input={inputData}
-                          done={writeResults[callId] ?? null}
-                          pending={pendingWriteIds.has(callId)}
-                          onConfirm={() => handleWriteConfirm(toolName, callId, inputData, true)}
-                          onCancel={() => handleWriteConfirm(toolName, callId, inputData, false)}
-                          onUndo={() => handleWriteUndo(callId)}
-                        />,
-                      );
-                      if (
-                        toolName === "updateTask" &&
-                        !writeResults[callId] &&
-                        inputData.taskId
-                      ) {
-                        pendingUpdateTasks.push({
-                          toolName,
-                          callId,
-                          input: inputData,
-                        });
-                      }
-                      return;
-                    }
-
-                    // Read tool → status line + (when done) a rich card.
-                    const label = TOOL_LABELS[part.type] ?? "Working";
-                    if (part.state === "output-available" && part.output) {
-                      const errored =
-                        typeof part.output === "object" &&
-                        part.output !== null &&
-                        "error" in (part.output as Record<string, unknown>);
-                      statusEls.push(
-                        <ToolStatus
-                          key={`s-${part.toolCallId}`}
-                          label={label}
-                          state={errored ? "error" : "done"}
-                        />,
-                      );
-                      if (!errored) {
-                        lastReadCard = (
-                          <ToolResultCard
-                            key={`c-${part.toolCallId}`}
-                            toolName={toolName}
-                            output={part.output}
-                          />
-                        );
-                      }
-                      return;
-                    }
-                    if (part.state === "input-streaming" || part.state === "input-available") {
-                      statusEls.push(
-                        <ToolStatus key={`s-${i}`} label={label} state="running" />,
-                      );
-                    }
-                  });
-
-                  return (
-                    <div key={message.id} className="flex items-start gap-2">
-                      <Image
-                        src="/harly-ai-animado.svg"
-                        alt="Harly AI"
-                        width={18}
-                        height={18}
-                        unoptimized
-                        className="mt-1 shrink-0"
-                      />
-                      <div className="flex min-w-0 flex-1 flex-col gap-2">
-                        {statusEls.length > 0 && (
-                          <div className="flex flex-col gap-1">{statusEls}</div>
-                        )}
-                        {lastReadCard}
-                        {textEls}
-                        {writeEls}
-                        {pendingUpdateTasks.length > 1 && (
-                          <div
-                            className="self-start rounded-lg border border-border/60 bg-muted/30 p-2"
-                            role="group"
-                            aria-label={`Batch confirmation for ${pendingUpdateTasks.length} task updates`}
-                          >
-                            <p className="mb-1.5 text-[11px] leading-snug text-muted-foreground">
-                              Review each task card, then confirm all {pendingUpdateTasks.length} updates together.
-                            </p>
-                            <Button
-                              size="sm"
-                              className="h-7 px-3 text-xs"
-                              disabled={isBusy || pendingUpdateTasks.some((task) => pendingWriteIds.has(task.callId))}
-                              aria-label={`Confirm all ${pendingUpdateTasks.length} task updates`}
-                              onClick={() => {
-                                for (const t of pendingUpdateTasks) {
-                                  void handleWriteConfirm(
-                                    t.toolName,
-                                    t.callId,
-                                    t.input,
-                                    true,
-                                  );
-                                }
-                              }}
-                            >
-                              Confirm all {pendingUpdateTasks.length} updates
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                  return;
+                }
+                if (
+                  part.state === "input-streaming" ||
+                  part.state === "input-available"
+                ) {
+                  statusEls.push(
+                    <ToolStatus key={`s-${i}`} label={label} state="running" />,
                   );
-                })}
+                }
+              });
 
-                {status === "submitted" && (
-                  <div className="flex items-center gap-2">
-                    <Image src="/harly-ai-animado.svg" alt="Harly AI" width={18} height={18} unoptimized className="shrink-0" />
-                    <ThinkingShimmer />
-                  </div>
-                )}
-
-                <ChatContainerScrollAnchor />
-              </ChatContainerContent>
-            </ChatContainerRoot>
-
-            {/* Input */}
-            <div className="shrink-0 border-t border-border/60 p-3">
-              <div className="relative">
-                {mentionCandidates.length > 0 ? (
-                  <div className="absolute inset-x-0 bottom-full z-10 mb-2 overflow-hidden rounded-xl border border-border/70 bg-popover p-1 shadow-lg">
-                    <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
-                      Mention candidate
-                    </p>
-                    {mentionCandidates.map((candidate) => (
-                      <button
-                        key={candidate.id}
-                        type="button"
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={() => selectMention(candidate)}
-                        className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent active:scale-[0.99]"
-                      >
-                        <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
-                          {candidate.name
-                            .split(" ")
-                            .map((part) => part[0])
-                            .join("")
-                            .slice(0, 2)}
-                        </span>
-                        <span className="min-w-0">
-                          <span className="block truncate text-xs font-medium text-foreground">
-                            {candidate.name}
-                          </span>
-                          <span className="block truncate text-[11px] text-muted-foreground">
-                            {candidate.email}
-                          </span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-                <PromptInput
-                  value={input}
-                  onValueChange={handleInputChange}
-                  onSubmit={submit}
-                  isLoading={isBusy}
-                  maxHeight={120}
-                  className="rounded-3xl border-border/60 bg-muted/30 px-3 py-2 shadow-none"
-                >
-                  <PromptInputTextarea
-                    placeholder="Ask Harly AI… Use @ to mention a candidate"
-                    className="min-h-[36px] bg-transparent py-1 text-[13px] dark:bg-transparent"
+              return (
+                <div key={message.id} className="flex items-start gap-2">
+                  <Image
+                    src="/harly-ai-animado.svg"
+                    alt="Harly AI"
+                    width={18}
+                    height={18}
+                    unoptimized
+                    className="mt-1 shrink-0"
                   />
-                  <PromptInputActions className="justify-between pt-1">
-                  <PromptInputAction tooltip="Attach files (coming soon)">
+                  <div className="flex min-w-0 flex-1 flex-col gap-2">
+                    {statusEls.length > 0 && (
+                      <div className="flex flex-col gap-1">{statusEls}</div>
+                    )}
+                    {lastReadCard}
+                    {textEls}
+                    {writeEls}
+                    {pendingUpdateTasks.length > 1 && (
+                      <div
+                        className="self-start rounded-lg border border-border/60 bg-muted/30 p-2"
+                        role="group"
+                        aria-label={`Batch confirmation for ${pendingUpdateTasks.length} task updates`}
+                      >
+                        <p className="mb-1.5 text-[11px] leading-snug text-muted-foreground">
+                          Review each task card, then confirm all{" "}
+                          {pendingUpdateTasks.length} updates together.
+                        </p>
+                        <Button
+                          size="sm"
+                          className="h-7 px-3 text-xs"
+                          disabled={
+                            isBusy ||
+                            pendingUpdateTasks.some((task) =>
+                              pendingWriteIds.has(task.callId),
+                            )
+                          }
+                          aria-label={`Confirm all ${pendingUpdateTasks.length} task updates`}
+                          onClick={() => {
+                            for (const t of pendingUpdateTasks) {
+                              void handleWriteConfirm(
+                                t.toolName,
+                                t.callId,
+                                t.input,
+                                true,
+                              );
+                            }
+                          }}
+                        >
+                          Confirm all {pendingUpdateTasks.length} updates
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            {status === "submitted" && (
+              <div className="flex items-center gap-2">
+                <Image
+                  src="/harly-ai-animado.svg"
+                  alt="Harly AI"
+                  width={18}
+                  height={18}
+                  unoptimized
+                  className="shrink-0"
+                />
+                <ThinkingShimmer />
+              </div>
+            )}
+
+            <ChatContainerScrollAnchor />
+          </ChatContainerContent>
+        </ChatContainerRoot>
+
+        {/* Input */}
+        <div className="shrink-0 border-t border-border/60 p-3">
+          <div className="relative">
+            {mentionCandidates.length > 0 ? (
+              <div className="absolute inset-x-0 bottom-full z-10 mb-2 overflow-hidden rounded-xl border border-border/70 bg-popover p-1 shadow-lg">
+                <p className="px-2 py-1 text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">
+                  Mention candidate
+                </p>
+                {mentionCandidates.map((candidate) => (
+                  <button
+                    key={candidate.id}
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => selectMention(candidate)}
+                    className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors hover:bg-accent active:scale-[0.99]"
+                  >
+                    <span className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-muted-foreground">
+                      {candidate.name
+                        .split(" ")
+                        .map((part) => part[0])
+                        .join("")
+                        .slice(0, 2)}
+                    </span>
+                    <span className="min-w-0">
+                      <span className="block truncate text-xs font-medium text-foreground">
+                        {candidate.name}
+                      </span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {candidate.email}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            <PromptInput
+              value={input}
+              onValueChange={handleInputChange}
+              onSubmit={submit}
+              isLoading={isBusy}
+              maxHeight={120}
+              className="rounded-3xl border-border/60 bg-muted/30 px-3 py-2 shadow-none"
+            >
+              <PromptInputTextarea
+                placeholder="Ask Harly AI… Use @ to mention a candidate"
+                className="min-h-[36px] bg-transparent py-1 text-[13px] dark:bg-transparent"
+              />
+              <PromptInputActions className="justify-between pt-1">
+                <PromptInputAction tooltip="Attach files (coming soon)">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon-sm"
+                    disabled
+                    className="cursor-not-allowed text-muted-foreground/50"
+                    aria-label="Attach files (coming soon)"
+                  >
+                    <Paperclip className="size-3.5" />
+                  </Button>
+                </PromptInputAction>
+                <PromptInputAction tooltip={isBusy ? "Stop" : "Send (Enter)"}>
+                  {isBusy ? (
                     <Button
                       type="button"
-                      variant="ghost"
                       size="icon-sm"
-                      disabled
-                      className="cursor-not-allowed text-muted-foreground/50"
-                      aria-label="Attach files (coming soon)"
+                      onClick={() => void stop()}
+                      aria-label="Stop"
                     >
-                      <Paperclip className="size-3.5" />
+                      <Square className="size-3 fill-current" strokeWidth={0} />
                     </Button>
-                  </PromptInputAction>
-                  <PromptInputAction tooltip={isBusy ? "Stop" : "Send (Enter)"}>
-                    {isBusy ? (
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        onClick={() => void stop()}
-                        aria-label="Stop"
-                      >
-                        <Square className="size-3 fill-current" strokeWidth={0} />
-                      </Button>
-                    ) : (
-                      <Button
-                        size="icon-sm"
-                        onClick={submit}
-                        aria-label="Send"
-                        aria-disabled={!input.trim()}
-                        className={cn(
-                          !input.trim() &&
-                            "pointer-events-none opacity-50",
-                        )}
-                      >
-                        <ArrowUp className="size-3.5" strokeWidth={2.5} />
-                      </Button>
-                    )}
-                  </PromptInputAction>
-                  </PromptInputActions>
-                </PromptInput>
-              </div>
-            </div>
+                  ) : (
+                    <Button
+                      size="icon-sm"
+                      onClick={submit}
+                      aria-label="Send"
+                      aria-disabled={!input.trim()}
+                      className={cn(
+                        !input.trim() && "pointer-events-none opacity-50",
+                      )}
+                    >
+                      <ArrowUp className="size-3.5" strokeWidth={2.5} />
+                    </Button>
+                  )}
+                </PromptInputAction>
+              </PromptInputActions>
+            </PromptInput>
+          </div>
+        </div>
       </>
     </div>
   );
@@ -1844,7 +2489,12 @@ function HistoryDrawer({
     const h = Math.floor(m / 60);
     if (h < 24) return `${h}h ago`;
     const d = Math.floor(h / 24);
-    return d < 7 ? `${d}d ago` : new Date(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    return d < 7
+      ? `${d}d ago`
+      : new Date(iso).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        });
   };
 
   return (
@@ -1865,8 +2515,16 @@ function HistoryDrawer({
         )}
       >
         <div className="flex shrink-0 items-center justify-between border-b border-border/60 px-3 py-3">
-          <span className="text-[12px] font-semibold tracking-tight">Chats</span>
-          <Button variant="ghost" size="icon" className="size-7 text-muted-foreground" onClick={onClose} aria-label="Close history">
+          <span className="text-[12px] font-semibold tracking-tight">
+            Chats
+          </span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-7 text-muted-foreground"
+            onClick={onClose}
+            aria-label="Close history"
+          >
             <X className="size-4" />
           </Button>
         </div>
@@ -1882,7 +2540,9 @@ function HistoryDrawer({
         </div>
         <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto p-2">
           {conversations.length === 0 ? (
-            <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">No conversations yet.</p>
+            <p className="px-2 py-4 text-center text-[11px] text-muted-foreground">
+              No conversations yet.
+            </p>
           ) : (
             conversations.map((c, i) => (
               <div
@@ -1899,8 +2559,12 @@ function HistoryDrawer({
                   onClick={() => onSelect(c.id)}
                   className="flex min-w-0 flex-1 flex-col text-left"
                 >
-                  <span className="truncate text-[12px] font-medium text-foreground">{c.title ?? "New chat"}</span>
-                  <span className="text-[10px] text-muted-foreground">{relative(c.lastMessageAt)}</span>
+                  <span className="truncate text-[12px] font-medium text-foreground">
+                    {c.title ?? "New chat"}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {relative(c.lastMessageAt)}
+                  </span>
                 </button>
                 <button
                   type="button"
@@ -1929,7 +2593,11 @@ type HarlyAIPanelProps = {
   onClose: () => void;
   /** Candidate currently visible in the dashboard. */
   candidateId?: string;
-  surfaceContext?: { kind: "candidate" | "section"; label: string; path: string };
+  surfaceContext?: {
+    kind: "candidate" | "section";
+    label: string;
+    path: string;
+  };
 };
 
 function freshId(): string {
@@ -1949,13 +2617,19 @@ export function HarlyAIPanel({
 }: HarlyAIPanelProps) {
   const [conversationId, setConversationId] = useState<string>(() => freshId());
   const [initialMessages, setInitialMessages] = useState<StoredUIMessage[]>([]);
-  const [restoredPersistenceKey, setRestoredPersistenceKey] = useState<string | null>(null);
-  const [conversations, setConversations] = useState<ConversationListItem[]>([]);
+  const [restoredPersistenceKey, setRestoredPersistenceKey] = useState<
+    string | null
+  >(null);
+  const [conversations, setConversations] = useState<ConversationListItem[]>(
+    [],
+  );
   const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    const storedId = window.sessionStorage.getItem(`harly-ai:conversation:${persistenceKey}`);
+    const storedId = window.sessionStorage.getItem(
+      `harly-ai:conversation:${persistenceKey}`,
+    );
     if (!storedId) {
       queueMicrotask(() => {
         if (!cancelled) setRestoredPersistenceKey(persistenceKey);
@@ -2048,7 +2722,9 @@ export function HarlyAIPanel({
               </Button>
             )}
             <HarlyAILogoMark className="size-5 shrink-0" />
-            <span className="text-sm font-semibold tracking-tight">Harly AI</span>
+            <span className="text-sm font-semibold tracking-tight">
+              Harly AI
+            </span>
           </div>
           <div className="flex items-center gap-0.5">
             {aiEnabled && (

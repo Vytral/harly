@@ -140,7 +140,10 @@ export function AiSettingsCard({
               canEdit ? (
                 <>
                   {status.encryptionReady ? (
-                    <Button asChild variant={status.hasApiKey ? "outline" : "default"}>
+                    <Button
+                      asChild
+                      variant={status.hasApiKey ? "outline" : "default"}
+                    >
                       <Link href={"/settings/ai/configure" as Route}>
                         <KeyDuotoneIcon className="size-4" />
                         {status.hasApiKey ? "Manage" : "Configure AI"}
@@ -178,7 +181,9 @@ export function AiSettingsCard({
               </StatCell>
               <StatCell label="Model">
                 <span className="truncate font-mono text-[13px]">
-                  {status.modelId ? formatModelLabel(status.modelId) : "Not configured"}
+                  {status.modelId
+                    ? formatModelLabel(status.modelId)
+                    : "Not configured"}
                 </span>
               </StatCell>
               <StatCell label="Endpoint">
@@ -209,18 +214,9 @@ export function AiSettingsCard({
             description="Generate first-draft postings from a short brief in the job wizard. Title, keywords, and workplace type are enough to get a full draft."
             alwaysOn
           />
-          <AutoScoreFeatureCard
-            status={status}
-            canEdit={canEdit}
-          />
-          <DuplicateCheckFeatureCard
-            status={status}
-            canEdit={canEdit}
-          />
-          <ResumeAnonymizationFeatureCard
-            status={status}
-            canEdit={canEdit}
-          />
+          <AutoScoreFeatureCard status={status} canEdit={canEdit} />
+          <DuplicateCheckFeatureCard status={status} canEdit={canEdit} />
+          <ResumeAnonymizationFeatureCard status={status} canEdit={canEdit} />
         </div>
       </div>
 
@@ -238,7 +234,8 @@ export function AiSettingsCard({
         <div className="grid grid-cols-2 gap-2.5 px-6 sm:grid-cols-3 lg:grid-cols-5">
           {AI_PROVIDERS.map((provider) => {
             const Logo = PROVIDER_LOGO[provider.id];
-            const isActive = status.provider === provider.id && status.hasApiKey;
+            const isActive =
+              status.provider === provider.id && status.hasApiKey;
             return (
               <div
                 key={provider.id}
@@ -402,7 +399,9 @@ function DuplicateCheckFeatureCard({
         toast.error(result.error ?? "Could not update setting.");
         return;
       }
-      toast.success(next ? "Duplicate detection enabled" : "Duplicate detection disabled");
+      toast.success(
+        next ? "Duplicate detection enabled" : "Duplicate detection disabled",
+      );
       router.refresh();
     });
   }
@@ -421,16 +420,20 @@ function DuplicateCheckFeatureCard({
           className="mt-0.5"
         />
       </div>
-      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">Duplicate detection</h3>
+      <h3 className="mt-3.5 text-sm font-semibold tracking-tight">
+        Duplicate detection
+      </h3>
       <p className="mt-1 text-sm text-muted-foreground">
-        Automatically flag potential duplicate candidates when a new application arrives, and let
-        you verify with AI from any candidate profile.
+        Automatically flag potential duplicate candidates when a new application
+        arrives, and let you verify with AI from any candidate profile.
       </p>
       {disabled && status.hasApiKey && !status.enabled ? (
         <p className="mt-2 text-xs text-clay">Enable AI above to activate.</p>
       ) : null}
       {!status.hasApiKey ? (
-        <p className="mt-2 text-xs text-muted-foreground">Configure a provider to unlock.</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Configure a provider to unlock.
+        </p>
       ) : null}
     </Card>
   );
@@ -493,9 +496,7 @@ function ResumeAnonymizationFeatureCard({
   );
 }
 
-export function AiSettingsForm({ status }: {
-  status: WorkspaceAiStatus;
-}) {
+export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
   const router = useRouter();
   const initialProvider = (status.provider as AiProviderId) ?? "openai";
   const [provider, setProvider] = useState<AiProviderId>(initialProvider);
@@ -517,7 +518,9 @@ export function AiSettingsForm({ status }: {
   );
   const isOpenRouter = info?.supportsModelSearch ?? false;
   const displayBaseUrl =
-    showCustomEndpoint && customEndpoint ? customEndpoint : info?.baseUrl ?? "";
+    showCustomEndpoint && customEndpoint
+      ? customEndpoint
+      : (info?.baseUrl ?? "");
 
   function changeProvider(next: string) {
     const id = next as AiProviderId;
@@ -536,7 +539,9 @@ export function AiSettingsForm({ status }: {
       const found = await searchOpenRouterModelsAction(query);
       setResults(found);
       if (found.length === 0) {
-        toast.message("No models found", { description: "Try a different term." });
+        toast.message("No models found", {
+          description: "Try a different term.",
+        });
       }
     });
   }
@@ -547,7 +552,8 @@ export function AiSettingsForm({ status }: {
         provider,
         modelId,
         apiKey: apiKey || undefined,
-        baseUrl: showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
+        baseUrl:
+          showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
       });
       if (result.ok) {
         toast.success("Connection OK");
@@ -563,7 +569,8 @@ export function AiSettingsForm({ status }: {
         provider,
         modelId,
         apiKey: apiKey || undefined,
-        baseUrl: showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
+        baseUrl:
+          showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
         enabled,
       });
       if (!result.ok) {
@@ -628,7 +635,11 @@ export function AiSettingsForm({ status }: {
             id="ai-model"
             value={modelId}
             onChange={(event) => setModelId(event.target.value)}
-            placeholder={isOpenRouter ? "e.g. openai/gpt-4o" : "Model id"}
+            placeholder={
+              isOpenRouter
+                ? "e.g. openai/gpt-4o"
+                : "Choose or enter any model ID"
+            }
             className="font-mono text-sm"
           />
           {isOpenRouter ? (
@@ -703,6 +714,12 @@ export function AiSettingsForm({ status }: {
               ))}
             </div>
           )}
+          {!isOpenRouter ? (
+            <p className="text-xs text-muted-foreground">
+              Choose a suggested model or enter any model ID supported by the
+              provider.
+            </p>
+          ) : null}
         </div>
 
         <div className="space-y-2">
@@ -731,7 +748,9 @@ export function AiSettingsForm({ status }: {
             className="inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
           >
             <GlobeIcon className="size-3.5" />
-            {showCustomEndpoint ? "Use default endpoint" : "Custom API endpoint"}
+            {showCustomEndpoint
+              ? "Use default endpoint"
+              : "Custom API endpoint"}
           </button>
           {showCustomEndpoint ? (
             <Input

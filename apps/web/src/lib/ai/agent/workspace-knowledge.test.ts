@@ -8,6 +8,7 @@ describe("workspace knowledge", () => {
       workspaceName: "Syntrix",
       tagline: "Build useful things",
       description: "A product company.",
+      websiteUrl: "https://syntrix.example",
       careerPageConfig: {
         hero: { headline: "Come build with us", subhead: "Ship with care" },
         intro: { body: "We work in small teams." },
@@ -15,17 +16,21 @@ describe("workspace knowledge", () => {
           enabled: true,
           items: [{ title: "Clarity", body: "Make the work understandable." }],
         },
+        overview: {
+          enabled: true,
+          stats: [{ label: "Team", value: "12" }],
+        },
       },
     });
 
     expect(result).toContain("Company: Syntrix");
     expect(result).toContain("Values:");
     expect(result).toContain("Clarity");
+    expect(result).toContain("Website: https://syntrix.example");
+    expect(result).toContain("Team: 12");
   });
 
   it("does not create fake company memory when nothing is configured", () => {
-    expect(
-      buildWorkspaceKnowledge({ workspaceName: "Syntrix" }),
-    ).toBeNull();
+    expect(buildWorkspaceKnowledge({ workspaceName: "Syntrix" })).toBeNull();
   });
 });

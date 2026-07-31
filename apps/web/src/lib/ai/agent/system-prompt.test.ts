@@ -10,6 +10,8 @@ describe("Harly AI system prompt", () => {
       role: "recruiter",
       today: "Sunday, July 19, 2026",
       activeCandidateId: "candidate-123",
+      productKnowledge:
+        "Canonical Harly identity: self-hostable ATS. LinkedIn native jobs are unsupported.",
     });
 
     expect(prompt).toContain("connectedIntegrations");
@@ -27,7 +29,15 @@ describe("Harly AI system prompt", () => {
     expect(prompt).toContain("deshaz lo último");
     expect(prompt).toContain("Reply in the same language");
     expect(prompt).toContain("hiringBrief");
+    expect(prompt).toContain("workspaceCapabilities");
+    expect(prompt).toContain("jobDistributionOptions");
+    expect(prompt).toContain("observedAt");
+    expect(prompt).toContain("native job on an external platform");
     expect(prompt).toContain("reviewCandidate");
-    expect(prompt).not.toContain("You have NO access to Settings , billing, integrations");
+    expect(prompt).toContain("Canonical Harly identity: self-hostable ATS");
+    expect(prompt).toContain("Canonical Harly product knowledge");
+    expect(prompt).not.toContain(
+      "You have NO access to Settings , billing, integrations",
+    );
   });
 });

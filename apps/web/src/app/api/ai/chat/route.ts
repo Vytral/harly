@@ -15,6 +15,9 @@ import { getModel } from "@/lib/ai/registry";
 import { buildHarlyTools } from "@/lib/ai/agent";
 import { buildHarlySystemPrompt } from "@/lib/ai/agent/system-prompt";
 import { getWorkspaceKnowledge } from "@/lib/ai/agent/workspace-knowledge";
+import { getHarlyCoreProductContext } from "@/lib/ai/knowledge/harly-product-knowledge";
+import { recordHarlyAgentTrace } from "@/lib/ai/agent/observability";
+import { classifyHarlyIntent } from "@/lib/ai/agent/intent";
 import { persistConversation } from "@/features/ai-chat/data";
 import { recordAiUsage } from "@/lib/ai/usage";
 import { enforceRateLimit } from "@/server/api/ratelimit";
@@ -61,7 +64,33 @@ function requestExceedsBodyLimit(req: Request): boolean {
 }
 
 function historyExceedsLimit(messages: unknown[]): boolean {
-  return messages.length > MAX_CHAT_MESSAGES || JSON.stringify(messages).length > MAX_CHAT_HISTORY_CHARS;
+  return (
+    messages.length > MAX_CHAT_MESSAGES ||
+    JSON.stringify(messages).length > MAX_CHAT_HISTORY_CHARS
+  );
+}
+
+function latestUserText(messages: unknown[]): string {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (!message || typeof message !== "object") continue;
+    const record = message as Record<string, unknown>;
+    if (record.role !== "user") continue;
+    if (typeof record.content === "string") return record.content;
+    if (!Array.isArray(record.parts)) return "";
+    return record.parts
+      .filter((part): part is { type: "text"; text: string } =>
+        Boolean(
+          part &&
+          typeof part === "object" &&
+          (part as Record<string, unknown>).type === "text" &&
+          typeof (part as Record<string, unknown>).text === "string",
+        ),
+      )
+      .map((part) => part.text)
+      .join(" ");
+  }
+  return "";
 }
 
 async function consumeSseStream(stream: ReadableStream<string>): Promise<void> {
@@ -89,7 +118,10 @@ export async function POST(req: Request) {
   }
 
   if (requestExceedsBodyLimit(req)) {
-    return Response.json({ error: "Chat request is too large." }, { status: 413 });
+    return Response.json(
+      { error: "Chat request is too large." },
+      { status: 413 },
+    );
   }
 
   let rawMessages: unknown[];
@@ -103,10 +135,16 @@ export async function POST(req: Request) {
   try {
     const body = chatRequestSchema.parse(await req.json());
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
-      return Response.json({ error: "At least one chat message is required." }, { status: 400 });
+      return Response.json(
+        { error: "At least one chat message is required." },
+        { status: 400 },
+      );
     }
     if (historyExceedsLimit(body.messages)) {
-      return Response.json({ error: "Chat history is too large." }, { status: 413 });
+      return Response.json(
+        { error: "Chat history is too large." },
+        { status: 413 },
+      );
     }
     rawMessages = body.messages;
     conversationId = body.conversationId;
@@ -131,6 +169,10 @@ export async function POST(req: Request) {
 
   const workspaceId = context.organization.id;
   const userId = context.user.id;
+  const intent = classifyHarlyIntent(latestUserText(rawMessages));
+  const agentStartedAt = Date.now();
+  const agentToolCalls = new Set<string>();
+  let agentOutcome: "completed" | "failed" | "aborted" = "completed";
   const workspaceKnowledge = await getWorkspaceKnowledge(
     workspaceId,
     context.organization.name,
@@ -182,6 +224,8 @@ export async function POST(req: Request) {
       mentionedCandidateIds,
       activeSurface: surfaceContext,
       workspaceKnowledge,
+      productKnowledge: getHarlyCoreProductContext(),
+      intent,
       today: new Intl.DateTimeFormat("en-US", {
         weekday: "long",
         year: "numeric",
@@ -199,7 +243,11 @@ export async function POST(req: Request) {
     maxOutputTokens: MAX_CHAT_OUTPUT_TOKENS,
     abortSignal: req.signal,
     timeout: 42_000,
+    onStepFinish: ({ toolCalls }) => {
+      for (const call of toolCalls ?? []) agentToolCalls.add(call.toolName);
+    },
     onError: (error) => {
+      agentOutcome = req.signal.aborted ? "aborted" : "failed";
       console.error("Harly AI chat stream error", {
         workspaceId,
         provider: config.provider,
@@ -229,13 +277,23 @@ export async function POST(req: Request) {
     originalMessages: messages,
     // Friendly, non-leaky message sent to the client if the stream fails
     // mid-flight (IA-05 / IA-11).
-    onError: () => "Harly AI is temporarily unavailable. Please try again in a moment.",
+    onError: () =>
+      "Harly AI is temporarily unavailable. Please try again in a moment.",
     consumeSseStream: ({ stream }) => {
       void consumeSseStream(stream).catch((error) => {
         console.error("Failed to consume Harly AI SSE stream", error);
       });
     },
     onFinish: async ({ messages: finalMessages }) => {
+      recordHarlyAgentTrace({
+        conversationId,
+        workspaceId,
+        userId,
+        toolCalls: [...agentToolCalls],
+        outcome: agentOutcome,
+        durationMs: Date.now() - agentStartedAt,
+        hadWorkspaceEvidence: agentToolCalls.size > 0,
+      });
       if (!conversationId) return;
       try {
         await persistConversation({

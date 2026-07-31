@@ -289,13 +289,19 @@ export function buildWriteTools() {
           .string()
           .nullable()
           .describe("Interviewer user id, or null."),
-        title: z.string().nullable().describe("Human interview title, or null."),
+        title: z
+          .string()
+          .nullable()
+          .describe("Human interview title, or null."),
         location: z
           .string()
           .describe(
             "Meeting URL or physical location. Copy an explicit URL exactly; use an empty string only when no location was provided.",
           ),
-        notes: z.string().nullable().describe("Optional interview notes, or null."),
+        notes: z
+          .string()
+          .nullable()
+          .describe("Optional interview notes, or null."),
         meetingProvider: z
           .enum(["auto", "google_meet", "zoom", "teams", "jitsi", "external"])
           .describe(
@@ -364,6 +370,37 @@ export function buildWriteTools() {
         toEmail: z.string().describe("The recipient email."),
         subject: z.string().describe("Email subject."),
         body: z.string().describe("Email body (plain text)."),
+      }),
+    }),
+
+    generateCandidateScore: tool({
+      strict: true,
+      description:
+        "Propose generating or regenerating the AI evaluation for one application. WRITE action — requires user confirmation because it persists a candidate evaluation and sends candidate data to the configured AI provider.",
+      inputSchema: z.object({
+        summary,
+        applicationId: z.string().describe("The application to evaluate."),
+        candidateName: z
+          .string()
+          .describe("The candidate name for the confirmation card."),
+        jobTitle: z
+          .string()
+          .describe("The role title for the confirmation card."),
+      }),
+    }),
+
+    bulkScoreJob: tool({
+      strict: true,
+      description:
+        "Propose generating AI evaluations for all currently unscored active applicants of one job. WRITE action — requires user confirmation because it persists multiple candidate evaluations and sends candidate data to the configured AI provider.",
+      inputSchema: z.object({
+        summary,
+        jobId: z
+          .string()
+          .describe("The job whose applicants will be evaluated."),
+        jobTitle: z
+          .string()
+          .describe("The role title for the confirmation card."),
       }),
     }),
   };

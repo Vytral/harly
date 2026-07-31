@@ -24,6 +24,8 @@ export const AGENT_WRITE_TOOLS = [
   "assignFromPoolToJob",
   "createScorecard",
   "sendCandidateEmail",
+  "generateCandidateScore",
+  "bulkScoreJob",
 ] as const;
 
 export type AgentWriteTool = (typeof AGENT_WRITE_TOOLS)[number];
