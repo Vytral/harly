@@ -223,7 +223,6 @@ export function JobShell({
           title={job.title}
           accent={accent}
           onAccent={onAccent}
-          radius={radius}
           activeTab={activeTab}
           applyHref={applyHref}
           overviewHref={overviewHref}
@@ -381,7 +380,6 @@ function JoinJobContent({
   title,
   accent,
   onAccent,
-  radius,
   activeTab,
   applyHref,
   overviewHref,
@@ -391,7 +389,6 @@ function JoinJobContent({
   title: string;
   accent: string;
   onAccent: string;
-  radius: string;
   activeTab: "overview" | "application";
   applyHref: Route;
   overviewHref: Route;
@@ -455,10 +452,7 @@ function JoinJobContent({
               </p>
               <Link
                 href={applyHref}
-                className={cn(
-                  "mt-3 inline-flex h-10 w-full items-center justify-center px-5 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]",
-                  radius,
-                )}
+                className="mt-3 inline-flex h-10 w-full items-center justify-center rounded-full px-5 text-sm font-semibold transition-transform duration-150 active:scale-[0.98]"
                 style={{ backgroundColor: accent, color: onAccent }}
               >
                 Apply now

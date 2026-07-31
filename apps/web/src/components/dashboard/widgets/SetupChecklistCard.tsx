@@ -13,6 +13,7 @@ import type { SetupChecklist } from "@/features/dashboard/setup-checklist";
 const DISMISS_KEY = "harly:setup-checklist-dismissed";
 const COLLAPSE_KEY = "harly:setup-checklist-collapsed";
 const SKIPPED_KEY = "harly:setup-checklist-skipped-items";
+const EMPTY_SKIPPED: string[] = [];
 
 /** Set of item keys the user skipped (e.g. "Invite your team" for a solo
  *  workspace) , same localStorage/useSyncExternalStore pattern as the flags
@@ -61,7 +62,10 @@ function makeSkippedStore() {
 }
 
 const skippedStore = makeSkippedStore();
-const serverEmptyArray = () => [] as string[];
+// React compares external-store snapshots by identity. Keep this value
+// stable across server renders so React does not detect a new snapshot on
+// every render and schedule an infinite update loop.
+const serverEmptyArray = () => EMPTY_SKIPPED;
 
 /**
  * A localStorage-backed boolean shared with React via useSyncExternalStore.

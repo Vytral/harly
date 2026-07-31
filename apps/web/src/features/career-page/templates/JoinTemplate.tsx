@@ -272,7 +272,7 @@ export function JoinTemplate({
             </p>
           ) : (
             <>
-              <div className="mt-5 divide-y divide-zinc-100 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+              <div className="mt-5 divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
                 {shown.map((job) => (
                   <Link
                     key={job.id}

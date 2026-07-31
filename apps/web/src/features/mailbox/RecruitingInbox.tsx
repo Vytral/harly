@@ -189,7 +189,6 @@ function InboxCommandBar({
 function InboxEmptyState({ status, filter }: { status: InboxMailboxStatus; filter: InboxFilter }) {
   const isFiltered = filter !== "all";
   const isConnected = status.enabled && status.configured && status.route !== "conflict";
-  const address = status.address ?? (status.replyDomain ? `your address at ${status.replyDomain}` : null);
 
   if (isFiltered) {
     return (
@@ -250,12 +249,6 @@ function InboxEmptyState({ status, filter }: { status: InboxMailboxStatus; filte
           ))}
         </div>
 
-        {address ? (
-          <div className="mt-4 rounded-lg border border-border/70 bg-background px-4 py-3 text-center">
-            <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">Reply address</p>
-            <p className="mt-1 break-all font-mono text-sm text-foreground">{address}</p>
-          </div>
-        ) : null}
       </div>
     </div>
   );
