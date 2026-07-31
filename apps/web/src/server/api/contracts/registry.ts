@@ -10,6 +10,7 @@ import { tasksContracts } from "./tasks";
 import { activityEventsContracts } from "./activity-events";
 import { poolEntriesContracts } from "./pool-entries";
 import { meContracts } from "./me";
+import { automationsContracts } from "./automations";
 import type { RouteDefinition } from "./types";
 
 export const apiContracts: RouteDefinition[] = [
@@ -25,4 +26,5 @@ export const apiContracts: RouteDefinition[] = [
   ...activityEventsContracts,
   ...poolEntriesContracts,
   ...meContracts,
+  ...automationsContracts,
 ];

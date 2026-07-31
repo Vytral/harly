@@ -18,7 +18,6 @@ import {
 } from "@/features/career-page/builder/builder-icons";
 
 import {
-  approveWorkflowAction,
   createWorkflowAction,
   dryRunWorkflowAction,
   getWorkflowMetricsAction,
@@ -324,7 +323,7 @@ function WorkflowMetrics({ workflowId }: { workflowId: string }) {
   useEffect(() => {
     let active = true;
     void getWorkflowMetricsAction(workflowId).then((result) => {
-      if (active && result.ok) setMetrics(result.metrics);
+      if (active && result.ok && result.metrics) setMetrics(result.metrics);
     });
     return () => { active = false; };
   }, [workflowId]);
