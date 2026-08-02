@@ -63,6 +63,11 @@
         "icon": "plug",
         "pages": [
           "integrations/overview",
+          "integrations/join",
+          "integrations/greenhouse",
+          "integrations/workable",
+          "integrations/ashby",
+          "integrations/lever",
           "integrations/email",
           "integrations/google-calendar",
           "integrations/microsoft",
@@ -91,6 +96,11 @@
           "developers/realtime",
           "developers/automations"
         ]
+      },
+      {
+        "group": "API Reference",
+        "icon": "brackets-curly",
+        "openapi": "openapi.json"
       },
       {
         "group": "Operations",

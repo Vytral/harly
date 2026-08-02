@@ -83,8 +83,9 @@ firewall setup before you install.
     matching `HARLY_INITIAL_ADMIN_EMAIL`.
 
     <Warning>
-      The claim link expires after 15 minutes. If it expires, restart the app
-      container to generate a new one: `docker compose restart app`.
+      Keep `HARLY_SETUP_SECRET` private. If `/setup` is unavailable, verify
+      that the owner account has not already been claimed and confirm the value
+      in `.env` with `npx @harly/cli setup-secret`.
     </Warning>
 
     <Note>

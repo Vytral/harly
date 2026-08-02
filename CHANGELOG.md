@@ -4,6 +4,46 @@ All notable changes are documented here. Releases follow semantic versioning;
 pre-releases remain explicitly tagged, and production deployments use a pinned
 version or image digest. Harly does not publish a floating `latest` tag.
 
+## @harly/cli 0.4.0
+
+- Report the running deployment by release name instead of a 64-character
+  digest. `harly` resolves the friendliest honest label available — a semver
+  tag, a digest that matches the published release manifest, or the
+  `org.opencontainers.image.version` and `.revision` labels CI bakes into every
+  image — and degrades to a short digest only when nothing else is known. A
+  moving channel is reported with its build commit (`edge · cd78e8e`) so two
+  `edge` deployments can be told apart.
+- Record a resolved release name in `HARLY_VERSION` at install and upgrade time.
+  A digest-pinned installation previously wrote the literal string `digest`,
+  which the application then reported as its own version at
+  `/api/health/ready` and in its OpenAPI document.
+- Split the rollback backup out of `harly update` into its own reported phase.
+  The upgrade now renders as four numbered steps (rollback point, images,
+  migrations, health) and names the archive it wrote, instead of running the
+  backup silently and printing a bare path mid-flow.
+- Keep the interactive vertical rail unbroken. `doctor`, `backup`, `launch`,
+  `uninstall`, and the install outro wrote directly to stdout inside a prompt
+  flow, which severed the rail and left output floating unindented; the setup
+  secret block was the worst affected. Automation output is unchanged: `--json`
+  and non-interactive runs still carry the machine check keys, and
+  `harly backup` still prints the bare archive path for `$(harly backup)`.
+- Group `doctor` checks with per-domain glyphs and an aligned detail column, and
+  drop the internal check keys (`service:postgres`, `readiness`) from the
+  interactive render. They remain in `--json` and non-interactive output.
+- Report download rate and active layers while pulling images. Layer counts
+  stay the progress measure because Docker never reports a layer's total size,
+  so a byte percentage would be fiction.
+- Add `HARLY_ASCII=1` for terminals without box-drawing glyph coverage.
+
+## @harly/cli 0.3.1
+
+- Treat restricted `EACCES`/`EPERM` port probes as inconclusive so the CLI can
+  continue in constrained runners and let Docker perform the authoritative
+  publish check.
+- Polish the interactive installer summaries, progress labels, and compact
+  branding for narrow SSH sessions.
+- Make CLI tests resilient to shared ports and ANSI-formatted dry-run output.
+
 ## @harly/cli 0.3.0
 
 - New `harly check` command that prints a host requirements table (Docker
