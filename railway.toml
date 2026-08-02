@@ -1,0 +1,17 @@
+# Railway Config as Code for Harly's web service.
+#
+# This file configures one Railway service deployment. It intentionally does
+# not provision PostgreSQL, the scheduler, or a migration service: those are
+# separate resources and are created by `npx @harly/cli deploy railway` (or by
+# a future official Railway Template).
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "node /app/runtime.mjs serve"
+healthcheckPath = "/api/health/ready"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

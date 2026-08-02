@@ -81,7 +81,7 @@ The public deployment guides and environment reference are maintained in [`apps/
 1. Use an HTTPS `HARLY_URL` and set independent production secrets.
 2. Run `npx @harly/cli doctor` after deployment.
 3. Configure off-host encrypted backups and prove a restore once.
-4. Create the first owner at `/setup` using `HARLY_SETUP_SECRET` — the CLI writes it to a local `.env`, and Render/DigitalOcean's buttons have you type it in during deploy, so save it then (see [`docs/cloud-deployments.md`](docs/cloud-deployments.md#render) for where to find it per platform). Registration is invite-only after that.
+4. Create the first owner at `/setup` using `HARLY_SETUP_SECRET` — save the value shown during deployment. The CLI only writes a local secrets file when `--save-env` is explicitly supplied; Render/DigitalOcean's buttons have you type it in during deploy (see [`docs/cloud-deployments.md`](docs/cloud-deployments.md#render) for platform details). Registration is invite-only after that.
 
 ### Career-page discovery
 

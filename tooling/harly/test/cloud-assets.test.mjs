@@ -44,11 +44,12 @@ test("DigitalOcean assets keep the database secret app-wide and run all runtime 
 });
 
 test("release manifest is the single source of truth for deployment assets", async () => {
-  const [manifestContents, fly, render, digitalOceanButton, releaseModule, ci] =
+  const [manifestContents, fly, render, railway, digitalOceanButton, releaseModule, ci] =
     await Promise.all([
       readFile(path.join(repositoryRoot, "release-manifest.json"), "utf8"),
       readFile(path.join(repositoryRoot, "fly.toml"), "utf8"),
       readFile(path.join(repositoryRoot, "render.yaml"), "utf8"),
+      readFile(path.join(repositoryRoot, "railway.toml"), "utf8"),
       readFile(path.join(repositoryRoot, ".do/app.yaml"), "utf8"),
       readFile(path.join(packageRoot, "src/release.ts"), "utf8"),
       readFile(path.join(repositoryRoot, ".github/workflows/ci.yml"), "utf8"),
@@ -68,6 +69,9 @@ test("release manifest is the single source of truth for deployment assets", asy
     new RegExp(tagImage.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
   );
   assert.match(digitalOceanButton, new RegExp(`tag: ${manifest.version}`));
+  assert.match(railway, /builder = "DOCKERFILE"/);
+  assert.match(railway, /startCommand = "node \/app\/runtime\.mjs serve"/);
+  assert.match(railway, /healthcheckPath = "\/api\/health\/ready"/);
   assert.match(releaseModule, new RegExp(`version: "${manifest.version}"`));
   assert.match(releaseModule, new RegExp(`digest: "${manifest.digest}"`));
   assert.match(ci, /release-manifest\.json/);
@@ -101,6 +105,7 @@ test("cloud documentation links and provider instructions resolve", async () => 
     ".do/app.yaml",
     "render.yaml",
     "fly.toml",
+    "railway.toml",
     "docs/cloud-deployments.md",
   ])
     await access(path.join(repositoryRoot, relativePath));

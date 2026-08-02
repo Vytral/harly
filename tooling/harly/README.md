@@ -136,6 +136,14 @@ The command creates PostgreSQL, the web and scheduler services, a migration
 service, environment variables, a public Railway domain, and deployments. It
 waits for public readiness before returning `ready`.
 
+Railway also supports repository-native Config as Code. The root
+[`railway.toml`](../../railway.toml) is automatically read for the web service:
+it selects the Dockerfile, web start command, readiness endpoint, and restart
+policy. Railway applies this file to one service deployment; it does not
+provision PostgreSQL, the scheduler, or the migration service. Use the CLI
+above for the complete Railway topology. Railway Templates can eventually
+package that topology as a one-click multi-service install.
+
 Fly.io and DigitalOcean currently use a safe preparation flow:
 
 ```bash
