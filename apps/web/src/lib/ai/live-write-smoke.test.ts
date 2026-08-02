@@ -69,7 +69,6 @@ describe.skipIf(!live)("live Harly AI write smoke test", () => {
     const { updateInterview } = await import("@/features/interviews/actions");
     const { removeCandidateTag } =
       await import("@/features/candidates/actions");
-    const { buildHarlyTools } = await import("./agent");
 
     const [workspace] = await db
       .select({ id: workspaceSettings.organizationId })

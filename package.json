@@ -18,6 +18,7 @@
     "docs:validate": "pnpm --dir apps/docs validate",
     "docs:broken-links": "pnpm --dir apps/docs broken-links",
     "docs:a11y": "pnpm --dir apps/docs a11y",
+    "generate:openapi": "pnpm --filter web generate:openapi",
     "clean": "rm -rf .next .turbo apps/*/.next apps/*/dist packages/*/dist tooling/*/dist",
     "db:up": "docker compose -f tooling/docker/compose.dev.yml up -d",
     "db:down": "docker compose -f tooling/docker/compose.dev.yml down",
@@ -44,7 +45,8 @@
       "@babel/core": "7.29.6",
       "drizzle-orm": "0.45.2",
       "esbuild": "0.28.1",
-      "postcss": "8.5.10",
+      "postcss": "8.5.25",
+      "next>sharp": "0.35.2",
       "tar": ">=7.5.19",
       "vite": "7.3.6",
       "vitest": "3.2.6"

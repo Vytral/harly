@@ -694,7 +694,7 @@ function buildReadTools(ctx: HarlyToolContext) {
           ),
       }),
       execute: async ({ candidateId, applicationId, generateScore }) => {
-        let profile = await getCandidateProfile(candidateId);
+        const profile = await getCandidateProfile(candidateId);
         if (!profile)
           return { reviewed: false as const, found: false as const };
 
@@ -734,7 +734,7 @@ function buildReadTools(ctx: HarlyToolContext) {
           };
         }
 
-        let evaluation = selectedApplication
+        const evaluation = selectedApplication
           ? profile.aiEvaluations.find(
               (candidateEvaluation) =>
                 candidateEvaluation.applicationId === selectedApplication.id,
