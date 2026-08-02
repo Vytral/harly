@@ -32,7 +32,7 @@ import {
   PORTAL_SESSION_COOKIE,
   createMagicLinkToken,
   deletePortalSession,
-  getPortalWorkspaceBySlug,
+  getSinglePortalWorkspace,
   resolvePortalSession,
 } from "@/lib/portal-auth";
 import { getWorkspaceEmailSender } from "@/lib/email";
@@ -52,26 +52,23 @@ export type SendMagicLinkResult = { ok: true } | { ok: false; error: string };
 // that happens before the client component hydrates is still handled by the
 // server action instead of falling back to GET /portal/login?email=....
 export async function sendPortalMagicLinkFormAction(
-  workspaceSlug: string,
   formData: FormData,
 ): Promise<void> {
   const email = formData.get("email");
   await sendPortalMagicLinkAction(
     typeof email === "string" ? email : "",
-    workspaceSlug,
   );
 }
 
 export async function sendPortalMagicLinkAction(
   email: string,
-  workspaceSlug: string,
 ): Promise<SendMagicLinkResult> {
   const parsed = emailSchema.safeParse(email);
   if (!parsed.success) {
     return { ok: false, error: "Enter a valid email address." };
   }
 
-  const workspace = await getPortalWorkspaceBySlug(workspaceSlug);
+  const workspace = await getSinglePortalWorkspace();
   if (!workspace) {
     return { ok: false, error: "This candidate portal is unavailable." };
   }

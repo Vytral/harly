@@ -1,4 +1,5 @@
 import { Suspense } from "react";
+import type { Metadata } from "next";
 import { and, eq, sql } from "drizzle-orm";
 
 import { db, jobs, organization, workspaceSettings } from "@harly/db";
@@ -7,11 +8,22 @@ import {
   getPortalGitHubCredentials,
   getPortalGoogleCredentials,
   getPortalLinkedInCredentials,
-  getPortalWorkspaceBySlug,
   getSinglePortalWorkspace,
 } from "@/lib/portal-auth";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const workspace = await getSinglePortalWorkspace();
+  if (!workspace) return {};
+  const org = await getOrgBranding(workspace.id);
+  return {
+    title: `${org.name} Candidate Portal`,
+    icons: {
+      icon: org.logo ?? "/favicon.svg",
+    },
+  };
+}
 
 async function getOrgBranding(workspaceId: string) {
   const [row] = await db
@@ -53,13 +65,8 @@ async function getOrgBranding(workspaceId: string) {
   };
 }
 
-type Props = { searchParams: Promise<{ workspace?: string }> };
-
-export default async function PortalLoginPage({ searchParams }: Props) {
-  const { workspace: requestedWorkspace } = await searchParams;
-  const workspace = requestedWorkspace
-    ? await getPortalWorkspaceBySlug(requestedWorkspace)
-    : await getSinglePortalWorkspace();
+export default async function PortalLoginPage() {
+  const workspace = await getSinglePortalWorkspace();
 
   if (!workspace) {
     return (
@@ -181,7 +188,6 @@ export default async function PortalLoginPage({ searchParams }: Props) {
               hasGoogle={hasGoogle}
               hasGitHub={hasGitHub}
               hasLinkedIn={hasLinkedIn}
-              workspaceSlug={workspace.slug}
             />
           </Suspense>
 

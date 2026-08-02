@@ -24,6 +24,7 @@ import {
   CalendarBlankIcon,
 } from "@/components/ui/icons/phosphor";
 import { formatShort } from "@/lib/date";
+import { formatEnumLabel } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -48,14 +49,14 @@ function synthesizeActivities(
       items.push({
         id: `${iv.id}-done`,
         type: "interview_completed",
-        label: `${iv.title ?? iv.type} completed`,
+        label: `${iv.title ?? formatEnumLabel(iv.type)} completed`,
         timestamp: new Date(iv.scheduledAt.getTime() + iv.durationMins * 60_000),
       });
     } else if (iv.status === "scheduled") {
       items.push({
         id: `${iv.id}-sched`,
         type: "interview_scheduled",
-        label: `${iv.title ?? iv.type} scheduled`,
+        label: `${iv.title ?? formatEnumLabel(iv.type)} scheduled`,
         timestamp: iv.scheduledAt,
       });
     }
@@ -259,7 +260,7 @@ export default async function ApplicationDetailPage({
               {upcomingInterviews.map((iv) => (
                 <PortalInterviewCard
                   key={iv.id}
-                  title={iv.title ?? iv.type}
+                  title={iv.title ?? formatEnumLabel(iv.type)}
                   scheduledAt={iv.scheduledAt}
                   durationMins={iv.durationMins}
                   location={iv.location}
@@ -281,7 +282,7 @@ export default async function ApplicationDetailPage({
               {pastInterviews.map((iv) => (
                 <PortalInterviewCard
                   key={iv.id}
-                  title={iv.title ?? iv.type}
+                  title={iv.title ?? formatEnumLabel(iv.type)}
                   scheduledAt={iv.scheduledAt}
                   durationMins={iv.durationMins}
                   location={iv.location}
