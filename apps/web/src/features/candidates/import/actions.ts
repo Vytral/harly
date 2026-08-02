@@ -14,9 +14,7 @@ import {
   jobStages,
 } from "@harly/db";
 
-import {
-  requireJobPermission,
-} from "@/features/workspaces/permissions-server";
+import { requireJobPermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
@@ -34,6 +32,7 @@ import {
 } from "./workable";
 import { fetchAshbyCandidateImportRows, AshbyImportError } from "./ashby";
 import { fetchLeverCandidateImportRows, LeverImportError } from "./lever";
+import { fetchJoinCandidateImportRows, JoinImportError } from "./join";
 
 const log = createLogger("candidate-import");
 
@@ -377,6 +376,54 @@ export async function importLeverCandidatesAction(input: {
   }
 }
 
+/** Imports JOIN applications into one existing Harly pipeline. The API token is
+ * used only for this request and is never persisted or written to logs. */
+export async function importJoinCandidatesAction(input: {
+  jobId: string;
+  apiToken: string;
+}): Promise<ImportCandidatesResult & { skipped?: number }> {
+  if (
+    !z.uuid().safeParse(input.jobId).success ||
+    typeof input.apiToken !== "string"
+  ) {
+    return { success: false, error: "Invalid JOIN import request." };
+  }
+  try {
+    await requireJobPermission("candidates:edit", input.jobId);
+    const exportRows = await fetchJoinCandidateImportRows(input.apiToken);
+    if (exportRows.rows.length === 0) {
+      return {
+        success: true,
+        imported: 0,
+        alreadyInPipeline: 0,
+        errors: [],
+        skipped: exportRows.skipped,
+      };
+    }
+    const totals = {
+      imported: 0,
+      alreadyInPipeline: 0,
+      errors: [] as { row: number; email: string; reason: string }[],
+    };
+    for (let start = 0; start < exportRows.rows.length; start += 500) {
+      const result = await importCandidatesAction({
+        jobId: input.jobId,
+        rows: exportRows.rows.slice(start, start + 500),
+      });
+      if (!result.success) return result;
+      totals.imported += result.imported;
+      totals.alreadyInPipeline += result.alreadyInPipeline;
+      totals.errors.push(...result.errors);
+    }
+    return { success: true, ...totals, skipped: exportRows.skipped };
+  } catch (error) {
+    if (error instanceof JoinImportError)
+      return { success: false, error: error.message };
+    log.error(error, "JOIN candidate import failed");
+    return { success: false, error: "Could not import candidates from JOIN." };
+  }
+}
+
 export async function importCandidatesAction(input: {
   jobId: string;
   rows: { rowNumber: number; values: Record<string, string> }[];
@@ -591,10 +638,15 @@ export async function importCandidatesAction(input: {
   await publishPersistedDomainEvents(persistedEvents);
 
   for (const applicationId of importedApplicationIds) {
-    void emitWebhookEvent(workspaceId, "application.created", {
-      application: { id: applicationId },
-      source: "csv_import",
-    }, { actorId: context.user.id, skipDomainEvent: true });
+    void emitWebhookEvent(
+      workspaceId,
+      "application.created",
+      {
+        application: { id: applicationId },
+        source: "csv_import",
+      },
+      { actorId: context.user.id, skipDomainEvent: true },
+    );
   }
 
   return { success: true, imported, alreadyInPipeline, errors };

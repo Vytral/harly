@@ -80,6 +80,17 @@ export function WorkableLogo({ className }: IconProps) {
   );
 }
 
+export function JoinLogo({ className }: IconProps) {
+  return (
+    <img
+      src="/brands/join.svg"
+      alt=""
+      aria-hidden="true"
+      className={cn("size-5 shrink-0 object-contain", className)}
+    />
+  );
+}
+
 export function AshbyLogo({ className }: IconProps) {
   return (
     <svg

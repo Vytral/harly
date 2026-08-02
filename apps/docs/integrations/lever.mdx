@@ -1,0 +1,62 @@
+---
+title: "Lever candidate import"
+description: "Import Lever opportunities and candidate profiles into a Harly job with a Lever API key."
+---
+
+Harly imports Lever pipeline opportunities into a selected Harly job. Lever is
+candidate-centric, so the importer reads opportunities rather than the legacy
+Candidates endpoint. This is a one-time migration, not a live synchronization.
+
+## Before you begin
+
+You need a Lever API key with read access to **Opportunities**. Lever API keys
+can carry broad privileges, and access to confidential opportunities is granted
+when the key is created, so use a dedicated key with the smallest access your
+migration needs.
+
+## Create the Lever API key
+
+<Steps>
+  <Step title="Open Lever API settings">
+    In Lever, open **Settings → Integrations and API → API Credentials**.
+  </Step>
+  <Step title="Create a read key">
+    Create an API key and enable the read permission for Opportunities. Enable
+    confidential-data access only if those opportunities must be migrated.
+  </Step>
+  <Step title="Run the Harly import">
+    Open **Candidates → Import candidates**, choose **Lever**, select the
+    destination job, paste the API key, and select **Import Lever candidates**.
+  </Step>
+</Steps>
+
+Harly calls `GET https://api.lever.co/v1/opportunities?limit=100` using Basic
+Auth, follows Lever's offset pagination, and retries temporary rate-limit or
+server errors. The key is used once and never persisted by Harly.
+
+## What Harly imports
+
+- Name, email, phone, and location
+- Headline
+- LinkedIn, GitHub, and other website URLs
+- Opportunity tags
+
+The importer reads at most **5,000 opportunities** per run. Records without a
+first name, last name, or email are skipped and included in the summary.
+
+<Warning>
+  Education, employment history, resumes, attachments, feedback, interviews,
+  and application answers are not downloaded by this importer. Lever's
+  opportunity data is currently imported as the profile fields listed above.
+</Warning>
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `Lever lacks opportunities read access` | Update the API key's Opportunities permission and retry with the new key. |
+| Confidential opportunities are missing | Create a key with confidential-data access, if your organization's policy allows it. |
+| Candidates are skipped | Confirm the opportunity has a full name and at least one email address. |
+| The import stops at 5,000 | Split the migration into smaller sets or import the remaining opportunities separately. |
+
+See Lever's [API overview and authentication](https://hire.lever.co/developer/documentation) and [opportunities reference](https://hire.lever.co/developer/documentation#opportunities).
