@@ -1,3 +1,5 @@
+import type { Metadata } from "next";
+
 import { HarlyAIProvider } from "@/components/dashboard/HarlyAIWidget";
 import { IconRail } from "@/components/dashboard/IconRail";
 import { PageTitleProvider } from "@/components/dashboard/PageTitleContext";
@@ -20,6 +22,15 @@ import { getMyTasksDueCount } from "@/features/tasks/data";
 import { getOwnProfileAction } from "@/features/people/actions";
 import { RealtimeProvider } from "@/components/dashboard/RealtimeProvider";
 import { RealtimePageSync } from "@/components/dashboard/RealtimePageSync";
+
+export async function generateMetadata(): Promise<Metadata> {
+  const { organization } = await getWorkspaceContext();
+  return {
+    icons: {
+      icon: organization.logo ?? "/favicon.svg",
+    },
+  };
+}
 
 export default async function DashboardLayout({
   children,

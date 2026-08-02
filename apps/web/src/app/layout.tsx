@@ -42,6 +42,9 @@ export const metadata: Metadata = {
   ),
   title: "Harly",
   description: "Open-source applicant tracking system for modern teams.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 };
 
 export default function RootLayout({
