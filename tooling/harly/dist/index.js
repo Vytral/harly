@@ -15,11 +15,12 @@ import {
   statfs,
   writeFile
 } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { createServer, isIP } from "node:net";
 import { createSocket } from "node:dgram";
 import os from "node:os";
 import path from "node:path";
-import process3 from "node:process";
+import process4 from "node:process";
 import * as p3 from "@clack/prompts";
 import pc2 from "picocolors";
 
@@ -62,11 +63,13 @@ function atLeast(actual, expected) {
 
 // src/errors.ts
 var CliError = class extends Error {
-  constructor(message, exitCode = 1) {
+  constructor(message, exitCode = 1, code) {
     super(message);
     this.exitCode = exitCode;
+    this.code = code;
   }
   exitCode;
+  code;
 };
 var RetryWithOptions = class extends CliError {
   constructor(mode, port) {
@@ -122,8 +125,8 @@ function detectPortOwner(port, protocol) {
     ["ss", ["-H", "-ltnp", `sport = :${port}`]],
     ["lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"]]
   ];
-  for (const [program, args2] of commands) {
-    const result = run(program, args2, { allowFailure: true });
+  for (const [program, args] of commands) {
+    const result = run(program, args, { allowFailure: true });
     const output = String(result.stdout ?? "").trim();
     if (result.status === 0 && output) {
       return classifyPortOwner(output.split("\n")[0] ?? "");
@@ -485,6 +488,42 @@ function showBrand(context, version = "") {
   );
 }
 var spinnerStyle = { styleFrame: accent };
+var wide = process2.env.HARLY_ASCII !== "1";
+var mark = {
+  ok: () => wide ? accent("\u2713") : accent("OK"),
+  warn: () => wide ? pc.yellow("\u26A0") : pc.yellow("!!"),
+  fail: () => wide ? pc.red("\u2717") : pc.red("XX")
+};
+var icon = {
+  config: () => wide ? "\u2261" : "-",
+  database: () => wide ? "\u25A4" : "-",
+  app: () => wide ? "\u25A3" : "-",
+  scheduler: () => wide ? "\u21BB" : "-",
+  proxy: () => wide ? "\u21C4" : "-",
+  network: () => wide ? "\u25CD" : "-",
+  archive: () => wide ? "\u25BD" : "-",
+  image: () => wide ? "\u25A6" : "-"
+};
+function rows(items) {
+  const visible = (value) => (
+    // eslint-disable-next-line no-control-regex
+    value.replace(/\[[0-9;]*m/g, "").length
+  );
+  const width = Math.max(0, ...items.map((item) => visible(item.label)));
+  return items.map((item) => {
+    const status = item.status ? `${mark[item.status]()} ` : "";
+    const glyph = item.icon ? `${soft(item.icon)} ` : "";
+    const pad = " ".repeat(width - visible(item.label));
+    const detail = item.detail ? `  ${pad}${soft(item.detail)}` : "";
+    return `${status}${glyph}${item.label}${detail}`;
+  });
+}
+function humanBytes(bytes) {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
 
 // src/pull.ts
 var terminal = {
@@ -492,11 +531,6 @@ var terminal = {
   "already exists": "done",
   "download complete": "downloaded"
 };
-function humanBytes(bytes) {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-  if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
-  return `${Math.round(bytes / 1024)} KB`;
-}
 function humanDuration(ms) {
   const seconds = Math.round(ms / 1e3);
   return seconds >= 60 ? `${Math.floor(seconds / 60)}m${String(seconds % 60).padStart(2, "0")}s` : `${seconds}s`;
@@ -506,7 +540,7 @@ function bar(done, total, width = 24) {
   const filled = Math.round(ratio * width);
   return `${accent("\u2588".repeat(filled))}${soft("\u2591".repeat(width - filled))}`;
 }
-async function pullWithProgress(cwd, services, interactive2) {
+async function pullWithProgress(cwd, services, interactive2, label = "Pulling container images", doneLabel = "Container images downloaded") {
   if (!interactive2) {
     await runPlain(cwd, services);
     return;
@@ -515,17 +549,18 @@ async function pullWithProgress(cwd, services, interactive2) {
   const bytes = /* @__PURE__ */ new Map();
   const startedAt = performance.now();
   const spin = p2.spinner(spinnerStyle);
-  spin.start("Pulling container images");
+  spin.start(label);
   const render = () => {
     const known = [...layers.values()];
     const complete = known.filter((state) => state === "done").length;
+    const received = [...bytes.values()].reduce((sum, value) => sum + value, 0);
+    const elapsed = (performance.now() - startedAt) / 1e3;
+    const rate = received > 0 && elapsed > 1 ? `  ${soft(`\xB7 ${humanBytes(received / elapsed)}/s`)}` : "";
     const active = [...layers.entries()].filter(([, state]) => state === "downloading").slice(0, 3).map(
-      ([id]) => `${soft(id.slice(0, 12).padEnd(12))} ${humanBytes(bytes.get(id) ?? 0)}`
+      ([id]) => `${accent("\u2193")} ${soft(id.slice(0, 12).padEnd(12))} ${humanBytes(bytes.get(id) ?? 0)}`
     );
-    const headline = known.length ? `${bar(complete, known.length)}  ${complete}/${known.length} layers` : "contacting registry";
-    spin.message(
-      ["Pulling container images", headline, ...active].join("\n   ")
-    );
+    const headline = known.length ? `${bar(complete, known.length)}  ${complete}/${known.length} layers${received > 0 ? soft(` \xB7 ${humanBytes(received)}`) : ""}` : "contacting registry";
+    spin.message([`${label}${rate}`, headline, ...active].join("\n   "));
   };
   await stream(cwd, services, (line) => {
     const match = line.match(/^\s*([0-9a-f]{8,}|Image \S+)\s+(.+?)\s*$/);
@@ -553,7 +588,7 @@ async function pullWithProgress(cwd, services, interactive2) {
     humanDuration(performance.now() - startedAt)
   ].filter(Boolean).join(" \xB7 ");
   spin.stop(
-    layers.size === 0 ? "Container images are up to date" : `Container images downloaded  ${soft(`\xB7 ${summary}`)}`
+    layers.size === 0 ? `${doneLabel} \u2014 already up to date` : `${doneLabel}  ${soft(`\xB7 ${summary}`)}`
   );
 }
 function stream(cwd, services, onLine) {
@@ -604,6 +639,225 @@ function runPlain(cwd, services) {
   });
 }
 
+// src/version.ts
+var semverPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
+function shortDigest(reference) {
+  const digest = reference.split("@sha256:")[1];
+  return digest ? `sha256:${digest.slice(0, 8)}` : reference;
+}
+function labelForTag(tag) {
+  return semverPattern.test(tag) ? `v${tag}` : tag;
+}
+function inspectLabels(reference) {
+  const result = run(
+    "docker",
+    [
+      "image",
+      "inspect",
+      reference,
+      "--format",
+      '{{index .Config.Labels "org.opencontainers.image.version"}}	{{index .Config.Labels "org.opencontainers.image.revision"}}'
+    ],
+    { allowFailure: true }
+  );
+  if (result.status !== 0) return null;
+  const [version, revision] = String(result.stdout ?? "").trim().split("	");
+  const clean = (value) => value && value !== "<no value>" ? value : void 0;
+  return { version: clean(version), revision: clean(revision) };
+}
+function describeImage(reference, release = embeddedRelease, inspect = inspectLabels) {
+  const lastSegment = reference.split("/").at(-1) ?? reference;
+  const tag = reference.includes("@sha256:") ? void 0 : lastSegment.includes(":") ? lastSegment.split(":").at(-1) : void 0;
+  if (tag && semverPattern.test(tag))
+    return { label: labelForTag(tag), source: "tag", reference };
+  const labels = inspect(reference);
+  const revision = labels?.revision?.slice(0, 7);
+  if (tag) return { label: tag, source: "tag", revision, reference };
+  if (reference.endsWith(`@${release.digest}`))
+    return {
+      label: labelForTag(release.version),
+      source: "manifest",
+      revision,
+      reference
+    };
+  if (labels?.version)
+    return {
+      label: labelForTag(labels.version),
+      source: "label",
+      revision,
+      reference
+    };
+  return { label: shortDigest(reference), source: "digest", revision, reference };
+}
+function versionLine(identity) {
+  const ambiguous = identity.source !== "manifest" && !identity.label.startsWith("v");
+  return ambiguous && identity.revision ? `${identity.label} \xB7 ${identity.revision}` : identity.label;
+}
+function envVersion(identity) {
+  if (identity.source === "digest") {
+    const digest = identity.reference.split("@sha256:")[1];
+    return digest ? digest.slice(0, 12) : identity.label;
+  }
+  const base = identity.label.replace(/^v(?=\d)/, "");
+  return !/^\d/.test(base) && identity.revision ? `${base}-${identity.revision}` : base;
+}
+
+// src/cli.ts
+var booleanFlags = /* @__PURE__ */ new Set([
+  "--dry-run",
+  "--encrypt",
+  "--fix",
+  "--force",
+  "--json",
+  "--launch",
+  "--no-launch",
+  "--non-interactive",
+  "--quiet",
+  "--remove-data",
+  "--save-env",
+  "--verbose",
+  "--yes",
+  "--allow-plaintext",
+  "--no-color",
+  "--railway-token-stdin",
+  "--s3-secret-stdin",
+  "--fly-token-stdin",
+  "--digitalocean-token-stdin"
+]);
+var valueFlags = /* @__PURE__ */ new Set([
+  "--app",
+  "--database-url",
+  "--domain",
+  "--email",
+  "--image",
+  "--organization",
+  "--output-dir",
+  "--port",
+  "--project-name",
+  "--proxy",
+  "--region",
+  "--resource-profile",
+  "--s3-bucket",
+  "--s3-endpoint",
+  "--s3-public-url",
+  "--s3-region",
+  "--storage",
+  "--timeout",
+  "--to",
+  "--url"
+]);
+var secretFlags = /* @__PURE__ */ new Set([
+  "--access-key",
+  "--access-key-id",
+  "--database-url",
+  "--password",
+  "--railway-token",
+  "--s3-access-key-id",
+  "--s3-secret-access-key",
+  "--secret",
+  "--secret-key",
+  "--token"
+]);
+function invalid(message) {
+  const error = new Error(message);
+  error.name = "CliUsageError";
+  throw error;
+}
+function parseCliArgs(argv) {
+  let commandIndex = -1;
+  let command2 = "menu";
+  const positionals2 = [];
+  const flags2 = /* @__PURE__ */ new Set();
+  const values = /* @__PURE__ */ new Map();
+  const raw = [...argv];
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (!token.startsWith("-")) {
+      if (commandIndex < 0) {
+        commandIndex = index;
+        command2 = token;
+      } else {
+        positionals2.push(token);
+      }
+      continue;
+    }
+    if (token === "--") {
+      positionals2.push(...argv.slice(index + 1));
+      break;
+    }
+    const equalsIndex = token.indexOf("=");
+    const name = equalsIndex >= 0 ? token.slice(0, equalsIndex) : token;
+    const inlineValue = equalsIndex >= 0 ? token.slice(equalsIndex + 1) : void 0;
+    const normalized = name === "-h" ? "--help" : name === "-v" ? "--version" : name;
+    if (secretFlags.has(normalized)) {
+      invalid(`${normalized} is not accepted. Use an environment variable or an explicit stdin flag.`);
+    }
+    if (!booleanFlags.has(normalized) && !valueFlags.has(normalized)) {
+      if (normalized === "--help" || normalized === "--version") {
+        flags2.add(normalized);
+        continue;
+      }
+      invalid(`Unknown option: ${normalized}`);
+    }
+    if (booleanFlags.has(normalized)) {
+      if (inlineValue !== void 0) invalid(`${normalized} does not accept a value.`);
+      flags2.add(normalized);
+      continue;
+    }
+    const value = inlineValue ?? argv[index + 1];
+    if (!value || value.startsWith("--")) invalid(`${normalized} requires a value.`);
+    if (inlineValue === void 0) index += 1;
+    values.set(normalized, value);
+  }
+  if (flags2.has("--launch") && flags2.has("--no-launch")) {
+    invalid("--launch and --no-launch cannot be used together.");
+  }
+  const stdinSecretFlags = [
+    "--railway-token-stdin",
+    "--s3-secret-stdin",
+    "--fly-token-stdin",
+    "--digitalocean-token-stdin"
+  ].filter((flag) => flags2.has(flag));
+  if (stdinSecretFlags.length > 1) {
+    invalid("Only one explicit stdin secret may be requested per execution.");
+  }
+  return { command: command2, positionals: positionals2, flags: flags2, values, raw };
+}
+function option(parsed2, name) {
+  return parsed2.values.get(name);
+}
+function hasOption(parsed2, name) {
+  return parsed2.flags.has(name);
+}
+
+// src/result.ts
+import process3 from "node:process";
+var jsonSchemaVersion = 1;
+function resultOk(command2, status, fields = {}) {
+  return { schemaVersion: jsonSchemaVersion, ok: true, status, command: command2, ...fields };
+}
+function resultError(command2, status, code, message, fields = {}) {
+  return {
+    schemaVersion: jsonSchemaVersion,
+    ok: false,
+    status,
+    command: command2,
+    error: { code, message },
+    ...fields
+  };
+}
+function emitJson(value) {
+  process3.stdout.write(`${JSON.stringify(value)}
+`);
+}
+function errorCodeFor(error) {
+  if (error && typeof error === "object" && "code" in error) {
+    const code = error.code;
+    if (typeof code === "string") return code;
+  }
+  return "INTERNAL_ERROR";
+}
+
 // src/index.ts
 var resourceProfiles = {
   compact: {
@@ -641,26 +895,88 @@ function detectResourceProfile() {
   if (freeGb < 3.5) return "standard";
   return "performance";
 }
-var args = process3.argv.slice(2);
-var command = args.shift() ?? "menu";
-var flags = new Set(
-  args.filter((arg) => arg.startsWith("--") && !["--to"].includes(arg))
-);
-var positionals = args.filter(
-  (arg, index) => !arg.startsWith("--") && args[index - 1] !== "--to"
-);
-var toIndex = args.indexOf("--to");
-var toVersion = toIndex >= 0 ? args[toIndex + 1] : void 0;
+var parsed;
+var parseError;
+try {
+  parsed = parseCliArgs(process4.argv.slice(2));
+} catch (error) {
+  parseError = error;
+  parsed = {
+    command: "help",
+    positionals: [],
+    flags: process4.argv.includes("--json") ? /* @__PURE__ */ new Set(["--json"]) : /* @__PURE__ */ new Set(),
+    values: /* @__PURE__ */ new Map(),
+    raw: process4.argv.slice(2)
+  };
+}
+var command = parsed.flags.has("--version") ? "--version" : parsed.flags.has("--help") ? "--help" : parsed.command;
+var flags = parsed.flags;
+var positionals = parsed.positionals;
+var toVersion = option(parsed, "--to");
 var force = flags.has("--force");
 var yes = flags.has("--yes");
 var json = flags.has("--json");
+var verbose = flags.has("--verbose");
 var interactive = Boolean(
-  process3.stdin.isTTY && process3.stdout.isTTY && !process3.env.CI
+  !json && !flags.has("--non-interactive") && process4.stdin.isTTY && process4.stdout.isTTY && !process4.env.CI
 );
-var cliVersion = "0.3.0";
-var releaseManifestUrl = process3.env.HARLY_RELEASE_MANIFEST_URL ?? "https://raw.githubusercontent.com/Vytral/harly/main/release-manifest.json";
+var cliVersion = "0.4.0";
+var jsonResultWritten = false;
+function humanOut(message) {
+  if (json) process4.stderr.write(message);
+  else process4.stdout.write(message);
+}
+function writeResult(result) {
+  if (!json || jsonResultWritten) return;
+  jsonResultWritten = true;
+  emitJson(result);
+}
+function stableErrorCode(error) {
+  if (railwayResources.length > 0 && command === "deploy") return "PARTIAL_PROVISIONING";
+  if (error instanceof Error && error.name === "CliUsageError") return "INVALID_ARGUMENT";
+  const explicit = errorCodeFor(error);
+  if (explicit !== "INTERNAL_ERROR") return explicit;
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  if (message.includes("required") || message.includes("missing")) return "MISSING_ARGUMENT";
+  if (message.includes("readiness") || message.includes("timed out")) return "READINESS_TIMEOUT";
+  if (message.includes("railway") || message.includes("api")) return "REMOTE_OPERATION_FAILED";
+  return "INTERNAL_ERROR";
+}
+function usageError(message, code = "INVALID_ARGUMENT") {
+  return new CliError(message, 2, code);
+}
+function readExplicitSecretStdin(flag, envName) {
+  if (!hasOption(parsed, flag)) return process4.env[envName]?.trim() || void 0;
+  if (process4.stdin.isTTY) throw usageError(`${flag} requires piped stdin.`, "INVALID_SECRET_SOURCE");
+  const data = readFileSync(0, "utf8");
+  if (!data.trim()) throw usageError(`${envName} received through stdin is empty.`, "MISSING_SECRET");
+  return data.trim();
+}
+var releaseManifestUrl = process4.env.HARLY_RELEASE_MANIFEST_URL ?? "https://raw.githubusercontent.com/Vytral/harly/main/release-manifest.json";
 var currentOfficialRelease;
 var releaseManifestChecked = false;
+var railwayResources = [];
+function recordRailwayResource(type, id, name) {
+  railwayResources.push({ type, id, name });
+}
+async function promptOrValue(message, flag, envName, initialValue) {
+  if (!interactive) {
+    const value = option(parsed, flag) ?? process4.env[envName] ?? initialValue;
+    if (!value?.trim()) throw usageError(`${flag} or ${envName} is required in non-interactive mode.`, "MISSING_ARGUMENT");
+    return value.trim();
+  }
+  return unwrapPrompt(await p3.text({ message, initialValue }));
+}
+async function promptOrSecret(message, flag, envName, stdinFlag) {
+  if (!interactive) {
+    const stdinValue = readExplicitSecretStdin(stdinFlag, envName);
+    const value = stdinValue ?? process4.env[envName];
+    if (!value?.trim()) throw usageError(`${envName} is required in non-interactive mode.`, "MISSING_SECRET");
+    return value.trim();
+  }
+  if (process4.env[envName]?.trim()) return process4.env[envName].trim();
+  return unwrapPrompt(await p3.password({ message, validate: (value) => value?.trim() ? void 0 : "Required." }));
+}
 function validRelease(value) {
   if (!value || typeof value !== "object") return false;
   const release = value;
@@ -696,7 +1012,7 @@ var commandHelp = [
 ];
 function usage() {
   const width = Math.max(...commandHelp.map(([command2]) => command2.length));
-  process3.stdout.write(
+  process4.stdout.write(
     `
   ${ink("Harly")} ${soft("\xB7 self-hosted ATS")}
 
@@ -712,7 +1028,7 @@ ${commandHelp.map(
 function unwrapPrompt(value) {
   if (!p3.isCancel(value)) return value;
   p3.cancel("Installation cancelled.");
-  throw new CliError("", 2);
+  throw new CliError("Operation cancelled.", 2, "CANCELLED");
 }
 async function portAvailable(port) {
   return new Promise((resolve) => {
@@ -741,15 +1057,15 @@ function portOwner(port, protocol = "tcp") {
     ["ss", ["-H", "-ltnp", `sport = :${port}`]],
     ["lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN"]]
   ];
-  for (const [program, args2] of commands) {
-    const result = run(program, args2, { allowFailure: true });
+  for (const [program, args] of commands) {
+    const result = run(program, args, { allowFailure: true });
     const output = String(result.stdout ?? "").trim();
     if (result.status === 0 && output) return output.split("\n")[0].trim();
   }
   return void 0;
 }
 async function checkRequiredPorts(mode, requestedPort, ctx = { interactive, yes }) {
-  const port = requestedPort ?? Number(process3.env.HARLY_PORT ?? 3e3);
+  const port = requestedPort ?? Number(process4.env.HARLY_PORT ?? 3e3);
   const checks = mode === "caddy" ? [
     { port: 80, protocol: "tcp" },
     { port: 443, protocol: "tcp" },
@@ -855,10 +1171,10 @@ async function readDistro() {
   return `${os.platform()} ${os.release()}`;
 }
 async function preflightHost(directory) {
-  if (!atLeast(parseVersion(process3.versions.node), [20, 12, 0]))
+  if (!atLeast(parseVersion(process4.versions.node), [20, 12, 0]))
     throw new DockerMissing(
       "not-installed",
-      `Node.js 20.12 or newer is required (running ${process3.versions.node}).`
+      `Node.js 20.12 or newer is required (running ${process4.versions.node}).`
     );
   const docker = await readDockerInfo().catch((error) => {
     if (error instanceof DockerMissing) throw error;
@@ -868,7 +1184,7 @@ async function preflightHost(directory) {
     );
   });
   const diskGb = await freeDiskGb(directory);
-  const requiredDiskGb = Number(process3.env.HARLY_REQUIRED_DISK_GB ?? 5);
+  const requiredDiskGb = Number(process4.env.HARLY_REQUIRED_DISK_GB ?? 5);
   if (diskGb < requiredDiskGb)
     throw new InsufficientDisk(requiredDiskGb, diskGb, directory);
   return {
@@ -881,14 +1197,14 @@ async function preflightHost(directory) {
     firewall: detectFirewallWarning() ?? void 0
   };
 }
-async function preflight(mode, checkPorts = true, requestedPort, directory = process3.cwd(), ctx = { interactive, yes }) {
+async function preflight(mode, checkPorts = true, requestedPort, directory = process4.cwd(), ctx = { interactive, yes }) {
   const host = await preflightHost(directory);
   if (checkPorts) await checkRequiredPorts(mode ?? "caddy", requestedPort, ctx);
   return host;
 }
 function requiredEnvironment(name, value) {
   if (value?.trim()) return value.trim();
-  throw new CliError(`${name} is required in non-interactive mode.`, 2);
+  throw new CliError(`${name} is required in non-interactive mode.`, 2, "MISSING_ARGUMENT");
 }
 async function confirm2(question) {
   if (yes) return true;
@@ -945,18 +1261,29 @@ async function verifyPublicDns(url, ctx = { interactive, yes }) {
   await error.render(ctx);
   throw new CliError("", exitCode);
 }
-function validateDatabaseUrl(value) {
-  if (!value?.trim())
-    return "A DigitalOcean Managed PostgreSQL connection URL is required.";
-  try {
-    const url = new URL(value.trim());
-    if (!["postgres:", "postgresql:"].includes(url.protocol) || !url.hostname || !url.pathname || url.pathname === "/") {
-      return "Enter a postgresql:// connection URL that includes a database name.";
+function operationTimeoutMs() {
+  const value = Number(option(parsed, "--timeout") ?? process4.env.HARLY_CLI_TIMEOUT ?? 120);
+  if (!Number.isFinite(value) || value < 1 || value > 3600)
+    throw usageError("--timeout must be between 1 and 3600 seconds.");
+  return value * 1e3;
+}
+async function waitForPublicReadiness(origin) {
+  const timeoutMs = operationTimeoutMs();
+  const started = Date.now();
+  let lastDetail = "unreachable";
+  while (Date.now() - started < timeoutMs) {
+    try {
+      const response = await fetch(`${origin}/api/health/ready`, {
+        signal: AbortSignal.timeout(Math.min(5e3, timeoutMs))
+      });
+      if (response.ok) return;
+      lastDetail = `HTTP ${response.status}`;
+    } catch (error) {
+      lastDetail = error instanceof Error ? error.message : "unreachable";
     }
-  } catch {
-    return "Enter a valid postgresql:// connection URL.";
+    await new Promise((resolve) => setTimeout(resolve, 2e3));
   }
-  return void 0;
+  throw new CliError(`Public readiness did not complete within ${Math.round(timeoutMs / 1e3)} seconds (${lastDetail}).`, 1, "READINESS_TIMEOUT");
 }
 function secret() {
   return randomBytes(32).toString("base64url");
@@ -1058,8 +1385,8 @@ function validatePublicOrigin(value) {
   if (!value?.trim()) return "Enter a domain or public URL.";
   try {
     const candidate = value.includes("://") ? value : `https://${value}`;
-    const parsed = new URL(candidate);
-    if (parsed.pathname !== "/" || parsed.search || parsed.hash)
+    const parsed2 = new URL(candidate);
+    if (parsed2.pathname !== "/" || parsed2.search || parsed2.hash)
       return "Use an origin without a path, query, or hash.";
   } catch {
     return "Enter a valid domain or public URL.";
@@ -1069,50 +1396,64 @@ function hostSummary(host) {
   return `${host.cpuCount} CPU \xB7 ${host.memoryGb.toFixed(1)} GB RAM \xB7 ${host.diskGb.toFixed(1)} GB free`;
 }
 async function collectNonInteractiveAnswers(directory) {
-  const mode = process3.env.HARLY_PROXY_MODE ?? "caddy";
+  const mode = option(parsed, "--proxy") ?? process4.env.HARLY_PROXY_MODE ?? "caddy";
   if (!["caddy", "external", "local"].includes(mode))
-    throw new CliError("Invalid proxy mode.", 2);
-  const url = normalizeUrl(
-    requiredEnvironment("HARLY_URL", process3.env.HARLY_URL),
-    mode
-  );
+    throw usageError("Invalid proxy mode.", "INVALID_CONFIGURATION");
+  const explicitUrl = option(parsed, "--url");
+  const explicitDomain = option(parsed, "--domain");
+  if (explicitUrl && !explicitUrl.includes("://"))
+    throw usageError("--url requires an origin with an HTTP(S) protocol.");
+  const envUrl = process4.env.HARLY_URL;
+  const urlCandidate = explicitUrl ?? explicitDomain ?? envUrl;
+  if (!urlCandidate) throw usageError("--url, --domain or HARLY_URL is required.", "MISSING_ARGUMENT");
+  const url = normalizeUrl(urlCandidate, mode);
+  if (explicitUrl && explicitDomain) {
+    const domainUrl = normalizeUrl(explicitDomain, mode);
+    if (domainUrl.origin !== url.origin)
+      throw usageError("--url and --domain resolve to different origins.");
+  }
   const port = Number(
-    process3.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : 3e3)
+    option(parsed, "--port") ?? process4.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : 3e3)
   );
-  await preflight(mode, true, port, directory);
-  if (mode !== "local") await verifyPublicDns(url);
+  if (!Number.isInteger(port) || port < 1 || port > 65535)
+    throw usageError("Port must be an integer between 1 and 65535.");
   const email = requiredEnvironment(
     "HARLY_INITIAL_ADMIN_EMAIL",
-    process3.env.HARLY_INITIAL_ADMIN_EMAIL
+    option(parsed, "--email") ?? process4.env.HARLY_INITIAL_ADMIN_EMAIL
   ).toLowerCase();
-  if (validateEmail(email)) throw new CliError("Invalid owner email.", 2);
-  const organization = process3.env.HARLY_ORGANIZATION?.trim() || "My organization";
-  const storage = process3.env.STORAGE_PROVIDER ?? "local";
+  if (validateEmail(email)) throw usageError("Invalid owner email.", "INVALID_CONFIGURATION");
+  const organization = option(parsed, "--organization")?.trim() || process4.env.HARLY_ORGANIZATION?.trim() || "My organization";
+  const storage = option(parsed, "--storage") ?? process4.env.STORAGE_PROVIDER ?? "local";
   if (!["local", "s3"].includes(storage))
-    throw new CliError("Invalid storage provider.", 2);
-  const resourceProfile = process3.env.HARLY_RESOURCE_PROFILE ?? detectResourceProfile();
+    throw usageError("Invalid storage provider.", "INVALID_CONFIGURATION");
+  const resourceProfile = option(parsed, "--resource-profile") ?? process4.env.HARLY_RESOURCE_PROFILE ?? detectResourceProfile();
   if (!Object.hasOwn(resourceProfiles, resourceProfile))
-    throw new CliError("Invalid resource profile.", 2);
+    throw usageError("Invalid resource profile.", "INVALID_CONFIGURATION");
+  const s3Secret = readExplicitSecretStdin("--s3-secret-stdin", "S3_SECRET_ACCESS_KEY");
   const s3 = storage === "s3" ? {
-    bucket: requiredEnvironment("S3_BUCKET", process3.env.S3_BUCKET),
-    region: process3.env.S3_REGION?.trim() || "auto",
+    bucket: requiredEnvironment("S3_BUCKET", option(parsed, "--s3-bucket") ?? process4.env.S3_BUCKET),
+    region: option(parsed, "--s3-region")?.trim() || process4.env.S3_REGION?.trim() || "auto",
     accessKeyId: requiredEnvironment(
       "S3_ACCESS_KEY_ID",
-      process3.env.S3_ACCESS_KEY_ID
+      process4.env.S3_ACCESS_KEY_ID
     ),
     secretAccessKey: requiredEnvironment(
       "S3_SECRET_ACCESS_KEY",
-      process3.env.S3_SECRET_ACCESS_KEY
+      s3Secret ?? process4.env.S3_SECRET_ACCESS_KEY
     ),
-    endpoint: process3.env.S3_ENDPOINT?.trim() || "",
-    publicUrl: process3.env.S3_PUBLIC_URL?.trim() || ""
+    endpoint: option(parsed, "--s3-endpoint")?.trim() || process4.env.S3_ENDPOINT?.trim() || "",
+    publicUrl: option(parsed, "--s3-public-url")?.trim() || process4.env.S3_PUBLIC_URL?.trim() || ""
   } : null;
-  const image = process3.env.HARLY_IMAGE_REF ?? releaseImage(await officialRelease());
+  const image = option(parsed, "--image") ?? process4.env.HARLY_IMAGE_REF ?? releaseImage(flags.has("--dry-run") ? embeddedRelease : await officialRelease());
   if (image.endsWith(":latest"))
     throw new CliError(
       "Installations must pin a version or digest, never latest.",
       2
     );
+  if (!flags.has("--dry-run")) {
+    await preflight(mode, true, port, directory);
+    if (mode !== "local") await verifyPublicDns(url);
+  }
   return {
     mode,
     url,
@@ -1126,6 +1467,11 @@ async function collectNonInteractiveAnswers(directory) {
   };
 }
 async function collectInteractiveAnswers(directory) {
+  const requestedUrl = option(parsed, "--url");
+  const requestedDomain = option(parsed, "--domain");
+  if (requestedUrl && !requestedUrl.includes("://"))
+    throw usageError("--url requires an origin with an HTTP(S) protocol.");
+  const initialUrl = requestedUrl ?? requestedDomain ?? process4.env.HARLY_URL ?? "careers.example.com";
   showBrand("Install", cliVersion);
   p3.note(
     [
@@ -1139,14 +1485,14 @@ async function collectInteractiveAnswers(directory) {
     await p3.text({
       message: "Public domain or subdomain",
       placeholder: "careers.example.com",
-      initialValue: process3.env.HARLY_URL ?? "careers.example.com",
+      initialValue: initialUrl,
       validate: validatePublicOrigin
     })
   );
   let mode = unwrapPrompt(
     await p3.select({
       message: "Reverse proxy",
-      initialValue: process3.env.HARLY_PROXY_MODE ?? "caddy",
+      initialValue: option(parsed, "--proxy") ?? process4.env.HARLY_PROXY_MODE ?? "caddy",
       options: [
         {
           value: "caddy",
@@ -1159,11 +1505,16 @@ async function collectInteractiveAnswers(directory) {
     })
   );
   let url = normalizeUrl(publicOrigin, mode);
+  if (requestedUrl && requestedDomain) {
+    const domainUrl = normalizeUrl(requestedDomain, mode);
+    if (domainUrl.origin !== url.origin)
+      throw usageError("--url and --domain resolve to different origins.");
+  }
   const preflightSpinner = p3.spinner(spinnerStyle);
   preflightSpinner.start("Checking Docker, ports, and DNS");
   let dnsAnswers = [];
   let requestedPort = Number(
-    process3.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : 3e3)
+    option(parsed, "--port") ?? process4.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : 3e3)
   );
   let host;
   try {
@@ -1203,7 +1554,7 @@ async function collectInteractiveAnswers(directory) {
     await p3.text({
       message: "Initial owner email",
       placeholder: "owner@example.com",
-      initialValue: process3.env.HARLY_INITIAL_ADMIN_EMAIL,
+      initialValue: option(parsed, "--email") ?? process4.env.HARLY_INITIAL_ADMIN_EMAIL,
       validate: validateEmail
     })
   ).toLowerCase();
@@ -1211,14 +1562,14 @@ async function collectInteractiveAnswers(directory) {
     await p3.text({
       message: "Organization name",
       placeholder: "Acme Inc.",
-      initialValue: process3.env.HARLY_ORGANIZATION ?? "My organization",
+      initialValue: option(parsed, "--organization") ?? process4.env.HARLY_ORGANIZATION ?? "My organization",
       validate: (value) => value?.trim() ? void 0 : "Enter an organization name."
     })
   );
   const storage = unwrapPrompt(
     await p3.select({
       message: "File storage",
-      initialValue: process3.env.STORAGE_PROVIDER ?? "local",
+      initialValue: option(parsed, "--storage") ?? process4.env.STORAGE_PROVIDER ?? "local",
       options: [
         { value: "local", label: "Local persistent volume", hint: "simple" },
         {
@@ -1233,20 +1584,20 @@ async function collectInteractiveAnswers(directory) {
     bucket: unwrapPrompt(
       await p3.text({
         message: "S3 bucket",
-        initialValue: process3.env.S3_BUCKET,
+        initialValue: option(parsed, "--s3-bucket") ?? process4.env.S3_BUCKET,
         validate: (value) => value?.trim() ? void 0 : "Enter the bucket name."
       })
     ),
     region: unwrapPrompt(
       await p3.text({
         message: "S3 region",
-        initialValue: process3.env.S3_REGION ?? "auto"
+        initialValue: option(parsed, "--s3-region") ?? process4.env.S3_REGION ?? "auto"
       })
     ),
     accessKeyId: unwrapPrompt(
       await p3.text({
         message: "S3 access key ID",
-        initialValue: process3.env.S3_ACCESS_KEY_ID,
+        initialValue: process4.env.S3_ACCESS_KEY_ID,
         validate: (value) => value?.trim() ? void 0 : "Enter the access key ID."
       })
     ),
@@ -1261,14 +1612,14 @@ async function collectInteractiveAnswers(directory) {
       await p3.text({
         message: "S3 endpoint",
         placeholder: "Leave blank for AWS",
-        initialValue: process3.env.S3_ENDPOINT ?? ""
+        initialValue: option(parsed, "--s3-endpoint") ?? process4.env.S3_ENDPOINT ?? ""
       })
     ),
     publicUrl: unwrapPrompt(
       await p3.text({
         message: "S3 public URL",
         placeholder: "Optional",
-        initialValue: process3.env.S3_PUBLIC_URL ?? ""
+        initialValue: option(parsed, "--s3-public-url") ?? process4.env.S3_PUBLIC_URL ?? ""
       })
     )
   } : null;
@@ -1279,7 +1630,7 @@ async function collectInteractiveAnswers(directory) {
   const resourceProfile = unwrapPrompt(
     await p3.select({
       message: "Resource profile",
-      initialValue: process3.env.HARLY_RESOURCE_PROFILE ?? detectedProfile,
+      initialValue: option(parsed, "--resource-profile") ?? process4.env.HARLY_RESOURCE_PROFILE ?? detectedProfile,
       options: [
         { value: "compact", label: "Compact", hint: "2 GB RAM + swap" },
         { value: "standard", label: "Standard", hint: "4 GB RAM, recommended" },
@@ -1291,7 +1642,7 @@ async function collectInteractiveAnswers(directory) {
       ]
     })
   );
-  const image = process3.env.HARLY_IMAGE_REF ?? releaseImage(await officialRelease());
+  const image = option(parsed, "--image") ?? process4.env.HARLY_IMAGE_REF ?? releaseImage(await officialRelease());
   if (image.endsWith(":latest"))
     throw new CliError(
       "Installations must pin a version or digest, never latest.",
@@ -1335,7 +1686,7 @@ async function collectInteractiveAnswers(directory) {
 }
 async function atomicWrite(file, contents, mode) {
   await mkdir(path.dirname(file), { recursive: true });
-  const temp = `${file}.tmp-${process3.pid}-${randomBytes(4).toString("hex")}`;
+  const temp = `${file}.tmp-${process4.pid}-${randomBytes(4).toString("hex")}`;
   await writeFile(temp, contents, { mode });
   await rename(temp, file);
   if (mode) await chmod(file, mode);
@@ -1478,7 +1829,17 @@ DOCUSEAL_API_TOKEN=
 DOCUSEAL_SECRET_KEY_BASE=
 `;
 async function init() {
-  const directory = path.resolve(positionals[0] ?? "harly");
+  const positionalDirectory = positionals[0];
+  const outputDirectory = option(parsed, "--output-dir");
+  if (positionals.length > 1)
+    throw usageError("init accepts only one directory positional argument.");
+  if (positionalDirectory && outputDirectory) {
+    const positionalPath = path.resolve(positionalDirectory);
+    const outputPath = path.resolve(outputDirectory);
+    if (positionalPath !== outputPath)
+      throw usageError("init positional directory and --output-dir must point to the same path.");
+  }
+  const directory = path.resolve(outputDirectory ?? positionalDirectory ?? "harly");
   const dryRun = flags.has("--dry-run");
   const answers = interactive ? await collectInteractiveAnswers(directory) : await collectNonInteractiveAnswers(directory);
   const {
@@ -1499,13 +1860,17 @@ async function init() {
   let envWritten = false;
   const wouldCreate = [];
   try {
-    await mkdir(directory, { recursive: true });
+    if (!dryRun) await mkdir(directory, { recursive: true });
     const envPath = path.join(directory, ".env");
     if (!await exists(envPath)) {
       setupSecret2 = secret();
       const env = [
         `HARLY_IMAGE=${envLine(image)}`,
-        `HARLY_VERSION=${envLine(image.includes("@sha256:") ? "digest" : image.split(":").at(-1) ?? "unknown")}`,
+        // A digest-pinned install used to record the literal string "digest"
+        // here, which the app then reported as its version at
+        // /api/health/ready and in its OpenAPI document. Resolve the release
+        // name instead; the digest is already recorded in HARLY_IMAGE.
+        `HARLY_VERSION=${envLine(envVersion(describeImage(image, dryRun ? embeddedRelease : await officialRelease())))}`,
         `HARLY_URL=${envLine(url.origin)}`,
         `HARLY_PORT=${envLine(String(port))}`,
         `HARLY_DOMAIN=${envLine(url.hostname)}`,
@@ -1610,21 +1975,28 @@ Before launching Caddy, make sure ${url.hostname} has an A record pointing to th
       ...wouldCreate.map((name) => `    ${accent("+")} ${name}`),
       ""
     ];
-    process3.stdout.write(`${lines.join("\n")}
+    if (json) {
+      writeResult(resultOk("init", "dry-run", {
+        resolvedConfig: { directory, url: url.origin, proxy: mode, storage, resourceProfile },
+        artifacts: wouldCreate.map((name) => name.split(" ")[0]),
+        operations: {
+          local: ["preflight", "generate configuration", ...flags.has("--launch") ? ["pull image", "start services", "verify readiness"] : []],
+          remote: mode === "local" ? [] : ["verify public DNS"]
+        },
+        sideEffects: false
+      }));
+    } else {
+      humanOut(`${lines.join("\n")}
 `);
+    }
     if (interactive) p3.outro("Re-run without --dry-run to write these files.");
     return;
   }
   generationSpinner?.stop("Configuration ready");
   if (interactive) {
-    const launchNow = unwrapPrompt(
-      await p3.confirm({
-        message: "Install and launch Harly now?",
-        initialValue: true
-      })
-    );
+    const launchNow = flags.has("--launch") ? true : flags.has("--no-launch") ? false : unwrapPrompt(await p3.confirm({ message: "Install and launch Harly now?", initialValue: true }));
     if (launchNow) {
-      await launch(directory, true);
+      await launch(directory, true, false);
       printInstallOutro({
         url: url.origin,
         email,
@@ -1638,7 +2010,7 @@ Before launching Caddy, make sure ${url.hostname} has an A record pointing to th
         `Next: ${accent(`cd ${shellQuote(directory)} && npx @harly/cli`)}`
       );
       if (setupSecret2) {
-        process3.stdout.write(
+        humanOut(
           `
 Setup secret (copy and keep it safe \u2014 you will need it at ${url.origin}/setup):
   ${accent(setupSecret2)}
@@ -1648,7 +2020,24 @@ Setup secret (copy and keep it safe \u2014 you will need it at ${url.origin}/set
       }
     }
   } else {
-    process3.stdout.write(
+    if (flags.has("--launch")) {
+      await launch(directory, true, false);
+      if (jsonResultWritten) return;
+    }
+    const result = resultOk("init", flags.has("--launch") ? "ready" : "generated", {
+      directory,
+      url: url.origin,
+      mode,
+      resourceProfile,
+      image,
+      artifacts: [".env", ".env.example", ".gitignore", "Caddyfile", "README.md", "compose.yaml", "harly.config.json"],
+      ...flags.has("--launch") ? {} : { next: [`cd ${shellQuote(directory)} && npx @harly/cli launch --yes`] }
+    });
+    if (json) {
+      writeResult(result);
+      return;
+    }
+    humanOut(
       `
 Generated ${directory}
 Image: ${image}
@@ -1659,7 +2048,7 @@ Volumes: postgres-data, uploads, next-cache${mode === "caddy" ? ", caddy-data, c
 `
     );
     if (setupSecret2) {
-      process3.stdout.write(
+      humanOut(
         `
 Setup secret: ${setupSecret2}
 Use it at ${url.origin}/setup to claim the owner account.
@@ -1667,12 +2056,12 @@ Use it at ${url.origin}/setup to claim the owner account.
 `
       );
     } else {
-      process3.stdout.write("\n");
+      humanOut("\n");
     }
   }
 }
-function printInstallOutro(args2) {
-  const { url, email, mode, setupSecret: setupSecret2, envWritten, directory } = args2;
+function printInstallOutro(args) {
+  const { url, email, mode, setupSecret: setupSecret2, envWritten, directory } = args;
   p3.log.success(`Harly is running at ${accent(url)}`);
   const lines = [];
   if (setupSecret2) {
@@ -1695,9 +2084,13 @@ function printInstallOutro(args2) {
   }
   lines.push("");
   lines.push("After setup:");
-  lines.push(`  ${accent("harly doctor")}   verify the public route`);
-  lines.push(`  ${accent("harly backup")}   write a private rollback point`);
-  lines.push(`  ${accent("harly update")}   apply future upgrades safely`);
+  lines.push(
+    ...rows([
+      { label: accent("harly doctor"), detail: "verify the public route" },
+      { label: accent("harly backup"), detail: "write a private rollback point" },
+      { label: accent("harly update"), detail: "apply future upgrades safely" }
+    ]).map((row) => `  ${row}`)
+  );
   if (mode === "caddy") {
     lines.push("");
     lines.push(
@@ -1706,43 +2099,44 @@ function printInstallOutro(args2) {
       )
     );
   }
-  p3.outro(lines.join("\n"));
+  p3.log.message(lines.join("\n").replace(/^\n/, ""));
+  p3.outro(`Harly is ready at ${accent(url)}`);
 }
 function renderHostCheck(host, options = {}) {
-  const rows = [];
-  rows.push({
+  const rows2 = [];
+  rows2.push({
     label: "Host",
     status: "ok",
     detail: `${host.distro}, ${host.cpuCount} CPU, ${host.freeMemoryGb.toFixed(1)} GB free of ${host.memoryGb.toFixed(1)} GB`
   });
   if (host.docker) {
-    rows.push({
+    rows2.push({
       label: "Docker",
       status: "ok",
       detail: `Engine ${host.docker.engine} (need \u2265 24)`
     });
-    rows.push({
+    rows2.push({
       label: "Compose",
       status: "ok",
       detail: `${host.docker.compose} (need \u2265 2.20)`
     });
   } else {
-    rows.push({
+    rows2.push({
       label: "Docker",
       status: "fail",
       detail: "missing",
       fix: "Install Docker Engine 24+"
     });
   }
-  const requiredDiskGb = Number(process3.env.HARLY_REQUIRED_DISK_GB ?? 5);
-  rows.push({
+  const requiredDiskGb = Number(process4.env.HARLY_REQUIRED_DISK_GB ?? 5);
+  rows2.push({
     label: "Disk",
     status: host.diskGb >= requiredDiskGb ? "ok" : "fail",
     detail: `${host.diskGb.toFixed(1)} GB free`,
     ...host.diskGb < requiredDiskGb ? { fix: `Free at least ${requiredDiskGb} GB on the install path` } : {}
   });
   if (host.firewall) {
-    rows.push({
+    rows2.push({
       label: "Firewall",
       status: "warn",
       detail: host.firewall.detail,
@@ -1750,12 +2144,12 @@ function renderHostCheck(host, options = {}) {
     });
   }
   for (const port of options.ports ?? []) {
-    rows.push({ label: `Port ${port.port}`, status: "warn", detail: port.detail });
+    rows2.push({ label: `Port ${port.port}`, status: "warn", detail: port.detail });
   }
-  const labelWidth = Math.max(...rows.map((row) => row.label.length));
+  const labelWidth = Math.max(...rows2.map((row) => row.label.length));
   const glyph = (status) => status === "ok" ? accent("\u2713") : status === "warn" ? pc2.yellow("\u26A0") : pc2.red("\u2717");
   const lines = ["", `  ${ink("Harly self-host requirements")}`, ""];
-  for (const row of rows) {
+  for (const row of rows2) {
     lines.push(
       `  ${glyph(row.status)} ${row.label.padEnd(labelWidth)}  ${row.detail}`
     );
@@ -1763,7 +2157,7 @@ function renderHostCheck(host, options = {}) {
   }
   return lines.join("\n");
 }
-async function harlyCheck(directory = process3.cwd()) {
+async function harlyCheck(directory = process4.cwd()) {
   const spinner4 = interactive ? p3.spinner(spinnerStyle) : null;
   spinner4?.start("Checking host");
   const host = await preflightHost(directory);
@@ -1781,11 +2175,20 @@ async function harlyCheck(directory = process3.cwd()) {
     }
   }
   const output = renderHostCheck(host, { ports: portChecks });
-  process3.stdout.write(`${output}
+  const requiredDiskGb = Number(process4.env.HARLY_REQUIRED_DISK_GB ?? 5);
+  const allOk = !host.firewall && portChecks.length === 0 && host.diskGb >= requiredDiskGb;
+  if (json) {
+    writeResult(resultOk("check", allOk ? "ready" : "failed", {
+      report: output,
+      host,
+      ports: portChecks
+    }));
+    if (!allOk) process4.exitCode = 1;
+    return;
+  }
+  process4.stdout.write(`${output}
 
 `);
-  const requiredDiskGb = Number(process3.env.HARLY_REQUIRED_DISK_GB ?? 5);
-  const allOk = !host.firewall && portChecks.length === 0 && host.diskGb >= requiredDiskGb;
   if (interactive) {
     if (allOk) {
       p3.log.success("Your host is ready. Run `harly init` to install Harly.");
@@ -1793,12 +2196,12 @@ async function harlyCheck(directory = process3.cwd()) {
       p3.log.warn("Some checks need attention. Resolve them above, then run `harly init`.");
     }
   } else {
-    if (!allOk) process3.exitCode = 1;
+    if (!allOk) process4.exitCode = 1;
   }
 }
 async function setupSecret(explicitDirectory) {
   const directory = path.resolve(
-    explicitDirectory ?? positionals[0] ?? process3.cwd()
+    explicitDirectory ?? positionals[0] ?? process4.cwd()
   );
   let envPath = path.join(directory, ".env");
   if (!await exists(envPath)) {
@@ -1828,8 +2231,15 @@ async function setupSecret(explicitDirectory) {
   if (!secret2) {
     throw new CliError(`HARLY_SETUP_SECRET is empty in ${envPath}.`, 1);
   }
-  process3.stdout.write(`${secret2}
+  if (json) {
+    writeResult(resultOk("setup-secret", "available", {
+      directory: path.dirname(envPath),
+      secretAvailable: true
+    }));
+  } else {
+    process4.stdout.write(`${secret2}
 `);
+  }
 }
 async function readConfig(directory) {
   try {
@@ -1842,7 +2252,7 @@ async function readConfig(directory) {
     );
   }
 }
-async function findInstallation(start = process3.cwd()) {
+async function findInstallation(start = process4.cwd()) {
   let directory = path.resolve(start);
   while (true) {
     const configPath = path.join(directory, "harly.config.json");
@@ -1874,8 +2284,8 @@ async function waitForService(cwd, service, timeoutMs) {
       const stdout = String(result.stdout ?? "").trim();
       if (stdout) {
         try {
-          const parsed = JSON.parse(stdout);
-          const item = Array.isArray(parsed) ? parsed[0] : parsed;
+          const parsed2 = JSON.parse(stdout);
+          const item = Array.isArray(parsed2) ? parsed2[0] : parsed2;
           if (item) {
             if (isOneShot) {
               if (item.State === "exited" && item.ExitCode === 0) {
@@ -1909,19 +2319,24 @@ function formatLaunchLine(service, ready, detail, elapsedSec) {
   const label = ready ? `${service} ready` : `${service} ${detail}`;
   return `  ${glyph} ${label.padEnd(28)} ${soft(`\xB7 ${elapsedSec.toFixed(1)}s`)}`;
 }
-async function launch(explicitDirectory, confirmed = false) {
+async function launch(explicitDirectory, confirmed = false, emit = true) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
   if (interactive && !confirmed) {
-    showBrand("Launch", cliVersion);
-    p3.note(
-      `Image  ${config.image}
-Mode   ${config.proxyMode}
-URL    ${config.publicUrl}`,
-      "Launch plan"
+    showBrand("Launch");
+    const identity = describeImage(
+      config.requestedImage ?? config.image,
+      await officialRelease()
+    );
+    p3.log.message(
+      rows([
+        { icon: icon.image(), label: "Version", detail: versionLine(identity) },
+        { icon: icon.proxy(), label: "Mode", detail: config.proxyMode },
+        { icon: icon.network(), label: "URL", detail: config.publicUrl }
+      ]).join("\n")
     );
   } else if (!interactive) {
-    process3.stdout.write(
+    humanOut(
       `Image: ${config.image}
 Mode: ${config.proxyMode}
 Commands: docker compose pull; docker compose up -d --wait
@@ -1929,7 +2344,7 @@ Commands: docker compose pull; docker compose up -d --wait
     );
   }
   if (!confirmed && !yes && !await confirm2("Continue?")) {
-    if (!process3.stdin.isTTY)
+    if (!process4.stdin.isTTY)
       throw new CliError("--yes is required in non-interactive mode.", 2);
     throw new CliError("Launch cancelled.", 2);
   }
@@ -1950,7 +2365,7 @@ Commands: docker compose pull; docker compose up -d --wait
     if (interactive) {
       step?.start(`Waiting for ${service}`);
     } else {
-      process3.stdout.write(`  \u2026 ${service}
+      humanOut(`  \u2026 ${service}
 `);
     }
     const result = await waitForService(directory, service, 9e4);
@@ -1959,7 +2374,7 @@ Commands: docker compose pull; docker compose up -d --wait
       const line = formatLaunchLine(service, result.ready, result.detail, elapsedSec);
       step?.stop(line);
     } else {
-      process3.stdout.write(
+      humanOut(
         `${formatLaunchLine(service, result.ready, result.detail, elapsedSec)}
 `
       );
@@ -1976,14 +2391,18 @@ Commands: docker compose pull; docker compose up -d --wait
     publicOk = false;
   }
   if (interactive) {
-    const glyph = publicOk ? accent("\u2713") : pc2.yellow("\u26A0");
-    const label = publicOk ? `Public URL ready (HTTP 200)` : `Public URL not reachable yet`;
-    process3.stdout.write(
-      `  ${glyph} ${label.padEnd(28)} ${soft(`\xB7 ${config.publicUrl}`)}
-`
+    p3.log.message(
+      rows([
+        {
+          icon: icon.network(),
+          label: "Public URL",
+          detail: config.publicUrl,
+          status: publicOk ? "ok" : "warn"
+        }
+      ]).join("\n")
     );
   } else {
-    process3.stdout.write(
+    humanOut(
       `${formatLaunchLine(
         "public",
         publicOk,
@@ -2003,14 +2422,24 @@ Run \`harly doctor ${directory}\` to inspect.`,
     );
   }
   if (interactive && !confirmed) {
-    p3.outro(
-      `Harly is ready
-
-${accent(config.publicUrl)}
+    p3.log.message(
+      `${accent(config.publicUrl)}
 ${soft(`Run ${accent("harly doctor")} to verify the installation.`)}`
     );
+    p3.outro("Harly is ready");
   } else if (!interactive) {
-    process3.stdout.write(
+    if (json && emit) {
+      writeResult(resultOk("launch", "ready", {
+        directory,
+        url: config.publicUrl,
+        image: config.image,
+        services: results.reduce((acc, item) => {
+          acc[item.service] = item.ready ? "ready" : "failed";
+          return acc;
+        }, {})
+      }));
+    }
+    humanOut(
       `Harly is ready at ${config.publicUrl}. Run \`harly doctor\` to verify.
 `
     );
@@ -2127,19 +2556,44 @@ async function doctor(explicitDirectory, print = true) {
     image: config.image,
     checks
   };
-  if (print)
-    process3.stdout.write(
-      json ? `${JSON.stringify(result)}
-` : `
+  if (print) {
+    if (json) {
+      writeResult(resultOk("doctor", result.ok ? "ready" : "failed", result));
+    } else if (interactive) {
+      const glyphs = {
+        compose: icon.config(),
+        "service:postgres": icon.database(),
+        "service:app": icon.app(),
+        "service:scheduler": icon.scheduler(),
+        "service:caddy": icon.proxy(),
+        "profile:caddy": icon.proxy(),
+        readiness: icon.network()
+      };
+      const body = rows(
+        checks.map((check) => ({
+          icon: glyphs[check.name],
+          label: check.label,
+          detail: check.detail,
+          status: check.ok ? "ok" : "fail"
+        }))
+      );
+      p3.log.message(body.join("\n"));
+      if (result.ok) p3.log.success("Harly is healthy.");
+      else p3.log.error("Harly needs attention.");
+    } else {
+      process4.stdout.write(
+        `
 ${checks.map(
-        (check) => `  ${check.ok ? accent("\u2713") : pc2.red("\u2717")} ${check.label}${check.detail ? ` ${soft(`\xB7 ${check.detail}`)}` : ""}  ${soft(check.name)}`
-      ).join("\n")}
+          (check) => `  ${check.ok ? accent("\u2713") : pc2.red("\u2717")} ${check.label}${check.detail ? ` ${soft(`\xB7 ${check.detail}`)}` : ""}  ${soft(check.name)}`
+        ).join("\n")}
 
   ${result.ok ? accent("Harly is healthy.") : pc2.red("Harly needs attention.")}
 
 `
-    );
-  if (!result.ok && print) process3.exitCode = 1;
+      );
+    }
+  }
+  if (!result.ok && print) process4.exitCode = 1;
   if (!result.ok && flags.has("--fix") && interactive && !json) {
     await runDoctorFix(directory, config);
   }
@@ -2182,11 +2636,11 @@ async function deploymentDatabase(directory) {
     database: values.get("POSTGRES_DB") || "harly"
   };
 }
-async function backup(explicitDirectory) {
+async function backup(explicitDirectory, print = true) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
   const database = await deploymentDatabase(directory);
-  const recipient = process3.env.AGE_RECIPIENT ?? (await deploymentEnvironment(directory)).get("AGE_RECIPIENT");
+  const recipient = process4.env.AGE_RECIPIENT ?? (await deploymentEnvironment(directory)).get("AGE_RECIPIENT");
   const encrypt = flags.has("--encrypt");
   if (encrypt && !recipient)
     throw new CliError(
@@ -2244,7 +2698,7 @@ async function backup(explicitDirectory) {
     run("tar", ["-czf", archive, "-C", temp, "."]);
     await chmod(archive, 384);
     if (!encrypt) {
-      process3.stdout.write(`${archive}
+      if (print) process4.stdout.write(`${archive}
 `);
       return archive;
     }
@@ -2252,7 +2706,7 @@ async function backup(explicitDirectory) {
     run("age", ["-r", recipient, "-o", encrypted, archive]);
     await chmod(encrypted, 384);
     await rm(archive, { force: true });
-    process3.stdout.write(`${encrypted}
+    if (print) process4.stdout.write(`${encrypted}
 `);
     return encrypted;
   } finally {
@@ -2278,7 +2732,7 @@ async function restore() {
   let plaintext = archive;
   if (archive.endsWith(".age")) {
     plaintext = path.join(temp, "backup.tar.gz");
-    const identity = process3.env.AGE_IDENTITY;
+    const identity = process4.env.AGE_IDENTITY;
     if (!identity)
       throw new CliError("AGE_IDENTITY is required to decrypt this backup.");
     run("age", ["-d", "-i", identity, "-o", plaintext, archive]);
@@ -2293,18 +2747,18 @@ async function restore() {
       throw new CliError(`Backup checksum verification failed for ${file}.`);
   }
   if (manifest.storage === "s3" || config.storage === "s3") {
-    process3.stderr.write(
+    process4.stderr.write(
       "This backup does not include S3 objects. Verify the bucket backup/version history before restoring.\n"
     );
   }
-  process3.stdout.write("Creating a safety backup of the current deployment\u2026\n");
+  process4.stdout.write("Creating a safety backup of the current deployment\u2026\n");
   await backup(directory);
-  process3.stdout.write("Safety backup saved. Preparing restore\u2026\n");
+  process4.stdout.write("Safety backup saved. Preparing restore\u2026\n");
   compose(directory, ["stop", "app", "scheduler", "migrate"], {
     allowFailure: true
   });
   try {
-    process3.stdout.write("Restoring database\u2026\n");
+    process4.stdout.write("Restoring database\u2026\n");
     compose(directory, [
       "cp",
       path.join(temp, "database.dump"),
@@ -2329,7 +2783,7 @@ async function restore() {
       { allowFailure: true }
     );
     if (await exists(path.join(temp, "uploads"))) {
-      process3.stdout.write("Restoring local uploads\u2026\n");
+      process4.stdout.write("Restoring local uploads\u2026\n");
       compose(directory, [
         "run",
         "--rm",
@@ -2345,7 +2799,7 @@ async function restore() {
         "app:/data/uploads"
       ]);
     }
-    process3.stdout.write("Applying migrations\u2026\n");
+    process4.stdout.write("Applying migrations\u2026\n");
     compose(directory, ["run", "--rm", "migrate"]);
   } finally {
     compose(directory, ["up", "-d", "app", "scheduler"], {
@@ -2357,7 +2811,7 @@ async function restore() {
     throw new CliError(
       "Restore completed but Harly did not become healthy. Your safety backup was preserved; run `harly doctor` and inspect `docker compose logs` before retrying."
     );
-  process3.stdout.write("Restore complete. Harly is healthy.\n");
+  process4.stdout.write("Restore complete. Harly is healthy.\n");
 }
 async function upgrade(explicitDirectory) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
@@ -2369,23 +2823,60 @@ async function upgrade(explicitDirectory) {
       2
     );
   const requestedImage = toVersion ? toVersion.startsWith("ghcr.io/") ? toVersion : `ghcr.io/vytral/harly:${toVersion}` : config.requestedImage ?? config.image;
+  const release = await officialRelease();
+  const currentIdentity = describeImage(config.image, release);
+  const targetIdentity = describeImage(requestedImage, release, () => null);
   if (!yes && !await confirm2(
-    `Back up and upgrade ${config.image} to ${requestedImage}?`
+    `Update Harly from ${versionLine(currentIdentity)} to ${versionLine(targetIdentity)}?`
   )) {
     if (!interactive)
       throw new CliError("--yes is required in non-interactive mode.", 2);
     throw new CliError("Upgrade cancelled.", 2);
   }
   if (interactive) {
-    showBrand("Update", cliVersion);
-    p3.note(
-      `Current  ${config.image}
-Target   ${requestedImage}
-Data     preserved`,
-      "Upgrade plan"
+    showBrand("Update");
+    p3.log.message(
+      rows([
+        {
+          icon: icon.image(),
+          label: "Current",
+          detail: versionLine(currentIdentity)
+        },
+        {
+          icon: icon.image(),
+          label: "Target",
+          detail: versionLine(targetIdentity)
+        },
+        { icon: icon.archive(), label: "Data", detail: "preserved" }
+      ]).join("\n")
     );
   }
-  await backup(directory);
+  const totalPhases = 4;
+  const phase = (index, message) => `${soft(`${index}/${totalPhases}`)}  ${message}`;
+  let archive = "";
+  if (interactive) {
+    const step = p3.spinner(spinnerStyle);
+    step.start(phase(1, "Writing a rollback point"));
+    try {
+      archive = await backup(directory, false);
+    } catch (error) {
+      step.stop(phase(1, "Rollback point failed"));
+      throw error;
+    }
+    const size = await stat(archive).then(
+      (info) => humanBytes(info.size),
+      () => ""
+    );
+    step.stop(
+      `${phase(1, "Rollback point written")}  ${soft(
+        [size, path.relative(directory, archive)].filter(Boolean).join(" \xB7 ")
+      )}`
+    );
+  } else {
+    archive = await backup(directory, false);
+    process4.stdout.write(`${archive}
+`);
+  }
   const envPath = path.join(directory, ".env");
   const configPath = path.join(directory, "harly.config.json");
   const originalEnv = await readFile(envPath, "utf8");
@@ -2400,7 +2891,9 @@ Data     preserved`,
     await pullWithProgress(
       directory,
       ["app", "migrate", "scheduler"],
-      interactive
+      interactive,
+      phase(2, "Downloading container images"),
+      phase(2, "Container images downloaded")
     );
   } catch (error) {
     await atomicWrite(envPath, originalEnv, 384);
@@ -2420,7 +2913,11 @@ Data     preserved`,
   const repository = requestedImage.split("@")[0].replace(/:[^/:]+$/, "");
   const digest = String(inspected.stdout ?? "").split(/\s+/).find((value) => value.startsWith(`${repository}@sha256:`));
   const deployedImage = digest ?? requestedImage;
-  const deployedVersion = deployedImage.includes("@sha256:") ? deployedImage.split("@sha256:")[1].slice(0, 12) : toVersion ?? "current";
+  const deployedIdentity = describeImage(
+    digest ? requestedImage : deployedImage,
+    release
+  );
+  const deployedVersion = envVersion(deployedIdentity);
   await atomicWrite(
     envPath,
     setImage(await readFile(envPath, "utf8"), deployedImage, deployedVersion),
@@ -2436,13 +2933,13 @@ Data     preserved`,
   try {
     migrationsAttempted = true;
     progressStep(
-      "Applying database migrations",
-      "Migrations applied",
+      phase(3, "Applying database migrations"),
+      phase(3, "Migrations applied"),
       () => compose(directory, ["run", "--rm", "migrate"])
     );
     progressStep(
-      "Recreating services and waiting for healthchecks",
-      "Services are healthy",
+      phase(4, "Recreating services and waiting for healthchecks"),
+      phase(4, "Services are healthy"),
       () => {
         compose(directory, ["up", "-d", "--wait", "--wait-timeout", "180"]);
       }
@@ -2463,14 +2960,23 @@ Data     preserved`,
     throw new CliError(
       "Upgrade completed but health checks failed. The new image remains selected because migrations are forward-only; restore the pre-upgrade backup if recovery is required."
     );
-  if (interactive)
-    p3.outro(
-      `Harly is running ${accent(deployedImage)} at ${accent(config.publicUrl)}`
+  if (interactive) {
+    p3.log.message(
+      soft(`Rollback point: ${path.relative(directory, archive) || archive}`)
     );
+    p3.outro(
+      `Harly is running ${accent(versionLine(deployedIdentity))} at ${accent(config.publicUrl)}`
+    );
+  }
 }
 async function uninstall(explicitDirectory) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   await readConfig(directory);
+  const finish = (message) => {
+    if (interactive) p3.outro(message);
+    else process4.stdout.write(`${message}
+`);
+  };
   if (!yes && !await confirm2(
     "Stop Harly and remove its containers? Data volumes will be kept."
   )) {
@@ -2481,60 +2987,71 @@ async function uninstall(explicitDirectory) {
       "Permanently delete PostgreSQL, uploads, cache, and proxy volumes?"
     )) {
       compose(directory, ["down"]);
-      process3.stdout.write("Containers removed; data volumes kept.\n");
+      finish("Containers removed; data volumes kept.");
       return;
     }
-    process3.stdout.write(
-      "Creating a final backup before deleting data volumes.\n"
-    );
-    await backup(directory);
+    let archive = "";
+    if (interactive) {
+      const step = p3.spinner(spinnerStyle);
+      step.start("Writing a final backup before deleting data volumes");
+      try {
+        archive = await backup(directory, false);
+      } catch (error) {
+        step.stop("Final backup failed");
+        throw error;
+      }
+      const size = await stat(archive).then(
+        (info) => humanBytes(info.size),
+        () => ""
+      );
+      step.stop(
+        `Final backup written  ${soft(
+          [size, path.relative(directory, archive)].filter(Boolean).join(" \xB7 ")
+        )}`
+      );
+    } else {
+      process4.stdout.write(
+        "Creating a final backup before deleting data volumes.\n"
+      );
+      archive = await backup(directory, false);
+      process4.stdout.write(`${archive}
+`);
+    }
     compose(directory, ["down", "--volumes"]);
-    process3.stdout.write(
-      "Harly containers and data volumes were removed. Local backup archives were kept.\n"
+    if (interactive)
+      p3.log.warn(
+        `Data volumes were deleted. The only copy left is ${accent(archive)}`
+      );
+    finish(
+      "Harly containers and data volumes were removed. Local backup archives were kept."
     );
   } else {
     compose(directory, ["down"]);
-    process3.stdout.write(
-      "Harly containers were removed. PostgreSQL, uploads, and backups were kept.\n"
+    finish(
+      "Harly containers were removed. PostgreSQL, uploads, and backups were kept."
     );
   }
 }
 async function railwayGuide() {
-  showBrand("Railway", cliVersion);
-  const token = unwrapPrompt(
-    await p3.password({
-      message: "Railway API token (from railway.app/account/tokens)",
-      validate: (value) => value?.trim() ? void 0 : "Required."
-    })
+  if (!json) showBrand("Railway", cliVersion);
+  const token = await promptOrSecret(
+    "Railway API token (from railway.app/account/tokens)",
+    "--railway-token",
+    "RAILWAY_TOKEN",
+    "--railway-token-stdin"
   );
-  const projectName = unwrapPrompt(
-    await p3.text({ message: "Railway project name", initialValue: "harly" })
-  );
-  const email = unwrapPrompt(
-    await p3.text({ message: "Initial owner email", validate: validateEmail })
-  ).toLowerCase();
-  const bucket = unwrapPrompt(
-    await p3.text({
-      message: "S3-compatible bucket (required for cloud uploads)",
-      validate: (value) => value?.trim() ? void 0 : "S3 storage is required on cloud platforms."
-    })
-  );
-  const region = unwrapPrompt(
-    await p3.text({ message: "S3 region", initialValue: "auto" })
-  );
-  const accessKey = unwrapPrompt(
-    await p3.password({
-      message: "S3 access key",
-      validate: (value) => value ? void 0 : "Required."
-    })
-  );
-  const secretKey = unwrapPrompt(
-    await p3.password({
-      message: "S3 secret key",
-      validate: (value) => value ? void 0 : "Required."
-    })
-  );
-  const deploymentRelease = await officialRelease();
+  const projectName = await promptOrValue("Railway project name", "--project-name", "HARLY_PROJECT_NAME", "harly");
+  const email = (await promptOrValue("Initial owner email", "--email", "HARLY_INITIAL_ADMIN_EMAIL")).toLowerCase();
+  if (validateEmail(email)) throw usageError("Invalid owner email.", "INVALID_CONFIGURATION");
+  const bucket = await promptOrValue("S3-compatible bucket (required for cloud uploads)", "--s3-bucket", "S3_BUCKET");
+  const region = await promptOrValue("S3 region", "--s3-region", "S3_REGION", "auto");
+  const accessKey = await promptOrValue("S3 access key", "--s3-access-key-id", "S3_ACCESS_KEY_ID");
+  const secretKey = await promptOrSecret("S3 secret key", "--s3-secret-access-key", "S3_SECRET_ACCESS_KEY", "--s3-secret-stdin");
+  const requestedUrlValue = option(parsed, "--url") ?? option(parsed, "--domain");
+  if (option(parsed, "--url") && !option(parsed, "--url").includes("://"))
+    throw usageError("--url requires an origin with an HTTP(S) protocol.");
+  const requestedUrl = requestedUrlValue ? normalizeUrl(requestedUrlValue, "external").origin : void 0;
+  const deploymentRelease = flags.has("--dry-run") ? embeddedRelease : await officialRelease();
   const image = releaseImage(deploymentRelease);
   const runtimeSecrets = {
     betterAuth: secret(),
@@ -2544,19 +3061,45 @@ async function railwayGuide() {
     setup: secret()
   };
   const postgresPassword = secret();
+  if (flags.has("--dry-run")) {
+    writeResult(resultOk("deploy", "dry-run", {
+      provider: "railway",
+      projectName,
+      ...requestedUrl ? { requestedUrl } : {},
+      operations: {
+        local: ["validate configuration", "resolve pinned release"],
+        remote: [
+          "create Railway project",
+          "provision managed PostgreSQL and volume",
+          "create web, scheduler and migrate services",
+          "set environment variables",
+          "run migrations",
+          "deploy web and scheduler",
+          "verify public readiness"
+        ]
+      },
+      artifacts: flags.has("--save-env") ? [path.join(path.resolve(option(parsed, "--output-dir") ?? "harly-railway"), ".env")] : [],
+      sideEffects: false
+    }));
+    return;
+  }
   const spin = p3.spinner(spinnerStyle);
-  spin.start("Creating Railway project");
+  if (interactive) spin.start("Creating Railway project");
+  else humanOut("[1/7] Creating Railway project...\n");
   const { projectId, environmentId } = await railwayCreateProject(
     token,
     projectName
   );
-  spin.message("Provisioning managed PostgreSQL");
+  recordRailwayResource("project", projectId, projectName);
+  if (interactive) spin.message("Provisioning managed PostgreSQL");
+  else humanOut("[2/7] Provisioning managed PostgreSQL...\n");
   const postgresServiceId = await railwayCreateService(
     token,
     projectId,
     "postgres",
     "ghcr.io/railwayapp-templates/postgres-ssl:latest"
   );
+  recordRailwayResource("service", postgresServiceId, "postgres");
   await railwayCreateVolume(
     token,
     projectId,
@@ -2577,26 +3120,30 @@ async function railwayGuide() {
     }
   );
   const databaseUrl = `postgresql://postgres:${postgresPassword}@postgres.railway.internal:5432/railway`;
-  spin.message("Creating web service");
+  if (interactive) spin.message("Creating web service");
+  else humanOut("[3/7] Creating web service...\n");
   const webServiceId = await railwayCreateService(
     token,
     projectId,
     "web",
     image
   );
+  recordRailwayResource("service", webServiceId, "web");
   await railwayUpdateInstance(token, environmentId, webServiceId, {
     healthcheckPath: "/api/health/ready",
     restartPolicyType: "ON_FAILURE"
   });
   const domain = await railwayCreateDomain(token, environmentId, webServiceId);
   const url = normalizeUrl(`https://${domain}`, "external");
-  spin.message("Creating scheduler service");
+  if (interactive) spin.message("Creating scheduler service");
+  else humanOut("[4/7] Creating scheduler service...\n");
   const schedulerServiceId = await railwayCreateService(
     token,
     projectId,
     "scheduler",
     image
   );
+  recordRailwayResource("service", schedulerServiceId, "scheduler");
   await railwayUpdateInstance(token, environmentId, schedulerServiceId, {
     startCommand: "node /app/runtime.mjs scheduler",
     restartPolicyType: "ON_FAILURE"
@@ -2618,7 +3165,8 @@ async function railwayGuide() {
     S3_ACCESS_KEY_ID: accessKey,
     S3_SECRET_ACCESS_KEY: secretKey
   };
-  spin.message("Setting environment variables");
+  if (interactive) spin.message("Setting environment variables");
+  else humanOut("[5/7] Setting environment variables...\n");
   await railwaySetVariables(
     token,
     projectId,
@@ -2633,13 +3181,15 @@ async function railwayGuide() {
     schedulerServiceId,
     sharedEnv
   );
-  spin.message("Running database migrations");
+  if (interactive) spin.message("Running database migrations");
+  else humanOut("[6/7] Running database migrations...\n");
   const migrateServiceId = await railwayCreateService(
     token,
     projectId,
     "migrate",
     image
   );
+  recordRailwayResource("service", migrateServiceId, "migrate");
   await railwayUpdateInstance(token, environmentId, migrateServiceId, {
     startCommand: "node /app/runtime.mjs migrate",
     numReplicas: 0
@@ -2648,72 +3198,71 @@ async function railwayGuide() {
     DATABASE_URL: databaseUrl
   });
   await railwayDeploy(token, environmentId, migrateServiceId);
-  spin.message("Deploying web and scheduler");
+  if (interactive) spin.message("Deploying web and scheduler");
+  else humanOut("[7/7] Deploying web and scheduler...\n");
   await railwayDeploy(token, environmentId, webServiceId);
   await railwayDeploy(token, environmentId, schedulerServiceId);
-  spin.stop("Railway project provisioned");
-  const directory = path.resolve("harly-railway");
-  await mkdir(directory, { recursive: true });
+  if (interactive) spin.message("Waiting for public readiness");
+  else humanOut("Checking public readiness...\n");
+  await waitForPublicReadiness(url.origin);
+  if (interactive) spin.stop("Railway project provisioned");
+  const directory = path.resolve(option(parsed, "--output-dir") ?? "harly-railway");
   const env = Object.entries(sharedEnv).map(([key, value]) => `${key}=${envLine(value)}`).join("\n") + "\n";
-  await atomicWrite(path.join(directory, ".env"), env, 384);
+  let savedEnvPath;
+  if (flags.has("--save-env") && !flags.has("--dry-run")) {
+    await mkdir(directory, { recursive: true });
+    savedEnvPath = path.join(directory, ".env");
+    if (await exists(savedEnvPath) && !force)
+      throw usageError(`${savedEnvPath} already exists. Use --force only to replace it.`);
+    await atomicWrite(savedEnvPath, env, 384);
+    await chmod(savedEnvPath, 384);
+    if (!json) process4.stderr.write(`Warning: Railway secrets were saved locally at ${savedEnvPath} with mode 0600.
+`);
+  }
+  const result = resultOk("deploy", "ready", {
+    provider: "railway",
+    project: { id: projectId, name: projectName, environmentId },
+    url: url.origin,
+    ...requestedUrl && requestedUrl !== url.origin ? { requestedUrl } : {},
+    version: versionLine(describeImage(image, deploymentRelease, () => null)),
+    resources: railwayResources.map(({ type, id, name }) => ({ type, id, name })),
+    ...savedEnvPath ? { artifacts: [savedEnvPath] } : {},
+    next: [
+      `Open ${url.origin}/setup to claim the owner account.`,
+      "The one-shot migrate service can be deleted after it succeeds.",
+      ...requestedUrl && requestedUrl !== url.origin ? [`Attach and verify the custom domain ${requestedUrl} in Railway.`] : []
+    ]
+  });
+  if (json) {
+    writeResult(result);
+    return;
+  }
   p3.note(
     `Project    ${projectName} (${projectId})
 URL        ${url.origin}
-Image      ${image}
-Secrets    ${path.join(directory, ".env")} (mode 0600, local record only)
-
-The migrate service ran once and can be deleted from the Railway dashboard once its deployment succeeds. Watch build/deploy logs at railway.app; the web and scheduler services redeploy automatically on future \`git push\` if you later connect a GitHub repo.`,
-    "Railway deployment provisioned"
+Version    ${versionLine(describeImage(image, deploymentRelease, () => null))}
+` + (savedEnvPath ? `Secrets    ${savedEnvPath} (mode 0600, explicitly saved)
+` : "Secrets    not saved locally (use --save-env to opt in)\n") + "\nThe migrate service ran once and can be deleted from the Railway dashboard once its deployment succeeds. Watch build/deploy logs at railway.app." + (requestedUrl && requestedUrl !== url.origin ? ` Configure ${requestedUrl} as a custom domain before using it.` : ""),
+    "Railway deployment ready"
   );
-  p3.outro(
-    `Harly is deploying to ${accent(url.origin)}. Never commit the generated .env file.`
-  );
+  p3.outro(`Harly is ready at ${accent(url.origin)}.`);
 }
 async function cloudGuide(provider) {
   const providerName = provider === "fly" ? "Fly.io" : "DigitalOcean";
-  showBrand(providerName, cliVersion);
-  const url = normalizeUrl(
-    unwrapPrompt(
-      await p3.text({
-        message: "Public URL",
-        placeholder: "https://hiring.example.com",
-        validate: validatePublicOrigin
-      })
-    ),
-    "external"
-  );
-  const email = unwrapPrompt(
-    await p3.text({ message: "Initial owner email", validate: validateEmail })
-  ).toLowerCase();
-  const bucket = unwrapPrompt(
-    await p3.text({
-      message: "S3-compatible bucket (required for cloud uploads)",
-      validate: (value) => value?.trim() ? void 0 : "S3 storage is required on cloud platforms."
-    })
-  );
-  const region = unwrapPrompt(
-    await p3.text({ message: "S3 region", initialValue: "auto" })
-  );
-  const accessKey = unwrapPrompt(
-    await p3.password({
-      message: "S3 access key",
-      validate: (value) => value ? void 0 : "Required."
-    })
-  );
-  const secretKey = unwrapPrompt(
-    await p3.password({
-      message: "S3 secret key",
-      validate: (value) => value ? void 0 : "Required."
-    })
-  );
-  const databaseUrl = provider === "digitalocean" ? unwrapPrompt(
-    await p3.password({
-      message: "DigitalOcean Managed PostgreSQL connection URL",
-      validate: validateDatabaseUrl
-    })
-  ) : void 0;
-  const directory = path.resolve(`harly-${provider}`);
-  await mkdir(directory, { recursive: true });
+  if (!json) showBrand(providerName, cliVersion);
+  const suppliedUrl = option(parsed, "--url") ?? option(parsed, "--domain") ?? process4.env.HARLY_URL;
+  if (!suppliedUrl) throw usageError("--url, --domain or HARLY_URL is required.", "MISSING_ARGUMENT");
+  if (option(parsed, "--url") && !option(parsed, "--url").includes("://"))
+    throw usageError("--url requires an origin with an HTTP(S) protocol.");
+  const url = normalizeUrl(suppliedUrl, "external");
+  const email = (await promptOrValue("Initial owner email", "--email", "HARLY_INITIAL_ADMIN_EMAIL")).toLowerCase();
+  if (validateEmail(email)) throw usageError("Invalid owner email.", "INVALID_CONFIGURATION");
+  const bucket = await promptOrValue("S3-compatible bucket (required for cloud uploads)", "--s3-bucket", "S3_BUCKET");
+  const region = await promptOrValue("S3 region", "--s3-region", "S3_REGION", "auto");
+  const accessKey = await promptOrValue("S3 access key", "--s3-access-key-id", "S3_ACCESS_KEY_ID");
+  const secretKey = await promptOrSecret("S3 secret key", "--s3-secret-access-key", "S3_SECRET_ACCESS_KEY", "--s3-secret-stdin");
+  const databaseUrl = provider === "digitalocean" ? await promptOrValue("DigitalOcean Managed PostgreSQL connection URL", "--database-url", "DATABASE_URL") : void 0;
+  const directory = path.resolve(option(parsed, "--output-dir") ?? `harly-${provider}`);
   const runtimeSecrets = {
     betterAuth: secret(),
     aiEncryption: secret(),
@@ -2738,11 +3287,19 @@ async function cloudGuide(provider) {
     `S3_SECRET_ACCESS_KEY=${envLine(secretKey)}`,
     ...databaseUrl ? [`DATABASE_URL=${envLine(databaseUrl)}`] : []
   ].join("\n") + "\n";
-  await atomicWrite(path.join(directory, ".env"), env, 384);
-  const deploymentRelease = await officialRelease();
+  const saveEnv = flags.has("--save-env");
+  if (saveEnv && !flags.has("--dry-run")) {
+    await mkdir(directory, { recursive: true });
+    const envPath = path.join(directory, ".env");
+    if (await exists(envPath) && !force) throw usageError(`${envPath} already exists. Use --force to replace it.`);
+    await atomicWrite(envPath, env, 384);
+    await chmod(envPath, 384);
+  }
+  const deploymentRelease = flags.has("--dry-run") ? embeddedRelease : await officialRelease();
   const image = releaseImage(deploymentRelease);
   if (provider === "fly") {
-    await atomicWrite(
+    if (!flags.has("--dry-run")) await mkdir(directory, { recursive: true });
+    if (!flags.has("--dry-run")) await atomicWrite(
       path.join(directory, "fly.toml"),
       `app = "replace-with-your-harly-app-name"
 primary_region = "iad"
@@ -2776,7 +3333,7 @@ primary_region = "iad"
   }
   if (provider === "digitalocean") {
     const yaml = (value) => JSON.stringify(value);
-    const secretEnv = (key, value) => `  - { key: ${key}, scope: RUN_TIME, type: SECRET, value: ${yaml(value)} }`;
+    const secretEnv = (key, value) => `  - { key: ${key}, scope: RUN_TIME, type: SECRET, value: ${yaml(saveEnv ? value : "<set-in-provider-dashboard>")} }`;
     const publicEnv = (key, value) => `  - { key: ${key}, scope: RUN_TIME, type: GENERAL, value: ${yaml(value)} }`;
     const appSpec = [
       "# Generated by the Harly CLI. This file contains secrets: keep it outside Git.",
@@ -2821,19 +3378,32 @@ primary_region = "iad"
       "    instance_size_slug: apps-s-1vcpu-0.5gb",
       ""
     ].join("\n");
-    await atomicWrite(path.join(directory, "app.yaml"), appSpec, 384);
+    if (!flags.has("--dry-run")) await atomicWrite(path.join(directory, "app.yaml"), appSpec, 384);
   }
   const next = provider === "fly" ? `Run \`fly launch --no-deploy\` in ${shellQuote(directory)}, attach Managed Postgres, import .env as Fly secrets, then run \`fly deploy\`.` : `The generated app spec already includes your Managed PostgreSQL URL as an encrypted app-level secret. Deploy with \`doctl apps create --spec ${shellQuote(path.join(directory, "app.yaml"))}\`.`;
+  const artifacts = [path.join(directory, provider === "fly" ? "fly.toml" : "app.yaml"), ...saveEnv ? [path.join(directory, ".env")] : []];
+  const result = resultOk("deploy", "ready-to-deploy", {
+    provider,
+    url: url.origin,
+    version: versionLine(describeImage(image, deploymentRelease, () => null)),
+    artifacts,
+    pending: [next],
+    ...saveEnv ? {} : { note: "Secrets were not saved locally. Use --save-env to opt in." }
+  });
+  if (json) {
+    writeResult(result);
+    return;
+  }
   p3.note(
-    `Image     ${image}
-Secrets   ${path.join(directory, ".env")} (mode 0600)${provider === "digitalocean" ? `
+    `Version   ${versionLine(describeImage(image, deploymentRelease, () => null))}
+${saveEnv ? `Secrets   ${path.join(directory, ".env")} (mode 0600, explicitly saved)` : "Secrets   not saved locally (use --save-env to opt in)"}${provider === "digitalocean" ? `
 App spec  ${path.join(directory, "app.yaml")} (mode 0600)` : ""}
 Storage   S3 required
 
 ${next}`,
     "Cloud deployment prepared"
   );
-  p3.outro("Your configuration is ready. Never commit generated secret files.");
+  p3.outro("Configuration ready to deploy. Never commit generated secret files.");
 }
 async function menu() {
   const installation = await findInstallation();
@@ -2867,11 +3437,28 @@ async function menu() {
     usage();
     return;
   }
-  p3.note(
-    `${installation.config.publicUrl}
-${installation.config.image}
-${installation.directory}`,
-    "Detected installation"
+  const identity = describeImage(
+    installation.config.requestedImage ?? installation.config.image,
+    await officialRelease()
+  );
+  p3.log.message(
+    rows([
+      {
+        icon: icon.network(),
+        label: "URL",
+        detail: installation.config.publicUrl
+      },
+      {
+        icon: icon.image(),
+        label: "Version",
+        detail: versionLine(identity)
+      },
+      {
+        icon: icon.config(),
+        label: "Directory",
+        detail: installation.directory
+      }
+    ]).join("\n")
   );
   const choice = unwrapPrompt(
     await p3.select({
@@ -2942,6 +3529,9 @@ async function deploy(provider) {
   }
 }
 async function main() {
+  if (parseError) {
+    throw usageError(parseError instanceof Error ? parseError.message : String(parseError));
+  }
   switch (command) {
     case "menu":
       return menu();
@@ -2969,11 +3559,13 @@ async function main() {
     case "help":
     case "--help":
     case "-h":
-      usage();
+      if (json) writeResult(resultOk("help", "completed", { commands: commandHelp.map(([name, description]) => ({ name, description })) }));
+      else usage();
       return;
     case "--version":
     case "-v":
-      process3.stdout.write(`${cliVersion}
+      if (json) writeResult(resultOk("version", "completed", { version: cliVersion }));
+      else process4.stdout.write(`${cliVersion}
 `);
       return;
     default:
@@ -2981,7 +3573,33 @@ async function main() {
       throw new CliError(`Unknown command: ${command}`, 2);
   }
 }
-main().catch(async (error) => {
+process4.once("SIGINT", () => {
+  if (json) writeResult(resultError(command, "cancelled", "CANCELLED", "Operation cancelled."));
+  else process4.stderr.write("Operation cancelled.\n");
+  process4.exit(130);
+});
+main().then(() => {
+  if (json && !jsonResultWritten) writeResult(resultOk(command, "completed"));
+}).catch(async (error) => {
   const result = await handleHarlyError(error, { interactive, yes });
-  if (result.kind === "abort") process3.exit(result.exitCode);
+  if (result.kind === "abort") {
+    const exitCode = result.exitCode;
+    if (json && !jsonResultWritten) {
+      const message = error instanceof Error && error.message ? error.message : "Operation failed.";
+      const cancelled = error instanceof CliError && error.code === "CANCELLED";
+      const code = cancelled ? "CANCELLED" : stableErrorCode(error);
+      writeResult(resultError(command, cancelled ? "cancelled" : "failed", code, message, railwayResources.length > 0 && command === "deploy" ? {
+        resourcesCreated: railwayResources,
+        recovery: {
+          automaticRollback: false,
+          actions: [
+            "Inspect the partially provisioned project in Railway.",
+            "Do not rerun until existing resources have been reviewed.",
+            "Delete unused resources manually if the deployment is abandoned."
+          ]
+        }
+      } : {}));
+    }
+    process4.exit(exitCode);
+  }
 });

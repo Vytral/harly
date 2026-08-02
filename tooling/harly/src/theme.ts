@@ -55,3 +55,86 @@ export function showBrand(context?: string, version = "") {
 
 /** Spinner frames tinted with the brand pulse. */
 export const spinnerStyle = { styleFrame: accent };
+
+/**
+ * Glyphs are chosen for *width*, not for expressiveness. Every symbol here is
+ * single-column in a terminal; emoji and most East Asian Wide characters are
+ * two columns wide and would shear the aligned detail column on the operator's
+ * machine while looking fine on ours. A CLI that runs over SSH on an unknown
+ * font budget is not the place to gamble on glyph coverage.
+ */
+// Glyph coverage and colour support are independent questions. A terminal run
+// under NO_COLOR, or a pipe into a log file, renders box-drawing characters
+// perfectly well; only a font that lacks them cannot, and that is what
+// HARLY_ASCII exists to declare.
+const wide = process.env.HARLY_ASCII !== "1";
+
+/** Status marks. These carry meaning, so they are never colour-only. */
+export const mark = {
+  ok: () => (wide ? accent("✓") : accent("OK")),
+  warn: () => (wide ? pc.yellow("⚠") : pc.yellow("!!")),
+  fail: () => (wide ? pc.red("✗") : pc.red("XX")),
+};
+
+/**
+ * Domain glyphs. Purely decorative: they speed up scanning a list of checks,
+ * and every row still reads correctly with them stripped. Kept deliberately
+ * plain so the chartreuse accent stays the only thing that draws the eye —
+ * DESIGN.md rations the pulse, and a row of coloured icons would compete.
+ */
+export const icon = {
+  config: () => (wide ? "≡" : "-"),
+  database: () => (wide ? "▤" : "-"),
+  app: () => (wide ? "▣" : "-"),
+  scheduler: () => (wide ? "↻" : "-"),
+  proxy: () => (wide ? "⇄" : "-"),
+  network: () => (wide ? "◍" : "-"),
+  archive: () => (wide ? "▽" : "-"),
+  image: () => (wide ? "▦" : "-"),
+};
+
+export type Row = {
+  icon?: string;
+  label: string;
+  detail?: string;
+  status?: "ok" | "warn" | "fail";
+};
+
+/**
+ * Renders labelled rows with the detail column aligned.
+ *
+ * Alignment is computed on the *visible* width: `label` arrives already
+ * coloured in some callers, and padding a string that contains ANSI escapes
+ * pads the escape bytes too, which is what silently bends a column out of
+ * true.
+ */
+export function rows(items: Row[]): string[] {
+  const visible = (value: string) =>
+    // eslint-disable-next-line no-control-regex
+    value.replace(/\[[0-9;]*m/g, "").length;
+  const width = Math.max(0, ...items.map((item) => visible(item.label)));
+  return items.map((item) => {
+    const status = item.status ? `${mark[item.status]()} ` : "";
+    const glyph = item.icon ? `${soft(item.icon)} ` : "";
+    const pad = " ".repeat(width - visible(item.label));
+    const detail = item.detail ? `  ${pad}${soft(item.detail)}` : "";
+    return `${status}${glyph}${item.label}${detail}`;
+  });
+}
+
+/** A quiet section heading, for grouping rows inside one block. */
+export function section(title: string): string {
+  return soft(title.toUpperCase());
+}
+
+/**
+ * Byte sizes for humans. A small-but-real file must never round to `0 MB`:
+ * a fresh install's first backup is a few hundred kilobytes, and reporting it
+ * as zero reads as a failed step.
+ */
+export function humanBytes(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}

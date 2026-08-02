@@ -58,7 +58,15 @@ value and redeploying.
 
 ## Railway
 
-Run `npx @harly/cli` and choose **Deploy on Railway**. Unlike Render and
+Run `npx @harly/cli` and choose **Deploy on Railway**. For automation, use:
+
+```bash
+RAILWAY_TOKEN=... S3_BUCKET=... S3_ACCESS_KEY_ID=... S3_SECRET_ACCESS_KEY=... \
+npx --yes @harly/cli deploy railway --project-name harly-prod \
+  --email owner@example.com --non-interactive
+```
+
+Unlike Render and
 DigitalOcean, Railway has no deploy-from-GitHub button we can point you at —
 their one-click button requires a template first published from Railway's
 own dashboard, a manual step tied to a Railway account. The CLI wizard skips
@@ -70,17 +78,18 @@ variable — then triggers the deploys. Nothing to configure by hand in the
 Railway dashboard afterward.
 
 **Finishing setup:** the CLI generates `HARLY_SETUP_SECRET` for you and
-prints its `harly-railway/.env` path at the end — open that file, copy the
-value, and visit `https://<your-app>/setup` to claim the first owner
-account. The file stays on your machine; keep it out of Git.
+returns the setup URL. It does not save Railway secrets locally unless
+`--save-env` is explicitly supplied. With that option, the file is written
+with mode `0600`; keep it out of Git.
 
 ## Fly.io
 
-[`fly.toml`](../fly.toml) is the canonical, versioned Fly configuration at the
-repository root, so `fly deploy` works without a path argument. Replace its
-placeholder `app` name, run `fly launch --no-deploy`, attach Fly Managed
-Postgres, import the generated `.env` (from `npx @harly/cli`, choose
-**Deploy on Fly.io**) as secrets, then run `fly deploy`. The config uses
+The canonical repository configuration remains [`fly.toml`](../fly.toml).
+Prepare Fly.io non-interactively with `npx @harly/cli deploy fly prepare`.
+The command writes `fly.toml` and finishes with `ready-to-deploy`. Use
+`--save-env` only when you explicitly want a local `0600` secrets file. Replace
+the placeholder app name, run `fly launch --no-deploy`, attach Fly Managed
+Postgres, import the secrets, then run `fly deploy`. The config uses
 separate `web` and `scheduler` processes, a one-time migration release
 command, and the readiness endpoint. Fly terminates HTTPS; do not add Caddy.
 

@@ -3,7 +3,7 @@ import process from "node:process";
 
 import * as p from "@clack/prompts";
 
-import { accent, soft, spinnerStyle } from "./theme.js";
+import { accent, humanBytes, soft, spinnerStyle } from "./theme.js";
 
 type LayerState = "waiting" | "downloading" | "downloaded" | "done";
 
@@ -12,12 +12,6 @@ const terminal: Record<string, LayerState> = {
   "already exists": "done",
   "download complete": "downloaded",
 };
-
-function humanBytes(bytes: number): string {
-  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-  if (bytes >= 1024 ** 2) return `${Math.round(bytes / 1024 ** 2)} MB`;
-  return `${Math.round(bytes / 1024)} KB`;
-}
 
 function humanDuration(ms: number): string {
   const seconds = Math.round(ms / 1000);
@@ -47,6 +41,8 @@ export async function pullWithProgress(
   cwd: string,
   services: string[],
   interactive: boolean,
+  label = "Pulling container images",
+  doneLabel = "Container images downloaded",
 ): Promise<void> {
   if (!interactive) {
     await runPlain(cwd, services);
@@ -57,24 +53,33 @@ export async function pullWithProgress(
   const bytes = new Map<string, number>();
   const startedAt = performance.now();
   const spin = p.spinner(spinnerStyle);
-  spin.start("Pulling container images");
+  spin.start(label);
 
   const render = () => {
     const known = [...layers.values()];
     const complete = known.filter((state) => state === "done").length;
+    const received = [...bytes.values()].reduce((sum, value) => sum + value, 0);
+    const elapsed = (performance.now() - startedAt) / 1000;
+    // Docker reports bytes received per layer but never a layer's total size,
+    // so a byte percentage would be a fiction. Rate is honest: it is derived
+    // only from what has actually arrived.
+    const rate =
+      received > 0 && elapsed > 1
+        ? `  ${soft(`· ${humanBytes(received / elapsed)}/s`)}`
+        : "";
     const active = [...layers.entries()]
       .filter(([, state]) => state === "downloading")
       .slice(0, 3)
       .map(
         ([id]) =>
-          `${soft(id.slice(0, 12).padEnd(12))} ${humanBytes(bytes.get(id) ?? 0)}`,
+          `${accent("↓")} ${soft(id.slice(0, 12).padEnd(12))} ${humanBytes(bytes.get(id) ?? 0)}`,
       );
     const headline = known.length
-      ? `${bar(complete, known.length)}  ${complete}/${known.length} layers`
+      ? `${bar(complete, known.length)}  ${complete}/${known.length} layers${
+          received > 0 ? soft(` · ${humanBytes(received)}`) : ""
+        }`
       : "contacting registry";
-    spin.message(
-      ["Pulling container images", headline, ...active].join("\n   "),
-    );
+    spin.message([`${label}${rate}`, headline, ...active].join("\n   "));
   };
 
   await stream(cwd, services, (line) => {
@@ -117,8 +122,8 @@ export async function pullWithProgress(
     .join(" · ");
   spin.stop(
     layers.size === 0
-      ? "Container images are up to date"
-      : `Container images downloaded  ${soft(`· ${summary}`)}`,
+      ? `${doneLabel} — already up to date`
+      : `${doneLabel}  ${soft(`· ${summary}`)}`,
   );
 }
 
