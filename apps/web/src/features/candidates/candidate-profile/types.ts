@@ -142,6 +142,7 @@ export type CandidateProfileTabsProps = {
   aiEvaluations: CandidateAiEvaluationItem[];
   aiConfigured: boolean;
   offers: CandidateOfferItem[];
+  offerSignatureChannel: "email" | "esign" | "native";
   emailTemplates?: EmailTemplateOption[];
   emailTemplateValues?: TemplateValues;
   scheduleApplications: ScheduleApplicationOption[];

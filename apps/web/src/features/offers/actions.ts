@@ -10,11 +10,13 @@ import {
   applicationStageHistory,
   db,
   documentAssociations,
+  documents,
   emailOutbox,
   jobHiringTeam,
   jobStages,
   notifications,
   offers,
+  signatureFields,
 } from "@harly/db";
 
 import {
@@ -447,6 +449,162 @@ export async function sendOffer(input: {
 
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
   return { success: true };
+}
+
+const draftFieldSchema = z.object({
+  type: z.enum(["signature", "text"]),
+  page: z.number().int().positive(),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  w: z.number().positive().max(1),
+  h: z.number().positive().max(1),
+  label: z.string().trim().max(60).nullable().optional(),
+  required: z.boolean().default(true),
+  order: z.number().int().min(0).default(0),
+});
+
+const saveFieldsAndSendSchema = z.object({
+  offerId: z.uuid(),
+  fields: z.array(draftFieldSchema).min(1).max(40),
+});
+
+/**
+ * Recruiter-facing "place fields, then send" — the native e-signature
+ * counterpart to a plain `sendOffer`. One atomic step: replace the draft
+ * `signatureFields` for the offer letter document, freeze them into
+ * `documents.fieldsSnapshot`, THEN call the existing `sendOffer` (which does
+ * its own outbox-backed, idempotent delivery). Never split "save fields" and
+ * "send" into two separate client-driven calls — that leaves real partial
+ * states (fields saved but nothing sent, a double-click duplicating rows).
+ *
+ * Guarded the same way `sendOffer` already is (`status === "draft"`), plus a
+ * `SELECT ... FOR UPDATE` recheck inside the transaction so a concurrent
+ * double-click/retry blocks on the lock and then no-ops once it sees the
+ * offer already left `draft` — same pattern as the signature-fields backfill
+ * script's concurrency fix.
+ */
+export async function saveOfferSignatureFieldsAndSend(
+  input: unknown,
+): Promise<ActionResult> {
+  const parsed = saveFieldsAndSendSchema.safeParse(input);
+  if (!parsed.success) {
+    return { success: false, error: "Invalid field placement." };
+  }
+
+  let context;
+  try {
+    context = await requireOfferPermission("offers:manage", parsed.data.offerId);
+  } catch (error) {
+    log.error(error, "saveOfferSignatureFieldsAndSend failed");
+    return {
+      success: false,
+      error: "You do not have permission to manage offers.",
+    };
+  }
+  const workspaceId = context.organization.id;
+
+  const offer = await getOfferRow(workspaceId, parsed.data.offerId);
+  if (!offer) return { success: false, error: "Offer not found." };
+  if (offer.status !== "draft") {
+    return { success: false, error: "Only draft offers can be sent." };
+  }
+  if (offerHasExpired(offer.expiresAt)) {
+    return {
+      success: false,
+      error: "This offer has expired and can no longer be sent.",
+    };
+  }
+
+  const esignStatus = await getWorkspaceEsignStatus(workspaceId);
+  if (esignStatus.offerSignatureChannel !== "native") {
+    return {
+      success: false,
+      error: "Field placement is only available for native e-signature offers.",
+    };
+  }
+
+  const prepared = await getOrCreateNativeOfferDocument({ workspaceId, offer });
+  if (!prepared) {
+    return {
+      success: false,
+      error: "Could not prepare the offer letter for signing.",
+    };
+  }
+
+  try {
+    await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ status: offers.status })
+        .from(offers)
+        .where(and(eq(offers.id, offer.id), eq(offers.workspaceId, workspaceId)))
+        .for("update")
+        .limit(1);
+      if (!locked || locked.status !== "draft") {
+        throw new Error("This offer is no longer a draft.");
+      }
+
+      await tx
+        .delete(signatureFields)
+        .where(eq(signatureFields.documentId, prepared.documentId));
+
+      const inserted = await tx
+        .insert(signatureFields)
+        .values(
+          parsed.data.fields.map((f) => ({
+            workspaceId,
+            documentId: prepared.documentId,
+            type: f.type,
+            page: f.page,
+            x: f.x,
+            y: f.y,
+            w: f.w,
+            h: f.h,
+            label: f.label ?? null,
+            required: f.required,
+            order: f.order,
+            createdById: context.user.id,
+          })),
+        )
+        .returning();
+
+      const snapshot = inserted.map((f) => ({
+        id: f.id,
+        type: f.type,
+        page: f.page,
+        x: f.x,
+        y: f.y,
+        w: f.w,
+        h: f.h,
+        label: f.label,
+        required: f.required,
+        order: f.order,
+      }));
+
+      await tx
+        .update(documents)
+        .set({ fieldsSnapshot: snapshot })
+        .where(
+          and(
+            eq(documents.id, prepared.documentId),
+            eq(documents.workspaceId, workspaceId),
+          ),
+        );
+    });
+  } catch (error) {
+    log.error(
+      { error, offerId: offer.id },
+      "saveOfferSignatureFieldsAndSend: failed to save fields",
+    );
+    return {
+      success: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Could not save the field placement.",
+    };
+  }
+
+  return sendOffer({ offerId: offer.id });
 }
 
 /**

@@ -43,6 +43,7 @@ import { can } from "@/features/workspaces/permissions-server";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
+import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 
 export const dynamic = "force-dynamic";
@@ -103,9 +104,10 @@ export default async function CandidateDetailPage({
   const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags, aiEvaluations, inPool, privacyRequests } =
     profile;
   const isHired = applications.some((application) => application.status === "hired");
-  const [calStatus, aiStatus, workspaceContext, canManageDsar, canDeleteCandidates, canManageDocuments] = await Promise.all([
+  const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canManageDocuments] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
     getWorkspaceAiStatus(workspaceId),
+    getWorkspaceEsignStatus(workspaceId),
     getWorkspaceContext(),
     can("dsar:manage"),
     can("candidates:delete"),
@@ -450,6 +452,7 @@ export default async function CandidateDetailPage({
               aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
             }
             offers={offers}
+            offerSignatureChannel={esignStatus.offerSignatureChannel}
             privacyRequests={canManageDsar ? privacyRequests.map((request) => ({
               ...request,
               createdAt: request.createdAt.toISOString(),

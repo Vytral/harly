@@ -981,6 +981,13 @@
       "when": 1785456221937,
       "tag": "0139_romantic_hex",
       "breakpoints": true
+    },
+    {
+      "idx": 140,
+      "version": "7",
+      "when": 1785651630288,
+      "tag": "0140_bitter_doorman",
+      "breakpoints": true
     }
   ]
 }

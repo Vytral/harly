@@ -5,7 +5,9 @@ import { z } from "zod";
 
 import {
   db,
+  documents,
   savedSignatures,
+  signatureFields,
   workspaceSettings,
 } from "@harly/db";
 
@@ -158,5 +160,107 @@ export async function sendDocumentForNativeSignature(input: unknown) {
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot send this document for signing." };
   if (access.document.status !== "active") return { ok: false, error: "Archived documents cannot be sent for signing." };
   if (access.document.signatureStatus !== "unsigned") return { ok: false, error: "This document already has a signature workflow." };
+  return createNativeSigningLink({ workspaceId: context.organization.id, documentId: parsed.data.documentId, actorId: context.user.id, recipientEmail: parsed.data.recipientEmail, recipientName: parsed.data.recipientName, subject: parsed.data.subject, message: parsed.data.message });
+}
+
+const draftFieldSchema = z.object({
+  type: z.enum(["signature", "text"]),
+  page: z.number().int().positive(),
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  w: z.number().positive().max(1),
+  h: z.number().positive().max(1),
+  label: z.string().trim().max(60).nullable().optional(),
+  required: z.boolean().default(true),
+  order: z.number().int().min(0).default(0),
+});
+
+/**
+ * Recruiter-facing "place fields, then send" for the Documents Hub native
+ * link flow — same atomic shape as offers/actions.ts's
+ * saveOfferSignatureFieldsAndSend: replace the draft signatureFields rows,
+ * freeze them into documents.fieldsSnapshot, THEN create the signing link.
+ * Never split those into two client-driven calls.
+ *
+ * The document's own `signatureStatus === "unsigned"` guard (rechecked
+ * under a row lock inside the transaction) is the idempotency guard here —
+ * a concurrent double-click/retry blocks on the lock, then sees the status
+ * already moved on and no-ops.
+ */
+export async function saveDocumentSignatureFieldsAndSend(input: unknown) {
+  let context: Awaited<ReturnType<typeof requirePermission>>;
+  try { context = await requirePermission("documents:manage"); } catch { return { ok: false, error: "You do not have permission to send documents for signing." }; }
+  const parsed = z.object({
+    documentId: z.uuid(),
+    fields: z.array(draftFieldSchema).min(1).max(40),
+    recipientEmail: z.email(),
+    recipientName: z.string().trim().min(1).max(200),
+    subject: z.string().trim().max(255).optional(),
+    message: z.string().trim().max(4000).nullable().optional(),
+  }).safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid recipient or field details." };
+
+  const access = await getDocumentAccessForUser({ documentId: parsed.data.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  if (!access || access.level !== "manage") return { ok: false, error: "You cannot send this document for signing." };
+  if (access.document.status !== "active") return { ok: false, error: "Archived documents cannot be sent for signing." };
+  if (access.document.signatureStatus !== "unsigned") return { ok: false, error: "This document already has a signature workflow." };
+
+  try {
+    await db.transaction(async (tx) => {
+      const [locked] = await tx
+        .select({ signatureStatus: documents.signatureStatus })
+        .from(documents)
+        .where(and(eq(documents.id, parsed.data.documentId), eq(documents.workspaceId, context.organization.id)))
+        .for("update")
+        .limit(1);
+      if (!locked || locked.signatureStatus !== "unsigned") {
+        throw new Error("This document already has a signature workflow.");
+      }
+
+      await tx.delete(signatureFields).where(eq(signatureFields.documentId, parsed.data.documentId));
+
+      const inserted = await tx
+        .insert(signatureFields)
+        .values(
+          parsed.data.fields.map((f) => ({
+            workspaceId: context.organization.id,
+            documentId: parsed.data.documentId,
+            type: f.type,
+            page: f.page,
+            x: f.x,
+            y: f.y,
+            w: f.w,
+            h: f.h,
+            label: f.label ?? null,
+            required: f.required,
+            order: f.order,
+            createdById: context.user.id,
+          })),
+        )
+        .returning();
+
+      const snapshot = inserted.map((f) => ({
+        id: f.id,
+        type: f.type,
+        page: f.page,
+        x: f.x,
+        y: f.y,
+        w: f.w,
+        h: f.h,
+        label: f.label,
+        required: f.required,
+        order: f.order,
+      }));
+
+      await tx
+        .update(documents)
+        .set({ fieldsSnapshot: snapshot })
+        .where(and(eq(documents.id, parsed.data.documentId), eq(documents.workspaceId, context.organization.id)));
+    });
+  } catch (error) {
+    log.error({ error, documentId: parsed.data.documentId }, "saveDocumentSignatureFieldsAndSend: failed to save fields");
+    return { ok: false, error: error instanceof Error ? error.message : "Could not save the field placement." };
+  }
+
   return createNativeSigningLink({ workspaceId: context.organization.id, documentId: parsed.data.documentId, actorId: context.user.id, recipientEmail: parsed.data.recipientEmail, recipientName: parsed.data.recipientName, subject: parsed.data.subject, message: parsed.data.message });
 }

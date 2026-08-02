@@ -10,7 +10,8 @@
     "db:seed": "tsx scripts/seed.ts",
     "db:seed:demo": "tsx scripts/seed-demo.ts",
     "db:migrate:local": "tsx scripts/migrate.ts",
-    "db:backfill-usernames": "tsx scripts/backfill-usernames.ts"
+    "db:backfill-usernames": "tsx scripts/backfill-usernames.ts",
+    "db:backfill-signature-fields": "tsx scripts/backfill-signature-fields.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.1",

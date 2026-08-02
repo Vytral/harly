@@ -51,7 +51,7 @@ import {
   setDocumentStatus,
   voidDocumentSignature,
 } from "./actions";
-import { sendDocumentForNativeSignature } from "./native-sign-actions";
+import { DocumentFieldPlacementDialog } from "./DocumentFieldPlacementDialog";
 import {
   AccessDialog,
   StatusPill,
@@ -251,83 +251,6 @@ function SendForSignatureDialog({
           >
             <Send className="size-4" />
             {isPending ? "Sending…" : "Send for signature"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function NativeSendForSignatureDialog({
-  document,
-  open,
-  onOpenChange,
-}: {
-  document: DocumentListItem;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [pending, startTransition] = useTransition();
-  function submit() {
-    startTransition(async () => {
-      const result = await sendDocumentForNativeSignature({
-        documentId: document.id,
-        recipientEmail: email,
-        recipientName: name,
-      });
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success("Native signing link sent");
-      setEmail("");
-      setName("");
-      onOpenChange(false);
-      router.refresh();
-    });
-  }
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Send with Harly Signature</DialogTitle>
-          <DialogDescription>
-            Send a secure signing link to any email address — a candidate, a
-            hiring manager, or anyone else. The workspace security setting
-            controls whether email OTP is required.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-2 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="native-recipient-email">Recipient email</Label>
-            <Input
-              id="native-recipient-email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="native-recipient-name">Recipient name</Label>
-            <Input
-              id="native-recipient-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={submit}
-            disabled={pending || !email.trim() || !name.trim()}
-          >
-            {pending ? "Sending…" : "Send signing link"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1215,7 +1138,7 @@ export function DocumentDetailView({
         open={sendSignOpen}
         onOpenChange={setSendSignOpen}
       />
-      <NativeSendForSignatureDialog
+      <DocumentFieldPlacementDialog
         document={document}
         open={nativeSendOpen}
         onOpenChange={setNativeSendOpen}

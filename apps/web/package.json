@@ -40,6 +40,7 @@
     "@marsidev/react-turnstile": "^1.5.3",
     "@openrouter/ai-sdk-provider": "^2.9.0",
     "@opentelemetry/api": "^1.9.1",
+    "@pdf-lib/fontkit": "^1.1.1",
     "@scalar/nextjs-api-reference": "^0.11.11",
     "@simplewebauthn/browser": "^13.3.0",
     "@simplewebauthn/server": "^13.3.1",

@@ -14,8 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SignaturePad } from "@/features/documents/SignaturePad";
-import { PdfSignaturePlacer } from "@/features/documents/PdfSignaturePlacer";
-import type { SignaturePlacement } from "@/lib/esign/native/bake";
+import { PdfFieldFiller, type FillableField } from "@/features/documents/PdfFieldFiller";
 import { signOfferNatively } from "@/features/portal/native-sign-actions";
 
 const EMPTY_PNG =
@@ -35,25 +34,40 @@ export function PortalOfferSignDialog({
   const router = useRouter();
   const [signature, setSignature] = useState("");
   const [consent, setConsent] = useState(false);
-  const [placements, setPlacements] = useState<SignaturePlacement[]>([]);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [fields, setFields] = useState<FillableField[] | null>(null);
+  const [textValues, setTextValues] = useState<Record<string, string>>({});
   const [isPending, startTransition] = useTransition();
 
-  function handleSignatureChange(value: string) {
-    setSignature(value);
-    if (value && placements.length === 0) {
-      setPlacements([{ page: 1, x: 0.08, y: 0.72, w: 0.26, h: 0.06 }]);
-      setActiveIndex(0);
+  // Render-time state sync (React's "adjust state during render" recipe,
+  // matching OfferDrawer.tsx / the offer field-placement dialogs) instead of
+  // useEffect+setState.
+  const syncKey = open ? offerId : "closed";
+  const [syncedKey, setSyncedKey] = useState<string | null>(null);
+  if (syncKey !== syncedKey) {
+    setSyncedKey(syncKey);
+    setSignature("");
+    setConsent(false);
+    setFields(null);
+    setTextValues({});
+    if (open) {
+      void fetch(`/api/portal/offers/${offerId}/fields`, { cache: "no-store" })
+        .then((res) => res.json())
+        .then((data) => setFields(Array.isArray(data.fields) ? data.fields : []))
+        .catch(() => setFields([]));
     }
   }
 
+  const requiredTextFieldsFilled =
+    fields?.filter((f) => f.type === "text" && f.required).every((f) => (textValues[f.id] ?? "").trim().length > 0) ?? false;
+  const canSubmit = Boolean(signature) && consent && fields !== null && fields.length > 0 && requiredTextFieldsFilled;
+
   function submit() {
-    if (!signature || !consent || placements.length === 0) return;
+    if (!canSubmit) return;
     startTransition(async () => {
       const result = await signOfferNatively({
         offerId,
-        placements,
         signaturePngBase64: signature,
+        textValues,
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -67,33 +81,35 @@ export function PortalOfferSignDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-4xl overflow-hidden p-0">
-        <div className="grid max-h-[90vh] grid-cols-1 gap-0 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="min-h-[420px] overflow-y-auto border-b border-border p-4 lg:border-b-0 lg:border-r">
-            <DialogHeader className="mb-3 text-left">
-              <DialogTitle>Sign your offer</DialogTitle>
-              <DialogDescription>
-                Review <strong>{offerTitle}</strong> and place your signature below.
-              </DialogDescription>
-            </DialogHeader>
-            <PdfSignaturePlacer
+      <DialogContent className="flex h-[90vh] max-h-[90vh] w-[min(1440px,calc(100%-2rem))] max-w-[min(1440px,calc(100%-2rem))] sm:max-w-[min(1440px,calc(100%-2rem))] flex-col overflow-hidden p-0">
+        <DialogHeader className="border-b border-border px-6 py-4 text-left">
+          <DialogTitle>Sign your offer</DialogTitle>
+          <DialogDescription>
+            Review <strong>{offerTitle}</strong> and fill in the fields below.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_380px]">
+          <div data-signature-scroll className="min-h-0 overflow-y-auto border-b border-border bg-muted/20 p-6 lg:border-b-0 lg:border-r">
+            <PdfFieldFiller
               fileUrl={`/api/portal/offers/${offerId}/letter`}
+              fields={fields ?? []}
               signatureDataUrl={signature || EMPTY_PNG}
               hasSignature={Boolean(signature)}
-              placements={placements}
-              activeIndex={activeIndex}
-              onChange={setPlacements}
-              onActiveIndexChange={setActiveIndex}
+              textValues={textValues}
+              onTextValueChange={(fieldId, value) =>
+                setTextValues((prev) => ({ ...prev, [fieldId]: value }))
+              }
+              maxPageWidth={960}
             />
           </div>
-          <aside className="flex flex-col gap-4 overflow-y-auto p-4">
+          <aside className="flex min-h-0 flex-col gap-4 overflow-y-auto p-6">
             <div>
               <p className="text-sm font-semibold text-foreground">Your signature</p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Draw or type your signature to place it on the offer.
+                Draw or type your signature — it fills in every signature field above.
               </p>
             </div>
-            <SignaturePad value={signature} onChange={handleSignatureChange} allowSaved={false} />
+            <SignaturePad value={signature} onChange={setSignature} allowSaved={false} />
             <label className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-3 text-sm">
               <Checkbox checked={consent} onCheckedChange={(value) => setConsent(value === true)} />
               <span>
@@ -103,10 +119,7 @@ export function PortalOfferSignDialog({
                 </span>
               </span>
             </label>
-            <Button
-              onClick={submit}
-              disabled={!signature || !consent || placements.length === 0 || isPending}
-            >
+            <Button onClick={submit} disabled={!canSubmit || isPending}>
               {isPending ? "Signing…" : "Sign offer"}
             </Button>
           </aside>

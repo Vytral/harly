@@ -76,6 +76,7 @@ export function CandidateProfileTabs({
   aiEvaluations,
   aiConfigured,
   offers,
+  offerSignatureChannel,
   emailTemplates = [],
   emailTemplateValues = {},
   scheduleApplications,
@@ -294,6 +295,7 @@ export function CandidateProfileTabs({
           offers={offers}
           applications={jobOptions}
           documents={relatedDocuments}
+          offerSignatureChannel={offerSignatureChannel}
         />
       </TabsContent>
 

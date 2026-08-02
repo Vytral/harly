@@ -6,12 +6,30 @@ import { and, desc, eq } from "drizzle-orm";
 
 import { db, documentVersions, documents, signatureArtifacts, signatureEnvelopes, signatureEvidenceEvents, signatureRecipients, activityEvents } from "@harly/db";
 
-import { bakeSignatureIntoPdf, type SignaturePlacement } from "./bake";
+import { bakeFieldsIntoPdf, type FieldPlacement, type SignaturePlacement } from "./bake";
 import { createCompletionCertificate, NATIVE_CERTIFICATE_VERSION } from "./certificate";
 import { createSignaturePreview } from "./preview";
 import { storage } from "@/lib/storage";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("native-finalize");
 
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Shape of one entry in documents.fieldsSnapshot — the frozen layout a
+ *  recruiter placed at send time (see the schema comment on that column). */
+type SnapshotField = {
+  id: string;
+  type: "signature" | "text";
+  page: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  label: string | null;
+  required: boolean;
+  order: number;
+};
 
 function sha256(bytes: Buffer) { return createHash("sha256").update(bytes).digest("hex"); }
 function key(workspaceId: string, kind: string, extension: string) {
@@ -31,14 +49,83 @@ async function evidence(tx: Tx, input: { workspaceId: string; envelopeId: string
   await tx.insert(signatureEvidenceEvents).values({ workspaceId: input.workspaceId, envelopeId: input.envelopeId, recipientId: input.recipientId, eventType: input.eventType, occurredAt, payload, previousHash: previous?.hash ?? null, currentHash });
 }
 
+/**
+ * Resolve the FieldPlacement[] to bake, server-side.
+ *
+ * If the document has a frozen fieldsSnapshot (recruiter placed fields before
+ * sending — see documents.fieldsSnapshot / signatureFields in schema.ts),
+ * that snapshot is the ONLY source of geometry. The caller only supplies
+ * CONTENT: one shared signature image for every "signature"-type field, and
+ * a per-field `value` (keyed by the field's own id) for every "text"-type
+ * field. Every submitted textValues key is validated against THIS
+ * document's own snapshot — an id that doesn't resolve there (foreign
+ * document, typo, tampering) is rejected outright, not silently ignored.
+ *
+ * If there is no snapshot, this is either genuinely legacy data or a
+ * document sent in the deliberate gap between the schema migration and the
+ * recruiter placement UI shipping (see the project plan) — fall back to the
+ * caller's free-placement `placements`, logged so post-rollout fallback
+ * hits are visible as bugs rather than silent.
+ */
+function resolveFields(input: {
+  documentId: string;
+  fieldsSnapshot: unknown;
+  signaturePngBytes: Buffer | null;
+  textValues: Record<string, string> | undefined;
+  legacyPlacements: SignaturePlacement[] | undefined;
+}): FieldPlacement[] {
+  const snapshot = Array.isArray(input.fieldsSnapshot) ? (input.fieldsSnapshot as SnapshotField[]) : null;
+
+  if (!snapshot || snapshot.length === 0) {
+    log.info({ documentId: input.documentId }, "finalizeNativeSignature: no fieldsSnapshot, using legacy free-placement fallback");
+    if (!input.legacyPlacements || input.legacyPlacements.length === 0) {
+      throw new Error("No signature placement was provided.");
+    }
+    return input.legacyPlacements.map((p) => ({ type: "signature" as const, ...p }));
+  }
+
+  const byId = new Map(snapshot.map((f) => [f.id, f]));
+  const textValues = input.textValues ?? {};
+
+  for (const submittedId of Object.keys(textValues)) {
+    const field = byId.get(submittedId);
+    if (!field) throw new Error("A submitted field does not belong to this document.");
+    if (field.type !== "text") throw new Error("A submitted value targets a non-text field.");
+  }
+
+  const fields: FieldPlacement[] = [];
+  for (const field of snapshot) {
+    if (field.type === "signature") {
+      if (field.required && !input.signaturePngBytes) {
+        throw new Error("A required signature field is missing its signature.");
+      }
+      fields.push({ type: "signature", page: field.page, x: field.x, y: field.y, w: field.w, h: field.h });
+    } else {
+      const value = textValues[field.id];
+      if (field.required && (value === undefined || value.length === 0)) {
+        throw new Error(`The "${field.label ?? "text"}" field is required.`);
+      }
+      if (value !== undefined) {
+        fields.push({ type: "text", page: field.page, x: field.x, y: field.y, w: field.w, h: field.h, value });
+      }
+    }
+  }
+  if (fields.length === 0) throw new Error("No signature placement was provided.");
+  return fields;
+}
+
 export async function finalizeNativeSignature(input: {
   workspaceId: string;
   documentId: string;
   actorId: string | null;
   signerName: string;
   signerEmail: string;
-  signaturePngBytes: Buffer;
-  placements: SignaturePlacement[];
+  /** Required only if the resolved field set includes a required signature field. */
+  signaturePngBytes?: Buffer;
+  /** New path: per-text-field values, keyed by the field's id in documents.fieldsSnapshot. */
+  textValues?: Record<string, string>;
+  /** Legacy path: only consulted when the document has no fieldsSnapshot. */
+  placements?: SignaturePlacement[];
   verification: "self_sign" | "link_only" | "email_otp";
   consentAt?: Date;
   ipAddress?: string | null;
@@ -46,12 +133,21 @@ export async function finalizeNativeSignature(input: {
   existingEnvelopeId?: string;
   existingRecipientId?: string;
 }) {
-  const [document] = await db.select({ id: documents.id, name: documents.name, storageKey: documents.storageKey, mimeType: documents.mimeType, status: documents.status, signatureStatus: documents.signatureStatus }).from(documents).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, input.workspaceId))).limit(1);
+  const [document] = await db.select({ id: documents.id, name: documents.name, storageKey: documents.storageKey, mimeType: documents.mimeType, status: documents.status, signatureStatus: documents.signatureStatus, fieldsSnapshot: documents.fieldsSnapshot }).from(documents).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, input.workspaceId))).limit(1);
   const expectedStatus = input.existingEnvelopeId ? "pending" : "unsigned";
   if (!document || document.status !== "active" || document.signatureStatus !== expectedStatus || document.mimeType !== "application/pdf") throw new Error("This document is no longer available for signing.");
+
+  const fields = resolveFields({
+    documentId: input.documentId,
+    fieldsSnapshot: document.fieldsSnapshot,
+    signaturePngBytes: input.signaturePngBytes ?? null,
+    textValues: input.textValues,
+    legacyPlacements: input.placements,
+  });
+
   const originalBytes = await storage.read(document.storageKey);
   const originalSha256 = sha256(originalBytes);
-  const signedBytes = await bakeSignatureIntoPdf({ pdfBytes: originalBytes, signaturePngBytes: input.signaturePngBytes, placements: input.placements });
+  const signedBytes = await bakeFieldsIntoPdf({ pdfBytes: originalBytes, signaturePngBytes: input.signaturePngBytes, fields });
   const signedDocumentSha256 = sha256(signedBytes);
   const signedAt = new Date();
   const previews = await Promise.all(([400, 1200] as const).map(async (width) => { const bytes = await createSignaturePreview({ documentName: document.name, signedAt, signedDocumentSha256, width }); return { width, bytes, checksum: sha256(bytes) }; }));
@@ -78,10 +174,10 @@ export async function finalizeNativeSignature(input: {
       recipient = existingRecipient;
       if (!envelope || !recipient) throw new Error("Signing recipient could not be resolved.");
       providerEnvelopeId = envelope.providerEnvelopeId ?? providerEnvelopeId;
-      await tx.update(signatureEnvelopes).set({ status: "completed", completedAt: signedAt, lastEventAt: signedAt }).where(eq(signatureEnvelopes.id, envelope.id));
+      await tx.update(signatureEnvelopes).set({ status: "completed", completedAt: signedAt, lastEventAt: signedAt, fieldsSnapshot: document.fieldsSnapshot ?? null }).where(eq(signatureEnvelopes.id, envelope.id));
       await tx.update(signatureRecipients).set({ status: "signed", signedAt }).where(eq(signatureRecipients.id, recipient.id));
     } else {
-      const [createdEnvelope] = await tx.insert(signatureEnvelopes).values({ workspaceId: input.workspaceId, provider: "native", providerEnvelopeId, kind: "document", status: "completed", subject: document.name, createdById: input.actorId, sentAt: signedAt, completedAt: signedAt }).returning({ id: signatureEnvelopes.id });
+      const [createdEnvelope] = await tx.insert(signatureEnvelopes).values({ workspaceId: input.workspaceId, provider: "native", providerEnvelopeId, kind: "document", status: "completed", subject: document.name, createdById: input.actorId, sentAt: signedAt, completedAt: signedAt, fieldsSnapshot: document.fieldsSnapshot ?? null }).returning({ id: signatureEnvelopes.id });
       if (createdEnvelope) envelope = createdEnvelope;
       const [createdRecipient] = envelope ? await tx.insert(signatureRecipients).values({ workspaceId: input.workspaceId, envelopeId: envelope.id, providerRecipientId: `native:${randomUUID()}`, role: "signer", email: input.signerEmail, name: input.signerName, status: "signed", signedAt }).returning({ id: signatureRecipients.id }) : [];
       if (createdRecipient) recipient = createdRecipient;
@@ -95,7 +191,9 @@ export async function finalizeNativeSignature(input: {
     ]).returning({ id: signatureArtifacts.id, kind: signatureArtifacts.kind });
     const common = { documentId: input.documentId, verification: input.verification };
     await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "created", payload: common });
-    await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "signature_placed", payload: { placements: input.placements } });
+    // Fully-resolved server-side fields, not raw client input — proves what
+    // the signer actually saw (snapshot geometry + submitted content).
+    await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "signature_placed", payload: { fields } });
     await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "signature_validated", payload: { originalSha256, consentAt: input.consentAt?.toISOString() ?? null } });
     await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "baked", payload: { signedDocumentSha256 } });
     await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "completed", payload: { certificateVersion: NATIVE_CERTIFICATE_VERSION, ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null } });

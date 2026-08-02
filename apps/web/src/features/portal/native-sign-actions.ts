@@ -16,26 +16,18 @@ import {
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { isNativeOfferSubmission } from "@/lib/esign/native/offer-signing";
 import { finalizeNativeSignature } from "@/lib/esign/native/finalize";
-import type { SignaturePlacement } from "@/lib/esign/native/bake";
 import { decideOfferForApi } from "@/features/offers/service";
 import { createLogger } from "@/lib/logger";
 import { storage } from "@/lib/storage";
 
 const log = createLogger("portal-native-sign");
 
-const placementSchema = z.object({
-  page: z.number().int().positive(),
-  x: z.number().min(0).max(1),
-  y: z.number().min(0).max(1),
-  w: z.number().positive().max(1),
-  h: z.number().positive().max(1),
-});
-
 const inputSchema = z.object({
   offerId: z.uuid(),
-  placements: z.array(placementSchema).min(1).max(20),
   signaturePngBase64: z.string().max(700_000).optional(),
   savedSignatureId: z.uuid().optional(),
+  /** Per-text-field values, keyed by the field's id in documents.fieldsSnapshot. */
+  textValues: z.record(z.string(), z.string().max(200)).optional(),
 });
 
 export type PortalNativeSignResult = { ok: true } | { ok: false; error: string };
@@ -156,7 +148,7 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
       signerName,
       signerEmail: candidate.email ?? "",
       signaturePngBytes: signatureBytes,
-      placements: parsed.data.placements as SignaturePlacement[],
+      textValues: parsed.data.textValues,
       verification: "self_sign",
     });
     await decideOfferForApi({

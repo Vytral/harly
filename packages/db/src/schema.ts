@@ -1852,6 +1852,12 @@ export const documents = pgTable(
       { onDelete: "set null" },
     ),
     signatureUrl: text("signature_url"),
+    // Frozen FieldPlacement[] snapshot taken at send time (see signatureFields
+    // below) — finalize.ts bakes from this, never from the live draft table,
+    // so a later edit to the draft can't retroactively change an in-flight
+    // signature. Null means "legacy" (no recruiter-placed fields — fall back
+    // to free client placement) or "not yet sent."
+    fieldsSnapshot: jsonb("fields_signature_snapshot"),
     // Manual "signed offline" attestation. Only set for non-externally-managed
     // providers when a manager marks a document signed by hand: who attested,
     // when, and a mandatory note (e.g. "signed in person 2026-07-22, scan on
@@ -1981,6 +1987,52 @@ export const documentAssociations = pgTable(
       table.workspaceId,
       table.targetType,
       table.targetId,
+    ),
+  ],
+);
+
+// Recruiter-authored signature/text field placements for native e-signature.
+// This is the EDITABLE DRAFT layout for a document, freely rewritten while
+// still unsent. At send time the current rows are copied verbatim into
+// `documents.fieldsSnapshot` (frozen) — finalize.ts only ever reads that
+// frozen snapshot, never these live rows, so a later edit here can't affect
+// an already-sent envelope. `type` is plain text (not a pgEnum) to match the
+// precedent in `applicationQuestions` earlier in this file: field types are expected to grow
+// (date, initials, checkbox...) without a migration per addition; validated
+// in zod at the application layer and constrained here via CHECK.
+export const signatureFields = pgTable(
+  "signature_fields",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    type: text("type").notNull(), // "signature" | "text"
+    page: integer("page").notNull(),
+    x: doublePrecision("x").notNull(),
+    y: doublePrecision("y").notNull(),
+    w: doublePrecision("w").notNull(),
+    h: doublePrecision("h").notNull(),
+    label: text("label"), // e.g. "Date" — shown to the candidate for text fields
+    required: boolean("required").default(true).notNull(),
+    order: integer("order").default(0).notNull(), // candidate fill/tab order
+    createdById: text("created_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    ...timestamps(),
+  },
+  (table) => [
+    index("signature_fields_workspace_document_idx").on(
+      table.workspaceId,
+      table.documentId,
+    ),
+    check("signature_fields_type_check", sql`${table.type} in ('signature', 'text')`),
+    check(
+      "signature_fields_geometry_check",
+      sql`${table.page} >= 1 AND ${table.x} >= 0 AND ${table.y} >= 0 AND ${table.w} > 0 AND ${table.h} > 0 AND ${table.x} + ${table.w} <= 1 AND ${table.y} + ${table.h} <= 1`,
     ),
   ],
 );
@@ -2366,6 +2418,11 @@ export const signatureEnvelopes = pgTable(
     }),
     reconcileAttempts: integer("reconcile_attempts").default(0).notNull(),
     reconcileError: text("reconcile_error"),
+    // Belt-and-suspenders copy of the FieldPlacement[] the signer actually
+    // saw, taken from documents.fieldsSnapshot at envelope-creation time —
+    // keeps the audit trail self-contained on the envelope even if the
+    // document's snapshot is later overwritten by a new send cycle.
+    fieldsSnapshot: jsonb("fields_snapshot"),
     ...timestamps(),
   },
   (table) => [

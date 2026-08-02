@@ -9,6 +9,7 @@ import { submitDocumentRequestAction } from "@/features/portal/document-actions"
 import {
   DOCUMENT_REQUEST_STATUS_META,
   canCandidateUpload,
+  isTerminalRequestStatus,
   type DocumentRequestItem,
 } from "@/features/documents/requests-shared";
 import {
@@ -66,7 +67,7 @@ export function PortalDocumentRequestsCard({
       <div className="mb-4 flex items-center justify-between">
         <h2 className="text-lg font-semibold text-foreground">Requested documents</h2>
         {outstanding > 0 ? (
-          <span className="rounded-full bg-amber-500/10 px-2.5 py-0.5 text-xs font-medium text-amber-700">
+          <span className="rounded-full bg-warning-clay/10 px-2.5 py-0.5 text-xs font-medium text-warning-clay">
             {outstanding} to upload
           </span>
         ) : null}
@@ -86,6 +87,7 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
   const [isPending, start] = useTransition();
   const meta = DOCUMENT_REQUEST_STATUS_META[request.status];
   const uploadable = canCandidateUpload(request.status);
+  const resolved = isTerminalRequestStatus(request.status);
 
   function pick() {
     inputRef.current?.click();
@@ -146,21 +148,36 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
     });
   }
 
+  // Resolved requests (waived / accepted) need no further action from the
+  // candidate — show them as a quiet closed-out row, not a full action card,
+  // so the checklist reads calm instead of every item competing for weight.
+  if (resolved) {
+    return (
+      <div className="flex items-center gap-3 rounded-xl bg-row-wash px-4 py-3">
+        <div
+          className={cn(
+            "flex size-8 shrink-0 items-center justify-center rounded-full",
+            request.status === "accepted" ? "bg-sage-wash text-success-olive" : "bg-card text-quiet-mist",
+          )}
+        >
+          <CheckCircleIcon className="size-4" />
+        </div>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">
+          {request.title}
+        </span>
+        <span className={cn("shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium", meta.className)}>
+          {meta.label}
+        </span>
+      </div>
+    );
+  }
+
   return (
     <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div
-            className={cn(
-              "flex size-10 shrink-0 items-center justify-center rounded-xl",
-              request.status === "accepted" ? "bg-pine/10 text-pine" : "bg-muted text-muted-foreground",
-            )}
-          >
-            {request.status === "accepted" ? (
-              <CheckCircleIcon className="size-5" />
-            ) : (
-              <FileTextIcon className="size-5" />
-            )}
+          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+            <FileTextIcon className="size-5" />
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">

@@ -2,21 +2,38 @@
 
 /* eslint-disable @next/next/no-img-element */
 
-import { useEffect, useRef, useState } from "react";
+import { useRef } from "react";
+import { X } from "lucide-react";
 import type { SignaturePlacement } from "@/lib/esign/native/bake";
+import { usePdfPageRenderer } from "@/features/documents/usePdfPageRenderer";
+
+/** A placement the recruiter is authoring. Widens SignaturePlacement with
+ *  optional fields only, so existing callers passing bare {page,x,y,w,h}
+ *  (NativeSignWorkspace's self-sign flow) keep typechecking untouched —
+ *  `type` defaults to "signature" wherever it's absent. */
+export type AuthorFieldPlacement = SignaturePlacement & {
+  type?: "signature" | "text";
+  label?: string | null;
+};
 
 type Props = {
   fileUrl: string;
   signatureDataUrl: string;
   hasSignature: boolean;
-  placements: SignaturePlacement[];
+  placements: AuthorFieldPlacement[];
   activeIndex: number;
-  onChange: (placements: SignaturePlacement[]) => void;
+  onChange: (placements: AuthorFieldPlacement[]) => void;
   onActiveIndexChange: (index: number) => void;
   onPageCountChange?: (count: number) => void;
+  /** Cap on rendered page width in px. Callers with a wider viewport (e.g. a
+   *  full-screen signing modal) can raise this so pages aren't stuck at the
+   *  720px default sized for a narrow dialog column. */
+  maxPageWidth?: number;
+  /** Recruiter-authoring extras — omit entirely for read-only/self-sign use
+   *  (NativeSignWorkspace manages its own remove/label UI separately). */
+  onRemoveField?: (index: number) => void;
+  onLabelChange?: (index: number, label: string) => void;
 };
-
-type Page = { number: number; width: number; height: number };
 
 export function PdfSignaturePlacer({
   fileUrl,
@@ -27,15 +44,21 @@ export function PdfSignaturePlacer({
   onChange,
   onActiveIndexChange,
   onPageCountChange,
+  maxPageWidth = 720,
+  onRemoveField,
+  onLabelChange,
 }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const [pages, setPages] = useState<Page[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { pages, error } = usePdfPageRenderer(fileUrl, maxPageWidth, rootRef, onPageCountChange);
   const dragRef = useRef<{
     index: number;
     page: number;
-    dx: number;
-    dy: number;
+    // Fractions of the page's OWN dimensions, not raw pixels — a raw pixel
+    // offset computed against the starting page's rect drifts when the box
+    // is dragged onto a page with a different height (pages share width via
+    // maxPageWidth but can have different aspect ratios).
+    offsetXFrac: number;
+    offsetYFrac: number;
   } | null>(null);
   const resizeRef = useRef<{
     index: number;
@@ -45,85 +68,6 @@ export function PdfSignaturePlacer({
     startW: number;
     startH: number;
   } | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const pdfjs = await import("pdfjs-dist");
-        if (!pdfjs.GlobalWorkerOptions.workerSrc)
-          pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-            "pdfjs-dist/build/pdf.worker.min.mjs",
-            import.meta.url,
-          ).toString();
-        const pdf = await pdfjs.getDocument({ url: fileUrl }).promise;
-        const next: Page[] = [];
-        for (let number = 1; number <= pdf.numPages; number += 1) {
-          const page = await pdf.getPage(number);
-          const viewport = page.getViewport({ scale: 1 });
-          next.push({ number, width: viewport.width, height: viewport.height });
-        }
-        if (!cancelled) {
-          setPages(next);
-          onPageCountChange?.(next.length);
-        }
-        await (pdf as { destroy?: () => Promise<void> }).destroy?.();
-      } catch {
-        if (!cancelled) setError("Could not load the PDF for signing.");
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fileUrl, onPageCountChange]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      if (pages.length === 0 || !rootRef.current) return;
-      const pdfjs = await import("pdfjs-dist");
-      if (!pdfjs.GlobalWorkerOptions.workerSrc)
-        pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-          "pdfjs-dist/build/pdf.worker.min.mjs",
-          import.meta.url,
-        ).toString();
-      const pdf = await pdfjs.getDocument({ url: fileUrl }).promise;
-      for (const pageInfo of pages) {
-        if (cancelled) break;
-        const host = rootRef.current.querySelector<HTMLDivElement>(
-          `[data-page="${pageInfo.number}"]`,
-        );
-        if (!host) continue;
-        const page = await pdf.getPage(pageInfo.number);
-        const available = Math.max(
-          280,
-          Math.min(host.parentElement?.clientWidth ?? 720, 720),
-        );
-        const viewport = page.getViewport({
-          scale: available / pageInfo.width,
-        });
-        const canvas =
-          host.querySelector("canvas") ?? document.createElement("canvas");
-        const scale = Math.min(window.devicePixelRatio || 1, 2);
-        canvas.width = Math.floor(viewport.width * scale);
-        canvas.height = Math.floor(viewport.height * scale);
-        canvas.style.width = `${Math.floor(viewport.width)}px`;
-        canvas.style.height = `${Math.floor(viewport.height)}px`;
-        canvas.className = "block bg-white shadow-sm";
-        if (!canvas.parentElement) host.prepend(canvas);
-        await page.render({
-          canvas,
-          canvasContext: canvas.getContext("2d")!,
-          viewport,
-          transform: scale === 1 ? undefined : [scale, 0, 0, scale, 0, 0],
-        }).promise;
-      }
-      await (pdf as { destroy?: () => Promise<void> }).destroy?.();
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [fileUrl, pages]);
 
   function pageRect(event: React.PointerEvent<HTMLDivElement>) {
     return (
@@ -144,8 +88,8 @@ export function PdfSignaturePlacer({
     dragRef.current = {
       index,
       page,
-      dx: event.clientX - (rect.left + placement.x * rect.width),
-      dy: event.clientY - (rect.top + placement.y * rect.height),
+      offsetXFrac: (event.clientX - rect.left) / rect.width - placement.x,
+      offsetYFrac: (event.clientY - rect.top) / rect.height - placement.y,
     };
     event.currentTarget.setPointerCapture(event.pointerId);
   }
@@ -187,11 +131,11 @@ export function PdfSignaturePlacer({
       return;
     const x = Math.min(
       1 - placement.w,
-      Math.max(0, (event.clientX - rect.left - dragState.dx) / rect.width),
+      Math.max(0, (event.clientX - rect.left) / rect.width - dragState.offsetXFrac),
     );
     const y = Math.min(
       1 - placement.h,
-      Math.max(0, (event.clientY - rect.top - dragState.dy) / rect.height),
+      Math.max(0, (event.clientY - rect.top) / rect.height - dragState.offsetYFrac),
     );
     dragState.page = targetPage;
     onChange(
@@ -260,11 +204,14 @@ export function PdfSignaturePlacer({
         <div
           key={page.number}
           data-page={page.number}
-          className="relative mx-auto w-full max-w-[720px] overflow-hidden rounded-md shadow-xs"
-          style={{ aspectRatio: `${page.width}/${page.height}` }}
+          className="relative mx-auto w-full overflow-hidden rounded-md shadow-xs"
+          style={{ aspectRatio: `${page.width}/${page.height}`, maxWidth: maxPageWidth }}
         >
-          {placements.map((placement, index) =>
-            placement.page === page.number ? (
+          {placements.map((placement, index) => {
+            if (placement.page !== page.number) return null;
+            const isText = placement.type === "text";
+            const isActive = activeIndex === index;
+            return (
               <div
                 key={index}
                 role="button"
@@ -274,7 +221,15 @@ export function PdfSignaturePlacer({
                   if (event.key === "Enter" || event.key === " ")
                     onActiveIndexChange(index);
                 }}
-                className={`absolute z-10 rounded-sm border-2 transition-colors ${activeIndex === index ? "border-primary bg-accent/60" : "border-primary/40 bg-accent/20 hover:bg-accent/35"}`}
+                className={`absolute z-10 rounded-sm border-2 border-dashed transition-colors ${
+                  isText
+                    ? isActive
+                      ? "border-info bg-info/15"
+                      : "border-info/50 bg-info/5 hover:bg-info/10"
+                    : isActive
+                      ? "border-primary bg-accent/60"
+                      : "border-primary/40 bg-accent/20 hover:bg-accent/35"
+                }`}
                 style={{
                   left: `${placement.x * 100}%`,
                   top: `${placement.y * 100}%`,
@@ -282,7 +237,11 @@ export function PdfSignaturePlacer({
                   height: `${placement.h * 100}%`,
                 }}
               >
-                {hasSignature ? (
+                {isText ? (
+                  <div className="flex h-full w-full items-center justify-center px-1 text-center text-[11px] text-info">
+                    {placement.label?.trim() || "Text field"}
+                  </div>
+                ) : hasSignature ? (
                   <img
                     src={signatureDataUrl}
                     alt={`Signature placement ${index + 1}`}
@@ -309,7 +268,7 @@ export function PdfSignaturePlacer({
                   }}
                 />
                 <div
-                  className="absolute -bottom-2 -right-2 size-4 cursor-se-resize rounded-full border-2 border-primary bg-background shadow-xs"
+                  className={`absolute -bottom-2 -right-2 size-4 cursor-se-resize rounded-full border-2 bg-background shadow-xs ${isText ? "border-info" : "border-primary"}`}
                   onPointerDown={(event) => startResize(event, index)}
                   onPointerMove={(event) => resize(event, index)}
                   onPointerUp={() => {
@@ -319,24 +278,53 @@ export function PdfSignaturePlacer({
                     resizeRef.current = null;
                   }}
                 />
-                <span className="pointer-events-none absolute -top-6 left-0 rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground shadow-xs">
-                  Signature {index + 1}
+                <span
+                  className={`pointer-events-none absolute -top-6 left-0 rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-xs ${isText ? "bg-info text-white" : "bg-primary text-primary-foreground"}`}
+                >
+                  {isText ? "Text" : "Signature"} {index + 1}
                 </span>
+                {onRemoveField ? (
+                  <button
+                    type="button"
+                    aria-label="Remove field"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onRemoveField(index);
+                    }}
+                    className="absolute -top-6 -right-2 flex size-5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow-xs"
+                  >
+                    <X className="size-3" />
+                  </button>
+                ) : null}
+                {isText && isActive && onLabelChange ? (
+                  <input
+                    type="text"
+                    value={placement.label ?? ""}
+                    onChange={(event) => onLabelChange(index, event.target.value)}
+                    onClick={(event) => event.stopPropagation()}
+                    placeholder="Label (e.g. Date)"
+                    maxLength={60}
+                    className="absolute -bottom-8 left-0 w-40 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-xs"
+                  />
+                ) : null}
               </div>
-            ) : null,
-          )}
+            );
+          })}
         </div>
       ))}
       {pages.length === 0 ? (
         <div className="space-y-3 p-8">
-          <div className="mx-auto h-[600px] w-full max-w-[720px] animate-pulse rounded-md bg-card" />
+          <div
+            className="mx-auto h-[600px] w-full animate-pulse rounded-md bg-card"
+            style={{ maxWidth: maxPageWidth }}
+          />
           <p className="text-center text-sm text-muted-foreground">
             Loading PDF…
           </p>
         </div>
       ) : null}
       <p className="text-center text-xs text-muted-foreground">
-        Drag a signature across pages. Hold it near the top or bottom edge to
+        Drag a field across pages. Hold it near the top or bottom edge to
         scroll.
       </p>
     </div>
