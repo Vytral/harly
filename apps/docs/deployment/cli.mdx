@@ -257,7 +257,7 @@ Railway.
 
 ### Railway Config as Code
 
-The repository also includes [`railway.toml`](/railway.toml). Railway detects
+The repository also includes [`railway.toml`](https://github.com/vytral/harly/blob/main/railway.toml). Railway detects
 this file automatically and applies its Dockerfile, web start command,
 readiness path, and restart policy to the current service deployment. This is a
 service-level configuration file, not a full project manifest: it does not
@@ -281,7 +281,7 @@ npx @harly/cli deploy digitalocean prepare \
 
 The CLI writes `fly.toml` or `app.yaml`, validates the resolved configuration,
 and prints the exact provider commands still required. It does not create
-provider resources. The repository's [`.do/app.yaml`](/.do/app.yaml) is the
+provider resources. The repository's [`.do/app.yaml`](https://github.com/vytral/harly/blob/main/.do/app.yaml) is the
 canonical DigitalOcean App Platform spec and can also be used directly with
 `doctl apps create --spec .do/app.yaml` or
 `doctl apps update APP_ID --spec .do/app.yaml`; it provisions the multi-service
