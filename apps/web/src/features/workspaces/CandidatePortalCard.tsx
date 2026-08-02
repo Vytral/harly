@@ -26,6 +26,7 @@ import {
   IdentificationCardDuotoneIcon,
   SpinnerIcon,
   CheckIcon,
+  WarningCircleIcon,
 } from "@/components/ui/icons/phosphor";
 
 // Inline SVG logos , no external deps
@@ -245,6 +246,7 @@ function OAuthProviderSection({
 
 export function CandidatePortalCard({
   enabled,
+  emailEnabled,
   canEdit,
   googleConfigured,
   googleClientId,
@@ -257,6 +259,7 @@ export function CandidatePortalCard({
   showHiringTeam,
 }: {
   enabled: boolean;
+  emailEnabled: boolean;
   canEdit: boolean;
   googleConfigured: boolean;
   googleClientId: string;
@@ -374,6 +377,27 @@ export function CandidatePortalCard({
                   {appUrl}/portal
                 </Link>
               </p>
+            </div>
+          ) : null}
+
+          {!optimisticEnabled && !emailEnabled ? (
+            <div className="mt-4 flex items-start gap-3 rounded-xl border border-clay/25 bg-clay/5 px-4 py-3.5">
+              <WarningCircleIcon className="mt-0.5 size-5 shrink-0 text-clay" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-foreground">
+                  Set up email before enabling the portal
+                </p>
+                <p className="mt-1 text-xs leading-5 text-muted-foreground">
+                  Candidates use email magic links to sign in. Configure an
+                  email provider first so portal access works from day one.
+                </p>
+                <Link
+                  href="/settings/email"
+                  className="mt-2 inline-flex text-xs font-semibold text-clay-strong underline-offset-2 hover:underline"
+                >
+                  Configure email
+                </Link>
+              </div>
             </div>
           ) : null}
         </div>
