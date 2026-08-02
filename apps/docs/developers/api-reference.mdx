@@ -157,6 +157,31 @@ automations:read   automations:write
 Use synthetic data in examples and integration tests. Never place a real resume
 or candidate email in a public README or issue.
 
+## Public jobs and applications
+
+These routes are intended for career sites, custom application forms, and the
+Harly embed widget. They are CORS-enabled and do not require a secret key, but
+each request must be scoped to a workspace with `?workspace=<slug>` or a
+publishable key (`pk_`). See the [public API guide](/developers/api-overview)
+for request and response examples.
+
+| Method | Path | Workspace selector | Purpose |
+| --- | --- | --- | --- |
+| `GET` | `/api/public/v1/jobs` | `workspace` or `pk_` | List open, published jobs |
+| `GET` | `/api/public/v1/jobs/{slug}` | `workspace` or `pk_` | Fetch a public job and application configuration |
+| `POST` | `/api/public/v1/jobs/{slug}/applications` | `workspace` or `pk_` | Submit an application |
+| `POST` | `/api/public/v1/resume/presign` | `workspace` or `pk_` | Create a resume upload URL |
+| `POST` | `/api/public/v1/image/presign` | `workspace` or `pk_` | Create a profile-image upload URL |
+
+Publishable keys are limited to `jobs:read` and `applications:write`. They are
+safe to expose in browser code, but they are not authentication for a person;
+they only identify and scope the workspace. Never expose a secret key.
+
+The public list endpoint accepts `department`, `location`, `workplaceType`,
+and `q` filters. Public application submissions return `201`; validation
+failures return `422`, failed CAPTCHA checks return `403`, unavailable jobs
+return `404`, and rate-limited clients receive `429` with `Retry-After`.
+
 <Card title="OpenAPI document" icon="brackets-curly" href="/developers/api-overview">
   Fetch `/api/v1/openapi.json` from your Harly instance for the full generated contract.
 </Card>

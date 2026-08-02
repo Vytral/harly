@@ -23,8 +23,8 @@ export const POST = withApi(async (request) => {
     windowMs: 60_000,
   });
 
-  // Anchor the request to a workspace (key or ?workspace=slug) to avoid open
-  // upload abuse from arbitrary origins.
+  // Anchor the request to the configured workspace (or publishable key) to
+  // avoid open upload abuse from arbitrary origins.
   const workspace = await resolvePublicWorkspace(request, "applications:write");
 
   const parsed = resumeUploadRequestSchema.safeParse(

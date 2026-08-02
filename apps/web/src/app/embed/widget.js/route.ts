@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  *
  *   <div id="harly-jobs-container"></div>
  *   <script src="https://<host>/embed/widget.js"
- *           data-workspace="acme" data-pk="harly_pk_live_..." defer></script>
+ *           data-pk="harly_pk_live_..." defer></script>
  *
  * It fetches the public API, renders a searchable job list with filters, and
  * offers an inline apply form (POSTing to the public intake endpoint) with a
@@ -18,7 +18,6 @@ export const runtime = "nodejs";
  * host page's typography so it blends into any site.
  *
  * Attributes:
- *   data-workspace  workspace slug (or use data-pk)
  *   data-pk         publishable API key
  *   data-container  target element id (default "harly-jobs-container")
  *   data-job        render ONLY this job's apply form (skip the board)
@@ -38,7 +37,6 @@ const WIDGET = String.raw`(function () {
     script = all[all.length - 1];
   }
   var origin = new URL(script.src).origin;
-  var workspace = script.getAttribute("data-workspace") || "";
   var pk = script.getAttribute("data-pk") || "";
   var containerId = script.getAttribute("data-container") || "harly-jobs-container";
   var singleJobSlug = script.getAttribute("data-job") || "";
@@ -46,9 +44,7 @@ const WIDGET = String.raw`(function () {
 
   function api(path) {
     var url = origin + path;
-    var sep = path.indexOf("?") === -1 ? "?" : "&";
-    if (workspace) url += sep + "workspace=" + encodeURIComponent(workspace);
-    if (pk) url += "&pk=" + encodeURIComponent(pk);
+    if (pk) url += (path.indexOf("?") === -1 ? "?" : "&") + "pk=" + encodeURIComponent(pk);
     return url;
   }
 
@@ -431,7 +427,7 @@ const WIDGET = String.raw`(function () {
     injectStyles();
     if (!workspace && !pk) {
       container.innerHTML = "";
-      container.appendChild(el("div", "oh-error", "Harly widget: set data-workspace or data-pk."));
+      container.appendChild(el("div", "oh-error", "Harly widget is not configured."));
       return;
     }
 

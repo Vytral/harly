@@ -57,7 +57,7 @@ export function JobShareButton({
   const embedSnippet =
     workspaceSlug && slug
       ? `<div id="harly-jobs-container"></div>
-<script src="${origin()}/embed/widget.js" data-workspace="${workspaceSlug}" data-job="${slug}" defer></script>`
+<script src="${origin()}/embed/widget.js" data-job="${slug}" defer></script>`
       : null;
 
   async function copyEmbed() {

@@ -151,3 +151,173 @@ curl -o harly-openapi.json \
 
 See the [API integration tutorial](/tutorials/api-integration) for an
 end-to-end walkthrough with webhook verification.
+
+## Public jobs and applications API
+
+The public API is the same API used by Harly's embedded job widget. It is
+CORS-enabled and intentionally exposes only published, open jobs and the
+application intake flow. It never exposes candidate or application records
+after submission.
+
+Every request must identify the workspace in one of these ways:
+
+- Add `?workspace=<workspace-slug>` to the URL. This is zero-configuration and
+  is suitable when the public workspace slug is already known.
+- Send a publishable key (`pk_`) in `X-API-Key`, `Authorization: Bearer`, or
+  `?pk=`. The key is bound to one workspace and is useful for browser embeds,
+  analytics, and revocation.
+
+The public routes do not infer a workspace automatically, even on a
+single-workspace installation. Never send a secret (`sk_`) key to a browser.
+
+### 1. List open jobs
+
+```bash
+curl 'https://hiring.example.com/api/public/v1/jobs?workspace=acme'
+```
+
+With a publishable key:
+
+```bash
+curl \
+  -H 'X-API-Key: harly_pk_live_YOUR_PUBLISHABLE_KEY' \
+  'https://hiring.example.com/api/public/v1/jobs'
+```
+
+The list endpoint supports the optional `department`, `location`,
+`workplaceType`, and `q` query filters. It returns a standard `{ data }`
+success envelope containing the workspace branding and serialized public jobs.
+
+Use the returned job's `slug` as the public job identifier. A custom frontend
+should use the slug rather than the internal job `id`.
+
+### 2. Fetch a job and its application configuration
+
+```bash
+curl \
+  'https://hiring.example.com/api/public/v1/jobs/senior-frontend-engineer?workspace=acme'
+```
+
+The response includes `applicationConfig`. Its `questions` array is the source
+of truth for custom questions:
+
+```json
+{
+  "id": "q_why-us",
+  "label": "Why do you want to join us?",
+  "type": "textarea",
+  "required": true,
+  "minLength": 50,
+  "placeholder": "Tell us why…"
+}
+```
+
+The question's `id` is the key used in `questionAnswers`. Supported question
+types are `text`, `textarea`, `url`, and `select`; `select` questions also
+return an `options` array. The same response describes standard fields under
+`applicationConfig.sections`, including resume, links, education, experience,
+and cover letter visibility (`required`, `optional`, or `disabled`).
+
+### 3. Submit the application
+
+```js
+const response = await fetch(
+  "https://hiring.example.com/api/public/v1/jobs/senior-frontend-engineer/applications?workspace=acme",
+  {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      firstName: "Ada",
+      lastName: "Lovelace",
+      email: "ada@example.com",
+      phone: "+44 20 7946 0958",
+      linkedinUrl: "https://linkedin.com/in/ada-lovelace",
+      questionAnswers: {
+        "q_why-us": "Because…",
+      },
+      // Include this only when the workspace has CAPTCHA enabled.
+      captchaToken: "token-from-your-captcha-provider",
+      _hp: "",
+    }),
+  },
+);
+
+if (!response.ok) {
+  const error = await response.json();
+  // 422 includes field-level validation details.
+  throw new Error(error.error?.message ?? "Application failed");
+}
+```
+
+The endpoint is:
+
+```text
+POST /api/public/v1/jobs/{jobSlug}/applications
+```
+
+It returns `201` with this success envelope:
+
+```json
+{
+  "data": {
+    "received": true,
+    "message": "Application received."
+  }
+}
+```
+
+The API validates required standard fields and every custom answer, so the
+frontend should render from `applicationConfig` instead of duplicating the
+form configuration. If CAPTCHA is configured for the workspace, the
+application request must include a valid token in `captchaToken` (the legacy
+`turnstileToken` name is also accepted).
+
+The public application endpoint is rate-limited to protect the intake flow.
+Clients must handle `429` and retry after the `Retry-After` response header.
+The request also accepts the `_hp` honeypot field; real forms should leave it
+empty.
+
+### Uploads
+
+For a resume or profile image, request a presigned upload URL first, upload the
+file directly to that URL, and send the returned `key` and file metadata in the
+application payload:
+
+```text
+POST /api/public/v1/resume/presign
+POST /api/public/v1/image/presign
+```
+
+Both endpoints accept `{ filename, contentType, contentLength }` and are scoped
+to the same `workspace` or publishable key. The resume fields are
+`resumeKey`, `resumeFileName`, `resumeFileType`, and `resumeFileSize`; the image
+field is `photoUrl`.
+
+For a browser integration, the publishable-key variant is usually preferable:
+
+```js
+const headers = {
+  "Content-Type": "application/json",
+  "X-API-Key": "harly_pk_live_YOUR_PUBLISHABLE_KEY",
+};
+```
+
+Never expose a secret (`sk_`) key in frontend code.
+
+### Public API errors
+
+Public routes use the same error envelope as the authenticated API:
+
+```json
+{
+  "error": {
+    "code": "validation_error",
+    "message": "Validation failed.",
+    "details": {}
+  }
+}
+```
+
+Common statuses are `400` for a missing or malformed workspace selector, `403`
+for a failed CAPTCHA or missing publishable-key scope, `404` for a job that is
+not public, `422` for invalid application fields, and `429` for rate limiting.

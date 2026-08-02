@@ -1063,11 +1063,8 @@ export function ApplyForm({
   }
 
   async function uploadResume(file: File) {
-    const workspaceParam = workspaceSlug
-      ? `?workspace=${encodeURIComponent(workspaceSlug)}`
-      : "";
     const presignResponse = await fetch(
-      `/api/public/v1/resume/presign${workspaceParam}`,
+      "/api/public/v1/resume/presign",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1106,11 +1103,8 @@ export function ApplyForm({
   }
 
   async function uploadImage(file: File) {
-    const workspaceParam = workspaceSlug
-      ? `?workspace=${encodeURIComponent(workspaceSlug)}`
-      : "";
     const presignResponse = await fetch(
-      `/api/public/v1/image/presign${workspaceParam}`,
+      "/api/public/v1/image/presign",
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

@@ -48,7 +48,6 @@ export default async function DevelopersSettingsPage() {
   return (
     <DevelopersSettings
       canManage={canManage}
-      workspaceSlug={organization.slug}
       appUrl={appUrl}
       apiKeys={keys.map(serializeApiKey)}
       webhooks={webhooks}
