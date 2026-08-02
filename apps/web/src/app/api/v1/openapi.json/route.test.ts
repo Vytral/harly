@@ -20,6 +20,15 @@ describe("GET /api/v1/openapi.json", () => {
     expect(spec.info?.title).toBeTruthy();
     expect(spec.info?.version).toBeTruthy();
 
+    for (const componentGroup of Object.values(spec.components ?? {})) {
+      if (typeof componentGroup !== "object" || componentGroup === null) {
+        continue;
+      }
+      for (const key of Object.keys(componentGroup)) {
+        expect(key).toMatch(/^[a-zA-Z0-9._-]+$/);
+      }
+    }
+
     // 2. Check for unique operationIds and documented responses across all routes
     const operationIds = new Set<string>();
     const duplicateIds: string[] = [];

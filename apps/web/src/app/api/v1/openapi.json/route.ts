@@ -126,13 +126,6 @@ export const GET = withApi(async (request) => {
         },
       },
       schemas: {},
-      headers: {
-        ...Object.fromEntries(
-          ["jobs:read", "jobs:write", "stages:read", "stages:write"].map(
-            (scope) => [scope, { schema: { type: "string" } }],
-          ),
-        ),
-      },
       "x-harly-api-scopes": API_SCOPES,
     },
   };

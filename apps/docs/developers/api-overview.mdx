@@ -13,6 +13,14 @@ The OpenAPI document is available from a running installation at
 `/api/v1/openapi.json`. Use it as the source of truth for exact schemas and
 route parameters.
 
+The repository also includes a generated snapshot at `/openapi.json`. With the
+Harly dev server running on port 3000, refresh it after changing an API
+contract with:
+
+```bash
+pnpm generate:openapi
+```
+
 ## Authenticate
 
 Create a key from **Settings → Developers → API keys**, copy the raw value
@@ -84,7 +92,7 @@ curl -X POST \
   -H 'Authorization: Bearer harly_sk_live_YOUR_KEY' \
   -H 'Content-Type: application/json' \
   -H 'Idempotency-Key: move-app_123-2026-07-27T12:00:00Z' \
-  --data '{"stageId":"stage_interview"}'
+  --data '{"toStageId":"stage_interview"}'
 ```
 
 <Warning>
