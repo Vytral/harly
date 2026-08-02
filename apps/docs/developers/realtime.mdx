@@ -64,21 +64,6 @@ The SSE stream emits these event types:
 Ephemeral events like `candidate.viewed` are not retained in the domain
 event outbox and cannot be replayed.
 
-## Reliability model
-
-- PostgreSQL is authoritative.
-- Durable domain events support automation, audit, and webhooks.
-- Realtime events carry event type, event version, schema version, workspace,
-  sequence, and a compact payload.
-- The client reconnects automatically and performs a focused reconciliation.
-- Ephemeral UI events such as `candidate.viewed` do not need durable domain
-  retention.
-
-<Warning>
-  Never treat receipt of an SSE event as proof that a mutation committed. Read
-  the affected record from the authenticated API after invalidation.
-</Warning>
-
 ## Production guidance
 
 <Steps>

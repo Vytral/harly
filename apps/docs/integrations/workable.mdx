@@ -1,0 +1,68 @@
+---
+title: "Workable candidate import"
+description: "Import Workable candidate profiles into a Harly job with the Workable SPI API."
+---
+
+Harly imports Workable candidates through the Workable SPI v3 API. This is a
+one-time migration into a selected Harly job; it does not create a live sync.
+
+## Before you begin
+
+You need:
+
+- Your Workable account subdomain, the first part of `https://<subdomain>.workable.com`.
+- A Workable API token with the **`r_candidates`** scope.
+- An existing Harly job for the imported candidates.
+
+Workable documents `r_candidates` as the read scope for candidate profiles.
+Keep the token private and create a dedicated token when possible.
+
+## Get the Workable credentials
+
+<Steps>
+  <Step title="Find your subdomain">
+    Open your Workable account URL and copy the subdomain. For
+    `https://acme.workable.com`, the subdomain is `acme`.
+  </Step>
+  <Step title="Create or retrieve an API token">
+    In Workable, open the API or access-token settings and create a token with
+    the `r_candidates` scope. Copy it securely.
+  </Step>
+  <Step title="Run the Harly import">
+    Open **Candidates → Import candidates**, choose **Workable**, select the
+    destination job, enter the subdomain and token, then select **Import
+    Workable candidates**.
+  </Step>
+</Steps>
+
+Harly lists candidates from `https://<subdomain>.workable.com/spi/v3/candidates`
+and then fetches each full profile from `/candidates/:id`. Requests are
+rate-limited and retried for temporary API failures. The token is used once
+and never persisted by Harly.
+
+## What Harly imports
+
+- Name, email, phone, and address
+- Headline and profile summary
+- LinkedIn, GitHub, and other social profile URLs
+- Skills and tags
+- Education and employment history
+
+The importer reads at most **5,000 candidates** per run. Profiles without a
+first name, last name, or email are skipped and included in the summary.
+
+<Warning>
+  CVs, attachments, application answers, custom fields, and Workable files are
+  not downloaded by this importer yet. The import is profile-focused.
+</Warning>
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `r_candidates scope is missing` | Create or update the token with `r_candidates`, then paste the new token into Harly. |
+| The subdomain is rejected | Use only the account subdomain, not the full Workable URL or path. |
+| Some candidates are skipped | Confirm the profile contains first name, last name, and email. |
+| `429 Too Many Requests` | Retry later; Harly applies a request limiter and exponential retry for temporary failures. |
+
+See Workable's [candidate list](https://workable.readme.io/reference/job-candidates-index), [candidate detail](https://workable.readme.io/reference/job-candidates-show), and [token scope guide](https://help.workable.com/hc/en-us/articles/115015785428-Generating-revoking-access-tokens-for-Workable-s-API).

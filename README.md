@@ -74,7 +74,7 @@ This opens a guided installer that checks the host and creates the PostgreSQL, m
 
 Prefer a managed platform? Click **Deploy to Render** or **Deploy on DigitalOcean** above for a one-click deploy straight from this repo ([`render.yaml`](render.yaml) and [`.do/app.yaml`](.do/app.yaml) define exactly what gets provisioned — web, scheduler, migration job, and a managed PostgreSQL database). The same `npx @harly/cli` wizard also deploys to **Railway**, provisioning the project, managed PostgreSQL, both services, and secrets for you through Railway's API, and to **Fly.io** with a versioned [`fly.toml`](fly.toml). Harly does not run on serverless platforms like Vercel: the scheduler needs a persistent background process, which serverless functions can't provide.
 
-Full deployment steps and the environment variable reference live in [`docs/self-hosting.md`](docs/self-hosting.md), [`docs/cloud-deployments.md`](docs/cloud-deployments.md), and [`docs/configuration.md`](docs/configuration.md). For Google Calendar and Google Meet, configure the server-side OAuth client and connect a workspace calendar from Settings using the [Google OAuth setup guide](docs/integrations/google-calendar.md).
+The public deployment guides and environment reference are maintained in [`apps/docs`](apps/docs). The repository notes in [`docs/`](docs/) contain implementation and operator records. For Google Calendar and Google Meet, start with the [Google Calendar guide](apps/docs/integrations/google-calendar.mdx).
 
 ### Before inviting your team
 
@@ -126,7 +126,7 @@ pnpm test
 
 ```txt
 apps/web          Core Harly ATS application
-apps/docs         Public documentation app (planned)
+apps/docs         Public documentation app
 apps/marketing    Marketing site (planned)
 packages/db       Drizzle schema, migrations, and database client
 packages/auth     Better Auth integration

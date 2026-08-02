@@ -7,6 +7,7 @@ export class CliError extends Error {
   constructor(
     message: string,
     readonly exitCode: 1 | 2 = 1,
+    readonly code?: string,
   ) {
     super(message);
   }

@@ -1,0 +1,69 @@
+---
+title: "Greenhouse candidate import"
+description: "Import Greenhouse candidates into a Harly job with a read-only Harvest API key."
+---
+
+Harly imports Greenhouse candidates through the [Harvest API](https://developers.greenhouse.io/harvest.html). This is a one-time migration into a selected Harly job, not a live sync.
+
+## Before you begin
+
+You need a Greenhouse user who can manage the organization's API credentials.
+The Harvest key can expose all data available to the endpoints it is granted,
+so create a dedicated key and grant only the **Candidates** endpoint access.
+
+## Create the Harvest API key
+
+<Steps>
+  <Step title="Open the Dev Center">
+    In Greenhouse, go to **Configure → Dev Center → API Credential Management**.
+  </Step>
+  <Step title="Create a Harvest key">
+    Select **Create API Key**, choose **Harvest**, give it a name such as
+    `harly-candidate-import`, and save the key securely.
+  </Step>
+  <Step title="Limit endpoint access">
+    Open **Manage Permissions** for the key and enable the **Candidates**
+    endpoint. Greenhouse permissions are endpoint-based and data access is
+    all-or-nothing within an enabled endpoint.
+  </Step>
+  <Step title="Run the Harly import">
+    In Harly, open **Candidates → Import candidates**, choose **Greenhouse**,
+    select the destination job, paste the Harvest API key, and select
+    **Import Greenhouse candidates**.
+  </Step>
+</Steps>
+
+Harly sends the key using Greenhouse's required Basic Auth format: the key as
+the username and an empty password. It is used once and never persisted by
+Harly.
+
+## What Harly imports
+
+Harly reads `GET https://harvest.greenhouse.io/v1/candidates` with pagination
+and maps:
+
+- Name, email, phone, and address
+- Company and current title as the headline
+- LinkedIn, GitHub, and other website URLs
+- Tags
+- Education and employment history
+
+The importer reads at most **5,000 candidates** per run. Records without a
+first name, last name, or email are skipped and included in the summary.
+
+<Warning>
+  Harly currently imports profile data only from Greenhouse. Resumes,
+  attachments, application answers, and Greenhouse files are not downloaded by
+  this importer.
+</Warning>
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `Greenhouse rejected the API key` | Regenerate the key if needed and verify the Candidates endpoint is enabled. |
+| `403 Forbidden` | Ask a Greenhouse admin to confirm API credential and endpoint permissions. |
+| Candidates are skipped | Add first name, last name, and email to the Greenhouse candidate record. |
+| The import stops at 5,000 | Run a smaller migration using Greenhouse's filters or import the remaining records separately. |
+
+See Greenhouse's [Harvest API authentication and permissions](https://developers.greenhouse.io/harvest.html#authentication) for provider-specific details.

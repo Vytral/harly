@@ -1961,6 +1961,7 @@ function HarlyChat({
   const [preparedWritePreviews, setPreparedWritePreviews] = useState<
     Record<string, AgentWritePreview>
   >({});
+  const preparedWriteRequestsRef = useRef(new Set<string>());
   const pendingWriteIdsRef = useRef(new Set<string>());
   const firstName = userName.split(" ")[0] ?? userName;
   const notifiedRef = useRef(false);
@@ -2005,11 +2006,12 @@ function HarlyChat({
       }
     }
     for (const item of pending) {
-      if (preparedWritePreviews[item.id]) continue;
-      setPreparedWritePreviews((previous) => ({
-        ...previous,
-        [item.id]: { ok: false, title: "Verifying action…", details: [] },
-      }));
+      if (
+        preparedWritePreviews[item.id] ||
+        preparedWriteRequestsRef.current.has(item.id)
+      )
+        continue;
+      preparedWriteRequestsRef.current.add(item.id);
       void prepareAgentWriteAction(item.tool, item.input).then((preview) => {
         setPreparedWritePreviews((previous) => ({
           ...previous,

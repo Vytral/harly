@@ -1,0 +1,67 @@
+---
+title: "Ashby candidate import"
+description: "Import Ashby candidate profiles into a Harly job with an Ashby API key."
+---
+
+Harly imports Ashby candidates with Ashby's read-only API endpoints. This is a
+one-time migration into a selected Harly job, not a background synchronization.
+
+## Before you begin
+
+You need an Ashby API key with access to the candidate endpoints used by this
+importer:
+
+- `candidate.list`
+- `candidate.info`
+
+The API key must be allowed to read candidates in the Ashby organization. Keep
+the key private and use a dedicated key for the migration.
+
+## Create the Ashby API key
+
+<Steps>
+  <Step title="Open Ashby developer settings">
+    Sign in to Ashby and open the organization's API or developer settings.
+    Create an API key for the organization.
+  </Step>
+  <Step title="Grant candidate read access">
+    Allow the key to call `candidate.list` and `candidate.info`. Ashby returns
+    a 403 response when an API key is missing endpoint permission.
+  </Step>
+  <Step title="Run the Harly import">
+    Open **Candidates → Import candidates**, choose **Ashby**, select the
+    destination job, paste the API key, and select **Import Ashby candidates**.
+  </Step>
+</Steps>
+
+Ashby requests use Basic Auth with the API key as the username and an empty
+password. Harly first reads candidate IDs with `candidate.list`, follows
+Ashby's cursor pagination, and then retrieves full profiles with
+`candidate.info`. The key is used once and never persisted by Harly.
+
+## What Harly imports
+
+- Name, email, phone, and location
+- Headline and profile summary
+- LinkedIn, GitHub, and personal website URLs
+- Tags
+- Education and employment history
+
+The importer reads at most **5,000 candidates** per run. Profiles without a
+first name, last name, or email are skipped and included in the summary.
+
+<Warning>
+  Resumes, attachments, application answers, and other Ashby files are not
+  downloaded by this importer yet.
+</Warning>
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `missing_endpoint_permission` | Update the API key to allow `candidate.list` and `candidate.info`. |
+| Ashby returns an invalid cursor | Create a fresh key and retry the import; do not reuse a cursor from another run. |
+| Candidates are skipped | Confirm the Ashby profile has first name, last name, and email. |
+| The import stops at 5,000 | Split the migration into smaller sets or import the remaining records separately. |
+
+See Ashby's [API authentication](https://developers.ashbyhq.com/docs/authentication) and [authentication reference](https://developers.ashbyhq.com/reference/authentication).

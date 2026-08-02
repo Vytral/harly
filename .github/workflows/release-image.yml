@@ -41,7 +41,7 @@ jobs:
           labels: |
             org.opencontainers.image.title=Harly
             org.opencontainers.image.description=Self-hosted applicant tracking system
-            org.opencontainers.image.licenses=AGPL-3.0-only
+            org.opencontainers.image.licenses=MIT
       - id: build
         uses: docker/build-push-action@v6
         with:

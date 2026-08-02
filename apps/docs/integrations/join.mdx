@@ -1,0 +1,76 @@
+---
+title: "JOIN.com candidate import"
+description: "Import candidate applications from JOIN.com into a Harly job with a one-time API token."
+---
+
+Harly can import candidate applications from [JOIN.com](https://join.com) into
+an existing job. This is a one-time migration, not a live synchronization or
+an OAuth connection.
+
+## Before you begin
+
+You need:
+
+- A JOIN account with access to **User Settings → API Credentials**.
+- A JOIN plan that includes API access. Check JOIN's current [API
+  documentation](https://help.join.com/join-api/api-documentation) if the API
+  menu or token generation is unavailable.
+- An existing Harly job where the imported candidates should be placed.
+
+JOIN API tokens can access company data, so create a dedicated token for the
+import and revoke it after the migration if it is no longer needed.
+
+## Create the JOIN token
+
+<Steps>
+  <Step title="Open JOIN settings">
+    Sign in to JOIN and open **User Settings → API Credentials**.
+  </Step>
+  <Step title="Generate a token">
+    Select **Generate new Token** and copy the token immediately. JOIN tokens
+    cannot be reactivated after they are revoked.
+  </Step>
+  <Step title="Start the Harly import">
+    In Harly, open **Settings → Integrations**, find **JOIN.com** under
+    **Candidate sources**, or open **Candidates → Import candidates** and
+    choose **JOIN.com**.
+  </Step>
+  <Step title="Choose the destination">
+    Select the Harly job, paste the token into **JOIN API token**, and select
+    **Import JOIN candidates**.
+  </Step>
+</Steps>
+
+## What Harly imports
+
+Harly reads JOIN applications through the JOIN API v2 endpoint
+`https://api.join.com/v2/applications` and maps available fields into the
+candidate profile:
+
+- First name, last name, email, phone, and location
+- Headline and profile summary
+- LinkedIn, GitHub, and personal website URLs
+- Skills and tags
+- Education and employment history when present
+
+The import is capped at **5,000 candidates** per run. Profiles without a first
+name, last name, or email are skipped and reported in the import summary.
+Harly does not persist the JOIN token after the request completes.
+
+<Warning>
+  CVs, application attachments, screening answers, and JOIN application files
+  are not downloaded by this importer yet. Use JOIN's own export when you need
+  a ZIP containing candidate documents, or keep the original JOIN account as
+  the source of truth for those files.
+</Warning>
+
+## Troubleshooting
+
+| Symptom | Fix |
+| --- | --- |
+| `JOIN rejected the API token` | Generate a new token, check that your JOIN user can access API credentials, and paste the complete token. |
+| The API menu is missing | Check your JOIN plan and ask a System Admin to generate the token. |
+| Some candidates were skipped | Confirm the JOIN application has first name, last name, and email. |
+| The import stops at 5,000 | Run a filtered or segmented migration, or import the remaining candidates separately. |
+
+For provider details, see JOIN's [API documentation](https://help.join.com/join-api/api-documentation).

@@ -10,11 +10,19 @@ process.env.HARLY_REQUIRED_DISK_GB = "0";
 
 const packageRoot = path.resolve(import.meta.dirname, "..");
 const cli = path.join(packageRoot, "dist", "index.js");
+const dockerAvailable =
+  spawnSync("docker", ["version"], { stdio: "ignore" }).status === 0;
 
-test("version flag reports the published CLI version", () => {
+test("version flag reports the published CLI version", async () => {
   const result = spawnSync(process.execPath, [cli, "--version"], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^0\.3\.0\n$/);
+  // Assert against package.json rather than a literal: the failure this needs
+  // to catch is the in-source constant drifting from the published version,
+  // and a hardcoded string here would have to be edited on every bump.
+  const { version } = JSON.parse(
+    await readFile(path.join(packageRoot, "package.json"), "utf8"),
+  );
+  assert.equal(result.stdout, `${version}\n`);
 });
 
 async function availablePort() {
@@ -28,7 +36,10 @@ async function availablePort() {
   });
 }
 
-test("init creates a secure, valid installation in an empty directory", async () => {
+test(
+  "init creates a secure, valid installation in an empty directory",
+  { skip: !dockerAvailable },
+  async () => {
   const parent = await mkdtemp(path.join(os.tmpdir(), "harly-init-e2e-"));
   const target = path.join(parent, "installation");
   const port = await availablePort();
@@ -100,7 +111,8 @@ test("init creates a secure, valid installation in an empty directory", async ()
   } finally {
     await rm(parent, { recursive: true, force: true });
   }
-});
+  },
+);
 
 test("launch requires --yes when stdin is not interactive", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "harly-launch-e2e-"));
@@ -146,8 +158,23 @@ exit 0
     const result = spawnSync(process.execPath, [cli], {
       cwd: child, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
     });
+    // Automation parses these keys, so a non-interactive run must keep them
+    // even though the interactive render drops them as noise.
     assert.match(result.stdout, /service:postgres/);
+    assert.match(result.stdout, /readiness/);
     assert.doesNotMatch(result.stdout, /Advanced commands/);
+
+    // The --json document is the automation contract: stable machine keys,
+    // plus the human label alongside them.
+    const asJson = spawnSync(process.execPath, [cli, "doctor", directory, "--json"], {
+      cwd: child, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+    });
+    const report = JSON.parse(asJson.stdout);
+    assert.deepEqual(
+      report.checks.map((check) => check.name),
+      ["compose", "service:postgres", "service:app", "service:scheduler", "profile:caddy", "readiness"],
+    );
+    assert.ok(report.checks.every((check) => typeof check.label === "string"));
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
