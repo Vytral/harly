@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import {
@@ -25,6 +26,7 @@ import {
   trashCandidateAction,
 } from "@/features/candidates/actions";
 import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
+import { bulkDecisionConfirmationMessage } from "@/features/pipeline/confirmation";
 import { toSafeCsv } from "@/lib/csv";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
@@ -75,6 +77,8 @@ export type CandidateRow = {
   inPool: boolean;
   /** Has a pending or in-progress data-export/erasure request awaiting review. */
   hasOpenPrivacyRequest: boolean;
+  isReferred: boolean;
+  isFeaturedReferral: boolean;
 };
 
 type SortKey = "recent" | "oldest" | "modified" | "name";
@@ -277,6 +281,13 @@ export function CandidatesTable({
 
     if (applicationIds.length === 0) {
       toast.error("Selected candidates have no application to update.");
+      return;
+    }
+    if (
+      applicationIds.length > 1 &&
+      (next === "hired" || next === "rejected") &&
+      !window.confirm(bulkDecisionConfirmationMessage(next, applicationIds.length))
+    ) {
       return;
     }
     startTransition(async () => {
@@ -690,7 +701,11 @@ export function CandidatesTable({
                   </div>
 
                   {/* Identity */}
-                  <div className="flex min-w-0 items-center gap-3">
+                  <Link
+                    href={`/dashboard/candidates/${row.id}` as Route}
+                    onClick={(event) => event.stopPropagation()}
+                    className="flex min-w-0 items-center gap-3"
+                  >
                     <UserAvatar
                       name={row.fullName}
                       src={row.avatarUrl}
@@ -750,7 +765,7 @@ export function CandidatesTable({
                         </div>
                       ) : null}
                     </div>
-                  </div>
+                  </Link>
 
                   {/* Pipeline */}
                   <div className="col-start-2 min-w-0 sm:col-auto">

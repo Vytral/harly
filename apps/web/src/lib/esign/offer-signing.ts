@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 
 import {
   db,
@@ -13,6 +13,7 @@ import {
 } from "@harly/db";
 
 import {
+  archiveSubmissionIdempotent,
   createSubmissionFromHtml,
   freshEsignContext,
   type CreateSubmissionFromHtmlInput,
@@ -48,6 +49,19 @@ const SIGNABLE_MIME = new Set([
   "image/png",
   "image/jpeg",
 ]);
+
+/** Archive a DocuSeal ceremony before a sent offer is withdrawn. */
+export async function archiveDocusealOffer(input: {
+  workspaceId: string;
+  esignSubmissionId: string | null;
+}): Promise<boolean> {
+  if (!input.esignSubmissionId || input.esignSubmissionId.startsWith("native:")) {
+    return true;
+  }
+  const ctx = await freshEsignContext(input.workspaceId);
+  if (!ctx) return false;
+  return archiveSubmissionIdempotent(ctx, input.esignSubmissionId);
+}
 
 function fmtDate(value: Date | string | null): string {
   if (!value) return "—";
@@ -234,47 +248,71 @@ export async function createOfferEnvelope(input: {
   const submission = await createSubmissionFromHtml(ctx, submissionInput);
   const submissionId = String(submission.id);
   const signer = pickSigner(submission.submitters, OFFER_SIGNER_ROLE);
-  const signingUrl = signerSigningUrl(ctx.baseUrl, signer);
+  if (!signer) throw new Error("DocuSeal returned no offer signer.");
 
-  await db.transaction(async (tx) => {
-    const [signatureEnvelope] = await tx
-      .insert(signatureEnvelopes)
-      .values({
+  try {
+    await db.transaction(async (tx) => {
+      const [signatureEnvelope] = await tx
+        .insert(signatureEnvelopes)
+        .values({
+          workspaceId: input.workspaceId,
+          provider: "docuseal",
+          providerEnvelopeId: submissionId,
+          kind: "offer",
+          status: "sent",
+          offerId: input.offer.id,
+          subject: submissionInput.name,
+          createdById: input.offer.createdById,
+          sentAt: new Date(),
+        })
+        .returning({ id: signatureEnvelopes.id });
+      if (!signatureEnvelope) throw new Error("Signature envelope could not be saved.");
+
+      await tx.insert(signatureRecipients).values({
         workspaceId: input.workspaceId,
-        provider: "docuseal",
-        providerEnvelopeId: submissionId,
-        kind: "offer",
+        envelopeId: signatureEnvelope.id,
+        providerRecipientId: String(signer.id),
+        role: "signer",
+        email: recipientEmail,
+        name: candidateName,
+        routingOrder: 1,
+        clientUserId: input.offer.candidateId,
+        // Bearer signing URLs are never persisted. The portal obtains one from
+        // a freshly verified provider response for each signing attempt.
+        signingUrl: null,
         status: "sent",
-        offerId: input.offer.id,
-        subject: submissionInput.name,
-        createdById: input.offer.createdById,
-        sentAt: new Date(),
-      })
-      .returning({ id: signatureEnvelopes.id });
-    if (!signatureEnvelope) throw new Error("Signature envelope could not be saved.");
+      });
 
-    await tx.insert(signatureRecipients).values({
-      workspaceId: input.workspaceId,
-      envelopeId: signatureEnvelope.id,
-      providerRecipientId: signer ? String(signer.id) : "1",
-      role: "signer",
-      email: recipientEmail,
-      name: candidateName,
-      routingOrder: 1,
-      clientUserId: input.offer.candidateId,
-      signingUrl,
-      status: "sent",
+      const [updated] = await tx
+        .update(offers)
+        .set({
+          esignSubmissionId: submissionId,
+          signatureEnvelopeRefId: signatureEnvelope.id,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(offers.workspaceId, input.workspaceId),
+            eq(offers.id, input.offer.id),
+            eq(offers.status, "draft"),
+            isNull(offers.esignSubmissionId),
+          ),
+        )
+        .returning({ id: offers.id });
+      if (!updated) {
+        throw new Error("Offer changed while its signature request was being created.");
+      }
     });
-
-    await tx
-      .update(offers)
-      .set({
-        esignSubmissionId: submissionId,
-        signatureEnvelopeRefId: signatureEnvelope.id,
-        updatedAt: new Date(),
-      })
-      .where(and(eq(offers.workspaceId, input.workspaceId), eq(offers.id, input.offer.id)));
-  });
+  } catch (error) {
+    const archived = await archiveSubmissionIdempotent(ctx, submissionId);
+    if (!archived) {
+      log.error(
+        { error, submissionId, offerId: input.offer.id },
+        "DocuSeal submission compensation failed; reconciliation is required",
+      );
+    }
+    throw error;
+  }
 
   return submissionId;
 }

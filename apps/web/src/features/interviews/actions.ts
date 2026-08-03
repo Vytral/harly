@@ -28,11 +28,13 @@ import { getWorkspaceGCalConfig } from "@/lib/gcal/config";
 import {
   syncInterviewToTeams,
   cancelInterviewTeamsMeeting,
+  replaceInterviewToTeams,
 } from "@/lib/outlook/teams-sync";
 import { getWorkspaceOutlookConfig } from "@/lib/outlook/config";
 import {
   syncInterviewToZoom,
   cancelInterviewZoomMeeting,
+  replaceInterviewToZoom,
 } from "@/lib/zoom/sync";
 import {
   syncInterviewToJitsi,
@@ -71,6 +73,7 @@ import {
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
 import { findWorkspaceMember } from "./core";
+import { lockInterviewerSchedule } from "./booking-lock";
 import { serializeInterview } from "./service";
 
 const log = createLogger("interviews");
@@ -144,8 +147,8 @@ async function hasInterviewerConflict(
     eq(interviews.workspaceId, input.workspaceId),
     eq(interviews.interviewerId, input.interviewerId),
     eq(interviews.status, "scheduled"),
-    sql`${interviews.scheduledAt} < ${new Date(input.when.getTime() + input.durationMins * 60_000)}`,
-    sql`${interviews.scheduledAt} + (${interviews.durationMins} * interval '1 minute') > ${input.when}`,
+    sql`${interviews.scheduledAt} < ${new Date(input.when.getTime() + input.durationMins * 60_000).toISOString()}`,
+    sql`${interviews.scheduledAt} + (${interviews.durationMins} * interval '1 minute') > ${input.when.toISOString()}`,
   ];
   if (input.excludeInterviewId) {
     conditions.push(ne(interviews.id, input.excludeInterviewId));
@@ -158,10 +161,14 @@ async function hasInterviewerConflict(
   return Boolean(conflict);
 }
 
-const interviewWhenFormatter = new Intl.DateTimeFormat("en", {
-  dateStyle: "long",
-  timeStyle: "short",
-});
+function formatInterviewWhen(when: Date, timeZone?: string | null): string {
+  return new Intl.DateTimeFormat("en", {
+    dateStyle: "long",
+    timeStyle: "short",
+    // Never let the app server's process TZ decide what the candidate sees.
+    timeZone: timeZone ?? "UTC",
+  }).format(when);
+}
 
 const interviewTypes = [
   "screening",
@@ -350,6 +357,7 @@ export async function scheduleInterview(
       }
 
       if (data.interviewerId) {
+        await lockInterviewerSchedule(tx, workspace.id, data.interviewerId);
         const conflict = await hasInterviewerConflict(tx, {
           workspaceId: workspace.id,
           interviewerId: data.interviewerId,
@@ -407,7 +415,7 @@ export async function scheduleInterview(
         candidateId: data.candidateId,
         type: "interview_scheduled",
         title: "Interview scheduled",
-        body: `Your interview is scheduled for ${interviewWhenFormatter.format(when)}.`,
+        body: `Your interview is scheduled for ${formatInterviewWhen(when, data.timeZone)}.`,
         href: `/portal/applications/${application.id}`,
         metadata: { interviewId: interview.id, applicationId: application.id },
       });
@@ -529,6 +537,7 @@ export async function scheduleInterview(
               attendees: attendees.length > 0 ? attendees : undefined,
               location: data.location ?? undefined,
               mode: conferenceData ? "video" : undefined,
+              timeZone: data.timeZone ?? "UTC",
             }),
           isSuccess: (providerResult) => providerResult.ok,
           resourceId: (providerResult) =>
@@ -569,12 +578,22 @@ export async function scheduleInterview(
               "Zoom is not connected; the interview was saved without a video link.",
             );
           } else if (
-            !(await syncInterviewToZoom({
+            !(await trackInterviewSync({
               workspaceId: workspace.id,
               interviewId: result.interviewId,
-              summary,
-              start: when,
-              durationMins: data.durationMins,
+              provider: "zoom",
+              operation: "upsert",
+              run: () =>
+                syncInterviewToZoom({
+                  workspaceId: workspace.id,
+                  interviewId: result.interviewId,
+                  summary,
+                  start: when,
+                  durationMins: data.durationMins,
+                }),
+              isSuccess: Boolean,
+              resourceId: (providerResult) => providerResult?.meetingId,
+              resourceUrl: (providerResult) => providerResult?.joinUrl,
             }))
           ) {
             warnings.push(
@@ -799,14 +818,16 @@ export async function scheduleInterview(
 
 const statusSchema = z.object({
   interviewId: z.string().min(1),
-  candidateId: z.string().min(1),
+  // Kept optional for backwards-compatible callers. The server never trusts
+  // this value; candidateId is always read from the authorized interview row.
+  candidateId: z.string().min(1).optional(),
   status: z.enum(["completed", "canceled"]),
 });
 
 /** Mark an interview completed or canceled from the candidate profile. */
 export async function setInterviewStatus(input: {
   interviewId: string;
-  candidateId: string;
+  candidateId?: string;
   status: "completed" | "canceled";
 }): Promise<{ success: boolean; error?: string; warning?: string }> {
   try {
@@ -827,6 +848,14 @@ export async function setInterviewStatus(input: {
     const [existing] = await db
       .select({ id: interviews.id, status: interviews.status })
       .from(interviews)
+      .innerJoin(
+        candidates,
+        and(
+          eq(candidates.id, interviews.candidateId),
+          eq(candidates.workspaceId, workspace.id),
+          isNull(candidates.deletedAt),
+        ),
+      )
       .where(
         and(
           eq(interviews.id, parsed.data.interviewId),
@@ -1017,7 +1046,7 @@ export async function setInterviewStatus(input: {
       }
     }
 
-    revalidatePath(`/dashboard/candidates/${parsed.data.candidateId}`);
+    revalidatePath(`/dashboard/candidates/${updatedInterview.candidateId}`);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/calendars");
 
@@ -1048,7 +1077,8 @@ export async function setInterviewStatus(input: {
 
 const rescheduleSchema = z.object({
   interviewId: z.string().min(1),
-  candidateId: z.string().min(1),
+  // Legacy callers may still send this field, but it is deliberately ignored.
+  candidateId: z.string().min(1).optional(),
   scheduledAt: z
     .string()
     .min(1, "Pick a date and time.")
@@ -1081,12 +1111,12 @@ const rescheduleSchema = z.object({
 /** Reschedule an interview to a new date/time and update the GCal event. */
 export async function rescheduleInterview(input: {
   interviewId: string;
-  candidateId: string;
+  candidateId?: string;
   scheduledAt: string;
   timeZone?: string | null;
   durationMins: number;
   location?: string | null;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string }> {
   try {
     const parsed = rescheduleSchema.safeParse(input);
     if (!parsed.success) {
@@ -1118,6 +1148,8 @@ export async function rescheduleInterview(input: {
     const [row] = await db
       .select({
         id: interviews.id,
+        candidateId: interviews.candidateId,
+        meetLink: interviews.meetLink,
         gcalEventId: interviews.gcalEventId,
         teamsMeetingId: interviews.teamsMeetingId,
         zoomMeetingId: interviews.zoomMeetingId,
@@ -1125,6 +1157,7 @@ export async function rescheduleInterview(input: {
         mode: interviews.mode,
         title: interviews.title,
         type: interviews.type,
+        status: interviews.status,
       })
       .from(interviews)
       .where(
@@ -1137,6 +1170,12 @@ export async function rescheduleInterview(input: {
 
     if (!row) {
       return { success: false, error: "Interview not found." };
+    }
+    if (row.status !== "scheduled") {
+      return {
+        success: false,
+        error: "This interview is no longer scheduled and can't be changed.",
+      };
     }
 
     // Fetch interview context for GCal attendees + candidate notification.
@@ -1177,6 +1216,13 @@ export async function rescheduleInterview(input: {
       )
       .limit(1);
 
+    if (!info) {
+      return {
+        success: false,
+        error: "Interview candidate or job is no longer active.",
+      };
+    }
+
     // Resolve attendee emails for GCal invitations.
     let interviewerEmail: string | undefined;
     if (info?.interviewerId) {
@@ -1210,80 +1256,146 @@ export async function rescheduleInterview(input: {
       }
     }
 
-    // Sync to Google Calendar if the event was previously synced. Await (don't
-    // fire-and-forget) so a GCal failure surfaces: the DB row keeps the new time
-    // (already persisted below for the provider-recreate path), but we log the
-    // calendar drift instead of silently leaving a stale event. scheduleInterview
-    // collects a user-visible warning; reschedule logs because its return type
-    // has no warning channel.
-    if (row?.gcalEventId) {
-      try {
-        await updateInterviewGCalEvent({
+    let calendarWarning: string | undefined;
+    const syncCalendar = async () => {
+      // Sync to Google Calendar only after any standalone video replacement has
+      // been created and persisted. This keeps a failed Zoom/Teams replacement
+      // from leaving the candidate with mixed old/new schedule state.
+      if (row?.gcalEventId) {
+        try {
+          const updated = await trackInterviewSync({
+            workspaceId: workspace.id,
+            interviewId: row.id,
+            provider: "google_calendar",
+            operation: "upsert",
+            run: () =>
+              updateInterviewGCalEvent({
+                workspaceId: workspace.id,
+                gcalEventId: row.gcalEventId!,
+                start: when,
+                durationMins: data.durationMins,
+                attendees: attendees.length > 0 ? attendees : undefined,
+                location: data.location ?? undefined,
+                timeZone: data.timeZone ?? "UTC",
+              }),
+            isSuccess: Boolean,
+          });
+          if (!updated) {
+            calendarWarning =
+              "Google Calendar could not be updated; the interview was saved and can be synced later.";
+            log.warn("rescheduleInterview: GCal event update failed");
+          }
+        } catch (error) {
+          calendarWarning =
+            "Google Calendar could not be updated; the interview was saved and can be synced later.";
+          log.warn(error, "rescheduleInterview: GCal event update failed");
+        }
+      } else if (
+        !row?.teamsMeetingId &&
+        !row?.zoomMeetingId &&
+        !row?.jitsiRoom
+      ) {
+        const gcalResult = await trackInterviewSync({
           workspaceId: workspace.id,
-          gcalEventId: row.gcalEventId,
-          start: when,
-          durationMins: data.durationMins,
-          attendees: attendees.length > 0 ? attendees : undefined,
-          location: data.location ?? undefined,
+          interviewId: row.id,
+          provider: "google_calendar",
+          operation: "upsert",
+          run: () =>
+            syncInterviewToGCal({
+              workspaceId: workspace.id,
+              interviewId: row.id,
+              summary:
+                row.title ??
+                INTERVIEW_TYPE_LABEL[row.type ?? "screening"] ??
+                "Interview",
+              start: when,
+              durationMins: data.durationMins,
+              attendees: attendees.length > 0 ? attendees : undefined,
+              location: data.location ?? undefined,
+              mode: info.mode,
+              timeZone: data.timeZone ?? "UTC",
+            }),
+          isSuccess: (result) => result.ok,
+          resourceId: (result) => (result.ok ? result.eventId : undefined),
+          resourceUrl: (result) => (result.ok ? result.meetLink : undefined),
         });
-      } catch (error) {
-        log.warn(error, "rescheduleInterview: GCal event update failed");
+        if (!gcalResult || !gcalResult.ok) {
+          calendarWarning =
+            "Google Calendar could not be updated; the interview was saved and can be synced later.";
+          log.warn(
+            { reason: gcalResult?.reason },
+            "rescheduleInterview: GCal sync failed, event may be stale",
+          );
+        }
       }
-    } else {
-      const gcalResult = await syncInterviewToGCal({
-        workspaceId: workspace.id,
-        interviewId: row!.id,
-        summary:
-          row?.title ??
-          INTERVIEW_TYPE_LABEL[row?.type ?? "screening"] ??
-          "Interview",
-        start: when,
-        durationMins: data.durationMins,
-        attendees: attendees.length > 0 ? attendees : undefined,
-        location: data.location ?? undefined,
-        mode: info?.mode,
-      });
-      if (gcalResult && !gcalResult.ok) {
-        log.warn(
-          { reason: gcalResult.reason },
-          "rescheduleInterview: GCal sync failed, event may be stale",
-        );
-      }
-    }
+    };
 
-    // Teams and Zoom meetings are standalone objects. Recreate them after
-    // their old meeting is deleted so their provider never keeps stale time.
+    // Teams and Zoom meetings are standalone objects. Create and persist the
+    // replacement first; the provider adapter compensates if old-meeting
+    // deletion fails, so the candidate never receives a dead link.
     const summary =
       row?.title ??
       INTERVIEW_TYPE_LABEL[row?.type ?? "screening"] ??
       "Interview";
     if (info?.mode === "video" && row?.teamsMeetingId) {
-      await cancelInterviewTeamsMeeting({
+      const replacement = await trackInterviewSync({
         workspaceId: workspace.id,
         interviewId: row.id,
-        teamsMeetingId: row.teamsMeetingId,
+        provider: "microsoft_teams",
+        operation: "upsert",
+        run: () =>
+          replaceInterviewToTeams({
+            workspaceId: workspace.id,
+            interviewId: row.id,
+            previousMeetingId: row.teamsMeetingId!,
+            previousMeetLink: row.meetLink,
+            summary,
+            start: when,
+            durationMins: data.durationMins,
+          }),
+        isSuccess: (result) => Boolean(result && "ok" in result && result.ok),
+        resourceId: (result) =>
+          result && "ok" in result && result.ok ? result.meetingId : undefined,
+        resourceUrl: (result) =>
+          result && "ok" in result && result.ok ? result.joinUrl : undefined,
       });
-      await syncInterviewToTeams({
-        workspaceId: workspace.id,
-        interviewId: row.id,
-        summary,
-        start: when,
-        durationMins: data.durationMins,
-      });
+      if (!replacement || !("ok" in replacement) || !replacement.ok) {
+        return {
+          success: false,
+          error: "Could not replace the Microsoft Teams meeting; the original meeting is still active.",
+        };
+      }
     } else if (info?.mode === "video" && row?.zoomMeetingId) {
-      await cancelInterviewZoomMeeting({
+      const replacement = await trackInterviewSync({
         workspaceId: workspace.id,
         interviewId: row.id,
-        zoomMeetingId: row.zoomMeetingId,
+        provider: "zoom",
+        operation: "upsert",
+        run: () =>
+          replaceInterviewToZoom({
+            workspaceId: workspace.id,
+            interviewId: row.id,
+            previousMeetingId: row.zoomMeetingId!,
+            previousMeetLink: row.meetLink,
+            summary,
+            start: when,
+            durationMins: data.durationMins,
+          }),
+        isSuccess: (result) => Boolean(result && "ok" in result && result.ok),
+        resourceId: (result) =>
+          result && "ok" in result && result.ok ? result.meetingId : undefined,
+        resourceUrl: (result) =>
+          result && "ok" in result && result.ok ? result.joinUrl : undefined,
       });
-      await syncInterviewToZoom({
-        workspaceId: workspace.id,
-        interviewId: row.id,
-        summary,
-        start: when,
-        durationMins: data.durationMins,
-      });
+      if (!replacement || !("ok" in replacement) || !replacement.ok) {
+        return {
+          success: false,
+          error: "Could not replace the Zoom meeting; the original meeting is still active.",
+        };
+      }
     }
+
+    await syncCalendar();
 
     // Persist the new time/location only after the provider meeting was
     // successfully recreated, keeping DB and provider state consistent.
@@ -1303,23 +1415,48 @@ export async function rescheduleInterview(input: {
       rescheduleSet.meetLink = deriveMeetLink(row.mode, data.location);
     }
     let persistedEvent: PersistedDomainEvent | undefined;
-    await db.transaction(async (tx) => {
-      await tx
+    const persisted = await db.transaction(async (tx) => {
+      if (info.interviewerId) {
+        await lockInterviewerSchedule(tx, workspace.id, info.interviewerId);
+        const conflict = await hasInterviewerConflict(tx, {
+          workspaceId: workspace.id,
+          interviewerId: info.interviewerId,
+          when,
+          durationMins: data.durationMins,
+          excludeInterviewId: data.interviewId,
+        });
+        if (conflict) {
+          return {
+            ok: false as const,
+            error: "This interviewer already has an overlapping interview.",
+          };
+        }
+      }
+
+      const [updated] = await tx
         .update(interviews)
         .set(rescheduleSet)
         .where(
           and(
             eq(interviews.id, data.interviewId),
             eq(interviews.workspaceId, workspace.id),
+            eq(interviews.status, "scheduled"),
           ),
-        );
+        )
+        .returning({ id: interviews.id });
+      if (!updated) {
+        return {
+          ok: false as const,
+          error: "This interview is no longer scheduled and can't be changed.",
+        };
+      }
 
       await tx.insert(candidatePortalNotifications).values({
         workspaceId: workspace.id,
-        candidateId: data.candidateId,
+        candidateId: row.candidateId,
         type: "interview_rescheduled",
         title: "Interview rescheduled",
-        body: `Your interview is now scheduled for ${interviewWhenFormatter.format(when)}.`,
+        body: `Your interview is now scheduled for ${formatInterviewWhen(when, data.timeZone)}.`,
         href: info?.applicationId
           ? `/portal/applications/${info.applicationId}`
           : null,
@@ -1338,14 +1475,21 @@ export async function rescheduleInterview(input: {
         payload: {
           interview: {
             id: data.interviewId,
-            candidateId: data.candidateId,
+            candidateId: row.candidateId,
             scheduledAt: when.toISOString(),
             durationMins: data.durationMins,
             location: data.location ?? null,
           },
         },
       });
+      return { ok: true as const };
     });
+    if (!persisted.ok) {
+      return {
+        success: false,
+        error: persisted.error,
+      };
+    }
     if (persistedEvent) await publishPersistedDomainEvents([persistedEvent]);
 
     const [synced] = await db
@@ -1381,7 +1525,7 @@ export async function rescheduleInterview(input: {
       );
     }
 
-    revalidatePath(`/dashboard/candidates/${data.candidateId}`);
+    revalidatePath(`/dashboard/candidates/${row.candidateId}`);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/calendars");
 
@@ -1389,14 +1533,14 @@ export async function rescheduleInterview(input: {
     void emitWebhookEvent(workspace.id, "interview.rescheduled", {
       interview: {
         id: data.interviewId,
-        candidateId: data.candidateId,
+        candidateId: row.candidateId,
         scheduledAt: when.toISOString(),
         durationMins: data.durationMins,
         location: data.location ?? null,
       },
     }, { actorId: user.id, skipDomainEvent: true });
 
-    return { success: true };
+    return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}) };
   } catch (error) {
     log.error(error, "rescheduleInterview failed");
     return {
@@ -1408,7 +1552,8 @@ export async function rescheduleInterview(input: {
 
 const updateSchema = z.object({
   interviewId: z.string().min(1),
-  candidateId: z.string().min(1),
+  // Legacy callers may still send this field, but it is deliberately ignored.
+  candidateId: z.string().min(1).optional(),
   type: z.enum(interviewTypes).optional(),
   mode: z.enum(interviewModes).optional(),
   scheduledAt: z
@@ -1469,7 +1614,7 @@ const updateSchema = z.object({
  */
 export async function updateInterview(input: {
   interviewId: string;
-  candidateId: string;
+  candidateId?: string;
   type?: "screening" | "culture_fit" | "technical" | "onsite" | "final";
   mode?: "video" | "phone" | "onsite";
   scheduledAt?: string;
@@ -1479,7 +1624,7 @@ export async function updateInterview(input: {
   title?: string | null;
   location?: string | null;
   notes?: string | null;
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string }> {
   try {
     const parsed = updateSchema.safeParse(input);
     if (!parsed.success) {
@@ -1540,16 +1685,19 @@ export async function updateInterview(input: {
     const [row] = await db
       .select({
         id: interviews.id,
+        candidateId: interviews.candidateId,
         gcalEventId: interviews.gcalEventId,
         teamsMeetingId: interviews.teamsMeetingId,
         zoomMeetingId: interviews.zoomMeetingId,
         jitsiRoom: interviews.jitsiRoom,
+        meetLink: interviews.meetLink,
         location: interviews.location,
         scheduledAt: interviews.scheduledAt,
         durationMins: interviews.durationMins,
         type: interviews.type,
         mode: interviews.mode,
         title: interviews.title,
+        status: interviews.status,
       })
       .from(interviews)
       .where(
@@ -1562,6 +1710,12 @@ export async function updateInterview(input: {
 
     if (!row) {
       return { success: false, error: "Interview not found." };
+    }
+    if (row.status !== "scheduled") {
+      return {
+        success: false,
+        error: "This interview is no longer scheduled and can't be changed.",
+      };
     }
 
     // Fetch full context for GCal sync and email.
@@ -1601,6 +1755,13 @@ export async function updateInterview(input: {
         ),
       )
       .limit(1);
+
+    if (!info) {
+      return {
+        success: false,
+        error: "Interview candidate or job is no longer active.",
+      };
+    }
 
     // Resolve attendee emails for GCal invitations.
     let interviewerEmail: string | undefined;
@@ -1650,20 +1811,38 @@ export async function updateInterview(input: {
       }
     }
 
+    let calendarWarning: string | undefined;
+
     // Sync to Google Calendar if the event was previously synced. Await so a
     // GCal failure is logged instead of silently leaving a stale event.
     if (row?.gcalEventId) {
       try {
-        await updateInterviewGCalEvent({
-          workspaceId: workspace.id,
-          gcalEventId: row.gcalEventId,
-          start: effectiveScheduledAt,
-          durationMins: effectiveDurationMins,
-          attendees: attendees.length > 0 ? attendees : undefined,
-          location: data.location ?? undefined,
-        });
-      } catch (error) {
-        log.warn(error, "updateInterview: GCal event update failed");
+          const updated = await trackInterviewSync({
+            workspaceId: workspace.id,
+            interviewId: row.id,
+            provider: "google_calendar",
+            operation: "upsert",
+            run: () =>
+              updateInterviewGCalEvent({
+                workspaceId: workspace.id,
+                gcalEventId: row.gcalEventId!,
+                start: effectiveScheduledAt,
+                durationMins: effectiveDurationMins,
+                attendees: attendees.length > 0 ? attendees : undefined,
+                location: data.location ?? undefined,
+                timeZone: data.timeZone ?? "UTC",
+              }),
+            isSuccess: Boolean,
+          });
+          if (!updated) {
+            calendarWarning =
+              "Google Calendar could not be updated; the interview was saved and can be synced later.";
+            log.warn("updateInterview: GCal event update failed");
+          }
+        } catch (error) {
+          calendarWarning =
+            "Google Calendar could not be updated; the interview was saved and can be synced later.";
+          log.warn(error, "updateInterview: GCal event update failed");
       }
     }
 
@@ -1684,34 +1863,98 @@ export async function updateInterview(input: {
         INTERVIEW_TYPE_LABEL[data.type ?? row.type] ??
         "Interview";
       if (row.teamsMeetingId) {
-        await cancelInterviewTeamsMeeting({
-          workspaceId: workspace.id,
-          interviewId: row.id,
-          teamsMeetingId: row.teamsMeetingId,
-        });
         if (effectiveMode === "video") {
-          await syncInterviewToTeams({
+          const replacement = await trackInterviewSync({
             workspaceId: workspace.id,
             interviewId: row.id,
-            summary,
-            start,
-            durationMins,
+            provider: "microsoft_teams",
+            operation: "upsert",
+            run: () =>
+              replaceInterviewToTeams({
+                workspaceId: workspace.id,
+                interviewId: row.id,
+                previousMeetingId: row.teamsMeetingId!,
+                previousMeetLink: row.meetLink,
+                summary,
+                start,
+                durationMins,
+              }),
+            isSuccess: (result) => Boolean(result && "ok" in result && result.ok),
+            resourceId: (result) =>
+              result && "ok" in result && result.ok ? result.meetingId : undefined,
+            resourceUrl: (result) =>
+              result && "ok" in result && result.ok ? result.joinUrl : undefined,
           });
+          if (!replacement || !("ok" in replacement) || !replacement.ok) {
+            return {
+              success: false,
+              error: "Could not replace the Microsoft Teams meeting; the original meeting is still active.",
+            };
+          }
+        } else {
+          const canceled = await trackInterviewSync({
+            workspaceId: workspace.id,
+            interviewId: row.id,
+            provider: "microsoft_teams",
+            operation: "cancel",
+            run: () =>
+              cancelInterviewTeamsMeeting({
+                workspaceId: workspace.id,
+                interviewId: row.id,
+                teamsMeetingId: row.teamsMeetingId!,
+              }),
+            isSuccess: Boolean,
+          });
+          if (!canceled) {
+            return { success: false, error: "Could not cancel the Teams meeting." };
+          }
         }
       } else if (row.zoomMeetingId) {
-        await cancelInterviewZoomMeeting({
-          workspaceId: workspace.id,
-          interviewId: row.id,
-          zoomMeetingId: row.zoomMeetingId,
-        });
         if (effectiveMode === "video") {
-          await syncInterviewToZoom({
+          const replacement = await trackInterviewSync({
             workspaceId: workspace.id,
             interviewId: row.id,
-            summary,
-            start,
-            durationMins,
+            provider: "zoom",
+            operation: "upsert",
+            run: () =>
+              replaceInterviewToZoom({
+                workspaceId: workspace.id,
+                interviewId: row.id,
+                previousMeetingId: row.zoomMeetingId!,
+                previousMeetLink: row.meetLink,
+                summary,
+                start,
+                durationMins,
+              }),
+            isSuccess: (result) => Boolean(result && "ok" in result && result.ok),
+            resourceId: (result) =>
+              result && "ok" in result && result.ok ? result.meetingId : undefined,
+            resourceUrl: (result) =>
+              result && "ok" in result && result.ok ? result.joinUrl : undefined,
           });
+          if (!replacement || !("ok" in replacement) || !replacement.ok) {
+            return {
+              success: false,
+              error: "Could not replace the Zoom meeting; the original meeting is still active.",
+            };
+          }
+        } else {
+          const canceled = await trackInterviewSync({
+            workspaceId: workspace.id,
+            interviewId: row.id,
+            provider: "zoom",
+            operation: "cancel",
+            run: () =>
+              cancelInterviewZoomMeeting({
+                workspaceId: workspace.id,
+                interviewId: row.id,
+                zoomMeetingId: row.zoomMeetingId!,
+              }),
+            isSuccess: Boolean,
+          });
+          if (!canceled) {
+            return { success: false, error: "Could not cancel the Zoom meeting." };
+          }
         }
       } else if (
         effectiveMode === "video" &&
@@ -1731,38 +1974,83 @@ export async function updateInterview(input: {
             getWorkspaceOutlookConfig(workspace.id),
             getWorkspaceGCalConfig(workspace.id),
             getWorkspaceJitsiConfig(workspace.id),
-          ]);
+        ]);
         if (zoomToken) {
-          await syncInterviewToZoom({
+          await trackInterviewSync({
             workspaceId: workspace.id,
             interviewId: row.id,
-            summary,
-            start,
-            durationMins,
+            provider: "zoom",
+            operation: "upsert",
+            run: () =>
+              syncInterviewToZoom({
+                workspaceId: workspace.id,
+                interviewId: row.id,
+                summary,
+                start,
+                durationMins,
+              }),
+            isSuccess: Boolean,
+            resourceId: (result) => result?.meetingId,
+            resourceUrl: (result) => result?.joinUrl,
           });
         } else if (outlookConfig) {
-          await syncInterviewToTeams({
+          await trackInterviewSync({
             workspaceId: workspace.id,
             interviewId: row.id,
-            summary,
-            start,
-            durationMins,
+            provider: "microsoft_teams",
+            operation: "upsert",
+            run: () =>
+              syncInterviewToTeams({
+                workspaceId: workspace.id,
+                interviewId: row.id,
+                summary,
+                start,
+                durationMins,
+              }),
+            isSuccess: Boolean,
+            resourceId: (result) => result?.meetingId,
+            resourceUrl: (result) => result?.joinUrl,
           });
         } else if (gcalConfig) {
-          await syncInterviewToGCal({
+          const gcalResult = await trackInterviewSync({
             workspaceId: workspace.id,
             interviewId: row.id,
-            summary,
-            start,
-            durationMins,
-            attendees: attendees.length > 0 ? attendees : undefined,
-            location: data.location ?? undefined,
-            mode: "video",
+            provider: "google_calendar",
+            operation: "upsert",
+            run: () =>
+              syncInterviewToGCal({
+                workspaceId: workspace.id,
+                interviewId: row.id,
+                summary,
+                start,
+                durationMins,
+                attendees: attendees.length > 0 ? attendees : undefined,
+                location: data.location ?? undefined,
+                mode: "video",
+                timeZone: data.timeZone ?? "UTC",
+              }),
+            isSuccess: (result) => result.ok,
+            resourceId: (result) => (result.ok ? result.eventId : undefined),
+            resourceUrl: (result) => (result.ok ? result.meetLink : undefined),
           });
+          if (!gcalResult || !gcalResult.ok) {
+            calendarWarning =
+              "Google Calendar could not be updated; the interview was saved and can be synced later.";
+          }
         } else if (jitsiConfig) {
-          await syncInterviewToJitsi({
+          await trackInterviewSync({
             workspaceId: workspace.id,
             interviewId: row.id,
+            provider: "jitsi",
+            operation: "upsert",
+            run: () =>
+              syncInterviewToJitsi({
+                workspaceId: workspace.id,
+                interviewId: row.id,
+              }),
+            isSuccess: Boolean,
+            resourceId: (result) => result?.room,
+            resourceUrl: (result) => result?.joinUrl,
           });
         }
       }
@@ -1795,16 +2083,42 @@ export async function updateInterview(input: {
     // Persist the edits only after the provider meeting was successfully
     // recreated, keeping DB and provider state consistent.
     let persistedEvent: PersistedDomainEvent | undefined;
-    await db.transaction(async (tx) => {
-      await tx
+    const persisted = await db.transaction(async (tx) => {
+      if (effectiveInterviewerId) {
+        await lockInterviewerSchedule(tx, workspace.id, effectiveInterviewerId);
+        if (
+          await hasInterviewerConflict(tx, {
+            workspaceId: workspace.id,
+            interviewerId: effectiveInterviewerId,
+            when: effectiveScheduledAt,
+            durationMins: effectiveDurationMins,
+            excludeInterviewId: data.interviewId,
+          })
+        ) {
+          return {
+            ok: false as const,
+            error: "This interviewer already has an overlapping interview.",
+          };
+        }
+      }
+
+      const [updated] = await tx
         .update(interviews)
         .set(set)
         .where(
           and(
             eq(interviews.id, data.interviewId),
             eq(interviews.workspaceId, workspace.id),
+            eq(interviews.status, "scheduled"),
           ),
-        );
+        )
+        .returning({ id: interviews.id });
+      if (!updated) {
+        return {
+          ok: false as const,
+          error: "This interview is no longer scheduled and can't be changed.",
+        };
+      }
 
       persistedEvent = await persistDomainEvent(tx, {
         workspaceId: workspace.id,
@@ -1815,20 +2129,26 @@ export async function updateInterview(input: {
         payload: {
           interview: {
             id: data.interviewId,
-            candidateId: data.candidateId,
+            candidateId: row.candidateId,
             scheduledAt: effectiveScheduledAt.toISOString(),
             durationMins: effectiveDurationMins,
             location: data.location ?? null,
           },
         },
       });
+      return { ok: true as const };
     });
+    if (!persisted.ok) {
+      return {
+        success: false,
+        error: persisted.error,
+      };
+    }
     if (persistedEvent) await publishPersistedDomainEvents([persistedEvent]);
 
     // Send rescheduled email if date/time changed.
     if (data.scheduledAt && data.scheduledAt !== "" && info?.email) {
-      const when = new Date(data.scheduledAt);
-      const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
+          const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
       await queueInterviewEmail(
         workspace.id,
         "interview.rescheduled",
@@ -1839,7 +2159,7 @@ export async function updateInterview(input: {
           jobTitle: info.jobTitle,
           interviewType:
             INTERVIEW_TYPE_LABEL[data.type ?? row.type] ?? "Interview",
-          scheduledAt: when.toISOString(),
+          scheduledAt: effectiveScheduledAt.toISOString(),
           mode: INTERVIEW_MODE_LABEL[effectiveMode] ?? effectiveMode,
           location: data.location ?? undefined,
           durationMins: effectiveDurationMins,
@@ -1849,21 +2169,21 @@ export async function updateInterview(input: {
       );
     }
 
-    revalidatePath(`/dashboard/candidates/${data.candidateId}`);
+    revalidatePath(`/dashboard/candidates/${row.candidateId}`);
     revalidatePath("/dashboard");
     revalidatePath("/dashboard/calendars");
 
     void emitWebhookEvent(workspace.id, "interview.rescheduled", {
       interview: {
         id: data.interviewId,
-        candidateId: data.candidateId,
+        candidateId: row.candidateId,
         scheduledAt: effectiveScheduledAt.toISOString(),
         durationMins: effectiveDurationMins,
         location: data.location ?? null,
       },
     }, { actorId: user.id, skipDomainEvent: true });
 
-    return { success: true };
+    return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}) };
   } catch (error) {
     log.error(error, "updateInterview failed");
     return {

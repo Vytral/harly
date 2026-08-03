@@ -140,6 +140,7 @@ export async function createEvent(
     attendees?: string[];
     location?: string;
     onlineMeeting?: boolean;
+    timeZone?: string;
   },
 ): Promise<OutlookEvent> {
   const startIso = event.start.toISOString();
@@ -147,7 +148,7 @@ export async function createEvent(
     event.start.getTime() + event.durationMins * 60_000,
   ).toISOString();
 
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = event.timeZone ?? "UTC";
 
   const body: Record<string, unknown> = {
     subject: event.subject,
@@ -186,9 +187,10 @@ export async function updateEvent(
     durationMins?: number;
     attendees?: string[];
     location?: string;
+    timeZone?: string;
   },
 ): Promise<OutlookEvent> {
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = updates.timeZone ?? "UTC";
 
   const body: Record<string, unknown> = {};
   if (updates.subject) body.subject = updates.subject;

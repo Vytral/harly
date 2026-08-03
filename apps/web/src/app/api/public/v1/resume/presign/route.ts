@@ -18,7 +18,7 @@ export const runtime = "nodejs";
  * embed widget / custom forms. Mirrors the in-app presign route but CORS-open.
  */
 export const POST = withApi(async (request) => {
-  enforceRateLimit(`public:resume-presign:${clientIp(request)}`, {
+  await enforceRateLimit(`public:resume-presign:${clientIp(request)}`, {
     limit: 20,
     windowMs: 60_000,
   });

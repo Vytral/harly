@@ -22,6 +22,7 @@ import {
   updateApplicationStatus,
   updateStageEmailSettings,
 } from "@/features/pipeline/actions";
+import { bulkDecisionConfirmationMessage } from "@/features/pipeline/confirmation";
 import {
   CandidateCard,
   CandidateCardOverlay,
@@ -377,6 +378,16 @@ export function PipelineBoard({
     );
 
     if (!firstApplication) {
+      return;
+    }
+
+    if (
+      applicationIds.length > 1 &&
+      (status === "hired" || status === "rejected") &&
+      !window.confirm(
+        bulkDecisionConfirmationMessage(status, applicationIds.length),
+      )
+    ) {
       return;
     }
 

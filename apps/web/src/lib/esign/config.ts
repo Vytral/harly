@@ -10,7 +10,7 @@ import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
  * DocuSeal (self-hosted e-signature) per-workspace config. Unlike DocuSign there
  * is no OAuth: a base instance URL plus a static API token (sent as X-Auth-Token,
  * encrypted at rest) is the whole credential. The webhook secret is a plaintext
- * shared token appended to the callback URL and checked on inbound events.
+ * shared token accepted only from an inbound header and checked server-side.
  */
 
 /** Public-safe status for the settings UI. Never returns the token. */
@@ -21,9 +21,9 @@ export type WorkspaceEsignStatus = {
   hasToken: boolean;
   hasWebhookSecret: boolean;
   /**
-   * The webhook shared secret. Safe to surface in the settings UI — it is how
-   * the admin configures the DocuSeal webhook URL; it is not a bearer credential
-   * for our API. Null until the integration is first saved.
+   * The webhook shared secret. It must be configured as an inbound webhook
+   * header (or used by an HMAC-capable proxy); it is not a URL credential.
+   * Null until the integration is first saved.
    */
   webhookSecret: string | null;
   offerSignatureChannel: "email" | "esign" | "native";

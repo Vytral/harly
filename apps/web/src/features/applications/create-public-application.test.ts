@@ -6,13 +6,16 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => {
   const transactionImpl = vi.fn();
-  return { transactionImpl };
+  const selectImpl = vi.fn();
+  const storageRead = vi.fn();
+  return { transactionImpl, selectImpl, storageRead };
 });
 
 vi.mock("@harly/db", () => ({
   db: {
     transaction: (fn: (tx: unknown) => Promise<unknown>) =>
       mocks.transactionImpl(fn),
+    select: () => mocks.selectImpl(),
   },
   // auth.ts (imported transitively) wires drizzleAdapter(db, { schema }),
   // so the mock must surface a `schema` export or vitest throws on import.
@@ -34,8 +37,18 @@ vi.mock("@harly/db", () => ({
   user: {},
   workspaceSettings: {},
 }));
+vi.mock("@/lib/storage", () => ({
+  storage: { read: mocks.storageRead },
+}));
 
 vi.mock("@/server/webhooks/emit", () => ({ emitWebhookEvent: vi.fn() }));
+vi.mock("@/server/events/emit", () => ({
+  persistDomainEvent: vi.fn(),
+  publishPersistedDomainEvents: vi.fn(),
+}));
+vi.mock("@/features/jobs/data", () => ({
+  publicJobVisibilityConditions: () => undefined,
+}));
 
 // data.ts -> jobs/data -> workspaces/context -> @/lib/auth -> @harly/auth,
 // which calls loadHarlyConfig() at module load. In CI without HARLY_URL set
@@ -45,7 +58,11 @@ vi.mock("@harly/config", () => ({
   formatConfigError: () => "config error",
 }));
 
-import { createPublicApplication } from "./data";
+import {
+  createPublicApplication,
+  getApplicationConflictMessage,
+  getPublicJobApplicationContext,
+} from "./data";
 
 function makeTx(queue: unknown[]) {
   const calls = { select: 0, update: 0, insert: 0 };
@@ -81,8 +98,13 @@ function makeTx(queue: unknown[]) {
   return { tx, calls };
 }
 
-const JOB = { id: "job-1", title: "Engineer", workspaceId: "ws-1" };
-const ORG = { name: "Acme", slug: "acme" };
+const JOB = {
+  id: "job-1",
+  title: "Engineer",
+  workspaceId: "ws-1",
+  applicationConfig: { resumeRequired: false },
+};
+const ORG = { name: "Acme", slug: "acme", portalEnabled: false };
 const EXISTING_CANDIDATE = { id: "cand-1" };
 const EXISTING_APPLICATION = { id: "app-existing" };
 
@@ -108,11 +130,51 @@ const VALUES = {
   resumeFileType: undefined,
   resumeFileSize: undefined,
   questionAnswers: {},
-} as never;
+} as unknown as Parameters<typeof createPublicApplication>[1];
 
 describe("F1-07 re-application duplicate detection order", () => {
   beforeEach(() => {
     mocks.transactionImpl.mockReset();
+    mocks.selectImpl.mockReset();
+    mocks.storageRead.mockReset();
+  });
+
+  it("publishes legal configuration through the public job application context", async () => {
+    const query = new Proxy(
+      function () {},
+      {
+        get(_target, prop) {
+          if (prop === "then") {
+            return (resolve: (value: unknown) => void) =>
+              resolve([
+                {
+                  id: "job-1",
+                  workspaceId: "ws-1",
+                  keywords: ["typescript"],
+                  applicationConfig: { questions: [] },
+                  legalConfigured: true,
+                  consentText: "Acme privacy terms",
+                },
+              ]);
+          }
+          return () => query;
+        },
+        apply() {
+          return query;
+        },
+      },
+    );
+    mocks.selectImpl.mockReturnValue(query);
+
+    const context = await getPublicJobApplicationContext({
+      jobSlug: "engineer",
+      workspaceSlug: "acme",
+    });
+
+    expect(context?.applicationConfig).toMatchObject({
+      legalConfigured: true,
+      consentText: "Acme privacy terms",
+    });
   });
 
   it("rejects a duplicate application for an existing candidate without overwriting their profile", async () => {
@@ -139,6 +201,182 @@ describe("F1-07 re-application duplicate detection order", () => {
 
     // …and crucially the candidate was never updated (no overwrite on retry).
     expect(calls.update).toBe(0);
+    expect(calls.insert).toBe(0);
+  });
+
+  it("creates a new application for another job without overwriting the canonical profile", async () => {
+    const canonicalCandidate = {
+      id: "cand-1",
+      firstName: "Canonical",
+      lastName: "Profile",
+      email: "retry@example.com",
+      phone: "+56 9 1111 1111",
+      workspaceId: "ws-1",
+    };
+    const insertValues: unknown[] = [];
+    const queue = [
+      [JOB],
+      [{ ...ORG, legalConfigured: true, consentText: "Canonical privacy terms" }],
+      [canonicalCandidate],
+      [],
+      [{ id: "stage-1" }],
+      [{ value: 1 }],
+      [{ id: "application-2" }],
+      [],
+      [],
+      [],
+      [],
+      [{ email: "owner@example.com" }],
+    ];
+    const calls = { update: 0, insert: 0 };
+    const runnable = new Proxy(
+      function () {},
+      {
+        get(_target, prop) {
+          if (prop === "then") {
+            return (resolve: (value: unknown) => void) => resolve(queue.shift());
+          }
+          if (prop === "values") {
+            return (values: unknown) => {
+              insertValues.push(values);
+              return runnable;
+            };
+          }
+          return () => runnable;
+        },
+        apply() {
+          return runnable;
+        },
+      },
+    );
+    const tx = {
+      select: () => runnable,
+      update: () => {
+        calls.update += 1;
+        return runnable;
+      },
+      insert: () => {
+        calls.insert += 1;
+        return runnable;
+      },
+    };
+    mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(tx),
+    );
+
+    const result = await createPublicApplication(
+      { jobSlug: "another-job", workspaceSlug: "acme" },
+      VALUES,
+      {
+        consent: {
+          consentText: "untrusted browser text",
+          ipAddress: "203.0.113.20",
+          userAgent: "candidate-browser/1.0",
+        },
+      },
+    );
+
+    expect(result).toMatchObject({
+      ok: true,
+      candidateId: "cand-1",
+      email: {
+        candidateName: "Canonical Profile",
+        candidateEmail: "retry@example.com",
+      },
+    });
+    expect(calls.update).toBe(0);
+    expect(calls.insert).toBeGreaterThan(0);
+    expect(insertValues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          candidateId: "cand-1",
+          jobId: "job-1",
+          source: "public_form",
+          pipelineOrder: 1,
+          snapshot: expect.objectContaining({
+            firstName: "Retry",
+            lastName: "User",
+          }),
+        }),
+        expect.objectContaining({
+          consentText: "Canonical privacy terms",
+          ipAddress: "203.0.113.20",
+          userAgent: "candidate-browser/1.0",
+          granted: true,
+        }),
+      ]),
+    );
+  });
+
+  it("enforces legal consent inside the domain transaction", async () => {
+    const { tx, calls } = makeTx([
+      [JOB],
+      [{ ...ORG, legalConfigured: true, consentText: "Acme privacy terms" }],
+    ]);
+    mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(tx),
+    );
+
+    const result = await createPublicApplication(
+      { jobSlug: "engineer", workspaceSlug: "acme" },
+      VALUES,
+    );
+
+    expect(result).toMatchObject({
+      ok: false,
+      message: expect.stringMatching(/privacy policy/i),
+    });
+    expect(calls.update).toBe(0);
+    expect(calls.insert).toBe(0);
+  });
+
+  it("maps an application uniqueness race to the known idempotent conflict", () => {
+    expect(
+      getApplicationConflictMessage({
+        code: "23505",
+        constraint: "applications_workspace_candidate_job_idx",
+      }),
+    ).toBe("You've already applied to this job.");
+  });
+
+  it("rejects an external resume URL when it is not backed by a canonical key", async () => {
+    const { tx, calls } = makeTx([[JOB]]);
+    mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(tx),
+    );
+
+    const result = await createPublicApplication(
+      { jobSlug: "engineer", workspaceSlug: "acme" },
+      {
+        ...VALUES,
+        resumeUrl: "https://attacker.example/resume.pdf",
+      },
+    );
+
+    expect(result).toEqual({ ok: false, message: "Resume upload is invalid." });
+    expect(calls.insert).toBe(0);
+  });
+
+  it("rejects a canonical-looking resume key when the object does not exist", async () => {
+    mocks.storageRead.mockRejectedValue(new Error("not found"));
+    const { tx, calls } = makeTx([[JOB]]);
+    mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(tx),
+    );
+
+    const result = await createPublicApplication(
+      { jobSlug: "engineer", workspaceSlug: "acme" },
+      {
+        ...VALUES,
+        resumeKey: "workspaces/ws-1/resumes/upload/cv.pdf",
+        resumeUrl: "https://harly.example/api/storage/file?key=forged",
+        resumeFileName: "cv.pdf",
+        resumeFileType: "application/pdf",
+        resumeFileSize: 100,
+      },
+    );
+
+    expect(result).toEqual({ ok: false, message: "Resume upload is invalid." });
     expect(calls.insert).toBe(0);
   });
 });

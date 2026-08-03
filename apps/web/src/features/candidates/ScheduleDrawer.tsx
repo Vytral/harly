@@ -20,6 +20,10 @@ import {
 import { SidePanel } from "@/components/ui/side-panel";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import {
+  getBrowserTimeZone,
+  parseScheduledAt,
+} from "@/features/interviews/shared";
 
 export type ScheduleApplicationOption = {
   applicationId: string;
@@ -114,7 +118,8 @@ export function ScheduleDrawer({
     }
     setCheckingAvailability(true);
     try {
-      const start = new Date(`${newDate}T${newTime}`);
+      const timeZone = getBrowserTimeZone();
+      const start = parseScheduledAt(`${newDate}T${newTime}`, timeZone);
       const end = new Date(start.getTime() + Number(duration) * 60_000);
       const result = await checkAvailability({
         timeMin: start,
@@ -186,6 +191,7 @@ export function ScheduleDrawer({
       return;
     }
     startTransition(async () => {
+      const timeZone = getBrowserTimeZone();
       const result = await scheduleInterview({
         workspaceId,
         candidateId,
@@ -193,6 +199,7 @@ export function ScheduleDrawer({
         type,
         mode,
         scheduledAt: `${date}T${time}`,
+        timeZone,
         durationMins: Number(durationMins),
         interviewerId: interviewerId || null,
         location: location.trim() || null,
@@ -202,6 +209,7 @@ export function ScheduleDrawer({
         toast.error(result.error ?? "Could not schedule.");
         return;
       }
+      if (result.warning) toast.warning(result.warning);
       toast.success("Interview scheduled");
       setOpen(false);
       reset();

@@ -40,7 +40,11 @@ vi.mock("./client", () => ({
   deleteMeeting: mocks.deleteMeeting,
 }));
 
-import { cancelInterviewZoomMeeting, syncInterviewToZoom } from "./sync";
+import {
+  cancelInterviewZoomMeeting,
+  replaceInterviewToZoom,
+  syncInterviewToZoom,
+} from "./sync";
 
 describe("Zoom interview sync isolation", () => {
   beforeEach(() => {
@@ -79,5 +83,69 @@ describe("Zoom interview sync isolation", () => {
       }),
     ).resolves.toBe(false);
     expect(mocks.deleteMeeting).not.toHaveBeenCalled();
+  });
+
+  it("creates the replacement before deleting the valid meeting", async () => {
+    mocks.selectQueue.push([{ id: "interview-1" }]);
+    mocks.createMeeting.mockResolvedValue({
+      id: 2,
+      join_url: "https://zoom.us/j/2",
+    });
+    mocks.update.mockReturnValue({
+      set: () => ({
+        where: () => ({ returning: async () => [{ id: "interview-1" }] }),
+      }),
+    });
+
+    const result = await replaceInterviewToZoom({
+      workspaceId: "ws-1",
+      interviewId: "interview-1",
+      previousMeetingId: "zoom-1",
+      previousMeetLink: "https://zoom.us/j/1",
+      summary: "Screening",
+      start: new Date("2030-01-01T11:00:00Z"),
+      durationMins: 30,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      meetingId: "2",
+      joinUrl: "https://zoom.us/j/2",
+    });
+    expect(mocks.createMeeting).toHaveBeenCalledTimes(1);
+    expect(mocks.deleteMeeting).toHaveBeenCalledWith("ws-1", "zoom-1");
+    expect(mocks.createMeeting.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.deleteMeeting.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("cleans up the replacement and restores the old link when deletion fails", async () => {
+    mocks.selectQueue.push([{ id: "interview-1" }]);
+    mocks.createMeeting.mockResolvedValue({
+      id: 2,
+      join_url: "https://zoom.us/j/2",
+    });
+    mocks.deleteMeeting
+      .mockRejectedValueOnce(new Error("old meeting unavailable"))
+      .mockResolvedValueOnce(undefined);
+    mocks.update.mockImplementation(() => ({
+      set: () => ({
+        where: () => ({ returning: async () => [{ id: "interview-1" }] }),
+      }),
+    }));
+
+    const result = await replaceInterviewToZoom({
+      workspaceId: "ws-1",
+      interviewId: "interview-1",
+      previousMeetingId: "zoom-1",
+      previousMeetLink: "https://zoom.us/j/1",
+      summary: "Screening",
+      start: new Date("2030-01-01T11:00:00Z"),
+      durationMins: 30,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(mocks.deleteMeeting).toHaveBeenNthCalledWith(2, "ws-1", "2");
+    expect(mocks.update).toHaveBeenCalledTimes(2);
   });
 });

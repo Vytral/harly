@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   ArrowRightLeft,
@@ -15,6 +16,7 @@ import {
   bulkMoveApplications,
   updateApplicationStatus,
 } from "@/features/pipeline/actions";
+import { bulkDecisionConfirmationMessage } from "@/features/pipeline/confirmation";
 import type {
   PipelineApplication,
   PipelineStage,
@@ -134,6 +136,13 @@ export function PipelineList({
 
   function setStatus(status: "hired" | "rejected" | "active") {
     if (selectedIds.length === 0) return;
+    if (
+      status !== "active" &&
+      selectedIds.length > 1 &&
+      !window.confirm(bulkDecisionConfirmationMessage(status, selectedIds.length))
+    ) {
+      return;
+    }
     startTransition(async () => {
       const result = await updateApplicationStatus({
         applicationIds: selectedIds,
@@ -265,7 +274,11 @@ export function PipelineList({
                     aria-label={`Select ${fullName}`}
                   />
                 </div>
-                <div className="flex min-w-0 items-center gap-3">
+                <Link
+                  href={`/dashboard/candidates/${a.candidateId}`}
+                  onClick={(event) => event.stopPropagation()}
+                  className="flex min-w-0 items-center gap-3"
+                >
                   <UserAvatar
                     name={fullName}
                     src={a.candidateAvatarUrl}
@@ -281,7 +294,7 @@ export function PipelineList({
                       {a.source ? ` · via ${a.source}` : ""}
                     </p>
                   </div>
-                </div>
+                </Link>
                 <div className="col-start-2 min-w-0 sm:col-auto">
                   <p className="text-xs font-medium text-foreground">{stageName}</p>
                   <PipelineSpine

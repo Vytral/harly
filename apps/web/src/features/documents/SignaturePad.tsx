@@ -67,14 +67,14 @@ export function SignaturePad({ value, onChange, allowSaved = false }: Props) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (value === internalValueRef.current) return;
-    internalValueRef.current = value;
     const context = canvas.getContext("2d");
     if (!context) return;
-    context.clearRect(0, 0, canvas.width, canvas.height);
     context.strokeStyle = "#171717";
     context.lineWidth = 3;
     context.lineCap = "round";
+    if (value === internalValueRef.current) return;
+    internalValueRef.current = value;
+    context.clearRect(0, 0, canvas.width, canvas.height);
     if (value?.startsWith("data:image")) {
       const image = new Image();
       image.onload = () =>
@@ -98,6 +98,13 @@ export function SignaturePad({ value, onChange, allowSaved = false }: Props) {
     drawingRef.current = true;
     const p = point(event.clientX, event.clientY);
     const context = canvasRef.current!.getContext("2d")!;
+    // A click without movement is a valid mark. Paint it immediately and
+    // commit it on pointer-up instead of relying on pointermove to serialize
+    // the canvas.
+    context.beginPath();
+    context.arc(p.x, p.y, context.lineWidth / 2, 0, Math.PI * 2);
+    context.fillStyle = context.strokeStyle;
+    context.fill();
     context.beginPath();
     context.moveTo(p.x, p.y);
     canvasRef.current!.setPointerCapture(event.pointerId);
@@ -118,9 +125,21 @@ export function SignaturePad({ value, onChange, allowSaved = false }: Props) {
       context.lineTo(p.x, p.y);
       context.stroke();
     }
-    const nextValue = canvasRef.current!.toDataURL("image/png");
+  }
+
+  function commitCanvas() {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const nextValue = canvas.toDataURL("image/png");
     internalValueRef.current = nextValue;
     onChange(nextValue);
+  }
+
+  function finishDrawing() {
+    const shouldCommit = drawingRef.current || captureStrokeRef.current;
+    drawingRef.current = false;
+    captureStrokeRef.current = false;
+    if (shouldCommit) commitCanvas();
   }
 
   function clear() {
@@ -386,14 +405,8 @@ export function SignaturePad({ value, onChange, allowSaved = false }: Props) {
             className={`h-40 w-full touch-none rounded-lg border bg-white ${captureMode ? "cursor-crosshair" : mode === "draw" ? "cursor-pen" : "cursor-default"}`}
             onPointerDown={start}
             onPointerMove={move}
-            onPointerUp={() => {
-              drawingRef.current = false;
-              captureStrokeRef.current = false;
-            }}
-            onPointerCancel={() => {
-              drawingRef.current = false;
-              captureStrokeRef.current = false;
-            }}
+            onPointerUp={finishDrawing}
+            onPointerCancel={finishDrawing}
             aria-label="Signature pad"
           />
           {mode === "draw" ? (

@@ -34,7 +34,8 @@ export function getHarlyPublicOrigin(): string {
   return url.origin;
 }
 
-/** Inbound DocuSeal webhook base. `?ws=` + `?secret=` are appended per workspace. */
+/** Inbound DocuSeal webhook base. Only `?ws=` is appended per workspace; the
+ * shared secret travels in X-DocuSeal-Secret (or an HMAC-capable proxy). */
 export function getEsignWebhookBaseUrl(): string {
   return `${getHarlyPublicOrigin()}/api/integrations/docuseal/webhook`;
 }

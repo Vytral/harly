@@ -89,16 +89,71 @@ const STATUS_ACTIONS: Array<{
     status: "hired",
     label: "Mark as hired",
     icon: CheckCircle2,
-    confirm: "Mark {name} as hired? This updates every active application.",
+    confirm: "Mark {name}'s application for {job} as hired?",
   },
   {
     status: "active",
     label: "Reactivate",
     icon: RotateCcw,
-    confirm:
-      "Reactivate {name}? Their applications return to the active pipeline.",
+    confirm: "Reactivate {name}'s application for {job}?",
   },
 ];
+
+export function decisionApplicationIds(
+  applications: ScheduleApplicationOption[],
+  selectedApplicationId: string | null,
+) {
+  const selected =
+    applications.find(
+      (application) => application.applicationId === selectedApplicationId,
+    ) ?? applications[0];
+  return selected ? [selected.applicationId] : [];
+}
+
+function decisionApplication(
+  applications: ScheduleApplicationOption[],
+  selectedApplicationId: string | null,
+) {
+  const selected =
+    applications.find(
+      (application) => application.applicationId === selectedApplicationId,
+    ) ?? applications[0];
+  return selected ?? null;
+}
+
+function DecisionApplicationSelector({
+  applications,
+  selectedApplicationId,
+  onChange,
+}: {
+  applications: ScheduleApplicationOption[];
+  selectedApplicationId: string | null;
+  onChange: (applicationId: string) => void;
+}) {
+  if (applications.length < 2) return null;
+
+  const selected = decisionApplication(applications, selectedApplicationId);
+
+  return (
+    <label className="flex min-w-0 items-center gap-2 rounded-xl border border-border/70 bg-background px-2.5 py-1.5">
+      <span className="shrink-0 text-xs font-medium text-muted-foreground">
+        Decide for
+      </span>
+      <select
+        aria-label="Application to update"
+        className="min-w-0 max-w-52 bg-transparent text-sm font-medium text-foreground outline-none"
+        value={selected?.applicationId ?? ""}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {applications.map((application) => (
+          <option key={application.applicationId} value={application.applicationId}>
+            {application.jobTitle}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
 
 /**
  * Prominent, isolated reject control (rust) with a split dropdown for
@@ -106,24 +161,31 @@ const STATUS_ACTIONS: Array<{
  */
 function RejectButton({
   name,
-  applicationIds,
+  application,
   compact = false,
 }: {
   name: string;
-  applicationIds: string[];
+  application: ScheduleApplicationOption | null;
   compact?: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   function run(status: "rejected" | "withdrawn", pastTense: string) {
-    if (applicationIds.length === 0) {
+    if (!application) {
       toast.error("This candidate has no application to update.");
+      return;
+    }
+    if (
+      !window.confirm(
+        `${pastTense === "withdrawn" ? "Mark" : "Reject"} ${name}'s application for ${application.jobTitle}?`,
+      )
+    ) {
       return;
     }
     startTransition(async () => {
       const result = await bulkUpdateCandidateStatusAction({
-        applicationIds,
+        applicationIds: [application.applicationId],
         status,
       });
       if (result.success) {
@@ -181,10 +243,10 @@ function RejectButton({
 
 function CandidateStatusMenu({
   name,
-  applicationIds,
+  application,
 }: {
   name: string;
-  applicationIds: string[];
+  application: ScheduleApplicationOption | null;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -194,15 +256,23 @@ function CandidateStatusMenu({
     label: string,
     confirmMessage: string,
   ) {
-    if (applicationIds.length === 0) {
+    if (!application) {
       toast.error("This candidate has no application to update.");
       return;
     }
-    if (!window.confirm(confirmMessage.replace("{name}", name))) return;
+    if (
+      !window.confirm(
+        confirmMessage
+          .replace("{name}", name)
+          .replace("{job}", application.jobTitle),
+      )
+    ) {
+      return;
+    }
 
     startTransition(async () => {
       const result = await bulkUpdateCandidateStatusAction({
-        applicationIds,
+        applicationIds: [application.applicationId],
         status,
       });
       if (result.success) {
@@ -320,6 +390,7 @@ export function CandidateActionBar({
   members,
   cal,
   move,
+  moveTargets = [],
   emailTemplates = [],
   emailTemplateValues = {},
   inPool = false,
@@ -336,14 +407,34 @@ export function CandidateActionBar({
   members: ScheduleMemberOption[];
   cal: ScheduleCalConfig;
   move: MoveStageTarget | null;
+  moveTargets?: MoveStageTarget[];
   emailTemplates?: EmailTemplateOption[];
   emailTemplateValues?: TemplateValues;
   inPool?: boolean;
   variant?: "full" | "compact";
   aiConfigured?: boolean;
 }) {
-  const applicationIds = applications.map(
-    (application) => application.applicationId,
+  const [selectedApplicationId, setSelectedApplicationId] = useState(
+    applications[0]?.applicationId ?? null,
+  );
+  const selectedDecisionIds = decisionApplicationIds(
+    applications,
+    selectedApplicationId,
+  );
+  const selectedApplication =
+    applications.find(
+      (application) => application.applicationId === selectedDecisionIds[0],
+    ) ?? null;
+  const selectedMoveTarget =
+    moveTargets.find(
+      (target) => target.applicationId === selectedApplication?.applicationId,
+    ) ?? move;
+  const applicationSelector = (
+    <DecisionApplicationSelector
+      applications={applications}
+      selectedApplicationId={selectedApplicationId}
+      onChange={setSelectedApplicationId}
+    />
   );
 
   const email = (
@@ -406,12 +497,12 @@ export function CandidateActionBar({
     />
   );
 
-  const evaluate = applications[0] ? (
+  const evaluate = selectedApplication ? (
     <EvaluationDrawer
       candidateId={candidate.id}
       workspaceId={candidate.workspaceId}
-      applicationId={applications[0].applicationId}
-      stageName={stageName}
+      applicationId={selectedApplication.applicationId}
+      stageName={selectedApplication.currentStageName ?? stageName}
       trigger={
         variant === "compact" ? (
           <Button
@@ -433,20 +524,21 @@ export function CandidateActionBar({
     />
   ) : null;
 
-  const isHired = applications.some((app) => app.status === "hired");
+  const isHired = selectedApplication?.status === "hired";
   const reject = isHired ? null : (
     <RejectButton
       name={name}
-      applicationIds={applicationIds}
+      application={selectedApplication}
       compact={variant === "compact"}
     />
   );
-  const moveTarget = isHired ? null : move;
+  const moveTarget = isHired ? null : selectedMoveTarget;
 
   // ── Compact (sticky bar): fast-path actions only ──
   if (variant === "compact") {
     return (
       <div className="flex items-center gap-1.5">
+        {applicationSelector}
         {email}
         {schedule}
         {evaluate}
@@ -491,7 +583,11 @@ export function CandidateActionBar({
 
       {/* Everything rare , status, pool, edit, resume, delete , lives here. */}
       <div className="ml-auto flex items-center gap-1">
-        <CandidateStatusMenu name={name} applicationIds={applicationIds} />
+        {applicationSelector}
+        <CandidateStatusMenu
+          name={name}
+          application={selectedApplication}
+        />
         <CandidatePoolButton candidateId={candidate.id} inPool={inPool} />
         <EditCandidateDrawer
           candidate={candidate}

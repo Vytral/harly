@@ -3,6 +3,7 @@ import { and, eq } from "drizzle-orm";
 
 import { db, documentAssociations, documents, offers } from "@harly/db";
 import { requireOfferPermission } from "@/features/workspaces/permissions-server";
+import { canDownloadOfferLetter } from "@/features/offers/core";
 import { getOrCreateNativeOfferDocument } from "@/lib/esign/native/offer-signing";
 import { storage } from "@/lib/storage";
 
@@ -15,7 +16,7 @@ export const runtime = "nodejs";
  * open the placement dialog on a draft offer that's never been baked yet).
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ offerId: string }> },
 ) {
   const { offerId } = await params;
@@ -34,6 +35,9 @@ export async function GET(
     .where(and(eq(offers.id, offerId), eq(offers.workspaceId, workspaceId)))
     .limit(1);
   if (!offer) return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+  if (!canDownloadOfferLetter(offer.status, request.nextUrl.searchParams.get("purpose"))) {
+    return NextResponse.json({ error: "Offer letter is not available." }, { status: 404 });
+  }
 
   try {
     const prepared = await getOrCreateNativeOfferDocument({ workspaceId, offer });

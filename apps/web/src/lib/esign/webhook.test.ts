@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { createHmac } from "node:crypto";
 
 import {
   verifyDocusealSecret,
@@ -6,6 +7,8 @@ import {
   webhookMetadata,
   webhookSubmissionId,
   webhookSubmissionStatus,
+  isVerifiedDocusealTerminalEvent,
+  verifyDocusealWebhookAuth,
   type DocusealWebhookEvent,
 } from "./webhook";
 
@@ -49,5 +52,49 @@ describe("docuseal webhook helpers", () => {
     expect(webhookMetadata(event, "offerId")).toBe("off_1");
     expect(webhookMetadata(event, "missing")).toBeNull();
     expect(webhookEventKey(event)).toBe("5|submission.completed|2026-07-22T10:00:00Z");
+  });
+});
+
+describe("docuseal webhook authentication", () => {
+  it("accepts a body HMAC carried in a header", () => {
+    const body = JSON.stringify({ event_type: "submission.completed" });
+    const signature = createHmac("sha256", "secret").update(body).digest("hex");
+
+    expect(
+      verifyDocusealWebhookAuth({
+        rawBody: body,
+        signature: `sha256=${signature}`,
+        sharedSecret: null,
+        expectedSecret: "secret",
+      }),
+    ).toBe(true);
+  });
+
+  it("falls back to a shared secret header, never a URL value", () => {
+    expect(
+      verifyDocusealWebhookAuth({
+        rawBody: "{}",
+        signature: null,
+        sharedSecret: "secret",
+        expectedSecret: "secret",
+      }),
+    ).toBe(true);
+    expect(
+      verifyDocusealWebhookAuth({
+        rawBody: "{}",
+        signature: null,
+        sharedSecret: "wrong",
+        expectedSecret: "secret",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("verified DocuSeal terminal events", () => {
+  it("only accepts completion after an active provider status check", () => {
+    expect(isVerifiedDocusealTerminalEvent("submission.completed", "completed")).toBe(true);
+    expect(isVerifiedDocusealTerminalEvent("submission.completed", "pending")).toBe(false);
+    expect(isVerifiedDocusealTerminalEvent("form.completed", "completed")).toBe(true);
+    expect(isVerifiedDocusealTerminalEvent("submission.declined", "declined")).toBe(true);
   });
 });

@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "generate:openapi": "tsx scripts/generate-openapi.ts",
     "test": "vitest run",
+    "e2e": "DATABASE_URL=postgresql://harly:harly@localhost:5432/harly_e2e playwright test",
     "ai:smoke": "LIVE_AI_SMOKE=1 vitest run src/lib/ai/live-smoke.test.ts",
     "ai:agent-smoke": "LIVE_AI_AGENT_SMOKE=1 vitest run src/lib/ai/live-agent-smoke.test.ts",
     "ai:write-smoke": "LIVE_AI_WRITE_SMOKE=1 vitest run src/lib/ai/live-write-smoke.test.ts",
@@ -98,6 +99,7 @@
   "devDependencies": {
     "@apidevtools/swagger-parser": "^12.1.0",
     "@better-auth/cli": "^1.4.21",
+    "@playwright/test": "^1.51.1",
     "@tailwindcss/postcss": "^4",
     "@types/dompurify": "^3.2.0",
     "@types/mailparser": "^3.4.6",

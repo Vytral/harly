@@ -1,9 +1,10 @@
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, isNull, sql } from "drizzle-orm";
 import { createElement } from "react";
 import { createHash, randomUUID } from "node:crypto";
 
 import {
   activityEvents,
+  applications,
   candidates,
   db,
   documentAssociations,
@@ -42,6 +43,12 @@ import { decryptSecret } from "@/lib/crypto";
 import { insertCanonicalMessage } from "@/lib/mail/canonical";
 import { createLogger } from "@/lib/logger";
 import { storage } from "@/lib/storage";
+import {
+  offerMatchesTerms,
+  parseOfferTermsSnapshot,
+  snapshotOfferTerms,
+  type OfferTermsSnapshot,
+} from "@/features/offers/core";
 
 const log = createLogger("email-outbox");
 
@@ -448,7 +455,11 @@ async function hasActiveCandidateRecipient(
 }
 
 async function deliverOffer(row: OutboxRow): Promise<boolean> {
-  const offerId = (row.payload as { offerId?: string } | null)?.offerId;
+  const payload = row.payload as {
+    offerId?: string;
+    terms?: unknown;
+  } | null;
+  const offerId = payload?.offerId;
   if (!offerId) {
     await markFailed(row.id, "Missing offerId in payload.");
     return false;
@@ -483,6 +494,41 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
     return false;
   }
 
+  const frozenTerms: OfferTermsSnapshot | null = payload?.terms
+    ? parseOfferTermsSnapshot(payload.terms)
+    : snapshotOfferTerms(offer);
+  if (!frozenTerms || !offerMatchesTerms(offer, frozenTerms)) {
+    await markStale(
+      row.id,
+      "Offer terms changed after the send request; no email was delivered.",
+    );
+    return false;
+  }
+
+  const [application] = await db
+    .select({
+      status: applications.status,
+      candidateId: applications.candidateId,
+      jobId: applications.jobId,
+    })
+    .from(applications)
+    .where(
+      and(
+        eq(applications.workspaceId, row.workspaceId),
+        eq(applications.id, offer.applicationId),
+      ),
+    )
+    .limit(1);
+  if (
+    !application ||
+    application.status !== "active" ||
+    application.candidateId !== offer.candidateId ||
+    application.jobId !== offer.jobId
+  ) {
+    await markFailed(row.id, "The application is no longer active.");
+    return false;
+  }
+
   const [recipient] = await db
     .select({
       email: candidates.email,
@@ -508,13 +554,14 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
 
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
   let offerSubject = "";
-  const startDate = formatOfferDate(offer.startDate);
-  const expiresAt = formatOfferDate(offer.expiresAt);
+  const startDate = formatOfferDate(frozenTerms.startDate);
+  const expiresAt = formatOfferDate(frozenTerms.expiresAt);
   const salary = formatOfferSalary(
-    offer.salaryAmount,
-    offer.currency,
-    offer.salaryPeriod,
+    frozenTerms.salaryAmount,
+    frozenTerms.currency,
+    frozenTerms.salaryPeriod,
   );
+  const offerUrl = `${appBaseUrl().replace(/\/$/, "")}/portal/applications/${encodeURIComponent(offer.applicationId)}`;
   try {
     const branding = await getWorkspaceEmailBranding(row.workspaceId);
     // DocuSeal submissions already contain the selected ATS documents. Do not
@@ -554,18 +601,19 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
       candidate_first_name: recipient.firstName,
       candidate_last_name: recipient.lastName,
       candidate_full_name: `${recipient.firstName} ${recipient.lastName}`,
-      job_title: offer.title,
+      job_title: frozenTerms.title,
       company_name: recipient.companyName,
       offer_salary: salary ?? undefined,
       offer_expiry: expiresAt ?? undefined,
       offer_start_date: startDate ?? undefined,
+      offer_url: offerUrl,
     });
 
     const offerSubjectValue = custom
       ? custom.subject
       : offerExtendedSubject({
           companyName: recipient.companyName,
-          jobTitle: offer.title,
+          jobTitle: frozenTerms.title,
         });
     offerSubject = offerSubjectValue;
 
@@ -596,11 +644,12 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
               hideBranding: branding.hideBranding,
               accentColor: branding.primaryColor ?? undefined,
               socialLinks: branding.socialLinks,
-              jobTitle: offer.title,
+              jobTitle: frozenTerms.title,
               salary,
               startDate,
               expiresAt,
-              equity: offer.equity ?? undefined,
+              equity: frozenTerms.equity ?? undefined,
+              offerUrl,
             }),
             ...deliveryOptions(row),
             attachments,
@@ -616,13 +665,57 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
     return false;
   }
 
+  let offerTransitioned = false;
   await db.transaction(async (tx) => {
-    await tx
+    const [transitioned] = await tx
       .update(offers)
-      .set({ status: "sent" })
+      .set({ status: "sent", updatedAt: new Date() })
       .where(
-        and(eq(offers.workspaceId, row.workspaceId), eq(offers.id, offer.id)),
-      );
+        and(
+          eq(offers.workspaceId, row.workspaceId),
+          eq(offers.id, offer.id),
+          eq(offers.status, "draft"),
+          eq(offers.title, frozenTerms.title),
+          frozenTerms.salaryAmount === null
+            ? isNull(offers.salaryAmount)
+            : eq(offers.salaryAmount, frozenTerms.salaryAmount),
+          frozenTerms.currency === null
+            ? isNull(offers.currency)
+            : eq(offers.currency, frozenTerms.currency),
+          frozenTerms.salaryPeriod === null
+            ? isNull(offers.salaryPeriod)
+            : eq(offers.salaryPeriod, frozenTerms.salaryPeriod),
+          frozenTerms.equity === null
+            ? isNull(offers.equity)
+            : eq(offers.equity, frozenTerms.equity),
+          frozenTerms.startDate === null
+            ? isNull(offers.startDate)
+            : eq(offers.startDate, frozenTerms.startDate),
+          frozenTerms.expiresAt === null
+            ? isNull(offers.expiresAt)
+            : eq(offers.expiresAt, frozenTerms.expiresAt),
+          frozenTerms.notes === null
+            ? isNull(offers.notes)
+            : eq(offers.notes, frozenTerms.notes),
+          // Revalidate after the provider accepted the email. A withdrawal or
+          // terminal application decision must never be overwritten by this
+          // worker's late success callback.
+          exists(
+            db
+              .select({ id: applications.id })
+              .from(applications)
+              .where(
+                and(
+                  eq(applications.workspaceId, row.workspaceId),
+                  eq(applications.id, offer.applicationId),
+                  eq(applications.status, "active"),
+                ),
+              ),
+          ),
+        ),
+      )
+      .returning({ id: offers.id });
+    offerTransitioned = Boolean(transitioned);
     await tx
       .update(emailOutbox)
       .set({
@@ -635,6 +728,14 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
       })
       .where(eq(emailOutbox.id, row.id));
   });
+
+  if (!offerTransitioned) {
+    log.warn(
+      { offerId: offer.id, applicationId: offer.applicationId },
+      "offer email delivered after offer/application became non-actionable",
+    );
+    return true;
+  }
 
   if (row.actorId) {
     await db.insert(activityEvents).values({
@@ -654,7 +755,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
     outboxRowId: row.id,
     candidateId: offer.candidateId,
     applicationId: offer.applicationId,
-    textBody: `Offer extended for ${offer.title} at ${recipient.companyName}.${startDate ? `\nStart date: ${startDate}.` : ""}${expiresAt ? `\nExpires: ${expiresAt}.` : ""}${salary ? `\nSalary: ${salary}.` : ""}`,
+    textBody: `Offer extended for ${frozenTerms.title} at ${recipient.companyName}.${startDate ? `\nStart date: ${startDate}.` : ""}${expiresAt ? `\nExpires: ${expiresAt}.` : ""}${salary ? `\nSalary: ${salary}.` : ""}\nReview and sign: ${offerUrl}`,
   });
 
   return true;
@@ -1201,6 +1302,19 @@ async function markFailed(id: string, message: string) {
         WHEN ${emailOutbox.attempts} + 1 >= ${MAX_ATTEMPTS} THEN 'failed'::text
         ELSE 'pending'::text
       END`,
+      lockedAt: null,
+      lockedBy: null,
+    })
+    .where(eq(emailOutbox.id, id));
+}
+
+async function markStale(id: string, message: string) {
+  await db
+    .update(emailOutbox)
+    .set({
+      status: "failed",
+      lastError: message,
+      nextRetryAt: null,
       lockedAt: null,
       lockedBy: null,
     })

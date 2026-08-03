@@ -4,6 +4,7 @@ import {
   bigint,
   check,
   doublePrecision,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -1266,6 +1267,9 @@ export const jobs = pgTable(
     sector: text("sector"),
     experienceLevel: text("experience_level"),
     education: text("education"),
+    evaluationMode: text("evaluation_mode")
+      .default("balanced")
+      .notNull(),
     keywords: jsonb("keywords")
       .default(sql`'[]'::jsonb`)
       .notNull(),
@@ -1574,6 +1578,15 @@ export const applications = pgTable(
   (table) => [
     uniqueIndex("applications_workspace_candidate_job_idx").on(
       table.workspaceId,
+      table.candidateId,
+      table.jobId,
+    ),
+    // Composite identity used by dependent business records. It prevents an
+    // offer or interview from mixing an application with another workspace,
+    // candidate, or job even when every individual UUID exists.
+    uniqueIndex("applications_workspace_id_candidate_job_uidx").on(
+      table.workspaceId,
+      table.id,
       table.candidateId,
       table.jobId,
     ),
@@ -2365,6 +2378,21 @@ export const offers = pgTable(
     ...timestamps(),
   },
   (table) => [
+    foreignKey({
+      name: "offers_application_context_fk",
+      columns: [
+        table.workspaceId,
+        table.applicationId,
+        table.candidateId,
+        table.jobId,
+      ],
+      foreignColumns: [
+        applications.workspaceId,
+        applications.id,
+        applications.candidateId,
+        applications.jobId,
+      ],
+    }).onDelete("cascade"),
     index("offers_workspace_created_at_idx").on(
       table.workspaceId,
       table.createdAt,
@@ -3195,6 +3223,63 @@ export const candidateTags = pgTable(
   ],
 );
 
+// Candidate referrals — internal "so-and-so recommends this candidate"
+// records, distinct from poolEntries (talent-pool membership): a referral
+// can exist for a candidate who isn't in the pool at all, credits a specific
+// referrer (who may differ from whoever logged it), and can be flagged
+// "featured" to highlight a standout recommendation.
+export const candidateReferrals = pgTable(
+  "candidate_referrals",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    candidateId: uuid("candidate_id")
+      .notNull()
+      .references(() => candidates.id, { onDelete: "cascade" }),
+    // Nullable: a referral can exist before any requisition. CASCADE (not SET
+    // NULL): if the job is deleted, only the job-specific referral row goes
+    // with it — SET NULL would let two job-scoped referrals from the same
+    // referrer collapse onto the same "no job" identity and collide with the
+    // unique index below, blocking the job deletion. General (no-job)
+    // referrals never reference a job either way. In practice job hard-delete
+    // (permanentlyDeleteJob) removes job-scoped referrals explicitly first
+    // (with full event/webhook emission) — this cascade is a backstop.
+    jobId: uuid("job_id").references(() => jobs.id, { onDelete: "cascade" }),
+    // Who is credited with the referral (e.g. "Jane from Sales"). Not
+    // necessarily the person who submitted the form.
+    referredById: text("referred_by_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    // Who actually performed the action (always the authenticated actor).
+    // Used as actorId in events/webhooks/audit logs — never referredById.
+    createdById: text("created_by_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    note: text("note"),
+    featured: boolean("featured").default(false).notNull(),
+    featuredById: text("featured_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    featuredAt: timestamp("featured_at", { withTimezone: true }),
+    ...timestamps(),
+  },
+  (table) => [
+    // Same referrer can't double-refer the same candidate for the same job.
+    // jobId coalesced to a sentinel so the "no job" case is deduped too
+    // (NULL <> NULL in a plain unique index).
+    uniqueIndex("candidate_referrals_candidate_referrer_job_uidx").on(
+      table.candidateId,
+      table.referredById,
+      sql`coalesce(${table.jobId}, '00000000-0000-0000-0000-000000000000'::uuid)`,
+    ),
+    index("candidate_referrals_workspace_idx").on(table.workspaceId),
+    index("candidate_referrals_candidate_idx").on(table.candidateId),
+    index("candidate_referrals_job_idx").on(table.jobId),
+  ],
+);
+
 // Candidate pool — tracks which candidates are in the talent pool and why
 export const poolEntries = pgTable(
   "pool_entries",
@@ -3427,6 +3512,29 @@ export const interviews = pgTable(
     ...timestamps(),
   },
   (table) => [
+    foreignKey({
+      name: "interviews_application_context_fk",
+      columns: [
+        table.workspaceId,
+        table.applicationId,
+        table.candidateId,
+        table.jobId,
+      ],
+      foreignColumns: [
+        applications.workspaceId,
+        applications.id,
+        applications.candidateId,
+        applications.jobId,
+      ],
+    }).onDelete("cascade"),
+    check(
+      "interviews_duration_mins_check",
+      sql`${table.durationMins} between 1 and 1440`,
+    ),
+    check(
+      "interviews_single_video_provider_check",
+      sql`num_nonnulls(${table.teamsMeetingId}, ${table.zoomMeetingId}, ${table.jitsiRoom}) <= 1`,
+    ),
     index("interviews_workspace_scheduled_at_idx").on(
       table.workspaceId,
       table.scheduledAt,
@@ -3564,6 +3672,8 @@ export type JobStage = typeof jobStages.$inferSelect;
 export type NewJobStage = typeof jobStages.$inferInsert;
 export type Candidate = typeof candidates.$inferSelect;
 export type NewCandidate = typeof candidates.$inferInsert;
+export type CandidateReferral = typeof candidateReferrals.$inferSelect;
+export type NewCandidateReferral = typeof candidateReferrals.$inferInsert;
 export type Application = typeof applications.$inferSelect;
 export type NewApplication = typeof applications.$inferInsert;
 export type ApplicationStageHistory =

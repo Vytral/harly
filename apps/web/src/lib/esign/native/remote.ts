@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, createHmac, randomBytes, randomInt, timingSafeEqual } from "node:crypto";
 
-import { and, eq, gt, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, gt, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -19,6 +19,8 @@ import {
 import { enqueueEmailOutbox, processEmailOutbox } from "@/lib/email/outbox-processor";
 import { encryptSecret } from "@/lib/crypto";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
+import { purgeExpiredSignatureData } from "@/lib/esign/maintenance";
+import { nextOtpAttempt } from "@/lib/esign/otp-policy";
 
 const tokenSchema = z.string().regex(/^[A-Za-z0-9_-]{32,128}$/);
 const DEFAULT_EXPIRATION_DAYS = 30;
@@ -160,6 +162,7 @@ export async function createNativeSigningLink(input: {
 
 export async function requestNativeOtp(target: NativeSigningTarget) {
   if (target.securityMode !== "email_otp") return { ok: false as const, error: "OTP is not required for this signing link." };
+  await purgeExpiredSignatureData({ workspaceId: target.workspaceId });
   const code = String(randomInt(100000, 1_000_000));
   // Protect the code before creating a challenge. A missing encryption key
   // must not leave an unverifiable challenge in the database.
@@ -174,17 +177,59 @@ export async function requestNativeOtp(target: NativeSigningTarget) {
 export async function verifyNativeOtp(target: NativeSigningTarget, challengeId: string, code: string) {
   const parsed = z.object({ challengeId: z.uuid(), code: z.string().regex(/^\d{6}$/) }).safeParse({ challengeId, code });
   if (!parsed.success) return { ok: false as const, error: "Invalid verification code." };
-  const [challenge] = await db.select().from(nativeSignatureOtpChallenges).where(and(eq(nativeSignatureOtpChallenges.id, parsed.data.challengeId), eq(nativeSignatureOtpChallenges.recipientId, target.recipientId), gt(nativeSignatureOtpChallenges.expiresAt, new Date()), isNull(nativeSignatureOtpChallenges.consumedAt), isNull(nativeSignatureOtpChallenges.verifiedAt))).limit(1);
-  if (!challenge || challenge.attempts >= MAX_OTP_ATTEMPTS) return { ok: false as const, error: "Invalid or expired verification code." };
-  const actual = Buffer.from(hash(parsed.data.code));
-  const expected = Buffer.from(challenge.codeHash);
-  const valid = actual.length === expected.length && timingSafeEqual(actual, expected);
-  if (!valid) {
-    await db.update(nativeSignatureOtpChallenges).set({ attempts: challenge.attempts + 1 }).where(eq(nativeSignatureOtpChallenges.id, challenge.id));
-    return { ok: false as const, error: "Invalid or expired verification code." };
-  }
-  await db.update(nativeSignatureOtpChallenges).set({ verifiedAt: new Date() }).where(eq(nativeSignatureOtpChallenges.id, challenge.id));
-  return { ok: true as const, cookieValue: nativeSignatureCookieValue(target.recipientId, challenge.id) };
+  return db.transaction(async (tx) => {
+    const [challenge] = await tx
+      .select()
+      .from(nativeSignatureOtpChallenges)
+      .where(
+        and(
+          eq(nativeSignatureOtpChallenges.id, parsed.data.challengeId),
+          eq(nativeSignatureOtpChallenges.recipientId, target.recipientId),
+          gt(nativeSignatureOtpChallenges.expiresAt, new Date()),
+          isNull(nativeSignatureOtpChallenges.consumedAt),
+          isNull(nativeSignatureOtpChallenges.verifiedAt),
+          lt(nativeSignatureOtpChallenges.attempts, MAX_OTP_ATTEMPTS),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!challenge) return { ok: false as const, error: "Invalid or expired verification code." };
+
+    const actual = Buffer.from(hash(parsed.data.code));
+    const expected = Buffer.from(challenge.codeHash);
+    const valid = actual.length === expected.length && timingSafeEqual(actual, expected);
+    if (!valid) {
+      // The row lock serializes the read while the SQL predicate makes the
+      // counter itself atomic even if another caller reached this transaction
+      // at the same time.
+      const next = nextOtpAttempt(challenge.attempts, MAX_OTP_ATTEMPTS);
+      if (next !== null) {
+        await tx
+          .update(nativeSignatureOtpChallenges)
+          .set({ attempts: sql`${nativeSignatureOtpChallenges.attempts} + 1` })
+          .where(
+            and(
+              eq(nativeSignatureOtpChallenges.id, challenge.id),
+              lt(nativeSignatureOtpChallenges.attempts, MAX_OTP_ATTEMPTS),
+            ),
+          );
+      }
+      return { ok: false as const, error: "Invalid or expired verification code." };
+    }
+    const [verified] = await tx
+      .update(nativeSignatureOtpChallenges)
+      .set({ verifiedAt: new Date() })
+      .where(
+        and(
+          eq(nativeSignatureOtpChallenges.id, challenge.id),
+          isNull(nativeSignatureOtpChallenges.verifiedAt),
+          lt(nativeSignatureOtpChallenges.attempts, MAX_OTP_ATTEMPTS),
+        ),
+      )
+      .returning({ id: nativeSignatureOtpChallenges.id });
+    if (!verified) return { ok: false as const, error: "Invalid or expired verification code." };
+    return { ok: true as const, cookieValue: nativeSignatureCookieValue(target.recipientId, challenge.id) };
+  });
 }
 
 export const nativeSignCookieName = verificationCookie;

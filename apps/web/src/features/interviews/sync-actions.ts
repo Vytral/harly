@@ -129,11 +129,7 @@ export async function retryInterviewSyncForWorkspace(input: {
         run: async () => {
           switch (sync.provider) {
             case "google_calendar":
-              if (
-                !interview.gcalEventId &&
-                !sync.providerResourceId &&
-                sync.operation !== "cancel"
-              ) {
+              if (!interview.gcalEventId && !sync.providerResourceId) {
                 return false;
               }
               return (await import("@/lib/gcal/sync")).cancelInterviewGCalEvent({

@@ -3,7 +3,9 @@ import { cookies } from "next/headers";
 import { and, eq } from "drizzle-orm";
 
 import { db, documentAssociations, documents, offers } from "@harly/db";
+import { offerHasExpired } from "@/features/offers/core";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
+import { isNativeOfferSubmission } from "@/lib/esign/native/offer-signing";
 import { storage } from "@/lib/storage";
 
 export const runtime = "nodejs";
@@ -22,7 +24,7 @@ export async function GET(
 
     const { offerId } = await params;
     const [offer] = await db
-      .select({ id: offers.id })
+      .select({ id: offers.id, status: offers.status, expiresAt: offers.expiresAt, esignSubmissionId: offers.esignSubmissionId })
       .from(offers)
       .where(
         and(
@@ -33,6 +35,13 @@ export async function GET(
       )
       .limit(1);
     if (!offer) return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+    if (
+      offer.status !== "sent" ||
+      offerHasExpired(offer.expiresAt) ||
+      !isNativeOfferSubmission(offer.esignSubmissionId)
+    ) {
+      return NextResponse.json({ error: "Offer is not available for signing." }, { status: 404 });
+    }
 
     const [row] = await db
       .select({ storageKey: documents.storageKey, mimeType: documents.mimeType, name: documents.name })

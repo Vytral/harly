@@ -28,6 +28,7 @@ import { CandidateActivityRail } from "@/features/candidates/CandidateActivityRa
 import { CandidatePager } from "@/features/candidates/CandidatePager";
 import { CandidateStickyHeader } from "@/features/candidates/CandidateStickyHeader";
 import { CandidateProfileTabs } from "@/features/candidates/CandidateProfileTabs";
+import { filterApplicationScopedItems } from "@/features/candidates/profile-scope";
 import { CandidateTags } from "@/features/candidates/CandidateTags";
 import { DuplicateDetectionCard } from "@/features/candidates/DuplicateDetectionCard";
 import { IdentityShield, Redact, RedactLink } from "@/features/candidates/IdentityShield";
@@ -39,7 +40,11 @@ import { listOffersForCandidate } from "@/features/offers/data";
 import { listDocumentsForCandidate, listDocumentsForSigning } from "@/features/documents/data";
 import { listDocumentRequestsForCandidate } from "@/features/documents/requests-data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { can } from "@/features/workspaces/permissions-server";
+import {
+  can,
+  requireApplicationPermission,
+  requireCandidatePermission,
+} from "@/features/workspaces/permissions-server";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
@@ -84,7 +89,14 @@ export default async function CandidateDetailPage({
   params,
 }: CandidateDetailPageProps) {
   const { candidateId } = await params;
-  const [profile, allCandidates, members, interviews, offers, emailTemplates, relatedDocuments, documentRequests, signableDocuments] =
+
+  try {
+    await requireCandidatePermission("candidates:view", candidateId);
+  } catch {
+    notFound();
+  }
+
+  const [profile, allCandidates, members, candidateInterviews, candidateOffers, emailTemplates, relatedDocuments, profileDocumentRequests, signableDocuments] =
     await Promise.all([
       getCandidateProfile(candidateId),
       listCandidates(),
@@ -101,8 +113,76 @@ export default async function CandidateDetailPage({
     notFound();
   }
 
-  const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags, aiEvaluations, inPool, privacyRequests } =
-    profile;
+  const {
+    candidate,
+    applications: candidateApplications,
+    notes,
+    files,
+    activity: profileActivity,
+    workspaceId,
+    scorecards: profileScorecards,
+    messages: profileMessages,
+    tags,
+    aiEvaluations: profileAiEvaluations,
+    inPool,
+    privacyRequests,
+  } = profile;
+  const applications = (
+    await Promise.all(
+      candidateApplications.map(async (application) => {
+        try {
+          await requireApplicationPermission("candidates:view", application.id);
+          return application;
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((application): application is (typeof candidateApplications)[number] => Boolean(application));
+
+  const visibleApplicationIds = new Set(
+    applications.map((application) => application.id),
+  );
+  const activity = filterApplicationScopedItems(
+    profileActivity,
+    visibleApplicationIds,
+  );
+  const scorecards = filterApplicationScopedItems(
+    profileScorecards,
+    visibleApplicationIds,
+  );
+  const messages = filterApplicationScopedItems(
+    profileMessages,
+    visibleApplicationIds,
+  );
+  const aiEvaluations = filterApplicationScopedItems(
+    profileAiEvaluations,
+    visibleApplicationIds,
+  );
+  const documentRequests = filterApplicationScopedItems(
+    profileDocumentRequests,
+    visibleApplicationIds,
+  );
+  const interviews = candidateInterviews.filter((interview) =>
+    visibleApplicationIds.has(interview.applicationId),
+  );
+  const offers = candidateOffers.filter((offer) =>
+    visibleApplicationIds.has(offer.applicationId),
+  );
+
+  const scopedCandidates = (
+    await Promise.all(
+      allCandidates.map(async (candidateRow) => {
+        try {
+          await requireCandidatePermission("candidates:view", candidateRow.id);
+          return candidateRow;
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((candidateRow): candidateRow is (typeof allCandidates)[number] => Boolean(candidateRow));
+
   const isHired = applications.some((application) => application.status === "hired");
   const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canManageDocuments] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
@@ -120,7 +200,7 @@ export default async function CandidateDetailPage({
   const latestApplication = applications[0] ?? null;
   const avatarFallbackSrcs = candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl);
 
-  const [suspectCandidates, nextStage] = await Promise.all([
+  const [suspectCandidates, moveTargets] = await Promise.all([
     // Fuzzy duplicate check (heuristic only, no AI at load time)
     findSuspectDuplicates(
       candidate.id,
@@ -128,12 +208,20 @@ export default async function CandidateDetailPage({
       candidate.lastName,
       workspaceId,
     ),
-    latestApplication
-      ? getNextStage(latestApplication.jobId, latestApplication.currentStageId)
-      : Promise.resolve(null),
+    Promise.all(
+      applications.map(async (application) => ({
+        applicationId: application.id,
+        fromStageId: application.currentStageId,
+        workspaceId: application.workspaceId,
+        nextStage: await getNextStage(
+          application.jobId,
+          application.currentStageId,
+        ),
+      })),
+    ),
   ]);
 
-  const railCandidates = allCandidates
+  const railCandidates = scopedCandidates
     .slice()
     .sort((a, b) => {
       const aTime = a.latestApplication?.appliedAt?.getTime() ?? 0;
@@ -187,14 +275,7 @@ export default async function CandidateDetailPage({
     company_name: workspaceName,
     sender_name: currentUserName,
   };
-  const moveTarget = latestApplication
-    ? {
-        applicationId: latestApplication.id,
-        fromStageId: latestApplication.currentStageId,
-        workspaceId: latestApplication.workspaceId,
-        nextStage,
-      }
-    : null;
+  const moveTarget = moveTargets[0] ?? null;
   const serializedActivity = activity.map((event) => ({
     ...event,
     createdAt: event.createdAt.toISOString(),
@@ -239,6 +320,7 @@ export default async function CandidateDetailPage({
                 members={members}
                 cal={actionCal}
                 move={moveTarget}
+                moveTargets={moveTargets}
                 emailTemplates={emailTemplates}
                 emailTemplateValues={actionTemplateValues}
                 inPool={inPool}
@@ -389,6 +471,7 @@ export default async function CandidateDetailPage({
                   members={members}
                   cal={actionCal}
                   move={moveTarget}
+                  moveTargets={moveTargets}
                   emailTemplates={emailTemplates}
                   emailTemplateValues={actionTemplateValues}
                   inPool={inPool}

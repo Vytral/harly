@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, exists, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, getTableColumns, isNull, lt, or, sql } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
 import {
@@ -180,9 +180,12 @@ export async function listApplicationsForApi(input: {
 export async function getApplicationForApi(input: {
   workspaceId: string;
   applicationId: string;
-}): Promise<Application> {
+}): Promise<Application & { updatedAtVersion: string }> {
   const [application] = await db
-    .select()
+    .select({
+      ...getTableColumns(applications),
+      updatedAtVersion: sql<string>`${applications.updatedAt}::text`,
+    })
     .from(applications)
     .where(
       and(
@@ -488,7 +491,7 @@ export async function moveApplicationStageForApi(input: {
           and(
             eq(applications.id, input.applicationId),
             eq(applications.workspaceId, input.workspaceId),
-            eq(applications.updatedAt, application.updatedAt),
+            sql`${applications.updatedAt} = ${application.updatedAtVersion}::timestamptz`,
           ),
         )
         .returning();
@@ -624,7 +627,7 @@ async function setApplicationStatus(
           and(
             eq(applications.id, input.applicationId),
             eq(applications.workspaceId, input.workspaceId),
-            eq(applications.updatedAt, application.updatedAt),
+            sql`${applications.updatedAt} = ${application.updatedAtVersion}::timestamptz`,
           ),
         )
         .returning();

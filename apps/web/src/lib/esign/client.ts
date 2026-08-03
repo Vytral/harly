@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getWorkspaceEsignConfig, type EsignConfig } from "@/lib/esign/config";
+import { trustedDocusealArtifactUrl } from "@/lib/esign/url-security";
 
 /** Alias so downstream modules can type a client context without importing config. */
 export type EsignConfigLike = EsignConfig;
@@ -225,7 +226,21 @@ export async function downloadDocusealFile(
   ctx: EsignConfig,
   url: string,
 ): Promise<Buffer> {
-  const res = await fetch(url, { headers: { [AUTH_HEADER]: ctx.apiToken } });
+  const trustedUrl = trustedDocusealArtifactUrl(ctx, url);
+  if (!trustedUrl) {
+    throw new Error("DocuSeal returned an untrusted artifact URL.");
+  }
+
+  // Do not follow a provider-controlled redirect while carrying the workspace
+  // bearer token. A redirect is retried only if a future provider adapter
+  // explicitly validates its destination first.
+  const res = await fetch(trustedUrl, {
+    redirect: "manual",
+    headers: { [AUTH_HEADER]: ctx.apiToken },
+  });
+  if (res.status >= 300 && res.status < 400) {
+    throw new Error("DocuSeal artifact URL redirected unexpectedly.");
+  }
   if (!res.ok) {
     const body = await res.text();
     throw new Error(

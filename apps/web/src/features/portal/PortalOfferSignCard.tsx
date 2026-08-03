@@ -23,6 +23,7 @@ type PortalOffer = {
 type Props = {
   applicationId: string;
   offer: PortalOffer;
+  isExpired: boolean;
   /**
    * True when the URL carries ?signed=pending — DocuSeal redirected the
    * candidate back here after the signing ceremony, but the webhook may not
@@ -31,7 +32,12 @@ type Props = {
   signedPending: boolean;
 };
 
-export function PortalOfferSignCard({ applicationId, offer, signedPending }: Props) {
+export function PortalOfferSignCard({
+  applicationId,
+  offer,
+  isExpired,
+  signedPending,
+}: Props) {
   const [isPending, start] = useTransition();
   const [nativeSignOpen, setNativeSignOpen] = useState(false);
   const isNative = offer.esignSubmissionId?.startsWith("native:") ?? false;
@@ -65,6 +71,12 @@ export function PortalOfferSignCard({ applicationId, offer, signedPending }: Pro
               Your signed offer for <strong>{offer.title}</strong> has been received.
               We&apos;ll be in touch with next steps.
             </p>
+            <a
+              href={`/api/portal/offers/${offer.id}/evidence`}
+              className="mt-3 inline-flex text-sm font-semibold text-pine underline-offset-4 hover:underline"
+            >
+              Export signature evidence
+            </a>
           </div>
         </div>
       </div>
@@ -80,6 +92,22 @@ export function PortalOfferSignCard({ applicationId, offer, signedPending }: Pro
             <h2 className="text-lg font-semibold text-foreground">Offer declined</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               The offer for <strong>{offer.title}</strong> was declined.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isExpired) {
+    return (
+      <div className="rounded-2xl border border-border bg-card p-5 shadow-[0_1px_3px_rgba(0,0,0,0.04)]">
+        <div className="flex items-start gap-3">
+          <XCircleIcon className="size-6 shrink-0 text-muted-foreground" />
+          <div>
+            <h2 className="text-lg font-semibold text-foreground">Offer expired</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              This offer is no longer actionable. Contact the hiring team if you need a new offer.
             </p>
           </div>
         </div>

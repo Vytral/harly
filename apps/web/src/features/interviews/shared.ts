@@ -68,7 +68,16 @@ export type UpcomingInterviewItem = CandidateInterviewItem & {
  * a `"use server"` module.
  */
 export function parseScheduledAt(value: string, timeZone?: string | null): Date {
-  if (!timeZone || /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value)) {
+  const hasExplicitOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
+  const isNaiveWallClock = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?$/.test(
+    value,
+  );
+  if (!timeZone && isNaiveWallClock && !hasExplicitOffset) {
+    throw new RangeError(
+      "An IANA timezone is required for a timezone-less interview time.",
+    );
+  }
+  if (!timeZone || hasExplicitOffset) {
     return new Date(value);
   }
 
@@ -103,6 +112,16 @@ export function parseScheduledAt(value: string, timeZone?: string | null): Date 
   );
   const offset = represented - wallTime.getTime();
   return new Date(wallTime.getTime() - offset);
+}
+
+/** Resolve the browser's IANA timezone for client forms. */
+export function getBrowserTimeZone(): string {
+  if (typeof Intl === "undefined") return "UTC";
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC";
+  } catch {
+    return "UTC";
+  }
 }
 
 const TYPE_LABELS: Record<InterviewType, string> = {

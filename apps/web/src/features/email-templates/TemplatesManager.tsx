@@ -144,6 +144,7 @@ const PREVIEW_VALUES = {
   interview_location: "https://meet.google.com/abc-xyz",
   offer_salary: "$140,000 / yr",
   offer_expiry: "July 12, 2026",
+  offer_url: "https://jobs.acme.com/portal/applications/offer-123",
   company_name: "Acme Inc.",
   portal_link: "https://jobs.acme.com/portal",
   sender_name: "You",

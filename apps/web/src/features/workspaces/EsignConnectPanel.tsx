@@ -31,19 +31,22 @@ import { Label } from "@/components/ui/label";
 /**
  * DocuSeal (self-hosted e-signature). BYO instance URL + API token (encrypted at
  * rest). A webhook secret is generated on save; the admin pastes the shown
- * webhook URL into their DocuSeal instance so signing events flow back.
+ * webhook URL and configures the secret as X-DocuSeal-Secret.
  */
 export function EsignConnectPanel({
   status,
   canEdit,
   webhookUrl,
+  webhookSecret,
   tileClassName,
   description,
 }: {
   status: WorkspaceEsignStatus;
   canEdit: boolean;
-  /** Fully-formed inbound webhook URL incl. ?ws= and ?secret=, or null. */
+  /** Inbound webhook URL with workspace selector only (`?ws=`), or null. */
   webhookUrl: string | null;
+  /** Shared secret sent as X-DocuSeal-Secret, never put in the URL. */
+  webhookSecret: string | null;
   tileClassName: string;
   description: string;
 }) {
@@ -117,9 +120,16 @@ export function EsignConnectPanel({
             <Card className="space-y-4 p-5">
               {webhookUrl ? (
                 <div className="space-y-2 border-t pt-4">
-                  <h2 className="font-display text-base font-semibold tracking-tight">Webhook URL</h2>
-                  <p className="text-sm text-muted-foreground">In your DocuSeal instance → Settings → Webhooks, add this URL for the <code className="font-mono text-xs">form.completed</code>, <code className="font-mono text-xs">form.declined</code>, and <code className="font-mono text-xs">submission.*</code> events.</p>
+                  <h2 className="font-display text-base font-semibold tracking-tight">Webhook</h2>
+                  <p className="text-sm text-muted-foreground">In your DocuSeal instance → Settings → Webhooks, add this endpoint for the <code className="font-mono text-xs">form.completed</code>, <code className="font-mono text-xs">form.declined</code>, and <code className="font-mono text-xs">submission.*</code> events. The URL contains only the workspace selector.</p>
                   <code className="block break-all rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs">{webhookUrl}</code>
+                  {webhookSecret ? (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium text-foreground">Authentication header</p>
+                      <code className="block break-all rounded-md border bg-muted/30 px-3 py-2 font-mono text-xs">X-DocuSeal-Secret: {webhookSecret}</code>
+                      <p className="text-xs text-muted-foreground">Configure this as an HTTP header in DocuSeal or in your reverse proxy. Never append the secret as <code className="font-mono text-xs">?secret=</code>.</p>
+                    </div>
+                  ) : null}
                 </div>
               ) : null}
               <ConnectForm status={status} onSaved={() => { setOpen(false); router.refresh(); }} />

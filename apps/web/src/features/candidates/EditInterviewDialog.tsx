@@ -24,6 +24,10 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type { CandidateInterviewItem } from "@/features/interviews/shared";
+import {
+  getBrowserTimeZone,
+  parseScheduledAt,
+} from "@/features/interviews/shared";
 
 const TYPES = [
   { key: "screening", label: "Screening" },
@@ -44,7 +48,6 @@ type ModeKey = (typeof MODES)[number]["key"];
 
 export function EditInterviewDialog({
   interview,
-  candidateId,
   members,
   currentUserId,
   trigger,
@@ -89,7 +92,8 @@ export function EditInterviewDialog({
     }
     setCheckingAvailability(true);
     try {
-      const start = new Date(`${newDate}T${newTime}`);
+      const timeZone = getBrowserTimeZone();
+      const start = parseScheduledAt(`${newDate}T${newTime}`, timeZone);
       const end = new Date(start.getTime() + duration * 60_000);
       const result = await checkAvailability({
         timeMin: start,
@@ -126,12 +130,13 @@ export function EditInterviewDialog({
       return;
     }
     startTransition(async () => {
+      const timeZone = getBrowserTimeZone();
       const result = await updateInterview({
         interviewId: interview.id,
-        candidateId,
         type,
         mode,
         scheduledAt: `${date}T${time}`,
+        timeZone,
         durationMins,
         interviewerId: interviewerId || null,
         location: location.trim() || null,
@@ -142,6 +147,7 @@ export function EditInterviewDialog({
         toast.error(result.error ?? "Could not update.");
         return;
       }
+      if (result.warning) toast.warning(result.warning);
       toast.success("Interview updated");
       setOpen(false);
       router.refresh();

@@ -16,6 +16,106 @@ export type OfferTerms = {
   expiresAt: Date | null;
 };
 
+/** JSON-safe immutable terms captured when a send is requested. */
+export type OfferTermsSnapshot = OfferTerms & {
+  title: string;
+  equity: string | null;
+  notes: string | null;
+};
+
+export type SerializedOfferTermsSnapshot = Omit<
+  OfferTermsSnapshot,
+  "startDate" | "expiresAt"
+> & {
+  startDate: string | null;
+  expiresAt: string | null;
+};
+
+export function snapshotOfferTerms(input: {
+  title: string;
+  salaryAmount: number | null;
+  currency: string | null;
+  salaryPeriod: "annual" | "monthly" | null;
+  equity: string | null;
+  startDate: Date | null;
+  expiresAt: Date | null;
+  notes: string | null;
+}): OfferTermsSnapshot {
+  return {
+    title: input.title,
+    salaryAmount: input.salaryAmount,
+    currency: input.currency,
+    salaryPeriod: input.salaryPeriod,
+    equity: input.equity,
+    startDate: input.startDate,
+    expiresAt: input.expiresAt,
+    notes: input.notes,
+  };
+}
+
+export function serializeOfferTermsSnapshot(
+  snapshot: OfferTermsSnapshot,
+): SerializedOfferTermsSnapshot {
+  return {
+    ...snapshot,
+    startDate: snapshot.startDate?.toISOString() ?? null,
+    expiresAt: snapshot.expiresAt?.toISOString() ?? null,
+  };
+}
+
+export function parseOfferTermsSnapshot(
+  value: unknown,
+): OfferTermsSnapshot | null {
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<SerializedOfferTermsSnapshot>;
+  if (
+    typeof candidate.title !== "string" ||
+    (candidate.startDate !== null && typeof candidate.startDate !== "string") ||
+    (candidate.expiresAt !== null && typeof candidate.expiresAt !== "string")
+  ) {
+    return null;
+  }
+  const startDate = candidate.startDate ? new Date(candidate.startDate) : null;
+  const expiresAt = candidate.expiresAt ? new Date(candidate.expiresAt) : null;
+  if (
+    (startDate && Number.isNaN(startDate.getTime())) ||
+    (expiresAt && Number.isNaN(expiresAt.getTime()))
+  ) {
+    return null;
+  }
+  return {
+    title: candidate.title,
+    salaryAmount: candidate.salaryAmount ?? null,
+    currency: candidate.currency ?? null,
+    salaryPeriod: candidate.salaryPeriod ?? null,
+    equity: candidate.equity ?? null,
+    startDate,
+    expiresAt,
+    notes: candidate.notes ?? null,
+  };
+}
+
+function sameDate(left: Date | null, right: Date | null) {
+  return left?.getTime() === right?.getTime();
+}
+
+/** Compare the mutable offer row to the frozen terms in an outbox payload. */
+export function offerMatchesTerms(
+  offer: OfferTermsSnapshot,
+  snapshot: OfferTermsSnapshot,
+): boolean {
+  return (
+    offer.title === snapshot.title &&
+    offer.salaryAmount === snapshot.salaryAmount &&
+    offer.currency === snapshot.currency &&
+    offer.salaryPeriod === snapshot.salaryPeriod &&
+    offer.equity === snapshot.equity &&
+    sameDate(offer.startDate, snapshot.startDate) &&
+    sameDate(offer.expiresAt, snapshot.expiresAt) &&
+    offer.notes === snapshot.notes
+  );
+}
+
 export type TermsViolation = { ok: false; message: string };
 export type TermsOk = { ok: true };
 export type TermsResult = TermsOk | TermsViolation;
@@ -62,6 +162,14 @@ export function assertOfferTerms(values: OfferTerms): TermsResult {
 /** Whether an offer's expiry has already passed. */
 export function offerHasExpired(expiresAt: Date | null): boolean {
   return !!expiresAt && expiresAt.getTime() < Date.now();
+}
+
+/** Draft letters are only exposed to the authenticated field-placement flow. */
+export function canDownloadOfferLetter(
+  status: string,
+  purpose: string | null,
+): boolean {
+  return status !== "withdrawn" && (status !== "draft" || purpose === "placement");
 }
 
 export type OfferRecipient = {

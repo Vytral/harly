@@ -1,8 +1,9 @@
 import type { CandidateScore } from "@/lib/ai/schemas";
 import { extractResumeAutofillFields } from "@/features/applications/resume-autofill";
+import type { EvaluationMode } from "./mode";
 
 /** Immutable engine identifier persisted with every deterministic evaluation. */
-export const RULES_EVALUATION_VERSION = "rules-v2";
+export const RULES_EVALUATION_VERSION = "rules-v3";
 
 export type RulesCriterion = {
   key: string;
@@ -48,6 +49,7 @@ export type RulesInput = {
     experienceLevel: string | null;
     education: string | null;
     keywords: string[];
+    evaluationMode?: EvaluationMode;
   };
   candidate: {
     resumeText: string | null;
@@ -174,6 +176,16 @@ function clamp(score: number): number {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+function missingEvidenceScore(
+  criterion: RulesCriterion,
+  mode: EvaluationMode,
+): number {
+  if (criterion.importance === "required") {
+    return mode === "relaxed" ? 35 : mode === "balanced" ? 20 : 0;
+  }
+  return mode === "relaxed" ? 55 : mode === "balanced" ? 35 : 20;
+}
+
 function resultCriterion(
   label: string,
   score: number,
@@ -249,11 +261,18 @@ export function evaluateCandidateWithRules(input: RulesInput): RulesEvaluation {
     };
   });
 
+  const criterionByKey = new Map(rubric.criteria.map((criterion) => [criterion.key, criterion]));
   const known = criterionResults.filter((criterion) => criterion.score !== null);
-  const denominator = known.reduce((sum, criterion) => sum + criterion.weight, 0);
+  const denominator = rubric.criteria.reduce((sum, criterion) => sum + criterion.weight, 0);
   const score = denominator === 0
     ? 0
-    : known.reduce((sum, criterion) => sum + (criterion.score ?? 0) * criterion.weight, 0) / denominator;
+    : criterionResults.reduce((sum, criterion) => {
+        const definition = criterionByKey.get(criterion.key);
+        const fallback = definition
+          ? missingEvidenceScore(definition, input.job.evaluationMode ?? "balanced")
+          : 0;
+        return sum + (criterion.score ?? fallback) * (definition?.weight ?? criterion.weight);
+      }, 0) / denominator;
   const coverage = rubric.criteria.length === 0
     ? 0
     : Math.round((known.length / rubric.criteria.length) * 100);
@@ -261,7 +280,25 @@ export function evaluateCandidateWithRules(input: RulesInput): RulesEvaluation {
     ? 0
     : Math.round(known.reduce((sum, criterion) => sum + criterion.confidence, 0) / known.length);
   const roundedScore = clamp(score);
-  const recommendation = roundedScore >= 80 ? "strong_yes" : roundedScore >= 60 ? "yes" : roundedScore >= 40 ? "maybe" : "no";
+  const mode = input.job.evaluationMode ?? "balanced";
+  const requiredGap = criterionResults.some((criterion) => {
+    const definition = criterionByKey.get(criterion.key);
+    return definition?.importance === "required" && criterion.status !== "met";
+  });
+  const requiredFailure = criterionResults.some((criterion) => {
+    const definition = criterionByKey.get(criterion.key);
+    return definition?.importance === "required" && criterion.status === "not_met";
+  });
+  const strongBlocked = mode === "strict" ? requiredGap : requiredFailure;
+  const yesBlocked = mode === "strict" ? requiredGap : requiredFailure;
+  const recommendation =
+    roundedScore >= 85 && !strongBlocked && coverage >= (mode === "relaxed" ? 60 : 80) && confidence >= (mode === "relaxed" ? 60 : 75)
+      ? "strong_yes"
+      : roundedScore >= (mode === "strict" ? 80 : 70) && !yesBlocked && coverage >= (mode === "strict" ? 80 : 60)
+        ? "yes"
+        : roundedScore >= 45
+          ? "maybe"
+          : "no";
   const requiredUnknown = criterionResults.some((criterion) => criterion.status === "unknown" && rubric.criteria.find((item) => item.key === criterion.key)?.importance === "required");
   const requiresHumanReview = requiredUnknown || coverage < 80 || confidence < 70;
   const criteria = criterionResults.map((criterion) => resultCriterion(criterion.label, criterion.score ?? 0, criterion.evidence));

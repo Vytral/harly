@@ -15,7 +15,11 @@ import {
   jobs,
 } from "@harly/db";
 
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  requireApplicationPermission,
+  requireJobPermission,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { logAiCandidateDecision } from "@/lib/ai/governance";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
@@ -29,6 +33,7 @@ import {
 } from "@/features/evaluations/service";
 import { loadResumeText } from "@/lib/resume/load-resume-text";
 import { enforceRateLimit } from "@/server/api/ratelimit";
+import type { EvaluationMode } from "@/lib/evaluation/mode";
 import {
   detectCandidateDuplicatesForWorkspace,
   type DuplicateMatch,
@@ -53,7 +58,10 @@ export async function generateAiEvaluationAction(input: {
 
   let context;
   try {
-    context = await requirePermission("collab:write");
+    context = await requireApplicationPermission(
+      "collab:write",
+      parsed.data.applicationId,
+    );
   } catch {
     return {
       success: false,
@@ -61,6 +69,17 @@ export async function generateAiEvaluationAction(input: {
     };
   }
   const workspaceId = context.organization.id;
+  try {
+    await enforceRateLimit(`ai-score:${workspaceId}:${context.user.id}`, {
+      limit: 30,
+      windowMs: 10 * 60_000,
+    });
+  } catch {
+    return {
+      success: false,
+      error: "Too many scoring requests. Slow down and try again shortly.",
+    };
+  }
 
   const [row] = await db
     .select({
@@ -80,6 +99,7 @@ export async function generateAiEvaluationAction(input: {
       jobExperienceLevel: jobs.experienceLevel,
       jobEducation: jobs.education,
       jobKeywords: jobs.keywords,
+      evaluationMode: jobs.evaluationMode,
     })
     .from(applications)
     .innerJoin(
@@ -106,6 +126,12 @@ export async function generateAiEvaluationAction(input: {
   }
 
   const aiConfig = await getWorkspaceAiConfig(workspaceId);
+  const evaluationMode: EvaluationMode = row.evaluationMode === "relaxed" || row.evaluationMode === "strict"
+    ? row.evaluationMode
+    : "balanced";
+  const candidateSkills = Array.isArray(row.skills)
+    ? (row.skills as string[])
+    : [];
   const [resume, answerRows] = await Promise.all([
     loadResumeText({ workspaceId, candidateId: row.candidateId }),
     db
@@ -142,6 +168,7 @@ export async function generateAiEvaluationAction(input: {
         keywords: Array.isArray(row.jobKeywords)
           ? (row.jobKeywords as string[])
           : [],
+        evaluationMode,
       },
       candidate: {
         fullName: `${row.firstName} ${row.lastName}`,
@@ -149,7 +176,7 @@ export async function generateAiEvaluationAction(input: {
         location: row.location,
         resumeText: resume.text,
         answers: answerRows,
-        skills: Array.isArray(row.skills) ? (row.skills as string[]) : [],
+        skills: candidateSkills,
         experienceYears: row.experienceYears,
       },
     };
@@ -173,7 +200,9 @@ export async function generateAiEvaluationAction(input: {
       provider: aiConfig?.provider ?? "harly",
       modelId: aiConfig?.modelId ?? RULES_EVALUATION_VERSION,
       engine: aiConfig ? "provider-ai" : "harly-rules",
-      engineVersion: aiConfig?.modelId ?? RULES_EVALUATION_VERSION,
+      engineVersion: aiConfig
+        ? `${aiConfig.modelId}:${evaluationMode}`
+        : `${RULES_EVALUATION_VERSION}:${evaluationMode}`,
       rubricVersion: rulesEvaluation?.rubric.version ?? "ai-generated",
       rubricSnapshot: rulesEvaluation?.rubric ?? null,
       result,
@@ -214,7 +243,7 @@ export async function generateAiEvaluationAction(input: {
       inputSummary: {
         usedResume: resume.text !== null,
         answerCount: answerRows.length,
-        skillsCount: 0,
+        skillsCount: candidateSkills.length,
       },
       outputSummary: {
         score: result.score,
@@ -259,7 +288,7 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
 
   let context;
   try {
-    context = await requirePermission("collab:write");
+    context = await requireJobPermission("collab:write", parsed.data.jobId);
   } catch {
     return { success: false, error: "Permission denied." };
   }
@@ -279,11 +308,35 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
     };
   }
 
-  // Find application IDs that don't have an evaluation yet.
+  const aiConfig = await getWorkspaceAiConfig(workspaceId);
+  const currentEvaluationSource = aiConfig ? "ai" : "rules";
+  const [job] = await db
+    .select({ evaluationMode: jobs.evaluationMode })
+    .from(jobs)
+    .where(
+      and(eq(jobs.id, parsed.data.jobId), eq(jobs.workspaceId, workspaceId)),
+    )
+    .limit(1);
+  const evaluationMode: EvaluationMode = job?.evaluationMode === "relaxed" || job?.evaluationMode === "strict"
+    ? job.evaluationMode
+    : "balanced";
+  const currentEvaluationVersion = aiConfig
+    ? `${aiConfig.modelId}:${evaluationMode}`
+    : `${RULES_EVALUATION_VERSION}:${evaluationMode}`;
+
+  // Re-score applications without an evaluation or with an obsolete engine
+  // version. This makes rubric/engine improvements actually reach existing
+  // candidates instead of leaving stale scores visible forever.
   const scoredIds = db
     .select({ applicationId: aiEvaluations.applicationId })
     .from(aiEvaluations)
-    .where(eq(aiEvaluations.workspaceId, workspaceId));
+    .where(
+      and(
+        eq(aiEvaluations.workspaceId, workspaceId),
+        eq(aiEvaluations.source, currentEvaluationSource),
+        eq(aiEvaluations.engineVersion, currentEvaluationVersion),
+      ),
+    );
 
   const unscoredApps = await db
     .select({ applicationId: applications.id })
@@ -295,8 +348,21 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
         eq(applications.status, "active"),
         notInArray(applications.id, scoredIds),
       ),
-    )
-    .limit(BULK_BATCH_SIZE + 1); // +1 to know if there are more
+    );
+
+  // The job permission is necessary but not sufficient: a candidate can be
+  // deleted or otherwise unavailable even when the job itself is assigned.
+  // Authorize every application in the batch before starting any provider
+  // call, so a mixed-scope request cannot partially score candidates.
+  try {
+    await Promise.all(
+      unscoredApps.map(({ applicationId }) =>
+        requireApplicationPermission("collab:write", applicationId),
+      ),
+    );
+  } catch {
+    return { success: false, error: "Permission denied." };
+  }
 
   const remaining = Math.max(0, unscoredApps.length - BULK_BATCH_SIZE);
   const batch = unscoredApps.slice(0, BULK_BATCH_SIZE);

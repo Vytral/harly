@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/icons/phosphor";
 import { formatEnumLabel } from "@/lib/format";
 import type { PortalInterview } from "@/server/portal-applications";
+import { portalInterviewStatusLabel } from "./portal-interview-status";
 
 type PortalInterviewListProps = {
   interviews: PortalInterview[];
@@ -153,9 +154,17 @@ export function PortalInterviewList({
                 </div>
 
                 {isPast ? (
-                  <span className="flex shrink-0 items-center gap-1.5 text-sm font-medium text-emerald-600">
-                    <CheckCircleIcon className="size-4" />
-                    Completed
+                  <span
+                    className={`flex shrink-0 items-center gap-1.5 text-sm font-medium ${
+                      interview.status === "completed"
+                        ? "text-emerald-600"
+                        : "text-muted-foreground"
+                    }`}
+                  >
+                    {interview.status === "completed" && (
+                      <CheckCircleIcon className="size-4" />
+                    )}
+                    {portalInterviewStatusLabel(interview.status)}
                   </span>
                 ) : (
                   <InterviewAction interview={interview} />

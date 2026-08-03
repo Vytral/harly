@@ -28,6 +28,18 @@ import { storage } from "@/lib/storage";
 
 const log = createLogger("esign-signed-artifact");
 
+async function removeGeneratedArtifacts(keys: Array<string | null>) {
+  await Promise.all(
+    keys.filter((key): key is string => Boolean(key)).map(async (key) => {
+      try {
+        await storage.delete(key);
+      } catch (error) {
+        log.warn({ error, key }, "signed artifact cleanup failed");
+      }
+    }),
+  );
+}
+
 /**
  * Resolve the combined signed PDF URL for a completed submission. Prefer the
  * `combined_document_url` on the submission; fall back to the merged documents
@@ -145,10 +157,16 @@ export async function persistSignedDocumentForEnvelope(
     ? createDocumentStorageKey(workspaceId, "Signature certificate.pdf")
     : null;
   if (certificateBytes && certificateStorageKey) {
-    await storage.put(certificateStorageKey, certificateBytes, "application/pdf");
+    try {
+      await storage.put(certificateStorageKey, certificateBytes, "application/pdf");
+    } catch (error) {
+      await removeGeneratedArtifacts([storageKey]);
+      throw error;
+    }
   }
 
-  return db.transaction(async (tx) => {
+  try {
+    return await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(documents)
       .values({
@@ -239,7 +257,11 @@ export async function persistSignedDocumentForEnvelope(
       },
     });
     return created.id;
-  });
+    });
+  } catch (error) {
+    await removeGeneratedArtifacts([storageKey, certificateStorageKey]);
+    throw error;
+  }
 }
 
 /**
@@ -332,7 +354,12 @@ async function persistSignedDocumentForDocumentEnvelope(
     ? createDocumentStorageKey(workspaceId, "Signature certificate.pdf")
     : null;
   if (certificateBytes && certificateStorageKey) {
-    await storage.put(certificateStorageKey, certificateBytes, "application/pdf");
+    try {
+      await storage.put(certificateStorageKey, certificateBytes, "application/pdf");
+    } catch (error) {
+      await removeGeneratedArtifacts([storageKey]);
+      throw error;
+    }
   }
 
   const sourceAssociationRows = await db
@@ -345,7 +372,8 @@ async function persistSignedDocumentForDocumentEnvelope(
       ),
     );
 
-  return db.transaction(async (tx) => {
+  try {
+    return await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(documents)
       .values({
@@ -434,5 +462,9 @@ async function persistSignedDocumentForDocumentEnvelope(
       },
     });
     return created.id;
-  });
+    });
+  } catch (error) {
+    await removeGeneratedArtifacts([storageKey, certificateStorageKey]);
+    throw error;
+  }
 }

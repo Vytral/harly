@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
@@ -183,30 +184,36 @@ export function CandidateCard({
             aria-label={`Select ${fullName}`}
           />
         </span>
-        <UserAvatar
-          name={fullName}
-          src={application.candidateAvatarUrl}
-          fallbackSrcs={application.candidateAvatarFallbackSrcs}
-          size="sm"
-        />
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[14px] font-medium leading-tight text-near-ink">
-            {fullName}
-          </p>
-          <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden">
-            {application.aiScore != null ? (
-              <AiFitNote
-                score={application.aiScore}
-                recommendation={application.aiRecommendation}
-                source={application.evaluationSource}
-              />
-            ) : null}
-            <StageAge value={stageStartedAt} />
-            {application.status !== "active" ? (
-              <ApplicationStatusBadge status={application.status} />
-            ) : null}
+        <Link
+          href={`/dashboard/candidates/${application.candidateId}`}
+          onClick={(event) => event.stopPropagation()}
+          className="flex min-w-0 flex-1 items-center gap-2.5"
+        >
+          <UserAvatar
+            name={fullName}
+            src={application.candidateAvatarUrl}
+            fallbackSrcs={application.candidateAvatarFallbackSrcs}
+            size="sm"
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[14px] font-medium leading-tight text-near-ink">
+              {fullName}
+            </p>
+            <div className="mt-1 flex min-w-0 items-center gap-2 overflow-hidden">
+              {application.aiScore != null ? (
+                <AiFitNote
+                  score={application.aiScore}
+                  recommendation={application.aiRecommendation}
+                  source={application.evaluationSource}
+                />
+              ) : null}
+              <StageAge value={stageStartedAt} />
+              {application.status !== "active" ? (
+                <ApplicationStatusBadge status={application.status} />
+              ) : null}
+            </div>
           </div>
-        </div>
+        </Link>
         {/*
           Drag is the move affordance. The Hire and Reject buttons that used to
           appear here on hover are gone: ending someone's candidacy from a

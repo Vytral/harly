@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 import { candidateFiles, db } from "@harly/db";
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
@@ -7,6 +7,7 @@ import {
   PORTAL_SESSION_COOKIE,
   resolvePortalSession,
 } from "@/lib/portal-auth";
+import { requireCandidatePermission } from "@/features/workspaces/permissions-server";
 import { storage } from "@/lib/storage";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { cookies } from "next/headers";
@@ -25,34 +26,53 @@ function contentTypeFor(key: string) {
   return CONTENT_TYPES[extension] ?? "application/octet-stream";
 }
 
+async function findCandidateFileForKey(workspaceId: string, key: string) {
+  const rows = await db
+    .select({ candidateId: candidateFiles.candidateId, fileUrl: candidateFiles.fileUrl })
+    .from(candidateFiles)
+    .where(eq(candidateFiles.workspaceId, workspaceId))
+    .limit(5000);
+
+  return (
+    rows.find((row) => resumeKeyFromUrl(row.fileUrl) === key) ?? null
+  );
+}
+
 export async function GET(request: NextRequest) {
   const requested = request.nextUrl.searchParams.get("key");
-  const key = requested ? resumeKeyFromUrl(`/api/storage/file?key=${encodeURIComponent(requested)}`) : null;
+  const key = requested ? resumeKeyFromUrl(requested) : null;
   if (!key) return new NextResponse("Not found", { status: 404 });
 
-  const workspaceId = key.match(/^workspaces\/([^/]+)\/resumes\//)?.[1];
+  const keyWorkspaceId = key.match(/^workspaces\/([^/]+)\/resumes\//)?.[1] ?? null;
+  const context = await getWorkspaceContextOrNull();
+  const token = (await cookies()).get(PORTAL_SESSION_COOKIE)?.value;
+  const portal = token ? await resolvePortalSession(token) : null;
+  const workspaceId = keyWorkspaceId ?? context?.organization.id ?? portal?.workspaceId;
   if (!workspaceId) return new NextResponse("Not found", { status: 404 });
 
-  const context = await getWorkspaceContextOrNull();
-  let allowed = context?.organization.id === workspaceId;
+  if (
+    keyWorkspaceId &&
+    context?.organization.id !== keyWorkspaceId &&
+    portal?.workspaceId !== keyWorkspaceId
+  ) {
+    return new NextResponse("Not found", { status: 404 });
+  }
 
-  if (!allowed) {
-    const token = (await cookies()).get(PORTAL_SESSION_COOKIE)?.value;
-    const portal = token ? await resolvePortalSession(token) : null;
-    if (portal?.workspaceId === workspaceId) {
-      const [owned] = await db
-        .select({ id: candidateFiles.id })
-        .from(candidateFiles)
-        .where(
-          and(
-            eq(candidateFiles.candidateId, portal.candidateId),
-            eq(candidateFiles.workspaceId, workspaceId),
-            eq(candidateFiles.fileUrl, `/api/storage/file?key=${encodeURIComponent(key)}`),
-          ),
-        )
-        .limit(1);
-      allowed = Boolean(owned);
+  const file = await findCandidateFileForKey(workspaceId, key);
+  let allowed = false;
+
+  if (file && context?.organization.id === workspaceId) {
+    try {
+      await requireCandidatePermission("candidates:view", file.candidateId);
+      allowed = true;
+    } catch {
+      // Keep the response indistinguishable from a missing file. This
+      // prevents a scoped recruiter from probing candidate file keys.
     }
+  }
+
+  if (!allowed && file && portal?.workspaceId === workspaceId) {
+    allowed = file.candidateId === portal.candidateId;
   }
 
   if (!allowed) return new NextResponse("Not found", { status: 404 });

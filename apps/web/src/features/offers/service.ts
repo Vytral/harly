@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, desc, eq, exists, isNull, lt, or } from "drizzle-orm";
+import { and, desc, eq, exists, getTableColumns, isNull, lt, or, sql } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
 import {
@@ -13,6 +13,7 @@ import {
   jobStages,
   jobs,
   offers,
+  signatureEnvelopes,
   type Offer,
 } from "@harly/db";
 // NOTE: `organization` no longer imported directly — `getOfferRecipient` in
@@ -31,8 +32,20 @@ import {
   assertOfferTerms,
   getOfferRecipient,
   offerHasExpired,
+  serializeOfferTermsSnapshot,
+  snapshotOfferTerms,
   type OfferTerms,
 } from "./core";
+import {
+  archiveDocusealOffer,
+  createOfferEnvelope,
+} from "@/lib/esign/offer-signing";
+import {
+  ensureNativeOfferEnvelope,
+  getOrCreateNativeOfferDocument,
+} from "@/lib/esign/native/offer-signing";
+import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
+import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 
 /** Workspace-scoped offer service for REST API. Never reads session state. */
 
@@ -111,6 +124,19 @@ export async function listOffersForApi(input: {
         ),
         exists(
           db
+            .select({ id: applications.id })
+            .from(applications)
+            .where(
+              and(
+                eq(applications.id, offers.applicationId),
+                eq(applications.workspaceId, input.workspaceId),
+                eq(applications.candidateId, offers.candidateId),
+                eq(applications.jobId, offers.jobId),
+              ),
+            ),
+        ),
+        exists(
+          db
             .select({ id: jobs.id })
             .from(jobs)
             .where(
@@ -138,9 +164,12 @@ export async function listOffersForApi(input: {
 export async function getOfferForApi(input: {
   workspaceId: string;
   offerId: string;
-}): Promise<Offer> {
+}): Promise<Offer & { updatedAtVersion: string }> {
   const [offer] = await db
-    .select()
+    .select({
+      ...getTableColumns(offers),
+      updatedAtVersion: sql<string>`${offers.updatedAt}::text`,
+    })
     .from(offers)
     .where(
       and(
@@ -170,6 +199,19 @@ export async function getOfferForApi(input: {
               ),
             ),
         ),
+        exists(
+          db
+            .select({ id: applications.id })
+            .from(applications)
+            .where(
+              and(
+                eq(applications.id, offers.applicationId),
+                eq(applications.workspaceId, input.workspaceId),
+                eq(applications.candidateId, offers.candidateId),
+                eq(applications.jobId, offers.jobId),
+              ),
+            ),
+        ),
       ),
     )
     .limit(1);
@@ -191,6 +233,7 @@ export async function createOfferForApi(input: {
         id: applications.id,
         candidateId: applications.candidateId,
         jobId: applications.jobId,
+        status: applications.status,
       })
       .from(applications)
       .where(
@@ -223,8 +266,12 @@ export async function createOfferForApi(input: {
           ),
         ),
       )
+      .for("update")
       .limit(1);
     if (!application) throw ApiError.notFound("Application not found.");
+    if (application.status !== "active") {
+      throw ApiError.conflict("Only active applications can receive an offer.");
+    }
 
     const [offer] = await tx
       .insert(offers)
@@ -263,6 +310,22 @@ export async function updateOfferForApi(input: {
     throw ApiError.conflict("Only draft offers can be edited.");
   }
 
+  const [inFlightSend] = await db
+    .select({ id: emailOutbox.id })
+    .from(emailOutbox)
+    .where(
+      and(
+        eq(emailOutbox.workspaceId, input.workspaceId),
+        eq(emailOutbox.kind, "offer.extended"),
+        or(eq(emailOutbox.status, "pending"), eq(emailOutbox.status, "processing")),
+        sql`${emailOutbox.payload}->>'offerId' = ${existing.id}`,
+      ),
+    )
+    .limit(1);
+  if (inFlightSend) {
+    throw ApiError.conflict("This offer is being sent. Wait for delivery before editing its terms.");
+  }
+
   const values = { ...existing, ...input.values };
   assertOfferTermsOrThrow(values);
   const [updated] = await db
@@ -282,9 +345,12 @@ export async function updateOfferForApi(input: {
       and(
         eq(offers.workspaceId, input.workspaceId),
         eq(offers.id, input.offerId),
+        eq(offers.status, "draft"),
+        sql`${offers.updatedAt} = ${existing.updatedAtVersion}::timestamptz`,
       ),
     )
     .returning();
+  if (!updated) throw ApiError.conflict("Offer changed while you were editing it. Refresh and try again.");
   return updated;
 }
 
@@ -304,6 +370,20 @@ export async function sendOfferForApi(input: {
     );
   }
 
+  const [application] = await db
+    .select({ status: applications.status })
+    .from(applications)
+    .where(
+      and(
+        eq(applications.workspaceId, input.workspaceId),
+        eq(applications.id, offer.applicationId),
+      ),
+    )
+    .limit(1);
+  if (!application || application.status !== "active") {
+    throw ApiError.conflict("Only active applications can receive an offer.");
+  }
+
   const [candidate] = await db
     .select({ email: candidates.email })
     .from(candidates)
@@ -321,13 +401,44 @@ export async function sendOfferForApi(input: {
     );
   }
 
+  const esignStatus = await getWorkspaceEsignStatus(input.workspaceId);
+  if (esignStatus.offerSignatureChannel === "esign") {
+    try {
+      await createOfferEnvelope({ workspaceId: input.workspaceId, offer });
+    } catch {
+      throw ApiError.conflict(
+        "Could not create the signature request. Check the DocuSeal connection and try again.",
+      );
+    }
+  } else if (esignStatus.offerSignatureChannel === "native") {
+    const prepared = await getOrCreateNativeOfferDocument({
+      workspaceId: input.workspaceId,
+      offer,
+    });
+    if (!prepared || !isSignableNativeFieldsSnapshot(prepared.fieldsSnapshot)) {
+      throw ApiError.conflict(
+        "Place at least one required signature field before sending the offer.",
+      );
+    }
+    await ensureNativeOfferEnvelope({
+      workspaceId: input.workspaceId,
+      offer,
+      documentId: prepared.documentId,
+      fieldsSnapshot: prepared.fieldsSnapshot,
+    });
+  }
+
   // enqueueEmailOutbox dedupes by a hash of (kind, payload), so a double send
   // (double-click, retry, AI agent) reuses the same outbox row instead of
   // creating duplicates and double-counting deliveries / offer.sent events.
   const outboxId = await enqueueEmailOutbox(
     input.workspaceId,
     "offer.extended",
-    { offerId: offer.id, actorId: input.actorUserId },
+    {
+      offerId: offer.id,
+      actorId: input.actorUserId,
+      terms: serializeOfferTermsSnapshot(snapshotOfferTerms(offer)),
+    },
   );
 
   await processEmailOutbox({ ids: [outboxId] });
@@ -392,6 +503,7 @@ export async function decideOfferForApi(input: {
             eq(applications.id, offer.applicationId),
           ),
         )
+        .for("update")
         .limit(1);
       if (!application) throw ApiError.notFound("Application not found.");
       // Guard: accepting an offer moves the application to `hired`. Refuse if
@@ -416,7 +528,7 @@ export async function decideOfferForApi(input: {
         )
         .limit(1);
 
-      await tx
+      const [hired] = await tx
         .update(applications)
         .set({
           status: "hired",
@@ -427,8 +539,15 @@ export async function decideOfferForApi(input: {
           and(
             eq(applications.workspaceId, input.workspaceId),
             eq(applications.id, application.id),
+            eq(applications.status, "active"),
           ),
+        )
+        .returning({ id: applications.id });
+      if (!hired) {
+        throw ApiError.conflict(
+          "This application changed while the offer was being accepted. Refresh and try again.",
         );
+      }
 
       if (hiredStage && hiredStage.id !== application.currentStageId) {
         await tx.insert(applicationStageHistory).values({
@@ -499,6 +618,41 @@ export async function withdrawOfferForApi(input: {
   }
 
   const withdrawn = await db.transaction(async (tx) => {
+    const [lockedOffer] = await tx
+      .select({
+        status: offers.status,
+        esignSubmissionId: offers.esignSubmissionId,
+        signatureEnvelopeRefId: offers.signatureEnvelopeRefId,
+      })
+      .from(offers)
+      .where(
+        and(
+          eq(offers.workspaceId, input.workspaceId),
+          eq(offers.id, offer.id),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!lockedOffer || (lockedOffer.status !== "draft" && lockedOffer.status !== "sent")) {
+      throw ApiError.conflict("This offer can no longer be withdrawn.");
+    }
+
+    // Keep the offer row locked while revoking the provider ceremony. A
+    // concurrent completion webhook may read the old state, but its
+    // conditional offer transition will wait for this transaction and then
+    // observe `withdrawn`.
+    if (lockedOffer.status === "sent") {
+      const archived = await archiveDocusealOffer({
+        workspaceId: input.workspaceId,
+        esignSubmissionId: lockedOffer.esignSubmissionId,
+      });
+      if (!archived) {
+        throw ApiError.conflict(
+          "The signature request could not be revoked. The offer remains active.",
+        );
+      }
+    }
+
     const [updated] = await tx
       .update(offers)
       .set({
@@ -516,6 +670,22 @@ export async function withdrawOfferForApi(input: {
       .returning();
     if (!updated)
       throw ApiError.conflict("This offer can no longer be withdrawn.");
+
+    if (lockedOffer.signatureEnvelopeRefId) {
+      await tx
+        .update(signatureEnvelopes)
+        .set({
+          status: "voided",
+          voidedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(signatureEnvelopes.workspaceId, input.workspaceId),
+            eq(signatureEnvelopes.id, lockedOffer.signatureEnvelopeRefId),
+          ),
+        );
+    }
 
     await tx.insert(activityEvents).values({
       workspaceId: input.workspaceId,

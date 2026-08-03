@@ -231,6 +231,9 @@ export default async function ApplicationDetailPage({
               esignSubmissionId: esignOffer.esignSubmissionId,
               expiresAt: esignOffer.expiresAt,
             }}
+            isExpired={Boolean(
+              esignOffer.expiresAt && esignOffer.expiresAt <= new Date(),
+            )}
             signedPending={signedPending}
           />
         )}

@@ -134,7 +134,7 @@ export function OfferFieldPlacementDialog({
             className="min-h-0 overflow-y-auto border-b border-border bg-muted/20 p-6 lg:border-b-0 lg:border-r"
           >
             <PdfSignaturePlacer
-              fileUrl={`/api/offers/${offerId}/letter`}
+              fileUrl={`/api/offers/${offerId}/letter?purpose=placement`}
               signatureDataUrl=""
               hasSignature={false}
               placements={placements}

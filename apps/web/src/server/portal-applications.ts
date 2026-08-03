@@ -1,12 +1,13 @@
 import "server-only";
 
-import { and, asc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, exists, inArray, isNotNull, isNull } from "drizzle-orm";
 import {
   applications,
   candidates,
   db,
   interviews,
   jobStages,
+  jobs,
   offers,
   organization,
   user,
@@ -135,6 +136,14 @@ export async function getPortalApplicationOffer(input: {
     })
     .from(offers)
     .innerJoin(
+      applications,
+      and(
+        eq(applications.id, offers.applicationId),
+        eq(applications.workspaceId, offers.workspaceId),
+        eq(applications.candidateId, offers.candidateId),
+      ),
+    )
+    .innerJoin(
       candidates,
       and(
         eq(candidates.id, offers.candidateId),
@@ -147,6 +156,18 @@ export async function getPortalApplicationOffer(input: {
         eq(offers.workspaceId, input.workspaceId),
         eq(offers.applicationId, input.applicationId),
         eq(offers.candidateId, input.candidateId),
+        exists(
+          db
+            .select({ id: jobs.id })
+            .from(jobs)
+            .where(
+              and(
+                eq(jobs.id, offers.jobId),
+                eq(jobs.workspaceId, input.workspaceId),
+                isNull(jobs.deletedAt),
+              ),
+            ),
+        ),
         // E-signature offers only: submission id must be present.
         isNotNull(offers.esignSubmissionId),
         // Actionable (sent) or just-decided (the webhook flips these after the
@@ -154,7 +175,7 @@ export async function getPortalApplicationOffer(input: {
         inArray(offers.status, ["sent", "accepted", "declined"]),
       ),
     )
-    .orderBy(asc(offers.createdAt))
+    .orderBy(desc(offers.createdAt))
     .limit(1);
   return offer;
 }

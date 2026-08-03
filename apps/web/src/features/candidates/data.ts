@@ -14,6 +14,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import { db } from "@harly/db";
 import {
@@ -25,6 +26,7 @@ import {
   candidates,
   candidateFiles,
   candidateNotes,
+  candidateReferrals,
   candidateTags,
   candidateMessages,
   candidatePortalMagicLinks,
@@ -102,6 +104,8 @@ export type CandidateListItem = {
   applicationCount: number;
   inPool: boolean;
   hasOpenPrivacyRequest: boolean;
+  isReferred: boolean;
+  isFeaturedReferral: boolean;
   updatedAt: Date;
   latestApplication: {
     applicationId: string;
@@ -191,6 +195,7 @@ export type CandidateApplicationAnswerItem = {
 
 export type CandidateActivityItem = {
   id: string;
+  applicationId: string | null;
   type: string;
   label: string;
   actorName: string | null;
@@ -320,6 +325,8 @@ export async function listCandidates() {
       applicationCount: 0,
       inPool: false,
       hasOpenPrivacyRequest: false,
+      isReferred: false,
+      isFeaturedReferral: false,
       latestApplication: null,
       createdAt: row.candidateCreatedAt,
       updatedAt: row.candidateUpdatedAt,
@@ -408,6 +415,27 @@ export async function listCandidates() {
       .filter((id): id is string => Boolean(id)),
   );
 
+  const referralAggRows =
+    candidateIds.length > 0
+      ? await db
+          .select({
+            candidateId: candidateReferrals.candidateId,
+            featured: sql<boolean>`bool_or(${candidateReferrals.featured})`,
+          })
+          .from(candidateReferrals)
+          .where(
+            and(
+              eq(candidateReferrals.workspaceId, workspace.id),
+              inArray(candidateReferrals.candidateId, candidateIds),
+            ),
+          )
+          .groupBy(candidateReferrals.candidateId)
+      : [];
+  const referredIds = new Set(referralAggRows.map((row) => row.candidateId));
+  const featuredReferralIds = new Set(
+    referralAggRows.filter((row) => row.featured).map((row) => row.candidateId),
+  );
+
   return Array.from(candidateMap.values())
     .sort(
       (first, second) => second.createdAt.getTime() - first.createdAt.getTime(),
@@ -426,6 +454,8 @@ export async function listCandidates() {
       applicationCount: candidate.applicationCount,
       inPool: inPoolIds.has(candidate.id),
       hasOpenPrivacyRequest: openPrivacyRequestIds.has(candidate.id),
+      isReferred: referredIds.has(candidate.id),
+      isFeaturedReferral: featuredReferralIds.has(candidate.id),
       latestApplication: candidate.latestApplication,
       tags: tagsByCandidate.get(candidate.id) ?? [],
     }));
@@ -608,7 +638,7 @@ export async function listCandidateDirectory(
   ]);
 
   const candidateIds = rows.map((row) => row.id);
-  const [tagRows, poolRows, privacyRows] = candidateIds.length
+  const [tagRows, poolRows, privacyRows, referralRows] = candidateIds.length
     ? await Promise.all([
         db
           .select({ candidateId: candidateTags.candidateId, label: candidateTags.label })
@@ -637,8 +667,21 @@ export async function listCandidateDirectory(
               inArray(dsarRequests.candidateId, candidateIds),
             ),
           ),
+        db
+          .select({
+            candidateId: candidateReferrals.candidateId,
+            featured: sql<boolean>`bool_or(${candidateReferrals.featured})`,
+          })
+          .from(candidateReferrals)
+          .where(
+            and(
+              eq(candidateReferrals.workspaceId, workspace.id),
+              inArray(candidateReferrals.candidateId, candidateIds),
+            ),
+          )
+          .groupBy(candidateReferrals.candidateId),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
 
   const tagsByCandidate = new Map<string, string[]>();
   for (const row of tagRows) {
@@ -651,6 +694,10 @@ export async function listCandidateDirectory(
     privacyRows
       .map((row) => row.candidateId)
       .filter((id): id is string => Boolean(id)),
+  );
+  const referredIds = new Set(referralRows.map((row) => row.candidateId));
+  const featuredReferralIds = new Set(
+    referralRows.filter((row) => row.featured).map((row) => row.candidateId),
   );
 
   return {
@@ -667,6 +714,8 @@ export async function listCandidateDirectory(
       applicationCount: row.applicationCount,
       inPool: poolIds.has(row.id),
       hasOpenPrivacyRequest: privacyIds.has(row.id),
+      isReferred: referredIds.has(row.id),
+      isFeaturedReferral: featuredReferralIds.has(row.id),
       tags: tagsByCandidate.get(row.id) ?? [],
       latestApplication:
         row.applicationId && row.applicationJobId && row.jobTitle && row.appliedAt && row.applicationStatus
@@ -889,6 +938,7 @@ export async function getCandidateProfile(candidateId: string) {
   const scorecardRows = await db
     .select({
       id: scorecards.id,
+      applicationId: scorecards.applicationId,
       rating: scorecards.rating,
       comment: scorecards.comment,
       stageName: scorecards.stageName,
@@ -1115,6 +1165,7 @@ export async function getCandidateProfile(candidateId: string) {
   const stageNames = new Map(stageRows.map((stage) => [stage.id, stage.name]));
 
   const activity: CandidateActivityItem[] = events.map((event) => {
+    const mapped = (() => {
     if (event.type === "application.created") {
       const jobTitle = applicationJobTitles.get(event.entityId) ?? "a job";
       const source = textFromMetadata(event.metadata, "source");
@@ -1146,6 +1197,26 @@ export async function getCandidateProfile(candidateId: string) {
         id: event.id,
         type: event.type,
         label: "Note added",
+        actorName: event.actorName,
+        createdAt: event.createdAt,
+      };
+    }
+
+    if (event.type === "referral.added") {
+      return {
+        id: event.id,
+        type: event.type,
+        label: "Referred",
+        actorName: event.actorName,
+        createdAt: event.createdAt,
+      };
+    }
+
+    if (event.type === "referral.removed") {
+      return {
+        id: event.id,
+        type: event.type,
+        label: "Referral removed",
         actorName: event.actorName,
         createdAt: event.createdAt,
       };
@@ -1310,6 +1381,11 @@ export async function getCandidateProfile(candidateId: string) {
       actorName: event.actorName,
       createdAt: event.createdAt,
     };
+    })();
+    return {
+      ...mapped,
+      applicationId: event.entityType === "application" ? event.entityId : null,
+    };
   });
 
   // Check if candidate is in the pool
@@ -1326,6 +1402,46 @@ export async function getCandidateProfile(candidateId: string) {
     .limit(1);
 
   const inPool = !!poolEntry;
+
+  const referredByUsers = alias(authUsers, "referred_by_users");
+  const createdByUsers = alias(authUsers, "created_by_users");
+  const referralRows = await db
+    .select({
+      id: candidateReferrals.id,
+      note: candidateReferrals.note,
+      featured: candidateReferrals.featured,
+      createdAt: candidateReferrals.createdAt,
+      jobId: candidateReferrals.jobId,
+      jobTitle: jobs.title,
+      referredById: candidateReferrals.referredById,
+      referredByName: referredByUsers.name,
+      createdById: candidateReferrals.createdById,
+      createdByName: createdByUsers.name,
+    })
+    .from(candidateReferrals)
+    .leftJoin(jobs, eq(jobs.id, candidateReferrals.jobId))
+    .innerJoin(referredByUsers, eq(referredByUsers.id, candidateReferrals.referredById))
+    .innerJoin(createdByUsers, eq(createdByUsers.id, candidateReferrals.createdById))
+    .where(
+      and(
+        eq(candidateReferrals.workspaceId, workspace.id),
+        eq(candidateReferrals.candidateId, candidate.id),
+      ),
+    )
+    .orderBy(desc(candidateReferrals.featured), desc(candidateReferrals.createdAt));
+
+  const referrals = referralRows.map((row) => ({
+    id: row.id,
+    note: row.note,
+    featured: row.featured,
+    createdAt: row.createdAt.toISOString(),
+    jobId: row.jobId,
+    jobTitle: row.jobTitle,
+    referredById: row.referredById,
+    referredByName: row.referredByName,
+    createdById: row.createdById,
+    createdByName: row.createdByName,
+  }));
 
   const privacyRequests = await db
     .select({
@@ -1359,6 +1475,7 @@ export async function getCandidateProfile(candidateId: string) {
       experienceEntries,
     },
     inPool,
+    referrals,
     applications: candidateApplications.map((application) => ({
       ...application,
       answers: answersByApplication.get(application.id) ?? [],
@@ -1377,6 +1494,7 @@ export async function getCandidateProfile(candidateId: string) {
     activity,
     scorecards: scorecardRows.map((row) => ({
       id: row.id,
+      applicationId: row.applicationId,
       rating: row.rating,
       comment: row.comment,
       stageName: row.stageName,

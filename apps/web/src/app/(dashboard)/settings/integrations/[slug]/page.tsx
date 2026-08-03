@@ -46,6 +46,7 @@ import {
   getEsignWebhookBaseUrl,
   getHarlyPublicOrigin,
 } from "@/lib/public-origin";
+import { buildEsignWebhookUrl } from "@/lib/esign/webhook-url";
 import {
   WEBHOOK_EVENTS,
   WEBHOOK_EVENT_LABELS,
@@ -326,13 +327,14 @@ async function renderPanel(
     case "docuseal": {
       const status = await getWorkspaceEsignStatus(ctx.organizationId);
       const webhookUrl = status.webhookSecret
-        ? `${getEsignWebhookBaseUrl()}?ws=${encodeURIComponent(ctx.organizationId)}&secret=${encodeURIComponent(status.webhookSecret)}`
+        ? buildEsignWebhookUrl(getEsignWebhookBaseUrl(), ctx.organizationId)
         : null;
       return (
         <EsignConnectPanel
           status={status}
           canEdit={ctx.canEdit}
           webhookUrl={webhookUrl}
+          webhookSecret={status.webhookSecret}
           tileClassName={integration.tileClassName}
           description={integration.detail}
         />

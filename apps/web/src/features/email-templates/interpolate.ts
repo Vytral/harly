@@ -28,6 +28,7 @@ export const TEMPLATE_VARIABLES = [
   { key: "offer_salary", label: "Offer salary", group: "Offer" },
   { key: "offer_expiry", label: "Offer expiry date", group: "Offer" },
   { key: "offer_start_date", label: "Offer start date", group: "Offer" },
+  { key: "offer_url", label: "Offer review link", group: "Offer" },
   // Workspace
   { key: "company_name", label: "Company name", group: "Workspace" },
   { key: "portal_link", label: "Candidate portal link", group: "Workspace" },

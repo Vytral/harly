@@ -2,7 +2,7 @@
 
 import { cookies, headers } from "next/headers";
 import { createElement } from "react";
-import { and, eq, asc, count, gt, isNull } from "drizzle-orm";
+import { and, eq, asc, count, desc, gt, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -40,7 +40,18 @@ import { createLogger } from "@/lib/logger";
 import { normalizeJobApplicationConfig } from "@/features/jobs/config";
 import { validatePortalApplication } from "@/features/portal/application-validation";
 import { sendApplicationReceivedEmails } from "@/features/applications/notifications";
+import { verifyResumeUpload } from "@/features/applications/resume-upload";
+import { lockApplicationPipelineOrder } from "@/features/applications/pipeline-order";
+import { getApplicationConflictMessage } from "@/features/applications/data";
+import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+} from "@/server/events/emit";
+import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
+import { offerHasExpired } from "@/features/offers/core";
+import { freshEsignContext, getSubmission } from "@/lib/esign/client";
+import { signerSigningUrl } from "@/lib/esign/offer-signing";
 
 const log = createLogger("portal-actions");
 
@@ -148,6 +159,9 @@ type ApplyInput = {
   jobId: string;
   answers: Record<string, string>;
   resumeKey?: string;
+  resumeFileName?: string;
+  resumeFileType?: string;
+  resumeFileSize?: number;
   consentGiven?: boolean;
 };
 
@@ -212,6 +226,19 @@ export async function applyToJobAction(
     });
     if (!validation.ok) return validation;
 
+    const verifiedResume = input.resumeKey
+      ? await verifyResumeUpload({
+          workspaceId: session.workspaceId,
+          key: input.resumeKey,
+          fileName: input.resumeFileName,
+          fileType: input.resumeFileType,
+          fileSize: input.resumeFileSize,
+        })
+      : null;
+    if (input.resumeKey && !verifiedResume) {
+      return { ok: false, error: "Resume upload is invalid." };
+    }
+
     const [settings] = await db
       .select({
         consentCheckboxText: workspaceSettings.consentCheckboxText,
@@ -227,6 +254,19 @@ export async function applyToJobAction(
         error: "You must consent to data processing to apply.",
       };
     }
+
+    const consentHeaders = input.consentGiven ? await headers() : null;
+    const consentIp = consentHeaders
+      ? clientIp(
+          new Request("http://harly.local", {
+            headers: {
+              "x-forwarded-for": consentHeaders.get("x-forwarded-for") ?? "",
+              "x-real-ip": consentHeaders.get("x-real-ip") ?? "",
+            },
+          }),
+        )
+      : null;
+    const consentUserAgent = consentHeaders?.get("user-agent") ?? null;
 
     const [existing] = await db
       .select({ id: applications.id })
@@ -261,6 +301,22 @@ export async function applyToJobAction(
     }
 
     const application = await db.transaction(async (tx) => {
+      await lockApplicationPipelineOrder(
+        tx,
+        session.workspaceId,
+        firstStage.id,
+      );
+      const [nextPipelineOrder] = await tx
+        .select({
+          value: sql<number>`coalesce(max(${applications.pipelineOrder}), 0) + 1`,
+        })
+        .from(applications)
+        .where(
+          and(
+            eq(applications.workspaceId, session.workspaceId),
+            eq(applications.currentStageId, firstStage.id),
+          ),
+        );
       const [created] = await tx
         .insert(applications)
         .values({
@@ -268,6 +324,8 @@ export async function applyToJobAction(
           candidateId: session.candidateId,
           jobId: input.jobId,
           currentStageId: firstStage.id,
+          pipelineOrder: nextPipelineOrder?.value ?? 1,
+          source: "portal",
           status: "active",
         })
         .returning({ id: applications.id });
@@ -290,13 +348,14 @@ export async function applyToJobAction(
         metadata: { source: "portal", jobId: input.jobId },
       });
 
-      if (input.resumeKey) {
+      if (verifiedResume) {
         await tx.insert(candidateFiles).values({
           workspaceId: session.workspaceId,
           candidateId: session.candidateId,
-          fileName: "Resume",
-          fileUrl: `/uploads/${input.resumeKey}`,
-          fileType: "resume",
+          fileName: verifiedResume.fileName,
+          fileUrl: verifiedResume.fileUrl,
+          fileType: verifiedResume.fileType,
+          fileSize: verifiedResume.fileSize,
         });
       }
 
@@ -326,11 +385,48 @@ export async function applyToJobAction(
           consentType: "data_processing",
           consentText,
           granted: true,
+          ipAddress: consentIp,
+          userAgent: consentUserAgent,
         });
       }
 
-      return created;
+      const domainEvent = await persistDomainEvent(tx, {
+        name: "application.created",
+        workspaceId: session.workspaceId,
+        aggregateType: "application",
+        aggregateId: created.id,
+        payload: {
+          application: { id: created.id, jobId: input.jobId },
+          candidate: {
+            id: session.candidateId,
+            email: session.email,
+            name: `${session.firstName} ${session.lastName}`.trim(),
+          },
+          job: { id: input.jobId, title: job.title },
+        },
+      });
+
+      return { ...created, domainEvent };
     });
+
+    await publishPersistedDomainEvents([application.domainEvent]);
+    await emitWebhookEvent(
+      session.workspaceId,
+      "application.created",
+      {
+        application: { id: application.id, jobId: input.jobId },
+        candidate: {
+          id: session.candidateId,
+          email: session.email,
+          name: `${session.firstName} ${session.lastName}`.trim(),
+        },
+        job: { id: input.jobId, title: job.title },
+      },
+      {
+        skipDomainEvent: true,
+        eventId: application.domainEvent.eventId,
+      },
+    );
 
     // Keep portal submissions on the same durable email path as public
     // applications. Email delivery must never turn a successful application
@@ -375,6 +471,8 @@ export async function applyToJobAction(
 
     return { ok: true, applicationId: application.id };
   } catch (error) {
+    const conflict = getApplicationConflictMessage(error);
+    if (conflict) return { ok: false, error: conflict };
     log.error(error, "applyToJobAction failed");
     return { ok: false, error: "Unable to submit application." };
   }
@@ -383,9 +481,10 @@ export async function applyToJobAction(
 /**
  * Return the DocuSeal hosted signing URL for an offer the candidate was sent via
  * e-signature. Auth is the candidate portal session (JWT), not a dashboard
- * session. The signing URL was captured on the recipient row when the submission
- * was created, so no provider round-trip is needed. `completed_redirect_url` was
- * baked into the submission and returns the candidate to the portal after signing.
+ * session. Signing URLs are bearer credentials: they are generated from a
+ * fresh, provider-verified response and never persisted or reused from the
+ * recipient row. `completed_redirect_url` was baked into the submission and
+ * returns the candidate to the portal after signing.
  */
 export async function createOfferSigningViewAction(input: {
   applicationId: string;
@@ -405,24 +504,42 @@ export async function createOfferSigningViewAction(input: {
       esignSubmissionId: offers.esignSubmissionId,
       signatureEnvelopeRefId: offers.signatureEnvelopeRefId,
       candidateId: offers.candidateId,
+      expiresAt: offers.expiresAt,
+      applicationStatus: applications.status,
     })
     .from(offers)
+    .innerJoin(
+      applications,
+      and(
+        eq(applications.id, offers.applicationId),
+        eq(applications.workspaceId, offers.workspaceId),
+      ),
+    )
     .where(
       and(
         eq(offers.workspaceId, session.workspaceId),
         eq(offers.applicationId, input.applicationId),
         eq(offers.candidateId, session.candidateId),
         eq(offers.status, "sent"),
+        eq(applications.status, "active"),
       ),
     )
+    .orderBy(desc(offers.createdAt))
     .limit(1);
 
   if (!offer || !offer.esignSubmissionId || !offer.signatureEnvelopeRefId) {
     return { ok: false, error: "No offer is waiting for your signature." };
   }
+  if (offerHasExpired(offer.expiresAt)) {
+    return { ok: false, error: "This offer has expired and is no longer actionable." };
+  }
 
   const [recipient] = await db
-    .select({ signingUrl: signatureRecipients.signingUrl })
+    .select({
+      providerRecipientId: signatureRecipients.providerRecipientId,
+      email: signatureRecipients.email,
+      clientUserId: signatureRecipients.clientUserId,
+    })
     .from(signatureRecipients)
     .where(
       and(
@@ -433,8 +550,44 @@ export async function createOfferSigningViewAction(input: {
     .orderBy(asc(signatureRecipients.routingOrder))
     .limit(1);
 
-  if (!recipient?.signingUrl) {
+  if (!recipient) {
     return { ok: false, error: "Electronic signing is not available for this offer." };
   }
-  return { ok: true, signingUrl: recipient.signingUrl };
+
+  const ctx = await freshEsignContext(session.workspaceId);
+  if (!ctx) {
+    return { ok: false, error: "Electronic signing is not available for this offer." };
+  }
+
+  let submission;
+  try {
+    submission = await getSubmission(ctx, offer.esignSubmissionId);
+  } catch (error) {
+    log.warn({ error, offerId: offer.id }, "Could not refresh DocuSeal signing session");
+    return { ok: false, error: "Electronic signing is temporarily unavailable." };
+  }
+
+  if (
+    String(submission.id) !== offer.esignSubmissionId ||
+    ["completed", "archived", "declined", "expired"].includes(
+      submission.status?.toLowerCase() ?? "",
+    )
+  ) {
+    return { ok: false, error: "This offer is no longer waiting for your signature." };
+  }
+
+  // Correlate with provider-owned submitter fields and the local recipient row.
+  // Submission metadata is intentionally not used as identity.
+  const signer = submission.submitters.find(
+    (candidate) =>
+      String(candidate.id) === recipient.providerRecipientId &&
+      candidate.external_id === session.candidateId &&
+      candidate.email?.toLowerCase() === recipient.email.toLowerCase() &&
+      (!recipient.clientUserId || recipient.clientUserId === session.candidateId),
+  );
+  const signingUrl = signerSigningUrl(ctx.baseUrl, signer);
+  if (!signingUrl) {
+    return { ok: false, error: "Electronic signing is not available for this offer." };
+  }
+  return { ok: true, signingUrl };
 }

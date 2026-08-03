@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { evaluateCandidateWithRules, RULES_EVALUATION_VERSION } from "./rules";
 
-describe("Harly Algorithm rules-v2", () => {
+describe("Harly Algorithm rules-v3", () => {
   const job = {
     title: "Junior PHP Engineer",
     description: "Build web applications.",
@@ -22,13 +22,13 @@ describe("Harly Algorithm rules-v2", () => {
       },
     });
 
-    expect(RULES_EVALUATION_VERSION).toBe("rules-v2");
+    expect(RULES_EVALUATION_VERSION).toBe("rules-v3");
     expect(result.result.score).toBeGreaterThanOrEqual(80);
     expect(result.criterionResults.map((criterion) => criterion.label)).toContain("PHP");
     expect(result.criterionResults.filter((criterion) => criterion.status === "met").every((criterion) => criterion.evidence)).toBe(true);
   });
 
-  it("does not treat missing evidence as an automatic zero for every dimension", () => {
+  it("penalizes missing evidence instead of inflating the score", () => {
     const result = evaluateCandidateWithRules({
       job,
       candidate: { resumeText: "PHP developer", answers: [] },
@@ -36,7 +36,25 @@ describe("Harly Algorithm rules-v2", () => {
 
     expect(result.criterionResults.length).toBeGreaterThan(1);
     expect(result.criterionResults[0]?.label).toBe("PHP");
-    expect(result.result.score).toBeGreaterThan(0);
+    expect(result.result.score).toBeLessThan(70);
+    expect(result.result.recommendation).not.toBe("strong_yes");
     expect(result.requiresHumanReview).toBe(true);
+  });
+
+  it("never calls a candidate a strong yes when a required criterion is unknown", () => {
+    const result = evaluateCandidateWithRules({
+      job: {
+        ...job,
+        requirements: "PHP and Laravel experience. SQL is required.",
+        keywords: ["PHP", "Laravel", "SQL"],
+      },
+      candidate: {
+        resumeText: "PHP Laravel developer.",
+        answers: [],
+      },
+    });
+
+    expect(result.result.recommendation).not.toBe("strong_yes");
+    expect(result.criterionResults.find((criterion) => criterion.label === "SQL")?.status).toBe("unknown");
   });
 });

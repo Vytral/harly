@@ -23,8 +23,13 @@ import type {
   CandidateEducationEntry,
   CandidateExperienceEntry,
 } from "@harly/db";
-import { normalizeJobApplicationConfig } from "@/features/jobs/config";
+import {
+  normalizeJobApplicationConfig,
+  type JobApplicationConfig,
+} from "@/features/jobs/config";
 import { buildQuestionAnswerRows } from "@/features/applications/questions";
+import { lockApplicationPipelineOrder } from "@/features/applications/pipeline-order";
+import { verifyResumeUpload } from "@/features/applications/resume-upload";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
   persistDomainEvent,
@@ -32,7 +37,6 @@ import {
   type PersistedDomainEvent,
 } from "@/server/events/emit";
 import type { ApplicationFormValues } from "@/lib/validations/applications";
-import { isWorkspaceStorageKey } from "@/lib/storage-validation";
 import { publicJobVisibilityConditions } from "@/features/jobs/data";
 
 export type PublicApplicationResult =
@@ -54,6 +58,56 @@ export type PublicApplicationResult =
       };
     }
   | { ok: false; message: string };
+
+export const DEFAULT_APPLICATION_CONSENT_TEXT =
+  "I agree to the privacy policy and consent to the processing of my personal data.";
+
+export type PublicApplicationConfig = JobApplicationConfig & {
+  legalConfigured: boolean;
+  consentText: string;
+};
+
+/** Map known uniqueness races to the public application contract. */
+export function getApplicationConflictMessage(error: unknown): string | null {
+  const seen = new Set<unknown>();
+  const parts: string[] = [];
+  let current: unknown = error;
+
+  while (current && !seen.has(current)) {
+    seen.add(current);
+    if (typeof current !== "object") break;
+    const value = current as {
+      code?: unknown;
+      constraint?: unknown;
+      detail?: unknown;
+      message?: unknown;
+      cause?: unknown;
+    };
+    if (typeof value.code === "string") parts.push(value.code);
+    if (typeof value.constraint === "string") parts.push(value.constraint);
+    if (typeof value.detail === "string") parts.push(value.detail);
+    if (typeof value.message === "string") parts.push(value.message);
+    current = value.cause;
+  }
+
+  const description = parts.join(" ").toLowerCase();
+  if (
+    parts.includes("23505") &&
+    (description.includes("applications_workspace_candidate_job_idx") ||
+      (description.includes("applications") &&
+        description.includes("candidate") &&
+        description.includes("job")))
+  ) {
+    return "You've already applied to this job.";
+  }
+  if (
+    parts.includes("23505") &&
+    description.includes("candidates_workspace_email_idx")
+  ) {
+    return "A candidate with this email is being created. Please try again.";
+  }
+  return null;
+}
 
 function normalizeEducationEntries(
   entries: ApplicationFormValues["educationEntries"],
@@ -94,9 +148,15 @@ export async function getPublicJobApplicationContext(input: {
       workspaceId: jobs.workspaceId,
       keywords: jobs.keywords,
       applicationConfig: jobs.applicationConfig,
+      legalConfigured: workspaceSettings.legalConfigured,
+      consentText: workspaceSettings.consentCheckboxText,
     })
     .from(jobs)
     .innerJoin(organization, eq(organization.id, jobs.workspaceId))
+    .leftJoin(
+      workspaceSettings,
+      eq(workspaceSettings.organizationId, jobs.workspaceId),
+    )
     .where(
       and(
         eq(jobs.slug, input.jobSlug),
@@ -113,11 +173,20 @@ export async function getPublicJobApplicationContext(input: {
     return null;
   }
 
+  const normalizedApplicationConfig = normalizeJobApplicationConfig(
+    row.applicationConfig,
+  );
+
   return {
     id: row.id,
     workspaceId: row.workspaceId,
     keywords: Array.isArray(row.keywords) ? (row.keywords as string[]) : [],
-    applicationConfig: normalizeJobApplicationConfig(row.applicationConfig),
+    applicationConfig: {
+      ...normalizedApplicationConfig,
+      legalConfigured: row.legalConfigured === true,
+      consentText:
+        row.consentText?.trim() || DEFAULT_APPLICATION_CONSENT_TEXT,
+    } satisfies PublicApplicationConfig,
   };
 }
 
@@ -150,13 +219,16 @@ export async function createPublicApplication(
     current: null,
   };
 
-  const result = await db.transaction(
-    async (tx): Promise<PublicApplicationResult> => {
+  let result: PublicApplicationResult;
+  try {
+    result = await db.transaction(
+      async (tx): Promise<PublicApplicationResult> => {
       const [job] = await tx
         .select({
           id: jobs.id,
           title: jobs.title,
           workspaceId: jobs.workspaceId,
+          applicationConfig: jobs.applicationConfig,
         })
         .from(jobs)
         .innerJoin(organization, eq(organization.id, jobs.workspaceId))
@@ -177,10 +249,28 @@ export async function createPublicApplication(
       }
 
       const workspaceId = job.workspaceId;
+      const applicationConfig = normalizeJobApplicationConfig(
+        job.applicationConfig,
+      );
       if (
-        values.resumeKey &&
-        !isWorkspaceStorageKey(workspaceId, values.resumeKey, "resumes")
+        applicationConfig.sections.profile.resume.visibility === "required" &&
+        !values.resumeKey
       ) {
+        return { ok: false, message: "Resume is required." };
+      }
+      if (values.resumeUrl && !values.resumeKey) {
+        return { ok: false, message: "Resume upload is invalid." };
+      }
+      const verifiedResume = values.resumeKey
+        ? await verifyResumeUpload({
+            workspaceId,
+            key: values.resumeKey,
+            fileName: values.resumeFileName,
+            fileType: values.resumeFileType,
+            fileSize: values.resumeFileSize,
+          })
+        : null;
+      if (values.resumeKey && !verifiedResume) {
         return { ok: false, message: "Resume upload is invalid." };
       }
       const [workspace] = await tx
@@ -188,6 +278,8 @@ export async function createPublicApplication(
           name: organization.name,
           slug: organization.slug,
           portalEnabled: workspaceSettings.candidatePortalEnabled,
+          legalConfigured: workspaceSettings.legalConfigured,
+          consentText: workspaceSettings.consentCheckboxText,
         })
         .from(organization)
         .leftJoin(
@@ -199,6 +291,16 @@ export async function createPublicApplication(
 
       if (!workspace) {
         throw new Error("Workspace could not be resolved.");
+      }
+
+      const consentText =
+        workspace.consentText?.trim() || DEFAULT_APPLICATION_CONSENT_TEXT;
+      if (workspace.legalConfigured && !options?.consent) {
+        return {
+          ok: false,
+          message:
+            "You must agree to the privacy policy to submit your application.",
+        };
       }
 
       const submittedAddress = values.address ?? values.location ?? null;
@@ -251,55 +353,30 @@ export async function createPublicApplication(
         }
       }
 
-      const candidate = existingCandidate
-        ? (
-            await tx
-              .update(candidates)
-              .set({
-                firstName: values.firstName,
-                lastName: values.lastName,
-                phone: values.phone,
-                address: submittedAddress,
-                linkedinUrl: values.linkedinUrl,
-                githubUrl: values.githubUrl,
-                websiteUrl: values.websiteUrl,
-                avatarUrl: values.photoUrl,
-                headline: values.headline,
-                educationEntries,
-                experienceEntries,
-                ...(values.skills && values.skills.length > 0
-                  ? { skills: values.skills }
-                  : {}),
-                ...(values.experienceYears != null
-                  ? { experienceYears: values.experienceYears }
-                  : {}),
-                updatedAt: new Date(),
-              })
-              .where(eq(candidates.id, existingCandidate.id))
-              .returning()
-          )[0]
-        : (
-            await tx
-              .insert(candidates)
-              .values({
-                workspaceId,
-                firstName: values.firstName,
-                lastName: values.lastName,
-                email: values.email,
-                phone: values.phone,
-                address: submittedAddress,
-                linkedinUrl: values.linkedinUrl,
-                githubUrl: values.githubUrl,
-                websiteUrl: values.websiteUrl,
-                avatarUrl: values.photoUrl,
-                headline: values.headline,
-                educationEntries,
-                experienceEntries,
-                skills: values.skills ?? [],
-                experienceYears: values.experienceYears ?? null,
-              })
-              .returning()
-          )[0];
+      const candidate =
+        existingCandidate ??
+        (
+          await tx
+            .insert(candidates)
+            .values({
+              workspaceId,
+              firstName: values.firstName,
+              lastName: values.lastName,
+              email: values.email,
+              phone: values.phone,
+              address: submittedAddress,
+              linkedinUrl: values.linkedinUrl,
+              githubUrl: values.githubUrl,
+              websiteUrl: values.websiteUrl,
+              avatarUrl: values.photoUrl,
+              headline: values.headline,
+              educationEntries,
+              experienceEntries,
+              skills: values.skills ?? [],
+              experienceYears: values.experienceYears ?? null,
+            })
+            .returning()
+        )[0];
 
       if (!candidate) {
         throw new Error("Candidate could not be created.");
@@ -325,6 +402,7 @@ export async function createPublicApplication(
       }
 
       const now = new Date();
+      await lockApplicationPipelineOrder(tx, workspaceId, firstStage.id);
       const [nextPipelineOrder] = await tx
         .select({
           value: sql<number>`coalesce(max(${applications.pipelineOrder}), 0) + 1`,
@@ -349,6 +427,9 @@ export async function createPublicApplication(
           appliedAt: now,
           coverLetter: values.coverLetter ?? null,
           snapshot: {
+            firstName: values.firstName,
+            lastName: values.lastName,
+            email: values.email,
             phone: values.phone ?? null,
             address: submittedAddress,
             photoUrl: values.photoUrl ?? null,
@@ -359,10 +440,10 @@ export async function createPublicApplication(
             coverLetter: values.coverLetter ?? null,
             educationEntries,
             experienceEntries,
-            resumeUrl: values.resumeUrl ?? null,
-            resumeFileName: values.resumeFileName ?? null,
-            resumeFileType: values.resumeFileType ?? null,
-            resumeFileSize: values.resumeFileSize ?? null,
+            resumeUrl: verifiedResume?.fileUrl ?? null,
+            resumeFileName: verifiedResume?.fileName ?? null,
+            resumeFileType: verifiedResume?.fileType ?? null,
+            resumeFileSize: verifiedResume?.fileSize ?? null,
           },
         })
         .returning({ id: applications.id });
@@ -371,19 +452,14 @@ export async function createPublicApplication(
         throw new Error("Application could not be created.");
       }
 
-      if (
-        values.resumeUrl &&
-        values.resumeFileName &&
-        values.resumeFileType &&
-        values.resumeFileSize
-      ) {
+      if (verifiedResume) {
         await tx.insert(candidateFiles).values({
           workspaceId,
           candidateId: candidate.id,
-          fileName: values.resumeFileName,
-          fileUrl: values.resumeUrl,
-          fileType: values.resumeFileType,
-          fileSize: values.resumeFileSize,
+          fileName: verifiedResume.fileName,
+          fileUrl: verifiedResume.fileUrl,
+          fileType: verifiedResume.fileType,
+          fileSize: verifiedResume.fileSize,
           uploadedById: null,
         });
       }
@@ -432,7 +508,7 @@ export async function createPublicApplication(
         metadata: {
           jobTitle: job.title,
           candidateName: `${candidate.firstName} ${candidate.lastName}`,
-          resumeFileName: values.resumeFileName ?? null,
+          resumeFileName: verifiedResume?.fileName ?? null,
           resumeKey: values.resumeKey ?? null,
           questionAnswers: values.questionAnswers,
         },
@@ -445,7 +521,7 @@ export async function createPublicApplication(
           candidateId: candidate.id,
           applicationId: application.id,
           consentType: "data_processing",
-          consentText: options.consent.consentText,
+          consentText,
           granted: true,
           ipAddress: options.consent.ipAddress,
           userAgent: options.consent.userAgent,
@@ -501,8 +577,13 @@ export async function createPublicApplication(
           ownerEmails: owners.map((owner) => owner.email),
         },
       };
-    },
-  );
+      },
+    );
+  } catch (error) {
+    const conflict = getApplicationConflictMessage(error);
+    if (conflict) return { ok: false, message: conflict };
+    throw error;
+  }
 
   const event = createdEvent.current;
   if (createdDomainEvent.current) {

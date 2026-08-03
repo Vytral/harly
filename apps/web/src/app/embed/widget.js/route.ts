@@ -95,6 +95,8 @@ const WIDGET = String.raw`(function () {
       ".oh-btn.secondary{background:var(--oh-surface-2);color:var(--oh-fg)}" +
       ".oh-btn:active{transform:scale(.97)}" +
       ".oh-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}" +
+      ".oh-consent label{display:flex;align-items:flex-start;gap:8px;font-size:.85em;font-weight:400}" +
+      ".oh-consent input{margin-top:3px;accent-color:var(--oh-accent)}" +
       ".oh-field label{font-size:.85em;font-weight:600}" +
       ".oh-req{color:var(--oh-accent);margin-left:2px}" +
       ".oh-empty,.oh-error{padding:16px;color:var(--oh-muted)}" +
@@ -262,6 +264,7 @@ const WIDGET = String.raw`(function () {
     var resume = null;
     var questionInputs = [];
     var captchaToken = null;
+    var consentInput = null;
 
     var submitWrap = el("div");
     var submit = el("button", "oh-btn", "Submit application");
@@ -293,6 +296,18 @@ const WIDGET = String.raw`(function () {
       if (required) input.required = true;
       extra[key] = input;
       form.insertBefore(field(labelText, input, required), captchaBox);
+    }
+
+    function addConsent(text) {
+      var wrap = el("div", "oh-field oh-consent");
+      var label = el("label");
+      consentInput = el("input");
+      consentInput.type = "checkbox";
+      consentInput.required = true;
+      label.appendChild(consentInput);
+      label.appendChild(document.createTextNode(text));
+      wrap.appendChild(label);
+      form.insertBefore(wrap, captchaBox);
     }
 
     fetch(api("/api/public/v1/jobs/" + encodeURIComponent(job.slug)))
@@ -334,6 +349,12 @@ const WIDGET = String.raw`(function () {
           form.insertBefore(field(qn.label, input, qn.required), captchaBox);
         });
 
+        // Keep the embed aligned with the hosted form. The public job endpoint
+        // exposes this non-sensitive policy configuration inside applicationConfig.
+        if (cfg && cfg.legalConfigured === true) {
+          addConsent(cfg.consentText || "I agree to the privacy policy and consent to the processing of my personal data.");
+        }
+
         // Render the active CAPTCHA provider if the workspace requires it.
         // Falls back to the legacy turnstileSiteKey field for older API shapes.
         var captchaProvider = data.captchaProvider || (data.turnstileSiteKey ? "turnstile" : null);
@@ -361,7 +382,8 @@ const WIDGET = String.raw`(function () {
       questionInputs.forEach(function (q) { answers[q.id] = q.input.value; });
       var payload = {
         firstName: first.value, lastName: last.value, email: email.value,
-        questionAnswers: answers
+        questionAnswers: answers,
+        consentGiven: Boolean(consentInput && consentInput.checked)
       };
       Object.keys(extra).forEach(function (k) {
         if (extra[k] && extra[k].value) payload[k] = extra[k].value;

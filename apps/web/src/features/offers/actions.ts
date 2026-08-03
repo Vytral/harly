@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, exists, getTableColumns, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -11,12 +11,15 @@ import {
   db,
   documentAssociations,
   documents,
+  candidates,
   emailOutbox,
+  jobs,
   jobHiringTeam,
   jobStages,
   notifications,
   offers,
   signatureFields,
+  signatureEnvelopes,
 } from "@harly/db";
 
 import {
@@ -34,10 +37,23 @@ import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
-import { createOfferEnvelope } from "@/lib/esign/offer-signing";
-import { getOrCreateNativeOfferDocument } from "@/lib/esign/native/offer-signing";
+import {
+  archiveDocusealOffer,
+  createOfferEnvelope,
+} from "@/lib/esign/offer-signing";
+import {
+  ensureNativeOfferEnvelope,
+  getOrCreateNativeOfferDocument,
+} from "@/lib/esign/native/offer-signing";
+import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
-import { assertOfferTerms, getOfferRecipient, offerHasExpired } from "./core";
+import {
+  assertOfferTerms,
+  getOfferRecipient,
+  offerHasExpired,
+  serializeOfferTermsSnapshot,
+  snapshotOfferTerms,
+} from "./core";
 
 const log = createLogger("offers");
 
@@ -66,9 +82,55 @@ type ActionResult = { success: boolean; error?: string };
 /** Load an offer's application context, workspace-scoped. */
 async function getOfferRow(workspaceId: string, offerId: string) {
   const [row] = await db
-    .select()
+    .select({
+      ...getTableColumns(offers),
+      updatedAtVersion: sql<string>`${offers.updatedAt}::text`,
+    })
     .from(offers)
-    .where(and(eq(offers.workspaceId, workspaceId), eq(offers.id, offerId)))
+    .where(
+      and(
+        eq(offers.workspaceId, workspaceId),
+        eq(offers.id, offerId),
+        // Keep the denormalized offer links coherent before any mutation.
+        exists(
+          db
+            .select({ id: applications.id })
+            .from(applications)
+            .where(
+              and(
+                eq(applications.workspaceId, workspaceId),
+                eq(applications.id, offers.applicationId),
+                eq(applications.candidateId, offers.candidateId),
+                eq(applications.jobId, offers.jobId),
+              ),
+            ),
+        ),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.workspaceId, workspaceId),
+                eq(candidates.id, offers.candidateId),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
+        exists(
+          db
+            .select({ id: jobs.id })
+            .from(jobs)
+            .where(
+              and(
+                eq(jobs.workspaceId, workspaceId),
+                eq(jobs.id, offers.jobId),
+                isNull(jobs.deletedAt),
+              ),
+            ),
+        ),
+      ),
+    )
     .limit(1);
   return row ?? null;
 }
@@ -182,6 +244,7 @@ export async function createOffer(input: {
       id: applications.id,
       candidateId: applications.candidateId,
       jobId: applications.jobId,
+      status: applications.status,
     })
     .from(applications)
     .where(
@@ -194,6 +257,12 @@ export async function createOffer(input: {
 
   if (!application) {
     return { success: false, error: "Application not found." };
+  }
+  if (application.status !== "active") {
+    return {
+      success: false,
+      error: "Only active applications can receive an offer.",
+    };
   }
 
   if (parsed.data.documentIds.length > 0) {
@@ -216,13 +285,33 @@ export async function createOffer(input: {
   }
 
   await db.transaction(async (tx) => {
+    const [lockedApplication] = await tx
+      .select({
+        id: applications.id,
+        candidateId: applications.candidateId,
+        jobId: applications.jobId,
+        status: applications.status,
+      })
+      .from(applications)
+      .where(
+        and(
+          eq(applications.workspaceId, workspaceId),
+          eq(applications.id, application.id),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!lockedApplication || lockedApplication.status !== "active") {
+      throw new Error("Only active applications can receive an offer.");
+    }
+
     const [createdOffer] = await tx
       .insert(offers)
       .values({
         workspaceId,
         applicationId: application.id,
-        candidateId: application.candidateId,
-        jobId: application.jobId,
+        candidateId: lockedApplication.candidateId,
+        jobId: lockedApplication.jobId,
         status: "draft",
         title: parsed.data.title,
         salaryAmount: parsed.data.salaryAmount,
@@ -254,7 +343,7 @@ export async function createOffer(input: {
     await logOfferActivity(tx, {
       workspaceId,
       actorId: context.user.id,
-      applicationId: application.id,
+      applicationId: lockedApplication.id,
       type: "offer.created",
       metadata: { title: parsed.data.title },
     });
@@ -316,7 +405,26 @@ export async function updateOffer(input: {
     return { success: false, error: "Only draft offers can be edited." };
   }
 
-  await db
+  const [inFlightSend] = await db
+    .select({ id: emailOutbox.id })
+    .from(emailOutbox)
+    .where(
+      and(
+        eq(emailOutbox.workspaceId, workspaceId),
+        eq(emailOutbox.kind, "offer.extended"),
+        or(eq(emailOutbox.status, "pending"), eq(emailOutbox.status, "processing")),
+        sql`${emailOutbox.payload}->>'offerId' = ${offer.id}`,
+      ),
+    )
+    .limit(1);
+  if (inFlightSend) {
+    return {
+      success: false,
+      error: "This offer is being sent. Wait for delivery before editing its terms.",
+    };
+  }
+
+  const [updated] = await db
     .update(offers)
     .set({
       title: parsed.data.title,
@@ -327,8 +435,20 @@ export async function updateOffer(input: {
       startDate: parsed.data.startDate ? new Date(parsed.data.startDate) : null,
       expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null,
       notes: parsed.data.notes,
+      updatedAt: new Date(),
     })
-    .where(and(eq(offers.workspaceId, workspaceId), eq(offers.id, offer.id)));
+    .where(
+      and(
+        eq(offers.workspaceId, workspaceId),
+        eq(offers.id, offer.id),
+        eq(offers.status, "draft"),
+        sql`${offers.updatedAt} = ${offer.updatedAtVersion}::timestamptz`,
+      ),
+    )
+    .returning({ id: offers.id });
+  if (!updated) {
+    return { success: false, error: "Offer changed while you were editing it. Refresh and try again." };
+  }
 
   revalidatePath(`/dashboard/candidates/${offer.candidateId}`);
   return { success: true };
@@ -370,6 +490,23 @@ export async function sendOffer(input: {
     };
   }
 
+  const [application] = await db
+    .select({ status: applications.status })
+    .from(applications)
+    .where(
+      and(
+        eq(applications.workspaceId, workspaceId),
+        eq(applications.id, offer.applicationId),
+      ),
+    )
+    .limit(1);
+  if (!application || application.status !== "active") {
+    return {
+      success: false,
+      error: "Only active applications can receive an offer.",
+    };
+  }
+
   const recipient = await getOfferRecipient(workspaceId, offer.candidateId);
   if (!recipient?.email) {
     return {
@@ -406,6 +543,18 @@ export async function sendOffer(input: {
           error: "Could not prepare the offer letter for signing.",
         };
       }
+      if (!isSignableNativeFieldsSnapshot(prepared.fieldsSnapshot)) {
+        return {
+          success: false,
+          error: "Place at least one required signature field before sending the offer.",
+        };
+      }
+      await ensureNativeOfferEnvelope({
+        workspaceId,
+        offer,
+        documentId: prepared.documentId,
+        fieldsSnapshot: prepared.fieldsSnapshot,
+      });
     } catch (error) {
       log.error(
         { error, offerId: offer.id },
@@ -427,7 +576,10 @@ export async function sendOffer(input: {
   const outboxId = await enqueueEmailOutbox(
     workspaceId,
     "offer.extended",
-    { offerId: offer.id },
+    {
+      offerId: offer.id,
+      terms: serializeOfferTermsSnapshot(snapshotOfferTerms(offer)),
+    },
     undefined,
     context.user.id,
   );
@@ -701,7 +853,6 @@ export async function decideOffer(input: {
         .select({
           id: applications.id,
           currentStageId: applications.currentStageId,
-          updatedAt: applications.updatedAt,
           status: applications.status,
         })
         .from(applications)
@@ -711,6 +862,7 @@ export async function decideOffer(input: {
             eq(applications.id, offer.applicationId),
           ),
         )
+        .for("update")
         .limit(1);
 
       if (application) {
@@ -731,7 +883,7 @@ export async function decideOffer(input: {
           )
           .limit(1);
 
-        await tx
+        const [hired] = await tx
           .update(applications)
           .set({
             status: "hired",
@@ -743,9 +895,14 @@ export async function decideOffer(input: {
               eq(applications.workspaceId, workspaceId),
               eq(applications.id, application.id),
               eq(applications.status, "active"),
-              eq(applications.updatedAt, application.updatedAt),
             ),
+          )
+          .returning({ id: applications.id });
+        if (!hired) {
+          throw new Error(
+            "Application changed while the offer was being accepted. Refresh and try again.",
           );
+        }
 
         if (hiredStage && hiredStage.id !== application.currentStageId) {
           await tx.insert(applicationStageHistory).values({
@@ -851,6 +1008,37 @@ export async function withdrawOffer(input: {
   }
 
   await db.transaction(async (tx) => {
+    const [lockedOffer] = await tx
+      .select({
+        status: offers.status,
+        esignSubmissionId: offers.esignSubmissionId,
+        signatureEnvelopeRefId: offers.signatureEnvelopeRefId,
+      })
+      .from(offers)
+      .where(
+        and(
+          eq(offers.workspaceId, workspaceId),
+          eq(offers.id, offer.id),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    if (!lockedOffer || (lockedOffer.status !== "draft" && lockedOffer.status !== "sent")) {
+      throw new Error("This offer can no longer be withdrawn.");
+    }
+
+    if (lockedOffer.status === "sent") {
+      const archived = await archiveDocusealOffer({
+        workspaceId,
+        esignSubmissionId: lockedOffer.esignSubmissionId,
+      });
+      if (!archived) {
+        throw new Error(
+          "The signature request could not be revoked. The offer remains active.",
+        );
+      }
+    }
+
     const [updatedOffer] = await tx
       .update(offers)
       .set({ status: "withdrawn", decidedAt: new Date() })
@@ -867,6 +1055,22 @@ export async function withdrawOffer(input: {
       throw new Error(
         "Offer changed by another recruiter. Refresh and try again.",
       );
+    }
+
+    if (lockedOffer.signatureEnvelopeRefId) {
+      await tx
+        .update(signatureEnvelopes)
+        .set({
+          status: "voided",
+          voidedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(signatureEnvelopes.workspaceId, workspaceId),
+            eq(signatureEnvelopes.id, lockedOffer.signatureEnvelopeRefId),
+          ),
+        );
     }
 
     await logOfferActivity(tx, {

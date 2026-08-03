@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, CheckCircle2, PenLine, Plus, Trash2 } from "lucide-react";
@@ -33,7 +33,7 @@ export function NativeSignWorkspace({
   const [activeIndex, setActiveIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [allowSaved, setAllowSaved] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const [pending, setPending] = useState(false);
 
   useEffect(() => {
     void getNativeSignatureSettings().then((settings) =>
@@ -59,9 +59,10 @@ export function NativeSignWorkspace({
     }
   }
 
-  function submit() {
+  async function submit() {
     if (!signature || !consent) return;
-    startTransition(async () => {
+    setPending(true);
+    try {
       const result = await signDocumentNatively({
         documentId,
         placements,
@@ -69,12 +70,15 @@ export function NativeSignWorkspace({
       });
       if (!result.ok) {
         toast.error(result.error);
+        setPending(false);
         return;
       }
       toast.success("Document signed");
-      router.push(`/dashboard/documents/${documentId}` as Route);
-      router.refresh();
-    });
+      router.replace(`/dashboard/documents/${documentId}` as Route);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not sign the document.");
+      setPending(false);
+    }
   }
 
   return (

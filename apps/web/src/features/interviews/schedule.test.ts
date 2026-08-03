@@ -26,13 +26,16 @@ const mocks = vi.hoisted(() => {
     getWorkspaceJitsiConfig: vi.fn(),
     syncInterviewToZoom: vi.fn(),
     cancelInterviewZoomMeeting: vi.fn(),
+    replaceInterviewToZoom: vi.fn(),
     syncInterviewToJitsi: vi.fn(),
     cancelInterviewJitsiMeeting: vi.fn(),
     syncInterviewToTeams: vi.fn(),
     cancelInterviewTeamsMeeting: vi.fn(),
+    replaceInterviewToTeams: vi.fn(),
     syncInterviewToGCal: vi.fn(),
     cancelInterviewGCalEvent: vi.fn(),
     updateInterviewGCalEvent: vi.fn(),
+    execute: vi.fn(),
     emitWebhookEvent: vi.fn(),
     enqueueEmailOutbox: vi.fn(),
     processEmailOutbox: vi.fn(),
@@ -121,6 +124,7 @@ vi.mock("@/lib/zoom/config", () => ({ getZoomToken: mocks.getZoomToken }));
 vi.mock("@/lib/zoom/sync", () => ({
   syncInterviewToZoom: mocks.syncInterviewToZoom,
   cancelInterviewZoomMeeting: mocks.cancelInterviewZoomMeeting,
+  replaceInterviewToZoom: mocks.replaceInterviewToZoom,
 }));
 vi.mock("@/lib/outlook/config", () => ({
   getWorkspaceOutlookConfig: mocks.getWorkspaceOutlookConfig,
@@ -128,6 +132,7 @@ vi.mock("@/lib/outlook/config", () => ({
 vi.mock("@/lib/outlook/teams-sync", () => ({
   syncInterviewToTeams: mocks.syncInterviewToTeams,
   cancelInterviewTeamsMeeting: mocks.cancelInterviewTeamsMeeting,
+  replaceInterviewToTeams: mocks.replaceInterviewToTeams,
 }));
 vi.mock("@/lib/gcal/config", () => ({
   getWorkspaceGCalConfig: mocks.getWorkspaceGCalConfig,
@@ -179,7 +184,21 @@ beforeEach(() => {
   mocks.syncInterviewToGCal.mockReset();
   mocks.cancelInterviewTeamsMeeting.mockReset();
   mocks.cancelInterviewZoomMeeting.mockReset();
+  mocks.replaceInterviewToTeams.mockReset();
+  mocks.replaceInterviewToTeams.mockResolvedValue({
+    ok: true,
+    meetingId: "teams-2",
+    joinUrl: "https://teams.microsoft.com/2",
+  });
+  mocks.replaceInterviewToZoom.mockReset();
+  mocks.replaceInterviewToZoom.mockResolvedValue({
+    ok: true,
+    meetingId: "zoom-2",
+    joinUrl: "https://zoom.us/j/2",
+  });
   mocks.updateInterviewGCalEvent.mockReset();
+  mocks.execute.mockReset();
+  mocks.execute.mockResolvedValue([]);
   mocks.enqueueEmailOutbox.mockReset();
   mocks.enqueueEmailOutbox.mockResolvedValue("outbox-1");
   mocks.processEmailOutbox.mockReset();
@@ -212,6 +231,7 @@ function txMock(application: unknown[], conflict: unknown[]) {
     async (fn: (tx: unknown) => Promise<unknown>) => {
       let step = 0;
       const tx = {
+        execute: mocks.execute,
         select: () => txQuery(step++ === 0 ? application : conflict),
         insert: () => ({
           values: () => ({
@@ -222,7 +242,7 @@ function txMock(application: unknown[], conflict: unknown[]) {
           }),
         }),
         update: () => ({
-          set: () => ({ where: () => ({ returning: async () => [] }) }),
+          set: () => ({ where: () => ({ returning: async () => [{ id: "iv-1" }] }) }),
         }),
       };
       return fn(tx);
@@ -248,6 +268,7 @@ describe("F1-12 interviewer overlap", () => {
 
     expect(result.success).toBe(false);
     expect(result.error ?? "").toMatch(/overlapping/i);
+    expect(mocks.execute).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -494,10 +515,12 @@ describe("interview invitation delivery", () => {
 
 describe("F1-11 reschedule recreates provider meeting", () => {
   it("cancels and recreates the Teams meeting when the time changes", async () => {
+    txMock([], []);
     mocks.selectQueue.push(
       [
         {
           id: "iv-1",
+          status: "scheduled",
           gcalEventId: null,
           teamsMeetingId: "teams-1",
           zoomMeetingId: null,
@@ -528,11 +551,12 @@ describe("F1-11 reschedule recreates provider meeting", () => {
       durationMins: 45,
     });
 
+
     expect(result.success).toBe(true);
-    expect(mocks.cancelInterviewTeamsMeeting).toHaveBeenCalledWith(
-      expect.objectContaining({ teamsMeetingId: "teams-1" }),
+    expect(mocks.replaceInterviewToTeams).toHaveBeenCalledWith(
+      expect.objectContaining({ previousMeetingId: "teams-1" }),
     );
-    expect(mocks.syncInterviewToTeams).toHaveBeenCalledTimes(1);
+    expect(mocks.replaceInterviewToTeams).toHaveBeenCalledTimes(1);
     expect(mocks.cancelInterviewZoomMeeting).not.toHaveBeenCalled();
     expect(mocks.updateInterviewGCalEvent).not.toHaveBeenCalled();
   });
@@ -540,10 +564,12 @@ describe("F1-11 reschedule recreates provider meeting", () => {
 
 describe("F1-11 full edit preserves effective meeting details", () => {
   it("editing a title keeps the existing duration and recreates a video provider", async () => {
+    txMock([], []);
     mocks.selectQueue.push(
       [
         {
           id: "iv-1",
+          status: "scheduled",
           gcalEventId: null,
           teamsMeetingId: "teams-1",
           zoomMeetingId: null,
@@ -574,13 +600,63 @@ describe("F1-11 full edit preserves effective meeting details", () => {
       title: "Technical screen",
     });
 
+
     expect(result.success).toBe(true);
-    expect(mocks.syncInterviewToTeams).toHaveBeenCalledWith(
+    expect(mocks.replaceInterviewToTeams).toHaveBeenCalledWith(
       expect.objectContaining({
         durationMins: 60,
         summary: "Technical screen",
       }),
     );
+  });
+});
+
+describe("Google Calendar failure visibility", () => {
+  it("returns a warning when a rescheduled GCal event cannot be updated", async () => {
+    txMock([], []);
+    mocks.updateInterviewGCalEvent.mockResolvedValue(false);
+    mocks.selectQueue.push(
+      [
+        {
+          id: "iv-gcal",
+          status: "scheduled",
+          gcalEventId: "event-1",
+          teamsMeetingId: null,
+          zoomMeetingId: null,
+          jitsiRoom: null,
+          meetLink: null,
+          location: null,
+          scheduledAt: new Date("2099-08-01T10:00:00.000Z"),
+          durationMins: 45,
+          type: "screening",
+          mode: "phone",
+          title: "Screening",
+        },
+      ],
+      [
+        {
+          email: null,
+          firstName: "C",
+          companyName: "A",
+          jobTitle: "J",
+          interviewerId: null,
+          mode: "phone",
+          scheduledAt: new Date("2099-08-01T10:00:00.000Z"),
+          applicationId: "app-1",
+        },
+      ],
+    );
+
+    const result = await updateInterview({
+      interviewId: "iv-gcal",
+      scheduledAt: "2099-08-01T11:00",
+      timeZone: "UTC",
+    });
+
+    expect(result).toEqual({
+      success: true,
+      warning: expect.stringMatching(/Google Calendar/i),
+    });
   });
 });
 
@@ -660,6 +736,7 @@ describe("F1-12c reschedule re-validates interviewer conflict", () => {
       [
         {
           id: "iv-1",
+          status: "scheduled",
           gcalEventId: null,
           teamsMeetingId: null,
           zoomMeetingId: null,
@@ -697,12 +774,14 @@ describe("F1-12c reschedule re-validates interviewer conflict", () => {
 
 describe("F1-12d reschedule honours the recruiter timezone", () => {
   it("interprets a naive wall-clock time in the given timezone, not UTC", async () => {
+    txMock([], []);
     // America/Santiago is UTC-4 in August (no DST), so 10:00 wall-clock
     // becomes 14:00 UTC. A UTC interpretation would be 10:00Z.
     mocks.selectQueue.push(
       [
         {
           id: "iv-1",
+          status: "scheduled",
           gcalEventId: null,
           teamsMeetingId: null,
           zoomMeetingId: null,
@@ -733,6 +812,7 @@ describe("F1-12d reschedule honours the recruiter timezone", () => {
       durationMins: 45,
     });
 
+
     expect(result.success).toBe(true);
     // The webhook payload carries the resolved ISO time. Assert it reflects
     // the tz-adjusted time (14:00Z), not a naive UTC parse (10:00Z).
@@ -746,5 +826,61 @@ describe("F1-12d reschedule honours the recruiter timezone", () => {
       }),
       { actorId: "user-1", skipDomainEvent: true },
     );
+  });
+});
+
+describe("interview business state guards", () => {
+  it("does not reschedule an interview that was already canceled", async () => {
+    mocks.selectQueue.push([
+      {
+        id: "iv-canceled",
+        status: "canceled",
+        gcalEventId: null,
+        teamsMeetingId: null,
+        zoomMeetingId: null,
+        jitsiRoom: null,
+        title: "Screening",
+        type: "screening",
+      },
+    ]);
+
+    const result = await rescheduleInterview({
+      interviewId: "iv-canceled",
+      scheduledAt: new Date(Date.now() + 7200_000).toISOString(),
+      durationMins: 45,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/no longer scheduled/i);
+    expect(mocks.transactionImpl).not.toHaveBeenCalled();
+  });
+
+  it("does not edit an interview that was already completed", async () => {
+    mocks.selectQueue.push([
+      {
+        id: "iv-completed",
+        status: "completed",
+        gcalEventId: null,
+        teamsMeetingId: null,
+        zoomMeetingId: null,
+        jitsiRoom: null,
+        meetLink: null,
+        location: null,
+        scheduledAt: new Date("2099-08-01T10:00:00.000Z"),
+        durationMins: 45,
+        type: "screening",
+        mode: "phone",
+        title: "Screening",
+      },
+    ]);
+
+    const result = await updateInterview({
+      interviewId: "iv-completed",
+      title: "Updated title",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatch(/no longer scheduled/i);
+    expect(mocks.transactionImpl).not.toHaveBeenCalled();
   });
 });

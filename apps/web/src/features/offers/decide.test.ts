@@ -44,6 +44,11 @@ vi.mock("drizzle-orm", () => ({
   desc: (a: unknown) => ({ __desc: a }),
   lt: (a: unknown, b: unknown) => ({ __lt: [a, b] }),
   isNull: (a: unknown) => ({ __isNull: a }),
+  exists: (value: unknown) => ({ __exists: value }),
+  getTableColumns: (table: object) => table,
+  sql: (strings: TemplateStringsArray, ...values: unknown[]) => ({
+    __sql: [strings, values],
+  }),
 }));
 
 vi.mock("@harly/db", () => {
@@ -62,6 +67,7 @@ vi.mock("@harly/db", () => {
     q.innerJoin = () => q;
     q.leftJoin = () => q;
     q.orderBy = () => q;
+    q.for = () => q;
     q.limit = async () => mocks.selectQueue.shift() ?? [];
     return q;
   };
@@ -103,6 +109,7 @@ vi.mock("@harly/db", () => {
     emailOutbox: {},
     activityEvents: {},
     candidates: {},
+    jobs: {},
     organization: {},
     applications: {},
     jobStages: {},
@@ -110,6 +117,10 @@ vi.mock("@harly/db", () => {
     jobHiringTeam: {},
     notifications: {},
     workspaceSettings: {},
+    documents: {},
+    documentAssociations: {},
+    signatureFields: {},
+    signatureEnvelopes: {},
   };
 });
 

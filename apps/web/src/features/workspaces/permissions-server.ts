@@ -274,6 +274,8 @@ export async function requireCandidatePermission(
     )
     .limit(100);
   if (applicationsForCandidate.length === 0) {
+    const policy = await getRolePolicy(context.organization.id, context.roleKey);
+    if (policy.scope.jobAccess === "all") return context;
     throw new Error("Candidate is not assigned to a job.");
   }
   // Candidates can have multiple applications. Access is granted when one

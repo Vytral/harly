@@ -7,16 +7,28 @@ import { z } from "zod";
 
 import {
   candidates,
+  applications,
   db,
   documentAssociations,
+  documents,
   offers,
   savedSignatures,
 } from "@harly/db";
 
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
-import { isNativeOfferSubmission } from "@/lib/esign/native/offer-signing";
 import { finalizeNativeSignature } from "@/lib/esign/native/finalize";
-import { decideOfferForApi } from "@/features/offers/service";
+import {
+  ensureNativeOfferEnvelope,
+  isNativeOfferSubmission,
+} from "@/lib/esign/native/offer-signing";
+import {
+  isNativeOfferAcceptanceAvailable,
+  isSignableNativeFieldsSnapshot,
+} from "@/lib/esign/native/fields";
+import {
+  publishPersistedDomainEvents,
+} from "@/server/events/emit";
+import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { createLogger } from "@/lib/logger";
 import { storage } from "@/lib/storage";
 
@@ -89,6 +101,11 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
       applicationId: offers.applicationId,
       createdById: offers.createdById,
       esignSubmissionId: offers.esignSubmissionId,
+      signatureEnvelopeRefId: offers.signatureEnvelopeRefId,
+      jobId: offers.jobId,
+      title: offers.title,
+      expiresAt: offers.expiresAt,
+      applicationStatus: applications.status,
     })
     .from(offers)
     .innerJoin(
@@ -97,6 +114,13 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
         eq(candidates.id, offers.candidateId),
         eq(candidates.workspaceId, offers.workspaceId),
         isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
+      applications,
+      and(
+        eq(applications.id, offers.applicationId),
+        eq(applications.workspaceId, offers.workspaceId),
       ),
     )
     .where(
@@ -112,10 +136,23 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
   if (!isNativeOfferSubmission(offer.esignSubmissionId)) {
     return { ok: false, error: "This offer is not set up for native signing." };
   }
+  if (
+    !isNativeOfferAcceptanceAvailable({
+      offerStatus: offer.status,
+      applicationStatus: offer.applicationStatus,
+      expiresAt: offer.expiresAt,
+    })
+  ) {
+    return { ok: false, error: "This offer is no longer available for signing." };
+  }
 
   const [association] = await db
-    .select({ documentId: documentAssociations.documentId })
+    .select({
+      documentId: documentAssociations.documentId,
+      fieldsSnapshot: documents.fieldsSnapshot,
+    })
     .from(documentAssociations)
+    .innerJoin(documents, eq(documents.id, documentAssociations.documentId))
     .where(
       and(
         eq(documentAssociations.workspaceId, session.workspaceId),
@@ -125,6 +162,9 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
     )
     .limit(1);
   if (!association) return { ok: false, error: "The offer letter could not be found." };
+  if (!isSignableNativeFieldsSnapshot(association.fieldsSnapshot)) {
+    return { ok: false, error: "This offer is not ready for signing." };
+  }
 
   const [candidate] = await db
     .select({ firstName: candidates.firstName, lastName: candidates.lastName, email: candidates.email })
@@ -135,13 +175,24 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
   const signerName = [candidate.firstName, candidate.lastName].filter(Boolean).join(" ") || candidate.email || "Candidate";
 
   try {
+    const envelope = await ensureNativeOfferEnvelope({
+      workspaceId: session.workspaceId,
+      offer: {
+        id: offer.id,
+        candidateId: offer.candidateId,
+        title: offer.title,
+        createdById: offer.createdById,
+      },
+      documentId: association.documentId,
+      fieldsSnapshot: association.fieldsSnapshot,
+    });
     const signatureBytes = await getSignatureBytes({
       workspaceId: session.workspaceId,
       candidateId: session.candidateId,
       signaturePngBase64: parsed.data.signaturePngBase64,
       savedSignatureId: parsed.data.savedSignatureId,
     });
-    await finalizeNativeSignature({
+    const result = await finalizeNativeSignature({
       workspaceId: session.workspaceId,
       documentId: association.documentId,
       actorId: null,
@@ -150,13 +201,27 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
       signaturePngBytes: signatureBytes,
       textValues: parsed.data.textValues,
       verification: "self_sign",
-    });
-    await decideOfferForApi({
-      workspaceId: session.workspaceId,
-      actorUserId: offer.createdById,
+      existingEnvelopeId: envelope.envelopeId,
+      existingRecipientId: envelope.recipientId,
       offerId: offer.id,
-      decision: "accepted",
     });
+    if (result.applicationHiredEvent) {
+      await publishPersistedDomainEvents([result.applicationHiredEvent]);
+      await emitWebhookEvent(
+        session.workspaceId,
+        "application.hired",
+        {
+          application: { id: offer.applicationId, jobId: offer.jobId },
+          candidate: { id: offer.candidateId },
+          offer: { id: offer.id, title: offer.title },
+        },
+        {
+          actorId: offer.createdById,
+          skipDomainEvent: true,
+          eventId: result.applicationHiredEvent.eventId,
+        },
+      );
+    }
   } catch (error) {
     log.error({ error, offerId: offer.id }, "native offer signature failed");
     return { ok: false, error: error instanceof Error ? error.message : "Could not sign the offer." };

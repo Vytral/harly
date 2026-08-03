@@ -16,7 +16,7 @@ import {
   getDocusealSubmissionUrl,
   type CreateSubmissionFromPdfInput,
 } from "@/lib/esign/client";
-import { OFFER_SIGNER_ROLE, pickSigner, signerSigningUrl } from "@/lib/esign/offer-signing";
+import { OFFER_SIGNER_ROLE } from "@/lib/esign/offer-signing";
 import { createLogger } from "@/lib/logger";
 import { getWorkspaceEsignConfig } from "@/lib/esign/config";
 import { storage } from "@/lib/storage";
@@ -173,12 +173,9 @@ export async function sendDocumentForEnvelope(
   };
 
   let submissionId: string;
-  let signingUrl: string | null;
   try {
     const submission = await createSubmissionFromPdf(ctx, submissionInput);
     submissionId = String(submission.id);
-    const signer = pickSigner(submission.submitters, OFFER_SIGNER_ROLE);
-    signingUrl = signerSigningUrl(ctx.baseUrl, signer);
   } catch (error) {
     log.error(
       { error, workspaceId: input.workspaceId, documentId: input.documentId },
@@ -219,7 +216,7 @@ export async function sendDocumentForEnvelope(
       email: recipientEmail,
       name: recipientName,
       routingOrder: 1,
-      signingUrl,
+      signingUrl: null,
       status: "sent",
     });
 

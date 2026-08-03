@@ -52,7 +52,8 @@ describe("AI surfaces (IA-07)", () => {
       candidate: { fullName: "A B", headline: null, location: null, resumeText: null, answers: [] },
     });
 
-    expect(result.score).toBe(100);
+    expect(result.score).toBe(59);
+    expect(result.recommendation).toBe("maybe");
     expect(result.criteria).toHaveLength(6);
     expect(result.criteria.every((c) => c.score <= 100)).toBe(true);
     expect(result.strengths).toHaveLength(8);

@@ -6,6 +6,7 @@ import {
   count,
   desc,
   eq,
+  inArray,
   isNull,
   max,
   notInArray,
@@ -17,6 +18,7 @@ import {
   aiEvaluations,
   applications,
   applicationStageHistory,
+  candidateReferrals,
   candidates,
   jobs,
   jobStages,
@@ -62,9 +64,11 @@ export type PipelineApplication = {
   lastStageMovedAt: string | null;
   aiScore: number | null;
   evaluationSource: "ai" | "rules" | null;
+  evaluationEngineVersion: string | null;
   aiRecommendation: "strong_yes" | "yes" | "maybe" | "no" | null;
   aiSummary: string | null;
   aiUsedResume: boolean | null;
+  isFeaturedReferral: boolean;
 };
 
 export type PipelineData =
@@ -256,6 +260,7 @@ export async function getPipelineData(
         lastStageMovedAt: latestStageMove.createdAt,
         aiScore: aiEvaluations.score,
         evaluationSource: aiEvaluations.source,
+        evaluationEngineVersion: aiEvaluations.engineVersion,
         aiRecommendation: aiEvaluations.recommendation,
         aiSummary: aiEvaluations.summary,
         aiUsedResume: aiEvaluations.usedResume,
@@ -293,12 +298,31 @@ export async function getPipelineData(
       .orderBy(asc(applications.pipelineOrder), desc(applications.appliedAt)),
   ]);
 
+  const candidateIds = Array.from(new Set(jobApplications.map((a) => a.candidateId)));
+  const featuredReferralRows = candidateIds.length
+    ? await db
+        .select({ candidateId: candidateReferrals.candidateId })
+        .from(candidateReferrals)
+        .where(
+          and(
+            eq(candidateReferrals.workspaceId, workspace.id),
+            eq(candidateReferrals.featured, true),
+            inArray(candidateReferrals.candidateId, candidateIds),
+          ),
+        )
+        .groupBy(candidateReferrals.candidateId)
+    : [];
+  const featuredReferralCandidateIds = new Set(
+    featuredReferralRows.map((row) => row.candidateId),
+  );
+
   return {
     kind: "ready",
     jobs: jobOptions,
     selectedJob,
     applications: jobApplications.map(({ candidateGithubUrl, ...application }) => ({
       ...application,
+      isFeaturedReferral: featuredReferralCandidateIds.has(application.candidateId),
       evaluationSource:
         application.evaluationSource === "rules"
           ? "rules"

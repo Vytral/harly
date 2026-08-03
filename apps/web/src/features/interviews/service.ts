@@ -1,12 +1,13 @@
 import "server-only";
 
-import { and, desc, eq, isNull, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, exists, isNull, lt, ne, or, sql } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
 import {
   activityEvents,
   applications,
   candidates,
+  candidatePortalNotifications,
   db,
   interviews,
   jobs,
@@ -18,8 +19,14 @@ import {
   persistDomainEvent,
   publishPersistedDomainEvents,
 } from "@/server/events/emit";
+import { deriveMeetLink } from "./shared";
+import {
+  interviewPortalNotification,
+  runApiInterviewSideEffects,
+} from "./api-side-effects";
 
 import { findWorkspaceMember } from "./core";
+import { lockInterviewerSchedule } from "./booking-lock";
 
 /** Workspace-scoped, session-free interview service for REST API handlers. */
 
@@ -103,15 +110,20 @@ function assertFutureWhen(when: Date) {
   }
 }
 
-async function assertNoInterviewerConflict(input: {
+type InterviewSelectExecutor = Pick<typeof db, "select">;
+
+async function assertNoInterviewerConflict(
+  input: {
   workspaceId: string;
   interviewerId: string | null;
   scheduledAt: Date;
   durationMins: number;
   excludeInterviewId?: string;
-}) {
+  },
+  executor: InterviewSelectExecutor = db,
+) {
   if (!input.interviewerId) return;
-  const [conflict] = await db
+  const [conflict] = await executor
     .select({ id: interviews.id })
     .from(interviews)
     .where(
@@ -122,8 +134,8 @@ async function assertNoInterviewerConflict(input: {
         input.excludeInterviewId
           ? ne(interviews.id, input.excludeInterviewId)
           : undefined,
-        sql`${interviews.scheduledAt} < ${new Date(input.scheduledAt.getTime() + input.durationMins * 60_000)}`,
-        sql`${interviews.scheduledAt} + (${interviews.durationMins} * interval '1 minute') > ${input.scheduledAt}`,
+        sql`${interviews.scheduledAt} < ${new Date(input.scheduledAt.getTime() + input.durationMins * 60_000).toISOString()}`,
+        sql`${interviews.scheduledAt} + (${interviews.durationMins} * interval '1 minute') > ${input.scheduledAt.toISOString()}`,
       ),
     )
     .limit(1);
@@ -175,6 +187,30 @@ export async function getInterviewForApi(input: {
       and(
         eq(interviews.workspaceId, input.workspaceId),
         eq(interviews.id, input.interviewId),
+        exists(
+          db
+            .select({ id: candidates.id })
+            .from(candidates)
+            .where(
+              and(
+                eq(candidates.id, interviews.candidateId),
+                eq(candidates.workspaceId, input.workspaceId),
+                isNull(candidates.deletedAt),
+              ),
+            ),
+        ),
+        exists(
+          db
+            .select({ id: jobs.id })
+            .from(jobs)
+            .where(
+              and(
+                eq(jobs.id, interviews.jobId),
+                eq(jobs.workspaceId, input.workspaceId),
+                isNull(jobs.deletedAt),
+              ),
+            ),
+        ),
       ),
     )
     .limit(1);
@@ -227,25 +263,17 @@ export async function createInterviewForApi(input: {
       );
     }
 
-    // Keep the read/check/write close together. DB has no exclusion constraint,
-    // so callers needing strict concurrent booking protection must serialize.
     if (input.values.interviewerId) {
-      const [conflict] = await tx
-        .select({ id: interviews.id })
-        .from(interviews)
-        .where(
-          and(
-            eq(interviews.workspaceId, input.workspaceId),
-            eq(interviews.interviewerId, input.values.interviewerId),
-            eq(interviews.status, "scheduled"),
-            sql`${interviews.scheduledAt} < ${new Date(input.values.scheduledAt.getTime() + input.values.durationMins * 60_000)}`,
-            sql`${interviews.scheduledAt} + (${interviews.durationMins} * interval '1 minute') > ${input.values.scheduledAt}`,
-          ),
-        )
-        .limit(1);
-      if (conflict) {
-        throw ApiError.conflict("This interviewer already has an overlapping interview.");
-      }
+      await lockInterviewerSchedule(tx, input.workspaceId, input.values.interviewerId);
+      await assertNoInterviewerConflict(
+        {
+          workspaceId: input.workspaceId,
+          interviewerId: input.values.interviewerId,
+          scheduledAt: input.values.scheduledAt,
+          durationMins: input.values.durationMins,
+        },
+        tx,
+      );
     }
 
     const [interview] = await tx
@@ -263,6 +291,7 @@ export async function createInterviewForApi(input: {
         scheduledAt: input.values.scheduledAt,
         durationMins: input.values.durationMins,
         location: input.values.location ?? null,
+        meetLink: deriveMeetLink(input.values.mode, input.values.location),
         notes: input.values.notes ?? null,
         source: "api",
       })
@@ -281,6 +310,10 @@ export async function createInterviewForApi(input: {
         via: "api",
       },
     });
+    await tx.insert(candidatePortalNotifications).values({
+      workspaceId: input.workspaceId,
+      ...interviewPortalNotification({ action: "scheduled", interview }),
+    });
     return {
       created: interview,
       event: await persistDomainEvent(tx, {
@@ -295,10 +328,20 @@ export async function createInterviewForApi(input: {
   });
 
   await publishPersistedDomainEvents([event]);
+  await runApiInterviewSideEffects({
+    workspaceId: input.workspaceId,
+    actorUserId: input.actorUserId,
+    interview: created,
+    action: "scheduled",
+  });
+  const refreshed = await getInterviewForApi({
+    workspaceId: input.workspaceId,
+    interviewId: created.id,
+  });
   await emitWebhookEvent(input.workspaceId, "interview.scheduled", {
-    interview: serializeInterview(created),
+    interview: serializeInterview(refreshed),
   }, { actorId: input.actorUserId, skipDomainEvent: true });
-  return created;
+  return refreshed;
 }
 
 export async function updateInterviewForApi(input: {
@@ -344,7 +387,33 @@ export async function updateInterviewForApi(input: {
   if (input.values.location !== undefined) set.location = input.values.location;
   if (input.values.notes !== undefined) set.notes = input.values.notes;
 
+  const effectiveMode = input.values.mode ?? current.mode;
+  const effectiveLocation = input.values.location ?? current.location;
+  if (input.values.mode !== undefined || input.values.location !== undefined) {
+    const hasProviderMeeting =
+      Boolean(current.teamsMeetingId) ||
+      Boolean(current.zoomMeetingId) ||
+      Boolean(current.jitsiRoom) ||
+      Boolean(current.gcalEventId);
+    if (effectiveMode !== "video" || !hasProviderMeeting) {
+      set.meetLink = deriveMeetLink(effectiveMode, effectiveLocation);
+    }
+  }
+
   const { updated, event } = await db.transaction(async (tx) => {
+    if (interviewerId) {
+      await lockInterviewerSchedule(tx, input.workspaceId, interviewerId);
+    }
+    await assertNoInterviewerConflict(
+      {
+        workspaceId: input.workspaceId,
+        interviewerId,
+        scheduledAt,
+        durationMins,
+        excludeInterviewId: current.id,
+      },
+      tx,
+    );
     const [next] = await tx
       .update(interviews)
       .set(set)
@@ -352,10 +421,13 @@ export async function updateInterviewForApi(input: {
         and(
           eq(interviews.id, input.interviewId),
           eq(interviews.workspaceId, input.workspaceId),
+          eq(interviews.status, "scheduled"),
         ),
       )
       .returning();
-    if (!next) throw ApiError.notFound("Interview not found.");
+    if (!next) {
+      throw ApiError.conflict("Interview changed while it was being updated; retry request.");
+    }
     await tx.insert(activityEvents).values({
       workspaceId: input.workspaceId,
       actorId: input.actorUserId,
@@ -363,6 +435,10 @@ export async function updateInterviewForApi(input: {
       entityId: next.applicationId,
       type: "interview.updated",
       metadata: { interviewId: next.id, via: "api" },
+    });
+    await tx.insert(candidatePortalNotifications).values({
+      workspaceId: input.workspaceId,
+      ...interviewPortalNotification({ action: "rescheduled", interview: next }),
     });
     return {
       updated: next,
@@ -377,10 +453,21 @@ export async function updateInterviewForApi(input: {
     };
   });
   await publishPersistedDomainEvents([event]);
+  await runApiInterviewSideEffects({
+    workspaceId: input.workspaceId,
+    actorUserId: input.actorUserId,
+    interview: updated,
+    previous: current,
+    action: "rescheduled",
+  });
+  const refreshed = await getInterviewForApi({
+    workspaceId: input.workspaceId,
+    interviewId: updated.id,
+  });
   await emitWebhookEvent(input.workspaceId, "interview.rescheduled", {
-    interview: serializeInterview(updated),
+    interview: serializeInterview(refreshed),
   }, { actorId: input.actorUserId, skipDomainEvent: true });
-  return updated;
+  return refreshed;
 }
 
 export async function setInterviewStatusForApi(input: {
@@ -418,6 +505,12 @@ export async function setInterviewStatusForApi(input: {
       type: event,
       metadata: { interviewId: next.id, via: "api" },
     });
+    if (input.status === "canceled") {
+      await tx.insert(candidatePortalNotifications).values({
+        workspaceId: input.workspaceId,
+        ...interviewPortalNotification({ action: "canceled", interview: next }),
+      });
+    }
     return {
       updated: next,
       persistedEvent: await persistDomainEvent(tx, {
@@ -431,8 +524,21 @@ export async function setInterviewStatusForApi(input: {
     };
   });
   await publishPersistedDomainEvents([persistedEvent]);
+  if (input.status === "canceled") {
+    await runApiInterviewSideEffects({
+      workspaceId: input.workspaceId,
+      actorUserId: input.actorUserId,
+      interview: updated,
+      previous: current,
+      action: "canceled",
+    });
+  }
+  const refreshed = await getInterviewForApi({
+    workspaceId: input.workspaceId,
+    interviewId: updated.id,
+  });
   await emitWebhookEvent(input.workspaceId, event, {
-    interview: serializeInterview(updated),
+    interview: serializeInterview(refreshed),
   }, { actorId: input.actorUserId, skipDomainEvent: true });
-  return updated;
+  return refreshed;
 }

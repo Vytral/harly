@@ -106,6 +106,8 @@ const initialImportSource: ImportSource | undefined =
       avatarFallbackSrcs: candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl),
       inPool: candidate.inPool,
       hasOpenPrivacyRequest: candidate.hasOpenPrivacyRequest,
+      isReferred: candidate.isReferred,
+      isFeaturedReferral: candidate.isFeaturedReferral,
       location: candidate.location,
       role: candidate.latestApplication?.jobTitle ?? null,
       department: candidate.latestApplication?.department ?? null,

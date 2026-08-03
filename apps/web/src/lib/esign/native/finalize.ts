@@ -4,13 +4,32 @@ import { createHash, randomUUID } from "node:crypto";
 
 import { and, desc, eq } from "drizzle-orm";
 
-import { db, documentVersions, documents, signatureArtifacts, signatureEnvelopes, signatureEvidenceEvents, signatureRecipients, activityEvents } from "@harly/db";
+import {
+  activityEvents,
+  applications,
+  applicationStageHistory,
+  db,
+  documentVersions,
+  documents,
+  jobStages,
+  offers,
+  signatureArtifacts,
+  signatureEnvelopes,
+  signatureEvidenceEvents,
+  signatureRecipients,
+} from "@harly/db";
 
 import { bakeFieldsIntoPdf, type FieldPlacement, type SignaturePlacement } from "./bake";
 import { createCompletionCertificate, NATIVE_CERTIFICATE_VERSION } from "./certificate";
 import { createSignaturePreview } from "./preview";
 import { storage } from "@/lib/storage";
 import { createLogger } from "@/lib/logger";
+import { persistDomainEvent, type PersistedDomainEvent } from "@/server/events/emit";
+import { isNativeOfferAcceptanceAvailable } from "./fields";
+import {
+  purgeExpiredSignatureData,
+  SIGNATURE_EVIDENCE_RETENTION_MS,
+} from "@/lib/esign/maintenance";
 
 const log = createLogger("native-finalize");
 
@@ -46,7 +65,7 @@ async function evidence(tx: Tx, input: { workspaceId: string; envelopeId: string
   const occurredAt = new Date();
   const payload = canonical(input.payload) as Record<string, unknown>;
   const currentHash = sha256(Buffer.from(JSON.stringify({ previousHash: previous?.hash ?? null, timestamp: occurredAt.toISOString(), envelopeId: input.envelopeId, recipientId: input.recipientId, eventType: input.eventType, payload })));
-  await tx.insert(signatureEvidenceEvents).values({ workspaceId: input.workspaceId, envelopeId: input.envelopeId, recipientId: input.recipientId, eventType: input.eventType, occurredAt, payload, previousHash: previous?.hash ?? null, currentHash });
+  await tx.insert(signatureEvidenceEvents).values({ workspaceId: input.workspaceId, envelopeId: input.envelopeId, recipientId: input.recipientId, eventType: input.eventType, occurredAt, payload, previousHash: previous?.hash ?? null, currentHash, retentionExpiresAt: new Date(occurredAt.getTime() + SIGNATURE_EVIDENCE_RETENTION_MS) });
 }
 
 /**
@@ -73,10 +92,14 @@ function resolveFields(input: {
   signaturePngBytes: Buffer | null;
   textValues: Record<string, string> | undefined;
   legacyPlacements: SignaturePlacement[] | undefined;
+  requireFrozenFields?: boolean;
 }): FieldPlacement[] {
   const snapshot = Array.isArray(input.fieldsSnapshot) ? (input.fieldsSnapshot as SnapshotField[]) : null;
 
   if (!snapshot || snapshot.length === 0) {
+    if (input.requireFrozenFields) {
+      throw new Error("The offer does not have a frozen signature field layout.");
+    }
     log.info({ documentId: input.documentId }, "finalizeNativeSignature: no fieldsSnapshot, using legacy free-placement fallback");
     if (!input.legacyPlacements || input.legacyPlacements.length === 0) {
       throw new Error("No signature placement was provided.");
@@ -132,7 +155,10 @@ export async function finalizeNativeSignature(input: {
   userAgent?: string | null;
   existingEnvelopeId?: string;
   existingRecipientId?: string;
+  /** When set, signing and offer acceptance commit in one transaction. */
+  offerId?: string;
 }) {
+  await purgeExpiredSignatureData({ workspaceId: input.workspaceId });
   const [document] = await db.select({ id: documents.id, name: documents.name, storageKey: documents.storageKey, mimeType: documents.mimeType, status: documents.status, signatureStatus: documents.signatureStatus, fieldsSnapshot: documents.fieldsSnapshot }).from(documents).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, input.workspaceId))).limit(1);
   const expectedStatus = input.existingEnvelopeId ? "pending" : "unsigned";
   if (!document || document.status !== "active" || document.signatureStatus !== expectedStatus || document.mimeType !== "application/pdf") throw new Error("This document is no longer available for signing.");
@@ -143,6 +169,7 @@ export async function finalizeNativeSignature(input: {
     signaturePngBytes: input.signaturePngBytes ?? null,
     textValues: input.textValues,
     legacyPlacements: input.placements,
+    requireFrozenFields: Boolean(input.offerId),
   });
 
   const originalBytes = await storage.read(document.storageKey);
@@ -155,9 +182,99 @@ export async function finalizeNativeSignature(input: {
   const signedKey = key(input.workspaceId, "signed-document", "pdf");
   const certificateKey = key(input.workspaceId, `certificate-v${NATIVE_CERTIFICATE_VERSION}`, "pdf");
   const previewKeys = previews.map((p) => ({ ...p, key: key(input.workspaceId, `preview-${p.width}`, "png") }));
+  const generatedStorageKeys = [signedKey, certificateKey, ...previewKeys.map((p) => p.key)];
   await Promise.all([storage.put(signedKey, signedBytes, "application/pdf"), storage.put(certificateKey, certificateBytes, "application/pdf"), ...previewKeys.map((p) => storage.put(p.key, p.bytes, "image/png"))]);
 
-  return db.transaction(async (tx) => {
+  try {
+    return await db.transaction(async (tx) => {
+    let nativeOffer:
+      | {
+          id: string;
+          applicationId: string;
+          candidateId: string;
+          jobId: string;
+          title: string;
+          createdById: string;
+        }
+      | undefined;
+    let nativeApplication:
+      | {
+          id: string;
+          status: string;
+          currentStageId: string | null;
+        }
+      | undefined;
+    let hiredStage: { id: string } | undefined;
+    let applicationHiredEvent: PersistedDomainEvent | null = null;
+
+    // Lock both business rows before any signed state is persisted. This is
+    // the reservation: a concurrent withdraw/reject either waits and observes
+    // the committed hire, or causes the whole signing transaction to roll
+    // back before the PDF becomes visible as signed.
+    if (input.offerId) {
+      const [offer] = await tx
+        .select({
+          id: offers.id,
+          applicationId: offers.applicationId,
+          candidateId: offers.candidateId,
+          jobId: offers.jobId,
+          title: offers.title,
+          createdById: offers.createdById,
+          status: offers.status,
+          expiresAt: offers.expiresAt,
+        })
+        .from(offers)
+        .where(
+          and(
+            eq(offers.workspaceId, input.workspaceId),
+            eq(offers.id, input.offerId),
+          ),
+        )
+        .for("update")
+        .limit(1);
+      if (!offer) throw new Error("The offer could not be resolved.");
+
+      const [application] = await tx
+        .select({
+          id: applications.id,
+          status: applications.status,
+          currentStageId: applications.currentStageId,
+        })
+        .from(applications)
+        .where(
+          and(
+            eq(applications.workspaceId, input.workspaceId),
+            eq(applications.id, offer.applicationId),
+          ),
+        )
+        .for("update")
+        .limit(1);
+      if (
+        !application ||
+        !isNativeOfferAcceptanceAvailable({
+          offerStatus: offer.status,
+          applicationStatus: application.status,
+          expiresAt: offer.expiresAt,
+        })
+      ) {
+        throw new Error("This offer or application is no longer available for signing.");
+      }
+
+      [hiredStage] = await tx
+        .select({ id: jobStages.id })
+        .from(jobStages)
+        .where(
+          and(
+            eq(jobStages.workspaceId, input.workspaceId),
+            eq(jobStages.jobId, offer.jobId),
+            eq(jobStages.name, "Hired"),
+          ),
+        )
+        .limit(1);
+      nativeOffer = offer;
+      nativeApplication = application;
+    }
+
     const [locked] = await tx.select({ versionNumber: documentVersions.versionNumber, signatureStatus: documents.signatureStatus }).from(documentVersions).innerJoin(documents, eq(documents.id, documentVersions.documentId)).where(and(eq(documentVersions.documentId, input.documentId), eq(documents.workspaceId, input.workspaceId), eq(documentVersions.isCurrent, true))).for("update").limit(1);
     if (!locked || locked.signatureStatus !== expectedStatus) throw new Error("The document changed while it was being signed.");
     const versionNumber = locked.versionNumber + 1;
@@ -198,6 +315,97 @@ export async function finalizeNativeSignature(input: {
     await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "baked", payload: { signedDocumentSha256 } });
     await evidence(tx, { workspaceId: input.workspaceId, envelopeId: envelope.id, recipientId: recipient.id, eventType: "completed", payload: { certificateVersion: NATIVE_CERTIFICATE_VERSION, ipAddress: input.ipAddress ?? null, userAgent: input.userAgent ?? null } });
     await tx.insert(activityEvents).values({ workspaceId: input.workspaceId, actorId: input.actorId, entityType: "document", entityId: input.documentId, type: "document.signature_changed", metadata: { status: "signed", provider: "native", versionNumber } });
-    return { envelopeId: envelope.id, versionId: version.id, recipientId: recipient.id, artifacts };
-  });
+    if (nativeOffer && nativeApplication) {
+      const [hired] = await tx
+        .update(applications)
+        .set({
+          status: "hired",
+          ...(hiredStage ? { currentStageId: hiredStage.id } : {}),
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(applications.workspaceId, input.workspaceId),
+            eq(applications.id, nativeApplication.id),
+            eq(applications.status, "active"),
+          ),
+        )
+        .returning({ id: applications.id });
+      if (!hired) {
+        throw new Error("The application changed while the offer was being signed.");
+      }
+
+      const [accepted] = await tx
+        .update(offers)
+        .set({ status: "accepted", decidedAt: signedAt, updatedAt: signedAt })
+        .where(
+          and(
+            eq(offers.workspaceId, input.workspaceId),
+            eq(offers.id, nativeOffer.id),
+            eq(offers.status, "sent"),
+          ),
+        )
+        .returning({ id: offers.id });
+      if (!accepted) {
+        throw new Error("The offer changed while the offer was being signed.");
+      }
+
+      if (hiredStage && hiredStage.id !== nativeApplication.currentStageId) {
+        await tx.insert(applicationStageHistory).values({
+          workspaceId: input.workspaceId,
+          applicationId: nativeApplication.id,
+          fromStageId: nativeApplication.currentStageId,
+          toStageId: hiredStage.id,
+          movedById: input.actorId ?? nativeOffer.createdById,
+        });
+      }
+      await tx.insert(activityEvents).values({
+        workspaceId: input.workspaceId,
+        actorId: input.actorId ?? nativeOffer.createdById,
+        entityType: "application",
+        entityId: nativeApplication.id,
+        type: "application.hired",
+        metadata: { via: "native_offer_signature", offerId: nativeOffer.id },
+      });
+      await tx.insert(activityEvents).values({
+        workspaceId: input.workspaceId,
+        actorId: input.actorId ?? nativeOffer.createdById,
+        entityType: "application",
+        entityId: nativeApplication.id,
+        type: "offer.accepted",
+        metadata: { title: nativeOffer.title, via: "native_signature" },
+      });
+      applicationHiredEvent = await persistDomainEvent(tx, {
+        name: "application.hired",
+        workspaceId: input.workspaceId,
+        actorId: input.actorId ?? nativeOffer.createdById,
+        aggregateType: "application",
+        aggregateId: nativeApplication.id,
+        payload: {
+          application: { id: nativeApplication.id, jobId: nativeOffer.jobId },
+          candidate: { id: nativeOffer.candidateId },
+          offer: { id: nativeOffer.id, title: nativeOffer.title },
+        },
+      });
+    }
+      return {
+        envelopeId: envelope.id,
+        versionId: version.id,
+        recipientId: recipient.id,
+        artifacts,
+        applicationHiredEvent,
+      };
+    });
+  } catch (error) {
+    await Promise.all(
+      generatedStorageKeys.map(async (storageKey) => {
+        try {
+          await storage.delete(storageKey);
+        } catch (cleanupError) {
+          log.warn({ cleanupError, storageKey }, "native signature rollback cleanup failed");
+        }
+      }),
+    );
+    throw error;
+  }
 }

@@ -55,6 +55,7 @@ export type CandidateFile = {
 
 export type Scorecard = {
   id: string;
+  applicationId: string | null;
   rating: "strong" | "mixed" | "weak";
   comment: string | null;
   stageName: string | null;

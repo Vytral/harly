@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { and, eq, isNull, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
   db,
@@ -12,6 +12,7 @@ import {
 
 import { createLogger } from "@/lib/logger";
 import { decideOfferForApi } from "@/features/offers/service";
+import { freshEsignContext, getSubmission } from "@/lib/esign/client";
 import { syncDocumentsForEnvelope } from "@/lib/esign/webhook-sync";
 import {
   canAdvanceSignatureEnvelope,
@@ -20,7 +21,8 @@ import {
   type SignatureEnvelopeStatus,
 } from "@/lib/esign/signature-state";
 import {
-  verifyDocusealSecret,
+  isVerifiedDocusealTerminalEvent,
+  verifyDocusealWebhookAuth,
   webhookEventKey,
   webhookMetadata,
   webhookSubmissionId,
@@ -33,17 +35,18 @@ const log = createLogger("api-docuseal-webhook");
 export const runtime = "nodejs";
 
 /**
- * POST /api/integrations/docuseal/webhook?ws=<workspaceId>&secret=<sharedSecret>
+ * POST /api/integrations/docuseal/webhook?ws=<workspaceId>
  *
  * DocuSeal posts submission/form status here (configured in the DocuSeal admin
- * webhook settings, one URL per workspace with its own secret). Authorization is
- * the per-workspace shared secret compared in constant time — DocuSeal has no
- * per-body HMAC on self-hosted by default. We:
- *  1. Verify the shared secret against the workspace's stored value.
+ * webhook settings, one URL per workspace with its own secret). Authorization
+ * is a body HMAC when available, otherwise the per-workspace shared secret in a
+ * header. We:
+ *  1. Verify header/body authentication against the workspace's stored value.
  *  2. Parse the JSON payload; resolve the submission id.
  *  3. Dedupe by (submissionId, eventType, timestamp) via signature_events.
  *  4. Advance the envelope + recipients monotonically.
- *  5. On completion/decline, sync attached documents and flip the offer decision.
+ *  5. On terminal events, verify the live provider submission before syncing
+ *     documents or changing an offer decision.
  */
 export async function POST(request: NextRequest) {
   const workspaceId = request.nextUrl.searchParams.get("ws");
@@ -60,16 +63,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "DocuSeal webhook not configured." }, { status: 404 });
   }
 
-  const providedSecret =
-    request.nextUrl.searchParams.get("secret") ??
-    request.headers.get("x-docuseal-secret");
-  if (!verifyDocusealSecret(providedSecret, settings.secret)) {
+  const rawBody = await request.text();
+  const authorization = request.headers.get("authorization");
+  const bearerSecret = authorization?.match(/^Bearer\s+(.+)$/i)?.[1] ?? null;
+  if (
+    !verifyDocusealWebhookAuth({
+      rawBody,
+      signature:
+        request.headers.get("x-docuseal-signature") ??
+        request.headers.get("x-docuseal-signature-256"),
+      sharedSecret: request.headers.get("x-docuseal-secret") ?? bearerSecret,
+      expectedSecret: settings.secret,
+    })
+  ) {
     return NextResponse.json({ error: "Invalid signature." }, { status: 401 });
   }
 
   let event: DocusealWebhookEvent;
   try {
-    event = (await request.json()) as DocusealWebhookEvent;
+    event = JSON.parse(rawBody) as DocusealWebhookEvent;
   } catch (err) {
     log.error(err, "docuseal webhook JSON parse failed");
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
@@ -90,10 +102,45 @@ export async function POST(request: NextRequest) {
   }
 
   const eventKey = webhookEventKey(event);
+  const internalEvent = eventForDocusealWebhook(eventType, webhookSubmissionStatus(event));
+  const envelopeStatus = internalEvent ? signatureEnvelopeStatusForEvent(internalEvent) : null;
+  const decision =
+    envelopeStatus === "completed"
+      ? "accepted"
+      : envelopeStatus === "declined"
+        ? "declined"
+        : null;
+
+  // Event names are caller-controlled. For terminal events, require a fresh
+  // provider read whose status agrees with the event before doing any local
+  // state transition or document sync.
+  if (decision) {
+    const esignContext = await freshEsignContext(workspaceId);
+    if (!esignContext) {
+      log.error({ workspaceId, submissionId }, "docuseal webhook: live verification unavailable");
+      return NextResponse.json({ error: "DocuSeal verification unavailable." }, { status: 503 });
+    }
+    try {
+      const providerSubmission = await getSubmission(esignContext, submissionId);
+      if (
+        String(providerSubmission.id) !== submissionId ||
+        !isVerifiedDocusealTerminalEvent(eventType, providerSubmission.status)
+      ) {
+        log.warn(
+          { submissionId, eventType, providerStatus: providerSubmission.status },
+          "docuseal webhook: terminal event failed live verification",
+        );
+        return NextResponse.json({ error: "DocuSeal event could not be verified." }, { status: 409 });
+      }
+    } catch (err) {
+      log.error({ err, submissionId, eventType }, "docuseal webhook: live verification failed");
+      return NextResponse.json({ error: "DocuSeal event could not be verified." }, { status: 502 });
+    }
+  }
+
   const signatureEnvelope = await ensureSignatureEnvelope({
     workspaceId,
     submissionId,
-    offerId: webhookMetadata(event, "offerId"),
   });
 
   const [insertedEvent] = await db
@@ -121,8 +168,6 @@ export async function POST(request: NextRequest) {
     recorded = existingEvent;
   }
 
-  const internalEvent = eventForDocusealWebhook(eventType, webhookSubmissionStatus(event));
-  const envelopeStatus = internalEvent ? signatureEnvelopeStatusForEvent(internalEvent) : null;
   const documentSignatureStatus =
     envelopeStatus === "completed"
       ? "signed"
@@ -141,7 +186,15 @@ export async function POST(request: NextRequest) {
       status: envelopeStatus,
     });
 
-    if (documentSignatureStatus) {
+    const offer = decision
+      ? await resolveOffer(workspaceId, signatureEnvelope.id, submissionId)
+      : null;
+    const offerIsActionable = !offer || offer.status === "sent";
+
+    // A late terminal event for a withdrawn/accepted/declined offer may still
+    // update the local envelope event log, but must not download a signed PDF
+    // or revive the offer.
+    if (documentSignatureStatus && offerIsActionable) {
       await syncDocumentsForEnvelope({
         workspaceId,
         envelopeId: submissionId,
@@ -151,18 +204,11 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    const decision =
-      envelopeStatus === "completed"
-        ? "accepted"
-        : envelopeStatus === "declined"
-          ? "declined"
-          : null;
     if (!decision) {
       await markProcessed(recorded.id);
       return NextResponse.json({ ok: true, skipped: eventType });
     }
 
-    const offer = await resolveOffer(workspaceId, signatureEnvelope.id, submissionId, webhookMetadata(event, "offerId"));
     if (!offer) {
       log.warn({ submissionId, workspaceId }, "docuseal webhook: offer not found");
       await markProcessed(recorded.id);
@@ -176,6 +222,9 @@ export async function POST(request: NextRequest) {
         offerId: offer.id,
         decision,
       });
+    } else {
+      await markProcessed(recorded.id);
+      return NextResponse.json({ ok: true, skipped: "offer no longer actionable" });
     }
 
     await markProcessed(recorded.id);
@@ -201,7 +250,6 @@ async function resolveOffer(
   workspaceId: string,
   signatureEnvelopeId: string,
   submissionId: string,
-  metaOfferId: string | null,
 ) {
   const cols = {
     id: offers.id,
@@ -222,26 +270,12 @@ async function resolveOffer(
       .where(and(eq(offers.workspaceId, workspaceId), eq(offers.esignSubmissionId, submissionId)))
       .limit(1);
   }
-  if (!offer && metaOfferId) {
-    [offer] = await db
-      .select(cols)
-      .from(offers)
-      .where(
-        and(
-          eq(offers.workspaceId, workspaceId),
-          eq(offers.id, metaOfferId),
-          or(isNull(offers.esignSubmissionId), eq(offers.esignSubmissionId, submissionId)),
-        ),
-      )
-      .limit(1);
-  }
   return offer;
 }
 
 async function ensureSignatureEnvelope(input: {
   workspaceId: string;
   submissionId: string;
-  offerId: string | null;
 }) {
   const [existing] = await db
     .select({ id: signatureEnvelopes.id })
@@ -256,24 +290,11 @@ async function ensureSignatureEnvelope(input: {
     .limit(1);
   if (existing) return existing;
 
-  let [offer] = await db
+  const [offer] = await db
     .select({ id: offers.id, title: offers.title, createdById: offers.createdById })
     .from(offers)
     .where(and(eq(offers.workspaceId, input.workspaceId), eq(offers.esignSubmissionId, input.submissionId)))
     .limit(1);
-  if (!offer && input.offerId) {
-    [offer] = await db
-      .select({ id: offers.id, title: offers.title, createdById: offers.createdById })
-      .from(offers)
-      .where(
-        and(
-          eq(offers.workspaceId, input.workspaceId),
-          eq(offers.id, input.offerId),
-          or(isNull(offers.esignSubmissionId), eq(offers.esignSubmissionId, input.submissionId)),
-        ),
-      )
-      .limit(1);
-  }
 
   const [created] = await db
     .insert(signatureEnvelopes)

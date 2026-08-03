@@ -75,6 +75,7 @@ export async function createEvent(
     attendees?: string[];
     location?: string;
     conferenceData?: boolean;
+    timeZone?: string;
   },
 ): Promise<CalendarEvent> {
   const startIso = event.start.toISOString();
@@ -82,7 +83,7 @@ export async function createEvent(
     event.start.getTime() + event.durationMins * 60_000,
   ).toISOString();
 
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = event.timeZone ?? "UTC";
 
   const body: Record<string, unknown> = {
     id: event.id,
@@ -142,9 +143,10 @@ export async function updateEvent(
     attendees?: string[];
     location?: string;
     status?: "confirmed" | "cancelled";
+    timeZone?: string;
   },
 ): Promise<CalendarEvent> {
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = updates.timeZone ?? "UTC";
 
   const body: Record<string, unknown> = {};
   if (updates.summary) body.summary = updates.summary;
