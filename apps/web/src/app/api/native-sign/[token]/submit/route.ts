@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 
 const schema = z.object({
   signaturePngBase64: z.string().max(700_000),
-  placements: z.array(z.object({ page: z.number().int().positive(), x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().positive().max(1), h: z.number().positive().max(1) })).min(1).max(20),
+  textValues: z.record(z.string(), z.string().max(200)).optional(),
   consentAt: z.string().datetime(),
 });
 
@@ -32,7 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
   const parsed = schema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) return NextResponse.json({ error: "Invalid signature submission." }, { status: 400 });
   try {
-    const result = await finalizeNativeSignature({ workspaceId: target.workspaceId, documentId: target.documentId, actorId: null, signerName: target.name, signerEmail: target.email, signaturePngBytes: decodePng(parsed.data.signaturePngBase64), placements: parsed.data.placements, verification: target.securityMode === "email_otp" ? "email_otp" : "link_only", consentAt: new Date(parsed.data.consentAt), ipAddress: clientIp(request), userAgent: request.headers.get("user-agent"), existingEnvelopeId: target.envelopeId, existingRecipientId: target.recipientId });
+    const result = await finalizeNativeSignature({ workspaceId: target.workspaceId, documentId: target.documentId, actorId: null, signerName: target.name, signerEmail: target.email, signaturePngBytes: decodePng(parsed.data.signaturePngBase64), textValues: parsed.data.textValues, verification: target.securityMode === "email_otp" ? "email_otp" : "link_only", consentAt: new Date(parsed.data.consentAt), ipAddress: clientIp(request), userAgent: request.headers.get("user-agent"), existingEnvelopeId: target.envelopeId, existingRecipientId: target.recipientId });
     const cookie = request.cookies.get(nativeSignCookieName)?.value;
     const challengeId = cookie?.split(".")[1];
     if (challengeId) await db.update(nativeSignatureOtpChallenges).set({ consumedAt: new Date() }).where(and(eq(nativeSignatureOtpChallenges.id, challengeId), eq(nativeSignatureOtpChallenges.recipientId, target.recipientId)));

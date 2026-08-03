@@ -40,6 +40,8 @@ const PUBLIC_PATHS = [
   "/portal",
   "/api/portal",
   "/setup-2fa",
+  "/sign",
+  "/api/native-sign",
 ];
 
 const PROTECTED_PATH_PREFIXES = ["/dashboard", "/settings"];

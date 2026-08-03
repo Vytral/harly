@@ -1,16 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, PenLine, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, PenLine } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { PdfSignaturePlacer } from "@/features/documents/PdfSignaturePlacer";
+import { PdfFieldFiller, type FillableField } from "@/features/documents/PdfFieldFiller";
 import { SignaturePad } from "@/features/documents/SignaturePad";
-import type { SignaturePlacement } from "@/lib/esign/native/bake";
 
 const emptyPng =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
@@ -29,28 +28,9 @@ export function NativeSigningPage({ token }: { token: string }) {
   const [verified, setVerified] = useState(false);
   const [loading, setLoading] = useState(true);
   const [signed, setSigned] = useState(false);
-  const [placements, setPlacements] = useState<SignaturePlacement[]>([]);
-  const [activeIndex, setActiveIndex] = useState(0);
-  const [pageCount, setPageCount] = useState(1);
+  const [fields, setFields] = useState<FillableField[] | null>(null);
+  const [textValues, setTextValues] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
-
-  function addPlacement() {
-    const current = placements[activeIndex] ??
-      placements[0] ?? { page: 1, x: 0.08, y: 0.7, w: 0.24, h: 0.055 };
-    setPlacements((items) => [
-      ...items,
-      { ...current, x: 0.08, y: 0.7, w: 0.24, h: 0.055 },
-    ]);
-    setActiveIndex(placements.length);
-  }
-
-  function handleSignatureChange(value: string) {
-    setSignature(value);
-    if (value && placements.length === 0) {
-      setPlacements([{ page: 1, x: 0.08, y: 0.7, w: 0.24, h: 0.055 }]);
-      setActiveIndex(0);
-    }
-  }
 
   useEffect(() => {
     void fetch(`/api/native-sign/${token}`)
@@ -66,6 +46,14 @@ export function NativeSigningPage({ token }: { token: string }) {
       .catch((error) => toast.error(error.message))
       .finally(() => setLoading(false));
   }, [token]);
+
+  useEffect(() => {
+    if (!verified) return;
+    void fetch(`/api/native-sign/${token}/fields`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setFields(Array.isArray(data.fields) ? data.fields : []))
+      .catch(() => setFields([]));
+  }, [token, verified]);
 
   async function requestOtp() {
     const response = await fetch(`/api/native-sign/${token}`, {
@@ -97,9 +85,13 @@ export function NativeSigningPage({ token }: { token: string }) {
     toast.success("Email verified.");
   }
 
+  const requiredTextFieldsFilled =
+    fields?.filter((f) => f.type === "text" && f.required).every((f) => (textValues[f.id] ?? "").trim().length > 0) ?? false;
+  const canSubmit = Boolean(signature) && consent && fields !== null && fields.length > 0 && requiredTextFieldsFilled;
+
   async function submit() {
-    if (!signature || !consent) {
-      toast.error("Add your signature and confirm consent first.");
+    if (!canSubmit) {
+      toast.error("Fill in every field, add your signature, and confirm consent first.");
       return;
     }
     setSubmitting(true);
@@ -109,7 +101,7 @@ export function NativeSigningPage({ token }: { token: string }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           signaturePngBase64: signature,
-          placements,
+          textValues,
           consentAt: new Date().toISOString(),
         }),
       });
@@ -207,96 +199,26 @@ export function NativeSigningPage({ token }: { token: string }) {
       ) : (
         <div className="grid gap-5 duration-500 animate-in fade-in slide-in-from-bottom-2 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-h-0 rounded-2xl border border-border/70 bg-muted/30 p-3 shadow-xs sm:p-5">
-            <PdfSignaturePlacer
+            <PdfFieldFiller
               fileUrl={`/api/native-sign/${token}/document`}
+              fields={fields ?? []}
               signatureDataUrl={signature || emptyPng}
               hasSignature={Boolean(signature)}
-              placements={placements}
-              activeIndex={activeIndex}
-              onChange={setPlacements}
-              onActiveIndexChange={setActiveIndex}
-              onPageCountChange={setPageCount}
+              textValues={textValues}
+              onTextValueChange={(fieldId, value) =>
+                setTextValues((prev) => ({ ...prev, [fieldId]: value }))
+              }
             />
-            <div className="sticky bottom-3 z-20 mx-auto mt-3 flex max-w-[720px] items-center justify-between gap-3 rounded-xl border border-primary/20 bg-card/95 px-3 py-2 shadow-lg backdrop-blur">
-              <span className="text-xs text-muted-foreground">
-                {placements.length === 0
-                  ? "Draw a signature or add a field"
-                  : `${placements.length} signature field${placements.length === 1 ? "" : "s"}`}
-              </span>
-              <Button size="sm" variant="outline" onClick={addPlacement}>
-                <Plus className="size-4" />
-                Add signature
-              </Button>
-            </div>
           </div>
           <section className="flex h-fit flex-col gap-5 rounded-2xl border border-border/70 bg-card p-5 shadow-xs lg:sticky lg:top-5">
             <div>
               <p className="text-sm font-semibold">Your signature</p>
               <p className="mt-1 text-xs leading-5 text-muted-foreground">
-                Draw or type the representation you want to place on the
-                document.
+                Draw or type your signature — it fills in every signature
+                field on the document.
               </p>
             </div>
-            <SignaturePad value={signature} onChange={handleSignatureChange} />
-            {placements.length > 0 ? (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Signature placements
-                </p>
-                {placements.map((placement, index) => (
-                  <div
-                    key={index}
-                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${activeIndex === index ? "border-primary bg-accent/50" : "border-border/70"}`}
-                  >
-                    <button
-                      type="button"
-                      className="min-w-0 flex-1 truncate text-left font-medium"
-                      onClick={() => setActiveIndex(index)}
-                    >
-                      Signature {index + 1}
-                    </button>
-                    <select
-                      value={placement.page}
-                      onChange={(event) =>
-                        setPlacements((items) =>
-                          items.map((item, itemIndex) =>
-                            itemIndex === index
-                              ? { ...item, page: Number(event.target.value) }
-                              : item,
-                          ),
-                        )
-                      }
-                      className="h-7 rounded-md border border-input bg-background px-2 text-xs"
-                      aria-label={`Page for signature ${index + 1}`}
-                    >
-                      {Array.from({ length: pageCount }, (_, pageIndex) => (
-                        <option key={pageIndex + 1} value={pageIndex + 1}>
-                          Page {pageIndex + 1}
-                        </option>
-                      ))}
-                    </select>
-                    {placements.length > 1 ? (
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="size-7 shrink-0"
-                        onClick={() => {
-                          setPlacements((items) =>
-                            items.filter((_, itemIndex) => itemIndex !== index),
-                          );
-                          setActiveIndex((current) =>
-                            Math.max(0, Math.min(current, placements.length - 2)),
-                          );
-                        }}
-                        aria-label={`Remove signature ${index + 1}`}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    ) : null}
-                  </div>
-                ))}
-              </div>
-            ) : null}
+            <SignaturePad value={signature} onChange={setSignature} />
             <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/20 p-3 text-sm">
               <Checkbox
                 checked={consent}
@@ -314,13 +236,13 @@ export function NativeSigningPage({ token }: { token: string }) {
               <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-primary" />
               <p>
                 Your signing intent, consent, document hash, timestamp,
-                placements, and artifact integrity are recorded.
+                field values, and artifact integrity are recorded.
               </p>
             </div>
             <Button
               size="lg"
               className="w-full"
-              disabled={submitting || !signature || !consent}
+              disabled={submitting || !canSubmit}
               onClick={submit}
             >
               {submitting ? "Signing…" : "Sign document"}
