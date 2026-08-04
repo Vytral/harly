@@ -103,10 +103,12 @@ export async function purgeExpiredSignatureData(input: {
 /** Scheduled, installation-wide cleanup. Keeps expiring signing secrets out of
  * the database even when no candidate opens a signing session afterward. */
 export async function purgeExpiredSignatureDataGlobally(now = new Date()) {
+  // # arreglado papu
+  const cutoff = now.toISOString();
   const result = await db.execute(sql`
     with expired_challenges as materialized (
       select "id" from "native_signature_otp_challenges"
-      where "expires_at" < ${now}
+      where "expires_at" < ${cutoff}::timestamptz
     ), deleted_otp_payloads as (
       delete from "email_outbox" o
       using expired_challenges c
@@ -122,12 +124,12 @@ export async function purgeExpiredSignatureDataGlobally(now = new Date()) {
       delete from "email_outbox"
       where "kind" = 'native.signature.invitation'
         and "payload"->>'expiresAt' ~ '^\\d{4}-\\d{2}-\\d{2}T'
-        and ("payload"->>'expiresAt')::timestamptz < ${now}
+        and ("payload"->>'expiresAt')::timestamptz < ${cutoff}::timestamptz
       returning "id"
     ), deleted_evidence as (
       delete from "signature_evidence_events"
       where "retention_expires_at" is not null
-        and "retention_expires_at" < ${now}
+        and "retention_expires_at" < ${cutoff}::timestamptz
         and "legal_hold" = false
         and "redacted_at" is null
       returning "id"
