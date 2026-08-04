@@ -1356,41 +1356,6 @@ function ToolResultCard({
   return null;
 }
 
-function EvidenceMeta({ output }: { output: unknown }) {
-  if (!output || typeof output !== "object") return null;
-  const value = output as Record<string, unknown>;
-  if (
-    typeof value.source !== "string" ||
-    typeof value.observedAt !== "string"
-  ) {
-    return null;
-  }
-
-  const observed = new Date(value.observedAt);
-  const observedLabel = Number.isNaN(observed.getTime())
-    ? value.observedAt
-    : observed.toLocaleString();
-  const confidence =
-    typeof value.confidence === "string" ? value.confidence : null;
-  const limitations = Array.isArray(value.limitations)
-    ? value.limitations.filter(
-        (item): item is string => typeof item === "string",
-      )
-    : [];
-
-  return (
-    <div className="mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 px-1 text-[10px] text-muted-foreground">
-      <span>Fuente: {value.source}</span>
-      <span aria-hidden="true">·</span>
-      <span>Observado: {observedLabel}</span>
-      {confidence ? <span>· Confianza: {confidence}</span> : null}
-      {limitations.length > 0 ? (
-        <span title={limitations.join(" ")}>· Tiene límites</span>
-      ) : null}
-    </div>
-  );
-}
-
 // ─── Generic confirm card for ANY write tool ──────────────────────────────────
 
 type WriteActionDetail = {
@@ -2274,7 +2239,6 @@ function HarlyChat({
                   if (!errored) {
                     lastReadCard = (
                       <div key={`c-${part.toolCallId}`}>
-                        <EvidenceMeta output={part.output} />
                         <ToolResultCard
                           toolName={toolName}
                           output={part.output}
