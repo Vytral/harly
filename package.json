@@ -45,6 +45,7 @@
       "@babel/core": "7.29.6",
       "drizzle-orm": "0.45.2",
       "esbuild": "0.28.1",
+      "ip-address": "10.4.0",
       "postcss": "8.5.25",
       "next>sharp": "0.35.2",
       "tar": ">=7.5.19",
