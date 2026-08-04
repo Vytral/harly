@@ -216,7 +216,7 @@ export function LegalSettings({
   const pageCount = Object.keys(pages).filter((k) => pages[k]?.trim()).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {/* Header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-4">
@@ -265,13 +265,13 @@ export function LegalSettings({
       </div>
 
       {/* Entity Information */}
-      <Card className="p-6">
+      <Card className="gap-3 p-5">
         <h2 className="m-0 text-sm font-semibold text-foreground">Legal Entity</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="-mt-2 text-xs text-muted-foreground">
           Basic information about the organization responsible for candidate data.
         </p>
 
-        <div className="mt-4 space-y-3">
+        <div className="space-y-3">
           <Field>
             <Label htmlFor="legal-entity-name">Entity name</Label>
             <Input
@@ -346,13 +346,13 @@ export function LegalSettings({
       </Card>
 
       {/* Data Retention */}
-      <Card className="p-6">
+      <Card className="gap-3 p-5">
         <h2 className="m-0 text-sm font-semibold text-foreground">Data Retention</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="-mt-2 text-xs text-muted-foreground">
           How long candidate data is kept after the hiring process concludes.
         </p>
 
-        <div className="mt-4 flex items-start justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 p-4">
+        <div className="flex items-start justify-between gap-4 rounded-xl border border-border/70 bg-muted/20 p-4">
           <div>
             <p className="text-sm font-medium text-foreground">Enforce automatically</p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
@@ -369,7 +369,7 @@ export function LegalSettings({
           />
         </div>
 
-        <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field>
             <Label htmlFor="retention-applicants">Applicants (months)</Label>
             <Input
@@ -399,7 +399,7 @@ export function LegalSettings({
             </p>
           </Field>
         </div>
-        <div className="mt-4 max-w-sm">
+        <div className="max-w-sm">
           <Field>
             <Label htmlFor="retention-audit">Audit log retention (months)</Label>
             <Input
@@ -418,13 +418,13 @@ export function LegalSettings({
       </Card>
 
       {/* Consent */}
-      <Card className="p-6">
+      <Card className="gap-3 p-5">
         <h2 className="m-0 text-sm font-semibold text-foreground">Consent</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">
+        <p className="-mt-2 text-xs text-muted-foreground">
           Text shown next to the consent checkbox on the application form.
         </p>
 
-        <div className="mt-4">
+        <div>
           <Label htmlFor="consent-text">Consent checkbox text</Label>
           <Textarea
             id="consent-text"

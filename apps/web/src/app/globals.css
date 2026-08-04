@@ -371,6 +371,16 @@
   }
 }
 
+/* Scrolls (wheel, trackpad, keyboard) with no visible scrollbar chrome ,
+   for panels that must cap their height without looking capped. */
+.scrollbar-hide {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* legacy Edge */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari */
+}
+
 /* Public board pages opt into a neutral white canvas regardless of admin chrome. */
 .board-canvas {
   background: var(--board-surface);
