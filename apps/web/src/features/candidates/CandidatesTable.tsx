@@ -35,6 +35,9 @@ import {
   type ImportJobOption,
   type ImportSource,
 } from "@/features/candidates/import/ImportCandidatesDrawer";
+import { AddCandidateDrawer } from "@/features/candidates/AddCandidateDrawer";
+import { ReferralBadge } from "@/features/candidates/referrals/ReferralBadge";
+import type { WorkspaceMemberOption } from "@/features/jobs/hiring-team-data";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { PipelineSpine } from "@/components/ui/PipelineSpine";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -141,6 +144,7 @@ export function CandidatesTable({
   emailTemplates = [],
   importJobs = [],
   initialImportSource,
+  manualCandidate,
 }: {
   rows: CandidateRow[];
   pageInfo?: { page: number; pageSize: number; total: number; hasNextPage: boolean };
@@ -164,6 +168,11 @@ export function CandidatesTable({
   emailTemplates?: EmailTemplateOption[];
   importJobs?: ImportJobOption[];
   initialImportSource?: ImportSource;
+  manualCandidate?: {
+    workspaceId: string;
+    members: WorkspaceMemberOption[];
+    currentUserId: string;
+  };
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialFilters?.query ?? "");
@@ -482,6 +491,14 @@ export function CandidatesTable({
             {selectedCount > 0 ? `(${selectedCount})` : "CSV"}
           </span>
         </Button>
+        {manualCandidate ? (
+          <AddCandidateDrawer
+            workspaceId={manualCandidate.workspaceId}
+            jobs={importJobs}
+            members={manualCandidate.members}
+            currentUserId={manualCandidate.currentUserId}
+          />
+        ) : null}
         <ImportCandidatesDrawer
           jobs={importJobs}
           initialSource={initialImportSource}
@@ -732,6 +749,9 @@ export function CandidatesTable({
                             <BookmarkSimpleIcon className="size-3 fill-current" />
                             In Pool
                           </span>
+                        ) : null}
+                        {row.isReferred ? (
+                          <ReferralBadge featured={row.isFeaturedReferral} />
                         ) : null}
                         {row.hasOpenPrivacyRequest ? (
                           <span

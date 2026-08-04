@@ -21,8 +21,12 @@ import {
   type CandidateDirectoryFilters,
 } from "@/features/candidates/data";
 import { TrashCandidateActions } from "@/features/candidates/TrashCandidateActions";
+import { AddCandidateDrawer } from "@/features/candidates/AddCandidateDrawer";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listJobOptions } from "@/features/jobs/data";
+import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
+import { getWorkspaceContext } from "@/features/workspaces/context";
+import { can } from "@/features/workspaces/permissions-server";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 import { formatRelative, formatShort } from "@/lib/date";
 import { cn } from "@/lib/utils";
@@ -87,12 +91,24 @@ const initialImportSource: ImportSource | undefined =
     page: Number.isFinite(Number(pageRaw)) ? Number(pageRaw) : 1,
     pageSize: 50,
   };
-  const [directory, facets, trashed, emailTemplates, jobOptions] = await Promise.all([
+  const [
+    directory,
+    facets,
+    trashed,
+    emailTemplates,
+    jobOptions,
+    members,
+    workspaceContext,
+    canCreateCandidates,
+  ] = await Promise.all([
     listCandidateDirectory(directoryFilters),
     listCandidateDirectoryFacets(),
     listTrashedCandidates(),
     listEmailTemplates(),
     listJobOptions(),
+    listWorkspaceMembers(),
+    getWorkspaceContext(),
+    can("candidates:edit"),
   ]);
 
   const rows: CandidateRow[] = directory.rows.map((candidate) => {
@@ -181,7 +197,15 @@ const initialImportSource: ImportSource | undefined =
             title="No candidates yet"
             description="Share your public job board or import candidates from another ATS."
           />
-          <div className="flex justify-center">
+          <div className="flex justify-center gap-2">
+            {canCreateCandidates ? (
+              <AddCandidateDrawer
+                workspaceId={workspaceContext.organization.id}
+                jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
+                members={members}
+                currentUserId={workspaceContext.user.id}
+              />
+            ) : null}
             <ImportCandidatesDrawer
               jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
               initialSource={initialImportSource}
@@ -198,6 +222,15 @@ const initialImportSource: ImportSource | undefined =
           emailTemplates={emailTemplates}
           importJobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
           initialImportSource={initialImportSource}
+          manualCandidate={
+            canCreateCandidates
+              ? {
+                  workspaceId: workspaceContext.organization.id,
+                  members,
+                  currentUserId: workspaceContext.user.id,
+                }
+              : undefined
+          }
         />
       )}
     </div>

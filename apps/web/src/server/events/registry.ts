@@ -17,6 +17,10 @@ const payloadSchemas = {
   "application.rejected": z.object({ application: entitySchema }).passthrough(),
   "candidate.created": z.object({ candidate: entitySchema }).passthrough(),
   "candidate.updated": z.object({ candidate: entitySchema }).passthrough(),
+  "candidate.referred": z.object({ referral: entitySchema }).passthrough(),
+  "candidate.referral_deleted": z
+    .object({ referralId: z.string(), candidateId: z.string() })
+    .passthrough(),
   "interview.scheduled": z.object({ interview: entitySchema }).passthrough(),
   "interview.rescheduled": z.object({ interview: entitySchema }).passthrough(),
   "interview.completed": z.object({ interview: entitySchema }).passthrough(),
@@ -37,6 +41,8 @@ export const DOMAIN_EVENTS = {
   APPLICATION_REJECTED: "application.rejected",
   CANDIDATE_CREATED: "candidate.created",
   CANDIDATE_UPDATED: "candidate.updated",
+  CANDIDATE_REFERRED: "candidate.referred",
+  CANDIDATE_REFERRAL_DELETED: "candidate.referral_deleted",
   INTERVIEW_SCHEDULED: "interview.scheduled",
   INTERVIEW_CANCELED: "interview.canceled",
   INTERVIEW_COMPLETED: "interview.completed",

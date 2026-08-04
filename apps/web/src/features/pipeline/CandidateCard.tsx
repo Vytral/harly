@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useRouter } from "next/navigation";
+import { Star } from "lucide-react";
 
 import { DotsSixVerticalIcon } from "@/components/ui/icons/phosphor";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -208,6 +209,19 @@ export function CandidateCard({
                 />
               ) : null}
               <StageAge value={stageStartedAt} />
+              {application.isFeaturedReferral ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span
+                      aria-label="Featured referral"
+                      className="inline-flex shrink-0 items-center text-amber-600"
+                    >
+                      <Star className="size-3 fill-current" />
+                    </span>
+                  </TooltipTrigger>
+                  <TooltipContent>Featured referral</TooltipContent>
+                </Tooltip>
+              ) : null}
               {application.status !== "active" ? (
                 <ApplicationStatusBadge status={application.status} />
               ) : null}

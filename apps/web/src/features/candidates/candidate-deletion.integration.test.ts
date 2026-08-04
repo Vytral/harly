@@ -64,6 +64,7 @@ import {
   candidatePortalMagicLinks,
   candidatePortalNotifications,
   candidatePortalSessions,
+  candidateReferrals,
   candidateTags,
   candidateDeletionJobs,
   candidates,
@@ -790,6 +791,26 @@ integration("permanent candidate deletion", () => {
       })
       .returning({ id: tasks.id });
 
+    const [{ id: referredCandidateId }] = await db
+      .insert(candidates)
+      .values({
+        workspaceId: context.workspaceId,
+        firstName: "Referred",
+        lastName: "Candidate",
+        email: `referred-${randomUUID()}@example.test`,
+      })
+      .returning({ id: candidates.id });
+    const [{ id: referralId }] = await db
+      .insert(candidateReferrals)
+      .values({
+        workspaceId: context.workspaceId,
+        candidateId: referredCandidateId,
+        jobId,
+        referredById: context.userId,
+        createdById: context.userId,
+      })
+      .returning({ id: candidateReferrals.id });
+
     const deletedJob = await permanentlyDeleteJob(jobId);
     expect(deletedJob).toMatchObject({ ok: true });
     expect(
@@ -834,6 +855,18 @@ integration("permanent candidate deletion", () => {
         .from(jobApprovalRequests)
         .where(eq(jobApprovalRequests.jobId, jobId)),
     ).toHaveLength(0);
+    expect(
+      await db
+        .select({ id: candidateReferrals.id })
+        .from(candidateReferrals)
+        .where(eq(candidateReferrals.id, referralId)),
+    ).toHaveLength(0);
+    expect(
+      await db
+        .select({ id: candidates.id })
+        .from(candidates)
+        .where(eq(candidates.id, referredCandidateId)),
+    ).toHaveLength(1);
     const [task] = await db
       .select({ id: tasks.id, jobId: tasks.jobId })
       .from(tasks)

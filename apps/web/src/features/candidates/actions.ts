@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@harly/db";
@@ -40,8 +40,19 @@ import { sendCanonicalEmail } from "@/lib/mail/send-canonical-email";
 import { isMailUnificationEnabled } from "@/lib/mail/feature-flag";
 import {
   requireCandidatePermission,
+  requireJobPermission,
   requirePermission,
 } from "@/features/workspaces/permissions-server";
+import { emitWebhookEvent } from "@/server/webhooks/emit";
+import {
+  persistDomainEvent,
+  publishPersistedDomainEvents,
+} from "@/server/events/emit";
+import { serializeCandidate } from "./service";
+import {
+  createReferralRecord,
+  serializeReferral as serializeCandidateReferral,
+} from "./referrals/service";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
 import {
   permanentlyDeleteCandidate,
@@ -60,6 +71,7 @@ import {
 import { extractResumeAutofillFields } from "@/features/applications/resume-autofill";
 import { extractResumeText } from "@/lib/resume/extract-text";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
+import { isCandidateEmailConflict } from "./create-candidate-errors";
 import { isWorkspaceStorageKey } from "@/lib/storage-validation";
 import { storage } from "@/lib/storage";
 import { createLogger } from "@/lib/logger";
@@ -509,6 +521,213 @@ export async function createCandidateNote(input: {
       success: false,
       error: message,
     };
+  }
+}
+
+const createReferralInputSchema = z
+  .object({
+    jobId: z.string().trim().min(1).nullable().optional(),
+    referredById: z.string().trim().min(1).optional(),
+    note: z.string().trim().max(2000).optional(),
+    featured: z.boolean().optional(),
+  })
+  .optional();
+
+const createCandidateSchema = z.object({
+  firstName: z.string().trim().min(1, "First name is required."),
+  lastName: z.string().trim().min(1, "Last name is required."),
+  email: z.string().trim().email("Enter a valid email address."),
+  phone: optionalText,
+  address: optionalText,
+  headline: optionalText,
+  linkedinUrl: optionalHttpsUrl,
+  githubUrl: optionalHttpsUrl,
+  websiteUrl: optionalHttpsUrl,
+  referral: createReferralInputSchema,
+});
+
+/**
+ * Dashboard "Add candidate" entry point. Gated on candidates:edit — a
+ * superset of collab:write, so any inline referral this creates never needs
+ * the "attribute to someone else" / "featured" escalation checks that
+ * referCandidate has to apply on its lower collab:write floor.
+ */
+export async function createCandidate(input: {
+  workspaceId: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone?: string;
+  address?: string;
+  headline?: string;
+  linkedinUrl?: string;
+  githubUrl?: string;
+  websiteUrl?: string;
+  referral?: {
+    jobId?: string | null;
+    referredById?: string;
+    note?: string;
+    featured?: boolean;
+  };
+}): Promise<{ success: boolean; error?: string; candidateId?: string }> {
+  try {
+    const parsed = createCandidateSchema.safeParse(input);
+    if (!parsed.success) {
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid candidate.",
+      };
+    }
+
+    const { organization: workspace, user } = await getWorkspaceContext();
+    if (workspace.id !== input.workspaceId) {
+      return { success: false, error: "Workspace access denied." };
+    }
+
+    await requirePermission("candidates:edit");
+
+    const referral = parsed.data.referral;
+    if (referral?.jobId) {
+      await requireJobPermission("candidates:edit", referral.jobId);
+    }
+
+    const referredById = referral?.referredById ?? user.id;
+    if (referral && referredById !== user.id) {
+      const [member] = await db
+        .select({ userId: authMembers.userId })
+        .from(authMembers)
+        .where(
+          and(
+            eq(authMembers.organizationId, workspace.id),
+            eq(authMembers.userId, referredById),
+            eq(authMembers.status, "active"),
+          ),
+        )
+        .limit(1);
+      if (!member) {
+        return {
+          success: false,
+          error: "Referrer is not an active member of this workspace.",
+        };
+      }
+    }
+
+    const email = parsed.data.email.trim().toLowerCase();
+
+    const result = await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ id: candidates.id })
+        .from(candidates)
+        .where(
+          and(
+            eq(candidates.workspaceId, workspace.id),
+            sql`lower(${candidates.email}) = ${email}`,
+          ),
+        )
+        .limit(1);
+      if (existing) {
+        return { error: "A candidate with this email already exists." } as const;
+      }
+
+      const [created] = await tx
+        .insert(candidates)
+        .values({
+          workspaceId: workspace.id,
+          firstName: parsed.data.firstName,
+          lastName: parsed.data.lastName,
+          email,
+          phone: parsed.data.phone,
+          address: parsed.data.address,
+          headline: parsed.data.headline,
+          linkedinUrl: parsed.data.linkedinUrl,
+          githubUrl: parsed.data.githubUrl,
+          websiteUrl: parsed.data.websiteUrl,
+        })
+        .returning();
+      if (!created) throw new Error("Candidate could not be created.");
+
+      const candidateEvent = await persistDomainEvent(tx, {
+        name: "candidate.created",
+        workspaceId: workspace.id,
+        actorId: user.id,
+        aggregateType: "candidate",
+        aggregateId: created.id,
+        payload: { candidate: serializeCandidate(created) },
+      });
+
+      let referralResult:
+        | Awaited<ReturnType<typeof createReferralRecord>>
+        | undefined;
+      if (referral) {
+        referralResult = await createReferralRecord(tx, {
+          workspaceId: workspace.id,
+          candidateId: created.id,
+          jobId: referral.jobId ?? null,
+          referredById,
+          createdById: user.id,
+          note: referral.note,
+          featured: referral.featured,
+        });
+      }
+
+      return { candidate: created, candidateEvent, referralResult } as const;
+    });
+
+    if ("error" in result) {
+      return { success: false, error: result.error };
+    }
+
+    const { candidate, candidateEvent, referralResult } = result;
+
+    await publishPersistedDomainEvents([candidateEvent]);
+    await emitWebhookEvent(
+      workspace.id,
+      "candidate.created",
+      { candidate: serializeCandidate(candidate) },
+      { skipDomainEvent: true, actorId: user.id },
+    );
+    await logAuditEvent({
+      workspaceId: workspace.id,
+      actorId: user.id,
+      actorEmail: user.email,
+      action: "candidate.created",
+      resourceType: "candidate",
+      resourceId: candidate.id,
+      severity: "info",
+      metadata: { via: "dashboard" },
+    });
+
+    if (referralResult && "referral" in referralResult) {
+      await publishPersistedDomainEvents([referralResult.event]);
+      await emitWebhookEvent(
+        workspace.id,
+        "candidate.referred",
+        { referral: serializeCandidateReferral(referralResult.referral) },
+        { skipDomainEvent: true, actorId: user.id },
+      );
+      await logAuditEvent({
+        workspaceId: workspace.id,
+        actorId: user.id,
+        actorEmail: user.email,
+        action: "candidate.referred",
+        resourceType: "candidate",
+        resourceId: candidate.id,
+        severity: "info",
+        metadata: { referralId: referralResult.referral.id, via: "dashboard" },
+      });
+    }
+
+    revalidatePath("/dashboard/candidates");
+    return { success: true, candidateId: candidate.id };
+  } catch (error) {
+    if (isCandidateEmailConflict(error)) {
+      return {
+        success: false,
+        error: "A candidate with this email already exists.",
+      };
+    }
+    console.error("Failed to create candidate", error);
+    return { success: false, error: "Unable to create candidate." };
   }
 }
 

@@ -20,12 +20,17 @@ import { db } from "@harly/db";
 import {
   applicationQuestions,
   applications,
+  candidateReferrals,
   jobHiringTeam,
   jobStages,
   jobs,
   organization,
   workspaceSettings,
 } from "@harly/db";
+import { publishPersistedDomainEvents } from "@/server/events/emit";
+import { emitWebhookEvent } from "@/server/webhooks/emit";
+import { logAuditEvent } from "@/lib/audit-log";
+import { deleteReferralRecord } from "@/features/candidates/referrals/service";
 import {
   normalizeBoardStyle,
   normalizeLogoStyle,
@@ -575,9 +580,9 @@ export async function updateJob(jobId: string, values: JobFormValues) {
 
 /** Permanently delete a trashed job. Blocked if it has applications. */
 export async function permanentlyDeleteJob(jobId: string) {
-  const { organization: workspace } = await getWorkspaceContext();
+  const { organization: workspace, user } = await getWorkspaceContext();
 
-  return db.transaction(async (tx) => {
+  const result = await db.transaction(async (tx) => {
     // Lock the parent row while checking applications. PostgreSQL foreign-key
     // inserts must wait for this lock, so a concurrent application cannot slip
     // between the check and the destructive delete.
@@ -619,12 +624,60 @@ export async function permanentlyDeleteJob(jobId: string) {
       } as const;
     }
 
+    // Job-scoped referrals have an FK CASCADE on jobId as a backstop, but that
+    // would silently drop the row with no candidate.referral_deleted webhook
+    // — an external subscriber that saw candidate.referred would see the
+    // referral vanish with no lifecycle signal. Delete them explicitly first,
+    // with the same event/webhook/audit trail a standalone delete gets, so by
+    // the time the job row is deleted below zero referrals are left to cascade.
+    const jobReferrals = await tx
+      .select({ id: candidateReferrals.id, candidateId: candidateReferrals.candidateId })
+      .from(candidateReferrals)
+      .where(
+        and(
+          eq(candidateReferrals.workspaceId, workspace.id),
+          eq(candidateReferrals.jobId, job.id),
+        ),
+      );
+    const referralDeletions = [];
+    for (const r of jobReferrals) {
+      const event = await deleteReferralRecord(
+        tx,
+        { id: r.id, workspaceId: workspace.id, candidateId: r.candidateId },
+        user.id,
+      );
+      if (event) referralDeletions.push({ event, referralId: r.id, candidateId: r.candidateId });
+    }
+
     await tx
       .delete(jobs)
       .where(and(eq(jobs.id, job.id), eq(jobs.workspaceId, workspace.id)));
 
-    return { ok: true, slug: job.slug } as const;
+    return { ok: true, slug: job.slug, referralDeletions } as const;
   });
+
+  if (result.ok) {
+    for (const { event, referralId, candidateId } of result.referralDeletions) {
+      await publishPersistedDomainEvents([event]);
+      await emitWebhookEvent(
+        workspace.id,
+        "candidate.referral_deleted",
+        { referralId, candidateId },
+        { skipDomainEvent: true, actorId: user.id },
+      );
+      await logAuditEvent({
+        workspaceId: workspace.id,
+        actorId: user.id,
+        action: "candidate.referral_deleted",
+        resourceType: "candidate",
+        resourceId: candidateId,
+        severity: "warning",
+        metadata: { referralId, via: "job_permanently_deleted" },
+      });
+    }
+  }
+
+  return result;
 }
 
 export async function updateJobStatus(jobId: string, status: JobStatus) {

@@ -30,6 +30,8 @@ import { CandidateStickyHeader } from "@/features/candidates/CandidateStickyHead
 import { CandidateProfileTabs } from "@/features/candidates/CandidateProfileTabs";
 import { filterApplicationScopedItems } from "@/features/candidates/profile-scope";
 import { CandidateTags } from "@/features/candidates/CandidateTags";
+import { CandidateReferrals } from "@/features/candidates/referrals/CandidateReferrals";
+import { ReferCandidateDrawer } from "@/features/candidates/referrals/ReferCandidateDrawer";
 import { DuplicateDetectionCard } from "@/features/candidates/DuplicateDetectionCard";
 import { IdentityShield, Redact, RedactLink } from "@/features/candidates/IdentityShield";
 import { getCandidateProfile, listCandidates, findSuspectDuplicates } from "@/features/candidates/data";
@@ -46,6 +48,7 @@ import {
   requireCandidatePermission,
 } from "@/features/workspaces/permissions-server";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
+import { listJobOptions } from "@/features/jobs/data";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
@@ -96,11 +99,12 @@ export default async function CandidateDetailPage({
     notFound();
   }
 
-  const [profile, allCandidates, members, candidateInterviews, candidateOffers, emailTemplates, relatedDocuments, profileDocumentRequests, signableDocuments] =
+  const [profile, allCandidates, members, jobOptions, candidateInterviews, candidateOffers, emailTemplates, relatedDocuments, profileDocumentRequests, signableDocuments] =
     await Promise.all([
       getCandidateProfile(candidateId),
       listCandidates(),
       listWorkspaceMembers(),
+      listJobOptions(),
       listCandidateInterviews(candidateId),
       listOffersForCandidate(candidateId),
       listEmailTemplates(),
@@ -126,6 +130,7 @@ export default async function CandidateDetailPage({
     aiEvaluations: profileAiEvaluations,
     inPool,
     privacyRequests,
+    referrals,
   } = profile;
   const applications = (
     await Promise.all(
@@ -184,7 +189,7 @@ export default async function CandidateDetailPage({
   ).filter((candidateRow): candidateRow is (typeof allCandidates)[number] => Boolean(candidateRow));
 
   const isHired = applications.some((application) => application.status === "hired");
-  const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canManageDocuments] = await Promise.all([
+  const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canManageDocuments, canCollaborate, canEditCandidates] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
     getWorkspaceAiStatus(workspaceId),
     getWorkspaceEsignStatus(workspaceId),
@@ -192,6 +197,8 @@ export default async function CandidateDetailPage({
     can("dsar:manage"),
     can("candidates:delete"),
     can("documents:manage"),
+    can("collab:write"),
+    can("candidates:edit"),
   ]);
   const workspaceName = workspaceContext.organization.name;
   const currentUserName = workspaceContext.user.name;
@@ -448,10 +455,33 @@ export default async function CandidateDetailPage({
                     />
                   ) : null}
 
-                  <CandidateTags
-                    candidateId={candidate.id}
-                    workspaceId={workspaceId}
-                    tags={tags}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CandidateTags
+                      candidateId={candidate.id}
+                      workspaceId={workspaceId}
+                      tags={tags}
+                    />
+                    {canCollaborate ? (
+                      <ReferCandidateDrawer
+                        candidateId={candidate.id}
+                        workspaceId={workspaceId}
+                        jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
+                        members={members}
+                        currentUserId={workspaceContext.user.id}
+                        canAttributeToOthers={canEditCandidates}
+                        trigger={
+                          <Button type="button" variant="outline" size="sm">
+                            <UserPlus className="size-4" />
+                            Refer
+                          </Button>
+                        }
+                      />
+                    ) : null}
+                  </div>
+                  <CandidateReferrals
+                    referrals={referrals}
+                    currentUserId={workspaceContext.user.id}
+                    canEditCandidates={canEditCandidates}
                   />
                 </div>
               </div>
