@@ -33,6 +33,7 @@ function parseJobFormData(formData: FormData) {
     workplaceType: formData.get("workplaceType"),
     experienceLevel: formData.get("experienceLevel"),
     education: formData.get("education"),
+    evaluationMode: formData.get("evaluationMode"),
     keywordsJson: formData.get("keywordsJson"),
     description: formData.get("description"),
     contentSectionsJson: formData.get("contentSectionsJson"),

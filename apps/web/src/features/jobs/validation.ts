@@ -2,6 +2,11 @@ import { z } from "zod";
 
 import { slugify } from "@/lib/utils";
 import {
+  DEFAULT_EVALUATION_MODE,
+  EVALUATION_MODES,
+  type EvaluationMode,
+} from "@/lib/evaluation/mode";
+import {
   defaultJobApplicationConfig,
   parseJobApplicationQuestions,
   parseJobContentSections,
@@ -67,6 +72,7 @@ export const jobFormSchema = z
     workplaceType: z.enum(["remote", "hybrid", "onsite"]),
     experienceLevel: optionalText,
     education: optionalText,
+    evaluationMode: z.enum(EVALUATION_MODES).default(DEFAULT_EVALUATION_MODE),
     keywordsJson: z.string().optional(),
     description: z.string().optional(),
     contentSectionsJson: z.string().optional(),
@@ -187,6 +193,7 @@ export const jobFormSchema = z
       workplaceType: values.workplaceType,
       experienceLevel: values.experienceLevel,
       education: values.education,
+      evaluationMode: values.evaluationMode as EvaluationMode,
       keywords: parseKeywords(values.keywordsJson),
       // Column is NOT NULL; a sections-only job submits no description.
       description: values.description ?? "",
