@@ -5,7 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 export default function ReportsLoading() {
   return (
     <div className="space-y-5">
-      <PageHeaderSkeleton actionCount={1} />
+      <PageHeaderSkeleton hasEyebrow={false} actionCount={2} />
       <StatsGridSkeleton count={4} columns="xl:grid-cols-4" />
 
       <Card>
