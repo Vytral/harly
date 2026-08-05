@@ -103,7 +103,6 @@ export async function purgeExpiredSignatureData(input: {
 /** Scheduled, installation-wide cleanup. Keeps expiring signing secrets out of
  * the database even when no candidate opens a signing session afterward. */
 export async function purgeExpiredSignatureDataGlobally(now = new Date()) {
-  // # arreglado papu
   const cutoff = now.toISOString();
   const result = await db.execute(sql`
     with expired_challenges as materialized (
