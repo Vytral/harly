@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getWorkspaceContextOrNull: vi.fn(),
+  getRolePolicy: vi.fn(),
   requirePermission: vi.fn(),
   getWorkspaceAiConfig: vi.fn(),
   getModel: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock("@/features/workspaces/context", () => ({
   getWorkspaceContextOrNull: mocks.getWorkspaceContextOrNull,
 }));
 vi.mock("@/features/workspaces/permissions-server", () => ({
+  getRolePolicy: mocks.getRolePolicy,
   requirePermission: mocks.requirePermission,
 }));
 vi.mock("@/lib/ai/config", () => ({ getWorkspaceAiConfig: mocks.getWorkspaceAiConfig }));
@@ -43,6 +45,7 @@ const context = {
   organization: { id: "workspace-1", name: "Harly" },
   user: { id: "user-1", name: "Ada Lovelace" },
   role: "recruiter",
+  roleKey: "recruiter",
 };
 const config = { provider: "openai", modelId: "gpt-test" };
 const message = { id: "message-1", role: "user", parts: [{ type: "text", text: "Hello" }] };
@@ -61,6 +64,9 @@ describe("POST /api/ai/chat", () => {
     vi.clearAllMocks();
     mocks.getWorkspaceContextOrNull.mockResolvedValue(context);
     mocks.requirePermission.mockResolvedValue(context);
+    mocks.getRolePolicy.mockResolvedValue({
+      scope: { jobAccess: "all", departments: [], regions: [] },
+    });
     mocks.getWorkspaceAiConfig.mockResolvedValue(config);
     mocks.getModel.mockReturnValue("model");
     mocks.buildHarlyTools.mockReturnValue({ lookup: { execute: vi.fn() } });
@@ -82,6 +88,18 @@ describe("POST /api/ai/chat", () => {
 
     expect(response.status).toBe(403);
     expect(mocks.getWorkspaceAiConfig).not.toHaveBeenCalled();
+  });
+
+  it("rejects scoped roles before constructing workspace-wide AI tools", async () => {
+    mocks.getRolePolicy.mockResolvedValue({
+      scope: { jobAccess: "assigned", departments: [], regions: [] },
+    });
+
+    const response = await POST(request({ messages: [message] }));
+
+    expect(response.status).toBe(403);
+    expect(mocks.getWorkspaceAiConfig).not.toHaveBeenCalled();
+    expect(mocks.buildHarlyTools).not.toHaveBeenCalled();
   });
 
   it("rejects invalid and oversized chat histories before calling the model", async () => {

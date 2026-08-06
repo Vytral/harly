@@ -41,6 +41,15 @@ function generateUid(): string {
   return `interview-${Date.now()}-${Math.random().toString(36).slice(2, 9)}@harly`;
 }
 
+function escapeIcsText(value: string): string {
+  return value
+    .replace(/\r\n?/g, "\n")
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,");
+}
+
 export function buildCalendarLinks(opts: {
   summary: string;
   start: Date;
@@ -69,9 +78,9 @@ export function buildCalendarLinks(opts: {
     "BEGIN:VEVENT",
     `DTSTART:${toIcsDate(opts.start)}`,
     `DTEND:${toIcsDate(end)}`,
-    `SUMMARY:${opts.summary}`,
-    description ? `DESCRIPTION:${description.replace(/\n/g, "\\n")}` : null,
-    opts.location ? `LOCATION:${opts.location}` : null,
+    `SUMMARY:${escapeIcsText(opts.summary)}`,
+    description ? `DESCRIPTION:${escapeIcsText(description)}` : null,
+    opts.location ? `LOCATION:${escapeIcsText(opts.location)}` : null,
     `UID:${generateUid()}`,
     "END:VEVENT",
     "END:VCALENDAR",

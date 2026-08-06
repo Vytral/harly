@@ -8,6 +8,27 @@ import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 
 export const DEFAULT_CAL_BASE_URL = "https://api.cal.com/v2";
 
+function normalizeConfiguredBaseUrl(
+  value: string | null | undefined,
+): string | null {
+  if (!value) return null;
+  try {
+    const url = new URL(value.trim());
+    if (
+      url.protocol !== "https:" ||
+      url.username ||
+      url.password ||
+      url.search ||
+      url.hash
+    ) {
+      return null;
+    }
+    return url.toString().replace(/\/+$/, "");
+  } catch {
+    return null;
+  }
+}
+
 export type WorkspaceCalStatus = {
   enabled: boolean;
   baseUrl: string;
@@ -100,9 +121,12 @@ export async function getWorkspaceCalConfig(
       tag: row.calApiKeyTag,
     });
 
+    const baseUrl = normalizeConfiguredBaseUrl(row.calBaseUrl);
+    if (!baseUrl) return null;
+
     return {
       apiKey,
-      baseUrl: row.calBaseUrl || DEFAULT_CAL_BASE_URL,
+      baseUrl,
       bookingUrl: row.calBookingUrl ?? null,
       defaultEventTypeId: row.calDefaultEventTypeId ?? null,
       webhookSecret: row.calWebhookSecret ?? null,

@@ -18,6 +18,8 @@ export type WorkspaceEsignStatus = {
   enabled: boolean;
   /** Base instance URL, e.g. https://sign.example.com (no trailing /api). */
   url: string | null;
+  /** Raw configured URL retained so unsafe legacy values cannot bypass rotation checks. */
+  configuredUrl: string | null;
   hasToken: boolean;
   hasWebhookSecret: boolean;
   /**
@@ -50,7 +52,8 @@ function normalizeBaseUrl(value: string | null | undefined): string | null {
   if (!value) return null;
   try {
     const url = new URL(value.trim());
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+    if (url.protocol !== "https:") return null;
+    if (url.username || url.password || url.search || url.hash) return null;
     const path = url.pathname.replace(/\/?api\/?$/i, "").replace(/\/$/, "");
     return `${url.origin}${path}`;
   } catch {
@@ -83,10 +86,12 @@ export async function getWorkspaceEsignStatus(
 
   const channel = resolveOfferSignatureChannel(row?.offerSignatureChannel);
   const url = normalizeBaseUrl(row?.docusealUrl) ?? envUrl();
+  const configuredUrl = row?.docusealUrl?.trim() || envUrl();
 
   return {
     enabled: Boolean(row?.docusealEnabled),
     url,
+    configuredUrl,
     hasToken: Boolean(row?.docusealApiTokenCiphertext) || Boolean(envToken()),
     hasWebhookSecret: Boolean(row?.docusealWebhookSecret),
     webhookSecret: row?.docusealWebhookSecret ?? null,

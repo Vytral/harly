@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
+  getRolePolicy: vi.fn(),
+  requireCandidatePermission: vi.fn(),
   select: vi.fn(),
   insert: vi.fn(),
   requirePermission: vi.fn(),
@@ -35,6 +37,8 @@ vi.mock("@harly/db", () => ({
 }));
 
 vi.mock("@/features/workspaces/permissions-server", () => ({
+  getRolePolicy: mocks.getRolePolicy,
+  requireCandidatePermission: mocks.requireCandidatePermission,
   requirePermission: mocks.requirePermission,
   requireApplicationPermission: mocks.requireApplicationPermission,
   requireJobPermission: mocks.requireJobPermission,
@@ -101,6 +105,14 @@ describe("AI evaluation application authorization", () => {
     mocks.requirePermission.mockResolvedValue({
       organization: { id: WORKSPACE_ID },
       user: { id: "recruiter-1" },
+    });
+    mocks.requireCandidatePermission.mockResolvedValue({
+      organization: { id: WORKSPACE_ID },
+      user: { id: "recruiter-1" },
+      roleKey: "recruiter",
+    });
+    mocks.getRolePolicy.mockResolvedValue({
+      scope: { jobAccess: "all", departments: [], regions: [] },
     });
     mocks.requireApplicationPermission.mockResolvedValue({
       organization: { id: WORKSPACE_ID },

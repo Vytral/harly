@@ -1,11 +1,14 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
+import { candidateFiles, db } from "@harly/db";
 import { getLocalUploadPath } from "@harly/storage";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import { requireCandidatePermission } from "@/features/workspaces/permissions-server";
 import { isPrivateResumeStorageKey } from "@/lib/upload-access";
+import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,9 +20,18 @@ const CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".pdf": "application/pdf",
   ".png": "image/png",
-  ".svg": "image/svg+xml",
   ".webp": "image/webp",
 };
+
+async function findCandidateFileForKey(workspaceId: string, key: string) {
+  const rows = await db
+    .select({ candidateId: candidateFiles.candidateId, fileUrl: candidateFiles.fileUrl })
+    .from(candidateFiles)
+    .where(eq(candidateFiles.workspaceId, workspaceId))
+    .limit(5000);
+
+  return rows.find((row) => resumeKeyFromUrl(row.fileUrl) === key) ?? null;
+}
 
 export async function GET(
   _request: Request,
@@ -43,11 +55,20 @@ export async function GET(
     const context = await getWorkspaceContextOrNull();
     if (!context) return new NextResponse("Not found", { status: 404 });
 
-    // Keep the legacy URL compatible for recruiter-facing surfaces, but apply
-    // the same candidate-data boundary as the authenticated storage route.
-    // Returning 404 avoids revealing whether a protected object exists.
+    // Keep legacy URLs compatible, but resolve every private key to a database
+    // file before reading it. Legacy keys have no workspace segment, so the
+    // workspace-scoped candidateFiles lookup is the tenant boundary.
+    const candidateFile = await findCandidateFileForKey(
+      context.organization.id,
+      storageKey,
+    );
+    if (!candidateFile) return new NextResponse("Not found", { status: 404 });
+
     try {
-      await requirePermission("candidates:view");
+      await requireCandidatePermission(
+        "candidates:view",
+        candidateFile.candidateId,
+      );
     } catch {
       return new NextResponse("Not found", { status: 404 });
     }
@@ -68,6 +89,13 @@ export async function GET(
       headers: {
         "Cache-Control": isResume ? "private, no-store" : "public, max-age=31536000, immutable",
         "Content-Type": contentType,
+        "X-Content-Type-Options": "nosniff",
+        ...(path.extname(storageKey).toLowerCase() === ".svg"
+          ? {
+              "Content-Disposition": 'attachment; filename="asset.bin"',
+              "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'",
+            }
+          : {}),
       },
     });
   } catch {

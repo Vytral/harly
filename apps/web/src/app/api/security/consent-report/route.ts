@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { consentRecords, candidates, db } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { extractRequestMeta, logAuditEvent } from "@/lib/audit-log";
+import { toSafeCsv } from "@/lib/csv";
 
 export async function GET(request: Request) {
   const context = await getWorkspaceContext();
@@ -53,8 +54,7 @@ export async function GET(request: Request) {
     metadata: { format, query: query ?? null, count: report.length },
   });
   if (format === "json") return NextResponse.json({ exportedAt: new Date().toISOString(), records: report }, { headers: { "Cache-Control": "private, no-store" } });
-  const escape = (value: unknown) => `"${String(value ?? "").replaceAll('"', '""')}"`;
   const header = ["id", "candidate_id", "candidate_email", "application_id", "consent_type", "granted", "withdrawn_at", "ip_address", "created_at"];
-  const body = report.map((row) => [row.id, row.candidateId, row.candidateEmail, row.applicationId, row.consentType, row.granted, row.withdrawnAt, row.ipAddress, row.createdAt].map(escape).join(","));
-  return new Response(`\ufeff${[header.join(","), ...body].join("\n")}`, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="harly-consent-report-${new Date().toISOString().slice(0, 10)}.csv"`, "Cache-Control": "private, no-store" } });
+  const csvRows = [header, ...report.map((row) => [String(row.id ?? ""), String(row.candidateId ?? ""), String(row.candidateEmail ?? ""), String(row.applicationId ?? ""), String(row.consentType ?? ""), String(row.granted), String(row.withdrawnAt ?? ""), String(row.ipAddress ?? ""), row.createdAt])];
+  return new Response(`\ufeff${toSafeCsv(csvRows)}`, { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="harly-consent-report-${new Date().toISOString().slice(0, 10)}.csv"`, "Cache-Control": "private, no-store" } });
 }

@@ -9,6 +9,7 @@ import { requirePermission } from "@/features/workspaces/permissions-server";
 import { logAuditEvent } from "@/lib/audit-log";
 import { createLogger } from "@/lib/logger";
 import { DEFAULT_JITSI_BASE_URL } from "@/lib/jitsi/config";
+import { safeFetchWebhook } from "@/lib/ssrf";
 import { eq } from "drizzle-orm";
 
 const log = createLogger("workspace-jitsi-settings");
@@ -130,19 +131,21 @@ export async function testJitsiConnectionAction(input: {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: `Instance responded with HTTP ${res.status}.`,
-      };
+    try {
+      const res = await safeFetchWebhook(url, {
+        method: "GET",
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        return {
+          ok: false,
+          error: `Instance responded with HTTP ${res.status}.`,
+        };
+      }
+      return { ok: true };
+    } finally {
+      clearTimeout(timeout);
     }
-    return { ok: true };
   } catch (err) {
     log.error(err, "testJitsiConnectionAction failed");
     return {

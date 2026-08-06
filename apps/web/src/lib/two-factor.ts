@@ -4,12 +4,10 @@
  * server-only) so it can be imported anywhere, including edge middleware.
  */
 
-/**
- * Roles exempt from 2FA enforcement. Owner is exempt (temporary , for testing):
- * the keyholder can always reach the workspace without a second factor.
- */
+/** No workspace role bypasses a mandatory 2FA policy. */
 export function isExemptFrom2fa(roleKey: string | null | undefined): boolean {
-  return roleKey === "owner";
+  void roleKey;
+  return false;
 }
 
 /**

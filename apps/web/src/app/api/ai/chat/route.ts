@@ -9,7 +9,10 @@ import {
 import { z } from "zod";
 
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  getRolePolicy,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { getModel } from "@/lib/ai/registry";
 import { buildHarlyTools } from "@/lib/ai/agent";
@@ -112,7 +115,21 @@ export async function POST(req: Request) {
   }
 
   try {
-    await requirePermission("collab:write");
+    const authorization = await requirePermission("collab:write");
+    const scope = (await getRolePolicy(
+      authorization.organization.id,
+      authorization.roleKey,
+    )).scope;
+    if (
+      scope.jobAccess !== "all" ||
+      scope.departments.length > 0 ||
+      scope.regions.length > 0
+    ) {
+      return Response.json(
+        { error: "The AI assistant is unavailable for scoped roles." },
+        { status: 403 },
+      );
+    }
   } catch {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }

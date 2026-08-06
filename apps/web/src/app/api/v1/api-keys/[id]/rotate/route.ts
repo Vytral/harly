@@ -11,6 +11,7 @@ import { resolveWorkspaceActorUserId } from "@/server/api/actor";
 import { type ApiKeyContext } from "@/server/api/auth";
 import { buildRouteHandler } from "@/server/api/contracts";
 import { rotateApiKeyContract } from "@/server/api/contracts/api-keys";
+import { canRotateApiKeyScopes } from "@/server/api/key-scope";
 import {
   reserveIdempotencyKey,
   type IdempotencyResult,
@@ -48,6 +49,15 @@ export const POST = withApi(
     if (!existing) throw ApiError.notFound("API key not found.");
     if (existing.revokedAt) {
       throw ApiError.conflict("A revoked API key cannot be rotated.");
+    }
+    const existingScopes = Array.isArray(existing.scopes)
+      ? (existing.scopes as string[])
+      : [];
+    const callerScopes = auth.scopes as readonly string[];
+    if (!canRotateApiKeyScopes(existingScopes, callerScopes)) {
+      throw ApiError.forbidden(
+        "You cannot rotate an API key with broader scopes.",
+      );
     }
 
     const actorUserId = await resolveWorkspaceActorUserId(

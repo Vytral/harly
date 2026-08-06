@@ -3,6 +3,7 @@ import "server-only";
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 import type { WorkspaceCalConfig } from "@/lib/cal/config";
+import { safeFetchHttp } from "@/lib/ssrf";
 
 /**
  * Cal.com API v2 client + webhook signature verification.
@@ -37,7 +38,7 @@ async function calFetch<T>({
   body,
 }: CalRequest): Promise<T> {
   const url = `${config.baseUrl.replace(/\/$/, "")}${path}`;
-  const response = await fetch(url, {
+  const response = await safeFetchHttp(url, {
     method,
     headers: {
       Authorization: `Bearer ${config.apiKey}`,

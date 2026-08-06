@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => {
     getWorkspaceContext: vi.fn(),
     requirePermission: vi.fn(),
     requireApplicationPermission: vi.fn(),
+    requireInterviewPermission: vi.fn(),
     sendWorkspaceEmail: vi.fn(),
     getWorkspaceEmailBranding: vi.fn(),
     getInboundReplyTo: vi.fn(),
@@ -108,7 +109,7 @@ vi.mock("@/features/workspaces/context", () => ({
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: mocks.requirePermission,
   requireApplicationPermission: mocks.requireApplicationPermission,
-  requireInterviewPermission: mocks.requirePermission,
+  requireInterviewPermission: mocks.requireInterviewPermission,
 }));
 vi.mock("@/lib/email", () => ({
   sendWorkspaceEmail: mocks.sendWorkspaceEmail,
@@ -171,14 +172,17 @@ vi.mock("@/lib/email/outbox-processor", () => ({
 }));
 
 import {
+  generateInterviewBriefAction,
   scheduleInterview,
   rescheduleInterview,
+  summarizeInterviewNotesAction,
   updateInterview,
 } from "./actions";
 
 beforeEach(() => {
   mocks.selectQueue.length = 0;
   mocks.transactionImpl.mockReset();
+  mocks.requireInterviewPermission.mockReset();
   mocks.syncInterviewToZoom.mockReset();
   mocks.syncInterviewToTeams.mockReset();
   mocks.syncInterviewToGCal.mockReset();
@@ -882,5 +886,43 @@ describe("interview business state guards", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/no longer scheduled/i);
     expect(mocks.transactionImpl).not.toHaveBeenCalled();
+  });
+});
+
+describe("interview AI authorization", () => {
+  const interviewId = "11111111-1111-4111-8111-111111111111";
+
+  beforeEach(() => {
+    mocks.requireInterviewPermission.mockRejectedValue(
+      new Error("You are not assigned to this job."),
+    );
+  });
+
+  it("rejects an out-of-scope interview brief before reading candidate data", async () => {
+    await expect(generateInterviewBriefAction({ interviewId })).resolves.toEqual({
+      success: false,
+      error: "You do not have permission to generate briefs.",
+    });
+
+    expect(mocks.requireInterviewPermission).toHaveBeenCalledWith(
+      "collab:write",
+      interviewId,
+    );
+    expect(mocks.selectQueue).toHaveLength(0);
+  });
+
+  it("rejects out-of-scope note summarization before reading candidate data", async () => {
+    await expect(
+      summarizeInterviewNotesAction({ interviewId, rawNotes: "Private notes" }),
+    ).resolves.toEqual({
+      success: false,
+      error: "You do not have permission to summarize notes.",
+    });
+
+    expect(mocks.requireInterviewPermission).toHaveBeenCalledWith(
+      "collab:write",
+      interviewId,
+    );
+    expect(mocks.selectQueue).toHaveLength(0);
   });
 });

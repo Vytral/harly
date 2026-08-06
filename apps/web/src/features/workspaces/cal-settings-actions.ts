@@ -17,6 +17,7 @@ import {
 import { registerCalWebhook, verifyCalConnection } from "@/lib/cal/client";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
+import { resolveSafeAddress } from "@/lib/ssrf";
 
 const log = createLogger("workspace-cal-settings");
 
@@ -39,6 +40,25 @@ const saveSchema = z.object({
     .optional()
     .transform((value) => (value === "" || value === undefined ? null : value)),
 });
+
+function normalizeCalBaseUrl(value: string): string {
+  const parsed = new URL(value.trim());
+  if (parsed.protocol !== "https:") {
+    throw new Error("Cal.com URL must use HTTPS.");
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error(
+      "Cal.com URL must not contain credentials, a query, or a fragment.",
+    );
+  }
+  return parsed.toString().replace(/\/+$/, "");
+}
+
+async function validateCalBaseUrl(value: string): Promise<string> {
+  const normalized = normalizeCalBaseUrl(value);
+  await resolveSafeAddress(new URL(normalized).hostname);
+  return normalized;
+}
 
 export async function saveCalSettingsAction(input: {
   enabled: boolean;
@@ -66,7 +86,35 @@ export async function saveCalSettingsAction(input: {
 
   const { enabled, apiKey, baseUrl, bookingUrl, defaultEventTypeId } = parsed.data;
 
+  let calBaseUrl: string;
+  try {
+    calBaseUrl = await validateCalBaseUrl(baseUrl ?? DEFAULT_CAL_BASE_URL);
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Enter a safe Cal.com URL.",
+    };
+  }
+
   const status = await getWorkspaceCalStatus(context.organization.id);
+  const storedBaseUrl = (() => {
+    try {
+      return normalizeCalBaseUrl(status.baseUrl);
+    } catch {
+      return null;
+    }
+  })();
+  if (
+    status.hasApiKey &&
+    !apiKey &&
+    storedBaseUrl !== calBaseUrl
+  ) {
+    return {
+      ok: false,
+      error: "Enter the Cal.com API key when changing the instance URL.",
+    };
+  }
   if (enabled && !apiKey && !status.hasApiKey) {
     return { ok: false, error: "Add a Cal.com API key before enabling." };
   }
@@ -90,7 +138,7 @@ export async function saveCalSettingsAction(input: {
     .values({
       organizationId: context.organization.id,
       calEnabled: enabled,
-      calBaseUrl: baseUrl ?? DEFAULT_CAL_BASE_URL,
+      calBaseUrl,
       calBookingUrl: bookingUrl,
       calDefaultEventTypeId: defaultEventTypeId,
       ...(webhookSecret ? { calWebhookSecret: webhookSecret } : {}),
@@ -100,7 +148,7 @@ export async function saveCalSettingsAction(input: {
       target: workspaceSettings.organizationId,
       set: {
         calEnabled: enabled,
-        calBaseUrl: baseUrl ?? DEFAULT_CAL_BASE_URL,
+        calBaseUrl,
         calBookingUrl: bookingUrl,
         calDefaultEventTypeId: defaultEventTypeId,
         ...(webhookSecret ? { calWebhookSecret: webhookSecret } : {}),
@@ -135,20 +183,71 @@ export async function testCalConnectionAction(input: {
 }): Promise<CalSettingsActionResult> {
   const context = await requirePermission("integrations:manage");
 
-  const baseUrl =
-    input.baseUrl && URL.canParse(input.baseUrl)
-      ? input.baseUrl
-      : DEFAULT_CAL_BASE_URL;
-
   let apiKey = input.apiKey?.trim() || null;
+  const stored = apiKey
+    ? null
+    : await getWorkspaceCalConfig(context.organization.id);
+  const requestedBaseUrl = input.baseUrl?.trim() || null;
+  let storedBaseUrl: string | null = null;
+  try {
+    storedBaseUrl = stored?.baseUrl
+      ? normalizeCalBaseUrl(stored.baseUrl)
+      : null;
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error
+          ? error.message
+          : "Stored Cal.com URL is invalid.",
+    };
+  }
+  const requestedNormalized = requestedBaseUrl
+    ? (() => {
+        try {
+          return normalizeCalBaseUrl(requestedBaseUrl);
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+
+  if (requestedBaseUrl && !requestedNormalized) {
+    return { ok: false, error: "Cal.com URL must use HTTPS." };
+  }
+
+  if (
+    requestedBaseUrl &&
+    !apiKey &&
+    stored?.apiKey &&
+    requestedNormalized !== storedBaseUrl
+  ) {
+    return {
+      ok: false,
+      error: "Enter the Cal.com API key when changing the instance URL.",
+    };
+  }
+
   // Fall back to the stored key when the field is left blank (managing an
   // existing connection).
   if (!apiKey) {
-    const stored = await getWorkspaceCalConfig(context.organization.id);
     apiKey = stored?.apiKey ?? null;
   }
   if (!apiKey) {
     return { ok: false, error: "Enter an API key to test." };
+  }
+
+  let baseUrl: string;
+  try {
+    baseUrl = await validateCalBaseUrl(
+      requestedNormalized ?? storedBaseUrl ?? DEFAULT_CAL_BASE_URL,
+    );
+  } catch (error) {
+    return {
+      ok: false,
+      error:
+        error instanceof Error ? error.message : "Enter a safe Cal.com URL.",
+    };
   }
 
   try {

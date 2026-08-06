@@ -6,7 +6,7 @@ import {
   type AuditLogFilters,
 } from "@/features/security/data";
 import { extractRequestMeta, logAuditEvent } from "@/lib/audit-log";
-import { toCsv } from "@/lib/csv";
+import { toSafeCsv } from "@/lib/csv";
 
 const SEVERITIES = new Set(["info", "warning", "critical"]);
 
@@ -124,7 +124,7 @@ export async function GET(request: Request) {
     ];
 
     const filename = `harly-audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
-    return new Response(`\ufeff${toCsv(rows)}`, {
+    return new Response(`\ufeff${toSafeCsv(rows)}`, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,

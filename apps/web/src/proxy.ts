@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "@harly/auth/cookies";
 
 import { mustSetUp2fa } from "@/lib/two-factor";
-import { detectSuspiciousSession, isEmailDomainAllowed, isIpAllowed } from "@/server/security/policy";
+import { detectSuspiciousSession, getTrustedClientIp, isEmailDomainAllowed, isIpAllowed } from "@/server/security/policy";
 
 const PORTAL_SESSION_COOKIE = "harly_portal_session";
 
@@ -166,8 +166,7 @@ export async function proxy(request: NextRequest) {
             .limit(1),
         ]);
 
-        const forwarded = request.headers.get("x-forwarded-for");
-        const requestIp = forwarded?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip");
+        const requestIp = getTrustedClientIp(request);
         const ipAllowlist = Array.isArray(wsRow?.ipAllowlist) ? wsRow.ipAllowlist as string[] : [];
         if (!isIpAllowed(requestIp, ipAllowlist)) {
           return new NextResponse("Workspace access is restricted by IP policy.", { status: 403 });

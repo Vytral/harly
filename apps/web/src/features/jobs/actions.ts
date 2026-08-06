@@ -15,7 +15,10 @@ import {
   updateJobStatus,
 } from "./data";
 import { jobFormSchema, jobStatusSchema } from "./validation";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  requireJobPermission,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { generateJobDraftWithAI } from "@/lib/ai/surfaces/generate-job";
@@ -106,8 +109,8 @@ export async function createJobAction(formData: FormData) {
 }
 
 export async function updateJobAction(formData: FormData) {
-  const context = await requirePermission("jobs:edit");
   const jobId = String(formData.get("jobId") ?? "");
+  const context = await requireJobPermission("jobs:edit", jobId);
   const values = parseJobFormData(formData);
   const job = await updateJob(jobId, values);
 
@@ -130,8 +133,8 @@ export async function updateJobAction(formData: FormData) {
 }
 
 export async function updateJobStatusAction(formData: FormData) {
-  const context = await requirePermission("jobs:edit");
   const jobId = String(formData.get("jobId") ?? "");
+  const context = await requireJobPermission("jobs:edit", jobId);
   const status = jobStatusSchema.parse(formData.get("status"));
   if (status === "open" && await getPendingJobApproval(jobId)) {
     throw new Error("Job has a pending approval request.");
@@ -162,7 +165,7 @@ export async function updateJobStatusAction(formData: FormData) {
 }
 
 export async function trashJobAction(jobId: string): Promise<JobActionState> {
-  const ctx = await requirePermission("jobs:delete");
+  const ctx = await requireJobPermission("jobs:delete", jobId);
   const result = await trashJob(jobId);
 
   if (!result.ok) {

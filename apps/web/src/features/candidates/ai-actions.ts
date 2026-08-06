@@ -16,9 +16,10 @@ import {
 } from "@harly/db";
 
 import {
+  getRolePolicy,
+  requireCandidatePermission,
   requireApplicationPermission,
   requireJobPermission,
-  requirePermission,
 } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { logAiCandidateDecision } from "@/lib/ai/governance";
@@ -415,7 +416,24 @@ export async function detectCandidateDuplicatesAction(input: {
 
   let context;
   try {
-    context = await requirePermission("collab:write");
+    context = await requireCandidatePermission(
+      "collab:write",
+      parsed.data.candidateId,
+    );
+    const scope = (await getRolePolicy(
+      context.organization.id,
+      context.roleKey,
+    )).scope;
+    if (
+      scope.jobAccess !== "all" ||
+      scope.departments.length > 0 ||
+      scope.regions.length > 0
+    ) {
+      return {
+        ok: false,
+        error: "Duplicate detection requires workspace-wide candidate access.",
+      };
+    }
   } catch {
     return {
       ok: false,

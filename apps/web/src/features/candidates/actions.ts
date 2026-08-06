@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@harly/db";
@@ -39,6 +39,7 @@ import { insertCanonicalMessage } from "@/lib/mail/canonical";
 import { sendCanonicalEmail } from "@/lib/mail/send-canonical-email";
 import { isMailUnificationEnabled } from "@/lib/mail/feature-flag";
 import {
+  requireApplicationPermission,
   requireCandidatePermission,
   requireJobPermission,
   requirePermission,
@@ -1494,7 +1495,7 @@ export async function generateEmailDraftAction(input: {
     return { ok: false, error: "Invalid input." };
   }
 
-  await requirePermission("collab:write");
+  await requireCandidatePermission("collab:write", parsed.data.candidateId);
   const { organization: workspace, user } = await getWorkspaceContext();
 
   const { getWorkspaceAiConfig } = await import("@/lib/ai/config");
@@ -1543,11 +1544,28 @@ export async function generateEmailDraftAction(input: {
     .orderBy(desc(applications.appliedAt))
     .limit(20);
 
-  const row = parsed.data.applicationId
-    ? rows.find(
+  let row: (typeof rows)[number] | undefined;
+  const candidateRows = parsed.data.applicationId
+    ? rows.filter(
         (candidate) => candidate.applicationId === parsed.data.applicationId,
       )
-    : rows[0];
+    : rows;
+  for (const candidate of candidateRows) {
+    if (!candidate.applicationId) {
+      if (!parsed.data.applicationId) row = candidate;
+      break;
+    }
+    try {
+      await requireApplicationPermission(
+        "collab:write",
+        candidate.applicationId,
+      );
+      row = candidate;
+      break;
+    } catch {
+      // Try the next application without revealing inaccessible job data.
+    }
+  }
 
   if (!row) {
     return { ok: false, error: "Candidate not found." };
@@ -1555,21 +1573,23 @@ export async function generateEmailDraftAction(input: {
 
   // Also grab latest AI evaluation for context.
   const { aiEvaluations } = await import("@harly/db");
-  const [evalRow] = await db
-    .select({
-      score: aiEvaluations.score,
-      recommendation: aiEvaluations.recommendation,
-      summary: aiEvaluations.summary,
-    })
-    .from(aiEvaluations)
-    .where(
-      and(
-        eq(aiEvaluations.workspaceId, workspace.id),
-        eq(aiEvaluations.candidateId, parsed.data.candidateId),
-      ),
-    )
-    .orderBy(desc(aiEvaluations.updatedAt))
-    .limit(1);
+  const [evalRow] = row.applicationId
+    ? await db
+        .select({
+          score: aiEvaluations.score,
+          recommendation: aiEvaluations.recommendation,
+          summary: aiEvaluations.summary,
+        })
+        .from(aiEvaluations)
+        .where(
+          and(
+            eq(aiEvaluations.workspaceId, workspace.id),
+            eq(aiEvaluations.applicationId, row.applicationId),
+          ),
+        )
+        .orderBy(desc(aiEvaluations.updatedAt))
+        .limit(1)
+    : [];
 
   let threadSubject: string | null = null;
   let threadContext: Array<{
@@ -1586,6 +1606,7 @@ export async function generateEmailDraftAction(input: {
         id: mailThreads.id,
         subject: mailThreads.subject,
         candidateId: mailThreads.candidateId,
+        applicationId: mailThreads.applicationId,
       })
       .from(mailThreads)
       .where(
@@ -1597,6 +1618,9 @@ export async function generateEmailDraftAction(input: {
       .limit(1);
     if (!thread || thread.candidateId !== parsed.data.candidateId)
       return { ok: false, error: "Thread not found." };
+    if (thread.applicationId && thread.applicationId !== row.applicationId) {
+      return { ok: false, error: "Thread not found." };
+    }
     threadSubject = thread.subject;
     const threadMessages = await db
       .select()
@@ -1605,6 +1629,12 @@ export async function generateEmailDraftAction(input: {
         and(
           eq(mailMessages.workspaceId, workspace.id),
           eq(mailMessages.threadId, thread.id),
+          or(
+            isNull(mailMessages.applicationId),
+            row.applicationId
+              ? eq(mailMessages.applicationId, row.applicationId)
+              : undefined,
+          ),
         ),
       )
       .orderBy(desc(mailMessages.receivedAt))
@@ -2110,7 +2140,7 @@ export async function refineScorecardTextAction(input: {
     };
   }
 
-  await requirePermission("collab:write");
+  await requireCandidatePermission("collab:write", parsed.data.candidateId);
   const { organization: workspace } = await getWorkspaceContext();
 
   const config = await getWorkspaceAiConfig(workspace.id);
@@ -2122,17 +2152,18 @@ export async function refineScorecardTextAction(input: {
     };
   }
 
-  const jobTitle = await getLatestJobTitleForCandidate(
+  const job = await getLatestAuthorizedJobForCandidate(
     workspace.id,
     parsed.data.candidateId,
   );
+  if (!job) return { ok: false, error: "No authorized job found for this candidate." };
 
   try {
     const { refineScorecardTextWithAI } =
       await import("@/lib/ai/surfaces/refine-scorecard");
     const result = await refineScorecardTextWithAI(config, {
       comment: parsed.data.comment,
-      jobTitle,
+      jobTitle: job.title,
     });
     return { ok: true, refined: result.refined };
   } catch (error) {
@@ -2165,7 +2196,7 @@ export async function suggestScorecardAttributesAction(input: {
     };
   }
 
-  await requirePermission("collab:write");
+  await requireCandidatePermission("collab:write", parsed.data.candidateId);
   const { organization: workspace } = await getWorkspaceContext();
 
   const config = await getWorkspaceAiConfig(workspace.id);
@@ -2177,25 +2208,10 @@ export async function suggestScorecardAttributesAction(input: {
     };
   }
 
-  const [job] = await db
-    .select({
-      title: jobs.title,
-      description: jobs.description,
-      requirements: jobs.requirements,
-    })
-    .from(applications)
-    .innerJoin(
-      jobs,
-      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
-    )
-    .where(
-      and(
-        eq(applications.workspaceId, workspace.id),
-        eq(applications.candidateId, parsed.data.candidateId),
-      ),
-    )
-    .orderBy(desc(applications.appliedAt))
-    .limit(1);
+  const job = await getLatestAuthorizedJobForCandidate(
+    workspace.id,
+    parsed.data.candidateId,
+  );
 
   if (!job) {
     return { ok: false, error: "No job found for this candidate." };
@@ -2217,17 +2233,31 @@ export async function suggestScorecardAttributesAction(input: {
   }
 }
 
-/** Latest job title a candidate applied to, or null. Small shared helper. */
-async function getLatestJobTitleForCandidate(
+/** Latest job context the current actor may access, or null. */
+async function getLatestAuthorizedJobForCandidate(
   workspaceId: string,
   candidateId: string,
-): Promise<string | null> {
-  const [row] = await db
-    .select({ title: jobs.title })
+): Promise<{
+  id: string;
+  title: string;
+  description: string;
+  requirements: string | null;
+} | null> {
+  const rows = await db
+    .select({
+      id: jobs.id,
+      title: jobs.title,
+      description: jobs.description,
+      requirements: jobs.requirements,
+    })
     .from(applications)
     .innerJoin(
       jobs,
-      and(eq(jobs.workspaceId, workspaceId), eq(jobs.id, applications.jobId)),
+      and(
+        eq(jobs.workspaceId, workspaceId),
+        eq(jobs.id, applications.jobId),
+        isNull(jobs.deletedAt),
+      ),
     )
     .where(
       and(
@@ -2236,6 +2266,14 @@ async function getLatestJobTitleForCandidate(
       ),
     )
     .orderBy(desc(applications.appliedAt))
-    .limit(1);
-  return row?.title ?? null;
+    .limit(20);
+  for (const row of rows) {
+    try {
+      await requireJobPermission("collab:write", row.id);
+      return row;
+    } catch {
+      // Continue without revealing which inaccessible job was skipped.
+    }
+  }
+  return null;
 }

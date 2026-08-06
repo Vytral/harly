@@ -52,7 +52,6 @@ import {
 import {
   requireApplicationPermission,
   requireInterviewPermission,
-  requirePermission,
 } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { getModel } from "@/lib/ai/registry";
@@ -2212,7 +2211,10 @@ export async function generateInterviewBriefAction(input: {
 
   let context;
   try {
-    context = await requirePermission("collab:write");
+    context = await requireInterviewPermission(
+      "collab:write",
+      parsed.data.interviewId,
+    );
   } catch {
     return {
       success: false,
@@ -2428,7 +2430,10 @@ export async function summarizeInterviewNotesAction(input: {
 
   let context;
   try {
-    context = await requirePermission("collab:write");
+    context = await requireInterviewPermission(
+      "collab:write",
+      parsed.data.interviewId,
+    );
   } catch {
     return {
       success: false,

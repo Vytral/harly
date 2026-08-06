@@ -2,7 +2,11 @@
 
 import { z } from "zod";
 
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  getRolePolicy,
+  requireJobPermission,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { supportsEmbeddings } from "@/lib/ai/embeddings";
 import { SEMANTIC_MATCH_LIMIT } from "@/features/matching/constants";
@@ -53,7 +57,18 @@ async function resolveEmbeddingConfig(workspaceId: string): Promise<ConfigResolu
 
 /** Index up to 20 stale/never-embedded candidates. Call repeatedly until `remaining` is 0. */
 export async function indexCandidatesForMatchingAction(): Promise<IndexActionResult> {
-  const { organization: workspace } = await requirePermission("candidates:edit");
+  const { organization: workspace, roleKey } = await requirePermission("candidates:edit");
+  const scope = (await getRolePolicy(workspace.id, roleKey)).scope;
+  if (
+    scope.jobAccess !== "all" ||
+    scope.departments.length > 0 ||
+    scope.regions.length > 0
+  ) {
+    return {
+      success: false,
+      error: "Semantic indexing requires workspace-wide candidate access.",
+    };
+  }
 
   const resolved = await resolveEmbeddingConfig(workspace.id);
   if (!resolved.ok) return { success: false, error: resolved.error, reason: resolved.reason };
@@ -69,7 +84,21 @@ export async function generateJobMatchesAction(
   const parsed = jobIdSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Invalid input." };
 
-  const { organization: workspace } = await requirePermission("candidates:edit");
+  const { organization: workspace, roleKey } = await requireJobPermission(
+    "candidates:edit",
+    parsed.data.jobId,
+  );
+  const scope = (await getRolePolicy(workspace.id, roleKey)).scope;
+  if (
+    scope.jobAccess !== "all" ||
+    scope.departments.length > 0 ||
+    scope.regions.length > 0
+  ) {
+    return {
+      success: false,
+      error: "Semantic matching requires workspace-wide candidate access.",
+    };
+  }
 
   const resolved = await resolveEmbeddingConfig(workspace.id);
   if (!resolved.ok) return { success: false, error: resolved.error, reason: resolved.reason };

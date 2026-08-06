@@ -73,13 +73,30 @@ async function handleUpload(request: NextRequest) {
 
   if (
     !Number.isFinite(contentLength) ||
+    contentLength <= 0 ||
     contentLength > maxSize ||
-    (contentLength > 0 && contentLength !== intent.contentLength)
+    contentLength !== intent.contentLength
   ) {
     return NextResponse.json({ error: "File too large." }, { status: 400 });
   }
 
-  const fileBuffer = Buffer.from(await request.arrayBuffer());
+  const reader = request.body?.getReader();
+  if (!reader) {
+    return NextResponse.json({ error: "File is required." }, { status: 400 });
+  }
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > maxSize || received > intent.contentLength) {
+      await reader.cancel();
+      return NextResponse.json({ error: "File too large." }, { status: 400 });
+    }
+    chunks.push(value);
+  }
+  const fileBuffer = Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
 
   if (
     fileBuffer.byteLength > maxSize ||
