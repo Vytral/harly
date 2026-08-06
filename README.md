@@ -29,8 +29,8 @@
 </p>
 
 > **Public beta.** Harly is intended for small, self-hosted teams while the
-> product and deployment workflows continue to mature. Review the [production
-> launch checklist](docs/launch-checklist.md), test upgrades on a disposable
+> product and deployment workflows continue to mature. Review the [release
+> readiness guide](docs/release-readiness.md), test upgrades on a disposable
 > installation, and verify backups before importing real candidate data.
 
 ## What is Harly?
