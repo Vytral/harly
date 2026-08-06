@@ -30,7 +30,7 @@ pnpm db:studio      # Open Drizzle Studio
 
 ## Migration rules
 
-See `packages/db/AGENTS.md` for the full migration workflow. Key points:
+See the migration rules below for the full database workflow. Key points:
 
 - Always edit `src/schema.ts` then run `pnpm db:generate` — never hand-write `.sql` files.
 - Commit `.sql` + `meta/*_snapshot.json` + `meta/_journal.json` together.

@@ -8,17 +8,12 @@
 **External reference:** [Remote by Modula](https://remotebymodula.framer.website/) (soft SaaS shell, human tables, lime signal)
 **Product one-liner:** Harly is a self-hosted ATS that feels like a calm morning desk — not an enterprise suite, not a feature warehouse.
 
-### Reference lock — [`referencias/`](referencias/)
+### Reference lock
 
-Every UI PR is compared against these five frames. They are the design, not mood board decoration.
-
-| File                                                                                     | What it locks                                                                                                       |
-| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| [`01-hero-human-table.webp`](referencias/01-hero-human-table.webp)                       | **The whole thesis.** Shell frame, icon rail, centered workspace pill, greeting, filter chips, human table, row wash |
-| [`02-onboarding-checklist.png`](referencias/02-onboarding-checklist.png)                  | Collapsible stacked list rows on paper — the pattern for checklists and grouped sections (not cards)                 |
-| [`03-ai-candidate-cards.png`](referencias/03-ai-candidate-cards.png)                      | How AI appears: small labelled cards inside a flow, chartreuse icon tile, `AI` micro-chip — never a permanent FAB    |
-| [`04-activity-feed-lime.png`](referencias/04-activity-feed-lime.png)                      | Activity/timeline rows with inline avatar pills; chartreuse as a **block wash** only in marketing-grade moments      |
-| [`05-feature-cards-row.webp`](referencias/05-feature-cards-row.webp)                      | Notification card, radio-select rows, toast, and batch-selection language — plus the marketing card rhythm           |
+The local screenshot reference pack was removed from the repository before
+launch. The rules below remain the source of truth for density, chrome, and
+visual hierarchy; the north-star composition is also represented by
+`public/images/figma-preview/dashboard-hero.png`.
 
 **Reading the frames (rules extracted, not vibes):**
 
@@ -59,9 +54,10 @@ Harly operates as a **light engineering-adjacent people tool**: warm paper canva
 
 ### Home is a cockpit, not the reference frame (learned the hard way)
 
-`referencias/01-hero-human-table.webp` is an **employee directory with a salary
-column** — an HR/payroll surface. It is the reference for *density, chrome budget,
-selection language and type*, and it is **not** the reference for what Home shows.
+The former employee-directory reference frame is an **employee directory with a
+salary column** — an HR/payroll surface. It was the reference for *density,
+chrome budget, selection language and type*, and it is **not** the reference for
+what Home shows.
 
 Translating it literally once already produced a Home that was a flat table of
 applications. That is the wrong question: a directory of everyone answers "who
@@ -381,7 +377,7 @@ Minimal, soft corners, ink text; success uses success olive sparingly.
 
 ### Do
 
-- Compare every UI PR to `referencias/01-hero-human-table.webp` and `public/images/figma-preview/dashboard-hero.png`
+- Compare every UI PR to the north-star composition in this file and `public/images/figma-preview/dashboard-hero.png`
 - Set text in **Onest** — static face for speech, variable face for labels (chips, statuses, badges, column heads)
 - Keep primary nav ≤5 visible destinations; bury the rest under More/Settings
 - Use **row wash** for selection/hover instead of boxing every entity in a card
@@ -718,7 +714,7 @@ A UI change **fails** review if any box is true:
 - [ ] Introduces a second icon library
 - [ ] Ships Coming soon in sidebar/topbar
 - [ ] Candidate surface adds tabs beyond the three-section cap without explicit exception
-- [ ] Visually diverges from `referencias/01-hero-human-table.webp` on shell/list density without written reason
+- [ ] Visually diverges from the north-star composition on shell/list density without written reason
 - [ ] Introduces Inter, Geist Sans, or any font family other than Onest
 - [ ] Sets a chip/status/badge in the static face, or body/button copy in the variable face
 
@@ -735,7 +731,7 @@ A UI change **passes** when:
 
 | Phase | Scope                                      | Done means                           | Status |
 | ----- | ------------------------------------------ | ------------------------------------ | ------ |
-| 0     | This file + freeze feature UI sprawl       | Agents cited DESIGN.md               | **done** — Onest lock + `referencias/` reference lock |
+| 0     | This file + freeze feature UI sprawl       | Agents cited DESIGN.md               | **done** — Onest lock + reference lock |
 | 1     | Tokens bridge + button/chip/row primitives | Story-level match to mock chips/rows | **done** — Onest self-hosted, Inter/Cal Sans deleted, `--primary` is ink, radius + shadow doctrine, `components/ui/human-table.tsx` |
 | 2     | App shell (rail + top bar)                 | ≤5 primaries; workspace pill center  | **done** — `IconRail` replaces the shadcn sidebar kit; no Coming soon; AI FAB retired into the top bar signal button |
 | 3     | Home = triage cockpit                      | Greeting + triage strip + ranked work | **done** — see the Home note below. Landed as a table first, corrected to a cockpit |
@@ -753,4 +749,4 @@ A UI change **passes** when:
 
 ---
 
-_Last updated: 2026-07-25 · Onest typography lock + `referencias/` reference lock · Source of truth for Harly visual + product UI identity._
+_Last updated: 2026-07-25 · Onest typography lock + reference lock · Source of truth for Harly visual + product UI identity._

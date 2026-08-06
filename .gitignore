@@ -75,10 +75,12 @@ graphify-out/
 .goose
 .kiro
 .agents
-!.agents/
-!.agents/skills/
-!.agents/skills/harly-self-host/
-!.agents/skills/harly-self-host/**
+.mcp.json
+skills-lock.json
+/skills/
+/referencias/
+**/AGENTS.md
+**/CLAUDE.md
 .qwen
 # figma debug dumps
 logs/

@@ -1,11 +1,11 @@
 ---
 title: "Offers and signatures"
-description: "Generate an offer, send it for signature with Harly Signing or DocuSeal, and confirm the accepted state before you close a hire."
+description: "Generate an offer, send it with Harly Sign or DocuSeal, and confirm the accepted state before you close a hire."
 ---
 
 An offer turns a hiring decision into a document the candidate can accept and
 sign. Harly generates the offer, tracks its state, and collects a signature
-through Harly Signing (built-in) or DocuSeal (self-hosted external service).
+through Harly Sign (built-in) or DocuSeal (self-hosted external service).
 
 ## Offer states
 
@@ -34,13 +34,15 @@ through Harly Signing (built-in) or DocuSeal (self-hosted external service).
   </Step>
 </Steps>
 
-## Send for signature — Harly Signing
+## Send for signature — Harly Sign
 
-Harly Signing is the built-in native flow. No external account required.
+Harly Sign is the built-in native flow. No external account is required.
 
 <Steps>
-  <Step title="Enable signing">
-    Confirm **Settings → Signature → Harly Signing** is enabled before sending.
+  <Step title="Choose native delivery">
+    Open **Settings → Integrations → Harly Sign** and select **Native
+    (built-in)** under **Offer signature delivery**. Use **Signature settings**
+    to control OTP, remote links, saved signatures, and signing evidence.
   </Step>
   <Step title="Place fields">
     Add signature and date fields where the candidate signs. Add countersign
@@ -71,8 +73,9 @@ If you prefer to use a self-hosted DocuSeal instance, configure it in
 **Settings → Integrations → DocuSeal** before sending. See
 [signatures](/integrations/signatures) for provider setup.
 
-When DocuSeal is configured, the offer sending flow routes signing through
-DocuSeal instead of Harly Signing. DocuSeal calls back via a webhook;
+When DocuSeal is configured and selected as the offer delivery channel, the
+offer sending flow routes signing through DocuSeal instead of Harly Sign.
+DocuSeal calls back via a webhook;
 Harly reconciles the signing status asynchronously.
 
 <Warning>
@@ -92,7 +95,7 @@ Harly reconciles the signing status asynchronously.
 
 <CardGroup cols={2}>
   <Card title="Signatures" icon="file-signature" href="/integrations/signatures">
-    Configure Harly Signing or DocuSeal.
+    Configure Harly Sign or DocuSeal.
   </Card>
   <Card title="Candidates and pipeline" icon="users" href="/product/candidates-and-pipeline">
     Mark the hire on the application after the offer is accepted.

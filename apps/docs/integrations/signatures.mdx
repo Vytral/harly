@@ -1,46 +1,86 @@
 ---
 title: "E-signatures and offer signing"
-description: "Configure DocuSeal or Harly Signing and verify signed offer state safely."
+description: "Configure Harly Sign or DocuSeal, send signature requests, and verify signed offer state safely."
 ---
 
-Harly supports remote signing through DocuSeal and native signing through
-Harly Signing. Both are optional. A document becomes signed from a verified
-signing state transition, not from a browser redirect alone.
+Harly supports native signing through Harly Sign and remote signing through
+DocuSeal. Native signing is built in and requires no external account. A
+document becomes signed from a verified signing state transition, not from a
+browser redirect alone.
+
+## Harly Sign
+
+Use Harly Sign when candidates should sign inside Harly's candidate portal.
+
+<Steps>
+  <Step title="Choose the offer delivery channel">
+    Open **Settings → Integrations → Harly Sign**. Under **Offer signature
+    delivery**, select **Native (built-in)**. Harly Sign is connected by
+    default; this setting chooses the channel used when an offer is sent.
+  </Step>
+  <Step title="Configure signing controls">
+    Select **Signature settings** or open **Settings → Signature**. You can
+    enable self-signing, remote signing links, saved signatures, the signing
+    timeline, and email OTP for remote recipients. Remote links expire after
+    30 days by default and accept a value from 1 to 365 days.
+  </Step>
+  <Step title="Create the offer">
+    Open an active candidate application, choose **New offer**, enter the offer
+    terms, and attach a PDF offer letter or generate one from a template. Save
+    the offer as a draft.
+  </Step>
+  <Step title="Place required fields and send">
+    Choose **Send offer**. With Native selected, Harly opens **Place signature
+    fields**. Review the automatically seeded signature field, add more
+    **Signature field** or **Text field** controls, position them on the PDF,
+    and select **Send offer**.
+  </Step>
+  <Step title="Verify completion">
+    The candidate opens the secure link, completes every required field, and
+    verifies the email OTP if you enabled it. Confirm the offer/document state
+    on the Harly record before marking the application hired.
+  </Step>
+</Steps>
+
+<Warning>
+  Native signing requires at least one required signature field. If no field is
+  saved, Harly keeps the offer in draft and refuses to send it.
+</Warning>
 
 ## DocuSeal
 
-DocuSeal can run as a separate service or as the optional bundled Compose
-profile. Configure the Harly workspace connection in **Settings → Integrations
-→ DocuSeal**.
+Use DocuSeal when you want a separate hosted or self-hosted signing service.
+Configure the Harly workspace connection in **Settings → Integrations →
+DocuSeal**.
 
-For a bundled self-hosted service, set the secret only when enabling the
-profile:
+<Steps>
+  <Step title="Connect the instance">
+    Enter the DocuSeal base URL and API token in the integration card. The URL
+    must use HTTPS and must not include `/api`, credentials, a query string, or
+    a fragment. Harly encrypts the API token at rest.
+  </Step>
+  <Step title="Enable the provider">
+    Enable DocuSeal and save. Harly generates a per-workspace webhook secret.
+    To use DocuSeal for offers, return to **Settings → Integrations → Harly
+    Sign** and select **DocuSeal** under **Offer signature delivery**.
+  </Step>
+  <Step title="Register the webhook">
+    Copy the webhook URL shown in the DocuSeal integration card and configure
+    DocuSeal to POST to:
 
-```dotenv
-COMPOSE_PROFILES=proxy,esign
-DOCUSEAL_URL=https://sign.example.com
-DOCUSEAL_API_TOKEN=<token>
-DOCUSEAL_SECRET_KEY_BASE=<secret-for-the-bundled-service>
-```
+    ```text
+    https://harly.example.com/api/integrations/docuseal/webhook?ws=<workspace-id>
+    ```
 
-`DOCUSEAL_SECRET_KEY_BASE` is not required by a normal Harly deployment. The
-Compose file accepts an empty value for the disabled optional profile, but
-DocuSeal itself must receive a real secret before the `esign` profile starts.
-
-Configure the DocuSeal webhook to:
-
-```text
-<HARLY_URL>/api/integrations/docuseal/webhook
-```
-
-Harly verifies the workspace secret, reconciles the submission status, and
-updates the document asynchronously.
-
-## Harly Signing
-
-Use the native signing flow when you want Harly to keep the signing ceremony
-inside the product. Add a signature, place it on the PDF, send the request,
-and verify the recipient's completion status from the document record.
+    Send the per-workspace secret in `X-DocuSeal-Secret` or the supported HMAC
+    signature header.
+  </Step>
+  <Step title="Test a signing request">
+    Send a test offer and confirm the submission appears in DocuSeal. Harly
+    verifies terminal status with a provider read before it updates the local
+    offer and document records.
+  </Step>
+</Steps>
 
 ## Recovery rules
 

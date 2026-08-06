@@ -4,6 +4,9 @@ about: Report a reproducible problem in Harly
 labels: bug
 ---
 
+> Suspected security vulnerabilities must not be reported here. Follow
+> [SECURITY.md](../../SECURITY.md) for the private reporting process.
+
 ## What happened?
 
 Describe the observed behavior and its impact. Do not include candidate data, credentials, private URLs, or security-sensitive details.

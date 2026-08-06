@@ -1,6 +1,6 @@
 ---
 title: "Tutorial: set up integrations"
-description: "Connect Google Calendar, email, Slack notifications, and Harly Signing in a single session."
+description: "Connect Google Calendar, email, Slack notifications, and Harly Sign in a single session."
 ---
 
 This tutorial walks through connecting the integrations most teams configure
@@ -13,7 +13,7 @@ notifications, and offer signing. Complete the [quickstart](/quickstart) and
 - Connect a Google Calendar for interview scheduling
 - Configure outbound email and inbound reply routing
 - Set up Slack notifications for recruiting events
-- Enable Harly Signing for offer documents
+- Choose Harly Sign or DocuSeal for offer documents
 
 Each integration is independent. You can complete them in any order or skip
 ones you do not need.
@@ -27,7 +27,7 @@ ones you do not need.
 | Google Calendar | A Google Cloud project with Calendar API enabled, OAuth client |
 | Email | A sending domain, Resend API key or SMTP credentials |
 | Slack | A Slack OAuth app, workspace admin approval |
-| Harly Signing | Nothing extra — it is built in |
+| Harly Sign | Nothing extra — it is built in |
 
 ---
 
@@ -143,10 +143,11 @@ record automatically.
     Point the provider webhook to:
 
     ```text
-    https://hiring.example.com/api/email/inbound/webhook
+    https://hiring.example.com/api/webhooks/email/<provider>?ws=<workspace-id>
     ```
 
-    Include the workspace inbound secret shown in the settings screen.
+    Use `resend` or `postmark` for `<provider>` and include the workspace
+    inbound secret shown in the settings screen.
   </Step>
   <Step title="Verify">
     Reply to a test candidate message from an external account. Confirm the
@@ -212,24 +213,25 @@ record automatically.
 
 ---
 
-## Part 4 — Harly Signing
+## Part 4 — Harly Sign
 
-Harly Signing is built in and requires no external account. Configure it
-in **Settings → Signature**.
+Harly Sign is built in and requires no external account. Choose the offer
+delivery channel in **Settings → Integrations → Harly Sign**.
 
 <Steps>
   <Step title="Enable signing">
-    Open **Settings → Signature → Harly Signing** and toggle it on.
+    Open **Settings → Integrations → Harly Sign** and select **Native
+    (built-in)** under **Offer signature delivery**.
   </Step>
   <Step title="Configure sender details">
-    Set the organization name and the email address that appears on signing
-    requests.
+    Open **Signature settings** to enable remote links, email OTP, saved
+    signatures, and the signing timeline.
   </Step>
   <Step title="Test with an offer">
-    Create a test offer on a test application. Place a signature field and date
-    field, then send to a test email address. Open the signing link from the
-    email, complete the signature, and confirm the offer state updates to
-    **Signed** in Harly.
+    Create a test offer on a test application. Choose **Send offer**, place a
+    required signature field and any text fields, then send to a test email
+    address. Open the signing link, complete the required fields, and confirm
+    the offer/document state updates in Harly.
   </Step>
 </Steps>
 
@@ -244,7 +246,7 @@ For remote signing with a third-party provider, see
 <Check>Outbound email: test message arrives in controlled mailbox.</Check>
 <Check>Inbound email: test reply threads back onto the application.</Check>
 <Check>Slack: test notification appears in the configured channel.</Check>
-<Check>Signing: test offer reaches Signed state from the offer record.</Check>
+<Check>Signing: test offer reaches its completed state from the offer record.</Check>
 
 ---
 

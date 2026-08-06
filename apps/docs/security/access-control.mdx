@@ -1,27 +1,79 @@
 ---
 title: "Access control and workspace security"
-description: "Design least-privilege roles, contextual access, MFA, and audit reviews for recruiting teams."
+description: "Create least-privilege roles, assign workspace access, enforce MFA, and review security changes."
 ---
 
-Harly uses workspace-scoped RBAC. A role combines a set of permissions with an
-optional scope (job access, departments, regions).
+Harly uses workspace-scoped RBAC. A role combines permissions with an optional
+job scope. Role permissions are enforced on the server; hiding a navigation item
+does not grant or revoke access by itself.
+
+<Frame caption="Workspace roles and permission scopes for least-privilege access.">
+  <img
+    src="/images/features/roles-and-permissions.webp"
+    alt="Harly settings showing workspace roles, members, and permission levels."
+  />
+</Frame>
 
 ## Built-in roles
 
 | Role | What it can do |
 | --- | --- |
-| **Owner** | All-powerful. Unconditionally has every permission. One per workspace. |
-| **Admin** | Full explicit permission set, same as owner, but editable and non-exclusive. |
-| **Recruiter** | Full recruiting workflow: create and publish jobs, manage candidates, offers, interviews, documents, and automations. |
-| **Hiring manager** | Approve and edit jobs, view candidates and applications, move candidates, provide interview feedback, read reports. |
+| **Owner** | Unconditionally has every permission. The Owner role is locked and cannot be edited or deleted. |
+| **Admin** | Starts with every explicit permission, but an administrator can tune it. It is not the same as the locked Owner role. |
+| **Recruiter** | Create and publish jobs, manage candidates, offers, interviews, documents, and recruiting workflows. |
+| **Hiring manager** | Approve and edit jobs, view candidates, move applications, provide interview feedback, and read reports. |
 
-Custom roles can be created in **Settings → Roles** with any combination of
-the available permissions. Only the `owner` role is non-editable.
+## Create a custom role
+
+Only members with the `roles:manage` permission can create or edit roles. The
+role editor is in **Settings → Members & roles → Roles → New role**. The
+`/settings/roles` path redirects to this page.
+
+<Steps>
+  <Step title="Name the role">
+    Enter a name between 2 and 40 characters, such as `Sourcer`. Harly creates
+    a slug-like role key from the name. A role key that collides with a
+    built-in key (`owner`, `admin`, `recruiter`, or `hiring_manager`) is
+    rejected.
+  </Step>
+  <Step title="Set the access scope">
+    Choose **All matching jobs** or **Assigned jobs only**. You can also enter
+    comma-separated department and region values, for example:
+
+    ```text
+    Departments: Engineering, Product
+    Regions: LATAM, EMEA
+    ```
+
+    Empty department and region fields mean no filter for that dimension.
+  </Step>
+  <Step title="Select permissions">
+    Select permissions from the Jobs, Candidates, Privacy, Collaboration,
+    Documents, Analytics, and Administration groups. Save the role when the
+    permission set and scope are complete.
+  </Step>
+</Steps>
+
+Harly applies a privilege ceiling: you cannot grant a role a permission you do
+not hold, or give it a broader job scope than your own. This prevents a scoped
+administrator from creating an escalation path.
+
+## Assign a role
+
+Open **Settings → Members & roles → Members**. Select a role in a member's
+**Role** dropdown, repeat any other changes, and choose **Save changes**. New
+invitations and direct member creation also include a **Role** selector; the
+Owner role is never available for invitations.
+
+Deleting a custom role moves its members to **Recruiter** inside the same
+transaction. Built-in roles cannot be deleted. Editing a built-in role stores a
+workspace-specific override; its display name stays fixed, and the Owner role
+remains locked.
 
 <Warning>
-  A scoped administrator cannot create a role broader than its own permission
-  ceiling. Review role changes in the audit log after every organisational
-  change.
+  Review role creation, updates, and deletion in the audit log after every
+  organizational change. Deleting a custom role reassigns its members to
+  Recruiter.
 </Warning>
 
 ## Permissions
@@ -33,34 +85,34 @@ Permissions follow the pattern `resource:action`. The available permissions are:
 | `jobs:create` `jobs:view` `jobs:edit` `jobs:delete` `jobs:publish` `jobs:approve` | Job lifecycle |
 | `candidates:view` `candidates:edit` `candidates:delete` `candidates:move` | Candidate records |
 | `hiring_team:manage` | Add or remove hiring team members for a job |
-| `collab:write` | Notes, scorecards, interview scheduling, candidate messaging |
-| `interviews:manage` `interviews:feedback` | Schedule interviews, submit feedback |
+| `collab:write` | Notes, scorecards, interview scheduling, and candidate messaging |
+| `interviews:manage` `interviews:feedback` | Schedule interviews and submit feedback |
 | `tasks:read` `tasks:write` | Task management |
 | `offers:manage` `offers:approve` | Draft, send, approve, and withdraw offers |
 | `templates:manage` | Email and offer templates |
 | `reports:read` | Pipeline and analytics reports |
 | `members:read` `members:invite` `members:edit` `members:remove` | Team management |
-| `invite_links:manage` | Invite link lifecycle |
+| `invite_links:manage` | Invite-link lifecycle |
 | `settings:edit` | Workspace settings |
 | `integrations:manage` | Integration credentials and connections |
 | `roles:manage` | Role and permission management |
-| `security:manage` | MFA enforcement, SSO, audit log |
+| `security:manage` | MFA enforcement, SSO, and security settings |
 | `documents:read` `documents:manage` `documents:share` | Candidate documents |
 | `automations:manage` | Workflow automation rules |
 | `dsar:manage` | Data subject access requests |
 
-## Contextual scopes
+## Job scopes
 
-Layer scopes on top of a role's permissions to restrict what data a member sees:
+Layer scopes on top of a role's permissions to restrict job-scoped resources:
 
-- **Job access: all**: member sees all jobs and their candidates.
-- **Job access: assigned**: member sees only jobs they are on the hiring team for.
-- **Departments**: restrict to specific departments.
-- **Regions**: restrict to specific regions.
+- **All matching jobs**: access every job that matches the department and region filters.
+- **Assigned jobs only**: access only jobs where the member is on the hiring team.
+- **Departments**: allow only matching job departments.
+- **Regions**: allow only matching job regions.
 
-Use `assigned` for recruiters who should work only on their requisitions. Add
-department or region constraints for larger teams with geographic or functional
-divisions.
+Use **Assigned jobs only** for recruiters who should work only on their
+requisitions. Add department or region constraints for geographic or functional
+divisions. A job with no department or region does not match a non-empty filter.
 
 ## MFA and session controls
 
@@ -68,11 +120,9 @@ Owners can enforce MFA from **Settings → Security**. When MFA is enforced,
 members without a configured factor are blocked from the workspace until they
 enroll.
 
-Additional controls available in **Settings → Security**:
-- Passkeys
-- Trusted domains
-- IP allowlists
-- Risk detection
+Additional controls available in **Settings → Security** include passkeys,
+trusted email domains, IP allowlists, suspicious-session detection, and
+reauthentication windows for sensitive changes.
 
 ## Audit review
 

@@ -13,6 +13,13 @@ Harly separates provider setup into two layers:
 This means one Harly installation can serve multiple workspaces without
 sharing a user's refresh token between them.
 
+<Frame caption="Integration settings for calendars, video, communication, and workspace tools.">
+  <img
+    src="/images/features/integrations.webp"
+    alt="Harly integrations settings showing calendar, video, notification, and communication providers."
+  />
+</Frame>
+
 ## Integration map
 
 | Need | Providers | Setup |
@@ -23,7 +30,7 @@ sharing a user's refresh token between them.
 | Email inbound (reply threading) | Postmark, Resend inbound | MX records + inbound webhook |
 | Mailbox sync (send and receive) | IMAP | Workspace mailbox connection |
 | Notifications | Slack, Discord, Telegram | OAuth or incoming webhook |
-| E-signature | DocuSeal, Harly Signing | Optional provider connection |
+| E-signature | Harly Sign, DocuSeal | Built-in signing or optional provider connection |
 | Files | Local volume, S3-compatible storage | Deployment configuration |
 
 ## Connection lifecycle
@@ -75,7 +82,7 @@ sharing a user's refresh token between them.
     Slack, Discord, and Telegram.
   </Card>
   <Card title="Signatures" icon="file-signature" href="/integrations/signatures">
-    DocuSeal and Harly Signing.
+    Harly Sign and DocuSeal.
   </Card>
   <Card title="Storage" icon="folder" href="/integrations/storage">
     Local volume and S3-compatible providers.

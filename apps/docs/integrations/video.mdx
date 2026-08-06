@@ -1,52 +1,95 @@
 ---
 title: "Video interview providers"
-description: "Configure Zoom, Microsoft Teams, Google Meet, or Jitsi for interview links."
+description: "Configure Zoom, Microsoft Teams, Google Meet, or Jitsi and verify the generated interview link."
 ---
 
-When an interview needs video, Harly selects one provider and stores the link
-on the interview. The current preference order is Zoom, Microsoft Teams,
-Google Meet, then Jitsi when more than one provider is available.
+When an interview uses **Video**, Harly selects one connected provider and
+stores the resulting link on the interview. With automatic selection, the
+preference order is Zoom, Microsoft Teams, Google Meet, then Jitsi. You can
+also select a provider explicitly or paste an external meeting URL.
 
 ## Provider setup
 
 | Provider | Credential model | Where to configure |
 | --- | --- | --- |
-| Zoom | OAuth client ID and secret | Installation variables, then workspace connect |
-| Microsoft Teams | Outlook/Entra connection | [Microsoft guide](/integrations/microsoft) |
-| Google Meet | Google Calendar OAuth | [Google guide](/integrations/google-calendar) |
-| Jitsi | Workspace base URL, default `https://meet.jit.si` | Settings → Integrations |
+| Zoom | OAuth connection | **Settings → Integrations → Zoom** |
+| Microsoft Teams | Microsoft/Outlook OAuth connection | **Settings → Integrations → Microsoft Teams** |
+| Google Meet | Shared Google Calendar OAuth connection | **Settings → Integrations → Google Meet** |
+| Jitsi Meet | Workspace base URL, default `https://meet.jit.si` | **Settings → Integrations → Jitsi Meet** |
 
 ## Zoom
 
-Create a Zoom OAuth app, register:
+Create a Zoom OAuth app and register this callback:
 
 ```text
-https://hiring.example.com/api/integrations/zoom/callback
+https://harly.example.com/api/integrations/zoom/callback
 ```
 
-Then configure the web service:
+Then open **Settings → Integrations → Zoom**. Enter the Zoom **Client ID**
+and **Client Secret** in the card or provide `ZOOM_CLIENT_ID` and
+`ZOOM_CLIENT_SECRET` on the server, choose **Connect**, and authorize the
+workspace account. Use the connection to schedule a test video interview.
 
-```dotenv
-ZOOM_CLIENT_ID=<client-id>
-ZOOM_CLIENT_SECRET=<client-secret>
-```
+Rotate the provider secret in Zoom and Harly together.
 
-Connect Zoom from **Settings → Integrations → Zoom** and test by scheduling a
-video interview. Rotate the provider secret in Zoom and Harly together.
+## Microsoft Teams
 
-## Jitsi
+<Steps>
+  <Step title="Configure Microsoft OAuth">
+    Set `MICROSOFT_CLIENT_ID` and `MICROSOFT_CLIENT_SECRET` on the Harly
+    server. Register this callback in the Microsoft app:
 
-Jitsi does not require an OAuth client. Open **Settings → Integrations → Jitsi**
-and set the base URL if you operate a private Jitsi deployment. Use HTTPS for
-production and verify that candidates can reach the resulting room URL.
+    ```text
+    https://harly.example.com/api/integrations/outlook/callback
+    ```
+  </Step>
+  <Step title="Connect Teams">
+    Open **Settings → Integrations → Microsoft Teams**, choose **Connect
+    Microsoft**, and authorize an account with access to the Outlook calendar.
+  </Step>
+  <Step title="Test the meeting link">
+    Use **Test connection**, then schedule a video interview. Teams creates the
+    meeting through the Outlook connection; calendar selection lives on the
+    Outlook Calendar integration.
+  </Step>
+</Steps>
+
+## Google Meet
+
+<Steps>
+  <Step title="Configure Google OAuth">
+    Set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` on the Harly server and
+    register `${HARLY_URL}/api/integrations/google/callback` in Google Cloud.
+  </Step>
+  <Step title="Connect Meet">
+    Open **Settings → Integrations → Google Meet**, choose **Connect Google**,
+    and authorize the Google Calendar account.
+  </Step>
+  <Step title="Select a calendar and test">
+    Select a writable calendar under Google Calendar, test the connection, and
+    schedule a video interview. Meet uses the same Google Calendar connection.
+  </Step>
+</Steps>
+
+## Jitsi Meet
+
+Jitsi does not require an OAuth client or API key. Open **Settings →
+Integrations → Jitsi Meet**, enter your self-hosted instance URL or keep the
+public `https://meet.jit.si` default, enable it, and test by scheduling a video
+interview. Use HTTPS in production. Public Jitsi rooms are open to anyone with
+the link; for sensitive interviews, prefer a self-hosted instance with a lobby.
+
+Jitsi is used automatically only when Zoom, Teams, and Google Meet are not
+connected.
 
 ## Sync behavior
 
 Editing or canceling an interview attempts to update the provider object. If a
-provider fails, Harly preserves the local interview and reports the provider
-warning. Retry from the interview instead of creating a second interview.
+provider fails, Harly preserves the local interview and reports a provider
+warning. Retry the sync from the interview instead of creating a second
+interview.
 
 <Warning>
   Do not paste private provider tokens into the interview location field. Use
-  the integration settings so secrets are encrypted and access is auditable.
+  the integration settings so credentials remain protected and auditable.
 </Warning>

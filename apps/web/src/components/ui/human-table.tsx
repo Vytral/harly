@@ -9,8 +9,8 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 /**
  * The locked primitives of Harly's hero surface (DESIGN.md , Components).
  *
- * Read off `referencias/01-hero-human-table.webp`. Every rule here is a value
- * from that frame, not a preference:
+ * Read off the north-star composition in DESIGN.md. Every rule here is a
+ * product constraint, not a preference:
  *   - selection is a filled soft row block with its own radius, never a border
  *   - status pills are cool-grey and silent; only taxonomy tags carry weight
  *   - column headers are 12px variable-face, letterspaced, soft ink

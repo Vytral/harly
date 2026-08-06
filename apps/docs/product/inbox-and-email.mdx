@@ -1,49 +1,98 @@
 ---
 title: "Inbox and email"
-description: "Message candidates from the record, keep replies on the timeline, and work a shared inbox."
+description: "Configure candidate email, send from a record, triage replies, and work a shared inbox."
 ---
 
 Harly keeps candidate email on the record instead of in a personal mailbox.
 Every message you send and every reply you receive is written to the shared
-mail store, so the whole hiring team sees one thread per candidate.
+mail store, so the whole hiring team can work one thread per candidate.
 
 ## Before you send
 
-Set up sending in **Settings → Email**:
+Set up sending in **Settings → Email** before using the Inbox:
 
-- A sender identity so messages come from your workspace, not a personal
-  account.
-- Inbound replies so candidate responses land back on the record.
+- Under **Outbound**, choose Resend or SMTP, set the sender identity, and send
+  a test message.
+- Under **Inbound**, choose Resend or Postmark, enter the receiving hostname,
+  configure the provider webhook, and verify the generated reply address.
+- Under **Reply handling**, choose **Shared mailbox** for a mailbox transport
+  or **Threaded replies** for provider-routed candidate replies.
 
 See [email](/integrations/email) for connection and DNS details.
 
-## Message a candidate
+<Info>
+  A shared mailbox and threaded replies are separate transports. Configure one
+  first, then confirm the status strip in **Inbox** says the connection is ready.
+</Info>
 
-From a candidate record, open the email drawer and compose. The composer is
-rich text with attachments, so you can send a formatted note with a document
-attached in one message.
+## Send a message from a candidate record
 
-- Replies thread back onto the same candidate automatically.
-- Templates keep common messages (screening invite, rejection, offer) consistent.
-- Attachments sent or received are kept with the thread.
+<Steps>
+  <Step title="Open the candidate">
+    Go to **Candidates**, open a candidate, and open the email composer from the
+    candidate record. If no sender is configured, Harly keeps the compose action
+    available from the record but does not offer Inbox replies until email is
+    configured.
+  </Step>
+  <Step title="Compose and send">
+    Choose a template if one fits, edit the rich-text body, and attach files if
+    needed. Send the message from the workspace sender identity.
+  </Step>
+  <Step title="Check the thread">
+    Harly stores the sent message on the candidate timeline. Replies are linked
+    to the application when the inbound provider can match the generated
+    `reply+token@domain` address.
+  </Step>
+</Steps>
 
-<Tip>
-  Keep candidate communication in Harly rather than a personal inbox. The record
-  stays complete, and a teammate can pick up the thread if you are out.
-</Tip>
+Templates keep common messages such as screening invitations, rejections, and
+offers consistent. Attachments sent or received remain with the thread.
 
-## The inbox
+## Work the Inbox
 
-The **Inbox** is a full-width view of active conversations across candidates.
-Use it to triage replies, hand off threads, and clear your queue without opening
-each candidate one at a time. Replies you send from the inbox and from a
-candidate record share the same underlying store, so nothing diverges.
+Open **Inbox** from the left sidebar or go to `/dashboard/inbox`. The command
+bar supports search and these filters: **All**, **Needs reply**, **Unread**,
+**Assigned to me**, **Archived**, **Replies**, **Unassigned**, **Candidates**,
+and **Assigned**.
+
+<Steps>
+  <Step title="Filter and search">
+    Choose a filter, then search by subject, participant email, candidate name,
+    preview text, or linked job/application text.
+  </Step>
+  <Step title="Open a conversation">
+    Select a person or thread. The reader shows the conversation and attachments;
+    the actions panel can link or unlink a candidate and application.
+  </Step>
+  <Step title="Reply or hand off">
+    Reply from the thread when a sender is configured. Use **Assign to** to hand
+    the conversation to a teammate, then mark it read when the next action is
+    clear.
+  </Step>
+  <Step title="Close or remove noise">
+    Use **Archive thread** for completed conversations or **Mark as spam** for
+    unwanted mail. Archived and spam threads remain separate from the active
+    queue.
+  </Step>
+</Steps>
+
+Replies sent from the Inbox and from a candidate record share the same mailbox
+store, so the timeline does not diverge.
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+| --- | --- | --- |
+| Inbox says it is not connected | No shared mailbox or threaded-reply transport is enabled | Open **Settings → Email → Reply handling** and configure one transport |
+| Candidate reply is missing | DNS, webhook, or workspace query parameter is wrong | Check the [inbound email setup](/integrations/email), provider delivery logs, and the `?ws=<workspace-id>` value |
+| Reply button is unavailable | No sender identity is configured | Configure **Settings → Email → Outbound**, then send a test message |
+| Message appears twice | Providers retry deliveries | Allow Harly's provider-message deduplication to settle before retrying |
 
 ## Next steps
 
 <CardGroup cols={2}>
   <Card title="Email setup" icon="envelope" href="/integrations/email">
-    Connect sending and inbound replies.
+    Connect outbound sending and inbound replies.
   </Card>
   <Card title="Automations" icon="workflow" href="/developers/automations">
     Send messages automatically on stage changes.

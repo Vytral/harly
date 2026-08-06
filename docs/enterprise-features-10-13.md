@@ -1,6 +1,6 @@
-# Enterprise features 10–13
+# Enterprise features 10–12
 
-## 10. Webhooks robustos
+## 10. Durable webhooks
 
 Outbound webhooks are durable rows in PostgreSQL. Payloads are signed with
 `x-harly-signature-256` using `t=<unix>,v1=<HMAC-SHA256>`, and each attempt is
@@ -15,7 +15,7 @@ Relevant APIs:
 - `GET /api/v1/webhooks/{id}/deliveries/{deliveryId}/attempts`
 - `POST /api/v1/webhooks/{id}/deliveries/{deliveryId}/replay`
 
-## 12. Analytics and reporting
+## 11. Analytics and reporting
 
 The reports layer now exposes advanced analytics from workspace-scoped
 operational data:
@@ -31,7 +31,7 @@ The advanced endpoint is `GET /api/reports/advanced?days=90`. Scheduled reports
 are managed through `/api/reports/schedules` and processed by the
 `scheduled-reports` cron.
 
-## 13. Seguridad avanzada
+## 12. Advanced security
 
 Workspace owners can configure:
 
