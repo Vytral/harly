@@ -1,5 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const safeFetchHttp = vi.hoisted(() => vi.fn());
+
+vi.mock("@/lib/ssrf", () => ({ safeFetchHttp }));
+
 import { cancelCalBooking } from "./client";
 
 const config = {
@@ -10,11 +14,14 @@ const config = {
   webhookSecret: null,
 };
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  safeFetchHttp.mockReset();
+});
 
 describe("cancelCalBooking", () => {
   it("cancels a booking with the pinned API headers", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    safeFetchHttp.mockResolvedValue(
       new Response(JSON.stringify({ status: "success", data: {} }), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -22,7 +29,7 @@ describe("cancelCalBooking", () => {
     );
 
     await expect(cancelCalBooking(config, "booking/uid")).resolves.toBe(true);
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(safeFetchHttp).toHaveBeenCalledWith(
       "https://cal.test/v2/bookings/booking%2Fuid/cancel",
       expect.objectContaining({
         method: "POST",
@@ -35,8 +42,7 @@ describe("cancelCalBooking", () => {
   });
 
   it("treats an already-cancelled booking as idempotent success", async () => {
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
+    safeFetchHttp
       .mockResolvedValueOnce(
         new Response(
           JSON.stringify({ error: { message: "Already cancelled" } }),
@@ -54,8 +60,8 @@ describe("cancelCalBooking", () => {
       );
 
     await expect(cancelCalBooking(config, "booking-uid")).resolves.toBe(true);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1]?.[0]).toBe(
+    expect(safeFetchHttp).toHaveBeenCalledTimes(2);
+    expect(safeFetchHttp.mock.calls[1]?.[0]).toBe(
       "https://cal.test/v2/bookings/booking-uid",
     );
   });

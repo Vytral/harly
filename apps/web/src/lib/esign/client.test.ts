@@ -1,7 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const safeFetchHttp = vi.hoisted(() => vi.fn());
+
 vi.mock("@/lib/esign/config", () => ({
   getWorkspaceEsignConfig: vi.fn(),
 }));
+vi.mock("@/lib/ssrf", () => ({ safeFetchHttp }));
 
 import { downloadDocusealFile } from "./client";
 
@@ -14,19 +18,20 @@ const ctx = {
 };
 
 describe("downloadDocusealFile", () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    safeFetchHttp.mockReset();
+  });
 
   it("does not fetch or disclose the token for an untrusted artifact URL", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch");
-
     await expect(
       downloadDocusealFile(ctx, "https://attacker.example/file.pdf"),
     ).rejects.toThrow(/untrusted artifact/i);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(safeFetchHttp).not.toHaveBeenCalled();
   });
 
   it("rejects redirects while the bearer header is present", async () => {
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+    safeFetchHttp.mockResolvedValue(
       new Response(null, {
         status: 302,
         headers: { location: "https://attacker.example/file.pdf" },
@@ -36,7 +41,7 @@ describe("downloadDocusealFile", () => {
     await expect(
       downloadDocusealFile(ctx, "/file.pdf"),
     ).rejects.toThrow(/redirected/i);
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(safeFetchHttp).toHaveBeenCalledWith(
       "https://sign.example.test/file.pdf",
       expect.objectContaining({
         redirect: "manual",
