@@ -48,6 +48,30 @@ Point your existing certificate management (Certbot, an ACME client, or a load b
   The Nginx block above is a standard reverse-proxy pattern, not a file shipped by Harly. Adapt it to your existing proxy configuration.
 </Note>
 
+### Trust your reverse proxy for client IPs
+
+By default, Harly reads the client IP from the rightmost hop in `X-Forwarded-For`. In `external` mode that hop is your reverse proxy, not the end user. Workspace IP allowlists, per-IP rate limits, and audit log `ipAddress` fields will all see the proxy's address instead of the real client until you tell Harly which peer to trust.
+
+Set `TRUSTED_PROXY_IPS` in `.env` to the peer address (or comma-separated addresses) that Harly's container sees when the proxy forwards a request:
+
+```dotenv
+# Single reverse proxy on the same host
+TRUSTED_PROXY_IPS=127.0.0.1
+
+# Multiple proxies or a load balancer pool
+TRUSTED_PROXY_IPS=10.0.0.5,10.0.0.6
+```
+
+When the immediate peer matches one of these values, Harly uses the leftmost address in `X-Forwarded-For` as the client IP. When it does not match, Harly falls back to the rightmost hop so a malicious client cannot spoof its address by injecting the header.
+
+Guidelines:
+
+- Use the address Harly actually receives the connection from, not the public IP of the proxy. Behind Docker with a host-network Nginx, that is typically `127.0.0.1` or the Docker bridge gateway.
+- If several load balancers can each forward directly to Harly, list all of them, comma-separated.
+- Behind a CDN like Cloudflare in front of your own reverse proxy, trust the reverse proxy's address here and let the CDN handle client IP resolution in your proxy configuration.
+- Leave `TRUSTED_PROXY_IPS` unset in `caddy` mode. The bundled Caddy proxy adds exactly one forwarding hop, so the rightmost-hop default already resolves to the real client.
+- After changing the value, restart the app container so the new environment is picked up.
+
 ## Troubleshooting
 
 ### `doctor` reports the wrong services as unhealthy

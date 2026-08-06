@@ -124,6 +124,13 @@ Additional controls available in **Settings → Security** include passkeys,
 trusted email domains, IP allowlists, suspicious-session detection, and
 reauthentication windows for sensitive changes.
 
+<Note>
+  Self-hosted deployments behind an external reverse proxy must set
+  `TRUSTED_PROXY_IPS` for IP allowlists (and per-IP rate limits) to evaluate
+  the original client address instead of the proxy's address. See
+  [proxy modes](/self-hosting/proxy-modes#trust-your-reverse-proxy-for-client-ips).
+</Note>
+
 ## Audit review
 
 Review security and administrative events periodically and after any incident.
