@@ -1,6 +1,6 @@
 ---
 title: "Configuration reference"
-description: "Configure Harly's required secrets, storage, email, scheduler, and optional integrations."
+description: "Reference for Harly environment variables: required secrets, storage, scheduler, resource profiles, integrations, and security-sensitive settings."
 ---
 
 `HARLY_URL` is the canonical public origin. Use a bare origin without a path:
@@ -132,9 +132,26 @@ redirect URIs and setup steps.
 
 ```dotenv
 HARLY_ALLOW_PRIVATE_WEBHOOKS=false  # default
+TRUSTED_PROXY_IPS=                  # comma-separated list, empty by default
 ```
 
-Set to `true` only for a controlled internal deployment where outbound webhooks
-must reach loopback or private addresses. In all other deployments, leave at
-the default — Harly blocks loopback, private, link-local, and cloud-metadata
-addresses on all outbound HTTP actions.
+`HARLY_ALLOW_PRIVATE_WEBHOOKS` should be set to `true` only for a controlled
+internal deployment where outbound webhooks must reach loopback or private
+addresses. In all other deployments, leave at the default. Harly blocks
+loopback, private, link-local, and cloud-metadata addresses on all outbound
+HTTP actions.
+
+`TRUSTED_PROXY_IPS` lists the peer addresses of reverse proxies whose
+`X-Forwarded-For` header Harly should trust. When the immediate peer matches
+one of these values, Harly uses the leftmost forwarded address as the client
+IP. Otherwise it falls back to the rightmost hop so the header cannot be
+spoofed. This value drives what audit logs record for `ipAddress`, which
+address workspace IP allowlists evaluate, and how per-IP rate limits partition
+traffic.
+
+Leave `TRUSTED_PROXY_IPS` empty when Harly is exposed directly or served
+through the bundled Caddy proxy. Set it to the address (or comma-separated
+addresses) that Harly sees as the TCP peer when running behind an external
+reverse proxy, load balancer, or CDN. See
+[proxy modes](/self-hosting/proxy-modes#trust-your-reverse-proxy-for-client-ips)
+for concrete examples.
