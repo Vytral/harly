@@ -20,7 +20,7 @@
   },
   "devDependencies": {
     "dotenv": "^17.4.2",
-    "tsx": "^4.22.3",
+    "tsx": "^4.23.5",
     "drizzle-kit": "^0.31.10"
   },
   "exports": {
