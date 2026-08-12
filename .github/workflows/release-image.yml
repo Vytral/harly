@@ -43,7 +43,7 @@ jobs:
             org.opencontainers.image.description=Self-hosted applicant tracking system
             org.opencontainers.image.licenses=MIT
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true
