@@ -1,8 +1,10 @@
 import type { MetadataRoute } from "next";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
-const origin = (process.env.HARLY_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+export const dynamic = "force-dynamic";
 
 export default function robots(): MetadataRoute.Robots {
+  const origin = getHarlyPublicOrigin();
   return {
     rules: [{ userAgent: "*", allow: ["/board/"], disallow: ["/api/", "/dashboard/", "/settings/", "/portal/", "/login", "/signup", "/apply/"] }],
     sitemap: `${origin}/sitemap.xml`,

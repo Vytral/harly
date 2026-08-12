@@ -6,6 +6,7 @@ import { OAuth2Client } from "google-auth-library";
 import { db, workspaceSettings } from "@harly/db";
 
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export type WorkspaceGCalStatus = {
   enabled: boolean;
@@ -48,9 +49,7 @@ function getGoogleCredentials(): {
 }
 
 export function getRedirectUri(): string {
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   return `${appUrl}/api/integrations/google/callback`;
 }
 

@@ -7,6 +7,7 @@ import {
   SetupError,
   setupClaimCookieName,
 } from "@harly/auth/setup";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,12 +23,7 @@ const bodySchema = z.object({
 });
 
 function publicUrl(): string {
-  return (
-    process.env.HARLY_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.BETTER_AUTH_URL ??
-    "http://localhost:3000"
-  );
+  return getHarlyPublicOrigin();
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {

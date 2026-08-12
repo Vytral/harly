@@ -5,13 +5,10 @@ import { eq } from "drizzle-orm";
 import { db, organization, workspaceSettings } from "@harly/db";
 import type { WorkspaceEmailBranding } from "@harly/emails";
 import { normalizeCareerPageConfig } from "@/features/career-page/config";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 function appBaseUrl(): string {
-  return (
-    process.env.HARLY_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  ).replace(/\/$/, "");
+  return getHarlyPublicOrigin();
 }
 
 /**

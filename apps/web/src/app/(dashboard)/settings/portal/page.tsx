@@ -5,6 +5,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { CandidatePortalCard } from "@/features/workspaces/CandidatePortalCard";
 import { getWorkspaceEmailStatus } from "@/lib/email/config";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -46,7 +47,7 @@ export default async function PortalSettingsPage() {
         row?.hasLinkedinClientId && row?.hasLinkedinSecret,
       )}
       linkedinClientId={row?.hasLinkedinClientId ?? ""}
-      appUrl={process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}
+      appUrl={getHarlyPublicOrigin()}
       showApplicationStatus={row?.portalShowApplicationStatus ?? true}
       showHiringTeam={row?.portalShowHiringTeam ?? false}
     />

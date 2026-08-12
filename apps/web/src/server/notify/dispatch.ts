@@ -7,6 +7,7 @@ import { getWorkspaceChatConfig, type ChatConfig } from "@/lib/notify/config";
 import { getWorkspaceSlackConfig } from "@/lib/slack/config";
 import { getWorkspaceTelegramConfig } from "@/lib/telegram/config";
 import { sendTelegramMessage } from "@/lib/telegram/client";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { WEBHOOK_EVENT_LABELS, type WebhookEvent } from "@/server/webhooks/events";
 
 /**
@@ -31,9 +32,7 @@ const EVENT_EMOJI: Record<WebhookEvent, string> = {
   "job.published": "📣",
 };
 
-const APP_URL = (
-  process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-).replace(/\/$/, "");
+const APP_URL = getHarlyPublicOrigin();
 
 type ChatField = { name: string; value: string; inline?: boolean };
 

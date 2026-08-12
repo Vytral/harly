@@ -6,6 +6,7 @@ import { ApiError, type Cursor } from "@harly/api";
 import { db, jobApprovalRequests, jobHiringTeam, jobs, jobStages, type Job } from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import {
   persistDomainEvent,
   publishPersistedDomainEvents,
@@ -73,10 +74,7 @@ export function serializeJob(job: Job) {
 }
 
 function appBaseUrl(): string {
-  return (process.env.HARLY_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
-    /\/$/,
-    "",
-  );
+  return getHarlyPublicOrigin();
 }
 
 /** Public (unauthenticated) job shape for the embed widget / board API. */

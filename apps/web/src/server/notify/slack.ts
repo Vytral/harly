@@ -15,12 +15,13 @@ import {
 } from "@harly/db";
 
 import { getWorkspaceSlackConfig } from "@/lib/slack/config";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { createLogger } from "@/lib/logger";
 import { recordSlackDelivery } from "@/server/observability/metrics";
 import { WEBHOOK_EVENT_LABELS, type WebhookEvent } from "@/server/webhooks/events";
 
 const log = createLogger("slack-notifications");
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const APP_URL = getHarlyPublicOrigin();
 const MAX_ATTEMPTS = 6;
 const RETRY_BACKOFF_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 60 * 60_000, 6 * 60 * 60_000, 24 * 60 * 60_000];
 

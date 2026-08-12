@@ -72,7 +72,22 @@ const envSchema = z
         if (!['http:', 'https:'].includes(parsed.protocol) || parsed.pathname !== "/") {
           throw new Error("invalid origin");
         }
-        if (env.NODE_ENV === "production" && parsed.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(parsed.hostname)) {
+        const normalizedHostname = parsed.hostname.toLowerCase();
+        const ipv4Parts = normalizedHostname.split(".");
+        const isIpv4Loopback =
+          ipv4Parts.length === 4 &&
+          ipv4Parts[0] === "127" &&
+          ipv4Parts.slice(1).every((part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255);
+        if (
+          env.NODE_ENV === "production" &&
+          (normalizedHostname === "localhost" ||
+            normalizedHostname.endsWith(".localhost") ||
+            isIpv4Loopback ||
+            ["::1", "[::1]", "0.0.0.0", "::", "[::]"].includes(normalizedHostname))
+        ) {
+          throw new Error("local or unspecified bind address");
+        }
+        if (env.NODE_ENV === "production" && parsed.protocol !== "https:") {
           ctx.addIssue({ code: "custom", path: ["HARLY_URL"], message: "must use HTTPS in production" });
         }
       } catch {

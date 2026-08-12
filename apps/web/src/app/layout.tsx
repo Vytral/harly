@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CookiePanel } from "@/components/CookieConsentBanner";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 import "./globals.css";
 
@@ -34,18 +35,18 @@ const onestVariable = localFont({
   fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.HARLY_URL ??
-      process.env.NEXT_PUBLIC_APP_URL ??
-      "http://localhost:3000",
-  ),
-  title: "Harly",
-  description: "Open-source applicant tracking system for modern teams.",
-  icons: {
-    icon: "/favicon.svg",
-  },
-};
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    metadataBase: new URL(getHarlyPublicOrigin()),
+    title: "Harly",
+    description: "Open-source applicant tracking system for modern teams.",
+    icons: {
+      icon: "/favicon.svg",
+    },
+  };
+}
 
 export default function RootLayout({
   children,

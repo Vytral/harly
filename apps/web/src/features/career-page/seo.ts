@@ -7,7 +7,10 @@ import type { WorkspaceBoardBranding } from "@/features/workspaces/board";
 import type { Job } from "@harly/db";
 
 function origin() {
-  const configured = process.env.HARLY_URL ?? process.env.NEXT_PUBLIC_APP_URL;
+  const configured =
+    process.env.HARLY_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.BETTER_AUTH_URL;
   // A production deployment without a public URL should never publish
   // localhost as its canonical origin. Relative URLs remain valid metadata
   // until the deployment is configured correctly.

@@ -42,6 +42,7 @@ import { getWorkspaceEmailConfig } from "@/lib/email/config";
 import { decryptSecret } from "@/lib/crypto";
 import { insertCanonicalMessage } from "@/lib/mail/canonical";
 import { createLogger } from "@/lib/logger";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { storage } from "@/lib/storage";
 import {
   offerMatchesTerms,
@@ -762,11 +763,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
 }
 
 function appBaseUrl(): string {
-  return (
-    process.env.HARLY_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    "http://localhost:3000"
-  );
+  return getHarlyPublicOrigin();
 }
 
 function splitName(full: string): { first: string; last: string } {

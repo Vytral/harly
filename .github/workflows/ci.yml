@@ -14,8 +14,10 @@ env:
   # Used by packages/db to build the client; tests that touch DB logic mock the
   # module, so this never needs a real Postgres instance in CI.
   DATABASE_URL: postgresql://harly:harly@localhost:5432/harly
-  NEXT_PUBLIC_APP_URL: http://localhost:3000
-  HARLY_URL: http://localhost:3000
+  # Keep CI's public-origin variables routable-looking and non-local. The
+  # production config intentionally rejects localhost/loopback origins.
+  NEXT_PUBLIC_APP_URL: https://ci.example.invalid
+  HARLY_URL: https://ci.example.invalid
   DOCUSEAL_SECRET_KEY_BASE: ci-docuseal-secret-key-base-do-not-use-in-production
   BETTER_AUTH_SECRET: ci-test-secret-do-not-use-in-production
   NODE_ENV: test
@@ -146,8 +148,8 @@ jobs:
     env:
       NODE_ENV: production
       DATABASE_URL: postgresql://harly:harly@localhost:5432/harly
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
-      HARLY_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: https://ci.example.invalid
+      HARLY_URL: https://ci.example.invalid
       BETTER_AUTH_SECRET: ci-test-secret-do-not-use-in-production
       AI_ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       STORAGE_UPLOAD_SECRET: cccccccccccccccccccccccccccccccc
@@ -359,7 +361,7 @@ jobs:
       - name: Validate Compose profiles
         run: |
           export HARLY_IMAGE="$(node -p 'const r=require("./release-manifest.json"); r.image + "@" + r.digest')"
-          export HARLY_VERSION="$(node -p 'require("./release-manifest.json").version')" HARLY_URL=http://localhost:3000
+          export HARLY_VERSION="$(node -p 'require("./release-manifest.json").version')" HARLY_URL=https://ci.example.invalid
           export POSTGRES_USER=harly POSTGRES_PASSWORD=harly POSTGRES_DB=harly
           export BETTER_AUTH_SECRET=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa AI_ENCRYPTION_KEY=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           export STORAGE_UPLOAD_SECRET=cccccccccccccccccccccccccccccccc CRON_SECRET=dddddddddddddddddddddddddddddddd
@@ -392,7 +394,7 @@ jobs:
           COMPOSE_PROJECT_NAME: harly-ci
           HARLY_IMAGE: harly:ci
           HARLY_VERSION: ci
-          HARLY_URL: http://127.0.0.1:3099
+          HARLY_URL: https://ci.example.invalid
           HARLY_PORT: 3099
           POSTGRES_USER: harly
           POSTGRES_PASSWORD: harly-ci-postgres-password

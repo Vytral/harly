@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { getZoomCredentials } from "@/lib/zoom/config";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 
@@ -84,9 +85,7 @@ export async function GET(req: NextRequest) {
     return redirectWithError("Zoom credentials not found for this workspace.");
   }
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const redirectUri = `${appUrl}/api/integrations/zoom/callback`;
 
   // Exchange code for token
@@ -151,9 +150,7 @@ export async function GET(req: NextRequest) {
 }
 
 function redirectWithError(msg: string) {
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const url = new URL(`${appUrl}/settings/integrations`);
   url.searchParams.set("zoom_error", msg);
   return NextResponse.redirect(url.toString());

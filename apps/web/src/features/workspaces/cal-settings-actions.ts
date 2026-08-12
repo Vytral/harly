@@ -17,6 +17,7 @@ import {
 import { registerCalWebhook, verifyCalConnection } from "@/lib/cal/client";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { resolveSafeAddress } from "@/lib/ssrf";
 
 const log = createLogger("workspace-cal-settings");
@@ -280,14 +281,9 @@ export async function registerCalWebhookAction(): Promise<CalSettingsActionResul
     return { ok: false, error: "Missing webhook secret. Save settings again." };
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL;
-  if (!appUrl) {
-    return { ok: false, error: "Server is missing NEXT_PUBLIC_APP_URL." };
-  }
-
   try {
     await registerCalWebhook(config, {
-      subscriberUrl: `${appUrl.replace(/\/$/, "")}/api/webhooks/cal?ws=${context.organization.id}`,
+      subscriberUrl: `${getHarlyPublicOrigin()}/api/webhooks/cal?ws=${context.organization.id}`,
       secret: config.webhookSecret,
     });
     return { ok: true };

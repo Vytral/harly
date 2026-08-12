@@ -7,14 +7,12 @@ import { apiContracts } from "@/server/api/contracts/registry";
 import { jsonSchema } from "@/server/api/contracts";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { withApi } from "@/server/api/respond";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const runtime = "nodejs";
 
 function baseUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
-    /\/$/,
-    "",
-  );
+  return getHarlyPublicOrigin();
 }
 
 function parameterList(contract: (typeof apiContracts)[number]) {

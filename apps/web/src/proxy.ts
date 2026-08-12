@@ -65,6 +65,14 @@ function isPortalProtected(pathname: string): boolean {
   return PORTAL_PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+function publicRedirectUrl(request: NextRequest, pathname: string): URL {
+  const configuredOrigin =
+    process.env.HARLY_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.BETTER_AUTH_URL;
+  return new URL(pathname, configuredOrigin ?? request.nextUrl.origin);
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
@@ -72,7 +80,7 @@ export async function proxy(request: NextRequest) {
   if (isPortalProtected(pathname)) {
     const token = request.cookies.get(PORTAL_SESSION_COOKIE)?.value;
     if (!token) {
-      const loginUrl = new URL("/portal/login", request.url);
+      const loginUrl = publicRedirectUrl(request, "/portal/login");
       loginUrl.searchParams.set("next", pathname);
       return NextResponse.redirect(loginUrl);
     }
@@ -91,7 +99,7 @@ export async function proxy(request: NextRequest) {
   const sessionCookie = getSessionCookie(request);
 
   if (!sessionCookie) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(publicRedirectUrl(request, "/login"));
   }
 
   // 2FA + org enforcement for protected paths
@@ -100,7 +108,7 @@ export async function proxy(request: NextRequest) {
     const session = await auth.api.getSession({ headers: request.headers });
 
     if (!session?.user) {
-      const loginUrl = new URL("/login", request.url);
+      const loginUrl = publicRedirectUrl(request, "/login");
       loginUrl.searchParams.set("redirect", pathname);
       return NextResponse.redirect(loginUrl);
     }
@@ -198,7 +206,7 @@ export async function proxy(request: NextRequest) {
           !CHANGE_PASSWORD_EXEMPT.some((p) => pathname.startsWith(p))
         ) {
           return NextResponse.redirect(
-            new URL("/change-password", request.url),
+            publicRedirectUrl(request, "/change-password"),
           );
         }
 
@@ -210,11 +218,11 @@ export async function proxy(request: NextRequest) {
             roleKey: memberRow?.role,
           })
         ) {
-          return NextResponse.redirect(new URL("/setup-2fa", request.url));
+          return NextResponse.redirect(publicRedirectUrl(request, "/setup-2fa"));
         }
 
         if (wsRow?.requirePasskey && !existingPasskey) {
-          return NextResponse.redirect(new URL("/setup-2fa", request.url));
+          return NextResponse.redirect(publicRedirectUrl(request, "/setup-2fa"));
         }
       }
     } catch {

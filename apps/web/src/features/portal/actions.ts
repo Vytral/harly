@@ -52,6 +52,7 @@ import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { offerHasExpired } from "@/features/offers/core";
 import { freshEsignContext, getSubmission } from "@/lib/esign/client";
 import { signerSigningUrl } from "@/lib/esign/offer-signing";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 const log = createLogger("portal-actions");
 
@@ -125,7 +126,7 @@ export async function sendPortalMagicLinkAction(
 
   try {
     const token = await createMagicLinkToken(workspaceId, parsed.data);
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appUrl = getHarlyPublicOrigin();
     const url = `${appUrl}/api/portal/auth/magic?token=${token}`;
 
     const sender = await getWorkspaceEmailSender(workspaceId);
