@@ -134,7 +134,9 @@ services:
     cpus: ${HARLY_CADDY_CPUS:-0.5}
     logging: *harly-logging
     environment:
-      HARLY_DOMAIN: ${HARLY_DOMAIN:-localhost}
+      # Never default the public proxy hostname to localhost. Deployments
+      # should set HARLY_DOMAIN explicitly; this placeholder is non-routable.
+      HARLY_DOMAIN: ${HARLY_DOMAIN:-example.invalid}
     ports:
       - "80:80"
       - "443:443"

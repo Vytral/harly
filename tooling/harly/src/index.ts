@@ -1285,7 +1285,7 @@ services:
     mem_limit: \${HARLY_CADDY_MEMORY:-256m}
     cpus: \${HARLY_CADDY_CPUS:-0.5}
     logging: *logging
-    environment: { HARLY_DOMAIN: "\${HARLY_DOMAIN:-localhost}" }
+    environment: { HARLY_DOMAIN: "\${HARLY_DOMAIN:-example.invalid}" }
     ports: ["80:80", "443:443", "443:443/udp"]
     volumes: ["./Caddyfile:/etc/caddy/Caddyfile:ro", caddy-data:/data, caddy-config:/config]
     depends_on: { app: { condition: service_healthy } }
