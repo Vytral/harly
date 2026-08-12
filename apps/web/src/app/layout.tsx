@@ -6,6 +6,7 @@ import { ThemeProvider } from "@/components/ThemeProvider";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CookiePanel } from "@/components/CookieConsentBanner";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 import "./globals.css";
 
@@ -35,11 +36,7 @@ const onestVariable = localFont({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(
-    process.env.HARLY_URL ??
-      process.env.NEXT_PUBLIC_APP_URL ??
-      "http://localhost:3000",
-  ),
+  metadataBase: new URL(getHarlyPublicOrigin()),
   title: "Harly",
   description: "Open-source applicant tracking system for modern teams.",
   icons: {

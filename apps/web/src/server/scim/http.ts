@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { enforceRateLimit, clientIp } from "@/server/api/ratelimit";
 import { resolveScimToken } from "@/server/scim/service";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export async function authenticateScimRequest(request: NextRequest, workspaceId: string) {
   try {
@@ -22,7 +23,7 @@ export function scimError(detail: string, status: number, scimType?: string) {
 }
 
 export function publicBaseUrl(request: NextRequest) {
-  return process.env.HARLY_URL ?? request.nextUrl.origin;
+  return process.env.HARLY_URL ? getHarlyPublicOrigin() : request.nextUrl.origin;
 }
 
 export function scimBaseUrl(request: NextRequest, workspaceId: string) {

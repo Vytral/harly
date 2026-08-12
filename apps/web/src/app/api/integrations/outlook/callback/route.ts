@@ -7,6 +7,7 @@ import { encryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { getWorkspaceOutlookCredentials } from "@/lib/outlook/config";
 import { getMe } from "@/lib/outlook/client";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 
@@ -70,9 +71,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const redirectUri = `${appUrl}/api/integrations/outlook/callback`;
 
   // Exchange code for tokens
@@ -146,9 +145,7 @@ export async function GET(req: NextRequest) {
 }
 
 function redirectWithError(msg: string) {
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const url = new URL(`${appUrl}/settings/integrations`);
   url.searchParams.set("outlook_error", msg);
   return NextResponse.redirect(url.toString());

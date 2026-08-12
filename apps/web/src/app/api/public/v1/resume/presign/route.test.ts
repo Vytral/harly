@@ -49,6 +49,8 @@ import { POST } from "./route";
 describe("POST /api/public/v1/resume/presign", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("HARLY_URL", "https://harly.example.com");
     mocks.enforceRateLimit.mockResolvedValue({
       limit: 20,
       remaining: 19,
@@ -71,5 +73,51 @@ describe("POST /api/public/v1/resume/presign", () => {
       error: { code: "rate_limited" },
     });
     expect(mocks.resolvePublicWorkspace).not.toHaveBeenCalled();
+  });
+
+  it("uses the configured public origin instead of the proxy request origin", async () => {
+    mocks.resolvePublicWorkspace.mockResolvedValue({ workspaceId: "workspace-1" });
+    mocks.getPresignedUploadUrl.mockResolvedValue({
+      uploadUrl: "/api/storage/upload?key=workspaces%2Fworkspace-1%2Fresumes%2Fresume.pdf",
+      fileUrl: "/uploads/workspaces/workspace-1/resumes/resume.pdf",
+    });
+    const storageValidation = await import("@/lib/storage-validation");
+    vi.mocked(storageValidation.createResumeStorageKey).mockReturnValue(
+      "workspaces/workspace-1/resumes/resume.pdf",
+    );
+    const intent = await import("@/lib/storage-upload-intent");
+    vi.mocked(intent.createStorageUploadIntent).mockReturnValue("signed-intent");
+    vi.mocked(intent.appendStorageUploadIntent).mockReturnValue(
+      "/api/storage/upload?key=workspaces%2Fworkspace-1%2Fresumes%2Fresume.pdf&intent=signed-intent",
+    );
+    const resumeStorageKey = await import("@/lib/resume/storage-key");
+    vi.mocked(resumeStorageKey.privateResumeFileUrl).mockReturnValue(
+      "/api/storage/private/resume.pdf",
+    );
+    vi.mocked(storageValidation.resumeUploadRequestSchema.safeParse).mockReturnValue({
+      success: true,
+      data: {
+        filename: "resume.pdf",
+        contentType: "application/pdf",
+        contentLength: 4,
+      },
+    } as never);
+
+    const response = await POST(
+      new Request("https://0.0.0.0:3000/api/public/v1/resume/presign", {
+        method: "POST",
+        body: JSON.stringify({
+          filename: "resume.pdf",
+          contentType: "application/pdf",
+          contentLength: 4,
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = await response.json();
+    expect(body.data.uploadUrl).toMatch(/^https:\/\/harly\.example\.com\//);
+    expect(body.data.fileUrl).toBe("https://harly.example.com/api/storage/private/resume.pdf");
+    expect(body.data.uploadUrl).not.toContain("0.0.0.0");
   });
 });

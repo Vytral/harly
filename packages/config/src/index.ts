@@ -72,7 +72,14 @@ const envSchema = z
         if (!['http:', 'https:'].includes(parsed.protocol) || parsed.pathname !== "/") {
           throw new Error("invalid origin");
         }
-        if (env.NODE_ENV === "production" && parsed.protocol !== "https:" && !["localhost", "127.0.0.1"].includes(parsed.hostname)) {
+        const normalizedHostname = parsed.hostname.toLowerCase();
+        if (
+          env.NODE_ENV === "production" &&
+          ["localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0", "::", "[::]"].includes(normalizedHostname)
+        ) {
+          throw new Error("local or unspecified bind address");
+        }
+        if (env.NODE_ENV === "production" && parsed.protocol !== "https:") {
           ctx.addIssue({ code: "custom", path: ["HARLY_URL"], message: "must use HTTPS in production" });
         }
       } catch {

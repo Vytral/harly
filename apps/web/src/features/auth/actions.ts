@@ -4,13 +4,10 @@ import { createElement } from "react";
 import { WelcomeEmail, welcomeEmailSubject } from "@harly/emails";
 
 import { sendEmail } from "@/lib/email";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export async function sendWelcomeEmailAction(email: string, name: string) {
-  const appUrl =
-    process.env.HARLY_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.BETTER_AUTH_URL ??
-    "http://localhost:3000";
+  const appUrl = getHarlyPublicOrigin();
 
   await sendEmail({
     to: email,

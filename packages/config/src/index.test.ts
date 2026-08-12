@@ -25,6 +25,18 @@ describe("loadHarlyConfig", () => {
     );
   });
 
+  it("rejects an unspecified production public origin", () => {
+    expect(() => loadHarlyConfig({ ...production, HARLY_URL: "https://0.0.0.0:3000" })).toThrow(
+      /HARLY_URL/,
+    );
+  });
+
+  it("rejects localhost in production", () => {
+    expect(() => loadHarlyConfig({ ...production, HARLY_URL: "https://localhost:3000" })).toThrow(
+      /HARLY_URL/,
+    );
+  });
+
   it("requires OAuth credentials in pairs", () => {
     expect(() => loadHarlyConfig({ ...production, GOOGLE_CLIENT_ID: "id" })).toThrow(
       /GOOGLE/,

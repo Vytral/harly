@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { getWorkspaceSlackCredentials } from "@/lib/slack/config";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createInstallState } from "@/server/oauth-state";
 
@@ -38,9 +39,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const redirectUri = `${appUrl}/api/integrations/slack/callback`;
 
   const state = await createInstallState({

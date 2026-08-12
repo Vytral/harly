@@ -20,4 +20,26 @@ describe("public provider origin", () => {
 
     expect(() => getHarlyPublicOrigin()).toThrow(/HTTPS/);
   });
+
+  it("rejects an unspecified production bind address", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("HARLY_URL", "https://0.0.0.0:3000");
+
+    expect(() => getHarlyPublicOrigin()).toThrow(/reachable public hostname/);
+  });
+
+  it("rejects localhost in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("HARLY_URL", "https://localhost:3000");
+
+    expect(() => getHarlyPublicOrigin()).toThrow(/reachable public hostname/);
+  });
+
+  it("uses a non-routable placeholder only during the production build", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PHASE", "phase-production-build");
+    vi.stubEnv("HARLY_URL", "http://localhost:3000");
+
+    expect(getHarlyPublicOrigin()).toBe("https://build.invalid");
+  });
 });

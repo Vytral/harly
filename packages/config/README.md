@@ -29,7 +29,8 @@ deprecated fallbacks, resolved in that order when `HARLY_URL` is absent. The
 resolved value must be an absolute HTTP(S) origin with no path, credentials,
 query, or fragment. It is normalized without a trailing slash.
 
-Production requires HTTPS, except for `localhost` and `127.0.0.1`.
+Production requires HTTPS and a reachable public origin. Localhost, loopback,
+and unspecified bind addresses are development-only values.
 
 ## Environment variables
 

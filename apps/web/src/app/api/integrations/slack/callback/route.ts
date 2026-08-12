@@ -8,6 +8,7 @@ import { getWorkspaceSlackCredentials } from "@/lib/slack/config";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 import { logAuditEvent } from "@/lib/audit-log";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const runtime = "nodejs";
 
@@ -65,9 +66,7 @@ export async function GET(req: NextRequest) {
     return redirectWithError("Slack credentials not found for this workspace.");
   }
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const redirectUri = `${appUrl}/api/integrations/slack/callback`;
 
   let tokenRes: Response;
@@ -160,9 +159,7 @@ export async function GET(req: NextRequest) {
 }
 
 function redirectWithError(msg: string) {
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const url = new URL(`${appUrl}/settings/integrations`);
   url.searchParams.set("slack_error", msg);
   return NextResponse.redirect(url.toString());

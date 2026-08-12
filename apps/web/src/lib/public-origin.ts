@@ -1,6 +1,21 @@
 import "server-only";
 
 const DEFAULT_PUBLIC_ORIGIN = "http://localhost:3000";
+const BUILD_PUBLIC_ORIGIN = "https://build.invalid";
+
+function isUnsafeProductionHost(hostname: string) {
+  const normalized = hostname.toLowerCase();
+  return (
+    normalized === "localhost" ||
+    normalized.endsWith(".localhost") ||
+    normalized === "127.0.0.1" ||
+    normalized === "::1" ||
+    normalized === "[::1]" ||
+    normalized === "0.0.0.0" ||
+    normalized === "::" ||
+    normalized === "[::]"
+  );
+}
 
 /**
  * Return the canonical origin that external providers must redirect to.
@@ -24,6 +39,15 @@ export function getHarlyPublicOrigin(): string {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error("HARLY_URL must use HTTP or HTTPS.");
   }
+  if (
+    process.env.NODE_ENV === "production" &&
+    isUnsafeProductionHost(url.hostname)
+  ) {
+    if (process.env.NEXT_PHASE === "phase-production-build") {
+      return BUILD_PUBLIC_ORIGIN;
+    }
+    throw new Error("HARLY_URL must use a reachable public hostname, not a local or bind address.");
+  }
   if (url.username || url.password || url.search || url.hash) {
     throw new Error("HARLY_URL must be a public origin without credentials or query parameters.");
   }
@@ -32,6 +56,14 @@ export function getHarlyPublicOrigin(): string {
   }
 
   return url.origin;
+}
+
+/** Resolve an app-relative URL against the configured public origin.
+ * Never use request.url here: behind a reverse proxy it can contain the
+ * container's listen address (for example 0.0.0.0:3000).
+ */
+export function toHarlyPublicUrl(pathname: string): string {
+  return new URL(pathname, `${getHarlyPublicOrigin()}/`).toString();
 }
 
 /** Inbound DocuSeal webhook base. Only `?ws=` is appended per workspace; the

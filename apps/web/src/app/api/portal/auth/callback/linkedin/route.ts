@@ -11,6 +11,7 @@ import {
   isPortalEnabled,
 } from "@/lib/portal-auth";
 import { PORTAL_OAUTH_STATE_COOKIE, verifyPortalOAuthState } from "@/lib/portal-oauth-state";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const runtime = "nodejs";
 
@@ -24,7 +25,7 @@ export async function GET(request: NextRequest) {
 
   if (!code) redirect("/portal/login?error=oauth_denied" as Route);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = getHarlyPublicOrigin();
   const redirectUri = `${appUrl}/api/portal/auth/callback/linkedin`;
 
   try {

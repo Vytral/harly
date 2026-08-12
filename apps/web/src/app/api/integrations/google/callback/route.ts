@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { createOAuth2Client } from "@/lib/gcal/config";
 import { createLogger } from "@/lib/logger";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import {
   verifyAndConsumeOauthStateNonce,
@@ -121,9 +122,7 @@ export async function GET(req: NextRequest) {
 }
 
 function getAppUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  return getHarlyPublicOrigin();
 }
 
 function redirectWithError(msg: string) {

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { auth } from "@/lib/auth";
 import { getZoomCredentials } from "@/lib/zoom/config";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createInstallState } from "@/server/oauth-state";
 
@@ -37,9 +38,7 @@ export async function GET(req: NextRequest) {
     provider: "zoom",
   });
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
 
   const authUrl = new URL("https://zoom.us/oauth/authorize");
   authUrl.searchParams.set("response_type", "code");
@@ -52,9 +51,7 @@ export async function GET(req: NextRequest) {
 }
 
 function redirectWithError(msg: string) {
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const url = new URL(`${appUrl}/settings/integrations`);
   url.searchParams.set("zoom_error", msg);
   return NextResponse.redirect(url.toString());

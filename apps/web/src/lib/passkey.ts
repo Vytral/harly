@@ -2,13 +2,9 @@ import "server-only";
 
 import { eq, and, lt } from "drizzle-orm";
 import { db, passkeys, passkeyChallenge } from "@harly/db";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
-const publicUrl = new URL(
-  process.env.HARLY_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.BETTER_AUTH_URL ??
-    "http://localhost:3000",
-);
+const publicUrl = new URL(getHarlyPublicOrigin());
 const RP_ID = publicUrl.hostname;
 const RP_NAME = "Harly";
 const ORIGIN = publicUrl.origin;

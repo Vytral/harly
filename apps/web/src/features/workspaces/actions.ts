@@ -13,6 +13,7 @@ import { logAuditEvent } from "@/lib/audit-log";
 import { sendWorkspaceEmail } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { createLogger } from "@/lib/logger";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { db } from "@harly/db";
 import { convertAndStoreLogo } from "@/lib/logo-convert";
 import {
@@ -424,9 +425,7 @@ async function inviteOneMember(
       );
 
     if (!existingMembership) {
-      const requestHeaders = await headers();
-      const host = requestHeaders.get("host") ?? "localhost:3000";
-      const protocol = host.startsWith("localhost") ? "http" : "https";
+      const appUrl = getHarlyPublicOrigin();
       const branding = await getWorkspaceEmailBranding(context.organization.id);
       void sendWorkspaceEmail(context.organization.id, {
         to: email,
@@ -434,7 +433,7 @@ async function inviteOneMember(
         react: createElement(WelcomeEmail, {
           userName: authUser.name,
           workspaceName: context.organization.name,
-          dashboardUrl: `${protocol}://${host}/login`,
+          dashboardUrl: `${appUrl}/login`,
           branding,
         }),
       });
@@ -478,10 +477,7 @@ async function inviteOneMember(
     inviterId: context.user.id,
   });
 
-  const requestHeaders = await headers();
-  const host = requestHeaders.get("host") ?? "localhost:3000";
-  const protocol = host.startsWith("localhost") ? "http" : "https";
-  const acceptUrl = `${protocol}://${host}/invite/${invitationId}`;
+  const acceptUrl = `${getHarlyPublicOrigin()}/invite/${invitationId}`;
   const branding = await getWorkspaceEmailBranding(context.organization.id);
 
   void sendWorkspaceEmail(context.organization.id, {
@@ -991,10 +987,7 @@ export async function resendWorkspaceInvitationAction(
       .set({ expiresAt: addDays(new Date(), 7) })
       .where(eq(invitation.id, invite.id));
 
-    const requestHeaders = await headers();
-    const host = requestHeaders.get("host") ?? "localhost:3000";
-    const protocol = host.startsWith("localhost") ? "http" : "https";
-    const acceptUrl = `${protocol}://${host}/invite/${invite.id}`;
+    const acceptUrl = `${getHarlyPublicOrigin()}/invite/${invite.id}`;
     const branding = await getWorkspaceEmailBranding(context.organization.id);
 
     void sendWorkspaceEmail(context.organization.id, {
