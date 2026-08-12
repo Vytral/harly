@@ -35,6 +35,22 @@ describe("public provider origin", () => {
     expect(() => getHarlyPublicOrigin()).toThrow(/reachable public hostname/);
   });
 
+  it("rejects the full IPv4 loopback range in production", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("HARLY_URL", "https://127.0.0.2");
+
+    expect(() => getHarlyPublicOrigin()).toThrow(/reachable public hostname/);
+  });
+
+  it("uses BETTER_AUTH_URL as the final legacy fallback", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("HARLY_URL", undefined);
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", undefined);
+    vi.stubEnv("BETTER_AUTH_URL", "https://legacy.example.com");
+
+    expect(getHarlyPublicOrigin()).toBe("https://legacy.example.com");
+  });
+
   it("uses a non-routable placeholder only during the production build", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("NEXT_PHASE", "phase-production-build");

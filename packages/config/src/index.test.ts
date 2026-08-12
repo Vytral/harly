@@ -37,6 +37,18 @@ describe("loadHarlyConfig", () => {
     );
   });
 
+  it("rejects the full IPv4 loopback range in production", () => {
+    expect(() => loadHarlyConfig({ ...production, HARLY_URL: "https://127.0.0.2" })).toThrow(
+      /HARLY_URL/,
+    );
+  });
+
+  it("rejects localhost subdomains in production", () => {
+    expect(() => loadHarlyConfig({ ...production, HARLY_URL: "https://tenant.localhost" })).toThrow(
+      /HARLY_URL/,
+    );
+  });
+
   it("requires OAuth credentials in pairs", () => {
     expect(() => loadHarlyConfig({ ...production, GOOGLE_CLIENT_ID: "id" })).toThrow(
       /GOOGLE/,

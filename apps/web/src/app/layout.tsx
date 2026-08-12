@@ -35,14 +35,18 @@ const onestVariable = localFont({
   fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL(getHarlyPublicOrigin()),
-  title: "Harly",
-  description: "Open-source applicant tracking system for modern teams.",
-  icons: {
-    icon: "/favicon.svg",
-  },
-};
+export const dynamic = "force-dynamic";
+
+export async function generateMetadata(): Promise<Metadata> {
+  return {
+    metadataBase: new URL(getHarlyPublicOrigin()),
+    title: "Harly",
+    description: "Open-source applicant tracking system for modern teams.",
+    icons: {
+      icon: "/favicon.svg",
+    },
+  };
+}
 
 export default function RootLayout({
   children,

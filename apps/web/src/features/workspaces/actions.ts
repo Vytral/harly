@@ -366,6 +366,7 @@ async function inviteOneMember(
   email: string,
   role: string,
 ): Promise<InviteOneResult> {
+  const appUrl = getHarlyPublicOrigin();
   const authUser = await getAuthUserByEmail(email);
 
   if (authUser) {
@@ -425,7 +426,6 @@ async function inviteOneMember(
       );
 
     if (!existingMembership) {
-      const appUrl = getHarlyPublicOrigin();
       const branding = await getWorkspaceEmailBranding(context.organization.id);
       void sendWorkspaceEmail(context.organization.id, {
         to: email,
@@ -477,7 +477,7 @@ async function inviteOneMember(
     inviterId: context.user.id,
   });
 
-  const acceptUrl = `${getHarlyPublicOrigin()}/invite/${invitationId}`;
+  const acceptUrl = `${appUrl}/invite/${invitationId}`;
   const branding = await getWorkspaceEmailBranding(context.organization.id);
 
   void sendWorkspaceEmail(context.organization.id, {
@@ -961,6 +961,7 @@ export async function resendWorkspaceInvitationAction(
 ): Promise<ActionResult> {
   try {
     const context = await requirePermission("members:invite");
+    const appUrl = getHarlyPublicOrigin();
 
     const [invite] = await db
       .select({
@@ -987,7 +988,7 @@ export async function resendWorkspaceInvitationAction(
       .set({ expiresAt: addDays(new Date(), 7) })
       .where(eq(invitation.id, invite.id));
 
-    const acceptUrl = `${getHarlyPublicOrigin()}/invite/${invite.id}`;
+    const acceptUrl = `${appUrl}/invite/${invite.id}`;
     const branding = await getWorkspaceEmailBranding(context.organization.id);
 
     void sendWorkspaceEmail(context.organization.id, {

@@ -73,9 +73,17 @@ const envSchema = z
           throw new Error("invalid origin");
         }
         const normalizedHostname = parsed.hostname.toLowerCase();
+        const ipv4Parts = normalizedHostname.split(".");
+        const isIpv4Loopback =
+          ipv4Parts.length === 4 &&
+          ipv4Parts[0] === "127" &&
+          ipv4Parts.slice(1).every((part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255);
         if (
           env.NODE_ENV === "production" &&
-          ["localhost", "127.0.0.1", "::1", "[::1]", "0.0.0.0", "::", "[::]"].includes(normalizedHostname)
+          (normalizedHostname === "localhost" ||
+            normalizedHostname.endsWith(".localhost") ||
+            isIpv4Loopback ||
+            ["::1", "[::1]", "0.0.0.0", "::", "[::]"].includes(normalizedHostname))
         ) {
           throw new Error("local or unspecified bind address");
         }

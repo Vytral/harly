@@ -5,10 +5,15 @@ const BUILD_PUBLIC_ORIGIN = "https://build.invalid";
 
 function isUnsafeProductionHost(hostname: string) {
   const normalized = hostname.toLowerCase();
+  const ipv4Parts = normalized.split(".");
+  const isIpv4Loopback =
+    ipv4Parts.length === 4 &&
+    ipv4Parts[0] === "127" &&
+    ipv4Parts.slice(1).every((part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255);
   return (
     normalized === "localhost" ||
     normalized.endsWith(".localhost") ||
-    normalized === "127.0.0.1" ||
+    isIpv4Loopback ||
     normalized === "::1" ||
     normalized === "[::1]" ||
     normalized === "0.0.0.0" ||
@@ -27,6 +32,7 @@ export function getHarlyPublicOrigin(): string {
   const configured =
     process.env.HARLY_URL ??
     process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.BETTER_AUTH_URL ??
     DEFAULT_PUBLIC_ORIGIN;
 
   let url: URL;

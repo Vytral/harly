@@ -23,7 +23,11 @@ export function scimError(detail: string, status: number, scimType?: string) {
 }
 
 export function publicBaseUrl(request: NextRequest) {
-  return process.env.HARLY_URL ? getHarlyPublicOrigin() : request.nextUrl.origin;
+  const configuredOrigin =
+    process.env.HARLY_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.BETTER_AUTH_URL;
+  return configuredOrigin ? getHarlyPublicOrigin() : request.nextUrl.origin;
 }
 
 export function scimBaseUrl(request: NextRequest, workspaceId: string) {

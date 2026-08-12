@@ -66,7 +66,11 @@ function isPortalProtected(pathname: string): boolean {
 }
 
 function publicRedirectUrl(request: NextRequest, pathname: string): URL {
-  return new URL(pathname, process.env.HARLY_URL ?? request.nextUrl.origin);
+  const configuredOrigin =
+    process.env.HARLY_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.BETTER_AUTH_URL;
+  return new URL(pathname, configuredOrigin ?? request.nextUrl.origin);
 }
 
 export async function proxy(request: NextRequest) {
