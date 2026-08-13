@@ -7,6 +7,42 @@ description: "Reference for Harly environment variables: required secrets, stora
 `https://hiring.example.com`. Every secret must be independent — do not reuse
 values between variables.
 
+## `HARLY_URL` validation
+
+Harly derives every public URL from `HARLY_URL` rather than the incoming
+request origin. That includes upload presign URLs, authenticated file URLs,
+OAuth callbacks, redirects, page metadata, outbound webhook payloads,
+candidate notifications, and integration callbacks. A misconfigured value
+therefore leaks into links your candidates and integrations receive, so Harly
+validates it at startup and refuses to boot when it is unsafe.
+
+In production (`NODE_ENV=production`), `HARLY_URL` must:
+
+- Be an absolute URL with an `https://` scheme. Plain `http://` is rejected.
+- Resolve to a routable public hostname. Harly rejects `localhost`, any
+  `*.localhost` subdomain, the IPv4 loopback range `127.0.0.0/8`, the IPv6
+  loopback `::1` (and `[::1]`), and the unspecified bind addresses `0.0.0.0`,
+  `::`, and `[::]`.
+- Contain no userinfo, query string, or fragment. Only scheme, host, and
+  optional port are accepted.
+
+Outside production, `http://` is allowed so local development against
+`http://localhost:3000` continues to work.
+
+If validation fails, Harly throws at startup with a message such as
+`HARLY_URL must use HTTPS in production.` or `HARLY_URL must use a reachable
+public hostname, not a local or bind address.`. Fix the value in `.env` (or
+your platform's secret manager) and restart the app.
+
+<Warning>
+  Behind a reverse proxy, set `HARLY_URL` to the public hostname candidates
+  and integrations see — never the container's internal bind address. Values
+  like `http://0.0.0.0:3000` or `http://127.0.0.1:3000` are rejected in
+  production, and even when accepted they would produce broken links in
+  emails, webhooks, and OAuth callbacks. See
+  [proxy modes](/self-hosting/proxy-modes) for reverse-proxy setup.
+</Warning>
+
 ## Required runtime values
 
 ```dotenv
