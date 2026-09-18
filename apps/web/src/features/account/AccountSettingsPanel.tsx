@@ -600,7 +600,7 @@ export function AccountSettingsPanel({
   function handleSignOut() {
     startSignOut(async () => {
       await signOut();
-      window.location.href = "/login";
+      router.push("/login" as Route);
     });
   }
 
@@ -613,7 +613,7 @@ export function AccountSettingsPanel({
       }
       if (result.current) {
         await signOut();
-        window.location.href = "/login";
+        router.push("/login" as Route);
       } else {
         toast.success("Session revoked.");
         router.refresh();

@@ -8,6 +8,7 @@ import {
   useTransition,
   type ReactNode,
 } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
 import type { Job } from "@harly/db";
 
@@ -190,6 +191,7 @@ export function JobForm({
   previewWorkspace,
   previewConfig,
 }: JobFormProps) {
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const applicationConfig = normalizeJobApplicationConfig(
@@ -318,7 +320,7 @@ export function JobForm({
 
   async function handleExit() {
     if (!(await confirmDiscard())) return;
-    window.location.href = "/dashboard/jobs";
+    router.push("/dashboard/jobs");
   }
 
   function jumpToSection(key: SectionKey) {

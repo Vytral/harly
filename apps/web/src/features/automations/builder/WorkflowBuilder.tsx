@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import type { Route } from "next";
+import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
@@ -85,6 +86,7 @@ export function WorkflowBuilder({
   builderData: { members: { id: string; name: string }[]; stageNames: string[]; candidates: { id: string; name: string; email: string }[] };
   isNew: boolean;
 }) {
+  const router = useRouter();
   const [draft, setDraft] = useState<WorkflowDraft>(() =>
     initial
       ? toDraft(initial)
@@ -131,7 +133,7 @@ export function WorkflowBuilder({
 
   async function handleExit() {
     if (!(await confirmDiscard())) return;
-    window.location.href = "/dashboard/automations";
+    router.push("/dashboard/automations" as Route);
   }
 
   function handleSave() {

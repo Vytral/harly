@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 
 import { toast } from "@/lib/notification-island/toast";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ export function CareerPageBuilder({
   jobs: Job[];
   availableLegalPages?: string[];
 }) {
+  const router = useRouter();
   const [config, setConfig] = useState<CareerPageConfig>(() =>
     initialConfig.template === "" ? CAREER_PRESETS.minimal() : initialConfig,
   );
@@ -72,7 +74,7 @@ export function CareerPageBuilder({
 
   async function handleExit() {
     if (!(await confirmDiscard())) return;
-    window.location.href = "/dashboard";
+    router.push("/dashboard");
   }
 
   function handleSave() {
