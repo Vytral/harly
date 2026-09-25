@@ -189,10 +189,11 @@ export async function getWorkspaceSlackCredentials(
  */
 export async function getWorkspaceSlackConfig(
   workspaceId: string,
+  database: typeof db = db,
 ): Promise<SlackConfig | null> {
   if (!isEncryptionConfigured()) return null;
 
-  const [row] = await db
+  const [row] = await database
     .select({
       slackEnabled: workspaceSettings.slackEnabled,
       slackChannelId: workspaceSettings.slackChannelId,

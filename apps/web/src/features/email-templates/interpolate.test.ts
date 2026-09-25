@@ -36,6 +36,15 @@ describe("interpolateTemplate", () => {
     expect(findUnknownVariables("{{offer_url}}")).toEqual([]);
   });
 
+  it("supports the booking link variable used by autoscheduling", () => {
+    expect(
+      interpolateTemplate("Choose a time: {{booking_link}}", {
+        booking_link: "https://cal.com/acme/interview?email=ava%40example.test",
+      }),
+    ).toBe("Choose a time: https://cal.com/acme/interview?email=ava%40example.test");
+    expect(findUnknownVariables("{{booking_link}}")).toEqual([]);
+  });
+
   it("tolerates whitespace inside braces", () => {
     expect(
       interpolateTemplate("Hi {{ candidate_first_name }}", {

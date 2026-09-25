@@ -76,6 +76,7 @@ type StageTransitionEvent = {
   rejectedEventId?: string;
   fromStageId: string | null;
   toStageId: string;
+  toStageName: string;
   status: ApplicationStatus;
   becameHired: boolean;
   becameRejected: boolean;
@@ -386,6 +387,7 @@ export async function moveApplicationInPipeline(
               eventId: "",
               fromStageId: application.currentStageId,
               toStageId: input.toStageId,
+              toStageName: application.toStageName,
               status: nextStatus,
               becameHired:
                 application.status !== "hired" && nextStatus === "hired",
@@ -403,6 +405,7 @@ export async function moveApplicationInPipeline(
                 application: { id: input.applicationId },
                 fromStageId: application.currentStageId,
                 toStageId: input.toStageId,
+                toStageName: application.toStageName,
                 status: nextStatus,
               },
             });
@@ -538,6 +541,7 @@ export async function moveApplicationInPipeline(
           application: { id: event.applicationId },
           fromStageId: event.fromStageId,
           toStageId: event.toStageId,
+          toStageName: event.toStageName,
           status: event.status,
           eventId: event.eventId,
         },
@@ -854,6 +858,7 @@ export async function bulkMoveApplications(
                 eventId: "",
                 fromStageId,
                 toStageId: input.toStageId,
+                toStageName,
                 status: resolvedStatus,
                 becameHired,
                 becameRejected,
@@ -869,6 +874,7 @@ export async function bulkMoveApplications(
                   application: { id: applicationId },
                   fromStageId,
                   toStageId: input.toStageId,
+                  toStageName,
                   status: resolvedStatus,
                 },
               });
@@ -1000,6 +1006,7 @@ export async function bulkMoveApplications(
           application: { id: evt.applicationId },
           fromStageId: evt.fromStageId,
           toStageId: input.toStageId,
+          toStageName: evt.toStageName,
           status: evt.status,
           eventId: evt.eventId,
         },
@@ -1140,7 +1147,7 @@ export async function updateApplicationStatus(
                   and(
                     eq(jobStages.workspaceId, input.workspaceId),
                     eq(jobStages.jobId, application.jobId),
-                    eq(jobStages.name, terminalStageName),
+                    sql`lower(${jobStages.name}) = ${terminalStageName.toLowerCase()}`,
                   ),
                 )
                 .limit(1);
@@ -1281,6 +1288,7 @@ export async function updateApplicationStatus(
                 eventId: "",
                 fromStageId: application.currentStageId,
                 toStageId: targetStageId,
+                toStageName: targetStage?.name ?? "",
                 status: input.status,
                 becameHired:
                   application.status !== "hired" && input.status === "hired",
@@ -1298,6 +1306,7 @@ export async function updateApplicationStatus(
                   application: { id: application.id },
                   fromStageId: application.currentStageId,
                   toStageId: targetStageId,
+                  toStageName: targetStage?.name ?? "",
                   status: input.status,
                 },
               });
@@ -1448,6 +1457,7 @@ export async function updateApplicationStatus(
           application: { id: event.applicationId },
           fromStageId: event.fromStageId,
           toStageId: event.toStageId,
+          toStageName: event.toStageName,
           status: event.status,
           eventId: event.eventId,
         },

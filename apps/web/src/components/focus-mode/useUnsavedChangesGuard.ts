@@ -1,27 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 /**
- * Guards a full-screen editor against losing unsaved work. Binds `beforeunload`
- * so tab-close / reload / browser-back prompt the browser's own native warning
- * (its text is browser-controlled and can't be restyled), and returns a
- * `confirmDiscard` helper plus dialog state for in-app exits (the router push
- * you control) so those can use Harly's own styled confirm dialog instead of
- * `window.confirm`.
+ * Guards a full-screen editor against losing unsaved work. Returns a
+ * `confirmDiscard` helper plus dialog state for in-app exits so those can use
+ * Harly's styled confirm dialog instead of native browser prompts.
  *
  * Reusable by any focus-mode builder (career page, automations, job editor, …).
  */
 export function useUnsavedChangesGuard(dirty: boolean) {
-  useEffect(() => {
-    if (!dirty) return;
-    const onBeforeUnload = (e: BeforeUnloadEvent) => {
-      // Modern spec: calling preventDefault triggers the native prompt.
-      e.preventDefault();
-    };
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, [dirty]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const resolveRef = useRef<((value: boolean) => void) | null>(null);

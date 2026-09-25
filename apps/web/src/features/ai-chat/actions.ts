@@ -5,6 +5,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { aiConversations, candidates, db } from "@harly/db";
 
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
+import { getCurrentPermissions } from "@/features/workspaces/permissions-server";
 import { searchWorkspace } from "@/features/search/data";
 import {
   getConversationMessages,
@@ -20,6 +21,18 @@ export async function listConversationsAction(): Promise<ConversationListItem[]>
   return listConversations();
 }
 
+/** PII gate for the widget helpers below: members without candidate
+ * visibility get empty results instead of an error so the widget keeps
+ * working for restricted custom roles. */
+async function canViewCandidates(): Promise<boolean> {
+  try {
+    const permissions = await getCurrentPermissions();
+    return permissions.includes("candidates:view");
+  } catch {
+    return false;
+  }
+}
+
 /** Resolve the visible candidate label for the context chip without trusting client text. */
 export async function getCandidateContextAction(candidateId: string): Promise<{
   id: string;
@@ -28,6 +41,7 @@ export async function getCandidateContextAction(candidateId: string): Promise<{
 } | null> {
   const context = await getWorkspaceContextOrNull();
   if (!context) return null;
+  if (!(await canViewCandidates())) return null;
 
   const [candidate] = await db
     .select({
@@ -59,6 +73,7 @@ export async function getCandidateContextAction(candidateId: string): Promise<{
 export async function searchCandidateMentionsAction(query: string) {
   const context = await getWorkspaceContextOrNull();
   if (!context) return [];
+  if (!(await canViewCandidates())) return [];
   const trimmed = query.trim().slice(0, 100);
   if (!trimmed) return [];
   const results = await searchWorkspace(trimmed);

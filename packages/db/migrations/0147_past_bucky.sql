@@ -1,0 +1,2 @@
+ALTER TABLE "workflow_definitions" ADD COLUMN "approval_requested_by_id" text;--> statement-breakpoint
+ALTER TABLE "workflow_definitions" ADD CONSTRAINT "workflow_definitions_approval_requested_by_id_user_id_fk" FOREIGN KEY ("approval_requested_by_id") REFERENCES "public"."user"("id") ON DELETE set null ON UPDATE no action;

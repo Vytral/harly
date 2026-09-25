@@ -27,6 +27,13 @@ vi.mock("@/features/workspaces/context", () => ({
   })),
 }));
 
+vi.mock("@/features/workspaces/permissions-server", () => ({
+  requirePermission: vi.fn(async () => ({
+    user: mocks.contextUser,
+    organization: mocks.organization,
+  })),
+}));
+
 vi.mock("@harly/db", () => {
   const makeQuery = () => {
     const q: Record<string, unknown> = {

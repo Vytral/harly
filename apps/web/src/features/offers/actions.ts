@@ -47,6 +47,7 @@ import {
 } from "@/lib/esign/native/offer-signing";
 import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
+import { withdrawSiblingApplicationsForHire } from "./withdraw-siblings";
 import {
   assertOfferTerms,
   getOfferRecipient,
@@ -284,7 +285,7 @@ export async function createOffer(input: {
     }
   }
 
-  await db.transaction(async (tx) => {
+  const transactionError = await db.transaction(async (tx) => {
     const [lockedApplication] = await tx
       .select({
         id: applications.id,
@@ -303,6 +304,23 @@ export async function createOffer(input: {
       .limit(1);
     if (!lockedApplication || lockedApplication.status !== "active") {
       throw new Error("Only active applications can receive an offer.");
+    }
+
+    const [existingActiveOffer] = await tx
+      .select({ id: offers.id, status: offers.status })
+      .from(offers)
+      .where(
+        and(
+          eq(offers.workspaceId, workspaceId),
+          eq(offers.applicationId, application.id),
+          or(eq(offers.status, "draft"), eq(offers.status, "sent")),
+        ),
+      )
+      .limit(1);
+    if (existingActiveOffer) {
+      throw new Error(
+        `An active offer (${existingActiveOffer.status}) already exists for this application.`,
+      );
     }
 
     const [createdOffer] = await tx
@@ -347,7 +365,12 @@ export async function createOffer(input: {
       type: "offer.created",
       metadata: { title: parsed.data.title },
     });
-  });
+  })
+    .then(() => null)
+    .catch((error: unknown) =>
+      error instanceof Error ? error.message : "Unable to create offer.",
+    );
+  if (transactionError) return { success: false, error: transactionError };
 
   revalidatePath(`/dashboard/candidates/${application.candidateId}`);
   return { success: true };
@@ -828,7 +851,9 @@ export async function decideOffer(input: {
     }
   }
 
-  let persistedEvent: Awaited<ReturnType<typeof persistDomainEvent>> | null = null;
+  const hiredEvent: { current: Awaited<ReturnType<typeof persistDomainEvent>> | null } = {
+    current: null,
+  };
   await db.transaction(async (tx) => {
     const [updatedOffer] = await tx
       .update(offers)
@@ -878,7 +903,7 @@ export async function decideOffer(input: {
             and(
               eq(jobStages.workspaceId, workspaceId),
               eq(jobStages.jobId, offer.jobId),
-              eq(jobStages.name, "Hired"),
+              sql`lower(${jobStages.name}) = 'hired'`,
             ),
           )
           .limit(1);
@@ -914,6 +939,13 @@ export async function decideOffer(input: {
           });
         }
 
+        await withdrawSiblingApplicationsForHire(tx, {
+          workspaceId,
+          candidateId: offer.candidateId,
+          hiredApplicationId: application.id,
+          actorUserId: context.user.id,
+        });
+
         await tx.insert(activityEvents).values({
           workspaceId,
           actorId: context.user.id,
@@ -936,7 +968,7 @@ export async function decideOffer(input: {
       metadata: { title: offer.title },
     });
     if (decision !== "accepted") return;
-    persistedEvent = await persistDomainEvent(tx, {
+    hiredEvent.current = await persistDomainEvent(tx, {
       name: "application.hired",
       workspaceId,
       actorId: context.user.id,
@@ -950,13 +982,14 @@ export async function decideOffer(input: {
     });
   });
 
-  if (persistedEvent) {
-    await publishPersistedDomainEvents([persistedEvent]);
+  if (hiredEvent.current) {
+    await publishPersistedDomainEvents([hiredEvent.current]);
     await emitWebhookEvent(workspaceId, "application.hired", {
       application: { id: offer.applicationId, jobId: offer.jobId },
       candidate: { id: offer.candidateId },
       offer: { id: offer.id, title: offer.title },
-    }, { actorId: context.user.id, skipDomainEvent: true });
+      eventId: hiredEvent.current.eventId,
+    }, { actorId: context.user.id, skipDomainEvent: true, eventId: hiredEvent.current.eventId });
   }
 
   const decisionRecipient = await getOfferRecipient(

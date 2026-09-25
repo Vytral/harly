@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => {
   return {
     selectQueue,
     createMeeting: vi.fn(),
+    findMeetingByTrackingField: vi.fn(),
     deleteMeeting: vi.fn(),
     update: vi.fn(),
   };
@@ -37,6 +38,7 @@ vi.mock("@harly/db", () => {
 
 vi.mock("./client", () => ({
   createMeeting: mocks.createMeeting,
+  findMeetingByTrackingField: mocks.findMeetingByTrackingField,
   deleteMeeting: mocks.deleteMeeting,
 }));
 
@@ -50,6 +52,7 @@ describe("Zoom interview sync isolation", () => {
   beforeEach(() => {
     mocks.selectQueue.length = 0;
     mocks.createMeeting.mockReset();
+    mocks.findMeetingByTrackingField.mockReset();
     mocks.deleteMeeting.mockReset();
     mocks.update.mockReset();
     mocks.update.mockReturnValue({
@@ -117,6 +120,34 @@ describe("Zoom interview sync isolation", () => {
     expect(mocks.createMeeting.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.deleteMeeting.mock.invocationCallOrder[0]!,
     );
+  });
+
+  it("recovers a meeting when the provider committed before the response was lost", async () => {
+    mocks.selectQueue.push([{ id: "interview-1" }]);
+    mocks.createMeeting.mockRejectedValue(new Error("network timeout"));
+    mocks.findMeetingByTrackingField.mockResolvedValue({
+      id: 42,
+      join_url: "https://zoom.us/j/42",
+    });
+
+    const result = await syncInterviewToZoom({
+      workspaceId: "ws-1",
+      interviewId: "interview-1",
+      summary: "Screening",
+      start: new Date("2030-01-01T10:00:00Z"),
+      durationMins: 30,
+    });
+
+    expect(result).toEqual({
+      joinUrl: "https://zoom.us/j/42",
+      meetingId: "42",
+    });
+    expect(mocks.findMeetingByTrackingField).toHaveBeenCalledWith(
+      "ws-1",
+      "harly_interview_effect",
+      expect.stringMatching(new RegExp("^create:[0-9]+:30:interview-1$")),
+    );
+    expect(mocks.update).toHaveBeenCalledTimes(1);
   });
 
   it("cleans up the replacement and restores the old link when deletion fails", async () => {

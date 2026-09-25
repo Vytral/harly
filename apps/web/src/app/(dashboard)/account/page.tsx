@@ -1,3 +1,5 @@
+import { isDemoMode } from "@harly/config";
+
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getOwnProfileAction } from "@/features/people/actions";
 import { getSecurityPasskeys } from "@/features/security/data";
@@ -11,6 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AccountPage() {
   const { user } = await getWorkspaceContext();
+  const demoLocked = isDemoMode();
   const profile = await getOwnProfileAction();
   const sessions = await listMySessionsAction();
 
@@ -30,6 +33,7 @@ export default async function AccountPage() {
     <div className="space-y-6">
       <PageTitle title="Account" />
       <AccountSettingsPanel
+        demoLocked={demoLocked}
         user={{
           id: user.id,
           name: profile?.name ?? user.name,
@@ -53,7 +57,7 @@ export default async function AccountPage() {
         securitySlot={
           <>
             <TwoFactorCard enabled={twoFactorEnabled} />
-            <PasskeysCard initialPasskeys={userPasskeys} />
+            <PasskeysCard initialPasskeys={userPasskeys} demoLocked={demoLocked} />
           </>
         }
         sessions={sessions}

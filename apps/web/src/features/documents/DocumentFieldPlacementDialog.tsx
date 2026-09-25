@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, PenLine, Type as TypeIcon } from "lucide-react";
+import { ArrowLeft, PenLine, Plus, Trash2, Type as TypeIcon } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
@@ -30,6 +30,7 @@ const DEFAULT_SIGNATURE_FIELD: AuthorFieldPlacement = {
   y: 0.72,
   w: 0.26,
   h: 0.06,
+  recipientIndex: 0,
 };
 
 /**
@@ -52,8 +53,8 @@ export function DocumentFieldPlacementDialog({
   const [placements, setPlacements] = useState<AuthorFieldPlacement[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [pageCount, setPageCount] = useState(0);
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
+  const [rotated, setRotated] = useState(false);
+  const [recipients, setRecipients] = useState([{ email: "", name: "" }]);
   const [isPending, startTransition] = useTransition();
 
   // Render-time state sync (React's "adjust state during render" recipe,
@@ -68,8 +69,8 @@ export function DocumentFieldPlacementDialog({
       setPlacements([]);
       setActiveIndex(0);
       setPageCount(0);
-      setEmail("");
-      setName("");
+      setRotated(false);
+      setRecipients([{ email: "", name: "" }]);
     }
   }
 
@@ -85,7 +86,7 @@ export function DocumentFieldPlacementDialog({
     const next: AuthorFieldPlacement =
       type === "signature"
         ? { ...DEFAULT_SIGNATURE_FIELD, page }
-        : { type: "text", page, x: 0.08, y: 0.6, w: 0.28, h: 0.05, label: "" };
+        : { type: "text", page, x: 0.08, y: 0.6, w: 0.28, h: 0.05, label: "", recipientIndex: 0 };
     setPlacements((prev) => [...prev, next]);
     setActiveIndex(placements.length);
   }
@@ -100,7 +101,7 @@ export function DocumentFieldPlacementDialog({
   }
 
   function submit() {
-    if (placements.length === 0 || !email.trim() || !name.trim()) return;
+    if (placements.length === 0 || recipients.some((recipient) => !recipient.email.trim() || !recipient.name.trim())) return;
     startTransition(async () => {
       const result = await saveDocumentSignatureFieldsAndSend({
         documentId: document.id,
@@ -114,9 +115,9 @@ export function DocumentFieldPlacementDialog({
           label: p.label ?? null,
           required: true,
           order: index,
+          recipientIndex: p.recipientIndex ?? 0,
         })),
-        recipientEmail: email,
-        recipientName: name,
+        recipients,
       });
       if (!result.ok) {
         toast.error(result.error ?? "Could not send the document.");
@@ -129,6 +130,8 @@ export function DocumentFieldPlacementDialog({
   }
 
   if (step === "recipient") {
+    const allRecipientsComplete = recipients.every((recipient) => recipient.email.trim() && recipient.name.trim());
+    const allRecipientsHaveSignature = recipients.every((_, recipientIndex) => placements.some((placement) => (placement.recipientIndex ?? 0) === recipientIndex && (placement.type ?? "signature") === "signature"));
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
@@ -141,24 +144,36 @@ export function DocumentFieldPlacementDialog({
               their end.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-2 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="native-recipient-email">Recipient email</Label>
-              <Input
-                id="native-recipient-email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
+          <div className="space-y-4 py-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Signing order</p>
+                <p className="text-xs text-muted-foreground">Each person receives the link only after the previous signer finishes.</p>
+              </div>
+              <Button type="button" variant="outline" size="sm" onClick={() => setRecipients((prev) => [...prev, { email: "", name: "" }])} disabled={recipients.length >= 10}>
+                <Plus className="size-4" /> Add signer
+              </Button>
             </div>
+            {recipients.map((recipient, index) => (
+              <div key={index} className="grid gap-3 rounded-xl border border-border/70 p-3 sm:grid-cols-[32px_1fr_1fr_auto] sm:items-end">
+                <span className="pb-2 text-sm font-semibold text-muted-foreground">{index + 1}</span>
+                <div className="space-y-2"><Label htmlFor={`native-recipient-name-${index}`}>Name</Label><Input id={`native-recipient-name-${index}`} value={recipient.name} onChange={(event) => setRecipients((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, name: event.target.value } : item))} /></div>
+                <div className="space-y-2"><Label htmlFor={`native-recipient-email-${index}`}>Email</Label><Input id={`native-recipient-email-${index}`} type="email" value={recipient.email} onChange={(event) => setRecipients((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, email: event.target.value } : item))} /></div>
+                <Button type="button" variant="ghost" size="icon" aria-label={`Remove signer ${index + 1}`} onClick={() => setRecipients((prev) => prev.filter((_, itemIndex) => itemIndex !== index))} disabled={recipients.length === 1}><Trash2 className="size-4" /></Button>
+              </div>
+            ))}
             <div className="space-y-2">
-              <Label htmlFor="native-recipient-name">Recipient name</Label>
-              <Input
-                id="native-recipient-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
+              <Label>Field ownership</Label>
+              {placements.map((placement, index) => (
+                <div key={index} className="flex items-center gap-2 text-sm">
+                  <span className="min-w-0 flex-1 truncate">{placement.type === "text" ? placement.label || `Text field ${index + 1}` : `Signature field ${index + 1}`}</span>
+                  <select aria-label={`Signer for field ${index + 1}`} value={placement.recipientIndex ?? 0} onChange={(event) => setPlacements((prev) => prev.map((item, itemIndex) => itemIndex === index ? { ...item, recipientIndex: Number(event.target.value) } : item))} className="h-9 rounded-md border border-input bg-background px-2 text-sm">
+                    {recipients.map((_, recipientIndex) => <option key={recipientIndex} value={recipientIndex}>Signer {recipientIndex + 1}</option>)}
+                  </select>
+                </div>
+              ))}
             </div>
+            {!allRecipientsHaveSignature ? <p className="text-xs text-destructive">Every signer needs at least one signature field.</p> : null}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setStep("fields")}>
@@ -167,7 +182,7 @@ export function DocumentFieldPlacementDialog({
             </Button>
             <Button
               onClick={submit}
-              disabled={isPending || !email.trim() || !name.trim()}
+              disabled={isPending || !allRecipientsComplete || !allRecipientsHaveSignature}
             >
               {isPending ? "Sending…" : "Send signing link"}
             </Button>
@@ -201,6 +216,7 @@ export function DocumentFieldPlacementDialog({
               onChange={setPlacements}
               onActiveIndexChange={setActiveIndex}
               onPageCountChange={setPageCount}
+              onRotationChange={setRotated}
               onRemoveField={removeField}
               onLabelChange={updateLabel}
               maxPageWidth={960}
@@ -229,9 +245,14 @@ export function DocumentFieldPlacementDialog({
                 : `${placements.length} field${placements.length === 1 ? "" : "s"} placed.`}
             </p>
             <div className="mt-auto">
+              {rotated ? (
+                <p className="mb-2 text-xs text-destructive" role="alert">
+                  This PDF has rotated pages. Re-export it without rotation before sending.
+                </p>
+              ) : null}
               <Button
                 onClick={() => setStep("recipient")}
-                disabled={placements.length === 0}
+                disabled={placements.length === 0 || rotated}
               >
                 Continue
               </Button>

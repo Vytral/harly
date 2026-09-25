@@ -3,6 +3,9 @@ import "server-only";
 import { tool } from "ai";
 import { z } from "zod";
 
+import type { Permission } from "@/features/workspaces/permissions";
+import { isToolAllowed } from "./tool-permissions";
+
 /**
  * WRITE tool definitions for Harly AI.
  *
@@ -22,8 +25,8 @@ const summary = z
     "A short, human-readable one-line summary of this action for the confirmation card, e.g. 'Move Ana Soto to Interview'.",
   );
 
-export function buildWriteTools() {
-  return {
+export function buildWriteTools(permissions?: readonly Permission[]) {
+  const tools = {
     undoAgentAction: tool({
       strict: true,
       description:
@@ -403,5 +406,69 @@ export function buildWriteTools() {
           .describe("The role title for the confirmation card."),
       }),
     }),
+
+    applyAutomationProposal: tool({
+      strict: true,
+      description:
+        "Apply one already prepared Harly automation proposal to its draft. WRITE action — requires user confirmation. This creates or updates a draft only; it never publishes the automation or runs its actions. Use only a proposalId returned by prepareAutomationPlan or prepareAutomationPatch.",
+      inputSchema: z.object({
+        summary,
+        proposalId: z.string().uuid().describe("Prepared automation proposal id."),
+      }),
+    }),
+
+    retryAutomationRun: tool({
+      strict: true,
+      description:
+        "Retry one failed Harly automation run from its retryable failed step. WRITE action — requires user confirmation; it never repeats a non-retryable provider action.",
+      inputSchema: z.object({
+        summary,
+        runId: z.string().uuid().describe("The failed automation run id."),
+      }),
+    }),
+
+    reconcileAutomationRun: tool({
+      strict: true,
+      description:
+        "Resolve one uncertain automation action with an operator decision and optional provider reference/output. WRITE action — requires user confirmation and resumes the run only after the fenced server-side reconciliation succeeds.",
+      inputSchema: z.object({
+        summary,
+        runId: z.string().uuid().describe("The uncertain automation run id."),
+        nodeId: z.string().min(1).max(80).describe("The uncertain node id."),
+        decision: z.enum(["succeeded", "failed"]),
+        note: z.string().trim().min(3).max(1000),
+        providerRef: z
+          .string()
+          .trim()
+          .max(300)
+          .nullable()
+          .describe("Provider reference, or null when reconciling without one."),
+        outputJson: z
+          .string()
+          .max(64000)
+          .nullable()
+          .describe("JSON output payload, or null."),
+      }),
+    }),
+
+    replayAutomationRun: tool({
+      strict: true,
+      description:
+        "Replay one published automation run from a selected executable graph step using the immutable version and frozen context. WRITE action — requires user confirmation.",
+      inputSchema: z.object({
+        summary,
+        runId: z.string().uuid().describe("The source automation run id."),
+        stepIndex: z.number().int().min(0).describe("The executable graph node index to replay."),
+      }),
+    }),
   };
+
+  if (!permissions) return tools;
+  const filtered: Record<string, unknown> = {};
+  for (const [name, toolDef] of Object.entries(tools)) {
+    if (isToolAllowed(name, permissions)) {
+      filtered[name] = toolDef;
+    }
+  }
+  return filtered as typeof tools;
 }

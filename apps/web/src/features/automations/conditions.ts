@@ -51,14 +51,17 @@ export async function loadConditionContext(input: {
   candidateId: string | null;
   jobId?: string | null;
   trigger: Record<string, unknown>;
+  /** Keep runtime reads on the same tenant/database boundary as the run. */
+  database?: typeof db;
 }): Promise<ConditionContext> {
+  const database = input.database ?? db;
   let candidate: Record<string, unknown> | null = null;
   let application: Record<string, unknown> | null = null;
   let job: Record<string, unknown> | null = null;
   let ai: Record<string, unknown> | null = null;
 
   if (input.applicationId) {
-    const [row] = await db
+    const [row] = await database
       .select({
         application: applications,
         candidate: candidates,
@@ -94,7 +97,7 @@ export async function loadConditionContext(input: {
       candidate = row.candidate as unknown as Record<string, unknown>;
       job = row.job as unknown as Record<string, unknown>;
 
-      const [aiRow] = await db
+      const [aiRow] = await database
         .select()
         .from(aiEvaluations)
         .where(
@@ -108,7 +111,7 @@ export async function loadConditionContext(input: {
       if (aiRow) ai = aiRow as unknown as Record<string, unknown>;
     }
   } else if (input.candidateId) {
-    const [row] = await db
+    const [row] = await database
       .select()
       .from(candidates)
       .where(
@@ -124,7 +127,7 @@ export async function loadConditionContext(input: {
 
   // A job-published event has no application; resolve the job directly.
   if (!job && input.jobId) {
-    const [row] = await db
+    const [row] = await database
       .select()
       .from(jobs)
       .where(
@@ -205,10 +208,19 @@ function applyOp(op: Operator, left: unknown, right: unknown): boolean {
     case "is_empty":
       return !isSet(left);
 
-    case "eq":
+    case "eq": {
+      if (typeof left === "string" && typeof right === "string") {
+        return left.trim().toLowerCase() === right.trim().toLowerCase();
+      }
       return left === right;
-    case "ne":
+    }
+    case "ne": {
+      if (left === undefined || left === null) return false;
+      if (typeof left === "string" && typeof right === "string") {
+        return left.trim().toLowerCase() !== right.trim().toLowerCase();
+      }
       return left !== right;
+    }
 
     case "gt":
     case "gte":
@@ -231,23 +243,39 @@ function applyOp(op: Operator, left: unknown, right: unknown): boolean {
     case "in": {
       // left in right: right must be an array (or single value treated as 1-array).
       const haystack = asArray(right);
-      return haystack.some((item) => item === left);
+      return haystack.some((item) => {
+        if (typeof item === "string" && typeof left === "string") {
+          return item.trim().toLowerCase() === left.trim().toLowerCase();
+        }
+        return item === left;
+      });
     }
     case "not_in": {
+      if (left === undefined || left === null) return false;
       const haystack = asArray(right);
-      return !haystack.some((item) => item === left);
+      return !haystack.some((item) => {
+        if (typeof item === "string" && typeof left === "string") {
+          return item.trim().toLowerCase() === left.trim().toLowerCase();
+        }
+        return item === left;
+      });
     }
 
     case "includes": {
       // left is an array that contains right.
       if (!Array.isArray(left)) return false;
-      return left.some((item) => item === right);
+      return left.some((item) => {
+        if (typeof item === "string" && typeof right === "string") {
+          return item.trim().toLowerCase() === right.trim().toLowerCase();
+        }
+        return item === right;
+      });
     }
     case "match_any": {
       // left and right are arrays; true if they intersect.
       if (!Array.isArray(left) || !Array.isArray(right)) return false;
-      const set = new Set(left);
-      return right.some((item) => set.has(item));
+      const set = new Set(left.map((item) => typeof item === "string" ? item.trim().toLowerCase() : item));
+      return right.some((item) => set.has(typeof item === "string" ? item.trim().toLowerCase() : item));
     }
 
     case "starts_with":
@@ -256,10 +284,12 @@ function applyOp(op: Operator, left: unknown, right: unknown): boolean {
       const l = asString(left);
       const r = asString(right);
       if (l === undefined || r === undefined) return false;
+      const lowerL = l.toLowerCase();
+      const lowerR = r.toLowerCase();
       switch (op) {
-        case "starts_with": return l.startsWith(r);
-        case "ends_with": return l.endsWith(r);
-        case "contains": return l.includes(r);
+        case "starts_with": return lowerL.startsWith(lowerR);
+        case "ends_with": return lowerL.endsWith(lowerR);
+        case "contains": return lowerL.includes(lowerR);
       }
       return false; // unreachable
     }
@@ -342,10 +372,70 @@ export function evaluateConditions(
   return { matched: evaluated.every((node) => node.matched), evaluated };
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function scalarEquals(actual: unknown, expected: unknown): boolean {
+  if (typeof actual === "string" && typeof expected === "string") {
+    return actual.trim().toLowerCase() === expected.trim().toLowerCase();
+  }
+  return actual === expected;
+}
+
+/**
+ * Domain events nest ids (`application.jobId`, `toStageId`) while the builder
+ * writes flat filter keys (`jobId`, `toStageName`). Resolve both shapes.
+ */
+export function readTriggerFilterValue(
+  payload: Record<string, unknown>,
+  key: string,
+): unknown {
+  if (payload[key] !== undefined) return payload[key];
+
+  const app = isRecord(payload.application) ? payload.application : undefined;
+  const candidate = isRecord(payload.candidate) ? payload.candidate : undefined;
+  const job = isRecord(payload.job) ? payload.job : undefined;
+  const interview = isRecord(payload.interview) ? payload.interview : undefined;
+  const toStage = isRecord(payload.toStage) ? payload.toStage : undefined;
+
+  switch (key) {
+    case "jobId":
+      return payload.jobId ?? app?.jobId ?? job?.id ?? interview?.jobId;
+    case "toStageId":
+    case "stageId":
+      return (
+        payload.toStageId ??
+        payload.stageId ??
+        app?.currentStageId ??
+        toStage?.id
+      );
+    case "toStageName":
+    case "stageName":
+      return payload.toStageName ?? payload.stageName ?? toStage?.name;
+    case "fromStageId":
+      return payload.fromStageId;
+    case "candidateId":
+      return (
+        payload.candidateId ??
+        candidate?.id ??
+        app?.candidateId ??
+        interview?.candidateId
+      );
+    case "applicationId":
+      return payload.applicationId ?? app?.id ?? interview?.applicationId;
+    case "source":
+      return payload.source ?? app?.source ?? candidate?.source;
+    default:
+      return app?.[key] ?? candidate?.[key] ?? job?.[key] ?? interview?.[key];
+  }
+}
+
 /**
  * Cheap evaluation of a trigger filter against the event payload (§2.3).
  * Returns true when the workflow should fire. Each filter key must match:
- * a scalar value uses equality, an array value uses membership (`in`).
+ * a scalar value uses equality (strings case-insensitive), an array value
+ * uses membership (`in`). Empty filter values are ignored.
  */
 export function matchesTriggerFilter(
   filter: Record<string, unknown> | undefined,
@@ -353,10 +443,11 @@ export function matchesTriggerFilter(
 ): boolean {
   if (!filter) return true;
   for (const [key, expected] of Object.entries(filter)) {
-    const actual = payload[key];
+    if (expected === undefined || expected === null || expected === "") continue;
+    const actual = readTriggerFilterValue(payload, key);
     if (Array.isArray(expected)) {
-      if (!expected.includes(actual)) return false;
-    } else if (actual !== expected) {
+      if (!expected.some((item) => scalarEquals(actual, item))) return false;
+    } else if (!scalarEquals(actual, expected)) {
       return false;
     }
   }

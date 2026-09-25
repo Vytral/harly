@@ -1,13 +1,27 @@
 name: Release container image
 
+# Images are published only for a version tag:
+#   v0.2.0            -> ghcr.io/vytral/harly:0.2.0 and :latest
+#   v0.2.0-beta.1     -> ghcr.io/vytral/harly:0.2.0-beta.1 (does not move latest)
+#   v0.2.0-rc.1       -> ghcr.io/vytral/harly:0.2.0-rc.1 (does not move latest)
+# A push to main runs CI and does not build or publish an image.
+# There is no edge tag and no sha-* tag. The tag must start with v.
+#
+# Order matters here. The tagged commit is validated, then the image is built and
+# scanned before it is pushed, then the release manifest lands on main, and only
+# then is the GitHub Release published. Nothing announces a version that
+# `harly update` cannot yet install.
+
 on:
   push:
-    branches: [main]
-    tags: ["v*"]
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-beta.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-rc.[0-9]+"
 
 concurrency:
   group: release-image-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref == 'refs/heads/main' }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -16,12 +30,37 @@ permissions:
   attestations: write
 
 jobs:
+  # A tag is not validated by ci.yml, which runs on branches and pull requests.
+  # Publishing an unvalidated commit is how a broken build reaches `latest`.
+  validate:
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
   image:
+    needs: validate
     outputs:
       digest: ${{ steps.build.outputs.digest }}
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - id: version
+        name: Require a clean version tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          if [[ ! "$tag" =~ ^v([0-9]+\.[0-9]+\.[0-9]+(-(beta|rc)\.[0-9]+)?)$ ]]; then
+            echo "Refusing to publish '$tag'."
+            echo "Tag v0.2.0, v0.2.0-beta.1, or v0.2.0-rc.1."
+            exit 1
+          fi
+          version="${BASH_REMATCH[1]}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "prerelease=false" >> "$GITHUB_OUTPUT"
+          fi
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - uses: docker/login-action@v3
@@ -29,74 +68,284 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Build for the host architecture first and keep it local. The scan below
+      # is the publication gate, so it has to run against an image that is not
+      # in the registry yet. The layer cache makes the multi-architecture build
+      # that follows reuse this work instead of repeating it.
+      - id: candidate
+        name: Build the candidate image without publishing it
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          platforms: linux/amd64
+          tags: harly:candidate
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+      - name: Report HIGH and CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: harly:candidate
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+      - name: Block fixed CRITICAL vulnerabilities before publishing
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: harly:candidate
+          format: table
+          severity: CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+
       - id: meta
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/vytral/harly
+          # This job never publishes :latest. Which version owns that channel is
+          # decided later, in a serialized job that recomputes it at write time —
+          # see release-channel. Deciding it here would be a stale read: the
+          # build takes long enough for a newer tag to be pushed and published in
+          # the meantime, and this run would then overwrite it.
           flavor: latest=false
           tags: |
-            type=raw,value=edge,enable=${{ github.ref == 'refs/heads/main' }}
-            type=semver,pattern={{version}},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
           labels: |
             org.opencontainers.image.title=Harly
             org.opencontainers.image.description=Self-hosted applicant tracking system
             org.opencontainers.image.licenses=MIT
       - id: build
+        name: Publish the multi-architecture image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          # Main is a fast VPS testing channel. Version tags remain the
-          # reproducible multi-architecture release channel.
-          platforms: ${{ github.ref == 'refs/heads/main' && 'linux/amd64' || 'linux/amd64,linux/arm64' }}
+          platforms: linux/amd64,linux/arm64
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
           sbom: true
           provenance: mode=max
-      - name: Scan published image for HIGH and CRITICAL vulnerabilities
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ghcr.io/vytral/harly@${{ steps.build.outputs.digest }}
-          format: table
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "0"
-      - name: Block fixed CRITICAL vulnerabilities
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: ghcr.io/vytral/harly@${{ steps.build.outputs.digest }}
-          format: table
-          severity: CRITICAL
-          ignore-unfixed: true
-          exit-code: "1"
-  release-manifest:
-    if: startsWith(github.ref, 'refs/tags/v')
+
+  # Everything that points the stable channel at a version lives here, in one
+  # serialized job, and the decision is recomputed at write time.
+  #
+  # The previous design decided "am I the newest?" in the image job and carried
+  # the answer through a 40-minute build. Two overlapping releases both computed
+  # `true` before either finished, and whichever landed last won — so tagging
+  # v0.2.0 and v0.3.0 close together could leave :latest, the manifest, and the
+  # deployment assets on v0.2.0. Serializing the writes did not help, because
+  # neither run re-checked.
+  #
+  # Recomputing here, after the concurrency gate, makes overlapping runs
+  # converge: a run that finds a newer published release or stable manifest
+  # stands down instead of overwriting it. The worst case is a channel that is
+  # briefly behind, never one that moves backwards.
+  release-channel:
+    # A beta or release candidate never touches the stable channel.
+    if: needs.image.outputs.prerelease == 'false'
     needs: image
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write
     concurrency:
-      group: release-manifest
+      group: release-channel
       cancel-in-progress: false
+    outputs:
+      owns: ${{ steps.decide.outputs.owns }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
+          # Checkout now, inside the gate, so the manifest includes any stable
+          # channel update that completed while this release was building.
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Sync the published image into deployment assets
+      - id: decide
+        name: Recompute which stable version owns the channel
         env:
-          RELEASE_VERSION: ${{ github.ref_name }}
+          RELEASE_VERSION: ${{ needs.image.outputs.version }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Published GitHub Releases are the success record for this workflow:
+          # failed validation/scanning/build tags have no release and cannot
+          # block an older successful release from taking the stable channel.
+          # Include the manifest version too. The channel owner writes it to
+          # main before releasing this lock, while the GitHub Release is created
+          # by a later job. That in-lock record prevents an older queued run
+          # from regressing :latest during the gap.
+          published_releases="$(
+            gh api --paginate "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+              --jq '.[] | select(.draft == false and .prerelease == false) | .tag_name'
+          )"
+          manifest_version="$(jq -r '.version' release-manifest.json)"
+          decision="$(
+            {
+              printf '%s\n' "$published_releases"
+              printf 'v%s\n' "$manifest_version"
+            } | node tooling/harly/scripts/stable-channel.mjs "$RELEASE_VERSION"
+          )"
+          IFS=$'\t' read -r owns highest <<< "$decision"
+          if [ "$owns" = "true" ]; then
+            echo "owns=true" >> "$GITHUB_OUTPUT"
+            echo "$RELEASE_VERSION is the newest stable version; it takes the channel."
+          else
+            echo "owns=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$RELEASE_VERSION is not the newest stable version ($highest owns the channel). Leaving :latest and the release manifest untouched; install this one with --to $RELEASE_VERSION."
+          fi
+      - name: Require the tag to be on main
+        if: steps.decide.outputs.owns == 'true'
+        run: |
+          # The assets are regenerated from this checkout of main. If the tagged
+          # commit is not on main, main's templates and sync script are not the
+          # ones that were released, and the generated assets would not match.
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Tag $GITHUB_REF_NAME is not an ancestor of main."
+            echo "Merge the release into main before tagging."
+            exit 1
+          fi
+      - uses: docker/login-action@v3
+        if: steps.decide.outputs.owns == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Point :latest at this version
+        if: steps.decide.outputs.owns == 'true'
+        env:
+          DIGEST: ${{ needs.image.outputs.digest }}
+        run: |
+          # Retags the existing multi-architecture index by digest. It does not
+          # rebuild, so :latest and the version tag are the same bytes.
+          docker buildx imagetools create \
+            --tag ghcr.io/vytral/harly:latest \
+            "ghcr.io/vytral/harly@${DIGEST}"
+      - name: Point deployment assets at the stable image
+        if: steps.decide.outputs.owns == 'true'
+        env:
+          RELEASE_VERSION: ${{ needs.image.outputs.version }}
           RELEASE_DIGEST: ${{ needs.image.outputs.digest }}
         run: |
-          version="${RELEASE_VERSION#v}"
-          node tooling/harly/scripts/sync-release-assets.mjs --version "$version" --digest "$RELEASE_DIGEST"
+          node tooling/harly/scripts/sync-release-assets.mjs --version "$RELEASE_VERSION" --digest "$RELEASE_DIGEST"
           git diff --check
-          if git diff --quiet; then exit 0; fi
+          if git diff --quiet; then
+            echo "Deployment assets already point at $RELEASE_VERSION."
+            exit 0
+          fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add release-manifest.json fly.toml deploy/digitalocean/app.template.yaml deploy/railway/README.md tooling/harly/src/release.ts
-          git commit -m "chore(release): sync deployment assets for $version [skip ci]"
-          git push origin HEAD:main
+          git add \
+            release-manifest.json \
+            fly.toml \
+            render.yaml \
+            .do/app.yaml \
+            deploy/digitalocean/app.template.yaml \
+            tooling/harly/src/release.ts
+          git commit -m "chore(release): publish $RELEASE_VERSION [skip ci]"
+
+          # The image build takes long enough that main usually moves underneath
+          # this job. A rejected push here would leave the image published and
+          # the manifest stale, so `harly update` would keep installing the old
+          # version. Rebase and retry instead of failing on the first race.
+          for attempt in 1 2 3 4 5; do
+            if git push origin HEAD:main; then
+              echo "Deployment assets updated on main."
+              exit 0
+            fi
+            echo "Push rejected on attempt $attempt. Rebasing onto the current main."
+            git fetch origin main
+            if ! git rebase origin/main; then
+              git rebase --abort || true
+              echo "Could not rebase the release commit onto main. Resolve this by hand."
+              exit 1
+            fi
+          done
+          echo "main kept moving; the release commit was not pushed after 5 attempts."
+          exit 1
+
+  github-release:
+    # Published last, and only once the channel has been settled: the stable
+    # notes tell operators to run `npx @harly/cli update`, which reads the
+    # manifest that release-channel writes. A prerelease skips that job by
+    # design, so a skipped dependency still counts as success here.
+    needs: [image, release-channel]
+    if: >-
+      always() &&
+      needs.image.result == 'success' &&
+      (needs.release-channel.result == 'success' ||
+       needs.release-channel.result == 'skipped')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Publish the GitHub Release
+        env:
+          # gh resolves the repository from a local checkout or from GH_REPO.
+          # There is no checkout in this job, so GH_REPO is what makes it work.
+          GH_REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.image.outputs.version }}
+          DIGEST: ${{ needs.image.outputs.digest }}
+          PRERELEASE: ${{ needs.image.outputs.prerelease }}
+          # Taken from release-channel, which recomputed it under the lock.
+          # Empty when that job was skipped, which reads as false below.
+          LATEST: ${{ needs.release-channel.outputs.owns }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          notes="$(mktemp)"
+          {
+            echo "Harly ${VERSION}"
+            echo
+            if [ "$PRERELEASE" = "true" ]; then
+              echo "This is a prerelease. \`npx @harly/cli update\` stays on the current stable version."
+              echo
+              echo "Opt in from an existing install:"
+              echo
+              echo '```bash'
+              echo "npx @harly/cli update --to ${VERSION}"
+              echo '```'
+            elif [ "$LATEST" = "true" ]; then
+              echo "Self-hosted installs move to this version with:"
+              echo
+              echo '```bash'
+              echo "npx @harly/cli update"
+              echo '```'
+              echo
+              echo "\`ghcr.io/vytral/harly:latest\` points at this same image."
+            else
+              echo "This is a patch on an older release line, so it does not become the default."
+              echo "\`ghcr.io/vytral/harly:latest\` and \`npx @harly/cli update\` stay on the newest stable version."
+              echo
+              echo "Install it deliberately:"
+              echo
+              echo '```bash'
+              echo "npx @harly/cli update --to ${VERSION}"
+              echo '```'
+            fi
+            echo
+            echo "Image: \`ghcr.io/vytral/harly:${VERSION}\`"
+            echo "Digest: \`${DIGEST}\`"
+          } > "$notes"
+          # Only a release that actually owns the latest channel is marked Latest.
+          if [ "$LATEST" = "true" ]; then
+            stable_flags=(--latest --prerelease=false)
+          else
+            stable_flags=(--latest=false --prerelease=false)
+          fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            if [ "$PRERELEASE" = "true" ]; then
+              gh release edit "$TAG" --title "$VERSION" --notes-file "$notes" --prerelease
+            else
+              gh release edit "$TAG" --title "$VERSION" --notes-file "$notes" "${stable_flags[@]}"
+            fi
+          elif [ "$PRERELEASE" = "true" ]; then
+            gh release create "$TAG" --title "$VERSION" --notes-file "$notes" --prerelease
+          else
+            gh release create "$TAG" --title "$VERSION" --notes-file "$notes" "${stable_flags[@]}"
+          fi

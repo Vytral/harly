@@ -23,8 +23,9 @@ export async function POST(request: NextRequest) {
   const run = startCronRun(CRON_KEY);
 
   try {
+    const workerId = `interview-sync:${randomUUID()}`;
     const claimed = await claimDueInterviewSyncs({
-      workerId: `interview-sync:${randomUUID()}`,
+      workerId,
       limit: BATCH_SIZE,
     });
 
@@ -33,6 +34,9 @@ export async function POST(request: NextRequest) {
         retryInterviewSyncForWorkspace({
           workspaceId: sync.workspaceId,
           syncId: sync.id,
+          // The claim above is the concurrency boundary. Reuse the same
+          // owner for the provider call so retry cannot clear its lock.
+          workerId,
         }),
       ),
     );

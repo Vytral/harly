@@ -271,13 +271,18 @@ export async function sendMail(
   });
 }
 
-/** Create a standalone Teams online meeting. */
+/**
+ * Create or recover a standalone Teams online meeting. The external ID is
+ * provider-supported idempotency: a retry after a lost response returns the
+ * existing meeting instead of creating another one.
+ */
 export async function createTeamsMeeting(
   accessToken: string,
   meeting: {
     subject: string;
     start: Date;
     durationMins: number;
+    externalId: string;
   },
 ): Promise<OutlookOnlineMeeting> {
   const startIso = meeting.start.toISOString();
@@ -285,12 +290,13 @@ export async function createTeamsMeeting(
     meeting.start.getTime() + meeting.durationMins * 60_000,
   ).toISOString();
 
-  return outlookFetch<OutlookOnlineMeeting>(accessToken, "/me/onlineMeetings", {
+  return outlookFetch<OutlookOnlineMeeting>(accessToken, "/me/onlineMeetings/createOrGet", {
     method: "POST",
     body: JSON.stringify({
       subject: meeting.subject,
       startDateTime: startIso,
       endDateTime: endIso,
+      externalId: meeting.externalId,
     }),
   });
 }

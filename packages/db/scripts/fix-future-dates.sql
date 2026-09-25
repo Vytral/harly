@@ -5,9 +5,22 @@
 -- newer than that pivot, and for those the transform overshot into the
 -- future. This clamps every such row back to "now minus a small stagger",
 -- ordered so their original relative order is preserved.
+-- Usage:
+--   docker exec -i harly-postgres psql -U harly -d harly \
+--     -v ws=YOUR_WORKSPACE_ID -f fix-future-dates.sql
+\if :{?ws}
+\else
+  \echo 'ERROR: pass the workspace id with -v ws=<workspace_id>'
+  \quit 1
+\endif
+
+-- psql does NOT substitute :vars inside dollar-quoted ($$) blocks, so stash the
+-- workspace id in a session setting here and read it via current_setting below.
+SELECT set_config('demo.ws', :'ws', false);
+
 DO $$
 DECLARE
-  ws text := 'YyZYVHxI4t2YWY2XeY8gzVTijirlWg9T';
+  ws text := current_setting('demo.ws');
   v_now timestamptz := now();
 BEGIN
   WITH bad AS (

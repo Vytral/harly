@@ -11,9 +11,12 @@ const mocks = vi.hoisted(() => ({
   getWorkspaceAiConfig: vi.fn(),
   enforceRateLimit: vi.fn(),
   loadResumeText: vi.fn(),
+  loadResumeDocument: vi.fn(),
   logAiCandidateDecision: vi.fn(),
   scoreCandidateWithAI: vi.fn(),
   persistCandidateEvaluation: vi.fn(),
+  findReusableCandidateFacts: vi.fn(),
+  evaluateCandidateWithRulesAsync: vi.fn(),
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -54,6 +57,7 @@ vi.mock("@/server/api/ratelimit", () => ({
 
 vi.mock("@/lib/resume/load-resume-text", () => ({
   loadResumeText: mocks.loadResumeText,
+  loadResumeDocument: mocks.loadResumeDocument,
 }));
 
 vi.mock("@/lib/ai/governance", () => ({
@@ -66,12 +70,14 @@ vi.mock("@/lib/ai/surfaces/score-candidate", () => ({
 
 vi.mock("@/lib/evaluation/rules", () => ({
   evaluateCandidateWithRules: vi.fn(),
+  evaluateCandidateWithRulesAsync: mocks.evaluateCandidateWithRulesAsync,
   RULES_EVALUATION_VERSION: "rules-v1",
 }));
 
 vi.mock("@/features/evaluations/service", () => ({
   getPublishedRulesRubric: vi.fn(),
   persistCandidateEvaluation: mocks.persistCandidateEvaluation,
+  findReusableCandidateFacts: mocks.findReusableCandidateFacts,
 }));
 
 vi.mock("@/features/candidates/duplicate-detection", () => ({
@@ -124,6 +130,28 @@ describe("AI evaluation application authorization", () => {
     });
     mocks.enforceRateLimit.mockResolvedValue(undefined);
     mocks.insert.mockReturnValue({ values: vi.fn().mockResolvedValue([]) });
+    mocks.loadResumeDocument.mockResolvedValue({ text: "resume text", fileName: "cv.pdf", document: null });
+    mocks.findReusableCandidateFacts.mockResolvedValue(null);
+    mocks.evaluateCandidateWithRulesAsync.mockResolvedValue({
+      result: {
+        score: 70,
+        recommendation: "yes",
+        summary: "ok",
+        strengths: [],
+        gaps: [],
+        criteria: [],
+      },
+      rubric: { version: 1 },
+      criterionResults: [],
+      candidateFacts: null,
+      skillProfiles: null,
+      metadata: {},
+      criterionAssessments: [],
+      impactHighlights: [],
+      evidenceCoverage: 0,
+      confidence: 0,
+      requiresHumanReview: false,
+    });
   });
 
   it("rejects individual scoring before reading the application when its job is outside scope", async () => {
@@ -189,7 +217,6 @@ describe("AI evaluation application authorization", () => {
       provider: "openai",
       modelId: "gpt-4o",
     });
-    mocks.loadResumeText.mockResolvedValue({ text: "resume text" });
     mocks.scoreCandidateWithAI.mockResolvedValue({
       score: 82,
       recommendation: "yes",

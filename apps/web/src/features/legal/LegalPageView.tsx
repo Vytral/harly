@@ -1,5 +1,6 @@
 import type { Route } from "next";
 
+import { CookiePreferencesButton } from "@/components/CookiePreferencesButton";
 import { LEGAL_PAGE_TITLES, type LegalPageData } from "@/features/legal/data";
 import { isHtml, renderMarkdown } from "@/features/legal/render-markdown";
 import { sanitizeLegalHtml } from "@/features/legal/sanitize-html.server";
@@ -123,6 +124,7 @@ export function LegalPageView({
             >
               Careers
             </a>
+            <CookiePreferencesButton className="hover:text-foreground" />
             {data.websiteUrl && (
               <a
                 href={data.websiteUrl}

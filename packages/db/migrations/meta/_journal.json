@@ -1002,6 +1002,76 @@
       "when": 1785743493571,
       "tag": "0142_great_wraith",
       "breakpoints": true
+    },
+    {
+      "idx": 143,
+      "version": "7",
+      "when": 1788726633876,
+      "tag": "0143_exotic_grey_gargoyle",
+      "breakpoints": true
+    },
+    {
+      "idx": 144,
+      "version": "7",
+      "when": 1788729765227,
+      "tag": "0144_colossal_hiroim",
+      "breakpoints": true
+    },
+    {
+      "idx": 145,
+      "version": "7",
+      "when": 1790050549225,
+      "tag": "0145_neat_george_stacy",
+      "breakpoints": true
+    },
+    {
+      "idx": 146,
+      "version": "7",
+      "when": 1790050724852,
+      "tag": "0146_wakeful_shocker",
+      "breakpoints": true
+    },
+    {
+      "idx": 147,
+      "version": "7",
+      "when": 1790124494555,
+      "tag": "0147_past_bucky",
+      "breakpoints": true
+    },
+    {
+      "idx": 148,
+      "version": "7",
+      "when": 1790126683177,
+      "tag": "0148_nervous_edwin_jarvis",
+      "breakpoints": true
+    },
+    {
+      "idx": 149,
+      "version": "7",
+      "when": 1790134365618,
+      "tag": "0149_noisy_ted_forrester",
+      "breakpoints": true
+    },
+    {
+      "idx": 150,
+      "version": "7",
+      "when": 1790134684672,
+      "tag": "0150_tiny_azazel",
+      "breakpoints": true
+    },
+    {
+      "idx": 151,
+      "version": "7",
+      "when": 1790140651418,
+      "tag": "0151_cynical_dust",
+      "breakpoints": true
+    },
+    {
+      "idx": 152,
+      "version": "7",
+      "when": 1790301414335,
+      "tag": "0152_red_zarek",
+      "breakpoints": true
     }
   ]
 }

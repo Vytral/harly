@@ -30,6 +30,7 @@ export async function syncInterviewToTeams(opts: {
       subject: opts.summary,
       start: opts.start,
       durationMins: opts.durationMins,
+      externalId: `harly:create:${opts.interviewId}:${opts.start.getTime()}:${opts.durationMins}`,
     });
 
     const update: Record<string, unknown> = {
@@ -109,6 +110,7 @@ export async function replaceInterviewToTeams(opts: {
       subject: opts.summary,
       start: opts.start,
       durationMins: opts.durationMins,
+      externalId: `harly:replace:${opts.interviewId}:${opts.start.getTime()}:${opts.durationMins}`,
     });
   } catch (error) {
     log.error(error, "[teams-sync] Failed to create replacement meeting");

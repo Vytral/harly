@@ -16,49 +16,72 @@ const production = {
 
 describe("loadHarlyConfig", () => {
   it("accepts a complete production configuration", () => {
-    expect(loadHarlyConfig(production).HARLY_URL).toBe("https://harly.example.com");
+    expect(loadHarlyConfig(production).HARLY_URL).toBe(
+      "https://harly.example.com",
+    );
   });
 
   it("rejects short independent secrets", () => {
-    expect(() => loadHarlyConfig({ ...production, CRON_SECRET: "short" })).toThrow(
-      /CRON_SECRET/,
-    );
+    expect(() =>
+      loadHarlyConfig({ ...production, CRON_SECRET: "short" }),
+    ).toThrow(/CRON_SECRET/);
   });
 
   it("rejects an unspecified production public origin", () => {
-    expect(() => loadHarlyConfig({ ...production, HARLY_URL: "https://0.0.0.0:3000" })).toThrow(
-      /HARLY_URL/,
-    );
+    expect(() =>
+      loadHarlyConfig({ ...production, HARLY_URL: "https://0.0.0.0:3000" }),
+    ).toThrow(/HARLY_URL/);
   });
 
   it("rejects localhost in production", () => {
-    expect(() => loadHarlyConfig({ ...production, HARLY_URL: "https://localhost:3000" })).toThrow(
-      /HARLY_URL/,
-    );
+    expect(() =>
+      loadHarlyConfig({ ...production, HARLY_URL: "https://localhost:3000" }),
+    ).toThrow(/HARLY_URL/);
+  });
+
+  it("allows only an explicit HTTP loopback origin for production E2E", () => {
+    expect(
+      loadHarlyConfig({
+        ...production,
+        HARLY_URL: "http://127.0.0.1:3000",
+        HARLY_E2E: "true",
+      }).HARLY_URL,
+    ).toBe("http://127.0.0.1:3000");
+    expect(() =>
+      loadHarlyConfig({
+        ...production,
+        HARLY_URL: "http://127.0.0.2:3000",
+        HARLY_E2E: "true",
+      }),
+    ).toThrow(/HARLY_URL/);
   });
 
   it("rejects the full IPv4 loopback range in production", () => {
-    expect(() => loadHarlyConfig({ ...production, HARLY_URL: "https://127.0.0.2" })).toThrow(
-      /HARLY_URL/,
-    );
+    expect(() =>
+      loadHarlyConfig({ ...production, HARLY_URL: "https://127.0.0.2" }),
+    ).toThrow(/HARLY_URL/);
   });
 
   it("rejects localhost subdomains in production", () => {
-    expect(() => loadHarlyConfig({ ...production, HARLY_URL: "https://tenant.localhost" })).toThrow(
-      /HARLY_URL/,
-    );
+    expect(() =>
+      loadHarlyConfig({ ...production, HARLY_URL: "https://tenant.localhost" }),
+    ).toThrow(/HARLY_URL/);
   });
 
   it("requires OAuth credentials in pairs", () => {
-    expect(() => loadHarlyConfig({ ...production, GOOGLE_CLIENT_ID: "id" })).toThrow(
-      /GOOGLE/,
-    );
+    expect(() =>
+      loadHarlyConfig({ ...production, GOOGLE_CLIENT_ID: "id" }),
+    ).toThrow(/GOOGLE/);
   });
 
   it("supports the deprecated URL fallback with one warning", () => {
     const warn = vi.fn();
     const config = loadHarlyConfig(
-      { ...production, HARLY_URL: undefined, NEXT_PUBLIC_APP_URL: "https://legacy.example.com" },
+      {
+        ...production,
+        HARLY_URL: undefined,
+        NEXT_PUBLIC_APP_URL: "https://legacy.example.com",
+      },
       { warn },
     );
     expect(config.HARLY_URL).toBe("https://legacy.example.com");

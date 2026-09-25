@@ -34,6 +34,15 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
     organization: { id: liveState.workspaceId },
     user: { id: liveState.userId, email: "ai-smoke-test@localhost" },
   })),
+  getActorPermissions: vi.fn(async () => [
+    "candidates:move",
+    "candidates:edit",
+    "tasks:write",
+    "collab:write",
+    "jobs:create",
+    "offers:manage",
+    "automations:manage",
+  ]),
 }));
 
 // Server actions call this after a successful DB write; Vitest has no Next.js
@@ -65,6 +74,7 @@ describe.skipIf(!live)("live Harly AI agent read smoke test", () => {
       agentModule,
       { buildHarlySystemPrompt },
       { getModel },
+      { toolsForProvider },
       { generateText, stepCountIs },
     ] = await Promise.all([
       import("@harly/db"),
@@ -73,6 +83,7 @@ describe.skipIf(!live)("live Harly AI agent read smoke test", () => {
       import("@/lib/ai/agent"),
       import("@/lib/ai/agent/system-prompt"),
       import("@/lib/ai/registry"),
+      import("@/lib/ai/provider-tools"),
       import("ai"),
     ]);
 
@@ -163,10 +174,13 @@ describe.skipIf(!live)("live Harly AI agent read smoke test", () => {
     const aiConfig = await getWorkspaceAiConfig(workspace!.id);
     expect(aiConfig).not.toBeNull();
 
-    const tools = agentModule.buildHarlyTools({
-      workspaceId: workspace!.id,
-      userId: liveState.userId,
-    });
+    const tools = toolsForProvider(
+      agentModule.buildHarlyTools({
+        workspaceId: workspace!.id,
+        userId: liveState.userId,
+      }),
+      aiConfig!.provider,
+    );
     const { confirmAgentWriteAction } = await import("./agent/write-actions");
     const system = buildHarlySystemPrompt({
       workspaceName: liveState.workspaceName,
@@ -210,7 +224,7 @@ describe.skipIf(!live)("live Harly AI agent read smoke test", () => {
       capabilityTools.some((call) => call.toolName === "workspaceCapabilities"),
     ).toBe(true);
     expect(capabilities.text).toMatch(/not|no|cannot|can't|enlace|share/i);
-    expect(capabilities.text).not.toMatch(/automatically publish.*native job/i);
+    expect(capabilities.text).not.toMatch(/\b(?:can|will|does)\s+automatically publish.*native job/i);
 
     const distribution = await run(
       `Using live workspace data, tell me how I can distribute the ${job!.title} job on LinkedIn. Distinguish sharing its public Harly link from creating a native LinkedIn Job. Do not change anything.`,

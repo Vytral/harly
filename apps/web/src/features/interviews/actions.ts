@@ -796,7 +796,8 @@ export async function scheduleInterview(
           location: data.location ?? null,
           interviewerId: data.interviewerId ?? null,
         },
-      }, { actorId: user.id, skipDomainEvent: true });
+        eventId: scheduledEvent.current?.eventId,
+      }, { actorId: user.id, skipDomainEvent: true, eventId: scheduledEvent.current?.eventId });
       warning =
         warnings.length > 0 ? [...new Set(warnings)].join(" ") : undefined;
     }
@@ -1055,7 +1056,8 @@ export async function setInterviewStatus(input: {
     const event = `interview.${parsed.data.status}` as const;
     void emitWebhookEvent(workspace.id, event, {
       interview: serializeInterview(updatedInterview),
-    }, { actorId: user.id, skipDomainEvent: true });
+      eventId: statusEvent.current?.eventId,
+    }, { actorId: user.id, skipDomainEvent: true, eventId: statusEvent.current?.eventId });
 
     return {
       success: true,
@@ -1537,7 +1539,8 @@ export async function rescheduleInterview(input: {
         durationMins: data.durationMins,
         location: data.location ?? null,
       },
-    }, { actorId: user.id, skipDomainEvent: true });
+      eventId: persistedEvent?.eventId,
+    }, { actorId: user.id, skipDomainEvent: true, eventId: persistedEvent?.eventId });
 
     return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}) };
   } catch (error) {
@@ -2180,7 +2183,8 @@ export async function updateInterview(input: {
         durationMins: effectiveDurationMins,
         location: data.location ?? null,
       },
-    }, { actorId: user.id, skipDomainEvent: true });
+      eventId: persistedEvent?.eventId,
+    }, { actorId: user.id, skipDomainEvent: true, eventId: persistedEvent?.eventId });
 
     return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}) };
   } catch (error) {

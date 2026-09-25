@@ -52,7 +52,8 @@ export default async function DashboardJobPage({
 
   const { job } = result;
   const appUrl = getHarlyPublicOrigin();
-  const publicUrl = `${appUrl}/jobs/${job.slug}`;
+  // Canonical public job details (overview), never the apply form.
+  const publicUrl = `${appUrl}/board/${workspace.slug}/jobs/${job.slug}`;
 
   return (
     <JobForm

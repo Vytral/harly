@@ -137,15 +137,18 @@ export function UserMenu({
                 </Badge>
               </div>
 
-              <div className="h-px bg-border" />
+              {/* Workspace switcher — hidden when there are no options
+                  (e.g. demo mode passes an empty list on purpose). */}
+              {workspaceOptions.length > 0 ? (
+                <>
+                  <div className="h-px bg-border" />
 
-              {/* ── Workspace switcher ── */}
-              <div className="px-3 py-3">
-                <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                  Workspace
-                </p>
-                <div className="space-y-0.5">
-                  {workspaceOptions.map((ws) => (
+                  <div className="px-3 py-3">
+                    <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                      Workspace
+                    </p>
+                    <div className="space-y-0.5">
+                      {workspaceOptions.map((ws) => (
                     <button
                       key={ws.authOrganizationId}
                       onClick={() => {
@@ -170,9 +173,11 @@ export function UserMenu({
                         <Check className="size-3.5 shrink-0 text-primary" />
                       )}
                     </button>
-                  ))}
-                </div>
-              </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              ) : null}
 
               <div className="h-px bg-border" />
 

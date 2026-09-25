@@ -4,12 +4,27 @@
 
 # @harly/cli
 
-The official installer and operations CLI for self-hosted [Harly](https://github.com/Vytral/harly).
-It creates and manages an immutable Docker Compose deployment with PostgreSQL,
-the Harly web app, the scheduler, and an optional Caddy HTTPS proxy.
+Official CLI for self-hosted [Harly](https://github.com/Vytral/harly)
+deployments. Install Harly, manage an existing server, or prepare a cloud
+deployment from the command line.
 
 Requires Node.js 20.12 or newer. A local installation also requires Docker
 Engine 24+ and Docker Compose 2.20+.
+
+## What's new in 0.5.0
+
+- `harly update` follows the published stable release by default and pins the
+  selected image to its immutable digest. Use `--to <version>` to choose a
+  numbered release explicitly; `--to latest` follows the same stable channel.
+- Stable updates refuse to downgrade a newer installation and skip backup,
+  pulls, and migrations when the install already matches the current release.
+- Version reporting identifies numbered tags and published digests, uses OCI
+  image labels when available, and falls back to a short digest instead of
+  displaying an opaque full image reference.
+- Update failures after migrations keep the target image configured and point
+  to the local safety backup for recovery.
+
+See [CHANGELOG.md](CHANGELOG.md) for the release notes.
 
 ## Quick start
 
@@ -56,7 +71,7 @@ web service, the scheduler, and Caddy when enabled. The command reports
 | `harly setup-secret [directory]` | Read the setup secret from the local `.env` file. |
 | `harly backup [directory]` | Create a private rollback archive. |
 | `harly restore <archive> [directory]` | Restore database and uploads after explicit confirmation. |
-| `harly update [directory]` | Back up, pull a pinned image, migrate, and restart safely. |
+| `harly update [directory]` | Find this install and update it to the current stable release. |
 | `harly uninstall [directory]` | Stop and remove Harly; data is kept unless `--remove-data` is used. |
 | `harly deploy railway` | Provision and deploy the Railway project. |
 | `harly deploy fly prepare` | Generate a Fly.io deployment configuration. |
@@ -97,7 +112,7 @@ Important `init` flags:
 | `--organization <name>` | Organization display name. |
 | `--storage <local\|s3>` | Choose local persistent storage or S3-compatible storage. |
 | `--resource-profile <profile>` | Select `compact`, `standard`, or `performance`. |
-| `--image <tag-or-digest>` | Override the pinned release image. `latest` is rejected. |
+| `--image <tag-or-digest>` | Pin `ghcr.io/vytral/harly:0.2.0`, `:latest`, or a digest. `:latest` is recorded as the current stable digest. `edge` is rejected. |
 | `--launch` | Launch after generating configuration. |
 | `--no-launch` | Generate only, even in an interactive session. |
 | `--output-dir <directory>` | Alias for the positional directory. Conflicting paths are rejected. |

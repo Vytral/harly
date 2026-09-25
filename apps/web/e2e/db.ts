@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 
 import {
   applications,
@@ -10,6 +10,7 @@ import {
   offers,
   scorecards,
   signatureEnvelopes,
+  signatureRecipients,
 } from "@harly/db";
 
 import { E2E_DATABASE_URL, FIXTURE } from "./constants";
@@ -137,6 +138,58 @@ export async function readHiringState(email = FIXTURE.candidateEmail) {
       : null;
 
     return { candidate, application, interview: interview ?? null, scorecard: scorecard ?? null, offer: offer ?? null, envelope: envelope ?? null, document: document ?? null, consent: consent ?? null };
+  } finally {
+    await sql.end({ timeout: 1 });
+  }
+}
+
+export async function readNativeSigningState(documentName: string) {
+  const { db, sql } = createDatabaseClient(E2E_DATABASE_URL);
+  try {
+    const [document] = await db
+      .select({
+        id: documents.id,
+        name: documents.name,
+        signatureStatus: documents.signatureStatus,
+        signatureEnvelopeRefId: documents.signatureEnvelopeRefId,
+        fieldsSnapshot: documents.fieldsSnapshot,
+      })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.workspaceId, FIXTURE.workspaceId),
+          eq(documents.name, documentName),
+        ),
+      )
+      .orderBy(desc(documents.createdAt))
+      .limit(1);
+
+    if (!document) return { document: null, envelope: null, recipients: [] };
+    const [envelope] = document.signatureEnvelopeRefId
+      ? await db
+          .select({
+            id: signatureEnvelopes.id,
+            status: signatureEnvelopes.status,
+            completedAt: signatureEnvelopes.completedAt,
+          })
+          .from(signatureEnvelopes)
+          .where(eq(signatureEnvelopes.id, document.signatureEnvelopeRefId))
+          .limit(1)
+      : [];
+    const recipients = envelope
+      ? await db
+          .select({
+            id: signatureRecipients.id,
+            name: signatureRecipients.name,
+            email: signatureRecipients.email,
+            routingOrder: signatureRecipients.routingOrder,
+            status: signatureRecipients.status,
+          })
+          .from(signatureRecipients)
+          .where(eq(signatureRecipients.envelopeId, envelope.id))
+          .orderBy(asc(signatureRecipients.routingOrder))
+      : [];
+    return { document, envelope: envelope ?? null, recipients };
   } finally {
     await sql.end({ timeout: 1 });
   }

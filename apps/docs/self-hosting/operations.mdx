@@ -1,6 +1,7 @@
 ---
-title: "Operations"
-description: "Health checks, the scheduler, backups, restore, and upgrades for a Harly installation."
+title: "Health checks, scheduler, backups, and upgrades"
+sidebarTitle: "Operations"
+description: "Day-two operations for a self-hosted Harly installation — health checks, the background scheduler, encrypted backups, restore steps, and version upgrades."
 ---
 
 ## After reading this
@@ -91,7 +92,7 @@ The image exposes `serve`, `migrate`, `scheduler`, and `doctor`. Runtime migrati
 ```bash
 # Works everywhere: a private local rollback point (mode 0600).
 npx @harly/cli backup
-npx @harly/cli update --to <release-version> --yes
+npx @harly/cli update
 npx @harly/cli restore backups/harly-2026-...tar.gz --force
 
 # Optional advanced encryption for a portable backup.
@@ -136,7 +137,7 @@ pnpm db:migrate
 pnpm dev:web
 ```
 
-It lives at `tooling/docker/compose.dev.yml`. Development needs Node 22+, pnpm, Docker, about 4 GB of available RAM, and 10 GB of free disk for a comfortable full-monorepo workflow. Turbopack's persistent filesystem cache is disabled to prevent multi-gigabyte `.next` growth, and its memory graph defaults to 1024 MB. Larger workstations can set `HARLY_DEV_MEMORY_MB=2048`; values below 512 MB are ignored. `pnpm clean` removes generated workspace caches without touching PostgreSQL volumes.
+It lives at `tooling/docker/compose.dev.yml`. Development needs Node 22+, pnpm, Docker, about 4 GB of available RAM, and 10 GB of free disk for a comfortable full-monorepo workflow. Turbopack's persistent filesystem cache is disabled to prevent multi-gigabyte `.next` growth. `pnpm clean` removes generated workspace caches without touching PostgreSQL volumes.
 
 ## Troubleshooting
 

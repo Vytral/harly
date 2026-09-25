@@ -168,43 +168,35 @@ If anything here is unclear, email us at [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAI
 
 **Last updated:** {{DATE}}
 
-We use a small number of cookies on our careers page. This policy explains what they are and how you can control them.
+This careers site uses a small set of cookies and similar storage. Optional third-party content stays off until you allow it.
 
 ---
 
-## What cookies we use
+## Strictly necessary
 
-### Strictly necessary
+These are required for the site to function. They are not used for advertising.
 
-These cookies are required for the site to work. They cannot be turned off.
-
-| Cookie | What it does | Duration |
+| Name | What it does | Duration |
 |---|---|---|
-| Session | Keeps you logged in during your visit | Session |
-| CSRF token | Protects form submissions from cross-site attacks | Session |
-| UI preferences | Remembers sidebar state and display settings | 1 year |
+| Session | Keeps a staff member or candidate signed in after they log in | Up to 30 days |
+| harly_cookie_consent | Remembers this cookie choice | 1 year |
+| Setup and sign-in state | Short-lived cookies used only while finishing setup or a portal sign-in | Minutes |
 
-### Analytics (optional)
-
-If you accept analytics cookies, we collect anonymised data about how visitors use the site, including page views, time on page, and referral source. No personal data is attached to these events.
-
-| Cookie | What it does | Duration |
-|---|---|---|
-| Analytics | Tracks anonymous usage patterns | 1 year |
-
-Analytics cookies are only set after you give consent via the cookie banner.
+The display theme is stored in this browser's local storage, not in a cookie.
 
 ---
 
-## How to manage cookies
+## Embedded content
 
-You can change your preferences at any time using the cookie banner, or by clearing cookies in your browser settings. Disabling strictly necessary cookies will break core site functionality.
+Job posts and the careers page can include content the organization chose to embed, such as a video or an office map. Those embeds come from other sites and can set their own cookies. They do not load until you allow embeds. You can change that choice at any time from **Cookie preferences** in the footer.
 
 ---
 
-## Third-party services
+## Bot checks
 
-We use Cloudflare for security and performance. Cloudflare may set its own cookies , see [Cloudflare's cookie policy](https://www.cloudflare.com/cookie-policy/) for details.
+If the organization turns on a bot check for applications, the form loads Cloudflare Turnstile, Google reCAPTCHA, or hCaptcha, whichever they configured. That check is required to submit the form, and the provider may set its own cookies.
+
+Harly does not ship a usage-analytics or marketing cookie. If the organization adds its own tracking outside this product, it needs to describe that here.
 
 ---
 
@@ -481,41 +473,35 @@ Questions? Email [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}}).
 
 **Last updated:** {{DATE}}
 
-We use cookies on our careers page to make it work and to understand how people use it. Here's the full picture.
+This careers site uses a small set of cookies and similar storage. Optional third-party content stays off until you allow it.
 
 ---
 
-## Cookies we use
+## Strictly necessary
 
-### Essential cookies
+These are required for the site to function. They are not used for advertising.
 
-Required for the site to function. These can't be disabled.
-
-| Cookie | Purpose | Duration |
+| Name | What it does | Duration |
 |---|---|---|
-| Session | Maintains your session | Session |
-| CSRF | Protects form submissions | Session |
-| UI preferences | Remembers display settings | 1 year |
+| Session | Keeps a staff member or candidate signed in after they log in | Up to 30 days |
+| harly_cookie_consent | Remembers this cookie choice | 1 year |
+| Setup and sign-in state | Short-lived cookies used only while finishing setup or a portal sign-in | Minutes |
 
-### Analytics cookies (optional)
-
-Collect anonymous data about how visitors use the site. Only set with your consent.
-
-| Cookie | Purpose | Duration |
-|---|---|---|
-| Analytics | Tracks anonymous usage | 1 year |
+The display theme is stored in this browser's local storage, not in a cookie.
 
 ---
 
-## Managing cookies
+## Embedded content
 
-You can update your cookie preferences via the banner at any time, or clear cookies through your browser settings.
+Job posts and the careers page can include content the organization chose to embed, such as a video or an office map. Those embeds come from other sites and can set their own cookies. They do not load until you allow embeds. You can change that choice at any time from **Cookie preferences** in the footer.
 
 ---
 
-## Do Not Track
+## Bot checks
 
-We honor Do Not Track signals sent by your browser.
+If the organization turns on a bot check for applications, the form loads Cloudflare Turnstile, Google reCAPTCHA, or hCaptcha, whichever they configured. That check is required to submit the form, and the provider may set its own cookies.
+
+Harly does not ship a usage-analytics or marketing cookie. If the organization adds its own tracking outside this product, it needs to describe that here.
 
 ---
 
@@ -705,9 +691,15 @@ See our [Privacy Policy](/legal/privacy-policy).
 
 **Last updated:** {{DATE}}
 
-We use a small number of cookies to run our careers page. Essential cookies keep the site working. Analytics cookies (optional) help us understand how it's used.
+This careers site uses a small set of cookies and similar storage. Optional third-party content stays off until you allow it.
 
-You can manage your preferences via the cookie banner or your browser settings.
+Strictly necessary cookies keep a staff member or candidate signed in, and remember this cookie choice. The display theme is stored in this browser's local storage, not in a cookie.
+
+Job posts and the careers page can include content the organization chose to embed, such as a video or an office map. Those embeds come from other sites and can set their own cookies. They do not load until you allow embeds. Change that choice any time from **Cookie preferences** in the footer.
+
+If the organization turns on a bot check for applications, the form loads Cloudflare Turnstile, Google reCAPTCHA, or hCaptcha, whichever they configured. That check is required to submit the form, and the provider may set its own cookies.
+
+Harly does not ship a usage-analytics or marketing cookie. If the organization adds its own tracking outside this product, it needs to describe that here.
 
 Questions? [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
 `,
@@ -737,8 +729,8 @@ To ask about how AI was used in your application, contact [{{ENTITY_EMAIL}}](mai
   `,
 };
 
-// Chilean privacy copy. The shared terms and cookie policy are jurisdiction-neutral;
-// only the notices that carry country-specific data-protection obligations are overridden.
+// Chilean privacy copy. Terms, the cookie policy, and the notices that carry
+// country-specific data-protection obligations are overridden.
 const CHILE_TEMPLATE: LegalTemplate = {
   ...OTHER_TEMPLATE,
   termsOfService: `# Términos de Servicio
@@ -761,9 +753,15 @@ Preguntas: [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
 
 **Última actualización:** {{DATE}}
 
-Usamos cookies estrictamente necesarias para operar el sitio de carreras y, si las autorizas, cookies de analítica para comprender su uso. Las cookies opcionales solo se activan después de tu consentimiento.
+Este sitio de carreras usa pocas cookies. El contenido de terceros queda apagado hasta que lo permites.
 
-Puedes cambiar tus preferencias mediante el banner de cookies o la configuración de tu navegador. Deshabilitar las cookies estrictamente necesarias puede impedir el funcionamiento de partes del servicio.
+Las cookies estrictamente necesarias mantienen la sesión de quien inicia sesión y recuerdan esta elección. El tema visual se guarda en el almacenamiento local del navegador, no en una cookie.
+
+Las publicaciones y la página de carreras pueden incluir contenido que la organización decidió embeber, como un video o un mapa. Esos embeds vienen de otros sitios y pueden instalar sus propias cookies. No se cargan hasta que permites los embeds. Puedes cambiar esa elección en **Cookie preferences**, al pie de la página.
+
+Si la organización activa una verificación anti-bots en las postulaciones, el formulario carga Cloudflare Turnstile, Google reCAPTCHA o hCaptcha, según lo que haya configurado. Esa verificación es necesaria para enviar el formulario y el proveedor puede instalar sus propias cookies.
+
+Harly no incluye una cookie de analítica ni de marketing. Si la organización agrega su propio seguimiento fuera de este producto, debe describirlo aquí.
 
 Preguntas: [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
 
@@ -903,9 +901,15 @@ Dúvidas: [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
 
 **Última atualização:** {{DATE}}
 
-Usamos cookies estritamente necessários para operar o site de carreiras e, se você autorizar, cookies de análise para entender seu uso. Cookies opcionais somente serão ativados após seu consentimento.
+Este site de carreiras usa poucas cookies. Conteúdo de terceiros fica desligado até você permitir.
 
-Você pode alterar suas preferências pelo banner de cookies ou pelas configurações do navegador. A desativação de cookies estritamente necessários pode impedir o funcionamento de partes do serviço.
+Cookies estritamente necessários mantêm a sessão de quem entra e lembram esta escolha. O tema visual fica no armazenamento local do navegador, não em um cookie.
+
+As vagas e a página de carreiras podem incluir conteúdo que a organização decidiu incorporar, como um vídeo ou um mapa. Esses embeds vêm de outros sites e podem definir os próprios cookies. Eles não carregam até você permitir os embeds. Dá para mudar essa escolha em **Cookie preferences**, no rodapé.
+
+Se a organização ativar uma verificação anti-bots nas candidaturas, o formulário carrega Cloudflare Turnstile, Google reCAPTCHA ou hCaptcha, conforme a configuração. Essa verificação é necessária para enviar o formulário e o provedor pode definir os próprios cookies.
+
+A Harly não inclui um cookie de análise nem de marketing. Se a organização adicionar o próprio rastreamento fora deste produto, precisa descrevê-lo aqui.
 
 Dúvidas: [{{ENTITY_EMAIL}}](mailto:{{ENTITY_EMAIL}})
 

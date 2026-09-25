@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { getWorkspaceGCalConfig } from "@/lib/gcal/config";
 import { listCalendars } from "@/lib/gcal/client";
 import { createLogger } from "@/lib/logger";
@@ -60,6 +61,7 @@ async function clearGCalToken(organizationId: string): Promise<void> {
 export async function listGCalCalendarsAction(): Promise<
   { ok: true; calendars: GCalCalendar[] } | { ok: false; error: string }
 > {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const config = await getWorkspaceGCalConfig(context.organization.id);
   if (!config) {
@@ -94,6 +96,7 @@ export async function listGCalCalendarsAction(): Promise<
 export async function saveGCalSettingsAction(input: {
   calendarId: string;
 }): Promise<GCalActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const calendarId = input.calendarId.trim();
 
@@ -112,6 +115,7 @@ export async function saveGCalSettingsAction(input: {
 
 /** Disconnect Google Calendar , clear all gcal columns. */
 export async function disconnectGCalAction(): Promise<GCalActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   // Attempt to revoke the token at Google's end (best-effort)
@@ -143,6 +147,7 @@ export async function disconnectGCalAction(): Promise<GCalActionResult> {
 
 /** Quick connectivity check , tries to list calendars. */
 export async function testGCalConnectionAction(): Promise<GCalActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const config = await getWorkspaceGCalConfig(context.organization.id);
   if (!config) {

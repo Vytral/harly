@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { semanticGraphHash } from "@/features/automations/definition/hash";
 
 const mocks = vi.hoisted(() => ({
   getWorkspaceContextOrNull: vi.fn(),
@@ -15,6 +16,9 @@ const mocks = vi.hoisted(() => ({
   getAgentActionReceipt: vi.fn(),
   getApplicationForApi: vi.fn(),
   verifyInterviewOutcome: vi.fn(),
+  getAutomationProposal: vi.fn(),
+  applyAutomationProposal: vi.fn(),
+  getActorPermissions: vi.fn(),
 }));
 
 vi.mock("@/features/workspaces/context", () => ({
@@ -55,6 +59,7 @@ vi.mock("@/features/applications/service", () => ({
 }));
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: vi.fn(),
+  getActorPermissions: mocks.getActorPermissions,
 }));
 vi.mock("@/lib/audit-log", () => ({ logAuditEvent: vi.fn() }));
 vi.mock("./action-receipts", () => ({
@@ -66,8 +71,18 @@ vi.mock("./action-receipts", () => ({
 vi.mock("./interview-outcome", () => ({
   verifyInterviewOutcome: mocks.verifyInterviewOutcome,
 }));
+vi.mock("@/features/automations/ai-proposals", () => ({
+  getAutomationProposal: mocks.getAutomationProposal,
+  applyAutomationProposal: mocks.applyAutomationProposal,
+  createAutomationProposalPreviewToken: vi.fn(() => "preview-token-for-test"),
+  verifyAutomationProposalPreviewToken: vi.fn(() => false),
+}));
 
-import { confirmAgentWriteAction, undoAgentWriteAction } from "./write-actions";
+import {
+  confirmAgentWriteAction,
+  prepareAgentWriteAction,
+  undoAgentWriteAction,
+} from "./write-actions";
 
 describe("Harly AI task updates", () => {
   beforeEach(() => {
@@ -76,6 +91,14 @@ describe("Harly AI task updates", () => {
       organization: { id: "workspace-1" },
       user: { id: "user-1" },
     });
+    mocks.getActorPermissions.mockResolvedValue([
+      "jobs:create", "jobs:view", "jobs:edit", "jobs:delete", "jobs:publish", "jobs:approve",
+      "hiring_team:manage", "candidates:view", "candidates:edit", "candidates:delete", "candidates:move",
+      "dsar:manage", "collab:write", "interviews:manage", "interviews:feedback", "tasks:read", "tasks:write",
+      "offers:manage", "offers:approve", "templates:manage", "reports:read", "members:read", "members:invite",
+      "members:edit", "members:remove", "invite_links:manage", "settings:edit", "integrations:manage",
+      "roles:manage", "security:manage", "documents:read", "documents:manage", "documents:share", "automations:manage",
+    ]);
     mocks.updateTask.mockResolvedValue({ success: true });
     mocks.completeMyOpenTasks.mockResolvedValue({
       success: true,
@@ -106,6 +129,36 @@ describe("Harly AI task updates", () => {
     mocks.getApplicationForApi.mockResolvedValue({
       currentStageId: "11111111-1111-4111-8111-111111111111",
     });
+    const proposalGraph = {
+      schemaVersion: 2,
+      entryNodeId: "trigger",
+      nodes: [{ id: "trigger", type: "trigger", event: "application.created" }],
+      edges: [],
+    };
+    mocks.getAutomationProposal.mockResolvedValue({
+      id: "11111111-1111-4111-8111-111111111111",
+      workflowId: "22222222-2222-4222-8222-222222222222",
+      baseRevision: 4,
+      name: "Tag high-priority applicants",
+      issues: [],
+      status: "prepared",
+      graph: proposalGraph,
+      simulation: {
+        status: "verified",
+        coveragePercent: 100,
+        coveredNodeIds: ["trigger"],
+        uncoveredNodeIds: [],
+        scenarios: [],
+        allNodeIds: ["trigger"],
+        simulationHash: "test-hash",
+        graphHash: semanticGraphHash(proposalGraph as never),
+        simulatedAt: new Date().toISOString(),
+      },
+      diff: [
+        { kind: "node_added", id: "tag" },
+        { kind: "edge_changed", id: "e1" },
+      ],
+    });
   });
 
   it("updates one task without treating AI null fields as edits", async () => {
@@ -130,6 +183,39 @@ describe("Harly AI task updates", () => {
       dueDate: undefined,
       ownerId: undefined,
     });
+  });
+
+  it("shows a verified automation diff before confirmation", async () => {
+    const proposalId = "11111111-1111-4111-8111-111111111111";
+    await expect(
+      prepareAgentWriteAction("applyAutomationProposal", { proposalId }),
+    ).resolves.toMatchObject({
+      ok: true,
+      canonical: true,
+      title: "Apply automation proposal",
+      details: expect.arrayContaining([
+        { label: "Automation", value: "Tag high-priority applicants" },
+        { label: "Steps", value: "1 added" },
+        { label: "Test result", value: "verified (100% branch coverage)" },
+      ]),
+      automationChanges: [{ kind: "node_added", id: "tag", title: "Tag" }],
+    });
+    expect(mocks.getAutomationProposal).toHaveBeenCalledWith({
+      workspaceId: "workspace-1",
+      actorId: "user-1",
+      proposalId,
+    });
+  });
+
+  it("rejects direct proposal confirmation without the server preview token", async () => {
+    const result = await confirmAgentWriteAction("applyAutomationProposal", {
+      proposalId: "11111111-1111-4111-8111-111111111111",
+    });
+    expect(result).toMatchObject({
+      success: false,
+      error: expect.stringContaining("fresh server preview"),
+    });
+    expect(mocks.applyAutomationProposal).not.toHaveBeenCalled();
   });
 
   it("accepts null optional fields from strict AI write tools", async () => {
@@ -540,5 +626,48 @@ describe("Harly AI task updates", () => {
         sendEmail: false,
       }),
     );
+  });
+
+  it("rejects prepare and confirm of applyAutomationProposal when actor lacks automations:manage", async () => {
+    mocks.getActorPermissions.mockResolvedValue([
+      "candidates:view", "collab:write", "tasks:read", "tasks:write",
+    ]);
+    const proposalId = "11111111-1111-4111-8111-111111111111";
+
+    await expect(
+      prepareAgentWriteAction("applyAutomationProposal", { proposalId }),
+    ).resolves.toEqual({
+      ok: false,
+      title: "Action unauthorized",
+      details: [],
+      error: "You do not have permission to perform this action.",
+    });
+    expect(mocks.getAutomationProposal).not.toHaveBeenCalled();
+
+    await expect(
+      confirmAgentWriteAction("applyAutomationProposal", { proposalId }),
+    ).resolves.toEqual({
+      success: false,
+      error: "You do not have permission to perform this action.",
+    });
+    expect(mocks.applyAutomationProposal).not.toHaveBeenCalled();
+  });
+
+  it("rejects createOffer when actor lacks offers:manage", async () => {
+    mocks.getActorPermissions.mockResolvedValue([
+      "candidates:view", "collab:write", "tasks:read", "tasks:write",
+    ]);
+
+    await expect(
+      confirmAgentWriteAction("createOffer", {
+        applicationId: "11111111-1111-4111-8111-111111111111",
+        salary: 100000,
+        currency: "USD",
+        startDate: "2026-10-01",
+      }),
+    ).resolves.toEqual({
+      success: false,
+      error: "You do not have permission to perform this action.",
+    });
   });
 });

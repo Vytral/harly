@@ -214,6 +214,59 @@ export async function getAgentActionReceipt(input: {
 }
 
 /**
+ * Reaps confirmations whose request handler disappeared after reservation.
+ * A permanent `processing` row is worse than a failed result: it makes every
+ * legitimate retry look concurrent forever. The transition is conditional on
+ * the current status, so a late handler completion can never overwrite a
+ * receipt that was already completed by another worker.
+ */
+export async function reapStaleProcessingAgentReceipts(
+  olderThanMinutes = 10,
+  limit = 100,
+): Promise<number> {
+  const threshold = new Date(Date.now() - Math.max(1, olderThanMinutes) * 60_000);
+  const maxRows = Math.max(1, Math.min(500, Math.floor(limit)));
+  return db.transaction(async (tx) => {
+    const stale = await tx
+      .select({ id: aiActionReceipts.id })
+      .from(aiActionReceipts)
+      .where(
+        and(
+          eq(aiActionReceipts.status, "processing"),
+          lt(aiActionReceipts.updatedAt, threshold),
+        ),
+      )
+      .orderBy(aiActionReceipts.updatedAt)
+      .limit(maxRows)
+      .for("update", { skipLocked: true });
+
+    let reaped = 0;
+    for (const receipt of stale) {
+      const [updated] = await tx
+        .update(aiActionReceipts)
+        .set({
+          status: "failed",
+          result: {
+            success: false,
+            error: "The confirmation worker timed out before completing this action. Please confirm again.",
+            reaped: true,
+          },
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(aiActionReceipts.id, receipt.id),
+            eq(aiActionReceipts.status, "processing"),
+          ),
+        )
+        .returning({ id: aiActionReceipts.id });
+      if (updated) reaped += 1;
+    }
+    return reaped;
+  });
+}
+
+/**
  * Returns a compact, actor-scoped activity feed for Harly. Raw inputs and
  * action results stay server-side; the agent only needs enough information to
  * explain what happened and select a reversible receipt for an undo.

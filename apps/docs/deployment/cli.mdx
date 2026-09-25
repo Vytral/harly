@@ -1,6 +1,6 @@
 ---
 title: "Deploy with the Harly CLI"
-description: "Install, deploy, operate, and automate self-hosted Harly with @harly/cli v0.4.0."
+description: "Install, deploy, upgrade, and automate a self-hosted Harly instance from the terminal using the @harly/cli v0.4.0 command reference."
 ---
 
 The Harly CLI installs and operates a self-hosted Harly deployment. It
@@ -89,7 +89,7 @@ Public values can be passed as flags:
 | `--organization <name>` | Organization display name. |
 | `--storage <provider>` | `local` or `s3`. |
 | `--resource-profile <profile>` | `compact`, `standard`, or `performance`. |
-| `--image <reference>` | Exact tag or digest. `latest` is rejected. |
+| `--image <reference>` | Exact version, `:latest`, or a digest. `:latest` is pinned to the current stable digest. `edge` is rejected. |
 | `--output-dir <directory>` | Alias for the `init` positional directory. |
 | `--launch` | Launch after generation. |
 | `--no-launch` | Generate only. |
@@ -304,11 +304,15 @@ services or bring the Compose project back up.
 
 ```bash
 npx @harly/cli backup ./harly
-npx @harly/cli update ./harly --to 0.4.0
+npx @harly/cli update
 ```
 
-The update flow creates a rollback archive, pulls the pinned image, runs the
-database migration once, restarts the services, and waits for readiness.
+Run `update` from the installation directory, or from any directory inside it.
+It reads the current stable release and moves this install there. It does
+nothing when that version is already running. `--to 0.2.1-beta.1` opts into a
+prerelease. The flow creates a rollback archive, pulls that exact version,
+runs the database migration once, restarts the services, and waits for
+readiness.
 
 ### Restore or uninstall
 

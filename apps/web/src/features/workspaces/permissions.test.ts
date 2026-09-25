@@ -7,6 +7,7 @@ import {
   exceedsPrivilege,
   normalizeRoleScope,
   roleLabel,
+  rolePolicyIsStrictlyBelow,
   scopeExceedsPrivilege,
 } from "@/features/workspaces/permissions";
 import { normalizeWorkspaceRole } from "@/features/workspaces/roles";
@@ -93,6 +94,45 @@ describe("exceedsPrivilege", () => {
 });
 
 describe("workspace roles", () => {
+  it("orders member-management authority by strict effective privilege", () => {
+    const unrestricted = {
+      jobAccess: "all" as const,
+      departments: [],
+      regions: [],
+    };
+    const scoped = {
+      jobAccess: "assigned" as const,
+      departments: ["Engineering"],
+      regions: [],
+    };
+    const actor = { permissions: ["members:edit", "jobs:view"], scope: unrestricted };
+
+    expect(
+      rolePolicyIsStrictlyBelow(actor, {
+        permissions: ["jobs:view"],
+        scope: unrestricted,
+      }),
+    ).toBe(true);
+    expect(
+      rolePolicyIsStrictlyBelow(actor, {
+        permissions: [...actor.permissions],
+        scope: unrestricted,
+      }),
+    ).toBe(false);
+    expect(
+      rolePolicyIsStrictlyBelow(actor, {
+        permissions: [...actor.permissions, "roles:manage"],
+        scope: unrestricted,
+      }),
+    ).toBe(false);
+    expect(
+      rolePolicyIsStrictlyBelow(actor, {
+        permissions: [...actor.permissions],
+        scope: scoped,
+      }),
+    ).toBe(true);
+  });
+
   it("normalizes contextual role scope and removes duplicate/blank filters", () => {
     expect(
       normalizeRoleScope({

@@ -14,7 +14,11 @@ import {
   requirePermission,
 } from "@/features/workspaces/permissions-server";
 import { hashEvaluationInput } from "./service";
-import { evaluationRubricInputSchema } from "./rubric-schema";
+import {
+  evaluationRubricInputSchema,
+  toEffectiveCriterion,
+  validateRubricGates,
+} from "./rubric-schema";
 
 export type RubricActionResult =
   | { success: true; rubricId: string; version: number }
@@ -26,6 +30,9 @@ export async function createEvaluationRubricAction(
 ): Promise<RubricActionResult> {
   const parsed = evaluationRubricInputSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Invalid evaluation rubric." };
+  // Phase 2 governance (§2.3): reject invalid gates before touching auth/DB.
+  const gateError = validateRubricGates(parsed.data.criteria);
+  if (gateError) return { success: false, error: gateError };
   const context = await requireJobPermission("jobs:edit", parsed.data.jobId);
 
   const [job] = await db
@@ -62,13 +69,7 @@ export async function createEvaluationRubricAction(
     await tx.insert(evaluationCriteria).values(
       parsed.data.criteria.map((criterion) => ({
         rubricId: rubric.id,
-        key: criterion.key,
-        label: criterion.label,
-        type: criterion.type,
-        importance: criterion.importance,
-        weight: criterion.weight,
-        aliases: criterion.aliases,
-        minimumValue: criterion.minimumValue ?? null,
+        ...toEffectiveCriterion(criterion),
       })),
     );
     return { id: rubric.id, version };

@@ -7,6 +7,7 @@ import { PublicCareerPage } from "@/features/career-page/PublicCareerPage";
 import { getPublicWorkspaceSlug } from "@/lib/public-workspace";
 import { isPortalEnabled } from "@/lib/portal-auth";
 import { publicBoardMetadata } from "@/features/career-page/seo";
+import { DemoEntryButton } from "@/features/demo/DemoEntryButton";
 
 export const dynamic = "force-dynamic";
 
@@ -37,20 +38,23 @@ export default async function HomePage() {
   // available at `/board/[workspaceSlug]`, while the root board preserves its
   // legacy `/jobs` and `/apply` links.
   return (
-    <PublicCareerPage
-      workspace={data.workspace}
-      jobs={data.jobs.map((job) => ({
-        id: job.id,
-        slug: job.slug,
-        title: job.title,
-        department: job.department,
-        location: job.location,
-        employmentType: job.employmentType,
-        workplaceType: job.workplaceType,
-      }))}
-      config={data.config}
-      boardRoot=""
-      portalEnabled={portalEnabled}
-    />
+    <>
+      <PublicCareerPage
+        workspace={data.workspace}
+        jobs={data.jobs.map((job) => ({
+          id: job.id,
+          slug: job.slug,
+          title: job.title,
+          department: job.department,
+          location: job.location,
+          employmentType: job.employmentType,
+          workplaceType: job.workplaceType,
+        }))}
+        config={data.config}
+        boardRoot=""
+        portalEnabled={portalEnabled}
+      />
+      <DemoEntryButton />
+    </>
   );
 }

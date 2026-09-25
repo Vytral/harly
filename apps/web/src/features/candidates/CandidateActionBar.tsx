@@ -331,7 +331,7 @@ function DeleteCandidateButton({
         return;
       }
       setConfirmOpen(false);
-      toast.success(`${name} deleted permanently.`);
+      toast.success(`${name} moved to trash.`);
       router.push("/dashboard/candidates");
     });
   }

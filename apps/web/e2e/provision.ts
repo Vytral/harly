@@ -6,13 +6,19 @@ import {
   candidates,
   candidatePortalMagicLinks,
   createDatabaseClient,
+  documentLegalHolds,
+  documentRequestPackages,
+  documentRequests,
+  documents,
   emailOutbox,
   jobStages,
   jobs,
   member,
   organization,
+  signatureEnvelopes,
   user,
   workspaceSettings,
+  workflowDefinitions,
 } from "@harly/db";
 
 import {
@@ -59,6 +65,28 @@ export async function provisionE2EFixture() {
   try {
     // The cleanup predicates are fixture-specific. In particular, this never
     // deletes the normal `harly` database or another workspace's data.
+    // Reset generated document/signature records so repeated browser runs do
+    // not grow the shared E2E workspace or slow the document hub indefinitely.
+    await db
+      .delete(documentLegalHolds)
+      .where(eq(documentLegalHolds.workspaceId, FIXTURE.workspaceId));
+    await db
+      .delete(signatureEnvelopes)
+      .where(eq(signatureEnvelopes.workspaceId, FIXTURE.workspaceId));
+    await db
+      .delete(documentRequestPackages)
+      .where(eq(documentRequestPackages.workspaceId, FIXTURE.workspaceId));
+    await db
+      .delete(documentRequests)
+      .where(eq(documentRequests.workspaceId, FIXTURE.workspaceId));
+    await db
+      .delete(documents)
+      .where(eq(documents.workspaceId, FIXTURE.workspaceId));
+    // Clean workflows before jobs so published E2E recipes cannot leak into a
+    // later hiring-flow run and dispatch duplicate notes/events.
+    await db
+      .delete(workflowDefinitions)
+      .where(eq(workflowDefinitions.workspaceId, FIXTURE.workspaceId));
     await db
       .delete(jobs)
       .where(
@@ -73,6 +101,14 @@ export async function provisionE2EFixture() {
         and(
           eq(candidates.workspaceId, FIXTURE.workspaceId),
           eq(candidates.email, FIXTURE.candidateEmail),
+        ),
+      );
+    await db
+      .delete(candidates)
+      .where(
+        and(
+          eq(candidates.workspaceId, FIXTURE.workspaceId),
+          eq(candidates.email, FIXTURE.builderCandidateEmail),
         ),
       );
     await db
@@ -168,6 +204,75 @@ export async function provisionE2EFixture() {
       });
 
     await db
+      .insert(user)
+      .values({
+        id: FIXTURE.approverId,
+        name: "Harly E2E Approver",
+        email: FIXTURE.approverEmail,
+        emailVerified: true,
+        onboardingCompletedAt: now,
+        mustChangePassword: false,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: user.id,
+        set: {
+          name: "Harly E2E Approver",
+          email: FIXTURE.approverEmail,
+          emailVerified: true,
+          onboardingCompletedAt: now,
+          mustChangePassword: false,
+          updatedAt: now,
+        },
+      });
+
+    const approverPassword = await hashPassword(FIXTURE.approverPassword);
+    await db
+      .insert(account)
+      .values({
+        id: "e2e-hiring-approver-credential",
+        accountId: FIXTURE.approverId,
+        providerId: "credential",
+        userId: FIXTURE.approverId,
+        password: approverPassword,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: account.id,
+        set: {
+          accountId: FIXTURE.approverId,
+          providerId: "credential",
+          userId: FIXTURE.approverId,
+          password: approverPassword,
+          updatedAt: now,
+        },
+      });
+
+    await db
+      .insert(member)
+      .values({
+        id: "e2e-hiring-approver-membership",
+        organizationId: FIXTURE.workspaceId,
+        userId: FIXTURE.approverId,
+        role: "admin",
+        status: "active",
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: member.id,
+        set: {
+          organizationId: FIXTURE.workspaceId,
+          userId: FIXTURE.approverId,
+          role: "admin",
+          status: "active",
+          updatedAt: now,
+        },
+      });
+
+    await db
       .insert(workspaceSettings)
       .values({
         organizationId: FIXTURE.workspaceId,
@@ -189,7 +294,7 @@ export async function provisionE2EFixture() {
         emailSmtpPort: E2E_SMTP_PORT,
         emailSmtpSecure: false,
         nativeSignEnabled: true,
-        remoteSignEnabled: false,
+        remoteSignEnabled: true,
         signatureSecurityMode: "link_only",
         offerSignatureChannel: "native",
         updatedAt: now,
@@ -215,7 +320,7 @@ export async function provisionE2EFixture() {
           emailSmtpPort: E2E_SMTP_PORT,
           emailSmtpSecure: false,
           nativeSignEnabled: true,
-          remoteSignEnabled: false,
+          remoteSignEnabled: true,
           signatureSecurityMode: "link_only",
           offerSignatureChannel: "native",
           updatedAt: now,
@@ -238,6 +343,16 @@ export async function provisionE2EFixture() {
       status: "open",
       publishedAt: now,
       createdById: FIXTURE.recruiterId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await db.insert(candidates).values({
+      id: FIXTURE.builderCandidateId,
+      workspaceId: FIXTURE.workspaceId,
+      firstName: "Builder",
+      lastName: "Candidate",
+      email: FIXTURE.builderCandidateEmail,
       createdAt: now,
       updatedAt: now,
     });

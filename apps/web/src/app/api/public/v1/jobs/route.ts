@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 
 /** GET /api/public/v1/jobs , list a workspace's open jobs (CORS-open). */
 export const GET = withApi(async (request) => {
-  enforceRateLimit(`public:jobs:${clientIp(request)}`, {
+  await enforceRateLimit(`public:jobs:${clientIp(request)}`, {
     limit: 120,
     windowMs: 60_000,
   });

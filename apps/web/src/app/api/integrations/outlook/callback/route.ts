@@ -1,3 +1,4 @@
+import { isDemoMode } from "@harly/config";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -26,6 +27,9 @@ export const runtime = "nodejs";
  * 5. Redirect to settings
  */
 export async function GET(req: NextRequest) {
+  if (isDemoMode()) {
+    return NextResponse.json({ error: "This action is disabled in the demo." }, { status: 403 });
+  }
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
     return redirectWithError("Unauthorized. Please log in first.");

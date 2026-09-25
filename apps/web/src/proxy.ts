@@ -14,7 +14,13 @@ const PUBLIC_PATHS = [
   "/forgot-password",
   "/reset-password",
   "/setup",
+  // Demo mode entry screen + its sign-in action (no-op when DEMO_MODE unset).
+  "/enter",
+  "/api/demo",
   "/api/auth",
+  // Passkey login starts from the anonymous login form (register and
+  // authenticate verify the session in-route, so they stay gated).
+  "/api/passkey/login",
   "/api/health",
   "/api/metrics",
   // SSE authenticates in the route so unauthenticated EventSource clients get
@@ -35,6 +41,12 @@ const PUBLIC_PATHS = [
   "/jobs",
   "/apply",
   "/board",
+  // Workspace legal pages (privacy, terms, cookies…) linked from every
+  // public footer. The board-scoped variant is covered by "/board".
+  "/legal",
+  // Invite-link landing: renders a "Sign in to join" CTA for anonymous
+  // visitors, so the proxy must let them through (page handles !session).
+  "/join",
   "/invite",
   // Portal public routes , pages enforce isPortalEnabled themselves
   "/portal",
@@ -42,6 +54,7 @@ const PUBLIC_PATHS = [
   "/setup-2fa",
   "/sign",
   "/api/native-sign",
+  "/api/pdfjs",
 ];
 
 const PROTECTED_PATH_PREFIXES = ["/dashboard", "/settings"];
@@ -73,8 +86,22 @@ function publicRedirectUrl(request: NextRequest, pathname: string): URL {
   return new URL(pathname, configuredOrigin ?? request.nextUrl.origin);
 }
 
+// In demo mode the standard auth entry points are replaced by the shared-
+// credential `/enter` screen. The career board at `/` is untouched.
+const DEMO_REDIRECT_TO_ENTER = ["/login", "/signup", "/forgot-password", "/setup"];
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ── Demo mode: funnel the normal auth pages to the shared /enter screen ──
+  // Whole-instance behavior (this is a dedicated demo VPS). `/` (the board),
+  // `/enter`, and `/api/*` are left alone so entry + APIs keep working.
+  if (
+    process.env.DEMO_MODE === "true" &&
+    DEMO_REDIRECT_TO_ENTER.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  ) {
+    return NextResponse.redirect(publicRedirectUrl(request, "/enter"));
+  }
 
   // ── Candidate portal protected routes (cookie-only, no DB) ──────────────
   if (isPortalProtected(pathname)) {

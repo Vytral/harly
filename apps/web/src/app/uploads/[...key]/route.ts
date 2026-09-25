@@ -20,6 +20,7 @@ const CONTENT_TYPES: Record<string, string> = {
   ".jpg": "image/jpeg",
   ".pdf": "application/pdf",
   ".png": "image/png",
+  ".svg": "image/svg+xml",
   ".webp": "image/webp",
 };
 
@@ -92,8 +93,8 @@ export async function GET(
         "X-Content-Type-Options": "nosniff",
         ...(path.extname(storageKey).toLowerCase() === ".svg"
           ? {
-              "Content-Disposition": 'attachment; filename="asset.bin"',
-              "Content-Security-Policy": "default-src 'none'; style-src 'unsafe-inline'",
+              "Content-Security-Policy":
+                "default-src 'none'; style-src 'unsafe-inline'; sandbox",
             }
           : {}),
       },

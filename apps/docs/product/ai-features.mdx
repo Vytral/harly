@@ -1,6 +1,6 @@
 ---
 title: "AI features"
-description: "Optional, provider-backed assistance for matching, drafting, and anonymized review — always advisory."
+description: "Optional, provider-backed AI assistance in Harly for candidate matching, drafting messages, and anonymized review — always advisory, never a hiring decision."
 ---
 
 Harly's AI features are optional and off until you configure a provider. They
@@ -18,8 +18,9 @@ suggestion a human reviews and owns.
 
 <Steps>
   <Step title="Choose a provider">
-    Open **Settings → AI** and select a provider. Harly supports OpenAI-compatible
-    APIs. You bring your own API key — Harly does not proxy through a shared key.
+    Open **Settings → AI** and select a provider. Harly supports OpenAI,
+    Anthropic, Google Gemini, xAI, and OpenRouter (as well as custom OpenAI-compatible
+    endpoints). You bring your own API key — Harly does not proxy through a shared key.
   </Step>
   <Step title="Add the API key">
     Paste the API key from your provider. It is stored encrypted and never
@@ -32,8 +33,12 @@ suggestion a human reviews and owns.
 </Steps>
 
 <Warning>
-  AI output is advisory. Never auto-advance, auto-reject, or send a message on
-  an AI suggestion without a human review. A person owns every hiring decision.
+  AI output is advisory and the chat assistant never silently applies a
+  workflow. A workspace owner can explicitly authorize a reviewed automation
+  with a rule such as `ai.score < 50`, including a rejection email or a
+  candidate-data erasure step. A person owns the rule and its policy; the
+  workflow runtime enforces permissions, durable effects, retries, and legal
+  holds.
 </Warning>
 
 ## What AI can do
@@ -69,8 +74,10 @@ scorecard remains on the candidate record for audit.
 
 ### Chat
 
-Ask questions about a candidate or pipeline in context. The assistant sees only
-the data for the current candidate or job, not the entire workspace.
+Ask questions about candidates, jobs, pipeline health, or automations. The assistant
+operates within your active workspace using real-time tools governed by role-based
+permissions. When opened alongside a specific candidate or job, it automatically incorporates
+that item's context while respecting your tenant boundaries.
 
 <Frame caption="Harly AI assistant alongside the candidate pipeline.">
   <img
@@ -83,14 +90,32 @@ Examples:
 - "Summarize this candidate's relevant experience."
 - "What questions has this candidate not answered yet?"
 
+### Automation authoring
+
+Harly AI can propose complete workflows in the Automations Builder. It can
+discover the enabled action and integration catalog, resolve jobs, stages,
+templates, and other workspace resources, preserve branches, delays, waits,
+and approval outcomes, then simulate the proposal before anything is applied.
+The proposal shows a graph diff and branch-coverage report and uses a
+revision/content-hash check when the owner applies it. For example, an owner
+can ask for `application.created` → `ai_score` → `ai.score < 50` → reject,
+send a specific email, and queue durable candidate-data erasure, with an
+alternative manual-review branch for scores of 50 or more.
+
+The complete tool, permission, integration, and simulation contract is
+published in the generated [automation capability matrix](/product/automation-capability-matrix.generated).
+CI verifies that matrix against the runtime manifests and legacy registry so
+the documentation cannot drift from what Harly can actually execute.
+
 ## Data and privacy
 
 | Data sent to provider | When it is sent |
 | --- | --- |
 | Job description text | Matching and draft features |
 | Application answers | Matching and chat features |
+| Resume, job criteria, and configured workflow context | An owner-authorized `ai_score` automation or matching request |
 | Scorecard text | Anonymization feature |
-| Candidate name/email | Only if anonymization is off |
+| Candidate name/email and other profile fields | Only when the enabled feature or an owner-authorized chat/workflow request needs them |
 
 What is sent to a provider is limited to the feature you enabled. Candidate
 data is personal data, so:

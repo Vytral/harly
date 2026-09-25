@@ -9,13 +9,28 @@
 -- Interviews and tasks get direction-aware handling since "scheduled" must
 -- land in the future and "completed" must stay in the past.
 --
--- Safe to re-run; every UPDATE is scoped to the hardcoded workspace id below.
--- Usage: docker exec -i harly-postgres psql -U harly -d harly -f refresh-demo-freshness.sql
+-- Safe to re-run; every UPDATE is scoped to the workspace id passed in below.
+-- The workspace id is a required psql variable (:ws) so the same script can
+-- refresh any demo workspace; the cutoff is now relative (rows older than the
+-- pivot window) rather than a fixed calendar date.
+-- Usage:
+--   docker exec -i harly-postgres psql -U harly -d harly \
+--     -v ws=YOUR_WORKSPACE_ID -f refresh-demo-freshness.sql
+
+\if :{?ws}
+\else
+  \echo 'ERROR: pass the workspace id with -v ws=<workspace_id>'
+  \quit 1
+\endif
+
+-- psql does NOT substitute :vars inside dollar-quoted ($$) blocks, so stash the
+-- workspace id in a session setting here and read it via current_setting below.
+SELECT set_config('demo.ws', :'ws', false);
 
 DO $$
 DECLARE
-  ws text := 'YyZYVHxI4t2YWY2XeY8gzVTijirlWg9T'; -- Syntrix (acme)
-  cutoff timestamptz := '2026-07-15 00:00:00+00';  -- excludes live/real rows created during testing
+  ws text := current_setting('demo.ws');
+  cutoff timestamptz := now() - interval '10 days';  -- pivot window: rows older than this are the "aged story" to compress forward
   v_now timestamptz := now();
   v_pivot timestamptz;
   v_k numeric := 0.3;  -- compression factor: a row 10 days before the pivot lands 3 days before "now"

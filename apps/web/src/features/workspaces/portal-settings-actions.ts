@@ -8,11 +8,14 @@ import { db, workspaceSettings } from "@harly/db";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
+
 export type PortalSettingsResult = { ok: boolean; error?: string };
 
 export async function savePortalSettingsAction(
   enabled: boolean,
 ): Promise<PortalSettingsResult> {
+  assertNotDemo();
   const context = await requirePermission("settings:edit");
 
   await db
@@ -41,6 +44,7 @@ export async function savePortalOAuthAction(input: {
   clientId: string;
   clientSecret?: string;
 }): Promise<PortalSettingsResult> {
+  assertNotDemo();
   const context = await requirePermission("settings:edit");
 
   if (!isEncryptionConfigured()) {
@@ -127,6 +131,7 @@ export async function savePortalOAuthAction(input: {
 export async function disconnectPortalOAuthAction(
   provider: "google" | "github" | "linkedin",
 ): Promise<PortalSettingsResult> {
+  assertNotDemo();
   const context = await requirePermission("settings:edit");
 
   const set =
@@ -167,6 +172,7 @@ export async function savePortalUiOptionsAction(input: {
   showApplicationStatus: boolean;
   showHiringTeam: boolean;
 }): Promise<PortalSettingsResult> {
+  assertNotDemo();
   const context = await requirePermission("settings:edit");
 
   await db

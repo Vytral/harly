@@ -37,8 +37,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     .where(eq(documents.id, target.documentId))
     .limit(1);
 
+  const fields = Array.isArray(row?.fieldsSnapshot)
+    ? row.fieldsSnapshot.filter((field) => typeof field === "object" && field !== null && ((field as { recipientIndex?: number }).recipientIndex ?? 0) === target.routingOrder - 1)
+    : [];
   return NextResponse.json(
-    { fields: row?.fieldsSnapshot ?? [] },
+    { fields },
     { headers: { "Cache-Control": "private, no-store" } },
   );
 }

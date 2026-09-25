@@ -204,6 +204,28 @@ describe("F1-07 re-application duplicate detection order", () => {
     expect(calls.insert).toBe(0);
   });
 
+  it("does not restore a trashed candidate when the same-job application is still blocking", async () => {
+    const { tx, calls } = makeTx([
+      [JOB],
+      [ORG],
+      [{ ...EXISTING_CANDIDATE, deletedAt: new Date("2026-01-01") }],
+      [EXISTING_APPLICATION],
+    ]);
+    mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) =>
+      fn(tx),
+    );
+
+    const result = await createPublicApplication(
+      { jobSlug: "engineer", workspaceSlug: "acme" },
+      VALUES,
+    );
+
+    expect(result.ok).toBe(false);
+    expect((result as { message?: string }).message ?? "").toMatch(/already applied/i);
+    expect(calls.update).toBe(0);
+    expect(calls.insert).toBe(0);
+  });
+
   it("creates a new application for another job without overwriting the canonical profile", async () => {
     const canonicalCandidate = {
       id: "cand-1",

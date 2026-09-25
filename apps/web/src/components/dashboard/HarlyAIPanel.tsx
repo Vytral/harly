@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import type { Route } from "next";
@@ -158,39 +158,111 @@ const QUICK_PROMPTS = [
 ];
 
 // Human labels for the "calling a tool" inline state.
-const TOOL_LABELS: Record<string, string> = {
-  "tool-reviewPipeline": "Reading your pipeline",
-  "tool-candidatesNeedingReview": "Finding candidates to review",
+export const TOOL_LABELS: Record<string, string> = {
+  // Automations tools
+  "tool-listAutomationTools": "Checking automation tools",
+  "tool-searchAutomations": "Searching automations",
+  "tool-getAutomationContext": "Reading automation draft",
+  "tool-prepareAutomationPatch": "Preparing automation proposal",
+  "tool-simulateAutomationProposal": "Simulating automation",
+  "tool-applyAutomationProposal": "Applying automation changes",
+  "tool-resolveAutomationResources": "Resolving automation resources",
+  "tool-prepareAutomationPlan": "Preparing automation plan",
+  "tool-compilePlan": "Compiling automation plan",
+  "tool-runBranchCoverage": "Analyzing branch coverage",
+  "tool-diagnoseWorkflowRun": "Diagnosing workflow run",
+  "tool-getWorkflowRunDiagnosis": "Diagnosing workflow run",
+  "tool-prepareAutomationRepair": "Preparing automation repair",
+  // Capabilities & workspace
+  "tool-workspaceCapabilities": "Checking workspace capabilities",
+  "tool-connectedIntegrations": "Checking connected integrations",
+  "tool-userPermissions": "Checking permissions",
+  "tool-harlyProductKnowledge": "Consulting Harly documentation",
+  "tool-resolveCandidate": "Finding candidate",
+  "tool-resolveJob": "Finding job",
+  "tool-resolveApplication": "Finding application",
+  "tool-reviewCandidate": "Evaluating candidate profile",
+  "tool-candidateNextAction": "Determining next action",
+  "tool-prepareInterview": "Preparing interview scheduling",
+  "tool-hiringBrief": "Preparing hiring brief",
+  "tool-getCandidateContext": "Reading candidate context",
+  "tool-getApplicationContext": "Reading application context",
+  "tool-getJobStatus": "Checking job status",
+  "tool-jobContext": "Reading job context",
+  "tool-jobDistributionOptions": "Checking job distribution options",
+  // Core operational tools
+  "tool-reviewPipeline": "Checking pipeline",
+  "tool-candidatesNeedingReview": "Finding candidates needing review",
   "tool-jobsAtRisk": "Checking jobs at risk",
-  "tool-hiringReport": "Pulling your hiring report",
-  "tool-searchCandidates": "Searching",
+  "tool-hiringReport": "Generating hiring report",
+  "tool-searchCandidates": "Searching candidates",
   "tool-listCandidates": "Listing candidates",
-  "tool-candidateProfile": "Reading the candidate profile",
+  "tool-candidateProfile": "Reading candidate profile",
   "tool-listJobs": "Listing jobs",
-  "tool-jobDetail": "Reading the job",
+  "tool-jobDetail": "Checking job details",
   "tool-upcomingInterviews": "Checking upcoming interviews",
   "tool-todayInterviews": "Checking today's interviews",
-  "tool-listTasks": "Reading tasks",
+  "tool-listTasks": "Checking tasks",
   "tool-taskCounts": "Counting tasks",
-  "tool-inbox": "Checking your inbox",
-  "tool-getCandidateScore": "Reading the AI score",
-  "tool-candidateScorecards": "Reading team scorecards",
+  "tool-inbox": "Checking inbox",
+  "tool-getCandidateScore": "Reading AI evaluation",
+  "tool-candidateScorecards": "Checking team scorecards",
   "tool-listCandidateOffers": "Checking offers",
-  "tool-talentPool": "Browsing the talent pool",
+  "tool-talentPool": "Exploring talent pool",
   "tool-listEmailTemplates": "Listing email templates",
-  "tool-emailTemplate": "Reading the template",
-  "tool-reportsOverview": "Pulling the analytics report",
-  "tool-generateCandidateScore": "Generating the AI score",
-  "tool-draftCandidateEmail": "Drafting the email",
-  "tool-generateJobDraft": "Writing the job description",
+  "tool-emailTemplate": "Reading email template",
+  "tool-reportsOverview": "Generating analytics report",
+  "tool-generateCandidateScore": "Generating AI evaluation",
+  "tool-draftCandidateEmail": "Drafting candidate email",
+  "tool-generateJobDraft": "Drafting job description",
   "tool-generateScreeningQuestions": "Generating screening questions",
-  "tool-interviewBrief": "Preparing the interview brief",
-  "tool-summarizeInterviewNotes": "Summarizing the notes",
-  "tool-detectDuplicates": "Checking for duplicates",
+  "tool-interviewBrief": "Preparing interview brief",
+  "tool-summarizeInterviewNotes": "Summarizing interview notes",
+  "tool-detectDuplicates": "Checking duplicates",
   "tool-compareCandidates": "Comparing candidates",
-  "tool-bulkScoreJob": "Scoring all applicants",
-  "tool-recentAgentActions": "Checking recent Harly actions",
+  "tool-bulkScoreJob": "Scoring job applicants",
+  "tool-recentAgentActions": "Checking recent actions",
 };
+
+export function getToolLabel(partType: string): string {
+  if (TOOL_LABELS[partType]) return TOOL_LABELS[partType];
+  const name = partType.startsWith("tool-") ? partType.slice(5) : partType;
+  const spaced = name.replace(/([A-Z])/g, " $1").toLowerCase().trim();
+  return spaced ? `Checking ${spaced}` : "Working";
+}
+
+/**
+ * An assistant turn that ran tools but produced neither prose nor a write
+ * confirmation card is stranded — the stream was cut (route timeout, provider
+ * error, or step budget) after the last tool finished. Without this check the
+ * panel shows finished tool statuses in silence, which reads as "Harly never
+ * answered".
+ */
+export function isStrandedAssistantTurn(input: {
+  isBusy: boolean;
+  text: string;
+  writeCardCount: number;
+  toolExecutionCount: number;
+}): boolean {
+  return (
+    !input.isBusy &&
+    !input.text.trim() &&
+    input.writeCardCount === 0 &&
+    input.toolExecutionCount > 0
+  );
+}
+
+/** Normalize `useChat`'s `error` (Error | string | unknown) to display text. */
+export function chatErrorMessage(error: unknown): string | null {
+  if (error == null) return null;
+  if (typeof error === "string") return error.trim() || null;
+  if (error instanceof Error) return error.message.trim() || null;
+  if (typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  }
+  return "Harly AI is temporarily unavailable. Please try again in a moment.";
+}
 
 // Custom markdown renderers: internal links (candidate/job profiles) use the
 // router and stay styled as inline chips; external links open in a new tab.
@@ -241,8 +313,18 @@ function ToolStatus({
   state,
 }: {
   label: string;
-  state: "running" | "done" | "error";
+  state: "running" | "done" | "error" | "interrupted";
 }) {
+  if (state === "interrupted") {
+    return (
+      <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        <PhWarning className="shrink-0 text-amber-500" />
+        <span>
+          {label} was interrupted before finishing — send a message to continue.
+        </span>
+      </div>
+    );
+  }
   if (state === "running") {
     return (
       <div className="flex items-center gap-1.5">
@@ -1621,6 +1703,7 @@ function WriteConfirmCard({
     "createOffer",
     "generateCandidateScore",
     "bulkScoreJob",
+    "applyAutomationProposal",
   ].includes(toolName);
   const verifying =
     requiresCanonicalPreview &&
@@ -1715,6 +1798,13 @@ function WriteConfirmCard({
             </dl>
           )
         )}
+        {toolName === "applyAutomationProposal" &&
+        serverPreview?.automationLifecycle ? (
+          <AutomationLifecycleChip
+            stage={serverPreview.automationLifecycle.stage}
+            reason={serverPreview.automationLifecycle.reason}
+          />
+        ) : null}
         {summary && (
           <p className="text-[11px] leading-snug text-muted-foreground">
             <span className="font-medium text-foreground/80">
@@ -1723,6 +1813,12 @@ function WriteConfirmCard({
             {summary}
           </p>
         )}
+        {toolName === "applyAutomationProposal" &&
+        serverPreview?.canonical &&
+        serverPreview.ok &&
+        serverPreview.automationChanges ? (
+          <AutomationProposalCard preview={serverPreview} />
+        ) : null}
         {isMove && who && from && to && (
           <div>
             <StagePath from={from} to={to} />
@@ -1753,6 +1849,127 @@ function WriteConfirmCard({
         </Button>
       </div>
     </section>
+  );
+}
+
+// Recruiter-facing automation proposal card: plain words, no graph jargon.
+// Edges, metadata renames, per-node coverage levels, and permission codenames
+// stay out — the summary, the step list, the test outcome, and what access
+// the automation needs are what the decision requires.
+function humanizeAutomationLabel(value: string): string {
+  const words = value
+    .replaceAll("_", " ")
+    .replaceAll("-", " ")
+    .replaceAll(":", " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .split(" ");
+  return words
+    .map((word, index) =>
+      index === 0
+        ? word.charAt(0).toUpperCase() + word.slice(1)
+        : word,
+    )
+    .join(" ");
+}
+
+const PROPOSAL_CHANGE_VERBS: Record<string, string> = {
+  node_added: "Added step",
+  node_changed: "Updated step",
+  node_removed: "Removed step",
+};
+
+function AutomationProposalCard({ preview }: { preview: AgentWritePreview }) {
+  const changes = preview.automationChanges ?? [];
+  const visible = changes.slice(0, 8);
+  const hidden = changes.length - visible.length;
+  const simulation = preview.automationSimulation;
+  const simulationLabel = !simulation
+    ? null
+    : simulation.status === "verified"
+      ? "All paths tested"
+      : simulation.status === "partial"
+        ? "Partially tested"
+        : "Tests failed";
+  const requirements = preview.automationRequirements;
+  const needLines: string[] = [];
+  if (requirements) {
+    if (requirements.permissions.length > 0) {
+      needLines.push(
+        `Needs permission: ${requirements.permissions.map(humanizeAutomationLabel).join(", ")}`,
+      );
+    }
+    const uses = [...requirements.integrations, ...requirements.resources].map(
+      humanizeAutomationLabel,
+    );
+    if (uses.length > 0) {
+      needLines.push(`Uses: ${uses.join(", ")}`);
+    }
+  }
+  return (
+    <div className="space-y-1.5 rounded-lg bg-muted/45 px-2.5 py-2 text-[11px] leading-snug">
+      <p className="font-medium text-foreground">What this automation does</p>
+      <ul className="max-h-28 space-y-1 overflow-y-auto text-muted-foreground" aria-label="Automation steps">
+        {visible.map((change) => (
+          <li key={`${change.kind}:${change.id}`} className="flex gap-1.5">
+            <span aria-hidden="true">·</span>
+            <span>
+              {PROPOSAL_CHANGE_VERBS[change.kind] ?? "Changed step"}:{" "}
+              {change.title || humanizeAutomationLabel(change.id)}
+            </span>
+          </li>
+        ))}
+        {hidden > 0 ? <li>Plus {hidden} more steps.</li> : null}
+        {visible.length === 0 ? <li>No step changes.</li> : null}
+      </ul>
+      {simulation && simulationLabel ? (
+        <p className="border-t border-border/50 pt-1.5 text-muted-foreground">
+          {simulationLabel} · {simulation.coveragePercent}%
+          {simulation.uncoveredNodeCount > 0
+            ? ` · ${simulation.uncoveredNodeCount} steps untested`
+            : ""}
+        </p>
+      ) : null}
+      {needLines.length > 0 ? (
+        <div className="border-t border-border/50 pt-1.5 text-muted-foreground">
+          {needLines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// Canonical automation lifecycle chip (§12.14). One vocabulary across
+// proposals, jobs, and runs: suggested → validated → simulated → queued →
+// executed → delivered, with uncertain for anything needing human review.
+function AutomationLifecycleChip({ stage, reason }: { stage: string; reason: string }) {
+  const tones: Record<string, string> = {
+    suggested: "bg-muted/60 text-muted-foreground",
+    validated: "bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    simulated: "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+    queued: "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+    executed: "bg-muted text-foreground",
+    delivered: "bg-emerald-600/15 text-emerald-800 dark:text-emerald-200",
+    uncertain: "bg-destructive/10 text-destructive",
+  };
+  const label = stage
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+  return (
+    <p className="flex items-center gap-1.5 text-[11px] leading-snug">
+      <span
+        className={cn(
+          "inline-flex shrink-0 items-center rounded-full px-2 py-0.5 font-medium",
+          tones[stage] ?? "bg-muted/60 text-muted-foreground",
+        )}
+      >
+        {label}
+      </span>
+      {reason ? <span className="text-muted-foreground">{reason}</span> : null}
+    </p>
   );
 }
 
@@ -1887,7 +2104,44 @@ type HarlyChatProps = {
     label: string;
     path: string;
   };
+  automationContext?: AutomationContext;
+  onAutomationApplied?: (result: {
+    workflowId: string;
+    draftRevision?: number;
+  }) => void | Promise<void>;
   onConversationActivity: () => void;
+};
+
+/**
+ * Editor snapshot shared with Harly AI when the chat panel is open inside the
+ * Automations builder. Mirrors `HarlyToolContext['activeAutomation']`
+ * (tools.ts) and the `automationContext` schema in the chat route so the
+ * three don't drift out of sync again (D5). `graph`/`layout` carry the
+ * user's actual unsaved edits — not just their hash — so the model can act on
+ * what the user currently sees instead of the last-saved server revision.
+ */
+export type AutomationContext = {
+  workflowId: string | null;
+  draftRevision?: number;
+  /** Hash of the server-saved draft used as the apply CAS boundary. */
+  serverContentHash?: string;
+  /** Hash of the exact graph currently visible in the editor. */
+  localSnapshotHash?: string;
+  /** Kept for compatibility with older chat clients. */
+  contentHash?: string;
+  selectedNodeId?: string;
+  validationIssues?: Array<{
+    nodeId: string;
+    fieldPath: string;
+    message: string;
+  }>;
+  activeTab?: "build" | "test" | "runs";
+  sampleScenario?: string;
+  isNew?: boolean;
+  isUnsaved?: boolean;
+  /** The local WorkflowGraphV2, included only while there are unsaved edits. */
+  graph?: Record<string, unknown>;
+  layout?: Record<string, unknown>;
 };
 
 function HarlyChat({
@@ -1896,6 +2150,8 @@ function HarlyChat({
   userName,
   candidateId,
   surfaceContext,
+  automationContext,
+  onAutomationApplied,
   onConversationActivity,
 }: HarlyChatProps) {
   const [input, setInput] = useState("");
@@ -1926,25 +2182,33 @@ function HarlyChat({
   const [preparedWritePreviews, setPreparedWritePreviews] = useState<
     Record<string, AgentWritePreview>
   >({});
-  const preparedWriteRequestsRef = useRef(new Set<string>());
+  const preparedWriteRequestsRef = useRef(new Map<string, string>());
   const pendingWriteIdsRef = useRef(new Set<string>());
   const firstName = userName.split(" ")[0] ?? userName;
   const notifiedRef = useRef(false);
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-  const { messages, sendMessage, addToolOutput, status, stop } = useChat({
+  // `useChat` keeps its transport for the lifetime of this `id` (it only
+  // recreates the underlying Chat instance when `id` changes), so a plain
+  // object passed as `body` would freeze candidateId/mentionedCandidateIds/
+  // `useChat` keeps its transport for the lifetime of this `id` (it only
+  // recreates the underlying Chat instance when `id` changes), so a `body`
+  // set once at construction would freeze candidateId/mentionedCandidateIds/
+  // surfaceContext/automationContext (including the local graph, D5) at
+  // whatever they were on the FIRST render, silently going stale on every
+  // later turn of the same conversation. Instead, the transport's own body
+  // stays minimal and every `sendMessage` call below passes the CURRENT
+  // values explicitly via `ChatRequestOptions.body`, which the AI SDK merges
+  // over the transport's static body per request.
+  const transport = useMemo(
+    () => new DefaultChatTransport({ api: "/api/ai/chat" }),
+    [],
+  );
+
+  const { messages, sendMessage, addToolOutput, status, stop, error } = useChat({
     id: conversationId,
     messages: initialMessages as never,
-    transport: new DefaultChatTransport({
-      api: "/api/ai/chat",
-      body: {
-        conversationId,
-        candidateId,
-        mentionedCandidateIds: Object.keys(mentionedCandidates),
-        surfaceContext,
-        timeZone,
-      },
-    }),
+    transport,
   });
 
   const isBusy = status === "submitted" || status === "streaming";
@@ -1954,30 +2218,48 @@ function HarlyChat({
       id: string;
       tool: string;
       input: Record<string, unknown>;
+      key: string;
     }> = [];
     for (const message of messages) {
       if (message.role !== "assistant") continue;
       for (const part of message.parts as Array<{
         type?: string;
         toolCallId?: string;
+        state?: string;
         input?: Record<string, unknown>;
       }>) {
         const tool = part.type?.startsWith("tool-")
           ? part.type.slice("tool-".length)
           : "";
-        if (tool && part.toolCallId && part.input && isAgentWriteTool(tool)) {
-          pending.push({ id: part.toolCallId, tool, input: part.input });
+        // While the model is still streaming a call its input is partial
+        // (often `{}`): preparing against it fails validation and — worse —
+        // the failure was cached forever under the toolCallId. Wait for a
+        // settled, non-empty input and re-prepare if the input keeps growing.
+        if (
+          !tool ||
+          !part.toolCallId ||
+          !part.input ||
+          Object.keys(part.input).length === 0 ||
+          part.state === "input-streaming" ||
+          !isAgentWriteTool(tool)
+        ) {
+          continue;
         }
+        pending.push({
+          id: part.toolCallId,
+          tool,
+          input: part.input,
+          key: `${part.toolCallId}:${JSON.stringify(part.input)}`,
+        });
       }
     }
     for (const item of pending) {
-      if (
-        preparedWritePreviews[item.id] ||
-        preparedWriteRequestsRef.current.has(item.id)
-      )
-        continue;
-      preparedWriteRequestsRef.current.add(item.id);
+      if (preparedWriteRequestsRef.current.get(item.id) === item.key) continue;
+      preparedWriteRequestsRef.current.set(item.id, item.key);
       void prepareAgentWriteAction(item.tool, item.input).then((preview) => {
+        // Drop stale responses: the input may have grown while this
+        // request was in flight; only the latest key may write.
+        if (preparedWriteRequestsRef.current.get(item.id) !== item.key) return;
         setPreparedWritePreviews((previous) => ({
           ...previous,
           [item.id]: preview,
@@ -2034,8 +2316,37 @@ function HarlyChat({
   function submit() {
     const text = input.trim();
     if (!text || isBusy) return;
-    sendMessage({ text });
+    sendMessage(
+      { text },
+      {
+        body: {
+          conversationId,
+          candidateId,
+          mentionedCandidateIds: Object.keys(mentionedCandidates),
+          surfaceContext,
+          automationContext,
+          timeZone,
+        },
+      },
+    );
     setInput("");
+  }
+
+  function continueConversation() {
+    if (isBusy) return;
+    sendMessage(
+      { text: "Continue the previous automation request. Summarize what is ready for my review and show the next safe action." },
+      {
+        body: {
+          conversationId,
+          candidateId,
+          mentionedCandidateIds: Object.keys(mentionedCandidates),
+          surfaceContext,
+          automationContext,
+          timeZone,
+        },
+      },
+    );
   }
 
   async function handleWriteConfirm(
@@ -2059,7 +2370,33 @@ function HarlyChat({
     pendingWriteIdsRef.current.add(toolCallId);
     setPendingWriteIds((previous) => new Set(previous).add(toolCallId));
     try {
-      const res = await confirmAgentWriteAction(toolName, rawInput, toolCallId);
+      const previewToken = preparedWritePreviews[toolCallId]?.previewToken;
+      const confirmedInput =
+        toolName === "applyAutomationProposal" &&
+        previewToken &&
+        typeof rawInput === "object" &&
+        rawInput !== null &&
+        !Array.isArray(rawInput)
+          ? { ...(rawInput as Record<string, unknown>), previewToken }
+          : rawInput;
+      const res = await confirmAgentWriteAction(
+        toolName,
+        confirmedInput,
+        toolCallId,
+      );
+      if (
+        res.success &&
+        toolName === "applyAutomationProposal" &&
+        typeof res.workflowId === "string"
+      ) {
+        await onAutomationApplied?.({
+          workflowId: res.workflowId,
+          draftRevision:
+            typeof res.draftRevision === "number"
+              ? res.draftRevision
+              : undefined,
+        });
+      }
       setWriteResults((p) => ({
         ...p,
         [toolCallId]: {
@@ -2150,10 +2487,16 @@ function HarlyChat({
                 state?: string;
                 input?: { summary?: string } & Record<string, unknown>;
                 output?: unknown;
+                error?: unknown;
               }>;
-              const statusEls: React.ReactNode[] = [];
-              const textEls: React.ReactNode[] = [];
+              const textParts: string[] = [];
+              const toolExecutions: {
+                id: string;
+                label: string;
+                state: "running" | "done" | "error" | "interrupted";
+              }[] = [];
               const writeEls: React.ReactNode[] = [];
+              let partErrorMessage: string | null = null;
               // Collect pending updateTask confirmations so we can offer a
               // single "Confirm all" when the agent batches several.
               const pendingUpdateTasks: {
@@ -2169,15 +2512,11 @@ function HarlyChat({
 
               parts.forEach((part, i) => {
                 if (part.type === "text") {
-                  textEls.push(
-                    <Markdown
-                      key={`t-${i}`}
-                      className="prose prose-sm max-w-none text-[13px] leading-[22px] text-foreground prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1.5"
-                      components={MARKDOWN_COMPONENTS}
-                    >
-                      {part.text ?? ""}
-                    </Markdown>,
-                  );
+                  if (part.text) textParts.push(part.text);
+                  return;
+                }
+                if (part.type === "error") {
+                  partErrorMessage = chatErrorMessage(part.error);
                   return;
                 }
                 if (!part.type.startsWith("tool-")) return;
@@ -2223,19 +2562,25 @@ function HarlyChat({
                 }
 
                 // Read tool → status line + (when done) a rich card.
-                const label = TOOL_LABELS[part.type] ?? "Working";
+                const label = getToolLabel(part.type);
+                if (part.state === "output-error") {
+                  toolExecutions.push({
+                    id: part.toolCallId ?? `s-${i}`,
+                    label,
+                    state: "error",
+                  });
+                  return;
+                }
                 if (part.state === "output-available" && part.output) {
                   const errored =
                     typeof part.output === "object" &&
                     part.output !== null &&
                     "error" in (part.output as Record<string, unknown>);
-                  statusEls.push(
-                    <ToolStatus
-                      key={`s-${part.toolCallId}`}
-                      label={label}
-                      state={errored ? "error" : "done"}
-                    />,
-                  );
+                  toolExecutions.push({
+                    id: part.toolCallId ?? `s-${i}`,
+                    label,
+                    state: errored ? "error" : "done",
+                  });
                   if (!errored) {
                     lastReadCard = (
                       <div key={`c-${part.toolCallId}`}>
@@ -2252,11 +2597,138 @@ function HarlyChat({
                   part.state === "input-streaming" ||
                   part.state === "input-available"
                 ) {
-                  statusEls.push(
-                    <ToolStatus key={`s-${i}`} label={label} state="running" />,
-                  );
+                  toolExecutions.push({
+                    id: `s-${i}`,
+                    label,
+                    // A part can stay input-available forever when the request
+                    // was cut (route timeout) after the model emitted the
+                    // call: show running only while the stream is alive.
+                    state: isBusy ? "running" : "interrupted",
+                  });
                 }
               });
+
+              const runningExecution = toolExecutions.find((e) => e.state === "running");
+              const interruptedExecutions = toolExecutions.filter(
+                (e) => e.state === "interrupted",
+              );
+              const hasErrors = toolExecutions.some((e) => e.state === "error");
+
+              let statusSection: React.ReactNode = null;
+              if (runningExecution) {
+                statusSection = (
+                  <div className="flex flex-col gap-1">
+                    <ToolStatus
+                      key={runningExecution.id}
+                      label={runningExecution.label}
+                      state="running"
+                    />
+                  </div>
+                );
+              } else if (interruptedExecutions.length > 0) {
+                statusSection = (
+                  <div className="flex flex-col gap-1">
+                    {interruptedExecutions.map((exec) => (
+                      <ToolStatus
+                        key={exec.id}
+                        label={exec.label}
+                        state="interrupted"
+                      />
+                    ))}
+                  </div>
+                );
+              } else if (toolExecutions.length > 0) {
+                if (toolExecutions.length === 1 && !hasErrors) {
+                  statusSection = (
+                    <div className="flex flex-col gap-1">
+                      <ToolStatus
+                        key={toolExecutions[0]!.id}
+                        label={toolExecutions[0]!.label}
+                        state="done"
+                      />
+                    </div>
+                  );
+                } else {
+                  const summaryText = hasErrors
+                    ? `${toolExecutions.filter((e) => e.state === "error").length} operations with warnings`
+                    : `${toolExecutions.length} operations completed`;
+                  statusSection = (
+                    <details className="group text-[11px] text-muted-foreground">
+                      <summary className="inline-flex cursor-pointer select-none items-center gap-1.5 font-medium transition-colors hover:text-foreground">
+                        {hasErrors ? (
+                          <PhWarning className="shrink-0 text-rose-500" />
+                        ) : (
+                          <PhCheck className="shrink-0 text-emerald-500" />
+                        )}
+                        <span>{summaryText}</span>
+                        <span className="text-[9px] text-muted-foreground/60 transition-transform group-open:rotate-180">
+                          ▾
+                        </span>
+                      </summary>
+                      <div className="mt-1 flex flex-col gap-1 border-l border-border/50 pl-3">
+                        {toolExecutions.map((exec) => (
+                          <ToolStatus
+                            key={exec.id}
+                            label={exec.label}
+                            state={exec.state}
+                          />
+                        ))}
+                      </div>
+                    </details>
+                  );
+                }
+              }
+
+              const fullText = textParts.join("");
+              const textEl = fullText.trim() ? (
+                <Markdown
+                  key="text-body"
+                  className="prose prose-sm max-w-none text-[13px] leading-[22px] text-foreground prose-p:my-1 prose-headings:my-1.5 prose-ul:my-1 prose-ol:my-1 prose-li:my-0 prose-pre:my-1.5"
+                  components={MARKDOWN_COMPONENTS}
+                >
+                  {fullText}
+                </Markdown>
+              ) : null;
+
+              // The request can be cut (route timeout, provider error, or step
+              // budget) after tools finish: no text and no card. Say so
+              // instead of ending the turn in silence. Also covers the case
+              // where every tool completed cleanly and the final prose/apply
+              // step never arrived.
+              const wasCutOff = isStrandedAssistantTurn({
+                isBusy,
+                text: fullText,
+                writeCardCount: writeEls.length,
+                toolExecutionCount: toolExecutions.length,
+              });
+              const cutoffEl = wasCutOff ? (
+                <div
+                  key="cutoff-notice"
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] leading-snug text-muted-foreground"
+                  role="status"
+                >
+                  <span>Harly AI stopped before finishing this response.</span>
+                  <button
+                    type="button"
+                    onClick={continueConversation}
+                    className="font-medium text-foreground underline decoration-border underline-offset-2 transition-colors hover:decoration-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                    disabled={isBusy}
+                  >
+                    Continue safely
+                  </button>
+                </div>
+              ) : null;
+              // Error parts embedded in this message (stream-level useChat
+              // `error` is rendered once below the transcript, not per turn).
+              const messageErrorEl = partErrorMessage ? (
+                <p
+                  key="stream-error-notice"
+                  className="text-[11px] leading-snug text-rose-600 dark:text-rose-400"
+                  role="alert"
+                >
+                  {partErrorMessage}
+                </p>
+              ) : null;
 
               return (
                 <div key={message.id} className="flex items-start gap-2">
@@ -2269,11 +2741,11 @@ function HarlyChat({
                     className="mt-1 shrink-0"
                   />
                   <div className="flex min-w-0 flex-1 flex-col gap-2">
-                    {statusEls.length > 0 && (
-                      <div className="flex flex-col gap-1">{statusEls}</div>
-                    )}
+                    {statusSection}
                     {lastReadCard}
-                    {textEls}
+                    {textEl}
+                    {messageErrorEl}
+                    {cutoffEl}
                     {writeEls}
                     {pendingUpdateTasks.length > 1 && (
                       <div
@@ -2328,6 +2800,24 @@ function HarlyChat({
                 <ThinkingShimmer />
               </div>
             )}
+
+            {/* Stream-level failure from useChat (route onError / network).
+                Without this the panel swallows the server's friendly message
+                and the turn looks like a silent non-answer. */}
+            {error != null && !isBusy && (() => {
+              const text = chatErrorMessage(error);
+              return text ? (
+                <div
+                  className="flex items-start gap-2 rounded-lg border border-rose-200/60 bg-rose-50 px-3 py-2 dark:border-rose-900/50 dark:bg-rose-950/40"
+                  role="alert"
+                >
+                  <PhWarning className="mt-0.5 shrink-0 text-rose-500" />
+                  <p className="text-[12px] leading-snug text-rose-700 dark:text-rose-300">
+                    {text}
+                  </p>
+                </div>
+              ) : null;
+            })()}
 
             <ChatContainerScrollAnchor />
           </ChatContainerContent>
@@ -2564,6 +3054,12 @@ type HarlyAIPanelProps = {
     label: string;
     path: string;
   };
+  automationContext?: AutomationContext;
+  /** Lets an embedded Builder reconcile its canvas after a confirmed AI proposal. */
+  onAutomationApplied?: (result: {
+    workflowId: string;
+    draftRevision?: number;
+  }) => void | Promise<void>;
 };
 
 function freshId(): string {
@@ -2580,6 +3076,8 @@ export function HarlyAIPanel({
   onClose,
   candidateId,
   surfaceContext,
+  automationContext,
+  onAutomationApplied,
 }: HarlyAIPanelProps) {
   const [conversationId, setConversationId] = useState<string>(() => freshId());
   const [initialMessages, setInitialMessages] = useState<StoredUIMessage[]>([]);
@@ -2734,6 +3232,8 @@ export function HarlyAIPanel({
                 userName={userName}
                 candidateId={candidateId}
                 surfaceContext={surfaceContext}
+                automationContext={automationContext}
+                onAutomationApplied={onAutomationApplied}
                 onConversationActivity={refreshList}
               />
             )}

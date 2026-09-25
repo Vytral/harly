@@ -27,11 +27,14 @@ const schema = z.object({
   sentFolder: z.string().trim().max(255).optional(),
 });
 
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
+
 export type MailboxActionResult = { ok: boolean; error?: string };
 
 export async function saveMailboxSettingsAction(
   input: z.input<typeof schema>,
 ): Promise<MailboxActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   if (!isEncryptionConfigured())
     return { ok: false, error: "Server encryption is not configured." };
@@ -103,6 +106,7 @@ export async function saveMailboxSettingsAction(
 }
 
 export async function testMailboxConnectionAction(): Promise<MailboxActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   try {
     await syncMailbox(context.organization.id);
@@ -117,6 +121,7 @@ export async function testMailboxConnectionAction(): Promise<MailboxActionResult
 }
 
 export async function disableMailboxSettingsAction(): Promise<MailboxActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   await db

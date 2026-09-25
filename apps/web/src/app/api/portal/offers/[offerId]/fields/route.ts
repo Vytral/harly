@@ -7,8 +7,10 @@ import { offerHasExpired } from "@/features/offers/core";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { isNativeOfferSubmission } from "@/lib/esign/native/offer-signing";
 import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
+import { createLogger } from "@/lib/logger";
 
 export const runtime = "nodejs";
+const log = createLogger("api-portal-offer-fields");
 
 /**
  * Resolves the recruiter-placed field layout for a native offer, scoped
@@ -22,11 +24,20 @@ export async function GET(
   try {
     const token = (await cookies()).get(PORTAL_SESSION_COOKIE)?.value;
     const session = token ? await resolvePortalSession(token) : null;
-    if (!session) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    if (!session)
+      return NextResponse.json(
+        { error: "Not authenticated." },
+        { status: 401 },
+      );
 
     const { offerId } = await params;
     const [offer] = await db
-      .select({ id: offers.id, status: offers.status, expiresAt: offers.expiresAt, esignSubmissionId: offers.esignSubmissionId })
+      .select({
+        id: offers.id,
+        status: offers.status,
+        expiresAt: offers.expiresAt,
+        esignSubmissionId: offers.esignSubmissionId,
+      })
       .from(offers)
       .where(
         and(
@@ -36,13 +47,17 @@ export async function GET(
         ),
       )
       .limit(1);
-    if (!offer) return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+    if (!offer)
+      return NextResponse.json({ error: "Offer not found." }, { status: 404 });
     if (
       offer.status !== "sent" ||
       offerHasExpired(offer.expiresAt) ||
       !isNativeOfferSubmission(offer.esignSubmissionId)
     ) {
-      return NextResponse.json({ error: "Offer is not available for signing." }, { status: 404 });
+      return NextResponse.json(
+        { error: "Offer is not available for signing." },
+        { status: 404 },
+      );
     }
 
     const [row] = await db
@@ -59,11 +74,21 @@ export async function GET(
       .limit(1);
 
     if (!row || !isSignableNativeFieldsSnapshot(row.fieldsSnapshot)) {
-      return NextResponse.json({ error: "Offer signature fields are not available." }, { status: 409 });
+      return NextResponse.json(
+        { error: "Offer signature fields are not available." },
+        { status: 409 },
+      );
     }
 
-    return NextResponse.json({ fields: row.fieldsSnapshot }, { headers: { "Cache-Control": "private, no-store" } });
-  } catch {
-    return NextResponse.json({ error: "Could not load fields." }, { status: 404 });
+    return NextResponse.json(
+      { fields: row.fieldsSnapshot },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
+  } catch (error) {
+    log.error(error, "Native offer fields request failed.");
+    return NextResponse.json(
+      { error: "Could not load signature fields." },
+      { status: 503 },
+    );
   }
 }

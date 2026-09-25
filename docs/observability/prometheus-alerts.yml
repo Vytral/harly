@@ -99,3 +99,17 @@ groups:
         annotations:
           summary: Mail delivery worker has stale sends
           description: A mail reservation has remained sending beyond the lease and should be normalized by mail-reconciliation.
+      - alert: HarlyWorkflowUncertainNode
+        expr: harly_workflow_uncertain_nodes > 0
+        for: 5m
+        labels: { severity: critical }
+        annotations:
+          summary: Workflow action needs external reconciliation
+          description: An automation node has an ambiguous provider outcome. Reconcile the provider effect before resuming the run; do not blindly replay it.
+      - alert: HarlyWorkflowRunStale
+        expr: harly_workflow_runs_stale > 0
+        for: 10m
+        labels: { severity: critical }
+        annotations:
+          summary: Workflow worker has stale runs
+          description: A v2 workflow lease or node attempt is stale. Inspect worker heartbeats and scheduler health; takeover is safe only through the fenced runtime.

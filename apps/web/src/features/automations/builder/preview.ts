@@ -9,6 +9,7 @@
  */
 
 import type { Action, ConditionNode, FieldRef, Operator, Trigger, WorkflowEvent } from "../schema";
+import type { WorkflowGraphV2, WorkflowNode } from "../definition/schema-v2";
 import { actionMeta, operatorMeta, triggerMeta } from "./catalog";
 
 const BODY_PREVIEW = 60;
@@ -110,6 +111,18 @@ export function describeAction(action: Action): string {
       return `send a chat message ${describeValue(c.message)}`;
     case "send_email":
       return `email ${c.toEmail ? quote(String(c.toEmail)) : "the candidate"} ${c.subject ? `re: ${quote(String(c.subject))}` : ""}`;
+    case "send_booking_link":
+      return `send a self-scheduling link ${c.toEmail ? `to ${quote(String(c.toEmail))}` : "to the candidate"}`;
+    case "request_documents": {
+      const items = Array.isArray(c.items) ? c.items.length : 0;
+      return `request ${items || "some"} document${items === 1 ? "" : "s"} from the candidate`;
+    }
+    case "generate_document":
+      return `generate ${c.title ? quote(String(c.title)) : "a document"}`;
+    case "send_document_for_signature":
+      return `send ${c.documentRequestId ? "the uploaded document" : "a document"} for signature`;
+    case "erase_candidate_data":
+      return "queue complete erasure of candidate data";
     case "http_request":
       return `${c.method ?? "POST"} ${c.url ?? "an external URL"}`;
     default:
@@ -133,4 +146,40 @@ export function describeWorkflow(input: {
 
   const ifClause = cond === "always" ? "" : ` if ${cond},`;
   return `When ${when},${ifClause} then ${thenPart}.`;
+}
+
+function graphTrigger(graph: WorkflowGraphV2): Trigger {
+  const node = graph.nodes.find(
+    (candidate): candidate is Extract<WorkflowNode, { type: "trigger" }> =>
+      candidate.type === "trigger" && candidate.id === graph.entryNodeId,
+  );
+  return node ? { event: node.event, filter: node.filter } : { event: "application.created" };
+}
+
+/**
+ * Honest summary for v2 list cards. It deliberately describes the graph's
+ * shape instead of flattening it through the lossy legacy adapter.
+ */
+export function describeGraphWorkflow(graph: WorkflowGraphV2): string {
+  const trigger = describeTrigger(graphTrigger(graph));
+  const counts = graph.nodes.reduce(
+    (result, node) => {
+      result[node.type] += 1;
+      return result;
+    },
+    { action: 0, condition: 0, delay: 0, approval: 0, wait: 0, end: 0, trigger: 0 },
+  );
+  const details = [
+    counts.action > 0 ? `${counts.action} action${counts.action === 1 ? "" : "s"}` : null,
+    counts.condition > 0 ? "branching" : null,
+    counts.delay > 0 ? "a delay" : null,
+    counts.approval > 0 ? "an approval" : null,
+    counts.wait > 0 ? "an event wait" : null,
+  ].filter((value): value is string => Boolean(value));
+  const plan = details.length > 0 ? details.join(", ") : "no configured steps";
+  return `When ${trigger}, then ${plan}.`;
+}
+
+export function graphActionCount(graph: WorkflowGraphV2): number {
+  return graph.nodes.filter((node) => node.type === "action").length;
 }

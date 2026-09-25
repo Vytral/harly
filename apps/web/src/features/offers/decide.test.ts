@@ -40,6 +40,7 @@ vi.mock("drizzle-orm", () => ({
   and: (...args: unknown[]) => ({ __and: args }),
   eq: (a: unknown, b: unknown) => ({ __eq: [a, b] }),
   or: (...args: unknown[]) => ({ __or: args }),
+  ne: (a: unknown, b: unknown) => ({ __ne: [a, b] }),
   inArray: (a: unknown, b: unknown) => ({ __inArray: [a, b] }),
   desc: (a: unknown) => ({ __desc: a }),
   lt: (a: unknown, b: unknown) => ({ __lt: [a, b] }),
@@ -237,7 +238,7 @@ describe("decideOffer guards", () => {
       "ws-1",
       "application.hired",
       expect.objectContaining({ application: { id: "app-1", jobId: "job-1" } }),
-      { actorId: "user-1", skipDomainEvent: true },
+      expect.objectContaining({ actorId: "user-1", skipDomainEvent: true }),
     );
   });
 

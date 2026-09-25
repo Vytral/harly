@@ -4,28 +4,41 @@ import {
   verifyAuthenticationResponse,
 } from "@simplewebauthn/server";
 import { eq } from "drizzle-orm";
-import { db, passkeys } from "@harly/db";
+import { db, passkeys, user } from "@harly/db";
 import { auth } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
-import { RP_ID, ORIGIN } from "@/lib/passkey";
+import { RP_ID, ORIGIN, storeChallenge, consumeChallenge } from "@/lib/passkey";
+import { signSessionCookieValue } from "@/lib/session-cookie";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 
 const log = createLogger("api-passkey-login");
 
-// In-memory challenge store for passkey login (short-lived, 5 min TTL).
-// We can't use the existing passkeyChallenge table because it requires a userId,
-// but for passkey login we don't know the user until after verification.
-const loginChallenges = new Map<string, { challenge: string; expiresAt: number }>();
+async function createAuthenticationOptions(email?: string) {
+  const legacyPasskeys = email
+    ? await db
+        .select({ credentialId: passkeys.credentialId, transports: passkeys.transports })
+        .from(passkeys)
+        .innerJoin(user, eq(passkeys.userId, user.id))
+        .where(eq(user.email, email))
+    : [];
 
-// Clean up expired challenges periodically.
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, value] of loginChallenges.entries()) {
-    if (value.expiresAt < now) {
-      loginChallenges.delete(key);
-    }
-  }
-}, 60_000);
+  const options = await generateAuthenticationOptions({
+    rpID: RP_ID,
+    userVerification: "preferred",
+    // No email means username-less/discoverable login. The email-scoped path
+    // exists only to let credentials created before residentKey was required
+    // authenticate; it never enumerates credentials belonging to other users.
+    allowCredentials: legacyPasskeys.map((passkey) => ({
+      id: passkey.credentialId,
+      transports: passkey.transports
+        ? (JSON.parse(passkey.transports) as AuthenticatorTransport[])
+        : undefined,
+    })),
+  });
+
+  const storedChallenge = await storeChallenge(null, options.challenge, "login");
+  return { ...options, challengeId: storedChallenge.id };
+}
 
 // GET , generate authentication options for passkey login (no session required).
 export async function GET(req: NextRequest) {
@@ -38,31 +51,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Too many attempts." }, { status: 429 });
   }
 
-  // Get all passkeys to allow the browser to check if any are available.
-  const allPasskeys = await db
-    .select({ credentialId: passkeys.credentialId, transports: passkeys.transports })
-    .from(passkeys);
-
-  const options = await generateAuthenticationOptions({
-    rpID: RP_ID,
-    userVerification: "preferred",
-    allowCredentials: allPasskeys.map((p) => ({
-      id: p.credentialId,
-      transports: p.transports
-        ? (JSON.parse(p.transports) as AuthenticatorTransport[])
-        : undefined,
-    })),
-  });
-
-  // Generate a unique challenge ID and store the challenge.
-  const challengeId = crypto.randomUUID();
-  loginChallenges.set(challengeId, {
-    challenge: options.challenge,
-    expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
-  });
-
-  // Return options with the challenge ID for the client to send back.
-  return NextResponse.json({ ...options, challengeId });
+  return NextResponse.json(await createAuthenticationOptions());
 }
 
 // POST , verify authentication response and create session for passkey login.
@@ -78,18 +67,23 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
 
-  // Get and consume the challenge using the challenge ID.
-  const storedChallenge = loginChallenges.get(body.challengeId);
-  if (!storedChallenge || storedChallenge.expiresAt < Date.now()) {
-    loginChallenges.delete(body.challengeId);
+  // Explicit compatibility path for pre-discoverable credentials. Keep the
+  // email in the POST body (not the URL) and return only this user's IDs.
+  if (body.mode === "legacy-options") {
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    return NextResponse.json(await createAuthenticationOptions(email));
+  }
+
+  // Atomically consume the anonymous login challenge by its unique ID.
+  const expectedChallenge = typeof body.challengeId === "string"
+    ? await consumeChallenge(body.challengeId, null, "login")
+    : null;
+  if (!expectedChallenge) {
     return NextResponse.json(
       { error: "Challenge expired or not found" },
       { status: 400 },
     );
   }
-  loginChallenges.delete(body.challengeId);
-
-  const expectedChallenge = storedChallenge.challenge;
 
   // Find the passkey by credential ID.
   const [storedPasskey] = await db
@@ -171,7 +165,10 @@ export async function POST(req: NextRequest) {
   const cookieAttributes = ctx.authCookies.sessionToken.attributes;
 
   // Set the session token cookie.
-  response.cookies.set(cookieName, session.token, {
+  // better-auth stores this as a SIGNED cookie. Writing the raw token would
+  // make getSession reject it, so a successful WebAuthn assertion would still
+  // land on the login page.
+  response.cookies.set(cookieName, signSessionCookieValue(session.token, ctx.secret), {
     maxAge: ctx.sessionConfig.expiresIn,
     path: cookieAttributes.path || "/",
     httpOnly: (cookieAttributes as Record<string, unknown>).httponly as boolean || cookieAttributes.httpOnly,

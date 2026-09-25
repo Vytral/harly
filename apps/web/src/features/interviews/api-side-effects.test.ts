@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   trackInterviewSync: vi.fn(),
   syncInterviewToGCal: vi.fn(),
+  syncInterviewToZoom: vi.fn(),
   getWorkspaceGCalConfig: vi.fn(),
   getZoomToken: vi.fn(),
   getWorkspaceOutlookConfig: vi.fn(),
@@ -31,7 +32,11 @@ vi.mock("@harly/db", () => ({
     interviewerId: "interviewerId",
     workspaceId: "interviewWorkspaceId",
   },
-  jobs: { id: "jobId", workspaceId: "jobWorkspaceId", deletedAt: "jobDeletedAt" },
+  jobs: {
+    id: "jobId",
+    workspaceId: "jobWorkspaceId",
+    deletedAt: "jobDeletedAt",
+  },
   organization: { id: "organizationId", name: "organizationName" },
   user: { id: "userId", email: "userEmail" },
 }));
@@ -55,7 +60,7 @@ vi.mock("@/lib/zoom/config", () => ({ getZoomToken: mocks.getZoomToken }));
 vi.mock("@/lib/zoom/sync", () => ({
   cancelInterviewZoomMeeting: vi.fn(),
   replaceInterviewToZoom: vi.fn(),
-  syncInterviewToZoom: vi.fn(),
+  syncInterviewToZoom: mocks.syncInterviewToZoom,
 }));
 vi.mock("@/lib/outlook/config", () => ({
   getWorkspaceOutlookConfig: mocks.getWorkspaceOutlookConfig,
@@ -103,7 +108,11 @@ beforeEach(() => {
     async (input: { run: () => Promise<unknown> }) => input.run(),
   );
   mocks.syncInterviewToGCal.mockReset();
-  mocks.syncInterviewToGCal.mockResolvedValue({ ok: false, reason: "not_connected" });
+  mocks.syncInterviewToGCal.mockResolvedValue({
+    ok: false,
+    reason: "not_connected",
+  });
+  mocks.syncInterviewToZoom.mockResolvedValue(null);
   mocks.getWorkspaceGCalConfig.mockResolvedValue(null);
   mocks.getZoomToken.mockResolvedValue(null);
   mocks.getWorkspaceOutlookConfig.mockResolvedValue(null);
@@ -112,6 +121,7 @@ beforeEach(() => {
 
 describe("REST interview side effects", () => {
   it("uses the dashboard calendar ledger path even when GCal is not connected", async () => {
+    const database = { select: mocks.dbSelect } as never;
     const interview = {
       id: "iv-1",
       workspaceId: "ws-1",
@@ -140,6 +150,7 @@ describe("REST interview side effects", () => {
       actorUserId: "user-1",
       interview,
       action: "scheduled",
+      database,
     });
 
     expect(mocks.trackInterviewSync).toHaveBeenCalledWith(
@@ -148,6 +159,7 @@ describe("REST interview side effects", () => {
         interviewId: "iv-1",
         provider: "google_calendar",
         operation: "upsert",
+        database,
       }),
     );
     const sync = mocks.trackInterviewSync.mock.calls[0]?.[0] as {
@@ -157,5 +169,110 @@ describe("REST interview side effects", () => {
     const result = await sync.run();
     expect(result).toEqual({ ok: false, reason: "not_connected" });
     expect(sync.isSuccess(result)).toBe(false);
+  });
+
+  it("honors an explicitly selected video provider instead of silently choosing another", async () => {
+    const database = { select: mocks.dbSelect } as never;
+    const interview = {
+      id: "iv-zoom",
+      workspaceId: "ws-1",
+      applicationId: "app-1",
+      candidateId: "candidate-1",
+      jobId: "job-1",
+      interviewerId: null,
+      title: "Technical interview",
+      type: "technical",
+      mode: "video",
+      status: "scheduled",
+      scheduledAt: new Date("2099-01-01T15:00:00.000Z"),
+      durationMins: 45,
+      location: null,
+      meetLink: null,
+      notes: null,
+      source: "workflow",
+      gcalEventId: null,
+      teamsMeetingId: null,
+      zoomMeetingId: null,
+      jitsiRoom: null,
+    } as never;
+
+    await runApiInterviewSideEffects({
+      workspaceId: "ws-1",
+      actorUserId: "user-1",
+      interview,
+      action: "scheduled",
+      meetingProvider: "zoom",
+      strictSideEffects: true,
+      database,
+    });
+
+    expect(mocks.trackInterviewSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "zoom",
+        operation: "upsert",
+        strict: true,
+        database,
+      }),
+    );
+    expect(mocks.trackInterviewSync).not.toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "google_calendar" }),
+    );
+  });
+
+  it("propagates calendar provider failures for strict workflow side effects", async () => {
+    const database = { select: mocks.dbSelect } as never;
+    const interview = {
+      id: "iv-strict-calendar",
+      workspaceId: "ws-1",
+      applicationId: "app-1",
+      candidateId: "candidate-1",
+      jobId: "job-1",
+      interviewerId: null,
+      title: "Phone screen",
+      type: "screening",
+      mode: "phone",
+      status: "scheduled",
+      scheduledAt: new Date("2099-01-01T15:00:00.000Z"),
+      durationMins: 30,
+      location: null,
+      meetLink: null,
+      notes: null,
+      source: "workflow",
+      gcalEventId: null,
+      teamsMeetingId: null,
+      zoomMeetingId: null,
+      jitsiRoom: null,
+    } as never;
+    mocks.trackInterviewSync.mockImplementationOnce(
+      async (input: {
+        run: () => Promise<unknown>;
+        isSuccess: (result: unknown) => boolean;
+        strict?: boolean;
+      }) => {
+        const result = await input.run();
+        if (input.strict && !input.isSuccess(result)) {
+          throw new Error("Calendar sync failed");
+        }
+        return result;
+      },
+    );
+
+    await expect(
+      runApiInterviewSideEffects({
+        workspaceId: "ws-1",
+        actorUserId: "user-1",
+        interview,
+        action: "scheduled",
+        strictSideEffects: true,
+        database,
+      }),
+    ).rejects.toThrow("Calendar sync failed");
+    expect(mocks.trackInterviewSync).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "google_calendar",
+        strict: true,
+        database,
+      }),
+    );
   });
 });

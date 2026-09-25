@@ -24,6 +24,7 @@ import {
 import { decryptSecret, isEncryptionConfigured } from "./crypto-adapter";
 import { loadHarlyConfig } from "@harly/config";
 import { authorizeUserCreation, setupClaimCookieName } from "./setup";
+import { demoGuardMiddleware } from "./demo-guard";
 
 const config = loadHarlyConfig(
   process.env.NEXT_PHASE === "phase-production-build"
@@ -344,6 +345,12 @@ export const auth = betterAuth({
     provider: "pg",
     schema,
   }),
+  // Demo lockdown, Layer 1: reject sensitive identity/security mutations for the
+  // shared demo account before they run. No-op unless DEMO_MODE=true, so normal
+  // installs are unaffected. See ./demo-guard for the blocked path list.
+  hooks: {
+    before: demoGuardMiddleware,
+  },
   databaseHooks: {
     user: {
       create: {

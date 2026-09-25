@@ -24,9 +24,15 @@ const build = spawnSync(
   { cwd: packageRoot, encoding: "utf8" },
 );
 assert.equal(build.status, 0, build.stderr);
-const { describeImage, envVersion, shortDigest, versionLine } = await import(
-  bundle
-);
+const {
+  compareSemver,
+  describeImage,
+  envVersion,
+  isReleaseVersion,
+  isStableVersion,
+  shortDigest,
+  versionLine,
+} = await import(bundle);
 
 const release = {
   version: "0.1.0-beta.2",
@@ -120,6 +126,67 @@ test("HARLY_VERSION stays machine-shaped: no v prefix, no spaces", () => {
 
   for (const identity of [semver, channel, digestOnly])
     assert.doesNotMatch(envVersion(identity), /\s|·/);
+});
+
+test("release versions are 0.2.0, a numbered beta, or a numbered rc", () => {
+  for (const version of ["0.2.0", "0.2.0-beta.1", "0.2.0-rc.1", "0.1.0-beta.2"]) {
+    assert.equal(isReleaseVersion(version), true, version);
+  }
+  for (const version of ["edge", "latest", "sha-abc", "0.2.0-beta", "0.2", "v0.2.0"]) {
+    assert.equal(isReleaseVersion(version), false, version);
+  }
+});
+
+test("semver order keeps a prerelease behind its stable version", () => {
+  assert.equal(compareSemver("0.1.1", "0.2.0") < 0, true);
+  assert.equal(compareSemver("0.2.0", "0.2.0-beta.1") > 0, true);
+  assert.equal(compareSemver("0.2.0-beta.2", "0.2.0-beta.1") > 0, true);
+  assert.equal(compareSemver("0.2.0-rc.1", "0.2.0-beta.9") > 0, true);
+  assert.equal(compareSemver("0.1.0-beta.2", "0.2.0") < 0, true);
+  assert.equal(compareSemver("v0.2.0", "0.2.0"), 0);
+  assert.equal(compareSemver("edge", "0.2.0"), null);
+});
+
+test("only a version with no prerelease suffix is stable", () => {
+  for (const version of ["0.2.0", "1.0.0", "0.10.3"]) {
+    assert.equal(isStableVersion(version), true, version);
+  }
+  // A beta or rc is a release Harly publishes, but the stable channel must not
+  // serve it: `harly update` with no --to relies on this.
+  for (const version of ["0.2.0-beta.1", "0.2.0-rc.1", "0.1.0-beta.2"]) {
+    assert.equal(isReleaseVersion(version), true, version);
+    assert.equal(isStableVersion(version), false, version);
+  }
+  for (const version of ["edge", "latest", "sha-abc", "0.2", "v0.2.0"]) {
+    assert.equal(isStableVersion(version), false, version);
+  }
+});
+
+test("semver comparison follows the specification for prerelease identifiers", () => {
+  // Numeric identifiers rank below alphanumeric ones.
+  assert.equal(compareSemver("1.0.0-1", "1.0.0-alpha") < 0, true);
+  // A longer set of identifiers wins when it is otherwise a prefix.
+  assert.equal(compareSemver("1.0.0-beta.1", "1.0.0-beta") > 0, true);
+  // Build metadata is not part of precedence.
+  assert.equal(compareSemver("1.0.0+a", "1.0.0+b"), 0);
+  // The canonical ordering from the specification.
+  const ascending = [
+    "1.0.0-alpha",
+    "1.0.0-alpha.1",
+    "1.0.0-alpha.beta",
+    "1.0.0-beta",
+    "1.0.0-beta.2",
+    "1.0.0-beta.11",
+    "1.0.0-rc.1",
+    "1.0.0",
+  ];
+  for (let i = 1; i < ascending.length; i += 1) {
+    assert.equal(
+      compareSemver(ascending[i], ascending[i - 1]) > 0,
+      true,
+      `${ascending[i]} > ${ascending[i - 1]}`,
+    );
+  }
 });
 
 test("shortDigest leaves a reference without a digest untouched", () => {

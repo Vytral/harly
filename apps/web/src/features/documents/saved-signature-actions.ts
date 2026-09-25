@@ -9,14 +9,28 @@ import { db, savedSignatures, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { storage } from "@/lib/storage";
+import {
+  serverVectorExtractor,
+  validateVectorSaveInput,
+  verifyVectorPayload,
+} from "./signature-vector";
 
 const MAX_SIGNATURE_BYTES = 500 * 1024;
 const PNG_HEADER = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
 const signatureSchema = z.object({ pngBase64: z.string().max(700_000) });
 
+export type SavedSignatureEntry =
+  | { id: string; createdAt: Date; kind: "png"; dataUrl: string }
+  | { id: string; createdAt: Date; kind: "vector"; vectorData: string };
+
 function key(workspaceId: string) {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(workspaceId)) throw new Error("Invalid workspace.");
   return `workspaces/${workspaceId}/signatures/saved/${randomUUID()}.png`;
+}
+
+function vectorKey(workspaceId: string) {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(workspaceId)) throw new Error("Invalid workspace.");
+  return `workspaces/${workspaceId}/signatures/saved/${randomUUID()}.vector.txt`;
 }
 
 function decodePng(input: string) {
@@ -59,10 +73,10 @@ export async function saveSignature(input: unknown) {
   }
 }
 
-export async function listSavedSignatures() {
+export async function listSavedSignatures(): Promise<SavedSignatureEntry[]> {
   const context = await requirePermission("documents:manage");
   const rows = await db
-    .select({ id: savedSignatures.id, createdAt: savedSignatures.createdAt, storageKey: savedSignatures.storageKey })
+    .select({ id: savedSignatures.id, createdAt: savedSignatures.createdAt, kind: savedSignatures.kind, storageKey: savedSignatures.storageKey })
     .from(savedSignatures)
     .where(and(eq(savedSignatures.workspaceId, context.organization.id), eq(savedSignatures.ownerType, "user"), eq(savedSignatures.ownerId, context.user.id), isNull(savedSignatures.deletedAt)))
     .orderBy(desc(savedSignatures.createdAt));
@@ -70,13 +84,61 @@ export async function listSavedSignatures() {
     rows.map(async (row) => {
       try {
         const bytes = await storage.read(row.storageKey);
-        return { id: row.id, createdAt: row.createdAt, dataUrl: `data:image/png;base64,${bytes.toString("base64")}` };
+        if (row.kind === "vector") {
+          return { id: row.id, createdAt: row.createdAt, kind: "vector" as const, vectorData: bytes.toString("utf8") };
+        }
+        return { id: row.id, createdAt: row.createdAt, kind: "png" as const, dataUrl: `data:image/png;base64,${bytes.toString("base64")}` };
       } catch {
         return null;
       }
     }),
   );
   return withImages.filter((row) => row !== null);
+}
+
+/**
+ * Server-side vector verification (fail closed): the payload must actually
+ * decompress into a sane outline. Shape pre-check lives in the pure
+ * `validateVectorSaveInput` (client-safe, unit-tested without DB).
+ */
+
+async function assertDecompressableVector(vectorData: string): Promise<{ width: number; height: number; curves: number } | null> {
+  // Legacy build on the server (default build needs DOM); fail closed.
+  return verifyVectorPayload(vectorData, serverVectorExtractor);
+}
+
+export async function saveVectorSignature(input: unknown) {
+  const context = await requirePermission("documents:manage");
+  const parsed = validateVectorSaveInput(input);
+  if (!parsed.ok) return parsed;
+  const [settings] = await db
+    .select({ enabled: workspaceSettings.savedSignaturesEnabled })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, context.organization.id))
+    .limit(1);
+  if (!settings?.enabled) return { ok: false, error: "Saved signatures are not enabled for this workspace." };
+  try {
+    const meta = await assertDecompressableVector(parsed.vectorData);
+    if (!meta) return { ok: false, error: "Vector signature could not be verified." };
+    const bytes = Buffer.from(parsed.vectorData, "utf8");
+    const storageKey = vectorKey(context.organization.id);
+    const checksum = createHash("sha256").update(bytes).digest("hex");
+    await storage.put(storageKey, bytes, "text/plain");
+    const [saved] = await db.insert(savedSignatures).values({
+      workspaceId: context.organization.id,
+      ownerType: "user",
+      ownerId: context.user.id,
+      kind: "vector",
+      storageKey,
+      mimeType: "text/plain",
+      sizeBytes: bytes.byteLength,
+      checksum,
+    }).returning({ id: savedSignatures.id });
+    if (!saved) throw new Error("Vector signature could not be saved.");
+    return { ok: true, id: saved.id };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : "Vector signature could not be saved." };
+  }
 }
 
 export async function deleteSavedSignature(input: { id: string }) {

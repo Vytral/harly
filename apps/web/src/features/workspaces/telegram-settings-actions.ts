@@ -16,6 +16,7 @@ import {
 } from "@/lib/telegram/client";
 import { telegramText } from "@/server/notify/dispatch";
 import { isWebhookEvent } from "@/server/webhooks/events";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 
 const log = createLogger("workspace-telegram-settings");
 
@@ -37,6 +38,7 @@ export async function saveTelegramSettingsAction(input: {
   chatId: string;
   events: string[];
 }): Promise<TelegramActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   if (!isEncryptionConfigured()) {
@@ -111,6 +113,7 @@ export async function saveTelegramSettingsAction(input: {
 }
 
 export async function disconnectTelegramAction(): Promise<TelegramActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   await db
@@ -139,6 +142,7 @@ export async function sendTestTelegramAction(input: {
   botToken?: string;
   chatId?: string;
 }): Promise<TelegramActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   let botToken = input.botToken?.trim() || null;

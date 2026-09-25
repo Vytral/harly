@@ -98,7 +98,7 @@ uninstallation:
 ```bash
 npx @harly/cli doctor
 npx @harly/cli backup
-npx @harly/cli update --to <release-version> --yes
+npx @harly/cli update
 ```
 
 Read the [self-hosting guide](https://docs.harly.dev/self-hosting/overview),

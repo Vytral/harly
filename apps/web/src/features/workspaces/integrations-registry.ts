@@ -6,6 +6,7 @@ import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { getWorkspaceGCalStatus } from "@/lib/gcal/config";
 import { getWorkspaceJitsiStatus } from "@/lib/jitsi/config";
 import { getWorkspaceChatStatus } from "@/lib/notify/config";
+import { getWorkspaceEmailStatus } from "@/lib/email/config";
 import { getWorkspaceOutlookStatus } from "@/lib/outlook/config";
 import { getWorkspaceSlackStatus } from "@/lib/slack/config";
 import { getWorkspaceCaptchaStatus } from "@/lib/captcha";
@@ -311,6 +312,7 @@ export function getIntegration(
 }
 
 export type IntegrationStatuses = {
+  email: Awaited<ReturnType<typeof getWorkspaceEmailStatus>>;
   cal: Awaited<ReturnType<typeof getWorkspaceCalStatus>>;
   gcal: Awaited<ReturnType<typeof getWorkspaceGCalStatus>>;
   slack: Awaited<ReturnType<typeof getWorkspaceSlackStatus>>;
@@ -327,8 +329,9 @@ export type IntegrationStatuses = {
 export async function getIntegrationStatuses(
   workspaceId: string,
 ): Promise<IntegrationStatuses> {
-  const [cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha] =
+  const [email, cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha] =
     await Promise.all([
+      getWorkspaceEmailStatus(workspaceId),
       getWorkspaceCalStatus(workspaceId),
       getWorkspaceGCalStatus(workspaceId),
       getWorkspaceSlackStatus(workspaceId),
@@ -340,7 +343,7 @@ export async function getIntegrationStatuses(
       getWorkspaceEsignStatus(workspaceId),
       getWorkspaceCaptchaStatus(workspaceId),
     ]);
-  return { cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha };
+  return { email, cal, gcal, slack, outlook, zoom, chat, telegram, jitsi, docuseal, captcha };
 }
 
 /** Resolve whether a given integration slug is currently connected. */

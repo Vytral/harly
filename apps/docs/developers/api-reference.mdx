@@ -1,6 +1,6 @@
 ---
 title: "API resource reference"
-description: "Inventory of Harly REST resources, scopes, mutation semantics, and error statuses."
+description: "Inventory of every Harly REST resource with its endpoints, required scopes, mutation semantics, response shapes, and standard error status codes."
 ---
 
 The live OpenAPI document at `/api/v1/openapi.json` defines the exact request
@@ -46,7 +46,7 @@ integrations.
 | Stages | Read, update pipeline stages | `stages:read`, `stages:write` |
 | Webhooks | CRUD endpoints, view deliveries, replay | `webhooks:read`, `webhooks:write` |
 | API keys | List, create, rotate, delete | `api_keys:read`, `api_keys:write` |
-| Automations | List, read runs | `automations:read`, `automations:write` |
+| Automations | Withdrawn (HTTP 410) | Dashboard only until automations v2 |
 
 ## Mutation examples
 

@@ -45,8 +45,9 @@ export type WorkspaceCalStatus = {
 /** Public-safe Cal.com status for the settings UI. Never returns the API key. */
 export async function getWorkspaceCalStatus(
   workspaceId: string,
+  database: typeof db = db,
 ): Promise<WorkspaceCalStatus> {
-  const [row] = await db
+  const [row] = await database
     .select({
       calEnabled: workspaceSettings.calEnabled,
       calBaseUrl: workspaceSettings.calBaseUrl,
@@ -84,12 +85,13 @@ export type WorkspaceCalConfig = {
  */
 export async function getWorkspaceCalConfig(
   workspaceId: string,
+  database: typeof db = db,
 ): Promise<WorkspaceCalConfig | null> {
   if (!isEncryptionConfigured()) {
     return null;
   }
 
-  const [row] = await db
+  const [row] = await database
     .select({
       calEnabled: workspaceSettings.calEnabled,
       calBaseUrl: workspaceSettings.calBaseUrl,

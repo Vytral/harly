@@ -32,6 +32,7 @@ import { deliverWebhook } from "./dispatch";
 function delivery(attempts = 0) {
   return {
     id: "delivery-1",
+    workspaceId: "workspace-1",
     attempts,
     payload: { event: "candidate.created" },
   } as Parameters<typeof deliverWebhook>[0];
@@ -50,6 +51,7 @@ describe("deliverWebhook", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
     mocks.updates.length = 0;
+    mocks.safeFetchWebhook.mockClear();
     mocks.safeFetchWebhook.mockRejectedValue(new Error("network failed"));
   });
 
@@ -75,5 +77,26 @@ describe("deliverWebhook", () => {
       attempts: MAX_WEBHOOK_ATTEMPTS,
       nextRetryAt: null,
     });
+  });
+
+  it("sends stable event metadata headers when the envelope is enriched", async () => {
+    mocks.safeFetchWebhook.mockResolvedValue(new Response("ok", { status: 202 }));
+
+    await expect(deliverWebhook({
+      ...delivery(),
+      payload: {
+        event: "candidate.created",
+        eventId: "event-1",
+        eventVersion: 1,
+        schemaVersion: 1,
+      },
+    }, endpoint)).resolves.toBe("success");
+
+    const [, request] = mocks.safeFetchWebhook.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(request.headers);
+    expect(headers.get("X-Harly-Event-Id")).toBe("event-1");
+    expect(headers.get("X-Harly-Event-Version")).toBe("1");
+    expect(headers.get("X-Harly-Schema-Version")).toBe("1");
+    expect(headers.get("X-Harly-Workspace")).toBe("workspace-1");
   });
 });

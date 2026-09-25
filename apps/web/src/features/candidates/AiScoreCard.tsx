@@ -42,11 +42,26 @@ const RECOMMENDATION_META = {
   no: { label: "No", className: "bg-destructive/10 text-destructive" },
 } as const;
 
-function scoreTone(score: number) {
+function scoreTone(score: number | null | undefined) {
+  if (score == null) return "text-muted-foreground";
   if (score >= 60) return "text-primary";
   if (score >= 40) return "text-clay";
   return "text-destructive";
 }
+
+/** Null / unverified scores render as an em dash — never a misleading red 0. */
+function formatCriterionScore(score: number | null | undefined): string {
+  if (score == null) return "—";
+  return String(score);
+}
+
+const CRITERION_STATUS_META = {
+  met: { label: "Met", className: "bg-primary/10 text-primary" },
+  partially_met: { label: "Partially met", className: "bg-clay/15 text-clay" },
+  not_met: { label: "Not met", className: "bg-destructive/10 text-destructive" },
+  not_demonstrated: { label: "Not demonstrated", className: "bg-muted text-muted-foreground" },
+  unknown: { label: "Unknown", className: "bg-muted text-muted-foreground" },
+} as const;
 
 function ScoreRing({ score, compact = false }: { score: number; compact?: boolean }) {
   const radius = compact ? 19 : 26;
@@ -286,13 +301,25 @@ export function AiScoreCard({
                     <div key={criterion.label}>
                       <div className="flex items-baseline justify-between gap-2">
                         <p className="text-[13px] font-medium">{criterion.label}</p>
-                        <span
-                          className={cn(
-                            "text-xs font-semibold tabular-nums",
-                            scoreTone(criterion.score),
-                          )}
-                        >
-                          {criterion.score}
+                        <span className="flex items-center gap-2">
+                          {criterion.status ? (
+                            <span className={cn("rounded-full px-2 py-0.5 text-[11px] font-semibold", CRITERION_STATUS_META[criterion.status].className)}>
+                              {CRITERION_STATUS_META[criterion.status].label}
+                            </span>
+                          ) : null}
+                          {criterion.matchMethod === "semantic_assist" ? (
+                            <span className="rounded-full bg-clay/15 px-2 py-0.5 text-[11px] font-semibold text-clay">
+                              Semantically related · Review recommended
+                            </span>
+                          ) : null}
+                          <span
+                            className={cn(
+                              "text-xs font-semibold tabular-nums",
+                              scoreTone(criterion.score),
+                            )}
+                          >
+                            {formatCriterionScore(criterion.score)}
+                          </span>
                         </span>
                       </div>
                       <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -300,8 +327,9 @@ export function AiScoreCard({
                           className={cn(
                             "h-full rounded-full bg-current transition-[width] duration-700",
                             scoreTone(criterion.score),
+                            criterion.score == null && "opacity-40",
                           )}
-                          style={{ width: `${criterion.score}%` }}
+                          style={{ width: `${criterion.score == null ? 0 : criterion.score}%` }}
                         />
                       </div>
                       {criterion.evidence ? (
@@ -314,8 +342,28 @@ export function AiScoreCard({
                 </div>
               ) : null}
 
-              {evaluation.strengths.length > 0 || evaluation.gaps.length > 0 ? (
-                <div className="grid gap-4 sm:grid-cols-2">
+              {evaluation.impactHighlights.length > 0 ? (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Quantified evidence
+                  </p>
+                  <ul className="mt-2 space-y-1.5">
+                    {evaluation.impactHighlights.map((item) => (
+                      <li key={item.text} className="flex gap-2 text-sm">
+                        <span className="mt-2 size-1.5 shrink-0 rounded-full bg-muted-foreground/40" />
+                        <span>
+                          {item.text}{" "}
+                          <span className="text-xs tabular-nums text-muted-foreground">
+                            {item.metrics.map((metric) => metric.rawText).join(" · ")}
+                          </span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {evaluation.strengths.length > 0 || evaluation.gaps.length > 0 ? (                <div className="grid gap-4 sm:grid-cols-2">
                   {evaluation.strengths.length > 0 ? (
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-wide text-primary">
@@ -355,7 +403,9 @@ export function AiScoreCard({
                     const Logo = PROVIDER_LOGO[evaluation.provider as AiProviderId];
                     return Logo ? <Logo className="size-3.5" /> : null;
                   })()}
-                  {evaluation.source === "rules" ? "Harly Algorithm · rules-v2" : formatModelLabel(evaluation.modelId)}
+                  {evaluation.source === "rules"
+                    ? `Harly Algorithm · ${evaluation.modelId || "rules-v4"}`
+                    : formatModelLabel(evaluation.modelId)}
                 </Badge>
                 <span className="inline-flex items-center gap-1">
                   <FileText className="size-3.5" />
@@ -377,7 +427,7 @@ export function AiScoreCard({
               </div>
               <p className="text-xs leading-5 text-muted-foreground">
                 {evaluation.source === "rules"
-                  ? "Evaluación automática basada en reglas y evidencia explícita. Revisa la información faltante y decide con criterio humano."
+                  ? "Deterministic evaluation based on structured resume parsing, rule criteria, and verified evidence. Review missing information and apply human discretion."
                   : "AI guidance only — review the evidence and make the hiring decision yourself. Do not use this score as the sole basis for a decision."}
               </p>
             </CardContent>

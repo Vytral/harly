@@ -13,7 +13,7 @@ type Context = { params: Promise<{ slug: string }> };
 
 /** GET /api/public/v1/jobs/{slug} , job detail + application config (CORS-open). */
 export const GET = withApi(async (request, context) => {
-  enforceRateLimit(`public:job:${clientIp(request)}`, {
+  await enforceRateLimit(`public:job:${clientIp(request)}`, {
     limit: 120,
     windowMs: 60_000,
   });

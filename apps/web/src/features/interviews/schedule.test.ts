@@ -828,7 +828,7 @@ describe("F1-12d reschedule honours the recruiter timezone", () => {
           scheduledAt: "2099-08-01T14:00:00.000Z",
         }),
       }),
-      { actorId: "user-1", skipDomainEvent: true },
+      expect.objectContaining({ actorId: "user-1", skipDomainEvent: true }),
     );
   });
 });

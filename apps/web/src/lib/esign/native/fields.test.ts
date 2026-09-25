@@ -25,6 +25,20 @@ describe("native offer field snapshots", () => {
     ).toBe(true);
   });
 
+  it("accepts ordered multi-signer field ownership", () => {
+    expect(
+      isSignableNativeFieldsSnapshot([
+        { id: "signature-1", type: "signature", page: 1, x: 0.1, y: 0.8, w: 0.3, h: 0.1, required: true, order: 0, recipientIndex: 0 },
+        { id: "signature-2", type: "signature", page: 1, x: 0.5, y: 0.8, w: 0.3, h: 0.1, required: true, order: 1, recipientIndex: 1 },
+      ]),
+    ).toBe(true);
+    expect(
+      isSignableNativeFieldsSnapshot([
+        { id: "signature-1", type: "signature", page: 1, x: 0.1, y: 0.8, w: 0.3, h: 0.1, required: true, order: 0, recipientIndex: 10 },
+      ]),
+    ).toBe(false);
+  });
+
   it.each([
     ["missing snapshot", null],
     ["empty snapshot", []],

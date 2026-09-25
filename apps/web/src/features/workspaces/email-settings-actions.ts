@@ -21,6 +21,8 @@ import {
 
 const log = createLogger("workspace-email-settings");
 
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
+
 export type EmailSettingsActionResult = { ok: boolean; error?: string };
 
 const baseSchema = z.object({
@@ -84,6 +86,7 @@ export async function saveEmailSettingsAction(input: {
   smtpSecure?: boolean;
   smtpUser?: string;
 }): Promise<EmailSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   if (!isEncryptionConfigured()) {
@@ -143,6 +146,7 @@ export async function saveEmailSettingsAction(input: {
 }
 
 export async function disableEmailAction(): Promise<EmailSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   await db
@@ -170,6 +174,7 @@ export async function saveInboundEmailSettingsAction(input: {
   webhookSecret?: string;
   resendApiKey?: string;
 }): Promise<EmailSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   if (input.enabled && !isEncryptionConfigured()) {
@@ -245,6 +250,7 @@ export async function saveInboundEmailSettingsAction(input: {
 }
 
 export async function disableInboundEmailAction(): Promise<EmailSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   await db
@@ -266,6 +272,7 @@ export async function sendTestEmailAction(input: {
   smtpSecure?: boolean;
   smtpUser?: string;
 }): Promise<EmailSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   if (!isEncryptionConfigured()) {

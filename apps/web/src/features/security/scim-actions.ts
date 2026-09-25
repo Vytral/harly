@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { db, scimTokens } from "@harly/db";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { createScimTokenValue } from "@/server/scim/service";
 import { logAuditEvent } from "@/lib/audit-log";
 
@@ -39,6 +40,7 @@ export async function createScimTokenAction(input: {
   expiresAt?: string;
 }): Promise<{ ok: boolean; token?: string; error?: string }> {
   try {
+    assertNotDemo();
     const context = await requirePermission("security:manage");
     if (context.roleKey !== "owner") return { ok: false, error: "Only owners can manage SCIM tokens." };
     const name = input.name.trim().slice(0, 100);
@@ -76,6 +78,7 @@ export async function createScimTokenAction(input: {
 
 export async function revokeScimTokenAction(id: string) {
   try {
+    assertNotDemo();
     const context = await requirePermission("security:manage");
     if (context.roleKey !== "owner") return { ok: false, error: "Only owners can manage SCIM tokens." };
     await db.update(scimTokens).set({ revokedAt: new Date() }).where(

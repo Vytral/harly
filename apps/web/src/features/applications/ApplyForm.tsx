@@ -901,10 +901,25 @@ export function ApplyForm({
     }
 
     for (const question of applicationConfig.questions) {
+      if (question.type === "info") {
+        continue;
+      }
+
+      const value = answers[question.id]?.trim() ?? "";
+      if (question.required && !value) {
+        nextQuestionErrors[question.id] = ["This question is required."];
+        continue;
+      }
+      if (question.type === "consent" && question.required && value !== "agree") {
+        nextQuestionErrors[question.id] = [
+          "You must agree to continue with your application.",
+        ];
+        continue;
+      }
       if (question.type !== "url") {
         continue;
       }
-      const error = validateUrl(answers[question.id] ?? "");
+      const error = validateUrl(value);
       if (error) {
         nextQuestionErrors[question.id] = [error];
       }
@@ -2409,6 +2424,14 @@ export function ApplyForm({
                   </label>
                 ) : null}
                 {applicationConfig.questions.map((question) => {
+                  if (question.type === "info") {
+                    return (
+                      <aside key={question.id} className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+                        <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{question.label}</h3>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{question.description}</p>
+                      </aside>
+                    );
+                  }
                   const yesNo = isYesNoQuestion(question);
                   return (
                     <div key={question.id} className="block">
@@ -2417,6 +2440,9 @@ export function ApplyForm({
                           {question.label}
                         </FieldLabel>
                       </label>
+                      {question.description ? (
+                        <p className={hintClass}>{question.description}</p>
+                      ) : null}
                       {!yesNo && question.placeholder ? (
                         <p className={hintClass}>
                           e.g.: {question.placeholder}
@@ -2458,15 +2484,37 @@ export function ApplyForm({
                           className={`${input} mt-1.5`}
                         />
                       ) : null}
-                      {question.type === "select" && yesNo ? (
+                      {question.type === "select" && yesNo && !question.optionDescriptions?.some(Boolean) ? (
                         <YesNoToggle
                           name={question.id}
                           value={answers[question.id] ?? ""}
                           onChange={(next) => updateAnswer(question.id, next)}
                         />
                       ) : null}
-                      {question.type === "select" && !yesNo ? (
-                        <select
+                      {question.type === "select" && (!yesNo || question.optionDescriptions?.some(Boolean)) ? (
+                        question.optionDescriptions?.some(Boolean) ? (
+                          <fieldset className="mt-2 space-y-2">
+                            <legend className="sr-only">{question.label}</legend>
+                            {question.options?.map((option, optionIndex) => (
+                              <label key={option} className="flex cursor-pointer items-start gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-700">
+                                <input
+                                  type="radio"
+                                  name={question.id}
+                                  value={option}
+                                  checked={answers[question.id] === option}
+                                  onChange={() => updateAnswer(question.id, option)}
+                                  className="mt-1 accent-[var(--board-primary)]"
+                                />
+                                <span>
+                                  <span className="block text-sm font-medium">{option}</span>
+                                  {question.optionDescriptions?.[optionIndex] ? (
+                                    <span className="mt-0.5 block text-sm text-zinc-500 dark:text-zinc-400">{question.optionDescriptions[optionIndex]}</span>
+                                  ) : null}
+                                </span>
+                              </label>
+                            ))}
+                          </fieldset>
+                        ) : <select
                           name={question.id}
                           value={answers[question.id] ?? ""}
                           onChange={(event) =>
@@ -2483,6 +2531,26 @@ export function ApplyForm({
                             </option>
                           ))}
                         </select>
+                      ) : null}
+                      {question.type === "consent" ? (
+                        <fieldset className="mt-3 space-y-2">
+                          <legend className="sr-only">{question.label}</legend>
+                          {(["agree", "disagree"] as const).map((value) => (
+                            <label key={value} className="flex cursor-pointer items-center gap-3 rounded-md border border-zinc-200 px-3 py-2.5 text-sm dark:border-zinc-700">
+                              <input
+                                type="radio"
+                                name={question.id}
+                                value={value}
+                                checked={answers[question.id] === value}
+                                onChange={() => updateAnswer(question.id, value)}
+                                className="accent-[var(--board-primary)]"
+                              />
+                              {value === "agree"
+                                ? question.agreeLabel ?? "I agree"
+                                : question.disagreeLabel ?? "I do not agree"}
+                            </label>
+                          ))}
+                        </fieldset>
                       ) : null}
                       {question.minLength ? (
                         <p className={hintClass}>
@@ -3030,11 +3098,18 @@ export function ApplyForm({
                     <FieldError errors={fieldErrorsFor(state, "coverLetter")} />
                   </label>
                 ) : null}
-                {applicationConfig.questions.map((question) => (
-                  <label key={question.id} className="block">
+                {applicationConfig.questions.map((question) => question.type === "info" ? (
+                  <aside key={question.id} className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+                    <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">{question.label}</h3>
+                    <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{question.description}</p>
+                  </aside>
+                ) : <div key={question.id} className="block">
+                  <div>
                     <FieldLabel required={question.required}>
                       {question.label}
                     </FieldLabel>
+                  </div>
+                  {question.description ? <p className={hintClass}>{question.description}</p> : null}
                     {question.type === "textarea" ? (
                       <textarea
                         name={question.id}
@@ -3072,7 +3147,27 @@ export function ApplyForm({
                       />
                     ) : null}
                     {question.type === "select" ? (
-                      <select
+                      question.optionDescriptions?.some(Boolean) ? (
+                        <fieldset className="mt-2 space-y-2">
+                          <legend className="sr-only">{question.label}</legend>
+                          {question.options?.map((option, optionIndex) => (
+                            <label key={option} className="flex cursor-pointer items-start gap-3 rounded-md border border-zinc-200 p-3 dark:border-zinc-700">
+                              <input
+                                type="radio"
+                                name={question.id}
+                                value={option}
+                                checked={answers[question.id] === option}
+                                onChange={() => updateAnswer(question.id, option)}
+                                className="mt-1 accent-[var(--board-primary)]"
+                              />
+                              <span>
+                                <span className="block text-sm font-medium">{option}</span>
+                                {question.optionDescriptions?.[optionIndex] ? <span className="mt-0.5 block text-sm text-zinc-500 dark:text-zinc-400">{question.optionDescriptions[optionIndex]}</span> : null}
+                              </span>
+                            </label>
+                          ))}
+                        </fieldset>
+                      ) : <select
                         name={question.id}
                         value={answers[question.id] ?? ""}
                         onChange={(event) =>
@@ -3090,6 +3185,24 @@ export function ApplyForm({
                         ))}
                       </select>
                     ) : null}
+                    {question.type === "consent" ? (
+                      <fieldset className="mt-3 space-y-2">
+                        <legend className="sr-only">{question.label}</legend>
+                        {(["agree", "disagree"] as const).map((value) => (
+                          <label key={value} className="flex cursor-pointer items-center gap-3 rounded-md border border-zinc-200 px-3 py-2.5 text-sm dark:border-zinc-700">
+                            <input
+                              type="radio"
+                              name={question.id}
+                              value={value}
+                              checked={answers[question.id] === value}
+                              onChange={() => updateAnswer(question.id, value)}
+                              className="accent-[var(--board-primary)]"
+                            />
+                            {value === "agree" ? question.agreeLabel ?? "I agree" : question.disagreeLabel ?? "I do not agree"}
+                          </label>
+                        ))}
+                      </fieldset>
+                    ) : null}
                     {question.minLength ? (
                       <p className={hintClass}>
                         Minimum {question.minLength} characters if answered.
@@ -3101,8 +3214,7 @@ export function ApplyForm({
                         clientQuestionErrors[question.id],
                       )}
                     />
-                  </label>
-                ))}
+                </div>)}
               </div>
             </section>
           ) : null}

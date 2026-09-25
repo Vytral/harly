@@ -44,9 +44,13 @@ import {
   assignFromPoolToJobAction,
 } from "@/features/pool/actions";
 import { isAgentWriteTool, type AgentWriteTool } from "./write-tool-names";
+import { AGENT_WRITE_TOOL_PERMISSIONS } from "./tool-permissions";
 import { createJobForApi } from "@/features/jobs/service";
 import { getApplicationForApi } from "@/features/applications/service";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  getActorPermissions,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import { logAuditEvent } from "@/lib/audit-log";
 import {
   getAgentActionReceipt,
@@ -55,6 +59,18 @@ import {
   type ActionReceiptResult,
 } from "./action-receipts";
 import { verifyInterviewOutcome } from "./interview-outcome";
+import {
+  applyAutomationProposal,
+  createAutomationProposalPreviewToken,
+  getAutomationProposal,
+  verifyAutomationProposalPreviewToken,
+} from "@/features/automations/ai-proposals";
+import { semanticGraphHash } from "@/features/automations/definition/hash";
+import { proposalLifecycleStage } from "@/features/automations/lifecycle-status";
+import { retryRun, replayRunFromStep } from "@/features/automations/data";
+import { resolveWorkflowUncertain } from "@/features/automations/runtime/worker";
+import { jsonValueSchema } from "@/features/automations/definition/schema-v2";
+import { getAutomationToolManifestV2 } from "@/features/automations/registry";
 
 /**
  * Central dispatcher for Harly AI WRITE actions.
@@ -76,7 +92,30 @@ export type AgentWritePreview = {
   canonical?: boolean;
   title: string;
   details: Array<{ label: string; value: string }>;
+  automationChanges?: Array<{ kind: string; id: string; title?: string }>;
+  automationSimulation?: {
+    status: string;
+    coveragePercent: number;
+    uncoveredNodeCount: number;
+  };
+  automationCoverage?: Array<{
+    nodeId: string;
+    level: string;
+    covered: boolean;
+  }>;
+  automationRequirements?: {
+    permissions: string[];
+    integrations: string[];
+    resources: string[];
+  };
+  /** Canonical UI lifecycle stage of the proposal (§12.14). */
+  automationLifecycle?: {
+    stage: string;
+    reason: string;
+  };
   error?: string;
+  /** Short-lived server-bound confirmation credential for automation apply. */
+  previewToken?: string;
 };
 
 function detail(
@@ -97,7 +136,174 @@ async function resolveAgentWritePreview(
   tool: AgentWriteTool,
   input: Record<string, unknown>,
   workspaceId: string,
+  actorId: string,
 ): Promise<AgentWritePreview> {
+  if (tool === "applyAutomationProposal") {
+    const proposalId = typeof input.proposalId === "string" ? input.proposalId : "";
+    const proposal = await getAutomationProposal({
+      workspaceId,
+      actorId,
+      proposalId,
+    });
+    const stageFor = (
+      simulationStatus: "verified" | "partial" | "failed" | null,
+    ) => proposalLifecycleStage({
+      status: proposal.status,
+      issuesCount: proposal.issues.length,
+      simulationStatus,
+    });
+    if (proposal.status !== "prepared") {
+      return {
+        ok: false,
+        title: "Automation proposal unavailable",
+        details: [],
+        error: "This automation proposal is no longer available to apply.",
+        automationLifecycle: stageFor(proposal.simulation?.status ?? null),
+      };
+    }
+    if (proposal.issues.length > 0) {
+      return {
+        ok: false,
+        title: "Automation proposal needs fixes",
+        details: [
+          ...detail("Automation", proposal.name),
+          ...detail("Validation issues", String(proposal.issues.length)),
+        ],
+        error: "Resolve the proposal validation issues before applying it.",
+        automationLifecycle: stageFor(null),
+      };
+    }
+    const simulation = proposal.simulation;
+    const testStatus = simulation
+      ? `${simulation.status} (${simulation.coveragePercent}% branch coverage)`
+      : "Not tested";
+    if (!simulation) {
+      return {
+        ok: false,
+        title: "Automation proposal not simulated",
+        details: [
+          ...detail("Automation", proposal.name),
+          ...detail("Simulation", testStatus),
+        ],
+        error: "Simulate this proposal before applying it.",
+        automationLifecycle: stageFor(null),
+      };
+    }
+    if (simulation.status === "failed") {
+      return {
+        ok: false,
+        title: "Automation proposal simulation failed",
+        details: [
+          ...detail("Automation", proposal.name),
+          ...detail("Simulation", testStatus),
+          ...detail("Uncovered nodes", String(simulation.uncoveredNodeIds.length)),
+        ],
+        error: "Fix the reported branch failures and simulate again before applying.",
+        automationLifecycle: stageFor("failed"),
+      };
+    }
+    if (simulation.graphHash !== semanticGraphHash(proposal.graph)) {
+      return {
+        ok: false,
+        title: "Automation proposal simulation is stale",
+        details: [
+          ...detail("Automation", proposal.name),
+          ...detail("Simulation", testStatus),
+        ],
+        error: "This proposal's graph changed since it was last simulated. Simulate it again before applying.",
+        automationLifecycle: stageFor(simulation.status),
+      };
+    }
+
+    // Recruiter-facing change summary: node steps only (edges and metadata
+    // renames are wiring noise). Titles come from the proposed graph so the
+    // card reads "Send rejection email", not "node added: send-rejection-email".
+    const humanizeStepId = (value: string): string =>
+      value
+        .replaceAll("_", " ")
+        .replaceAll("-", " ")
+        .replace(/\s+/g, " ")
+        .trim()
+        .replace(/^./, (first) => first.toUpperCase());
+    const stepTitleFor = (nodeId: string): string => {
+      const node = proposal.graph.nodes.find((candidate) => candidate.id === nodeId) as
+        | { name?: unknown; actionType?: unknown }
+        | undefined;
+      const name = typeof node?.name === "string" ? node.name.trim() : "";
+      if (name) return name;
+      const actionType = typeof node?.actionType === "string" ? node.actionType : "";
+      if (actionType) return humanizeStepId(actionType);
+      return humanizeStepId(nodeId);
+    };
+    const nodeChanges = proposal.diff.filter((change) =>
+      change.kind.startsWith("node_"),
+    );
+    const addedSteps = nodeChanges.filter((change) => change.kind === "node_added").length;
+    const changedSteps = nodeChanges.filter((change) => change.kind === "node_changed").length;
+    const removedSteps = nodeChanges.filter((change) => change.kind === "node_removed").length;
+    const changeSummary =
+      nodeChanges.length === 0
+        ? "No step changes"
+        : [
+            addedSteps > 0 ? `${addedSteps} added` : null,
+            changedSteps > 0 ? `${changedSteps} changed` : null,
+            removedSteps > 0 ? `${removedSteps} removed` : null,
+          ]
+            .filter((fragment): fragment is string => Boolean(fragment))
+            .join(", ");
+
+    return {
+      ok: true,
+      canonical: true,
+      title: "Apply automation proposal",
+      details: [
+        ...detail("Automation", proposal.name),
+        ...detail("Steps", changeSummary),
+        ...detail("Test result", testStatus),
+      ],
+      automationChanges: nodeChanges.slice(0, 100).map((change) => ({
+        kind: change.kind,
+        id: change.id,
+        title: stepTitleFor(change.id),
+      })),
+      automationLifecycle: stageFor(simulation.status),
+      automationSimulation: {
+        status: simulation.status,
+        coveragePercent: simulation.coveragePercent,
+        uncoveredNodeCount: simulation.uncoveredNodeIds.length,
+      },
+      automationCoverage: proposal.graph.nodes.map((node) => ({
+        nodeId: node.id,
+        level: simulation.nodeCoverageLevels?.[node.id] ?? "uncovered",
+        covered: simulation.coveredNodeIds.includes(node.id),
+      })),
+      automationRequirements: (() => {        const permissions = new Set<string>();
+        const integrations = new Set<string>();
+        const resources = new Set<string>();
+        for (const node of proposal.graph.nodes) {
+          if (node.type !== "action") continue;
+          const manifest = typeof getAutomationToolManifestV2 === "function"
+            ? getAutomationToolManifestV2(node.actionType, node.toolVersion)
+            : null;
+          if (!manifest) continue;
+          manifest.requiredPermissions.forEach((value) => permissions.add(value));
+          manifest.integrationRequirements.forEach((value) => integrations.add(value));
+          manifest.inputs.forEach((input) => {
+            if (input.resourceType) resources.add(input.resourceType);
+          });
+        }
+        return {
+          permissions: [...permissions].sort(),
+          integrations: [...integrations].sort(),
+          resources: [...resources].sort(),
+        };
+      })(),
+      previewToken: createAutomationProposalPreviewToken({
+        proposalId: proposal.id,
+        graphHash: simulation.graphHash,
+      }),
+    };
+  }
   if (
     tool === "moveCandidateStage" ||
     tool === "rejectCandidate" ||
@@ -412,6 +618,21 @@ export async function prepareAgentWriteAction(
       error: "Not signed in.",
     };
   }
+  const requiredPermission = AGENT_WRITE_TOOL_PERMISSIONS[tool];
+  if (requiredPermission) {
+    const permissions = await getActorPermissions(
+      context.organization.id,
+      context.user.id,
+    );
+    if (!permissions.includes(requiredPermission)) {
+      return {
+        ok: false,
+        title: "Action unauthorized",
+        details: [],
+        error: "You do not have permission to perform this action.",
+      };
+    }
+  }
   const parsed = HANDLERS[tool].schema.safeParse(rawInput);
   if (!parsed.success) {
     return {
@@ -426,6 +647,7 @@ export async function prepareAgentWriteAction(
       tool,
       parsed.data as Record<string, unknown>,
       context.organization.id,
+      context.user.id,
     );
   } catch {
     return {
@@ -713,6 +935,31 @@ const generateCandidateScoreSchema = z.object({
 const bulkScoreJobSchema = z.object({
   jobId: z.string().min(1),
   jobTitle: z.string().trim().min(1).max(240),
+});
+
+const applyAutomationProposalSchema = z.object({
+  proposalId: z.string().uuid(),
+  previewToken: z.string().min(20).optional(),
+});
+
+const retryAutomationRunSchema = z.object({
+  runId: z.string().uuid(),
+});
+
+const reconcileAutomationRunSchema = z.object({
+  runId: z.string().uuid(),
+  nodeId: z.string().trim().min(1).max(80),
+  decision: z.enum(["succeeded", "failed"]),
+  note: z.string().trim().min(3).max(1000),
+  // Nullish (not optional): the model sends explicit nulls under strict
+  // function schemas, while dashboard clients omit the keys.
+  providerRef: z.string().trim().max(300).nullish(),
+  outputJson: z.string().max(64000).nullish(),
+});
+
+const replayAutomationRunSchema = z.object({
+  runId: z.string().uuid(),
+  stepIndex: z.number().int().min(0),
 });
 
 /**
@@ -1248,6 +1495,124 @@ const HANDLERS = {
       };
     },
   },
+
+  applyAutomationProposal: {
+    schema: applyAutomationProposalSchema,
+    run: async (
+      input: z.infer<typeof applyAutomationProposalSchema>,
+      ctx: { workspaceId: string; userId: string; actionId?: string },
+    ): Promise<WriteResult> => {
+      // The confirmation receipt's action id is supplied by the outer
+      // confirmation boundary. A proposal gets a second CAS/idempotency guard
+      // below when the handler is called without a receipt in tests.
+      const proposal = await getAutomationProposal({
+        workspaceId: ctx.workspaceId,
+        actorId: ctx.userId,
+        proposalId: input.proposalId,
+      });
+      if (
+        !proposal.simulation ||
+        !verifyAutomationProposalPreviewToken({
+          token: input.previewToken,
+          proposalId: proposal.id,
+          graphHash: proposal.simulation.graphHash,
+        })
+      ) {
+        return {
+          success: false,
+          error:
+            "A fresh server preview is required before applying this automation proposal.",
+        };
+      }
+      const result = await applyAutomationProposal({
+        workspaceId: ctx.workspaceId,
+        actorId: ctx.userId,
+        proposalId: input.proposalId,
+        actionId: ctx.actionId ?? `agent:${input.proposalId}`,
+        previewToken: input.previewToken,
+      });
+      return {
+        success: true,
+        message: "Automation proposal applied to a draft. It has not been published.",
+        workflowId: result.workflowId,
+        draftRevision: result.draftRevision,
+        replayed: result.replayed,
+      };
+    },
+  },
+
+  retryAutomationRun: {
+    schema: retryAutomationRunSchema,
+    run: async (
+      input: z.infer<typeof retryAutomationRunSchema>,
+      ctx: { workspaceId: string },
+    ): Promise<WriteResult> => {
+      const run = await retryRun({ workspaceId: ctx.workspaceId, id: input.runId });
+      return {
+        success: true,
+        message: "The failed automation run was queued for a retryable step.",
+        runId: run.id,
+      };
+    },
+  },
+
+  reconcileAutomationRun: {
+    schema: reconcileAutomationRunSchema,
+    run: async (
+      input: z.infer<typeof reconcileAutomationRunSchema>,
+      ctx: { workspaceId: string },
+    ): Promise<WriteResult> => {
+      let output: z.infer<typeof jsonValueSchema> | undefined;
+      if (input.outputJson?.trim()) {
+        try {
+          const parsed = jsonValueSchema.safeParse(JSON.parse(input.outputJson));
+          if (!parsed.success) {
+            return { success: false, error: "The reconciliation output must be valid JSON." };
+          }
+          output = parsed.data;
+        } catch {
+          return { success: false, error: "The reconciliation output is not valid JSON." };
+        }
+      }
+      const result = await resolveWorkflowUncertain({
+        workspaceId: ctx.workspaceId,
+        runId: input.runId,
+        nodeId: input.nodeId,
+        decision: input.decision,
+        note: input.note,
+        providerRef: input.providerRef ?? undefined,
+        ...(output === undefined ? {} : { output }),
+      });
+      if (!result.ok) return { success: false, error: result.error };
+      return {
+        success: true,
+        message: `The uncertain automation action was reconciled as ${input.decision}.`,
+        runId: input.runId,
+        resumedStatus: result.resumedStatus,
+      };
+    },
+  },
+
+  replayAutomationRun: {
+    schema: replayAutomationRunSchema,
+    run: async (
+      input: z.infer<typeof replayAutomationRunSchema>,
+      ctx: { workspaceId: string },
+    ): Promise<WriteResult> => {
+      const run = await replayRunFromStep({
+        workspaceId: ctx.workspaceId,
+        id: input.runId,
+        stepIndex: input.stepIndex,
+      });
+      return {
+        success: true,
+        message: "The automation run replay was queued from the selected step.",
+        runId: run.id,
+        replayOfRunId: input.runId,
+        stepIndex: input.stepIndex,
+      };
+    },
+  },
 } as const;
 
 // Compile-time guard: HANDLERS keys must exactly match the client-safe registry
@@ -1272,6 +1637,20 @@ export async function confirmAgentWriteAction(
   const context = await getWorkspaceContextOrNull();
   if (!context) {
     return { success: false, error: "Not signed in." };
+  }
+
+  const requiredPermission = AGENT_WRITE_TOOL_PERMISSIONS[tool];
+  if (requiredPermission) {
+    const permissions = await getActorPermissions(
+      context.organization.id,
+      context.user.id,
+    );
+    if (!permissions.includes(requiredPermission)) {
+      return {
+        success: false,
+        error: "You do not have permission to perform this action.",
+      };
+    }
   }
 
   const handler = HANDLERS[tool];
@@ -1324,11 +1703,12 @@ export async function confirmAgentWriteAction(
     // schema. TS can't correlate the two across the union, so cast at the call.
     const run = handler.run as (
       input: unknown,
-      ctx: { workspaceId: string; userId: string },
+      ctx: { workspaceId: string; userId: string; actionId?: string },
     ) => Promise<WriteResult>;
     const result = await run(parsed.data, {
       workspaceId: context.organization.id,
       userId: context.user.id,
+      actionId,
     });
     if (receipt?.kind === "reserved") {
       await receipt.complete(result);

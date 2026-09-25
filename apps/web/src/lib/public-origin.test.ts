@@ -21,6 +21,17 @@ describe("public provider origin", () => {
     expect(() => getHarlyPublicOrigin()).toThrow(/HTTPS/);
   });
 
+  it("allows only explicit HTTP loopback for a production E2E process", () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("HARLY_E2E", "true");
+    vi.stubEnv("HARLY_URL", "http://127.0.0.1:3000");
+
+    expect(getHarlyPublicOrigin()).toBe("http://127.0.0.1:3000");
+
+    vi.stubEnv("HARLY_URL", "http://127.0.0.2:3000");
+    expect(() => getHarlyPublicOrigin()).toThrow(/reachable public hostname/);
+  });
+
   it("rejects an unspecified production bind address", () => {
     vi.stubEnv("NODE_ENV", "production");
     vi.stubEnv("HARLY_URL", "https://0.0.0.0:3000");

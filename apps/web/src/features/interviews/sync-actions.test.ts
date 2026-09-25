@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   syncInterviewToZoom: vi.fn(),
   syncInterviewToTeams: vi.fn(),
   syncInterviewToJitsi: vi.fn(),
+  claimInterviewSync: vi.fn(),
   trackInterviewSync: vi.fn(),
   row: null as unknown,
 }));
@@ -76,6 +77,7 @@ vi.mock("@/lib/jitsi/sync", () => ({
   cancelInterviewJitsiMeeting: vi.fn(),
 }));
 vi.mock("@/lib/interviews/sync-ledger", () => ({
+  claimInterviewSync: mocks.claimInterviewSync,
   trackInterviewSync: mocks.trackInterviewSync,
 }));
 vi.mock("@/lib/logger", () => ({
@@ -92,6 +94,9 @@ beforeEach(() => {
   mocks.syncInterviewToZoom.mockReset();
   mocks.syncInterviewToTeams.mockReset();
   mocks.syncInterviewToJitsi.mockReset();
+  mocks.claimInterviewSync.mockReset();
+  mocks.claimInterviewSync.mockResolvedValue(true);
+  mocks.trackInterviewSync.mockReset();
   mocks.trackInterviewSync.mockImplementation(
     async ({ run }: { run: () => Promise<unknown> }) => run(),
   );
@@ -201,5 +206,18 @@ describe("retryInterviewSyncAction", () => {
     expect(result.success).toBe(false);
     expect(result.error).toMatch(/Google Calendar could not/i);
     expect(mocks.cancelInterviewGCalEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not call a provider when another worker owns the retry", async () => {
+    mocks.claimInterviewSync.mockResolvedValue(false);
+
+    const result = await retryInterviewSyncAction({ syncId: "sync-1" });
+
+    expect(result).toEqual({
+      success: false,
+      error: "This synchronization is already being retried or is no longer retryable.",
+    });
+    expect(mocks.syncInterviewToZoom).not.toHaveBeenCalled();
+    expect(mocks.trackInterviewSync).not.toHaveBeenCalled();
   });
 });

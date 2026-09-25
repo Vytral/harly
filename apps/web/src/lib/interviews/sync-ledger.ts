@@ -24,7 +24,33 @@ type TrackInterviewSyncInput<T> = {
   isSuccess: (result: T) => boolean;
   resourceId?: (result: T) => string | undefined;
   resourceUrl?: (result: T) => string | undefined;
+  /** Throw after recording a failed provider result for a workflow action. */
+  strict?: boolean;
+  /** Preserve the worker ownership while retrying a claimed ledger row. */
+  workerId?: string;
+  /** Explicit database boundary for isolated workflow workers. */
+  database?: typeof db;
 };
+
+export class InterviewProviderSyncError extends Error {
+  readonly retryable = true;
+  readonly code = "INTERVIEW_PROVIDER_SYNC_FAILED";
+
+  constructor(provider: InterviewSyncProvider) {
+    super(`${provider} did not complete the requested interview synchronization.`);
+    this.name = "InterviewProviderSyncError";
+  }
+}
+
+export class InterviewProviderReconciliationError extends Error {
+  readonly retryable = true;
+  readonly code = "INTERVIEW_PROVIDER_RECONCILIATION_FAILED";
+
+  constructor() {
+    super("One or more interview provider effects are still pending.");
+    this.name = "InterviewProviderReconciliationError";
+  }
+}
 
 function errorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error);
@@ -36,9 +62,12 @@ async function beginInterviewSync(input: {
   interviewId: string;
   provider: InterviewSyncProvider;
   operation: InterviewSyncOperation;
+  workerId?: string;
+  database?: typeof db;
 }) {
   try {
-    await db
+    const database = input.database ?? db;
+    await database
       .insert(interviewSyncs)
       .values({
         workspaceId: input.workspaceId,
@@ -50,8 +79,8 @@ async function beginInterviewSync(input: {
         lastAttemptAt: new Date(),
         nextRetryAt: null,
         lastError: null,
-        lockedAt: null,
-        lockedBy: null,
+        lockedAt: input.workerId ? new Date() : null,
+        lockedBy: input.workerId ?? null,
       })
       .onConflictDoUpdate({
         target: [interviewSyncs.interviewId, interviewSyncs.provider],
@@ -62,8 +91,8 @@ async function beginInterviewSync(input: {
           lastAttemptAt: new Date(),
           nextRetryAt: null,
           lastError: null,
-          lockedAt: null,
-          lockedBy: null,
+          lockedAt: input.workerId ? new Date() : null,
+          lockedBy: input.workerId ?? null,
         },
       });
   } catch (error) {
@@ -80,11 +109,14 @@ async function markInterviewSync(input: {
   error?: string;
   providerResourceId?: string;
   providerUrl?: string;
+  workerId?: string;
+  database?: typeof db;
 }) {
   try {
+    const database = input.database ?? db;
     let nextRetryAt: Date | null = null;
     if (input.status === "failed") {
-      const [current] = await db
+      const [current] = await database
         .select({ attempts: interviewSyncs.attempts })
         .from(interviewSyncs)
         .where(
@@ -92,6 +124,7 @@ async function markInterviewSync(input: {
             eq(interviewSyncs.workspaceId, input.workspaceId),
             eq(interviewSyncs.interviewId, input.interviewId),
             eq(interviewSyncs.provider, input.provider),
+            input.workerId ? eq(interviewSyncs.lockedBy, input.workerId) : undefined,
           ),
         )
         .limit(1);
@@ -102,7 +135,7 @@ async function markInterviewSync(input: {
       nextRetryAt = new Date(Date.now() + delayMs);
     }
 
-    await db
+    await database
       .update(interviewSyncs)
       .set({
         status: input.status,
@@ -119,6 +152,7 @@ async function markInterviewSync(input: {
           eq(interviewSyncs.workspaceId, input.workspaceId),
           eq(interviewSyncs.interviewId, input.interviewId),
           eq(interviewSyncs.provider, input.provider),
+          input.workerId ? eq(interviewSyncs.lockedBy, input.workerId) : undefined,
         ),
       );
   } catch (error) {
@@ -134,7 +168,10 @@ async function markInterviewSync(input: {
 export async function trackInterviewSync<T>(
   input: TrackInterviewSyncInput<T>,
 ): Promise<T> {
-  await beginInterviewSync(input);
+  // A claimed retry already transitioned the ledger row to this attempt. Do
+  // not run the insert/upsert path again: doing so could steal an expired
+  // claim from a newer worker between claim and provider I/O.
+  if (!input.workerId) await beginInterviewSync(input);
   try {
     const result = await input.run();
     if (input.isSuccess(result)) {
@@ -145,6 +182,8 @@ export async function trackInterviewSync<T>(
         status: input.operation === "cancel" ? "canceled" : "synced",
         providerResourceId: input.resourceId?.(result),
         providerUrl: input.resourceUrl?.(result),
+        workerId: input.workerId,
+        database: input.database,
       });
     } else {
       await markInterviewSync({
@@ -153,7 +192,10 @@ export async function trackInterviewSync<T>(
         provider: input.provider,
         status: "failed",
         error: "Provider did not complete the requested interview sync.",
+        workerId: input.workerId,
+        database: input.database,
       });
+      if (input.strict) throw new InterviewProviderSyncError(input.provider);
     }
     return result;
   } catch (error) {
@@ -163,9 +205,51 @@ export async function trackInterviewSync<T>(
       provider: input.provider,
       status: "failed",
       error: errorMessage(error),
+      workerId: input.workerId,
+      database: input.database,
     });
     throw error;
   }
+}
+
+/**
+ * Claim one explicit retry without allowing a second operator or cron worker
+ * to call the provider concurrently. The same worker may renew its claim;
+ * another worker can only take it after the lock TTL has elapsed.
+ */
+export async function claimInterviewSync(input: {
+  workspaceId: string;
+  syncId: string;
+  workerId: string;
+  lockTtlMs?: number;
+  database?: typeof db;
+}): Promise<boolean> {
+  const now = new Date();
+  const reclaimBefore = new Date(now.getTime() - (input.lockTtlMs ?? 10 * 60 * 1000));
+  const database = input.database ?? db;
+  const rows = await database
+    .update(interviewSyncs)
+    .set({
+      status: "pending",
+      attempts: sql`${interviewSyncs.attempts} + 1`,
+      lastAttemptAt: now,
+      nextRetryAt: null,
+      lastError: null,
+      lockedAt: now,
+      lockedBy: input.workerId,
+    })
+    .where(and(
+      eq(interviewSyncs.id, input.syncId),
+      eq(interviewSyncs.workspaceId, input.workspaceId),
+      or(eq(interviewSyncs.status, "pending"), eq(interviewSyncs.status, "failed")),
+      or(
+        isNull(interviewSyncs.lockedAt),
+        lte(interviewSyncs.lockedAt, reclaimBefore),
+        eq(interviewSyncs.lockedBy, input.workerId),
+      ),
+    ))
+    .returning({ id: interviewSyncs.id });
+  return rows.length === 1;
 }
 
 /** Return failed/pending work that is eligible for a future retry worker. */

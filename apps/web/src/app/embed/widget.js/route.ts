@@ -180,8 +180,10 @@ const WIDGET = String.raw`(function () {
         if (job.location) bits.push(job.location);
         if (job.workplaceType) bits.push(job.workplaceType);
         info.appendChild(el("div", "oh-meta", bits.join(" · ")));
-        var btn = el("button", "oh-btn", "Apply");
-        btn.onclick = function () { openApply(container, job, board, jobs); };
+        var btn = el("a", "oh-btn", "View job");
+        btn.href = job.hostedJobUrl || job.hostedApplyUrl || "#";
+        btn.target = "_blank";
+        btn.rel = "noopener noreferrer";
         card.appendChild(info);
         card.appendChild(btn);
         list.appendChild(card);
@@ -453,7 +455,8 @@ const WIDGET = String.raw`(function () {
       return;
     }
 
-    // Single-job mode: mount only that job's apply form, no board listing.
+    // Single-job mode: deep-link to hosted job details (overview), never the
+    // apply form directly — candidates should land on the real job page.
     if (singleJobSlug) {
       container.appendChild(el("div", "oh-empty", "Loading…"));
       fetch(api("/api/public/v1/jobs/" + encodeURIComponent(singleJobSlug)))
@@ -461,8 +464,20 @@ const WIDGET = String.raw`(function () {
         .then(function (body) {
           var job = body && body.data && body.data.job;
           if (!job) throw new Error("not found");
+          var href = job.hostedJobUrl || job.hostedApplyUrl;
           container.innerHTML = "";
-          openApply(container, job, null, null);
+          if (href) {
+            var root = el("div", "oh-root");
+            root.appendChild(el("h3", null, job.title || "Open role"));
+            var link = el("a", "oh-btn", "View job details");
+            link.href = href;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            root.appendChild(link);
+            container.appendChild(root);
+          } else {
+            openApply(container, job, null, null);
+          }
         })
         .catch(function () {
           container.innerHTML = "";

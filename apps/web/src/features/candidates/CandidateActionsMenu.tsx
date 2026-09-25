@@ -36,7 +36,7 @@ export function CandidateActionsMenu({
         toast.error(result.error ?? "Could not delete the candidate.");
         return;
       }
-      toast.success("Candidate deleted permanently.");
+      toast.success("Candidate moved to trash.");
       if (redirectAfterTrash) {
         router.replace("/dashboard/candidates");
       }
@@ -61,7 +61,7 @@ export function CandidateActionsMenu({
       <DropdownMenuContent align={align} className="w-48">
         <DropdownMenuItem variant="destructive" onClick={deleteCandidate}>
           <Trash2 />
-          Delete permanently
+          Move to trash
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

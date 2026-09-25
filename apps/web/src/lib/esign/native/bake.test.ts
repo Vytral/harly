@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument, degrees } from "pdf-lib";
 
-import { bakeFieldsIntoPdf, NATIVE_FIELD_MAX_COUNT } from "./bake";
+import { SignatureExtractor } from "pdfjs-dist/legacy/build/pdf.mjs";
+
+import { bakeFieldsIntoPdf, bakeVectorIntoPdf, NATIVE_FIELD_MAX_COUNT, renderVectorSignaturePng } from "./bake";
 
 async function sourcePdf(pageCount = 1) {
   const pdf = await PDFDocument.create();
@@ -155,5 +157,57 @@ describe("bakeFieldsIntoPdf", () => {
         fields: [{ type: "signature", page: 1, x: 0.1, y: 0.8, w: 0.3, h: 0.08 }],
       }),
     ).rejects.toThrow("rotated PDF");
+  });
+});
+
+async function vectorPayload() {
+  const out = SignatureExtractor.processDrawnLines({
+    lines: {
+      curves: [{ points: [10, 20, 60, 40, 120, 30] }, { points: [15, 100, 80, 120] }],
+      thickness: 3,
+      width: 700,
+      height: 180,
+    },
+    pageWidth: 700,
+    pageHeight: 180,
+    rotation: 0,
+    innerMargin: 0,
+    mustSmooth: false,
+    areContours: false,
+  });
+  return SignatureExtractor.compressSignature({
+    outlines: out!.newCurves,
+    areContours: out!.areContours,
+    thickness: out!.thickness,
+    width: out!.width,
+    height: out!.height,
+  });
+}
+
+describe("renderVectorSignaturePng", () => {
+  it("rasterizes an outline to a Hi-DPI PNG", async () => {
+    const rendered = await renderVectorSignaturePng({ vectorData: await vectorPayload() });
+    expect(rendered.pngBytes.byteLength).toBeGreaterThan(0);
+    expect(rendered.pngBytes.byteLength).toBeLessThanOrEqual(500 * 1024);
+    expect(rendered.width).toBeGreaterThan(8);
+    expect(rendered.height).toBeGreaterThan(8);
+    expect(rendered.areContours).toBe(false);
+  });
+
+  it("rejects corrupt payloads fail-closed", async () => {
+    await expect(renderVectorSignaturePng({ vectorData: "!!!nope!!!" })).rejects.toThrow("invalid");
+  });
+});
+
+describe("bakeVectorIntoPdf", () => {
+  it("bakes a vector signature into a readable PDF", async () => {
+    const result = await bakeVectorIntoPdf({
+      pdfBytes: await sourcePdf(),
+      vectorData: await vectorPayload(),
+      fields: [{ type: "signature", page: 1, x: 0.1, y: 0.8, w: 0.3, h: 0.08 }],
+    });
+    const parsed = await PDFDocument.load(result);
+    expect(parsed.getPageCount()).toBe(1);
+    expect(result.byteLength).toBeGreaterThan(0);
   });
 });

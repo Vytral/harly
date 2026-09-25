@@ -46,6 +46,14 @@ vi.mock("@/lib/logger", () => ({
   createLogger: () => ({ error: vi.fn() }),
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/server/webhooks/emit", () => ({
+  emitWebhookEvent: vi.fn(),
+  webhookOptionsAfterPersist: vi.fn((event: { eventId: string; actorId?: string }) => ({
+    skipDomainEvent: true,
+    eventId: event.eventId,
+    actorId: event.actorId,
+  })),
+}));
 
 import { createTask, deleteTask, updateTask } from "./actions";
 

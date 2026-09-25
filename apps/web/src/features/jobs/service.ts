@@ -97,7 +97,9 @@ export function serializePublicJob(job: Job, workspaceSlug: string) {
     currency: job.currency,
     salaryPeriod: job.salaryPeriod,
     publishedAt: job.publishedAt?.toISOString() ?? null,
-    // Where the company's careers page can deep-link for the hosted apply flow.
+    // Public job details (overview) — preferred share / deep-link target.
+    hostedJobUrl: `${base}/board/${workspaceSlug}/jobs/${job.slug}`,
+    // Hosted apply form — only for explicit apply actions.
     hostedApplyUrl: `${base}/board/${workspaceSlug}/apply/${job.slug}`,
     boardUrl: `${base}/board/${workspaceSlug}`,
   };
@@ -228,7 +230,8 @@ export async function createJobForApi(input: {
     await publishPersistedDomainEvents([event]);
     await emitWebhookEvent(workspaceId, "job.published", {
       job: serializeJob(job),
-    }, { actorId: actorUserId, skipDomainEvent: true });
+      eventId: event.eventId,
+    }, { actorId: actorUserId, skipDomainEvent: true, eventId: event.eventId });
   }
   return job;
 }
@@ -301,7 +304,8 @@ export async function updateJobForApi(input: {
     await publishPersistedDomainEvents([event]);
     await emitWebhookEvent(input.workspaceId, "job.published", {
       job: serializeJob(updated),
-    }, { skipDomainEvent: true });
+      eventId: event.eventId,
+    }, { skipDomainEvent: true, eventId: event.eventId });
   }
   return updated;
 }

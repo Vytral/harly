@@ -6,6 +6,7 @@ import { auth } from "@/lib/auth";
 import { db, member, session } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { logAuditEvent } from "@/lib/audit-log";
 
 export type SessionDevice = {
@@ -38,6 +39,7 @@ export async function listMySessionsAction(): Promise<SessionDevice[]> {
 }
 
 export async function revokeMySessionAction(sessionId: string) {
+  assertNotDemo();
   const current = await currentSession();
   const target = await db.select({ id: session.id }).from(session).where(and(eq(session.id, sessionId), eq(session.userId, current.user.id))).limit(1);
   if (!target[0]) return { ok: false, error: "Session not found." };
@@ -48,6 +50,7 @@ export async function revokeMySessionAction(sessionId: string) {
 }
 
 export async function revokeMemberSessionAction(memberId: string, sessionId: string) {
+  assertNotDemo();
   const context = await requirePermission("security:manage");
   const [targetMember] = await db.select({ userId: member.userId }).from(member).where(and(eq(member.id, memberId), eq(member.organizationId, context.organization.id))).limit(1);
   if (!targetMember) return { ok: false, error: "Member not found." };
@@ -67,6 +70,7 @@ export async function listMemberSessionsAction(memberId: string): Promise<Sessio
 }
 
 export async function revokeOtherMySessionsAction() {
+  assertNotDemo();
   const current = await currentSession();
   await db.delete(session).where(and(eq(session.userId, current.user.id), ne(session.id, current.session.id)));
   const { organization } = await getWorkspaceContext();

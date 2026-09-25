@@ -14,6 +14,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { SignaturePad } from "@/features/documents/SignaturePad";
+import type { VectorSignatureData } from "@/features/documents/signature-vector";
 import { PdfFieldFiller, type FillableField } from "@/features/documents/PdfFieldFiller";
 import { signOfferNatively } from "@/features/portal/native-sign-actions";
 
@@ -33,6 +34,7 @@ export function PortalOfferSignDialog({
 }) {
   const router = useRouter();
   const [signature, setSignature] = useState("");
+  const [vectorSignature, setVectorSignature] = useState<VectorSignatureData | null>(null);
   const [consent, setConsent] = useState(false);
   const [fields, setFields] = useState<FillableField[] | null>(null);
   const [textValues, setTextValues] = useState<Record<string, string>>({});
@@ -59,14 +61,14 @@ export function PortalOfferSignDialog({
 
   const requiredTextFieldsFilled =
     fields?.filter((f) => f.type === "text" && f.required).every((f) => (textValues[f.id] ?? "").trim().length > 0) ?? false;
-  const canSubmit = Boolean(signature) && consent && fields !== null && fields.length > 0 && requiredTextFieldsFilled;
+  const canSubmit = Boolean(vectorSignature?.compressed) && consent && fields !== null && fields.length > 0 && requiredTextFieldsFilled;
 
   function submit() {
     if (!canSubmit) return;
     startTransition(async () => {
       const result = await signOfferNatively({
         offerId,
-        signaturePngBase64: signature,
+        signatureVectorBase64: vectorSignature?.compressed,
         textValues,
       });
       if (!result.ok) {
@@ -109,7 +111,7 @@ export function PortalOfferSignDialog({
                 Draw or type your signature — it fills in every signature field above.
               </p>
             </div>
-            <SignaturePad value={signature} onChange={setSignature} allowSaved={false} />
+            <SignaturePad onChange={setSignature} allowSaved={false} onVectorChange={setVectorSignature} />
             <label className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-3 text-sm">
               <Checkbox checked={consent} onCheckedChange={(value) => setConsent(value === true)} />
               <span>

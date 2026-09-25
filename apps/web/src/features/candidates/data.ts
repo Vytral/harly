@@ -152,8 +152,19 @@ export type NoteMention = { userId: string; name: string };
 
 export type AiEvaluationCriterion = {
   label: string;
-  score: number;
+  /** Null means unverified / unknown — never coerce to 0 for display. */
+  score: number | null;
   evidence: string | null;
+  status?: "met" | "partially_met" | "not_met" | "not_demonstrated" | "unknown";
+  evidenceStrength?: string;
+  lastEvidenceDate?: string;
+  /** Phase 6 (§22.4): deterministic vs semantic provenance for review badges. */
+  matchMethod?: string;
+};
+
+export type ImpactHighlightItem = {
+  text: string;
+  metrics: Array<{ rawText: string; type: string; direction: string }>;
 };
 
 export type CandidateAiEvaluationItem = {
@@ -175,6 +186,8 @@ export type CandidateAiEvaluationItem = {
   criteria: AiEvaluationCriterion[];
   usedResume: boolean;
   updatedAt: string;
+  /** Phase 5 (§13): display-only quantified achievements, never scored. */
+  impactHighlights: ImpactHighlightItem[];
 };
 
 export type CandidateNoteItem = {
@@ -227,6 +240,83 @@ function textFromMetadata(value: unknown, key: string) {
 
   const entry = value[key];
   return typeof entry === "string" ? entry : null;
+}
+
+/** Defensive mapping for the Phase 5 impact snapshot (AI rows carry null). */function toImpactHighlights(value: unknown): ImpactHighlightItem[] {
+  if (!Array.isArray(value)) return [];
+  const out: ImpactHighlightItem[] = [];
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry.text !== "string") continue;
+    const metrics: ImpactHighlightItem["metrics"] = [];
+    if (Array.isArray(entry.metrics)) {
+      for (const metric of entry.metrics) {
+        if (!isRecord(metric) || typeof metric.rawText !== "string") continue;
+        metrics.push({
+          rawText: metric.rawText,
+          type: typeof metric.type === "string" ? metric.type : "other",
+          direction: typeof metric.direction === "string" ? metric.direction : "unknown",
+        });
+      }
+    }
+    if (metrics.length === 0) continue;
+    out.push({ text: entry.text, metrics });
+  }
+  return out.slice(0, 5);
+}
+
+/** Rich criterion projection from the persisted audit snapshot (canonical source of truth). */
+function criterionDetailsByLabel(value: unknown): Map<string, Pick<AiEvaluationCriterion, "status" | "evidenceStrength" | "lastEvidenceDate" | "matchMethod" | "score" | "evidence" | "label">> {
+  const details = new Map<string, Pick<AiEvaluationCriterion, "status" | "evidenceStrength" | "lastEvidenceDate" | "matchMethod" | "score" | "evidence" | "label">>();
+  if (!Array.isArray(value)) return details;
+  for (const entry of value) {
+    if (!isRecord(entry) || typeof entry.label !== "string") continue;
+    const method = typeof entry.matchMethod === "string"
+      ? entry.matchMethod
+      : isRecord(entry.evidence) && typeof entry.evidence.method === "string"
+        ? entry.evidence.method
+        : null;
+    const evidenceObj = isRecord(entry.evidence) ? entry.evidence : null;
+    const status = typeof entry.status === "string" &&
+      ["met", "partially_met", "not_met", "not_demonstrated", "unknown"].includes(entry.status)
+      ? entry.status as AiEvaluationCriterion["status"]
+      : undefined;
+    const evidenceStrength = typeof entry.evidenceStrength === "string"
+      ? entry.evidenceStrength
+      : evidenceObj && typeof evidenceObj.strength === "string"
+        ? evidenceObj.strength
+        : undefined;
+    const lastEvidenceDate = evidenceObj && typeof evidenceObj.lastEvidenceDate === "string"
+      ? evidenceObj.lastEvidenceDate
+      : undefined;
+    // Prefer rawScore from StructuredCriterionResult; fall back to score. Keep null.
+    const raw =
+      "rawScore" in entry ? entry.rawScore
+      : "score" in entry ? entry.score
+      : undefined;
+    const score =
+      typeof raw === "number" && Number.isFinite(raw) ? raw
+      : raw === null ? null
+      : undefined;
+    const evidenceText =
+      evidenceObj && typeof evidenceObj.verbatimSnippet === "string"
+        ? evidenceObj.verbatimSnippet
+        : typeof entry.evidence === "string"
+          ? entry.evidence
+          : null;
+    if (!details.has(entry.label)) {
+      details.set(entry.label, {
+        label: entry.label,
+        status,
+        evidenceStrength,
+        lastEvidenceDate,
+        matchMethod: method ?? undefined,
+        // Required field: missing/unknown raw → null (unverified), never undefined.
+        score: score === undefined ? null : score,
+        evidence: evidenceText,
+      });
+    }
+  }
+  return details;
 }
 
 export function workspaceStorageKeyFromUrl(
@@ -975,6 +1065,8 @@ export async function getCandidateProfile(candidateId: string) {
       criteria: aiEvaluations.criteria,
       usedResume: aiEvaluations.usedResume,
       updatedAt: aiEvaluations.updatedAt,
+      impactHighlightsSnapshot: aiEvaluations.impactHighlightsSnapshot,
+      criterionDetailsSnapshot: aiEvaluations.criterionDetailsSnapshot,
     })
     .from(aiEvaluations)
     .where(
@@ -1501,7 +1593,9 @@ export async function getCandidateProfile(candidateId: string) {
       authorName: row.authorName,
       createdAt: row.createdAt.toISOString(),
     })),
-    aiEvaluations: aiEvaluationRows.map((row) => ({
+    aiEvaluations: aiEvaluationRows.map((row) => {
+      const details = criterionDetailsByLabel(row.criterionDetailsSnapshot);
+      return {
       id: row.id,
       applicationId: row.applicationId,
       source: (row.source === "rules" ? "rules" : "ai") as "ai" | "rules",
@@ -1519,12 +1613,32 @@ export async function getCandidateProfile(candidateId: string) {
         ? (row.strengths as string[])
         : [],
       gaps: Array.isArray(row.gaps) ? (row.gaps as string[]) : [],
-      criteria: Array.isArray(row.criteria)
-        ? (row.criteria as AiEvaluationCriterion[])
-        : [],
+      // Prefer full criterionAssessments (details) as canonical UI path — do not
+      // truncate to the legacy 8-item criteria JSON when the snapshot is present.
+      criteria: (() => {
+        if (details.size > 0) {
+          return [...details.values()].map((detail) => ({
+            label: detail.label ?? "",
+            score: detail.score ?? null,
+            evidence: detail.evidence ?? null,
+            status: detail.status,
+            evidenceStrength: detail.evidenceStrength,
+            lastEvidenceDate: detail.lastEvidenceDate,
+            matchMethod: detail.matchMethod,
+          }));
+        }
+        if (!Array.isArray(row.criteria)) return [];
+        // Legacy adapter only: merge sparse status onto truncated criteria JSON.
+        return (row.criteria as AiEvaluationCriterion[]).map((criterion) => {
+          const detail = details.get(criterion.label);
+          return detail ? { ...criterion, ...detail } : criterion;
+        });
+      })(),
       usedResume: row.usedResume,
       updatedAt: row.updatedAt.toISOString(),
-    })),
+      impactHighlights: toImpactHighlights(row.impactHighlightsSnapshot),
+      };
+    }),
     tags: tagRows,
     privacyRequests,
     messages: messageRows.map((row) => ({
@@ -2347,29 +2461,13 @@ export async function permanentlyDeleteCandidate(
   return { ok: false, error: "Candidate not found in trash." } as const;
 }
 
-/** Permanently delete an active candidate from the normal delete action. */
+/** @deprecated Use `trashCandidate`. Kept as an alias for older callers. */
 export async function deleteCandidate(
   candidateId: string,
-  processedBy: string,
+  _processedBy?: string,
 ) {
-  const { organization: workspace } = await getWorkspaceContext();
-  const [movedToTrash] = await db
-    .update(candidates)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(
-        eq(candidates.id, candidateId),
-        eq(candidates.workspaceId, workspace.id),
-        isNull(candidates.deletedAt),
-      ),
-    )
-    .returning({ id: candidates.id });
-
-  if (!movedToTrash) {
-    return { ok: false, error: "Candidate not found." } as const;
-  }
-
-  return permanentlyDeleteCandidate(candidateId, processedBy);
+  void _processedBy;
+  return trashCandidate(candidateId);
 }
 
 // ── Duplicate detection helpers ──────────────────────────────────────────────

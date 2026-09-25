@@ -28,7 +28,11 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     CRON_SECRET=build-only-cron-secret-000000000000000000 \
     HARLY_SETUP_SECRET=build-only-setup-secret-0000000000000000 \
     HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
-RUN --mount=type=cache,id=harly-next-cache,target=/src/apps/web/.next/cache \
+# The Next build cache is architecture-specific. A single shared id let the
+# amd64 and arm64 builds of the same multi-platform build write into one cache,
+# mixing artifacts from both.
+ARG TARGETPLATFORM
+RUN --mount=type=cache,id=harly-next-cache-${TARGETPLATFORM},target=/src/apps/web/.next/cache \
     pnpm --filter @harly/cli build && pnpm --filter web build
 RUN pnpm exec esbuild tooling/runtime/src/entrypoint.ts --bundle --platform=node --format=esm --target=node22 --outfile=/tmp/harly-runtime.mjs
 

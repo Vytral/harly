@@ -14,10 +14,12 @@ export function FocusModeTopBar({
   left,
   center,
   right,
+  className,
 }: {
   left?: React.ReactNode;
   center?: React.ReactNode;
   right?: React.ReactNode;
+  className?: string;
 }) {
   return (
     <header
@@ -25,6 +27,7 @@ export function FocusModeTopBar({
         "relative z-40 flex h-12 shrink-0 items-center gap-3 px-3",
         "border-b border-border/70 bg-paper-raised/70 backdrop-blur-md",
         "supports-[backdrop-filter]:bg-paper-raised/55",
+        className,
       )}
     >
       <div className="flex min-w-0 flex-1 items-center">{left}</div>

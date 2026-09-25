@@ -341,7 +341,7 @@ export function CandidatesTable({
   function runDelete(row: CandidateRow) {
     if (
       !window.confirm(
-        `Delete ${row.fullName} permanently? This removes their profile and related records.`,
+        `Move ${row.fullName} to trash? You can restore them later from the Trash tab.`,
       )
     ) {
       return;
@@ -349,7 +349,7 @@ export function CandidatesTable({
     startTransition(async () => {
       const result = await trashCandidateAction(row.id);
       if (result.success) {
-        toast.success(`${row.fullName} deleted permanently.`);
+        toast.success(`${row.fullName} moved to trash.`);
         setSelected((prev) => {
           const next = new Set(prev);
           next.delete(row.id);
@@ -391,7 +391,7 @@ export function CandidatesTable({
     if (ids.length === 0) return;
     if (
       !window.confirm(
-        `Delete ${ids.length} candidate${ids.length === 1 ? "" : "s"} permanently? This cannot be undone.`,
+        `Move ${ids.length} candidate${ids.length === 1 ? "" : "s"} to trash? You can restore them later.`,
       )
     ) {
       return;
@@ -401,7 +401,7 @@ export function CandidatesTable({
       if (result.success) {
         const count = result.count ?? ids.length;
         toast.success(
-          `Deleted ${count} candidate${count === 1 ? "" : "s"} permanently.`,
+          `Moved ${count} candidate${count === 1 ? "" : "s"} to trash.`,
         );
         setSelected(new Set());
         router.refresh();

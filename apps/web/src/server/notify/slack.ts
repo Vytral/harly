@@ -14,6 +14,8 @@ import {
   type SlackDelivery,
 } from "@harly/db";
 
+import { isDemoMode } from "@harly/config";
+
 import { getWorkspaceSlackConfig } from "@/lib/slack/config";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { createLogger } from "@/lib/logger";
@@ -25,7 +27,7 @@ const APP_URL = getHarlyPublicOrigin();
 const MAX_ATTEMPTS = 6;
 const RETRY_BACKOFF_MS = [60_000, 5 * 60_000, 30 * 60_000, 2 * 60 * 60_000, 6 * 60 * 60_000, 24 * 60 * 60_000];
 
-const EVENT_EMOJI: Record<WebhookEvent, string> = {
+const EVENT_EMOJI: Partial<Record<WebhookEvent, string>> = {
   "application.created": "📥",
   "application.stage_changed": "↗️",
   "application.hired": "🎉",
@@ -38,6 +40,7 @@ const EVENT_EMOJI: Record<WebhookEvent, string> = {
   "interview.canceled": "❌",
   "interview.completed": "✅",
   "interview.rescheduled": "🔄",
+  "task.completed": "✅",
   "job.published": "📣",
 };
 
@@ -83,13 +86,19 @@ export function buildSlackPayload(event: WebhookEvent, data: Record<string, unkn
     ? role ? `“${role}” is now live` : null
     : who && role ? `${who} → ${role}` : who ?? role;
   const emoji = EVENT_EMOJI[event] ?? "🔔";
-  const text = detail ? `${title} , ${detail}` : title;
+  const workflowMessage = typeof data.workflowMessage === "string" && data.workflowMessage.trim()
+    ? escapeSlackText(data.workflowMessage.trim())
+    : null;
+  const text = `${detail ? `${title} , ${detail}` : title}${workflowMessage ? `: ${workflowMessage}` : ""}`;
   const mrkdwn = detail ? `${emoji} *${title}* , ${detail}` : `${emoji} *${title}*`;
 
   return {
     text,
     blocks: [
       { type: "section", text: { type: "mrkdwn", text: mrkdwn } },
+      ...(workflowMessage
+        ? [{ type: "section", text: { type: "mrkdwn", text: workflowMessage } }]
+        : []),
       { type: "context", elements: [{ type: "mrkdwn", text: `<${APP_URL}/dashboard|Open Harly>` }] },
     ],
   };
@@ -146,17 +155,21 @@ export async function notifySlackEvent(
   workspaceId: string,
   event: WebhookEvent,
   data: Record<string, unknown>,
-): Promise<void> {
+  options: { force?: boolean; database?: typeof db } = {},
+): Promise<{ queued: boolean; skipped: boolean }> {
   try {
-    const config = await getWorkspaceSlackConfig(workspaceId);
-    if (!config || !config.events.includes(event)) return;
+    const database = options.database ?? db;
+    const config = await getWorkspaceSlackConfig(workspaceId, database);
+    if (!config || (!options.force && !config.events.includes(event))) {
+      return { queued: false, skipped: true };
+    }
 
     const eventId = typeof data.eventId === "string" ? data.eventId : null;
     const payload: SlackPayload = {
       ...buildSlackPayload(event, data),
       _harly: sourceIds(data),
     };
-    const [delivery] = await db
+    const [delivery] = await database
       .insert(slackDeliveries)
       .values({
         workspaceId,
@@ -170,12 +183,16 @@ export async function notifySlackEvent(
       .returning({ id: slackDeliveries.id });
 
     if (delivery) {
-      void dispatchDueSlack(1, [delivery.id]).catch((error) =>
+      void dispatchDueSlack(1, [delivery.id], database).catch((error) =>
         log.error({ workspaceId, deliveryId: delivery.id, error }, "Slack immediate dispatch failed"),
       );
     }
+    // A deduplicated insert is already a durable success. This matters for a
+    // retry that reaches the queue after the first worker committed the row.
+    return { queued: Boolean(delivery) || Boolean(eventId), skipped: false };
   } catch (error) {
     log.error({ workspaceId, event, error }, "failed to enqueue Slack notification");
+    throw error;
   }
 }
 
@@ -184,8 +201,8 @@ function classify(error: unknown): "failed" | "dead_letter" {
   return code && PERMANENT_ERRORS.has(code) ? "dead_letter" : "failed";
 }
 
-async function markSlackRevoked(workspaceId: string): Promise<void> {
-  await db.update(workspaceSettings).set({
+async function markSlackRevoked(workspaceId: string, database: typeof db = db): Promise<void> {
+  await database.update(workspaceSettings).set({
     slackEnabled: false,
     slackBotTokenCiphertext: null,
     slackBotTokenIv: null,
@@ -199,7 +216,15 @@ async function markSlackRevoked(workspaceId: string): Promise<void> {
 export async function deliverSlack(
   delivery: SlackDelivery,
   workerId: string,
+  database: typeof db = db,
 ): Promise<"success" | "failed" | "dead_letter"> {
+  // Public demo: never post to real Slack workspaces. Mark done so the queue
+  // drains instead of retrying.
+  if (isDemoMode()) {
+    log.info({ deliveryId: delivery.id }, "[slack] Suppressed delivery (demo mode)");
+    return "success";
+  }
+
   const attempt = delivery.attempts + 1;
   const startedAt = new Date();
   let status: "success" | "failed" | "dead_letter" = "failed";
@@ -208,7 +233,7 @@ export async function deliverSlack(
   let failure: unknown = null;
 
   try {
-    const config = await getWorkspaceSlackConfig(delivery.workspaceId);
+    const config = await getWorkspaceSlackConfig(delivery.workspaceId, database);
     if (!config) {
       slackError = "integration_disabled";
       status = "dead_letter";
@@ -216,7 +241,7 @@ export async function deliverSlack(
       const payload = delivery.payload as SlackPayload;
       const candidateIds = payload._harly?.candidateIds ?? [];
       if (candidateIds.length > 0) {
-        const activeCandidates = await db
+        const activeCandidates = await database
           .select({ id: candidates.id })
           .from(candidates)
           .where(
@@ -249,14 +274,14 @@ export async function deliverSlack(
     slackError = errorMessage(error);
     status = classify(error);
     if (status === "dead_letter" && AUTH_ERRORS.has(slackErrorCode(error) ?? "")) {
-      await markSlackRevoked(delivery.workspaceId).catch((revokeError) =>
+      await markSlackRevoked(delivery.workspaceId, database).catch((revokeError) =>
         log.error({ workspaceId: delivery.workspaceId, error: revokeError }, "failed to mark Slack revoked"),
       );
     }
   }
 
   if (status === "failed" && attempt >= MAX_ATTEMPTS) status = "dead_letter";
-  await db.insert(slackDeliveryAttempts).values({
+  await database.insert(slackDeliveryAttempts).values({
     workspaceId: delivery.workspaceId,
     deliveryId: delivery.id,
     attempt,
@@ -268,7 +293,7 @@ export async function deliverSlack(
     finishedAt: new Date(),
   }).onConflictDoNothing().catch(() => undefined);
 
-  await db.update(slackDeliveries).set({
+  await database.update(slackDeliveries).set({
     status,
     attempts: attempt,
     responseStatus,
@@ -291,12 +316,12 @@ export async function deliverSlack(
 }
 
 /** Claim and deliver pending/retryable Slack rows with the same locking model as webhooks. */
-export async function dispatchDueSlack(limit = 50, ids?: string[]) {
+export async function dispatchDueSlack(limit = 50, ids?: string[], database: typeof db = db) {
   const workerId = randomUUID();
   const idsFilter = ids?.length
     ? sql`and delivery."id" in (${sql.join(ids.map((id) => sql`${id}`), sql`, `)})`
     : sql``;
-  const claimed = (await db.execute(sql`
+  const claimed = (await database.execute(sql`
     with candidates as (
       select delivery."id"
       from "slack_deliveries" as delivery
@@ -330,7 +355,7 @@ export async function dispatchDueSlack(limit = 50, ids?: string[]) {
   `)) as unknown as Array<{ id: string }>;
   if (claimed.length === 0) return { processed: 0, success: 0, failed: 0, deadLetter: 0 };
 
-  const rows = await db.select().from(slackDeliveries).where(and(
+  const rows = await database.select().from(slackDeliveries).where(and(
     inArray(slackDeliveries.id, claimed.map((row) => row.id)),
     eq(slackDeliveries.lockedBy, workerId),
     eq(slackDeliveries.status, "processing"),
@@ -340,7 +365,7 @@ export async function dispatchDueSlack(limit = 50, ids?: string[]) {
   let failed = 0;
   let deadLetter = 0;
   for (const row of rows) {
-    const result = await deliverSlack(row, workerId);
+    const result = await deliverSlack(row, workerId, database);
     if (result === "success") success += 1;
     else if (result === "dead_letter") deadLetter += 1;
     else failed += 1;

@@ -70,14 +70,10 @@ export function PdfViewer({
       try {
         const pdfjs = await import("pdfjs-dist");
         if (!workerConfigured) {
-          try {
-            pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-              "pdfjs-dist/build/pdf.worker.min.mjs",
-              import.meta.url,
-            ).toString();
-          } catch {
-            pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
-          }
+          const workerBase = import.meta.url;
+          pdfjs.GlobalWorkerOptions.workerSrc = !workerBase || workerBase.startsWith("file:")
+            ? "/api/pdfjs/pdf.worker.min.mjs"
+            : new URL("pdfjs-dist/build/pdf.worker.min.mjs", workerBase).toString();
           workerConfigured = true;
         }
 

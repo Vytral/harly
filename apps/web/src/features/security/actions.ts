@@ -16,10 +16,16 @@ import { auth } from "@/lib/auth";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { createLogger } from "@/lib/logger";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { normalizeSecurityPolicy } from "@/server/security/policy";
 import { requireRecentReauth } from "@/server/security/reauth";
+import {
+  LOGIN_METHODS,
+  parseEnabledLoginMethods,
+  type LoginMethod,
+} from "@/features/auth/login-methods";
 
 const log = createLogger("security");
 
@@ -37,6 +43,7 @@ async function getSession() {
 }
 
 export async function deletePasskeyAction(passkeyId: string) {
+  assertNotDemo();
   const session = await getSession();
   const { organization } = await getWorkspaceContext();
 
@@ -61,6 +68,7 @@ export async function toggleForce2FAAction(
   require2fa: boolean,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
+    assertNotDemo();
     const { organization, roleKey, user } =
       await requirePermission("security:manage");
     if (roleKey !== "owner")
@@ -102,6 +110,7 @@ export async function updateAdvancedSecurityPolicyAction(input: {
   requirePasskey: boolean;
 }): Promise<{ ok: boolean; error?: string }> {
   try {
+    assertNotDemo();
     const { organization, roleKey, user } = await requirePermission("security:manage");
     if (roleKey !== "owner") throw new Error("Only owners can change security policy.");
     await requireSensitiveReauth(user.id, organization.id);
@@ -160,7 +169,9 @@ export type OAuthProviderConfig = {
 export async function listOAuthProvidersAction(): Promise<
   OAuthProviderConfig[]
 > {
-  const { organization } = await getWorkspaceContext();
+  // Client IDs + secret presence are security posture: same gate as the
+  // writes below (security:manage).
+  const { organization } = await requirePermission("security:manage");
 
   const rows = await db
     .select()
@@ -192,6 +203,7 @@ export async function saveOAuthProviderAction(input: {
     if (roleKey !== "owner") {
       return { ok: false, error: "Only owners can configure OAuth providers." };
     }
+    assertNotDemo();
 
     if (!isEncryptionConfigured()) {
       return {
@@ -275,6 +287,7 @@ export async function toggleOAuthProviderAction(
   enabled: boolean,
 ): Promise<OAuthActionResult> {
   try {
+    assertNotDemo();
     const { organization, roleKey, user } =
       await requirePermission("security:manage");
     if (roleKey !== "owner") {
@@ -315,6 +328,7 @@ export async function deleteOAuthProviderAction(
   providerId: string,
 ): Promise<OAuthActionResult> {
   try {
+    assertNotDemo();
     const { organization, roleKey, user } =
       await requirePermission("security:manage");
     if (roleKey !== "owner") {
@@ -371,7 +385,7 @@ export async function deleteOAuthProviderAction(
 export async function getOAuthProviderStatus(): Promise<
   Record<OAuthProvider, { configured: boolean; source: "db" | "env" | null }>
 > {
-  const { organization } = await getWorkspaceContext();
+  const { organization } = await requirePermission("security:manage");
 
   const rows = await db
     .select()
@@ -422,6 +436,7 @@ export async function completeForcedPasswordChangeAction(input: {
   password: string;
 }): Promise<{ ok: boolean; error?: string }> {
   try {
+    assertNotDemo();
     const session = await auth.api.getSession({ headers: await headers() });
     if (!session?.user) return { ok: false, error: "Not signed in." };
 
@@ -493,5 +508,88 @@ export async function completeForcedPasswordChangeAction(input: {
   } catch (error) {
     log.error(error, "completeForcedPasswordChangeAction failed");
     return { ok: false, error: "Unable to change password." };
+  }
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Login method allow-list (which staff sign-in methods the login screen shows)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Read the admin's curated allow-list of staff login methods. Returns the raw
+ * selected methods (an empty array means "auto" — the login screen shows every
+ * method that is actually configured). Owner-gated like the other security
+ * settings, but does not require reauth: it is a display preference, not a
+ * credential change.
+ */
+export async function getEnabledLoginMethodsAction(): Promise<LoginMethod[]> {
+  const { organization } = await getWorkspaceContext();
+
+  const [row] = await db
+    .select({ enabledLoginMethods: workspaceSettings.enabledLoginMethods })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, organization.id))
+    .limit(1);
+
+  return Array.from(parseEnabledLoginMethods(row?.enabledLoginMethods));
+}
+
+/**
+ * Save the curated allow-list of staff login methods. Unknown values are
+ * dropped. Passing an empty array resets to "auto" (show everything
+ * configured). Owner-gated + audit-logged.
+ */
+export async function updateEnabledLoginMethodsAction(
+  methods: LoginMethod[],
+): Promise<{ ok: boolean; error?: string }> {
+  try {
+    assertNotDemo();
+    const { organization, roleKey, user } =
+      await requirePermission("security:manage");
+    if (roleKey !== "owner") {
+      return { ok: false, error: "Only owners can change this setting." };
+    }
+
+    // Validate + de-duplicate against the known method set, preserving the
+    // canonical order so storage is stable.
+    const requested = parseEnabledLoginMethods(methods);
+    const normalized = LOGIN_METHODS.filter((method) =>
+      requested.has(method),
+    );
+
+    await db
+      .insert(workspaceSettings)
+      .values({
+        organizationId: organization.id,
+        enabledLoginMethods: normalized,
+      })
+      .onConflictDoUpdate({
+        target: workspaceSettings.organizationId,
+        set: {
+          enabledLoginMethods: normalized,
+          updatedAt: new Date(),
+        },
+      });
+
+    await logAuditEvent({
+      workspaceId: organization.id,
+      actorId: user.id,
+      actorEmail: user.email,
+      action: "settings.login_methods_updated",
+      severity: "warning",
+      metadata: {
+        // "auto" when empty — record the effective intent for the audit trail.
+        methods: normalized.length > 0 ? normalized : ["auto"],
+      },
+    });
+
+    return { ok: true };
+  } catch (error) {
+    log.error(error, "updateEnabledLoginMethodsAction failed");
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Failed.",
+    };
   }
 }

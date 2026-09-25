@@ -4,6 +4,15 @@ import { PDFDocument } from "pdf-lib";
 import fontkit from "@pdf-lib/fontkit";
 import fs from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
+
+import {
+  rebuildVectorMark,
+  serverVectorExtractor,
+  validateVectorSaveInput,
+  vectorMarkSvg,
+} from "@/features/documents/signature-vector";
+import { fitContainOnPage } from "./fit";
 
 export const NATIVE_ENVELOPE_MAX_BYTES = 20 * 1024 * 1024;
 export const NATIVE_SIGNATURE_MAX_BYTES = 500 * 1024;
@@ -15,6 +24,14 @@ export const NATIVE_FIELD_MAX_COUNT = 40;
 const MIN_TEXT_FONT_SIZE = 6;
 
 const UNICODE_FONT_PATH = path.join(__dirname, "fonts", "NotoSans-Variable.ttf");
+
+/** Shared by native signing and workflow-generated PDFs so the standalone
+ * server resolves the bundled font from one known module-relative location. */
+export async function embedNativeUnicodeFont(pdf: PDFDocument) {
+  pdf.registerFontkit(fontkit);
+  const fontBytes = await fs.readFile(UNICODE_FONT_PATH);
+  return pdf.embedFont(fontBytes, { subset: true });
+}
 
 export type FieldPlacement =
   | { type: "signature"; page: number; x: number; y: number; w: number; h: number }
@@ -84,6 +101,22 @@ function validateAndNormalizeText(value: string): string {
  * spiking against a real rotated test PDF (see the project plan's
  * verification section) before lifting this restriction.
  */
+export async function assertNativeSignablePdf(pdfBytes: Buffer): Promise<number> {
+  if (pdfBytes.byteLength <= 0 || pdfBytes.byteLength > NATIVE_ENVELOPE_MAX_BYTES) {
+    throw new Error("The source PDF is empty or exceeds the 20 MB limit.");
+  }
+  const pdf = await PDFDocument.load(pdfBytes, { updateMetadata: false });
+  const pageCount = pdf.getPageCount();
+  if (pageCount < 1) throw new Error("The PDF has no pages.");
+  for (let index = 0; index < pageCount; index += 1) {
+    const angle = pdf.getPage(index).getRotation().angle % 360;
+    if (angle !== 0) {
+      throw new Error("Signing rotated PDF pages isn't supported yet. Re-export the file without rotation and try again.");
+    }
+  }
+  return pageCount;
+}
+
 export async function bakeFieldsIntoPdf(input: {
   pdfBytes: Buffer;
   /** Required only if `fields` contains at least one "signature" field. */
@@ -120,12 +153,16 @@ export async function bakeFieldsIntoPdf(input: {
   }
 
   const image = needsSignature ? await pdf.embedPng(input.signaturePngBytes!) : null;
+  let markAspect = 1;
+  if (needsSignature && input.signaturePngBytes) {
+    const meta = await sharp(input.signaturePngBytes).metadata();
+    if (!meta.width || !meta.height) throw new Error("The signature image could not be read.");
+    markAspect = meta.width / meta.height;
+  }
   const hasTextField = input.fields.some((f) => f.type === "text");
   let unicodeFont: Awaited<ReturnType<typeof pdf.embedFont>> | null = null;
   if (hasTextField) {
-    pdf.registerFontkit(fontkit);
-    const fontBytes = await fs.readFile(UNICODE_FONT_PATH);
-    unicodeFont = await pdf.embedFont(fontBytes, { subset: true });
+    unicodeFont = await embedNativeUnicodeFont(pdf);
   }
 
   for (const field of input.fields) {
@@ -137,10 +174,15 @@ export async function bakeFieldsIntoPdf(input: {
     const drawY = height - field.y * height - drawHeight;
 
     if (field.type === "signature") {
-      page.drawImage(image!, { x: drawX, y: drawY, width: drawWidth, height: drawHeight });
+      const fitted = fitContainOnPage(field, width, height, markAspect);
+      page.drawImage(image!, {
+        x: fitted.x,
+        y: height - fitted.y - fitted.h,
+        width: fitted.w,
+        height: fitted.h,
+      });
       continue;
     }
-
     // Text: single-line, auto-shrink to fit the box width, floor at
     // MIN_TEXT_FONT_SIZE then clip with an ellipsis rather than shrinking
     // further into illegibility.
@@ -167,4 +209,70 @@ export async function bakeFieldsIntoPdf(input: {
   }
 
   return Buffer.from(await pdf.save({ useObjectStreams: false }));
+}
+
+/** Pixels per capture-pixel when rasterizing a vector outline (Fase A). */
+export const VECTOR_BAKE_SCALE = 3;
+/** Hard cap on either raster dimension — keeps output far under the PNG cap. */
+export const VECTOR_BAKE_MAX_DIM = 1600;
+
+export type RenderedVectorSignature = {
+  pngBytes: Buffer;
+  width: number;
+  height: number;
+  areContours: boolean;
+};
+
+/**
+ * Fase A vector bake, step 1: verify + decompress a stored compressed payload
+ * and rasterize its outline to a Hi-DPI PNG (sharp, same pattern as
+ * `native/preview.ts`). Coordinates from the extractor are normalized 0..1,
+ * so the path is scaled into pixel space with `<g transform>` and the ink
+ * stroke keeps its capture-relative weight (`thickness / captureWidth`).
+ * Throws fail-closed on any invalid payload — callers never fall back to a
+ * different signature silently.
+ */
+export async function renderVectorSignaturePng(input: {
+  vectorData: string;
+  maxDim?: number;
+}): Promise<RenderedVectorSignature> {
+  const shaped = validateVectorSaveInput({ vectorData: input.vectorData });
+  if (!shaped.ok) throw new Error("The vector signature is invalid.");
+  const maxDim = input.maxDim ?? VECTOR_BAKE_MAX_DIM;
+  const mark = await rebuildVectorMark(shaped.vectorData, await serverVectorExtractor());
+  if (!mark) throw new Error("The vector signature is invalid.");
+
+  const longSide = Math.max(8, Math.min(maxDim, 1200));
+  const width = mark.aspect >= 1 ? longSide : Math.max(8, Math.round(longSide * mark.aspect));
+  const height = mark.aspect >= 1 ? Math.max(8, Math.round(longSide / mark.aspect)) : longSide;
+  const pngBytes = await sharp(Buffer.from(vectorMarkSvg(mark, width))).png().toBuffer();
+  if (pngBytes.byteLength <= 0 || pngBytes.byteLength > NATIVE_SIGNATURE_MAX_BYTES) {
+    throw new Error("The signature image is empty or exceeds the 500 KB limit.");
+  }
+  const meta = await sharp(pngBytes).metadata();
+  return {
+    pngBytes,
+    width: meta.width ?? width,
+    height: meta.height ?? height,
+    areContours: mark.areContours,
+  };
+}
+
+/**
+ * Fase A vector bake, step 2: same geometry/text contract as
+ * `bakeFieldsIntoPdf`, but the signature image is rendered Hi-DPI from the
+ * vector outline instead of stretched from a canvas PNG. One shared render
+ * is reused across every signature field (downscaling stays crisp).
+ */
+export async function bakeVectorIntoPdf(input: {
+  pdfBytes: Buffer;
+  vectorData: string;
+  fields: FieldPlacement[];
+}): Promise<Buffer> {
+  const rendered = await renderVectorSignaturePng({ vectorData: input.vectorData });
+  return bakeFieldsIntoPdf({
+    pdfBytes: input.pdfBytes,
+    signaturePngBytes: rendered.pngBytes,
+    fields: input.fields,
+  });
 }

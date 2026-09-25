@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/icons/brands";
 import { CaretLeftIcon, SealCheckDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
+import { DemoLockedNotice } from "@/features/demo/DemoLockedNotice";
 import { CalConnectPanel } from "@/features/workspaces/CalConnectPanel";
 import { DiscordConnectPanel } from "@/features/workspaces/DiscordConnectPanel";
 import { EsignConnectPanel } from "@/features/workspaces/EsignConnectPanel";
@@ -47,6 +48,7 @@ import {
   getHarlyPublicOrigin,
 } from "@/lib/public-origin";
 import { buildEsignWebhookUrl } from "@/lib/esign/webhook-url";
+import { isDemoMode } from "@harly/config";
 import {
   WEBHOOK_EVENTS,
   WEBHOOK_EVENT_LABELS,
@@ -113,7 +115,8 @@ export default async function IntegrationDetailPage({
   if (integration.externalHref) redirect(integration.externalHref as Route);
 
   const { organization, role } = await getWorkspaceContext();
-  const canEdit = role === "owner" || role === "admin";
+  const demoLocked = isDemoMode();
+  const canEdit = (role === "owner" || role === "admin") && !demoLocked;
 
   const eventOptions = WEBHOOK_EVENTS.map((event) => ({
     value: event,
@@ -141,6 +144,12 @@ export default async function IntegrationDetailPage({
         <CaretLeftIcon className="size-4" />
         Integrations
       </Link>
+
+      {demoLocked ? (
+        <DemoLockedNotice>
+          Integration credentials and outbound chat webhooks are locked in the demo.
+        </DemoLockedNotice>
+      ) : null}
 
       {panel ?? <ComingSoon integration={integration} />}
     </div>

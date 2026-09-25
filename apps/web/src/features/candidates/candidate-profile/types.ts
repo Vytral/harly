@@ -1,4 +1,3 @@
-import type { DocumentRequestItem } from "@/features/documents/requests-shared";
 import type {
   ScheduleApplicationOption,
   ScheduleCalConfig,
@@ -98,14 +97,6 @@ export type CandidatePrivacyRow = Omit<
   completedAt: string | null;
 };
 
-export type SignableDocument = {
-  id: string;
-  name: string;
-  mimeType: string;
-  sizeBytes: number;
-  updatedAt: Date | string;
-};
-
 export type RelatedDocument = { id: string; name: string; mimeType: string };
 
 export type CandidateProfileTabsProps = {
@@ -126,15 +117,6 @@ export type CandidateProfileTabsProps = {
   notes: CandidateNoteItem[];
   files: CandidateFile[];
   relatedDocuments: RelatedDocument[];
-  signableDocuments: Array<{
-    id: string;
-    name: string;
-    mimeType: string;
-    sizeBytes: number;
-    updatedAt: Date;
-  }>;
-  documentRequests: DocumentRequestItem[];
-  canManageDocuments: boolean;
   activity: CandidateActivityRow[];
   scorecards: Scorecard[];
   messages: CandidateMessage[];

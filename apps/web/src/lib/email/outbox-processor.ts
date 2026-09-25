@@ -107,7 +107,10 @@ export async function processEmailOutbox(opts?: {
   limit?: number;
   ids?: string[];
   workerId?: string;
+  /** Explicit database boundary for isolated workers and native signing. */
+  database?: typeof db;
 }): Promise<ProcessResult> {
+  const database = opts?.database ?? db;
   const workerId = opts?.workerId ?? randomUUID();
   const idsFilter = opts?.ids?.length
     ? sql`and "id" in (${sql.join(
@@ -118,7 +121,7 @@ export async function processEmailOutbox(opts?: {
   const workspaceFilter = opts?.workspaceId
     ? sql`and "workspace_id" = ${opts.workspaceId}`
     : sql``;
-  const claimed = (await db.execute(sql`
+  const claimed = (await database.execute(sql`
     with candidates as (
       select "id"
       from "email_outbox"
@@ -140,7 +143,7 @@ export async function processEmailOutbox(opts?: {
   `)) as unknown as Array<{ id: string }>;
 
   if (claimed.length === 0) return { processed: 0, sent: 0, failed: 0 };
-  const rows = await db
+  const rows = await database
     .select()
     .from(emailOutbox)
     .where(
@@ -158,14 +161,14 @@ export async function processEmailOutbox(opts?: {
   let sent = 0;
   let failed = 0;
   for (const row of rows) {
-    const ok = await deliverRow(row);
+    const ok = await deliverRow(row, database);
     if (ok) sent += 1;
     else failed += 1;
   }
   return { processed: rows.length, sent, failed };
 }
 
-async function deliverRow(row: OutboxRow): Promise<boolean> {
+async function deliverRow(row: OutboxRow, database: typeof db = db): Promise<boolean> {
   try {
     switch (row.kind) {
       case "offer.extended":
@@ -184,16 +187,16 @@ async function deliverRow(row: OutboxRow): Promise<boolean> {
       case "offer.withdrawn":
         return await deliverOfferWithdrawn(row);
       case "native.signature.invitation":
-        return await deliverNativeSignatureInvitation(row);
+        return await deliverNativeSignatureInvitation(row, database);
       case "native.signature.otp":
-        return await deliverNativeSignatureOtp(row);
+        return await deliverNativeSignatureOtp(row, database);
       case "report.scheduled":
         return await deliverScheduledReport(row);
       case "automation.email":
         return await deliverAutomationEmail(row);
       default:
         log.warn({ kind: row.kind }, "unknown email_outbox kind");
-        await db
+        await database
           .update(emailOutbox)
           .set({
             status: "failed",
@@ -210,6 +213,7 @@ async function deliverRow(row: OutboxRow): Promise<boolean> {
     await markFailed(
       row.id,
       error instanceof Error ? error.message : "delivery error",
+      database,
     );
     return false;
   }
@@ -221,17 +225,23 @@ async function deliverAutomationEmail(row: OutboxRow): Promise<boolean> {
     subject?: string;
     bodyHtml?: string;
     candidateId?: string | null;
+    companyName?: string;
   };
   if (!payload.to || !payload.subject || !payload.bodyHtml) {
     await markFailed(row.id, "Automation email payload is incomplete.");
     return false;
   }
+  const branding = await getWorkspaceEmailBranding(row.workspaceId);
   const delivered = await sendWorkspaceEmail(row.workspaceId, {
     to: payload.to,
     subject: payload.subject,
     react: createElement(CustomTemplateEmail, {
       bodyHtml: payload.bodyHtml,
-      companyName: "Harly",
+      companyName: payload.companyName || branding.name || "Harly",
+      companyLogoUrl: branding.logoUrl ?? undefined,
+      hideBranding: branding.hideBranding,
+      accentColor: branding.primaryColor ?? undefined,
+      socialLinks: branding.socialLinks,
     }),
     ...deliveryOptions(row),
   }, row.actorId ?? undefined);
@@ -279,10 +289,10 @@ async function deliverScheduledReport(row: OutboxRow): Promise<boolean> {
   return true;
 }
 
-async function deliverNativeSignatureInvitation(row: OutboxRow): Promise<boolean> {
+async function deliverNativeSignatureInvitation(row: OutboxRow, database: typeof db = db): Promise<boolean> {
   const payload = row.payload as { token?: { ciphertext: string; iv: string; tag: string }; recipientEmail?: string; recipientName?: string; documentName?: string; subject?: string; message?: string; expiresAt?: string } | null;
   if (!payload?.token || !payload.recipientEmail || !payload.documentName) {
-    await markFailed(row.id, "Invalid native signature invitation payload.");
+    await markFailed(row.id, "Invalid native signature invitation payload.", database);
     return false;
   }
   const token = decryptSecret(payload.token);
@@ -302,14 +312,14 @@ async function deliverNativeSignatureInvitation(row: OutboxRow): Promise<boolean
     },
     row.actorId,
   );
-  if (!delivered) { await markFailed(row.id, "Email provider did not accept the native signature invitation."); return false; }
-  await markSent(row.id, delivered);
+  if (!delivered) { await markFailed(row.id, "Email provider did not accept the native signature invitation.", database); return false; }
+  await markSent(row.id, delivered, database);
   return true;
 }
 
-async function deliverNativeSignatureOtp(row: OutboxRow): Promise<boolean> {
+async function deliverNativeSignatureOtp(row: OutboxRow, database: typeof db = db): Promise<boolean> {
   const payload = row.payload as { code?: { ciphertext: string; iv: string; tag: string }; recipientEmail?: string; recipientName?: string } | null;
-  if (!payload?.code || !payload.recipientEmail) { await markFailed(row.id, "Invalid native signature OTP payload."); return false; }
+  if (!payload?.code || !payload.recipientEmail) { await markFailed(row.id, "Invalid native signature OTP payload.", database); return false; }
   const code = decryptSecret(payload.code);
   const delivered = await sendWorkspaceEmail(row.workspaceId, {
     to: payload.recipientEmail,
@@ -322,8 +332,8 @@ async function deliverNativeSignatureOtp(row: OutboxRow): Promise<boolean> {
     ),
     ...deliveryOptions(row),
   });
-  if (!delivered) { await markFailed(row.id, "Email provider did not accept the native signature OTP."); return false; }
-  await markSent(row.id, delivered);
+  if (!delivered) { await markFailed(row.id, "Email provider did not accept the native signature OTP.", database); return false; }
+  await markSent(row.id, delivered, database);
   return true;
 }
 
@@ -336,13 +346,14 @@ export async function enqueueEmailOutbox(
   payload: Record<string, unknown>,
   dedupeKey?: string,
   actorId?: string,
+  database: typeof db = db,
 ): Promise<string> {
   const resolvedDedupeKey =
     dedupeKey ??
     createHash("sha256")
       .update(`${kind}:${JSON.stringify(payload)}`)
       .digest("hex");
-  const [row] = await db
+  const [row] = await database
     .insert(emailOutbox)
     .values({
       workspaceId,
@@ -356,7 +367,7 @@ export async function enqueueEmailOutbox(
     })
     .returning({ id: emailOutbox.id });
   if (row) return row.id;
-  const [existing] = await db
+  const [existing] = await database
     .select({ id: emailOutbox.id })
     .from(emailOutbox)
     .where(
@@ -1271,8 +1282,9 @@ async function deliverOfferWithdrawn(row: OutboxRow): Promise<boolean> {
 async function markSent(
   id: string,
   result: Exclude<Awaited<ReturnType<typeof sendWorkspaceEmail>>, false>,
+  database: typeof db = db,
 ) {
-  await db
+  await database
     .update(emailOutbox)
     .set({
       status: "sent",
@@ -1285,8 +1297,8 @@ async function markSent(
     .where(eq(emailOutbox.id, id));
 }
 
-async function markFailed(id: string, message: string) {
-  await db
+async function markFailed(id: string, message: string, database: typeof db = db) {
+  await database
     .update(emailOutbox)
     .set({
       attempts: sql`${emailOutbox.attempts} + 1`,
@@ -1305,8 +1317,8 @@ async function markFailed(id: string, message: string) {
     .where(eq(emailOutbox.id, id));
 }
 
-async function markStale(id: string, message: string) {
-  await db
+async function markStale(id: string, message: string, database: typeof db = db) {
+  await database
     .update(emailOutbox)
     .set({
       status: "failed",

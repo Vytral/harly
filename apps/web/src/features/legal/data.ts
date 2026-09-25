@@ -35,6 +35,60 @@ export type LegalPageData = {
   publishedSlugs: string[];
 };
 
+export type LegalIndexData = {
+  workspaceName: string;
+  workspaceSlug: string;
+  logoUrl: string | null;
+  primaryColor: string;
+  websiteUrl: string | null;
+  /** Published legal page slugs for this workspace. */
+  publishedSlugs: string[];
+};
+
+/**
+ * Branding + the list of published legal pages for a workspace, without
+ * requiring a specific page. Powers the /legal index. Returns null when the
+ * workspace doesn't exist; an empty `publishedSlugs` means nothing is
+ * published yet (the index renders an empty state).
+ */
+export async function getLegalIndexData(
+  workspaceSlug: string,
+): Promise<LegalIndexData | null> {
+  const [ws] = await db
+    .select({
+      name: organization.name,
+      slug: organization.slug,
+      logo: organization.logo,
+      legalPages: workspaceSettings.legalPages,
+      primaryColor: workspaceSettings.primaryColor,
+      websiteUrl: workspaceSettings.websiteUrl,
+    })
+    .from(organization)
+    .innerJoin(
+      workspaceSettings,
+      eq(workspaceSettings.organizationId, organization.id),
+    )
+    .where(eq(organization.slug, workspaceSlug))
+    .limit(1);
+
+  if (!ws) return null;
+
+  const pages = ws.legalPages as Record<string, string> | null;
+  const publishedSlugs = VALID_LEGAL_SLUGS.filter((s) => {
+    const k = LEGAL_SLUG_MAP[s];
+    return k && pages?.[k];
+  });
+
+  return {
+    workspaceName: ws.name,
+    workspaceSlug: ws.slug,
+    logoUrl: ws.logo ?? null,
+    primaryColor: (ws.primaryColor as string | null) ?? "#18181b",
+    websiteUrl: (ws.websiteUrl as string | null) ?? null,
+    publishedSlugs,
+  };
+}
+
 export async function getLegalPageData(
   workspaceSlug: string,
   pageSlug: string,

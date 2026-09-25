@@ -52,7 +52,7 @@ export default async function OnboardingLayout({
         )}
       </header>
 
-      <main className="relative z-10 flex flex-1 items-center justify-center px-4 py-10">
+      <main className="auth-card-enter relative z-10 flex flex-1 items-center justify-center px-4 py-10">
         {children}
       </main>
 

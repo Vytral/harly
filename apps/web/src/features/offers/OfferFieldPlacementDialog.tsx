@@ -43,6 +43,7 @@ export function OfferFieldPlacementDialog({
   const [placements, setPlacements] = useState<AuthorFieldPlacement[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [pageCount, setPageCount] = useState(0);
+  const [rotated, setRotated] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   // Render-time state sync (React's "adjust state during render" recipe —
@@ -142,6 +143,7 @@ export function OfferFieldPlacementDialog({
               onChange={setPlacements}
               onActiveIndexChange={setActiveIndex}
               onPageCountChange={setPageCount}
+              onRotationChange={setRotated}
               onRemoveField={removeField}
               onLabelChange={updateLabel}
               maxPageWidth={960}
@@ -170,9 +172,14 @@ export function OfferFieldPlacementDialog({
                 : `${placements.length} field${placements.length === 1 ? "" : "s"} placed.`}
             </p>
             <div className="mt-auto">
+              {rotated ? (
+                <p className="mb-2 text-xs text-destructive" role="alert">
+                  This PDF has rotated pages. Re-export it without rotation before sending.
+                </p>
+              ) : null}
               <Button
                 onClick={submit}
-                disabled={placements.length === 0 || isPending}
+                disabled={placements.length === 0 || isPending || rotated}
               >
                 {isPending ? "Sending…" : "Send offer"}
               </Button>

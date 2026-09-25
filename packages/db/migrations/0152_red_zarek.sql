@@ -1,0 +1,1 @@
+ALTER TABLE "passkey_challenge" ALTER COLUMN "user_id" DROP NOT NULL;

@@ -11,6 +11,7 @@ import { describeSchedulerRuns as describeSchedulerRunsForJobs } from "./schedul
 
 import {
   formatConfigError,
+  isDemoMode,
   loadHarlyConfig,
   validateRuntimeFilesystem,
 } from "../../../packages/config/src/index";
@@ -90,14 +91,50 @@ async function serve() {
   process.exitCode = exitCode;
 }
 
+/**
+ * Advisory lock key for schema migrations. Arbitrary but fixed: every Harly
+ * process that migrates has to agree on it.
+ */
+const MIGRATION_LOCK_KEY = 0x48524c59;
+const MIGRATION_LOCK_WAIT_MS = 10 * 60 * 1000;
+
 async function runMigrations() {
   const config = await runtimeConfig({ validateFilesystem: false });
   const client = postgres(config.DATABASE_URL!, { max: 1, prepare: false });
   try {
-    await migrate(drizzle(client), {
-      migrationsFolder: process.env.HARLY_MIGRATIONS_DIR ?? "/app/migrations",
-    });
-    jsonLog("info", "migrations.complete", { version: config.HARLY_VERSION });
+    // Nothing else serialises this. A rolling deploy, a replica set where every
+    // pod runs an init container, or a redeploy that overlaps the previous one
+    // all start two migrate processes against one database, and drizzle takes
+    // no lock of its own. The pool is max: 1, so the lock is held by the same
+    // session that then applies the migrations.
+    //
+    // Waiting is deliberate: the second process should apply nothing and exit
+    // cleanly rather than fail the deployment. The wait is bounded so a stuck
+    // migration surfaces as an error instead of hanging forever.
+    const deadline = Date.now() + MIGRATION_LOCK_WAIT_MS;
+    for (;;) {
+      const [row] = await client`
+        select pg_try_advisory_lock(${MIGRATION_LOCK_KEY}) as acquired
+      `;
+      if (row?.acquired) break;
+      if (Date.now() >= deadline) {
+        throw new Error(
+          "Timed out waiting for the migration lock. Another Harly instance has been migrating for more than 10 minutes, or a previous migration left a session open.",
+        );
+      }
+      jsonLog("info", "migrations.waiting", {
+        reason: "another instance holds the migration lock",
+      });
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+    }
+    try {
+      await migrate(drizzle(client), {
+        migrationsFolder: process.env.HARLY_MIGRATIONS_DIR ?? "/app/migrations",
+      });
+      jsonLog("info", "migrations.complete", { version: config.HARLY_VERSION });
+    } finally {
+      await client`select pg_advisory_unlock(${MIGRATION_LOCK_KEY})`;
+    }
   } finally {
     await client.end();
   }
@@ -115,6 +152,13 @@ const jobs: Job[] = [
     path: "/api/cron/domain-events",
     intervalMs: 15_000,
   },
+  {
+    // The dedicated v2 queue consumer is separate from event ingestion so a
+    // slow domain-event batch cannot starve retries, waits, or lease recovery.
+    name: "automations",
+    path: "/api/cron/automations",
+    intervalMs: 10_000,
+  },
   { name: "email-outbox", path: "/api/cron/email-outbox", intervalMs: 60_000 },
   {
     name: "webhooks-dispatch",
@@ -125,6 +169,11 @@ const jobs: Job[] = [
     name: "esign-reconciliation",
     path: "/api/cron/esign-reconciliation",
     intervalMs: 60_000,
+  },
+  {
+    name: "esign-reminders",
+    path: "/api/cron/esign-reminders",
+    intervalMs: 60 * 60_000,
   },
   {
     name: "interview-sync",
@@ -169,6 +218,28 @@ const jobs: Job[] = [
     intervalMs: 60_000,
   },
 ];
+
+// Public demo only. The route 404s unless DEMO_MODE=true, so schedule this job
+// ONLY in demo mode — otherwise a normal install's scheduler would call the
+// endpoint, get a 404, and log a failed run (polluting health). Keeping it out
+// of the base list also keeps doctor()'s scheduler check honest: it never
+// expects a demo-reset run where none should happen. Fixed ~2-hour cadence: a
+// full reseed is cheap for one workspace and gives every visitor an identical
+// clean slate.
+const demoResetJob: Job = {
+  name: "demo-reset",
+  path: "/api/cron/demo-reset",
+  intervalMs: 2 * 60 * 60_000,
+};
+
+/**
+ * Jobs this instance should actually run and be judged healthy against.
+ * demo-reset joins only when DEMO_MODE=true, so scheduler and doctor share the
+ * same list.
+ */
+function activeJobs(): Job[] {
+  return isDemoMode() ? [...jobs, demoResetJob] : jobs;
+}
 
 const schedulerStaleAfterMs = Math.max(
   60_000,
@@ -259,9 +330,10 @@ async function scheduler() {
   await database`delete from cron_runs where created_at < now() - interval '30 days'`.catch(
     () => undefined,
   );
-  jobs.forEach((job, index) => schedule(job, index * 1_000));
+  const scheduled = activeJobs();
+  scheduled.forEach((job, index) => schedule(job, index * 1_000));
   const heartbeat = setInterval(
-    () => jsonLog("info", "scheduler.heartbeat", { jobs: jobs.length }),
+    () => jsonLog("info", "scheduler.heartbeat", { jobs: scheduled.length }),
     60_000,
   );
 
@@ -284,6 +356,8 @@ async function doctor() {
   const config = await runtimeConfig({ validateFilesystem: false });
   const appOrigin = process.env.HARLY_INTERNAL_URL ?? config.HARLY_URL;
   const database = postgres(config.DATABASE_URL!, { max: 1, prepare: false });
+  const expectedJobs = activeJobs();
+  const expectedJobNames = expectedJobs.map((job) => job.name);
   const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];
   try {
     const health = await fetch(`${appOrigin}/api/health/ready`, {
@@ -300,13 +374,45 @@ async function doctor() {
   try {
     const [row] = await database`
       select
-        to_regclass('public.deployment_bootstrap') is not null as migrated,
+        (
+          to_regclass('public.deployment_bootstrap') is not null
+          and to_regclass('public.workflow_definitions') is not null
+          and to_regclass('public.workflow_definition_versions') is not null
+          and to_regclass('public.workflow_drafts') is not null
+          and to_regclass('public.workflow_runs') is not null
+          and to_regclass('public.workflow_node_executions') is not null
+          and to_regclass('public.workflow_node_attempts') is not null
+          and to_regclass('public.workflow_approval_votes') is not null
+          and to_regclass('public.document_request_packages') is not null
+          and to_regclass('public.workflow_document_templates') is not null
+          and exists (
+            select 1
+            from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'workflow_runs'
+              and column_name = 'engine_version'
+          )
+          and exists (
+            select 1
+            from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'workflow_runs'
+              and column_name = 'logical_status'
+          )
+          and exists (
+            select 1
+            from information_schema.columns
+            where table_schema = 'public'
+              and table_name = 'workflow_node_executions'
+              and column_name = 'waiting_resource_type'
+          )
+        ) as migrated,
         (
           select coalesce(json_object_agg(job, last_run), '{}'::json)
           from (
             select job, max(created_at) filter (where status in ('success', 'skipped')) as last_run
             from cron_runs
-            where job in ('domain-events', 'email-outbox', 'webhooks-dispatch', 'esign-reconciliation', 'interview-sync', 'evaluation-jobs', 'mailbox-sync', 'document-expiry', 'retention-enforcement', 'candidate-deletions', 'candidate-reconciliation', 'mail-reconciliation', 'scheduled-reports')
+            where job = any(${expectedJobNames})
             group by job
           ) scheduler_runs
         ) as scheduler_runs,
@@ -318,7 +424,7 @@ async function doctor() {
     `;
     checks.push({ name: "migrations", ok: row?.migrated === true });
     const scheduler = describeSchedulerRunsForJobs(
-      jobs,
+      expectedJobs,
       row?.scheduler_runs as Record<string, string | null> | null | undefined,
       schedulerStaleAfterMs,
     );

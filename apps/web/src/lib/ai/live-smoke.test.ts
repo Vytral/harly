@@ -36,6 +36,7 @@ describe.skipIf(!live)("configured AI provider smoke test", () => {
       pipelineModule,
       agentModule,
       registryModule,
+      { toolsForProvider },
       aiSdk,
     ] = await Promise.all([
       import("@/lib/ai/config"),
@@ -50,6 +51,7 @@ describe.skipIf(!live)("configured AI provider smoke test", () => {
       import("@/lib/ai/surfaces/summarize-pipeline"),
       import("@/lib/ai/agent"),
       import("@/lib/ai/registry"),
+      import("@/lib/ai/provider-tools"),
       import("ai"),
     ]);
     const aiConfig = await getWorkspaceAiConfig(workspace!.id);
@@ -60,10 +62,13 @@ describe.skipIf(!live)("configured AI provider smoke test", () => {
     // catches unsupported strict schemas before a recruiter opens the chat.
     const toolHandshake = await aiSdk.generateText({
       model: registryModule.getModel(model),
-      tools: agentModule.buildHarlyTools({
-        workspaceId: workspace!.id,
-        userId: "ai-smoke-test",
-      }),
+      tools: toolsForProvider(
+        agentModule.buildHarlyTools({
+          workspaceId: workspace!.id,
+          userId: "ai-smoke-test",
+        }),
+        model.provider,
+      ),
       toolChoice: "none",
       prompt: "Reply with OK.",
     });

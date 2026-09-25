@@ -15,6 +15,7 @@ import { safeFetchHttp } from "@/lib/ssrf";
 const BOOKINGS_API_VERSION = "2024-08-13";
 const WEBHOOKS_API_VERSION = "2024-08-13";
 const ME_API_VERSION = "2024-06-14";
+const EVENT_TYPES_API_VERSION = "2024-06-14";
 
 export const CAL_WEBHOOK_TRIGGERS = [
   "BOOKING_CREATED",
@@ -71,6 +72,148 @@ export type CalBookingResult = {
   end: string;
   status: string;
 };
+
+export type CalEventType = {
+  id: number | string;
+  title: string;
+  slug: string;
+  length: number | null;
+  hidden: boolean;
+  metadata: Record<string, unknown>;
+};
+
+export type CalEventTypesResult = {
+  items: CalEventType[];
+  nextCursor: string | null;
+};
+
+/**
+ * List the event types that actually exist in the connected Cal.com account.
+ * The provider cursor is kept opaque and only safe display fields cross the
+ * Harly boundary; credentials and the raw provider response never do.
+ *
+ * The provider has no server-side search, so `query` filtering is
+ * client-side by design. When a query is set we follow up to 3 pages so a
+ * match on a later page is still found; without a query a single page is
+ * returned. The limit clamp (1-50) matches resource-resolution so one page
+ * means the same thing on both sides of the boundary.
+ */
+export async function listCalEventTypes(
+  config: WorkspaceCalConfig,
+  input: { limit?: number; cursor?: string; query?: string } = {},
+): Promise<CalEventTypesResult> {
+  const limit = Math.min(Math.max(input.limit ?? 50, 1), 50);
+  const query = input.query?.trim().toLowerCase();
+  const maxPages = query ? 3 : 1;
+  const collected: CalEventType[] = [];
+  const seenIds = new Set<string>();
+  let cursor: string | undefined = input.cursor;
+  let nextCursor: string | null = null;
+  for (let page = 0; page < maxPages; page += 1) {
+    const single = await listCalEventTypePage(config, { limit, cursor });
+    for (const item of single.items) {
+      const key = String(item.id);
+      if (!seenIds.has(key)) {
+        seenIds.add(key);
+        collected.push(item);
+      }
+    }
+    nextCursor = single.nextCursor;
+    if (!nextCursor) break;
+    cursor = nextCursor;
+    if (!query && collected.length >= limit) break;
+  }
+  const items = query
+    ? collected.filter(
+        (item) =>
+          item.title.toLowerCase().includes(query) ||
+          item.slug.toLowerCase().includes(query) ||
+          String(item.id).toLowerCase().includes(query),
+      )
+    : collected.slice(0, limit);
+  return {
+    items: query ? items.slice(0, limit) : items,
+    nextCursor,
+  };
+}
+
+async function listCalEventTypePage(
+  config: WorkspaceCalConfig,
+  input: { limit: number; cursor?: string },
+): Promise<CalEventTypesResult> {
+  const params = new URLSearchParams();
+  params.set("limit", String(input.limit));
+  if (input.cursor) params.set("cursor", input.cursor);
+  const response = await safeFetchHttp(
+    `${config.baseUrl.replace(/\/$/, "")}/event-types?${params.toString()}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${config.apiKey}`,
+        "cal-api-version": EVENT_TYPES_API_VERSION,
+        "Content-Type": "application/json",
+      },
+      cache: "no-store",
+    },
+  );
+  const json = (await response.json().catch(() => null)) as {
+    status?: string;
+    data?: unknown;
+    nextCursor?: string | null;
+    pagination?: { nextCursor?: string | null };
+    error?: { message?: string };
+  } | null;
+  if (!response.ok || json?.status === "error") {
+    throw new Error(
+      json?.error?.message ?? `Cal.com API error (${response.status}).`,
+    );
+  }
+
+  const rawItems = Array.isArray(json?.data)
+    ? json.data
+    : typeof json?.data === "object" && json.data !== null && "eventTypes" in json.data
+      ? (json.data as { eventTypes?: unknown[] }).eventTypes ?? []
+      : [];
+  const items = rawItems.flatMap((value): CalEventType[] => {
+    if (!value || typeof value !== "object") return [];
+    const record = value as Record<string, unknown>;
+    const id = record.id;
+    const title = typeof record.title === "string" ? record.title.trim() : "";
+    const slug = typeof record.slug === "string" ? record.slug.trim() : "";
+    if ((typeof id !== "number" && typeof id !== "string") || !title || !slug) {
+      return [];
+    }
+    return [
+      {
+        id,
+        title,
+        slug,
+        length:
+          typeof record.length === "number"
+            ? record.length
+            : typeof record.duration === "number"
+              ? record.duration
+              : null,
+        hidden: record.hidden === true,
+        metadata: {
+          integration: "cal",
+          slug,
+          length:
+            typeof record.length === "number"
+              ? record.length
+              : typeof record.duration === "number"
+                ? record.duration
+                : null,
+          hidden: record.hidden === true,
+        },
+      },
+    ];
+  });
+  return {
+    items,
+    nextCursor: json?.nextCursor ?? json?.pagination?.nextCursor ?? null,
+  };
+}
 
 /**
  * Validate credentials by hitting the authenticated `/me` endpoint. Throws with

@@ -662,8 +662,8 @@ export async function permanentlyDeleteJob(jobId: string) {
       await emitWebhookEvent(
         workspace.id,
         "candidate.referral_deleted",
-        { referralId, candidateId },
-        { skipDomainEvent: true, actorId: user.id },
+        { referralId, candidateId, eventId: event.eventId },
+        { skipDomainEvent: true, actorId: user.id, eventId: event.eventId },
       );
       await logAuditEvent({
         workspaceId: workspace.id,

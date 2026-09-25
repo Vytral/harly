@@ -13,7 +13,19 @@ const STATE_MAX_AGE_MS = 10 * 60 * 1000;
 const NONCE_BYTES = 32;
 
 function getSigningKey(): string {
-  return process.env.AI_ENCRYPTION_KEY ?? "fallback-dev-only";
+  const key = process.env.AI_ENCRYPTION_KEY ?? process.env.BETTER_AUTH_SECRET;
+  if (!key) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error(
+        "AI_ENCRYPTION_KEY (or BETTER_AUTH_SECRET) is required to sign OAuth state in production.",
+      );
+    }
+    log.warn(
+      "AI_ENCRYPTION_KEY is not set; using development fallback key. Set AI_ENCRYPTION_KEY in production.",
+    );
+    return "fallback-dev-only";
+  }
+  return key;
 }
 
 /** HMAC-sign a base64url payload so its integrity can be verified later. */

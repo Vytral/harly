@@ -59,8 +59,9 @@ vi.mock("./referrals/service", () => ({
 vi.mock("@/features/pipeline/actions", () => ({ updateApplicationStatus: vi.fn() }));
 vi.mock("./data", () => ({
   permanentlyDeleteCandidate: vi.fn(),
-  deleteCandidate: vi.fn(),
   restoreCandidate: vi.fn(),
+  trashCandidate: vi.fn(),
+  trashCandidates: vi.fn(),
   listCandidateDirectory: vi.fn(),
 }));
 vi.mock("@/lib/csv", () => ({ toSafeCsv: vi.fn() }));

@@ -6,6 +6,7 @@ import { eq } from "drizzle-orm";
 import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 
 export type ZoomActionResult = { success: boolean; error?: string };
@@ -15,6 +16,7 @@ export async function saveZoomCredentialsAction(input: {
   clientId: string;
   clientSecret: string;
 }): Promise<ZoomActionResult> {
+  assertNotDemo();
   const { organization } = await requirePermission("integrations:manage");
 
   if (!isEncryptionConfigured()) {
@@ -48,6 +50,7 @@ export async function saveZoomCredentialsAction(input: {
 }
 
 export async function uninstallZoom() {
+  assertNotDemo();
   const { organization } = await requirePermission("integrations:manage");
   const [settings] = await db
     .select()

@@ -23,10 +23,15 @@ import { deriveMeetLink } from "./shared";
 import {
   interviewPortalNotification,
   runApiInterviewSideEffects,
+  type ApiMeetingProvider,
 } from "./api-side-effects";
 
 import { findWorkspaceMember } from "./core";
 import { lockInterviewerSchedule } from "./booking-lock";
+import {
+  retryInterviewSyncsForInterview,
+} from "./sync-actions";
+import { InterviewProviderReconciliationError } from "@/lib/interviews/sync-ledger";
 
 /** Workspace-scoped, session-free interview service for REST API handlers. */
 
@@ -89,16 +94,21 @@ function cursorWhere(cursor: Cursor | null) {
   );
 }
 
-async function assertWorkspaceMember(workspaceId: string, userId: string) {
-  const row = await findWorkspaceMember(workspaceId, userId);
+async function assertWorkspaceMember(
+  workspaceId: string,
+  userId: string,
+  database: typeof db = db,
+) {
+  const row = await findWorkspaceMember(workspaceId, userId, database);
   if (!row) throw ApiError.forbidden("User is not a member of this workspace.");
 }
 
 async function assertInterviewerMember(
   workspaceId: string,
   interviewerId: string | null | undefined,
+  database: typeof db = db,
 ) {
-  if (interviewerId) await assertWorkspaceMember(workspaceId, interviewerId);
+  if (interviewerId) await assertWorkspaceMember(workspaceId, interviewerId, database);
 }
 
 /** A scheduled interview time must be in the future. Past times produce a
@@ -179,8 +189,10 @@ export async function listInterviewsForApi(input: {
 export async function getInterviewForApi(input: {
   workspaceId: string;
   interviewId: string;
+  database?: typeof db;
 }): Promise<Interview> {
-  const [interview] = await db
+  const database = input.database ?? db;
+  const [interview] = await database
     .select()
     .from(interviews)
     .where(
@@ -188,7 +200,7 @@ export async function getInterviewForApi(input: {
         eq(interviews.workspaceId, input.workspaceId),
         eq(interviews.id, input.interviewId),
         exists(
-          db
+          database
             .select({ id: candidates.id })
             .from(candidates)
             .where(
@@ -200,7 +212,7 @@ export async function getInterviewForApi(input: {
             ),
         ),
         exists(
-          db
+          database
             .select({ id: jobs.id })
             .from(jobs)
             .where(
@@ -222,14 +234,19 @@ export async function createInterviewForApi(input: {
   workspaceId: string;
   actorUserId: string;
   values: InterviewApiInput;
+  workflowEffectId?: string;
+  strictSideEffects?: boolean;
+  meetingProvider?: ApiMeetingProvider;
+  database?: typeof db;
 }): Promise<Interview> {
+  const database = input.database ?? db;
   await Promise.all([
-    assertWorkspaceMember(input.workspaceId, input.actorUserId),
-    assertInterviewerMember(input.workspaceId, input.values.interviewerId),
+    assertWorkspaceMember(input.workspaceId, input.actorUserId, database),
+    assertInterviewerMember(input.workspaceId, input.values.interviewerId, database),
   ]);
   assertFutureWhen(input.values.scheduledAt);
 
-  const { created, event } = await db.transaction(async (tx) => {
+  const { created, event } = await database.transaction(async (tx) => {
     const [application] = await tx
       .select({ id: applications.id, jobId: applications.jobId })
       .from(applications)
@@ -263,6 +280,18 @@ export async function createInterviewForApi(input: {
       );
     }
 
+    if (input.workflowEffectId) {
+      const [existing] = await tx
+        .select()
+        .from(interviews)
+        .where(and(
+          eq(interviews.workspaceId, input.workspaceId),
+          eq(interviews.workflowEffectId, input.workflowEffectId),
+        ))
+        .limit(1);
+      if (existing) return { created: existing, event: null };
+    }
+
     if (input.values.interviewerId) {
       await lockInterviewerSchedule(tx, input.workspaceId, input.values.interviewerId);
       await assertNoInterviewerConflict(
@@ -293,7 +322,8 @@ export async function createInterviewForApi(input: {
         location: input.values.location ?? null,
         meetLink: deriveMeetLink(input.values.mode, input.values.location),
         notes: input.values.notes ?? null,
-        source: "api",
+        source: input.workflowEffectId ? "workflow" : "api",
+        workflowEffectId: input.workflowEffectId ?? null,
       })
       .returning();
     if (!interview) throw ApiError.internal("Interview could not be created.");
@@ -327,20 +357,40 @@ export async function createInterviewForApi(input: {
     };
   });
 
-  await publishPersistedDomainEvents([event]);
+  if (event) await publishPersistedDomainEvents([event], database);
+  if (!event) {
+    const reconciliation = await retryInterviewSyncsForInterview({
+      workspaceId: input.workspaceId,
+      interviewId: created.id,
+      database,
+    });
+    if (input.strictSideEffects && reconciliation.failed > 0) {
+      throw new InterviewProviderReconciliationError();
+    }
+    return getInterviewForApi({
+      workspaceId: input.workspaceId,
+      interviewId: created.id,
+      database,
+    });
+  }
   await runApiInterviewSideEffects({
     workspaceId: input.workspaceId,
     actorUserId: input.actorUserId,
     interview: created,
     action: "scheduled",
+    meetingProvider: input.meetingProvider,
+    strictSideEffects: input.strictSideEffects,
+    database,
   });
   const refreshed = await getInterviewForApi({
     workspaceId: input.workspaceId,
     interviewId: created.id,
+    database,
   });
   await emitWebhookEvent(input.workspaceId, "interview.scheduled", {
     interview: serializeInterview(refreshed),
-  }, { actorId: input.actorUserId, skipDomainEvent: true });
+    eventId: event.eventId,
+  }, { actorId: input.actorUserId, skipDomainEvent: true, eventId: event.eventId, database });
   return refreshed;
 }
 
@@ -349,9 +399,24 @@ export async function updateInterviewForApi(input: {
   actorUserId: string;
   interviewId: string;
   values: InterviewApiUpdate;
+  workflowEffectId?: string;
+  strictSideEffects?: boolean;
+  database?: typeof db;
 }): Promise<Interview> {
-  await assertWorkspaceMember(input.workspaceId, input.actorUserId);
-  const current = await getInterviewForApi(input);
+  const database = input.database ?? db;
+  await assertWorkspaceMember(input.workspaceId, input.actorUserId, database);
+  const current = await getInterviewForApi({ ...input, database });
+  if (input.workflowEffectId && current.workflowEffectId === input.workflowEffectId) {
+    const reconciliation = await retryInterviewSyncsForInterview({
+      workspaceId: input.workspaceId,
+      interviewId: current.id,
+      database,
+    });
+    if (input.strictSideEffects && reconciliation.failed > 0) {
+      throw new InterviewProviderReconciliationError();
+    }
+    return current;
+  }
   if (current.status !== "scheduled") {
     throw ApiError.conflict("Only scheduled interviews can be updated.");
   }
@@ -368,14 +433,14 @@ export async function updateInterviewForApi(input: {
   if (input.values.scheduledAt !== undefined) {
     assertFutureWhen(scheduledAt);
   }
-  await assertInterviewerMember(input.workspaceId, interviewerId);
+  await assertInterviewerMember(input.workspaceId, interviewerId, database);
   await assertNoInterviewerConflict({
     workspaceId: input.workspaceId,
     interviewerId,
     scheduledAt,
     durationMins,
     excludeInterviewId: current.id,
-  });
+  }, database);
 
   const set: Record<string, unknown> = { updatedAt: new Date() };
   if (input.values.interviewerId !== undefined) set.interviewerId = interviewerId;
@@ -386,6 +451,7 @@ export async function updateInterviewForApi(input: {
   if (input.values.durationMins !== undefined) set.durationMins = durationMins;
   if (input.values.location !== undefined) set.location = input.values.location;
   if (input.values.notes !== undefined) set.notes = input.values.notes;
+  if (input.workflowEffectId) set.workflowEffectId = input.workflowEffectId;
 
   const effectiveMode = input.values.mode ?? current.mode;
   const effectiveLocation = input.values.location ?? current.location;
@@ -400,7 +466,7 @@ export async function updateInterviewForApi(input: {
     }
   }
 
-  const { updated, event } = await db.transaction(async (tx) => {
+  const { updated, event } = await database.transaction(async (tx) => {
     if (interviewerId) {
       await lockInterviewerSchedule(tx, input.workspaceId, interviewerId);
     }
@@ -452,21 +518,25 @@ export async function updateInterviewForApi(input: {
       }),
     };
   });
-  await publishPersistedDomainEvents([event]);
+  await publishPersistedDomainEvents([event], database);
   await runApiInterviewSideEffects({
     workspaceId: input.workspaceId,
     actorUserId: input.actorUserId,
     interview: updated,
     previous: current,
     action: "rescheduled",
+    strictSideEffects: input.strictSideEffects,
+    database,
   });
   const refreshed = await getInterviewForApi({
     workspaceId: input.workspaceId,
     interviewId: updated.id,
+    database,
   });
   await emitWebhookEvent(input.workspaceId, "interview.rescheduled", {
     interview: serializeInterview(refreshed),
-  }, { actorId: input.actorUserId, skipDomainEvent: true });
+    eventId: event.eventId,
+  }, { actorId: input.actorUserId, skipDomainEvent: true, eventId: event.eventId, database });
   return refreshed;
 }
 
@@ -475,19 +545,38 @@ export async function setInterviewStatusForApi(input: {
   actorUserId: string;
   interviewId: string;
   status: "completed" | "canceled";
+  workflowEffectId?: string;
+  strictSideEffects?: boolean;
+  database?: typeof db;
 }): Promise<Interview> {
-  await assertWorkspaceMember(input.workspaceId, input.actorUserId);
-  const current = await getInterviewForApi(input);
+  const database = input.database ?? db;
+  await assertWorkspaceMember(input.workspaceId, input.actorUserId, database);
+  const current = await getInterviewForApi({ ...input, database });
+  if (input.workflowEffectId && current.workflowEffectId === input.workflowEffectId) {
+    const reconciliation = await retryInterviewSyncsForInterview({
+      workspaceId: input.workspaceId,
+      interviewId: current.id,
+      database,
+    });
+    if (input.strictSideEffects && reconciliation.failed > 0) {
+      throw new InterviewProviderReconciliationError();
+    }
+    return current;
+  }
   if (current.status === input.status) return current;
   if (current.status !== "scheduled") {
     throw ApiError.conflict("Completed or canceled interviews cannot change status.");
   }
 
   const event = `interview.${input.status}` as const;
-  const { updated, persistedEvent } = await db.transaction(async (tx) => {
+  const { updated, persistedEvent } = await database.transaction(async (tx) => {
     const [next] = await tx
       .update(interviews)
-      .set({ status: input.status, updatedAt: new Date() })
+      .set({
+        status: input.status,
+        ...(input.workflowEffectId ? { workflowEffectId: input.workflowEffectId } : {}),
+        updatedAt: new Date(),
+      })
       .where(
         and(
           eq(interviews.id, input.interviewId),
@@ -523,7 +612,7 @@ export async function setInterviewStatusForApi(input: {
       }),
     };
   });
-  await publishPersistedDomainEvents([persistedEvent]);
+  await publishPersistedDomainEvents([persistedEvent], database);
   if (input.status === "canceled") {
     await runApiInterviewSideEffects({
       workspaceId: input.workspaceId,
@@ -531,14 +620,18 @@ export async function setInterviewStatusForApi(input: {
       interview: updated,
       previous: current,
       action: "canceled",
+      strictSideEffects: input.strictSideEffects,
+      database,
     });
   }
   const refreshed = await getInterviewForApi({
     workspaceId: input.workspaceId,
     interviewId: updated.id,
+    database,
   });
   await emitWebhookEvent(input.workspaceId, event, {
     interview: serializeInterview(refreshed),
-  }, { actorId: input.actorUserId, skipDomainEvent: true });
+    eventId: persistedEvent.eventId,
+  }, { actorId: input.actorUserId, skipDomainEvent: true, eventId: persistedEvent.eventId, database });
   return refreshed;
 }

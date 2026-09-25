@@ -11,7 +11,7 @@ import { buildWriteTools } from "./write-tools";
 export function buildHarlyTools(ctx: HarlyToolContext) {
   return {
     ...buildReadTools(ctx),
-    ...buildWriteTools(),
+    ...buildWriteTools(ctx.permissions),
   };
 }
 

@@ -21,11 +21,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { ActivityTimeline } from "./candidate-profile/ActivityTimeline";
 import { ConversationThread } from "./candidate-profile/ConversationThread";
-import { DocumentsSection } from "./candidate-profile/DocumentsSection";
 import { InterviewCard } from "./candidate-profile/InterviewCard";
 import { PrivacyRequestCard } from "./candidate-profile/PrivacyRequestCard";
 import { ScorecardList } from "./candidate-profile/ScorecardList";
-import { CandidateSignaturePanel } from "./candidate-profile/SignaturePanel";
 import { EmptySection, TabCount } from "./candidate-profile/shared";
 import type {
   CandidateMessage,
@@ -65,9 +63,6 @@ export function CandidateProfileTabs({
   notes,
   files,
   relatedDocuments,
-  signableDocuments,
-  documentRequests,
-  canManageDocuments,
   activity,
   scorecards,
   messages,
@@ -87,7 +82,6 @@ export function CandidateProfileTabs({
   canFulfilErasure = false,
 }: CandidateProfileTabsProps) {
   const [tab, setTab] = useState("profile");
-  const [signatureOpen, setSignatureOpen] = useState(false);
   const conversations = groupIntoConversations(messages);
   const jobOptions = applications.map((application) => ({
     id: application.id,
@@ -129,10 +123,6 @@ export function CandidateProfileTabs({
         <TabsTrigger value="activity">
           Activity
           <TabCount value={activity.length + notes.length} />
-        </TabsTrigger>
-        <TabsTrigger value="documents">
-          Documents
-          <TabCount value={relatedDocuments.length} />
         </TabsTrigger>
         {privacyRequests.length > 0 ? (
           <TabsTrigger value="privacy">
@@ -330,26 +320,6 @@ export function CandidateProfileTabs({
             hint="Stage moves, notes, emails and interviews all land here in order, so you can see how this candidate got to where they are."
           />
         ) : null}
-      </TabsContent>
-
-      {/* ── Documents ── */}
-      <TabsContent value="documents" className="mt-4 space-y-4">
-        <DocumentsSection
-          candidateId={candidateId}
-          relatedDocuments={relatedDocuments}
-          documentRequests={documentRequests}
-          applications={jobOptions}
-          canManageDocuments={canManageDocuments}
-          hasSignableDocuments={signableDocuments.length > 0}
-          onRequestSignature={() => setSignatureOpen(true)}
-        />
-        <CandidateSignaturePanel
-          open={signatureOpen}
-          onOpenChange={setSignatureOpen}
-          candidateName={candidateName}
-          candidateEmail={candidateEmail}
-          documents={signableDocuments}
-        />
       </TabsContent>
 
       {/*

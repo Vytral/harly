@@ -1,5 +1,6 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
 import { and, eq, isNull } from "drizzle-orm";
 
 import {
@@ -17,13 +18,15 @@ import { requirePermission } from "@/features/workspaces/permissions-server";
 import {
   gcalEventIdForInterview,
   syncInterviewToGCal,
+  updateInterviewGCalEvent,
 } from "@/lib/gcal/sync";
 import {
+  replaceInterviewToTeams,
   syncInterviewToTeams,
 } from "@/lib/outlook/teams-sync";
-import { syncInterviewToZoom } from "@/lib/zoom/sync";
+import { replaceInterviewToZoom, syncInterviewToZoom } from "@/lib/zoom/sync";
 import { syncInterviewToJitsi } from "@/lib/jitsi/sync";
-import { trackInterviewSync } from "@/lib/interviews/sync-ledger";
+import { claimInterviewSync, trackInterviewSync } from "@/lib/interviews/sync-ledger";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("interview-sync-actions");
@@ -64,11 +67,15 @@ export async function retryInterviewSyncAction(input: {
 export async function retryInterviewSyncForWorkspace(input: {
   workspaceId: string;
   syncId: string;
+  /** Existing claim owner when invoked by the cron worker. */
+  workerId?: string;
+  database?: typeof db;
 }): Promise<{ success: boolean; error?: string; warning?: string }> {
   try {
+    const database = input.database ?? db;
     const workspace = { id: input.workspaceId };
 
-    const [row] = await db
+    const [row] = await database
       .select({
         sync: interviewSyncs,
         interview: interviews,
@@ -113,6 +120,20 @@ export async function retryInterviewSyncForWorkspace(input: {
 
     if (!row) return { success: false, error: "Sync attempt not found." };
 
+    const workerId = input.workerId ?? `interview-sync-manual:${randomUUID()}`;
+    const claimed = await claimInterviewSync({
+      workspaceId: workspace.id,
+      syncId: input.syncId,
+      workerId,
+      database,
+    });
+    if (!claimed) {
+      return {
+        success: false,
+        error: "This synchronization is already being retried or is no longer retryable.",
+      };
+    }
+
     const { sync, interview } = row;
     const attendees = [row.candidateEmail, row.interviewerEmail].filter(
       (email): email is string => Boolean(email),
@@ -126,6 +147,7 @@ export async function retryInterviewSyncForWorkspace(input: {
         interviewId: interview.id,
         provider: sync.provider,
         operation: "cancel",
+        workerId,
         run: async () => {
           switch (sync.provider) {
             case "google_calendar":
@@ -185,9 +207,22 @@ export async function retryInterviewSyncForWorkspace(input: {
       interviewId: interview.id,
       provider: sync.provider,
       operation: "upsert",
+      workerId,
       run: async (): Promise<ProviderRetryResult> => {
         switch (sync.provider) {
           case "google_calendar": {
+            if (interview.gcalEventId) {
+              const ok = await updateInterviewGCalEvent({
+                workspaceId: workspace.id,
+                gcalEventId: interview.gcalEventId,
+                summary,
+                start: interview.scheduledAt,
+                durationMins: interview.durationMins,
+                attendees: attendees.length > 0 ? attendees : undefined,
+                location: interview.location ?? undefined,
+              });
+              return { ok, resourceId: interview.gcalEventId };
+            }
             const providerResult = await syncInterviewToGCal({
               workspaceId: workspace.id,
               interviewId: interview.id,
@@ -200,14 +235,24 @@ export async function retryInterviewSyncForWorkspace(input: {
               mode: interview.mode === "video" ? "video" : undefined,
             });
             return providerResult.ok
-              ? {
-                  ok: true,
-                  resourceId: providerResult.eventId,
-                  resourceUrl: providerResult.meetLink,
-                }
+              ? { ok: true, resourceId: providerResult.eventId, resourceUrl: providerResult.meetLink }
               : { ok: false };
           }
           case "zoom": {
+            if (interview.zoomMeetingId) {
+              const providerResult = await replaceInterviewToZoom({
+                workspaceId: workspace.id,
+                interviewId: interview.id,
+                previousMeetingId: interview.zoomMeetingId,
+                previousMeetLink: interview.meetLink,
+                summary,
+                start: interview.scheduledAt,
+                durationMins: interview.durationMins,
+              });
+              return providerResult.ok
+                ? { ok: true, resourceId: providerResult.meetingId, resourceUrl: providerResult.joinUrl }
+                : { ok: false };
+            }
             const providerResult = await syncInterviewToZoom({
               workspaceId: workspace.id,
               interviewId: interview.id,
@@ -224,6 +269,20 @@ export async function retryInterviewSyncForWorkspace(input: {
               : { ok: false };
           }
           case "microsoft_teams": {
+            if (interview.teamsMeetingId) {
+              const providerResult = await replaceInterviewToTeams({
+                workspaceId: workspace.id,
+                interviewId: interview.id,
+                previousMeetingId: interview.teamsMeetingId,
+                previousMeetLink: interview.meetLink,
+                summary,
+                start: interview.scheduledAt,
+                durationMins: interview.durationMins,
+              });
+              return providerResult.ok
+                ? { ok: true, resourceId: providerResult.meetingId, resourceUrl: providerResult.joinUrl }
+                : { ok: false };
+            }
             const providerResult = await syncInterviewToTeams({
               workspaceId: workspace.id,
               interviewId: interview.id,
@@ -271,4 +330,42 @@ export async function retryInterviewSyncForWorkspace(input: {
     log.error(error, "retryInterviewSyncForWorkspace failed");
     return { success: false, error: "Could not retry this synchronization." };
   }
+}
+
+/**
+ * Reconcile provider work left by a committed interview mutation. This is
+ * deliberately scoped to one interview and only selects pending/failed rows;
+ * a workflow retry therefore does not replay already-synced providers or send
+ * a second calendar invitation.
+ */
+export async function retryInterviewSyncsForInterview(input: {
+  workspaceId: string;
+  interviewId: string;
+  database?: typeof db;
+}): Promise<{ attempted: number; failed: number }> {
+  const database = input.database ?? db;
+  const rows = await database
+    .select({ id: interviewSyncs.id })
+    .from(interviewSyncs)
+    .where(
+      and(
+        eq(interviewSyncs.workspaceId, input.workspaceId),
+        eq(interviewSyncs.interviewId, input.interviewId),
+        // A workflow retry is an explicit operator/engine retry. It may run
+        // before the ledger's exponential backoff because the node itself is
+        // already the durable retry boundary.
+        eq(interviewSyncs.status, "failed"),
+      ),
+    );
+
+  let failed = 0;
+  for (const row of rows) {
+    const result = await retryInterviewSyncForWorkspace({
+      workspaceId: input.workspaceId,
+      syncId: row.id,
+      database,
+    });
+    if (!result.success) failed += 1;
+  }
+  return { attempted: rows.length, failed };
 }

@@ -398,7 +398,10 @@ function JoinJobContent({
 
   async function copyLink() {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      // Always share the job details (overview) URL — never the apply form,
+      // even when the candidate is currently on the Application tab.
+      const detailsUrl = new URL(overviewHref, window.location.origin).href;
+      await navigator.clipboard.writeText(detailsUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 1600);
     } catch {

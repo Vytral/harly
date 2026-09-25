@@ -18,7 +18,7 @@ export const runtime = "nodejs";
  * images in the public application flow.
  */
 export const POST = withApi(async (request) => {
-  enforceRateLimit(`public:image-presign:${clientIp(request)}`, {
+  await enforceRateLimit(`public:image-presign:${clientIp(request)}`, {
     limit: 20,
     windowMs: 60_000,
   });

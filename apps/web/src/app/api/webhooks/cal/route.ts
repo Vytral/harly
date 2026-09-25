@@ -450,7 +450,8 @@ export async function POST(request: NextRequest) {
     await sendCalInterviewEmail({ workspaceId, action, interview: latest, context });
     await emitWebhookEvent(workspaceId, "interview.canceled", {
       interview: serializeCalInterview(latest),
-    }, { skipDomainEvent: true });
+      eventId: transition.event.eventId,
+    }, { skipDomainEvent: true, eventId: transition.event.eventId });
     return NextResponse.json({ ok: true });
   }
 
@@ -551,7 +552,8 @@ export async function POST(request: NextRequest) {
     await sendCalInterviewEmail({ workspaceId, action, interview: latest, context });
     await emitWebhookEvent(workspaceId, "interview.rescheduled", {
       interview: serializeCalInterview(latest),
-    }, { skipDomainEvent: true });
+      eventId: transition.event.eventId,
+    }, { skipDomainEvent: true, eventId: transition.event.eventId });
     return NextResponse.json({ ok: true });
   }
 
@@ -640,6 +642,7 @@ export async function POST(request: NextRequest) {
   });
   await emitWebhookEvent(workspaceId, "interview.scheduled", {
     interview: serializeCalInterview(latest),
-  }, { skipDomainEvent: true });
+    eventId: transition.event.eventId,
+  }, { skipDomainEvent: true, eventId: transition.event.eventId });
   return NextResponse.json({ ok: true });
 }

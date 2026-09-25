@@ -10,6 +10,8 @@ import {
   listNotifications,
 } from "@/features/notifications/data";
 import { getUnreadInboxThreadCount } from "@/features/mailbox/data";
+import { isDemoMode } from "@harly/config";
+
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getCurrentPermissions } from "@/features/workspaces/permissions-server";
@@ -38,6 +40,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { organization, user, role } = await getWorkspaceContext();
+  const demo = isDemoMode();
   const [
     workspaceOptions,
     notifications,
@@ -106,12 +109,15 @@ export default async function DashboardLayout({
                 }}
                 role={role}
                 workspace={workspace}
-                workspaceOptions={workspaceOptions}
+                // Demo: one shared account is a member of the pool workspace(s);
+                // hide the switcher so a visitor can't hop into another one.
+                workspaceOptions={demo ? [] : workspaceOptions}
                 notifications={notifications}
                 unreadNotificationCount={unreadNotificationCount}
                 userPermissions={userPermissions}
                 inboxCount={unreadInboxThreadCount}
                 taskDueCount={taskDueCount}
+                demoMode={demo}
               />
               <PageTitleProvider>
                 <main className="min-h-0 w-full flex-1 overflow-y-auto px-4 pb-8 pt-2 md:px-7">

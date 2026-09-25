@@ -190,7 +190,7 @@ export function ApplicationSection({
 
       <FieldGroup
         title="Details"
-        description="Additional written context and screening questions."
+        description="Add screening questions, applicant-facing information, and agreements."
       >
         <VisibilityField
           name="applicationCoverLetterVisibility"
@@ -198,7 +198,7 @@ export function ApplicationSection({
           value={applicationConfig.sections.details.coverLetter}
         />
         <div>
-          <h3 className="mb-3 text-sm font-semibold">Custom questions</h3>
+          <h3 className="mb-3 text-sm font-semibold">Custom form content</h3>
           <JobQuestionBuilder
             initialQuestions={applicationConfig.questions}
             aiContext={aiContext}

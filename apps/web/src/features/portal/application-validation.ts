@@ -37,9 +37,17 @@ export function validatePortalApplication(input: PortalApplicationInput):
 
   const answers: Record<string, string> = {};
   for (const question of input.questions) {
+    if (question.type === "info") continue;
+
     const value = input.answers[question.key]?.trim() ?? "";
     if (question.required && !value) {
       return { ok: false, error: "This question is required." };
+    }
+    if (question.type === "consent" && question.required && value !== "agree") {
+      return {
+        ok: false,
+        error: "You must agree to continue with your application.",
+      };
     }
     if (question.minLength && value && value.length < question.minLength) {
       return {

@@ -82,7 +82,16 @@ skills-lock.json
 **/AGENTS.md
 **/CLAUDE.md
 .qwen
+
+# local Git worktrees and generated CLI release output
+/.worktrees/
+/tooling/harly/dist/
 # figma debug dumps
 logs/
 public/images/figma-preview/
 .temptoken
+.env*.local
+
+
+# JetBrains IDE settings
+.idea/

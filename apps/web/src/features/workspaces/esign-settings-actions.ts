@@ -8,6 +8,7 @@ import { z } from "zod";
 import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { getWorkspaceEsignConfig, getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { resolveSafeAddress, safeFetchHttp } from "@/lib/ssrf";
@@ -54,6 +55,7 @@ export async function saveEsignSettingsAction(input: {
   apiToken?: string;
   enabled: boolean;
 }): Promise<EsignSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   if (!isEncryptionConfigured()) {
@@ -149,6 +151,7 @@ export async function saveEsignSettingsAction(input: {
 export async function saveOfferSignatureChannelAction(
   channel: "email" | "esign" | "native",
 ): Promise<EsignSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   const status = await getWorkspaceEsignStatus(context.organization.id);
@@ -170,6 +173,7 @@ export async function saveOfferSignatureChannelAction(
 
 /** Disconnect DocuSeal: clear config columns + reset offer channel to email. */
 export async function disconnectEsignAction(): Promise<EsignSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   await db
@@ -192,6 +196,7 @@ export async function disconnectEsignAction(): Promise<EsignSettingsActionResult
 
 /** Verify the connection by listing templates against the DocuSeal instance. */
 export async function testEsignAction(): Promise<EsignSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const config = await getWorkspaceEsignConfig(context.organization.id);
   if (!config) return { ok: false, error: "DocuSeal is not connected." };

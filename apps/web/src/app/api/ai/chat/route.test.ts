@@ -8,12 +8,17 @@ const mocks = vi.hoisted(() => ({
   getModel: vi.fn(),
   buildHarlyTools: vi.fn(),
   buildHarlySystemPrompt: vi.fn(),
+  getWorkspaceKnowledge: vi.fn(),
   validateUIMessages: vi.fn(),
   convertToModelMessages: vi.fn(),
   streamText: vi.fn(),
   enforceRateLimit: vi.fn(),
   recordAiUsage: vi.fn(),
   persistConversation: vi.fn(),
+  assertToolRoutingCoversAllTools: vi.fn(),
+  resolveActiveToolGroups: vi.fn(),
+  selectActiveToolNames: vi.fn(),
+  shouldWidenForStep: vi.fn(),
 }));
 
 vi.mock("ai", () => ({
@@ -35,9 +40,18 @@ vi.mock("@/lib/ai/agent", () => ({ buildHarlyTools: mocks.buildHarlyTools }));
 vi.mock("@/lib/ai/agent/system-prompt", () => ({
   buildHarlySystemPrompt: mocks.buildHarlySystemPrompt,
 }));
+vi.mock("@/lib/ai/agent/workspace-knowledge", () => ({
+  getWorkspaceKnowledge: mocks.getWorkspaceKnowledge,
+}));
 vi.mock("@/server/api/ratelimit", () => ({ enforceRateLimit: mocks.enforceRateLimit }));
 vi.mock("@/lib/ai/usage", () => ({ recordAiUsage: mocks.recordAiUsage }));
 vi.mock("@/features/ai-chat/data", () => ({ persistConversation: mocks.persistConversation }));
+vi.mock("@/lib/ai/agent/tool-routing", () => ({
+  assertToolRoutingCoversAllTools: mocks.assertToolRoutingCoversAllTools,
+  resolveActiveToolGroups: mocks.resolveActiveToolGroups,
+  selectActiveToolNames: mocks.selectActiveToolNames,
+  shouldWidenForStep: mocks.shouldWidenForStep,
+}));
 
 import { POST } from "./route";
 
@@ -71,10 +85,15 @@ describe("POST /api/ai/chat", () => {
     mocks.getModel.mockReturnValue("model");
     mocks.buildHarlyTools.mockReturnValue({ lookup: { execute: vi.fn() } });
     mocks.buildHarlySystemPrompt.mockReturnValue("system");
+    mocks.getWorkspaceKnowledge.mockResolvedValue(null);
     mocks.validateUIMessages.mockResolvedValue([message]);
     mocks.convertToModelMessages.mockResolvedValue([{ role: "user", content: "Hello" }]);
     mocks.enforceRateLimit.mockResolvedValue({ remaining: 1, resetAt: Date.now() + 60_000 });
     mocks.persistConversation.mockResolvedValue(undefined);
+    mocks.assertToolRoutingCoversAllTools.mockReturnValue(undefined);
+    mocks.resolveActiveToolGroups.mockReturnValue(new Set(["general"]));
+    mocks.selectActiveToolNames.mockReturnValue(["lookup"]);
+    mocks.shouldWidenForStep.mockImplementation((step: number) => step >= 2);
     mocks.streamText.mockReturnValue({
       totalUsage: Promise.resolve({ inputTokens: 13, outputTokens: 21 }),
       toUIMessageStreamResponse: vi.fn(() => new Response("stream")),
@@ -102,16 +121,39 @@ describe("POST /api/ai/chat", () => {
     expect(mocks.buildHarlyTools).not.toHaveBeenCalled();
   });
 
-  it("rejects invalid and oversized chat histories before calling the model", async () => {
+  it("rejects invalid histories and slides oversized ones instead of 413ing", async () => {
     mocks.validateUIMessages.mockRejectedValue(new Error("invalid message"));
 
     const invalid = await POST(request({ messages: [{ role: "system", parts: [] }] }));
-    const oversized = await POST(
-      request({ messages: Array.from({ length: 41 }, (_, index) => ({ ...message, id: `m-${index}` })) }),
-    );
 
     expect(invalid.status).toBe(400);
-    expect(oversized.status).toBe(413);
+    expect(mocks.streamText).not.toHaveBeenCalled();
+  });
+
+  it("trims an over-long history to the window and keeps the newest message", async () => {
+    mocks.validateUIMessages.mockResolvedValue([message]);
+    const history = Array.from({ length: 41 }, (_, index) => ({
+      ...message,
+      id: `m-${index}`,
+    }));
+    const response = await POST(request({ messages: history }));
+
+    expect(response.status).toBe(200);
+    const sent = mocks.validateUIMessages.mock.calls[0]![0] as {
+      messages: Array<{ id: string }>;
+    };
+    expect(sent.messages.length).toBeLessThanOrEqual(40);
+    expect(sent.messages[sent.messages.length - 1]!.id).toBe("m-40");
+  });
+
+  it("still 413s a single message that alone exceeds the history budget", async () => {
+    const huge = {
+      ...message,
+      parts: [{ type: "text", text: "x".repeat(100_001) }],
+    };
+    const response = await POST(request({ messages: [huge] }));
+
+    expect(response.status).toBe(413);
     expect(mocks.streamText).not.toHaveBeenCalled();
   });
 
@@ -181,5 +223,108 @@ describe("POST /api/ai/chat", () => {
     expect(mocks.streamText.mock.results[0]?.value.toUIMessageStreamResponse).toHaveBeenCalledWith(
       expect.objectContaining({ consumeSseStream: expect.any(Function) }),
     );
+  });
+
+  it("narrows the initial tool set via the routing gateway, then widens from step 2 on", async () => {
+    mocks.resolveActiveToolGroups.mockReturnValue(new Set(["general", "candidates"]));
+    mocks.selectActiveToolNames.mockReturnValue(["lookup"]);
+
+    const response = await POST(request({ messages: [message] }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.assertToolRoutingCoversAllTools).toHaveBeenCalledWith(["lookup"]);
+    expect(mocks.resolveActiveToolGroups).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Hello", intent: expect.any(String) }),
+    );
+    expect(mocks.selectActiveToolNames).toHaveBeenCalledWith(["lookup"], expect.any(Set));
+
+    const call = mocks.streamText.mock.calls[0]![0];
+    expect(call.activeTools).toEqual(["lookup"]);
+    expect(typeof call.prepareStep).toBe("function");
+    expect(call.prepareStep({ stepNumber: 1 })).toEqual({});
+    expect(call.prepareStep({ stepNumber: 2 })).toEqual({ activeTools: undefined });
+  });
+
+  it("gives automation builds a larger bounded orchestration budget", async () => {
+    const automationMessage = {
+      ...message,
+      parts: [{ type: "text", text: "Quiero crear una automatización cuando postule un candidato." }],
+    };
+    const response = await POST(request({ messages: [automationMessage] }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.streamText).toHaveBeenCalledWith(expect.objectContaining({
+      maxOutputTokens: 6_144,
+    }));
+    expect(mocks.streamText.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      stopWhen: { count: 16 },
+    }));
+  });
+
+  it("slides the history window instead of 413ing a long conversation", async () => {
+    const big = (id: string) => ({
+      id,
+      role: "assistant" as const,
+      parts: [{ type: "text", text: `x`.repeat(30_000) }],
+    });
+    const history = [big("m-1"), big("m-2"), big("m-3"), big("m-4"), message];
+    const response = await POST(request({ messages: history }));
+
+    expect(response.status).toBe(200);
+    const sent = mocks.validateUIMessages.mock.calls[0]![0] as {
+      messages: Array<{ id: string }>;
+    };
+    // Oldest turns dropped, newest (the current request) always kept.
+    expect(sent.messages.length).toBeLessThan(history.length);
+    expect(sent.messages[sent.messages.length - 1]!.id).toBe("message-1");
+  });
+
+  it("drops tool calls left without output by a cut request so the conversation can continue", async () => {
+    const history = [
+      message,
+      {
+        id: "message-2",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-simulateAutomationProposal",
+            toolCallId: "call-done",
+            state: "output-available",
+            input: { proposalId: "p1" },
+            output: { ok: true },
+          },
+          {
+            type: "tool-simulateAutomationProposal",
+            toolCallId: "call-dangling",
+            state: "input-available",
+            input: { proposalId: "p2" },
+          },
+        ],
+      },
+      { ...message, id: "message-3", parts: [{ type: "text", text: "Continua" }] },
+    ];
+    const response = await POST(request({ messages: history }));
+
+    expect(response.status).toBe(200);
+    expect(mocks.validateUIMessages).toHaveBeenCalledWith({
+      messages: [
+        history[0],
+        {
+          id: "message-2",
+          role: "assistant",
+          parts: [
+            {
+              type: "tool-simulateAutomationProposal",
+              toolCallId: "call-done",
+              state: "output-available",
+              input: { proposalId: "p1" },
+              output: { ok: true },
+            },
+          ],
+        },
+        history[2],
+      ],
+      tools: { lookup: { execute: expect.any(Function) } },
+    });
   });
 });

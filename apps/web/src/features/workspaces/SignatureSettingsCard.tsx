@@ -18,18 +18,22 @@ import {
   deleteSavedSignature,
   listSavedSignatures,
 } from "@/features/documents/saved-signature-actions";
+import { SavedVectorThumb } from "@/features/documents/VectorSignaturePreview";
 
 type Settings = {
   nativeSignEnabled: boolean;
   remoteSignEnabled: boolean;
   savedSignaturesEnabled: boolean;
+  vectorSignaturesEnabled: boolean;
   signatureOtpEnabled: boolean;
   signatureTimelineEnabled: boolean;
   signatureSecurityMode: string;
   signatureExpirationDays: number;
 };
 
-type SavedSignature = { id: string; createdAt: Date; dataUrl: string };
+type SavedSignature =
+  | { id: string; createdAt: Date; kind: "png"; dataUrl: string }
+  | { id: string; createdAt: Date; kind: "vector"; vectorData: string };
 
 const TOGGLES: Array<{
   key: "nativeSignEnabled" | "remoteSignEnabled" | "savedSignaturesEnabled" | "signatureTimelineEnabled";
@@ -163,7 +167,7 @@ function SavedSignaturesCard() {
 
   useEffect(() => {
     void listSavedSignatures()
-      .then((rows) => setSignatures(rows as SavedSignature[]))
+      .then((rows) => setSignatures(rows))
       .finally(() => setLoading(false));
   }, []);
 
@@ -209,11 +213,15 @@ function SavedSignaturesCard() {
             {signatures.map((signature) => (
               <div key={signature.id} className="group relative">
                 <div className="flex h-20 items-center justify-center rounded-lg border border-input bg-white p-2">
-                  <img
-                    src={signature.dataUrl}
-                    alt="Saved signature"
-                    className="max-h-full max-w-full object-contain"
-                  />
+                  {signature.kind === "vector" ? (
+                    <SavedVectorThumb vectorData={signature.vectorData} />
+                  ) : (
+                    <img
+                      src={signature.dataUrl}
+                      alt="Saved signature"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  )}
                 </div>
                 <button
                   type="button"

@@ -14,6 +14,7 @@ import {
   Settings,
   UserRound,
   Users,
+  Workflow,
   type LucideIcon,
 } from "lucide-react";
 
@@ -125,11 +126,18 @@ export const moreNav: MoreGroup[] = [
         hint: "Emails and scorecards",
       },
       {
+        label: "Automations",
+        href: "/dashboard/automations" as Route,
+        icon: Workflow,
+        requiredPermission: "automations:manage",
+        hint: "When something happens, do work automatically",
+      },
+      {
         label: "Documents",
         href: "/dashboard/documents" as Route,
         icon: NotebookTabs,
-        requiredPermission: "documents:read",
-        hint: "Requests, signatures, retention",
+        requiredPermission: ["documents:read", "templates:manage"],
+        hint: "Files, signatures, workflow templates",
       },
     ],
   },

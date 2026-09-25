@@ -88,7 +88,45 @@ const candidateExperienceEntrySchema = z.object({
   description: z.string().trim().max(20_000).nullable().default(null),
 });
 
-export const jobCreateSchema = z.object({
+function refineJobSalary(
+  values: {
+    salaryMin?: number | null;
+    salaryMax?: number | null;
+    currency?: string | null;
+    salaryPeriod?: "annual" | "monthly" | null;
+  },
+  ctx: z.RefinementCtx,
+) {
+  if (
+    values.salaryMin != null &&
+    values.salaryMax != null &&
+    values.salaryMin > values.salaryMax
+  ) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["salaryMax"],
+      message:
+        "Maximum salary must be greater than or equal to minimum salary.",
+    });
+  }
+  const hasAmount = values.salaryMin != null || values.salaryMax != null;
+  if (hasAmount && !values.currency) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["currency"],
+      message: "Currency is required when a salary amount is specified.",
+    });
+  }
+  if (hasAmount && !values.salaryPeriod) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["salaryPeriod"],
+      message: "Pay period is required when a salary amount is specified.",
+    });
+  }
+}
+
+const jobFields = z.object({
   title: z.string().trim().min(1).max(200),
   description: z.string().trim().min(1).max(50_000),
   slug: z.string().trim().max(200).optional(),
@@ -105,7 +143,8 @@ export const jobCreateSchema = z.object({
   currency: z.string().trim().max(8).nullish(),
   salaryPeriod: z.enum(["annual", "monthly"]).nullish(),
 });
-export const jobUpdateSchema = jobCreateSchema.partial();
+export const jobCreateSchema = jobFields.superRefine(refineJobSalary);
+export const jobUpdateSchema = jobFields.partial().superRefine(refineJobSalary);
 
 export const candidateCreateSchema = z.object({
   firstName: z.string().trim().min(1).max(120),

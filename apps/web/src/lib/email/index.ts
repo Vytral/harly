@@ -9,6 +9,8 @@ import {
   type SendEmailResult,
 } from "@harly/emails";
 
+import { isDemoMode } from "@harly/config";
+
 import { getWorkspaceEmailConfig } from "./config";
 import { resolveSenderFromOverride } from "./sender-identity";
 import { createLogger } from "@/lib/logger";
@@ -29,6 +31,13 @@ export type SendEmailOptions = {
 
 /** Send a platform-level email (welcome, invitations...) using the env-configured sender. */
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
+  // Public demo: never send real outbound email (an anonymous visitor could
+  // otherwise trigger invites/notifications to arbitrary addresses).
+  if (isDemoMode()) {
+    log.info({ to: options.to, subject: options.subject }, "[email] Suppressed (demo mode)");
+    return;
+  }
+
   if (!emailSender) {
     return;
   }
@@ -69,6 +78,12 @@ export async function sendWorkspaceEmail(
   options: SendEmailOptions,
   actorUserId?: string | null,
 ): Promise<SendEmailResult | false> {
+  // Public demo: swallow all workspace-scoped outbound email.
+  if (isDemoMode()) {
+    log.info({ to: options.to, subject: options.subject }, "[email] Suppressed workspace send (demo mode)");
+    return false;
+  }
+
   const sender = await getWorkspaceEmailSender(workspaceId, actorUserId);
   if (!sender) {
     return false;

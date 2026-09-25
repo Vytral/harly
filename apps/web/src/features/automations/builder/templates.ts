@@ -36,7 +36,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       actions: [
         {
           type: "send_slack",
-          config: { message: "New application received for {{job.title}} — {{candidate.firstName}} {{candidate.lastName}}." },
+          config: { message: "New application received for {{job_title}} — {{candidate_full_name}}." },
           continueOnError: true,
         },
       ],
@@ -86,7 +86,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       enabled: true,
       trigger: { event: "application.stage_changed" },
       conditions: [
-        { type: "leaf", field: { kind: "trigger", path: "stageId" }, op: "eq", value: "phone-screen" },
+        { type: "leaf", field: { kind: "trigger", path: "toStageName" }, op: "eq", value: "Phone screen" },
       ],
       actions: [
         {
@@ -118,7 +118,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
         },
         {
           type: "send_slack",
-          config: { message: "⭐ High-fit candidate applied: {{candidate.firstName}} {{candidate.lastName}} (score {{ai.score}})." },
+          config: { message: "High-fit candidate applied: {{candidate_full_name}} for {{job_title}}." },
           continueOnError: true,
         },
       ],
@@ -178,7 +178,7 @@ export const WORKFLOW_TEMPLATES: WorkflowTemplate[] = [
       actions: [
         {
           type: "send_slack",
-          config: { message: "🎉 {{candidate.firstName}} {{candidate.lastName}} accepted — welcome aboard!" },
+          config: { message: "{{candidate_full_name}} accepted — welcome aboard!" },
           continueOnError: true,
         },
       ],

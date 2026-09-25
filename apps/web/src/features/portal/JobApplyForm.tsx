@@ -16,6 +16,10 @@ type Question = {
   minLength: number | null;
   placeholder: string | null;
   options: unknown;
+  description: string | null;
+  optionDescriptions: readonly string[];
+  agreeLabel: string | null;
+  disagreeLabel: string | null;
 };
 
 export function JobApplyForm({
@@ -207,7 +211,12 @@ export function JobApplyForm({
         <div className="rounded-xl border border-border bg-card p-5">
           <h2 className="mb-4 text-sm font-semibold text-foreground">Application questions</h2>
           <div className="space-y-4">
-            {questions.map((q) => (
+            {questions.map((q) => q.type === "info" ? (
+              <aside key={q.id} className="rounded-lg border border-border bg-muted/30 p-4">
+                <h3 className="text-sm font-semibold text-foreground">{q.label}</h3>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{q.description}</p>
+              </aside>
+            ) : (
               <div key={q.id} className="space-y-1.5">
                 <label
                   htmlFor={q.key}
@@ -216,6 +225,11 @@ export function JobApplyForm({
                   {q.label}
                   {q.required && <span className="ml-1 text-destructive">*</span>}
                 </label>
+                {q.description ? (
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">
+                    {q.description}
+                  </p>
+                ) : null}
                 {q.type === "textarea" ? (
                   <textarea
                     id={q.key}
@@ -232,6 +246,49 @@ export function JobApplyForm({
                       "transition-colors resize-none",
                     )}
                   />
+                ) : q.type === "consent" ? (
+                  <fieldset className="space-y-2">
+                    <legend className="sr-only">{q.label}</legend>
+                    {(["agree", "disagree"] as const).map((value) => (
+                      <label key={value} className="flex cursor-pointer items-center gap-3 rounded-lg border border-border px-3 py-2.5 text-sm">
+                        <input
+                          type="radio"
+                          name={q.key}
+                          value={value}
+                          checked={answers[q.key] === value}
+                          onChange={() => setAnswer(q.key, value)}
+                          required={q.required}
+                          className="accent-primary"
+                        />
+                        {value === "agree"
+                          ? q.agreeLabel ?? "I agree"
+                          : q.disagreeLabel ?? "I do not agree"}
+                      </label>
+                    ))}
+                  </fieldset>
+                ) : q.type === "select" && q.optionDescriptions.some(Boolean) ? (
+                  <fieldset className="space-y-2">
+                    <legend className="sr-only">{q.label}</legend>
+                    {(Array.isArray(q.options) ? q.options : []).filter((option): option is string => typeof option === "string").map((option, optionIndex) => (
+                      <label key={option} className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
+                        <input
+                          type="radio"
+                          name={q.key}
+                          value={option}
+                          checked={answers[q.key] === option}
+                          onChange={() => setAnswer(q.key, option)}
+                          required={q.required}
+                          className="mt-1 accent-primary"
+                        />
+                        <span>
+                          <span className="block text-sm font-medium text-foreground">{option}</span>
+                          {q.optionDescriptions[optionIndex] ? (
+                            <span className="mt-0.5 block text-sm text-muted-foreground">{q.optionDescriptions[optionIndex]}</span>
+                          ) : null}
+                        </span>
+                      </label>
+                    ))}
+                  </fieldset>
                 ) : q.type === "select" ? (
                   <select
                     id={q.key}

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, eq, gte, inArray, isNull, lt, lte, or, sql } from "drizzle-orm";
+import { and, count, eq, gt, isNotNull, isNull, lt, lte, or, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -10,6 +10,7 @@ import {
   workflowActionEffects,
   workflowRunSteps,
   workflowRuns,
+  workspaceAutomationPolicies,
   type WorkflowDefinition,
   type WorkflowRun,
 } from "@harly/db";
@@ -17,6 +18,15 @@ import {
 import { createLogger } from "@/lib/logger";
 import { getRolePermissions } from "@/features/workspaces/permissions-server";
 import { roleIsAllPowerful } from "@/features/workspaces/permissions";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
+import {
+  releaseUnstartedExternalActionReservation,
+  reserveExternalActionPolicy,
+  type ExternalActionReservationReceipt,
+  withWorkspaceAutomationEffectPermit,
+  workspaceAutomationsEnabled,
+} from "./runtime/operational-policy";
+import { recordAutomationGuardDecision } from "@/server/observability/metrics";
 
 import {
   evaluateConditions,
@@ -40,28 +50,96 @@ const RUN_LEASE_MS = 5 * 60_000;
 
 async function claimRun(runId: string, workerId: string): Promise<boolean> {
   const now = new Date();
-  const [claimed] = await db
-    .update(workflowRuns)
-    .set({
-      attemptCount: sql`${workflowRuns.attemptCount} + 1`,
-      lockedAt: now,
-      lockedBy: workerId,
-      heartbeatAt: now,
-      updatedAt: now,
-    })
-    .where(
-      and(
-        eq(workflowRuns.id, runId),
-        eq(workflowRuns.status, "running"),
-        lte(workflowRuns.nextAttemptAt, now),
-        or(
-          isNull(workflowRuns.lockedAt),
-          lt(workflowRuns.lockedAt, new Date(now.getTime() - RUN_LEASE_MS)),
+  return db.transaction(async (tx) => {
+    const [run] = await tx
+      .select({ workspaceId: workflowRuns.workspaceId })
+      .from(workflowRuns)
+      .where(eq(workflowRuns.id, runId))
+      .limit(1);
+    if (!run) return false;
+    await tx
+      .insert(workspaceAutomationPolicies)
+      .values({ workspaceId: run.workspaceId })
+      .onConflictDoNothing();
+    const [policy] = await tx
+      .select({ enabled: workspaceAutomationPolicies.enabled })
+      .from(workspaceAutomationPolicies)
+      .where(eq(workspaceAutomationPolicies.workspaceId, run.workspaceId))
+      .for("update");
+    const defer = async (code: "WORKSPACE_PAUSED" | "WORKSPACE_CONCURRENCY_LIMITED") => {
+      recordAutomationGuardDecision(code);
+      await tx
+        .update(workflowRuns)
+        .set({ nextAttemptAt: sql`clock_timestamp() + interval '1 minute'` })
+        .where(
+          and(
+            eq(workflowRuns.id, runId),
+            eq(workflowRuns.engineVersion, 1),
+            eq(workflowRuns.status, "running"),
+            or(
+              isNull(workflowRuns.lockedAt),
+              lt(workflowRuns.lockedAt, new Date(now.getTime() - RUN_LEASE_MS)),
+            ),
+          ),
+        );
+      return false;
+    };
+    if (!policy?.enabled) return defer("WORKSPACE_PAUSED");
+
+    const [active] = await tx
+      .select({ count: count() })
+      .from(workflowRuns)
+      .where(
+        and(
+          eq(workflowRuns.workspaceId, run.workspaceId),
+          or(
+            and(
+              eq(workflowRuns.engineVersion, 1),
+              eq(workflowRuns.status, "running"),
+              isNotNull(workflowRuns.lockedBy),
+              gt(workflowRuns.lockedAt, new Date(now.getTime() - RUN_LEASE_MS)),
+            ),
+            and(
+              eq(workflowRuns.engineVersion, 2),
+              eq(workflowRuns.logicalStatus, "running"),
+              isNotNull(workflowRuns.lockedBy),
+              gt(workflowRuns.leaseUntil, now),
+            ),
+          ),
         ),
-      ),
-    )
-    .returning({ id: workflowRuns.id });
-  return Boolean(claimed);
+      );
+    const [maxConcurrent] = await tx
+      .select({ maxConcurrentRuns: workspaceAutomationPolicies.maxConcurrentRuns })
+      .from(workspaceAutomationPolicies)
+      .where(eq(workspaceAutomationPolicies.workspaceId, run.workspaceId))
+      .limit(1);
+    if ((active?.count ?? 0) >= (maxConcurrent?.maxConcurrentRuns ?? 20))
+      return defer("WORKSPACE_CONCURRENCY_LIMITED");
+
+    const [claimed] = await tx
+      .update(workflowRuns)
+      .set({
+        attemptCount: sql`${workflowRuns.attemptCount} + 1`,
+        lockedAt: now,
+        lockedBy: workerId,
+        heartbeatAt: now,
+        updatedAt: now,
+      })
+      .where(
+        and(
+          eq(workflowRuns.id, runId),
+          eq(workflowRuns.engineVersion, 1),
+          eq(workflowRuns.status, "running"),
+          lte(workflowRuns.nextAttemptAt, now),
+          or(
+            isNull(workflowRuns.lockedAt),
+            lt(workflowRuns.lockedAt, new Date(now.getTime() - RUN_LEASE_MS)),
+          ),
+        ),
+      )
+      .returning({ id: workflowRuns.id });
+    return Boolean(claimed);
+  });
 }
 
 async function heartbeatRun(runId: string, workerId: string): Promise<void> {
@@ -118,7 +196,7 @@ function parseDefinitionJson(def: WorkflowDefinition | Record<string, unknown>):
  * Mirrors requirePermission but for an explicit actor (no HTTP session).
  * Returns { ok, reason } so the engine can record a clear error (trade-off T1).
  */
-async function actorHasPermission(
+export async function actorHasPermission(
   workspaceId: string,
   actorUserId: string,
   permission: string,
@@ -156,17 +234,25 @@ function extractTriggerIds(payload: Record<string, unknown>): {
 } {
   const app = payload.application as Record<string, unknown> | undefined;
   const candidate = payload.candidate as Record<string, unknown> | undefined;
+  const interview = payload.interview as Record<string, unknown> | undefined;
+  const job = payload.job as Record<string, unknown> | undefined;
+
   const applicationId =
     (typeof app?.id === "string" && app.id) ||
+    (typeof interview?.applicationId === "string" && interview.applicationId) ||
     (typeof payload.applicationId === "string" && payload.applicationId) ||
     null;
   const candidateId =
     (typeof candidate?.id === "string" && candidate.id) ||
+    (typeof app?.candidateId === "string" && app.candidateId) ||
+    (typeof interview?.candidateId === "string" && interview.candidateId) ||
     (typeof payload.candidateId === "string" && payload.candidateId) ||
     null;
   const jobId =
     (typeof payload.jobId === "string" && payload.jobId) ||
     (typeof app?.jobId === "string" && app.jobId) ||
+    (typeof interview?.jobId === "string" && interview.jobId) ||
+    (typeof job?.id === "string" && job.id) ||
     null;
   return { applicationId, candidateId, jobId };
 }
@@ -182,23 +268,6 @@ function containsAutomatedEvaluationCondition(conditions: Conditions): boolean {
 
 const SENSITIVE_LOG_KEYS = /secret|token|password|authorization|cookie|credential|body/i;
 const EXTERNAL_ACTION_TYPES = ["send_slack", "send_email", "http_request"] as const;
-
-async function externalActionBudgetExceeded(actionCtx: ActionContext, actionType: string): Promise<boolean> {
-  if (!actionCtx.workflowId || !EXTERNAL_ACTION_TYPES.includes(actionType as (typeof EXTERNAL_ACTION_TYPES)[number])) return false;
-  const [recent] = await db
-    .select({ total: count() })
-    .from(workflowRunSteps)
-    .innerJoin(workflowRuns, eq(workflowRuns.id, workflowRunSteps.runId))
-    .where(
-      and(
-        eq(workflowRuns.workspaceId, actionCtx.workspaceId),
-        eq(workflowRuns.workflowId, actionCtx.workflowId),
-        gte(workflowRunSteps.startedAt, new Date(Date.now() - 60_000)),
-        inArray(workflowRunSteps.actionType, [...EXTERNAL_ACTION_TYPES]),
-      ),
-    );
-  return Number(recent?.total ?? 0) >= (actionCtx.maxExternalActionsPerMinute ?? 30);
-}
 
 function sanitizeLogValue(value: unknown, depth = 0): unknown {
   if (typeof value === "string") return value.length > 1_000 ? `${value.slice(0, 1_000)}…` : value;
@@ -299,7 +368,16 @@ async function executeAction(
         startedAt,
         finishedAt: new Date(),
       })
-      .onConflictDoNothing();
+      .onConflictDoUpdate({
+        target: [workflowRunSteps.runId, workflowRunSteps.stepIndex],
+        set: {
+          status,
+          result: sanitizeLogValue(result) as Record<string, unknown>,
+          retryable: result.retryable ?? false,
+          errorCode: result.errorCode ?? null,
+          finishedAt: new Date(),
+        },
+      });
     await db
       .update(workflowActionEffects)
       .set({
@@ -343,20 +421,70 @@ async function executeAction(
     }
   }
 
-  if (await externalActionBudgetExceeded(actionCtx, action.type)) {
-    const result: ActionResult = {
-      success: false,
-      error: "External action rate limit exceeded; retrying later.",
-      errorCode: "external_rate_limited",
-      retryable: true,
-    };
-    await recordStep(result, "failed");
-    return result;
+  let externalReservation: ExternalActionReservationReceipt | null = null;
+  if (
+    actionCtx.workflowId &&
+    EXTERNAL_ACTION_TYPES.includes(action.type as (typeof EXTERNAL_ACTION_TYPES)[number])
+  ) {
+    const reservation = await reserveExternalActionPolicy({
+      workspaceId,
+      workflowId: actionCtx.workflowId,
+      runId,
+      database: actionCtx.database,
+    });
+    if (!reservation.ok) {
+      if (
+        reservation.code === "WORKSPACE_PAUSED" ||
+        reservation.code === "WORKSPACE_EXTERNAL_RATE_LIMITED"
+      ) {
+        return {
+          success: false,
+          error: "Workspace automation policy deferred this action.",
+          errorCode: reservation.code.toLowerCase(),
+          deferUntil:
+            reservation.deferUntil ?? new Date(Date.now() + 60_000),
+        };
+      }
+      const rateLimited = reservation.code === "EXTERNAL_RATE_LIMITED";
+      const result: ActionResult = {
+        success: false,
+        error: rateLimited
+          ? "External action rate limit exceeded; retrying later."
+          : `External action blocked by workflow policy (${reservation.code}).`,
+        errorCode: reservation.code.toLowerCase(),
+        retryable: rateLimited,
+      };
+      await recordStep(result, "failed");
+      return result;
+    }
+    externalReservation = reservation.receipt;
   }
 
   let result: ActionResult;
   try {
-    result = await handler.run(parsed.data, actionCtx);
+    const permit = await withWorkspaceAutomationEffectPermit({
+      workspaceId,
+      database: actionCtx.database,
+      effect: () => handler.run(parsed.data, actionCtx),
+    });
+    if (!permit.started) {
+      if (externalReservation && actionCtx.workflowId) {
+        await releaseUnstartedExternalActionReservation({
+          workspaceId,
+          workflowId: actionCtx.workflowId,
+          receipt: externalReservation,
+          database: actionCtx.database,
+        });
+      }
+      recordAutomationGuardDecision("WORKSPACE_PAUSED");
+      return {
+        success: false,
+        error: "Workspace automations are paused.",
+        errorCode: "workspace_paused",
+        deferUntil: new Date(Date.now() + 60_000),
+      };
+    }
+    result = permit.value;
   } catch (error) {
     log.error(error, "[automations] action threw", { actionType: action.type, index });
     result = {
@@ -386,6 +514,7 @@ export async function runWorkflow(
   runId: string,
   options: RunWorkflowOptions = {},
 ): Promise<RunOutcome> {
+  assertNotDemo();
   const { dryRun = false } = options;
   const workerId = options.workerId ?? `workflow-worker:${randomUUID()}`;
 
@@ -506,6 +635,27 @@ export async function runWorkflow(
     if (cancelRequested?.cancelRequestedAt) {
       return finishRun({ ...run, lockedBy: workerId }, "cancelled", conditionResult);
     }
+    if (!(await workspaceAutomationsEnabled(run.workspaceId))) {
+      recordAutomationGuardDecision("WORKSPACE_PAUSED");
+      const nextAttemptAt = new Date(Date.now() + 60_000);
+      const [deferred] = await db
+        .update(workflowRuns)
+        .set({
+          lockedAt: null,
+          lockedBy: null,
+          nextAttemptAt,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(workflowRuns.id, runId),
+            eq(workflowRuns.status, "running"),
+            eq(workflowRuns.lockedBy, workerId),
+          ),
+        )
+        .returning();
+      return { status: "running", run: deferred ?? run };
+    }
     await heartbeatRun(runId, workerId);
     const result = await executeAction(
       action,
@@ -514,6 +664,27 @@ export async function runWorkflow(
       run.workspaceId,
       { ...actionCtx, effectKey: `workflow:${runId}:step:${index}` },
     );
+    if (result.deferUntil) {
+      recordAutomationGuardDecision(result.errorCode ?? "WORKSPACE_PAUSED");
+      const nextAttemptAt = result.deferUntil;
+      const [deferred] = await db
+        .update(workflowRuns)
+        .set({
+          lockedAt: null,
+          lockedBy: null,
+          nextAttemptAt,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(workflowRuns.id, runId),
+            eq(workflowRuns.status, "running"),
+            eq(workflowRuns.lockedBy, workerId),
+          ),
+        )
+        .returning();
+      return { status: "running", run: deferred ?? run };
+    }
     if (!result.success && !action.continueOnError) {
       failedAction = result;
       break;
@@ -586,7 +757,7 @@ async function finishRun(
       .where(eq(workflowDefinitions.id, run.workflowId))
       .limit(1);
     const failures = (definitionState?.consecutiveFailureCount ?? 0) + 1;
-    const shouldPause = failures >= 5;
+    const shouldPause = failures >= (definitionState?.circuitBreakerThreshold ?? 5);
     const shouldOpenCircuit = failures >= (definitionState?.circuitBreakerThreshold ?? 5);
     const circuitOpenUntil = shouldOpenCircuit
       ? new Date(Date.now() + (definitionState?.circuitBreakerCooldownSeconds ?? 300) * 1000)
@@ -647,6 +818,7 @@ export async function createRun(input: {
   sourceEventId?: string | null;
   parentRunId?: string | null;
 }): Promise<string> {
+  assertNotDemo();
   const [run] = await db
     .insert(workflowRuns)
     .values({

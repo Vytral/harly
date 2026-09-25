@@ -25,14 +25,15 @@ import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { logAiCandidateDecision } from "@/lib/ai/governance";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
 import {
-  evaluateCandidateWithRules,
+  evaluateCandidateWithRulesAsync,
   RULES_EVALUATION_VERSION,
 } from "@/lib/evaluation/rules";
 import {
+  findReusableCandidateFacts,
   getPublishedRulesRubric,
   persistCandidateEvaluation,
 } from "@/features/evaluations/service";
-import { loadResumeText } from "@/lib/resume/load-resume-text";
+import { loadResumeDocument } from "@/lib/resume/load-resume-text";
 import { enforceRateLimit } from "@/server/api/ratelimit";
 import type { EvaluationMode } from "@/lib/evaluation/mode";
 import {
@@ -101,6 +102,8 @@ export async function generateAiEvaluationAction(input: {
       jobEducation: jobs.education,
       jobKeywords: jobs.keywords,
       evaluationMode: jobs.evaluationMode,
+      appliedAt: applications.appliedAt,
+      applicationCreatedAt: applications.createdAt,
     })
     .from(applications)
     .innerJoin(
@@ -134,7 +137,7 @@ export async function generateAiEvaluationAction(input: {
     ? (row.skills as string[])
     : [];
   const [resume, answerRows] = await Promise.all([
-    loadResumeText({ workspaceId, candidateId: row.candidateId }),
+    loadResumeDocument({ workspaceId, candidateId: row.candidateId }),
     db
       .select({
         question: applicationQuestions.label,
@@ -156,6 +159,11 @@ export async function generateAiEvaluationAction(input: {
       )
       .orderBy(applicationQuestions.order),
   ]);
+  const referenceDateValue = row.appliedAt ?? row.applicationCreatedAt;
+  const parsedReferenceDate = referenceDateValue ? new Date(referenceDateValue) : null;
+  const pinnedReferenceDate = parsedReferenceDate && !Number.isNaN(parsedReferenceDate.getTime())
+    ? parsedReferenceDate.toISOString()
+    : "1970-01-01T00:00:00.000Z";
 
   try {
     const scoreInput = {
@@ -180,17 +188,44 @@ export async function generateAiEvaluationAction(input: {
         skills: candidateSkills,
         experienceYears: row.experienceYears,
       },
+      // Pin current-role math to an immutable application event. A missing
+      // appliedAt must not silently fall through to wall-clock time.
+      referenceDate: pinnedReferenceDate,
+      sourceDocument: resume.document ?? undefined,
     };
-    const source = aiConfig ? "ai" : "rules";
-    const publishedRubric = aiConfig
+    // Rules-first: deterministic evaluation is always the primary path and the
+    // persisted authority for criterion assessments. When AI is configured we
+    // may overlay an AI scorecard, but AI failure/timeout/unavailability MUST
+    // fall back to rules — never fail the entire eval solely because AI failed.
+    const publishedRubric = await getPublishedRulesRubric(workspaceId, row.jobId);
+    const reusableFacts = !resume.text
       ? null
-      : await getPublishedRulesRubric(workspaceId, row.jobId);
-    const rulesEvaluation = aiConfig
-      ? null
-      : evaluateCandidateWithRules({ ...scoreInput, rubric: publishedRubric ?? undefined });
-    const result = aiConfig
-      ? await scoreCandidateWithAI(aiConfig, scoreInput)
-      : rulesEvaluation!.result;
+      : await findReusableCandidateFacts({
+          workspaceId,
+          applicationId: row.applicationId,
+          resumeText: resume.text,
+        });
+    const rulesEvaluation = await evaluateCandidateWithRulesAsync({
+      ...scoreInput,
+      rubric: publishedRubric ?? undefined,
+      candidateFacts: reusableFacts ?? undefined,
+    });
+
+    let source: "ai" | "rules" = "rules";
+    let result = rulesEvaluation.result;
+    if (aiConfig) {
+      try {
+        result = await scoreCandidateWithAI(aiConfig, scoreInput);
+        source = "ai";
+      } catch (aiError) {
+        console.warn(
+          "AI evaluation unavailable; falling back to deterministic rules",
+          aiError,
+        );
+        source = "rules";
+        result = rulesEvaluation.result;
+      }
+    }
 
     const persisted = await persistCandidateEvaluation({
       workspaceId,
@@ -198,19 +233,26 @@ export async function generateAiEvaluationAction(input: {
       applicationId: row.applicationId,
       jobId: row.jobId,
       source,
-      provider: aiConfig?.provider ?? "harly",
-      modelId: aiConfig?.modelId ?? RULES_EVALUATION_VERSION,
-      engine: aiConfig ? "provider-ai" : "harly-rules",
-      engineVersion: aiConfig
-        ? `${aiConfig.modelId}:${evaluationMode}`
-        : `${RULES_EVALUATION_VERSION}:${evaluationMode}`,
-      rubricVersion: rulesEvaluation?.rubric.version ?? "ai-generated",
-      rubricSnapshot: rulesEvaluation?.rubric ?? null,
+      provider: source === "ai" && aiConfig ? aiConfig.provider : "harly",
+      modelId: source === "ai" && aiConfig ? aiConfig.modelId : RULES_EVALUATION_VERSION,
+      engine: source === "ai" ? "provider-ai" : "harly-rules",
+      engineVersion:
+        source === "ai" && aiConfig
+          ? `${aiConfig.modelId}:${evaluationMode}`
+          : `${RULES_EVALUATION_VERSION}:${evaluationMode}`,
+      // Prefer rules as persisted authority for rubric / assessments / coverage.
+      rubricVersion: rulesEvaluation.rubric.version,
+      rubricSnapshot: rulesEvaluation.rubric,
       result,
-      criterionResults: rulesEvaluation?.criterionResults,
-      evidenceCoverage: rulesEvaluation?.evidenceCoverage,
-      confidence: rulesEvaluation?.confidence,
-      requiresHumanReview: rulesEvaluation?.requiresHumanReview ?? true,
+      criterionResults: rulesEvaluation.criterionResults,
+      candidateFactsSnapshot: rulesEvaluation.candidateFacts,
+      skillProfilesSnapshot: rulesEvaluation.skillProfiles,
+      evaluationMetadataSnapshot: rulesEvaluation.metadata,
+      criterionDetailsSnapshot: rulesEvaluation.criterionAssessments,
+      impactHighlightsSnapshot: rulesEvaluation.impactHighlights,
+      evidenceCoverage: rulesEvaluation.evidenceCoverage,
+      confidence: rulesEvaluation.confidence,
+      requiresHumanReview: rulesEvaluation.requiresHumanReview || source === "ai",
       usedResume: resume.text !== null,
       generatedById: context.user.id,
       inputFingerprintSource: scoreInput,
@@ -231,7 +273,7 @@ export async function generateAiEvaluationAction(input: {
       },
     });
 
-    if (aiConfig) await logAiCandidateDecision({
+    if (source === "ai" && aiConfig) await logAiCandidateDecision({
       workspaceId,
       candidateId: row.candidateId,
       applicationId: row.applicationId,

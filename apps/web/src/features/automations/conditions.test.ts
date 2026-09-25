@@ -278,4 +278,41 @@ describe("conditions evaluator — trigger filter", () => {
     expect(matchesTriggerFilter({ jobId: "j1", source: "LinkedIn" }, { jobId: "j1", source: "LinkedIn" })).toBe(true);
     expect(matchesTriggerFilter({ jobId: "j1", source: "LinkedIn" }, { jobId: "j1", source: "Indeed" })).toBe(false);
   });
+
+  it("reads nested application.jobId when the filter is flat", () => {
+    expect(
+      matchesTriggerFilter(
+        { jobId: "job-1" },
+        { application: { id: "app-1", jobId: "job-1" } },
+      ),
+    ).toBe(true);
+    expect(
+      matchesTriggerFilter(
+        { jobId: "job-1" },
+        { application: { id: "app-1", jobId: "job-2" } },
+      ),
+    ).toBe(false);
+  });
+
+  it("matches toStageId from a stage_changed payload", () => {
+    expect(
+      matchesTriggerFilter(
+        { toStageId: "stage-b" },
+        { application: { id: "app-1" }, fromStageId: "stage-a", toStageId: "stage-b" },
+      ),
+    ).toBe(true);
+  });
+
+  it("matches toStageName case-insensitively", () => {
+    expect(
+      matchesTriggerFilter(
+        { toStageName: "Technical Interview" },
+        { toStageName: "technical interview" },
+      ),
+    ).toBe(true);
+  });
+
+  it("ignores empty filter values", () => {
+    expect(matchesTriggerFilter({ jobId: "", toStageId: "stage-b" }, { toStageId: "stage-b" })).toBe(true);
+  });
 });

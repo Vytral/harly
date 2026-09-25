@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PdfFieldFiller, type FillableField } from "@/features/documents/PdfFieldFiller";
 import { SignaturePad } from "@/features/documents/SignaturePad";
+import type { VectorSignatureData } from "@/features/documents/signature-vector";
 
 const emptyPng =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
@@ -18,10 +19,13 @@ export function NativeSigningPage({ token }: { token: string }) {
   const [meta, setMeta] = useState<{
     documentName: string;
     recipientName: string;
+    routingOrder: number;
+    signerCount: number;
     securityMode: string;
     requiresOtp: boolean;
   } | null>(null);
   const [signature, setSignature] = useState("");
+  const [vectorSignature, setVectorSignature] = useState<VectorSignatureData | null>(null);
   const [consent, setConsent] = useState(false);
   const [challengeId, setChallengeId] = useState("");
   const [otp, setOtp] = useState("");
@@ -87,7 +91,7 @@ export function NativeSigningPage({ token }: { token: string }) {
 
   const requiredTextFieldsFilled =
     fields?.filter((f) => f.type === "text" && f.required).every((f) => (textValues[f.id] ?? "").trim().length > 0) ?? false;
-  const canSubmit = Boolean(signature) && consent && fields !== null && fields.length > 0 && requiredTextFieldsFilled;
+  const canSubmit = Boolean(vectorSignature?.compressed) && consent && fields !== null && fields.length > 0 && requiredTextFieldsFilled;
 
   async function submit() {
     if (!canSubmit) {
@@ -100,7 +104,7 @@ export function NativeSigningPage({ token }: { token: string }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          signaturePngBase64: signature,
+          signatureVectorBase64: vectorSignature?.compressed,
           textValues,
           consentAt: new Date().toISOString(),
         }),
@@ -157,18 +161,23 @@ export function NativeSigningPage({ token }: { token: string }) {
     );
 
   return (
-    <main className="mx-auto max-w-7xl space-y-6 p-4 md:p-8">
-      <header className="flex flex-col items-center border-b border-border/70 pb-5 text-center duration-500 animate-in fade-in slide-in-from-bottom-1">
-        <div className="mb-1.5 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-primary">
-          <PenLine className="size-3.5" />
-          Harly Signature
+    <main className="mx-auto max-w-[1600px] space-y-5 p-4 md:p-6">
+      <header className="flex items-center gap-3 border-b border-border/70 pb-3 duration-500 animate-in fade-in slide-in-from-top-1">
+        <div className="flex items-center gap-2">
+          <PenLine className="size-4 shrink-0 text-primary" />
+          <h1 className="shrink-0 font-display text-base font-semibold tracking-tight">
+            Review and sign
+          </h1>
+          <span className="text-muted-foreground/50" aria-hidden>
+            /
+          </span>
+          <p className="min-w-0 truncate text-sm text-muted-foreground">
+            {meta.documentName}
+          </p>
         </div>
-        <h1 className="font-display text-2xl font-semibold tracking-tight">
-          Review and sign
-        </h1>
-        <p className="mx-auto mt-1 max-w-2xl truncate text-sm text-muted-foreground">
-          {meta.documentName} · for {meta.recipientName}
-        </p>
+        <span className="ml-auto hidden shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground sm:block">
+          Signer {meta.routingOrder} of {meta.signerCount}
+        </span>
       </header>
 
       {meta.requiresOtp && !verified ? (
@@ -197,14 +206,15 @@ export function NativeSigningPage({ token }: { token: string }) {
           )}
         </section>
       ) : (
-        <div className="grid gap-5 duration-500 animate-in fade-in slide-in-from-bottom-2 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="min-h-0 rounded-2xl border border-border/70 bg-muted/30 p-3 shadow-xs sm:p-5">
+        <div className="grid gap-5 duration-500 animate-in fade-in slide-in-from-bottom-2 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="min-h-0 rounded-2xl border border-border/70 bg-muted/30 p-3 shadow-xs sm:p-4">
             <PdfFieldFiller
               fileUrl={`/api/native-sign/${token}/document`}
               fields={fields ?? []}
               signatureDataUrl={signature || emptyPng}
               hasSignature={Boolean(signature)}
               textValues={textValues}
+              maxPageWidth={960}
               onTextValueChange={(fieldId, value) =>
                 setTextValues((prev) => ({ ...prev, [fieldId]: value }))
               }
@@ -218,7 +228,7 @@ export function NativeSigningPage({ token }: { token: string }) {
                 field on the document.
               </p>
             </div>
-            <SignaturePad value={signature} onChange={setSignature} />
+            <SignaturePad onChange={setSignature} onVectorChange={setVectorSignature} />
             <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/20 p-3 text-sm">
               <Checkbox
                 checked={consent}

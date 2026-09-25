@@ -38,8 +38,10 @@ import {
 } from "@/features/workspaces/context";
 import {
   assignRolePrivilegeError,
+  manageMemberRolePrivilegeError,
   requirePermission,
 } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import {
   boardBrandingSchema,
   boardStyles,
@@ -512,6 +514,7 @@ export async function inviteWorkspaceMemberAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("members:invite");
     const parsed = inviteMemberSchema.safeParse({
       email: formData.get("email"),
@@ -588,6 +591,7 @@ export async function inviteWorkspaceMembersAction(
   formData: FormData,
 ): Promise<BulkInviteResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("members:invite");
 
     const raw = formData.get("invites");
@@ -654,6 +658,7 @@ export async function updateWorkspaceMemberRoleAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("members:edit");
     const parsed = updateMemberRoleSchema.safeParse({
       memberId: formData.get("memberId"),
@@ -682,6 +687,7 @@ export async function updateWorkspaceMemberRoleAction(
     const [targetMember] = await db
       .select({
         id: authMembers.id,
+        userId: authMembers.userId,
         role: authMembers.role,
       })
       .from(authMembers)
@@ -697,16 +703,13 @@ export async function updateWorkspaceMemberRoleAction(
       return { success: false, error: "Member not found." };
     }
 
-    // Only an owner may modify another owner's role , stops a non-owner from
-    // demoting or hijacking the workspace's keyholders.
-    if (
-      isOwnerRole(targetMember.role) &&
-      !isOwnerRole(context.roleKey)
-    ) {
-      return {
-        success: false,
-        error: "Only an owner can change an owner's role.",
-      };
+    const targetPrivilegeError = await manageMemberRolePrivilegeError(
+      context,
+      targetMember.role,
+      targetMember.userId,
+    );
+    if (targetPrivilegeError) {
+      return { success: false, error: targetPrivilegeError };
     }
 
     // Consistent with the bulk action: you can't strip your own Owner role.
@@ -773,6 +776,7 @@ export async function updateMemberRolesAction(input: {
   changes: { memberId: string; role: string }[];
 }): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("members:edit");
     const parsed = bulkRolesSchema.safeParse(input);
     if (!parsed.success) {
@@ -794,7 +798,7 @@ export async function updateMemberRolesAction(input: {
 
     const ids = parsed.data.changes.map((c) => c.memberId);
     const targets = await db
-      .select({ id: authMembers.id, role: authMembers.role })
+      .select({ id: authMembers.id, userId: authMembers.userId, role: authMembers.role })
       .from(authMembers)
       .where(
         and(
@@ -812,12 +816,15 @@ export async function updateMemberRolesAction(input: {
       }
       const wasOwner = target.role === "owner";
       const willOwner = change.role === "owner";
-      // Only an owner may modify another owner's role.
-      if (wasOwner && !isOwnerRole(context.roleKey)) {
-        return {
-          success: false,
-          error: "Only an owner can change an owner's role.",
-        };
+      if (target.id !== context.membership.id) {
+        const targetPrivilegeError = await manageMemberRolePrivilegeError(
+          context,
+          target.role,
+          target.userId,
+        );
+        if (targetPrivilegeError) {
+          return { success: false, error: targetPrivilegeError };
+        }
       }
       if (target.id === context.membership.id && wasOwner && !willOwner) {
         return { success: false, error: "You can't remove your own Owner role." };
@@ -860,11 +867,14 @@ export async function updateMemberAccessAction(input: {
   status: "active" | "inactive" | "suspended";
 }): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("members:edit");
     const parsed = updateMemberAccessSchema.safeParse(input);
     if (!parsed.success) return { success: false, error: "Invalid member access profile." };
     const [target] = await db.select({ id: authMembers.id, userId: authMembers.userId, role: authMembers.role }).from(authMembers).where(and(eq(authMembers.id, parsed.data.memberId), eq(authMembers.organizationId, context.organization.id))).limit(1);
     if (!target) return { success: false, error: "Member not found." };
+    const targetPrivilegeError = await manageMemberRolePrivilegeError(context, target.role, target.userId);
+    if (targetPrivilegeError) return { success: false, error: targetPrivilegeError };
     if (target.userId === context.user.id && parsed.data.status !== "active") return { success: false, error: "You cannot deactivate your own membership." };
     if (isOwnerRole(target.role) && parsed.data.status !== "active" && !isOwnerRole(context.roleKey)) return { success: false, error: "Only an owner can suspend an owner." };
     const managerMemberId = parsed.data.managerMemberId ?? null;
@@ -889,6 +899,7 @@ export async function removeWorkspaceMemberAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("members:remove");
     const parsed = removeMemberSchema.safeParse({
       memberId: formData.get("memberId"),
@@ -915,6 +926,15 @@ export async function removeWorkspaceMemberAction(
 
     if (!targetMember) {
       return { success: false, error: "Member not found." };
+    }
+
+    const targetPrivilegeError = await manageMemberRolePrivilegeError(
+      context,
+      targetMember.role,
+      targetMember.userId,
+    );
+    if (targetPrivilegeError) {
+      return { success: false, error: targetPrivilegeError };
     }
 
     if (targetMember.userId === context.user.id) {
@@ -960,6 +980,7 @@ export async function resendWorkspaceInvitationAction(
   invitationId: string,
 ): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("members:invite");
     const appUrl = getHarlyPublicOrigin();
 
@@ -1027,6 +1048,7 @@ export async function cancelWorkspaceInvitationAction(
   invitationId: string,
 ): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("members:invite");
 
     await db
@@ -1064,6 +1086,7 @@ export async function acceptWorkspaceInvitationAction(
   invitationId: string,
 ): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const requestHeaders = await headers();
     const session = await auth.api.getSession({ headers: requestHeaders });
 
@@ -1112,27 +1135,31 @@ export async function acceptWorkspaceInvitationAction(
         return { success: false, error: "This invitation points to a role that no longer exists." };
       }
 
-      const memberId = crypto.randomUUID();
-      await tx
-        .insert(authMembers)
-        .values({
-          id: memberId,
-          organizationId: targetInvitation.organizationId,
-          userId: session.user.id,
-          role,
-          createdAt: new Date(),
-        })
-        .onConflictDoNothing();
-
-      await tx
-        .update(authMembers)
-        .set({ role })
+      // Already a member: keep the current role. Role changes for existing
+      // members belong to the members UI (last-owner / self-demote guards),
+      // not to invitation accept — still consume the invitation and land in
+      // the workspace so the flow completes.
+      const [existingMembership] = await tx
+        .select({ id: authMembers.id })
+        .from(authMembers)
         .where(
           and(
             eq(authMembers.organizationId, targetInvitation.organizationId),
             eq(authMembers.userId, session.user.id),
           ),
-        );
+        )
+        .limit(1);
+
+      const memberId = existingMembership?.id ?? crypto.randomUUID();
+      if (!existingMembership) {
+        await tx.insert(authMembers).values({
+          id: memberId,
+          organizationId: targetInvitation.organizationId,
+          userId: session.user.id,
+          role,
+          createdAt: new Date(),
+        });
+      }
 
       const [acceptedMember] = await tx
         .select({ id: authMembers.id })
@@ -1186,6 +1213,7 @@ export async function acceptWorkspaceInvitationAction(
 
 export async function leaveWorkspaceAction(): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const context = await getWorkspaceContext();
 
     if (
@@ -1259,6 +1287,7 @@ export async function enableInviteLinkAction(
   formData: FormData,
 ): Promise<InviteLinkResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("invite_links:manage");
 
     const parsed = inviteLinkRoleSchema.safeParse({ role: formData.get("role") });
@@ -1320,6 +1349,7 @@ export async function enableInviteLinkAction(
 /** Disable the shareable link (keeps the token so re-enabling reuses it). */
 export async function disableInviteLinkAction(): Promise<InviteLinkResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("invite_links:manage");
     await db
       .insert(workspaceSettings)
@@ -1342,6 +1372,7 @@ export async function disableInviteLinkAction(): Promise<InviteLinkResult> {
 /** Mint a fresh token, invalidating all previously shared URLs. */
 export async function rotateInviteLinkAction(): Promise<InviteLinkResult> {
   try {
+    assertNotDemo();
     const context = await requirePermission("invite_links:manage");
     const token = crypto.randomBytes(18).toString("base64url");
     await db
@@ -1372,6 +1403,7 @@ export async function joinViaInviteLinkAction(
   token: string,
 ): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const requestHeaders = await headers();
     const session = await auth.api.getSession({ headers: requestHeaders });
     if (!session) {
@@ -1497,6 +1529,13 @@ async function requireOwnerActingOnMember(
 
   if (!target) return { ok: false, error: "Member not found." };
 
+  const targetPrivilegeError = await manageMemberRolePrivilegeError(
+    context,
+    target.role,
+    target.userId,
+  );
+  if (targetPrivilegeError) return { ok: false, error: targetPrivilegeError };
+
   return {
     ok: true,
     workspaceId: context.organization.id,
@@ -1511,6 +1550,7 @@ export async function setMemberPasswordAction(input: {
   password: string;
 }): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const parsed = setMemberPasswordSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -1597,6 +1637,7 @@ export async function editMemberProfileAction(input: {
   email: string;
 }): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const parsed = editMemberProfileSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -1700,6 +1741,7 @@ export async function createMemberAction(input: {
   jobTitle?: string;
 }): Promise<ActionResult> {
   try {
+    assertNotDemo();
     const context = await getWorkspaceContext();
     if (!isOwnerRole(context.roleKey)) {
       return { success: false, error: "Only the workspace owner can do this." };

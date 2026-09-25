@@ -13,6 +13,7 @@ vi.mock("drizzle-orm", () => ({
   and: vi.fn(),
   eq: vi.fn(),
   or: vi.fn(),
+  sql: vi.fn(),
 }));
 
 vi.mock("@harly/db", () => ({

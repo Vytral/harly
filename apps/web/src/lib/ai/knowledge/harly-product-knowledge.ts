@@ -168,7 +168,7 @@ export const HARLY_PRODUCT_KNOWLEDGE: readonly HarlyKnowledgeEntry[] = [
     updatedAt: "2026-07-31",
     keywords: ["api", "rest", "openapi", "webhook", "automation", "events"],
     content:
-      "Harly exposes a versioned REST API, API keys, OpenAPI output, and outbound webhooks for supported automation and integrations. Harly AI may describe or use an action only when the corresponding server tool and permission exist; documentation alone never authorizes an external operation.",
+      "Harly exposes a versioned REST API, API keys, OpenAPI output, and outbound webhooks for supported recruitment integrations. The legacy public REST automations endpoint (/api/v1/automations) is withdrawn; automation workflows are authored and managed securely via the workspace dashboard and Harly AI workflow proposals. Harly AI may describe or use an action only when the corresponding server tool and permission exist; documentation alone never authorizes an external operation.",
   },
   {
     id: "harly-deployment-and-operations",
@@ -258,6 +258,24 @@ export const HARLY_PRODUCT_KNOWLEDGE: readonly HarlyKnowledgeEntry[] = [
       "Candidate reviews summarize evidence from the candidate profile, application, resume, scorecards, notes, and AI evaluation when present. Harly can provide a recommendation and missing evidence, but the human makes the final hiring decision. Protected characteristics must not be used as evaluation criteria.",
   },
   {
+    id: "harly-automations-ai-actions",
+    title: "AI evaluation and actions in automations",
+    kind: "workflow",
+    version: "1.0",
+    updatedAt: "2026-09-16",
+    keywords: [
+      "automations",
+      "ai_score",
+      "evaluation",
+      "workflow",
+      "scoring",
+      "score",
+      "builder",
+    ],
+    content:
+      "Automations and the workflow builder fully support AI candidate evaluation via the ai_score action. Workflows triggered by application events can execute ai_score to evaluate applicant resume and answers against job criteria, persisting an AI match score and recommendation. Downstream condition nodes can branch on the evaluation score (e.g. IF ai.score >= 80 or ai.score < 50) or other criteria to advance stages, set status, schedule interviews, send emails, or queue durable candidate-data erasure. Harly AI can propose these complete graphs, resolve workspace resources, preserve delay/wait/approval outcomes, and simulate branch coverage before a revision-checked owner applies the proposal. Erasure is durable worker work subject to permissions, retries, retention rules, and legal holds; chat never silently applies it.",
+  },
+  {
     id: "integrations-and-secrets",
     title: "Integration status and secrets",
     kind: "integration",
@@ -322,6 +340,7 @@ export function getHarlyCoreProductContext(): string {
       "harly-integrations-scope",
       "harly-security-and-governance",
       "harly-roadmap-boundaries",
+      "harly-automations-ai-actions",
     ].includes(entry.id),
   )
     .map((entry) => `${entry.title}: ${entry.content}`)

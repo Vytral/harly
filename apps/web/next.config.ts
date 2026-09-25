@@ -20,14 +20,11 @@ const nextConfig: NextConfig = {
           // Some constrained runners can leave the isolated worker waiting
           // indefinitely. CI keeps the faster worker by default, while this
           // escape hatch makes the build recoverable for those environments.
-          webpackBuildWorker: process.env.HARLY_DISABLE_WEBPACK_BUILD_WORKER !== "1",
+          webpackBuildWorker:
+            process.env.HARLY_DISABLE_WEBPACK_BUILD_WORKER !== "1",
           webpackMemoryOptimizations: true,
         }
       : {
-          // Keep Turbopack's graph bounded on small machines. The
-          // `turbopackMemoryLimit` key was removed in Next 16.3; the
-          // supported equivalent is automatic memory eviction.
-          turbopackMemoryEviction: "auto",
           // Keep development predictable across machines. Turbopack's
           // persistent cache can otherwise grow to several GB under .next/dev.
           turbopackFileSystemCacheForDev: false,
@@ -42,6 +39,39 @@ const nextConfig: NextConfig = {
     "@harly/config",
   ],
   serverExternalPackages: ["postgres", "unpdf"],
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+          ...(process.env.NODE_ENV === "production"
+            ? [
+                {
+                  key: "Strict-Transport-Security",
+                  value: "max-age=31536000; includeSubDomains",
+                },
+              ]
+            : []),
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

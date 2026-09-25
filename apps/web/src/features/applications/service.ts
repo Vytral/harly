@@ -5,6 +5,7 @@ import { and, asc, desc, eq, exists, getTableColumns, isNull, lt, or, sql } from
 import { ApiError, type Cursor } from "@harly/api";
 import {
   db,
+  activityEvents,
   applications,
   applicationStageHistory,
   candidatePortalNotifications,
@@ -51,15 +52,17 @@ async function notifyApplicationStatusChange(input: {
   workspaceId: string;
   application: Application;
   status: "hired" | "rejected";
+  database?: typeof db;
 }) {
-  const [settings] = await db
+  const database = input.database ?? db;
+  const [settings] = await database
     .select({
       showApplicationStatus: workspaceSettings.portalShowApplicationStatus,
     })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, input.workspaceId))
     .limit(1);
-  const [details] = await db
+  const [details] = await database
     .select({
       email: candidates.email,
       firstName: candidates.firstName,
@@ -87,7 +90,7 @@ async function notifyApplicationStatusChange(input: {
   if (!details) return;
 
   if (settings?.showApplicationStatus !== false) {
-    await db.insert(candidatePortalNotifications).values({
+    await database.insert(candidatePortalNotifications).values({
       workspaceId: input.workspaceId,
       candidateId: input.application.candidateId,
       type:
@@ -117,8 +120,11 @@ async function notifyApplicationStatusChange(input: {
         workspaceName: details.workspaceName,
         type: "rejected",
       },
+      undefined,
+      undefined,
+      input.database,
     );
-    await processEmailOutbox({ ids: [id], workspaceId: input.workspaceId });
+    await processEmailOutbox({ ids: [id], workspaceId: input.workspaceId, database: input.database });
   }
 }
 
@@ -180,8 +186,10 @@ export async function listApplicationsForApi(input: {
 export async function getApplicationForApi(input: {
   workspaceId: string;
   applicationId: string;
+  database?: typeof db;
 }): Promise<Application & { updatedAtVersion: string }> {
-  const [application] = await db
+  const database = input.database ?? db;
+  const [application] = await database
     .select({
       ...getTableColumns(applications),
       updatedAtVersion: sql<string>`${applications.updatedAt}::text`,
@@ -192,7 +200,7 @@ export async function getApplicationForApi(input: {
         eq(applications.id, input.applicationId),
         eq(applications.workspaceId, input.workspaceId),
         exists(
-          db
+          database
             .select({ id: jobs.id })
             .from(jobs)
             .where(
@@ -204,7 +212,7 @@ export async function getApplicationForApi(input: {
             ),
         ),
         exists(
-          db
+          database
             .select({ id: candidates.id })
             .from(candidates)
             .where(
@@ -341,7 +349,8 @@ export async function createApplicationForApi(input: {
   await publishPersistedDomainEvents([event]);
   await emitWebhookEvent(workspaceId, "application.created", {
     application: serializeApplication(application),
-  }, { skipDomainEvent: true });
+    eventId: event.eventId,
+  }, { skipDomainEvent: true, eventId: event.eventId });
   return application;
 }
 
@@ -437,18 +446,21 @@ export async function moveApplicationStageForApi(input: {
   actorId?: string;
   retryOnConflict?: boolean;
   automationRunId?: string;
+  database?: typeof db;
 }): Promise<Application> {
+  const database = input.database ?? db;
   const attemptMove = async (): Promise<Application> => {
     const application = await getApplicationForApi({
       workspaceId: input.workspaceId,
       applicationId: input.applicationId,
+      database,
     });
 
     if (application.currentStageId === input.toStageId) {
       return application;
     }
 
-    const [stage] = await db
+    const [stage] = await database
       .select({ id: jobStages.id, name: jobStages.name })
       .from(jobStages)
       .where(
@@ -465,7 +477,7 @@ export async function moveApplicationStageForApi(input: {
 
     const fromStageId = application.currentStageId;
 
-    const { updated, persistedEvents } = await db.transaction(async (tx) => {
+    const { updated, persistedEvents } = await database.transaction(async (tx) => {
       const nextStatus = statusForStageName(stage.name);
       const [next] = await tx
         .select({
@@ -517,10 +529,12 @@ export async function moveApplicationStageForApi(input: {
           actorId: input.actorId,
           aggregateType: "application",
           aggregateId: input.applicationId,
+          automationParentRunId: input.automationRunId,
           payload: {
             application: serializeApplication(updatedApplication),
             fromStageId,
             toStageId: input.toStageId,
+            toStageName: stage.name,
             status: nextStatus,
           },
         }),
@@ -536,6 +550,7 @@ export async function moveApplicationStageForApi(input: {
             actorId: input.actorId,
             aggregateType: "application",
             aggregateId: input.applicationId,
+            automationParentRunId: input.automationRunId,
             payload: { application: serializeApplication(updatedApplication) },
           }),
         );
@@ -546,20 +561,24 @@ export async function moveApplicationStageForApi(input: {
       };
     });
 
-    await publishPersistedDomainEvents(persistedEvents);
+    await publishPersistedDomainEvents(persistedEvents, database);
     await emitWebhookEvent(input.workspaceId, "application.stage_changed", {
       application: serializeApplication(updated),
       fromStageId,
       toStageId: input.toStageId,
+      toStageName: stage.name,
       status: updated.status,
-    }, { actorId: input.actorId, skipDomainEvent: true, parentRunId: input.automationRunId });
+      eventId: persistedEvents[0]?.eventId,
+    }, { actorId: input.actorId, skipDomainEvent: true, eventId: persistedEvents[0]?.eventId, parentRunId: input.automationRunId, database });
     if (
       application.status !== updated.status &&
       (updated.status === "hired" || updated.status === "rejected")
     ) {
+      const outcomeEvent = persistedEvents[1];
       await emitWebhookEvent(input.workspaceId, `application.${updated.status}`, {
         application: serializeApplication(updated),
-      }, { actorId: input.actorId, skipDomainEvent: true, parentRunId: input.automationRunId });
+        eventId: outcomeEvent?.eventId,
+      }, { actorId: input.actorId, skipDomainEvent: true, eventId: outcomeEvent?.eventId, parentRunId: input.automationRunId, database });
     }
 
     return updated;
@@ -585,15 +604,18 @@ async function setApplicationStatus(
     workspaceId: string;
     applicationId: string;
     actorId?: string;
+    automationRunId?: string;
     retryOnConflict?: boolean;
+    database?: typeof db;
   },
   status: "hired" | "rejected",
   event: "application.hired" | "application.rejected",
 ): Promise<Application> {
+  const database = input.database ?? db;
   const attemptStatus = async (): Promise<Application> => {
-    const application = await getApplicationForApi(input);
+    const application = await getApplicationForApi({ ...input, database });
     const terminalStageName = status === "hired" ? "Hired" : "Rejected";
-    const [terminalStage] = await db
+    const [terminalStage] = await database
       .select({ id: jobStages.id })
       .from(jobStages)
       .where(
@@ -615,7 +637,7 @@ async function setApplicationStatus(
       return application;
     }
 
-    const { updated, persistedEvent } = await db.transaction(async (tx) => {
+    const { updated, persistedEvent } = await database.transaction(async (tx) => {
       const [next] = await tx
         .update(applications)
         .set({
@@ -650,20 +672,23 @@ async function setApplicationStatus(
           actorId: input.actorId,
           aggregateType: "application",
           aggregateId: input.applicationId,
+          automationParentRunId: input.automationRunId,
           payload: { application: serializeApplication(next) },
         }),
       };
     });
 
-    await publishPersistedDomainEvents([persistedEvent]);
+    await publishPersistedDomainEvents([persistedEvent], database);
     await emitWebhookEvent(input.workspaceId, event, {
       application: serializeApplication(updated),
-    }, { actorId: input.actorId, skipDomainEvent: true });
+      eventId: persistedEvent.eventId,
+    }, { actorId: input.actorId, skipDomainEvent: true, eventId: persistedEvent.eventId, parentRunId: input.automationRunId, database });
     if (application.status !== status) {
       await notifyApplicationStatusChange({
         workspaceId: input.workspaceId,
         application: updated,
         status,
+        database,
       });
     }
     return updated;
@@ -688,6 +713,8 @@ export function hireApplicationForApi(input: {
   workspaceId: string;
   applicationId: string;
   actorId?: string;
+  automationRunId?: string;
+  database?: typeof db;
 }): Promise<Application> {
   return setApplicationStatus(input, "hired", "application.hired");
 }
@@ -696,6 +723,110 @@ export function rejectApplicationForApi(input: {
   workspaceId: string;
   applicationId: string;
   actorId?: string;
+  automationRunId?: string;
+  database?: typeof db;
 }): Promise<Application> {
   return setApplicationStatus(input, "rejected", "application.rejected");
+}
+
+/**
+ * Change a non-terminal application status from a workflow.
+ *
+ * The mutation, activity trail, and durable domain event share one transaction
+ * so a successful automation can never leave downstream workflows/webhooks
+ * unaware of the status change. Repeating the same command is idempotent.
+ */
+export async function setApplicationStatusForWorkflow(input: {
+  workspaceId: string;
+  applicationId: string;
+  status: "active" | "withdrawn";
+  actorId?: string;
+  automationRunId?: string;
+  retryOnConflict?: boolean;
+  database?: typeof db;
+}): Promise<Application> {
+  const database = input.database ?? db;
+  const attemptStatus = async (): Promise<Application> => {
+    const application = await getApplicationForApi({ ...input, database });
+    if (application.status === input.status) return application;
+
+    const { updated, persistedEvent } = await database.transaction(async (tx) => {
+      const [next] = await tx
+        .update(applications)
+        .set({ status: input.status, updatedAt: new Date() })
+        .where(
+          and(
+            eq(applications.id, input.applicationId),
+            eq(applications.workspaceId, input.workspaceId),
+            sql`${applications.updatedAt} = ${application.updatedAtVersion}::timestamptz`,
+          ),
+        )
+        .returning();
+      if (!next) throw ApiError.conflict("Application changed; retry request.");
+
+      await tx.insert(activityEvents).values({
+        workspaceId: input.workspaceId,
+        actorId: input.actorId,
+        entityType: "application",
+        entityId: input.applicationId,
+        type: "application.status_changed",
+        metadata: {
+          fromStatus: application.status,
+          toStatus: input.status,
+          source: "workflow",
+        },
+      });
+
+      return {
+        updated: next,
+        persistedEvent: await persistDomainEvent(tx, {
+          name: "application.status_changed",
+          workspaceId: input.workspaceId,
+          actorId: input.actorId,
+          aggregateType: "application",
+          aggregateId: input.applicationId,
+          automationParentRunId: input.automationRunId,
+          payload: {
+            application: serializeApplication(next),
+            fromStatus: application.status,
+            toStatus: input.status,
+          },
+        }),
+      };
+    });
+
+    await publishPersistedDomainEvents([persistedEvent], database);
+    await emitWebhookEvent(
+      input.workspaceId,
+      "application.status_changed",
+      {
+        application: serializeApplication(updated),
+        fromStatus: application.status,
+        toStatus: input.status,
+        eventId: persistedEvent.eventId,
+      },
+      {
+        actorId: input.actorId,
+        skipDomainEvent: true,
+        eventId: persistedEvent.eventId,
+        parentRunId: input.automationRunId,
+        database,
+      },
+    );
+    return updated;
+  };
+
+  return input.retryOnConflict
+    ? withConcurrencyRetry(attemptStatus, {
+        isConflict: (error) =>
+          error instanceof ApiError
+            ? error.code === "conflict"
+            : (error as { code?: string } | null)?.code === "conflict",
+        onExhausted: (error, attempts) =>
+          log.error(
+            { error, attempts, applicationId: input.applicationId },
+            "setApplicationStatusForWorkflow exhausted concurrency retries",
+          ),
+      })
+    : attemptStatus();
 }

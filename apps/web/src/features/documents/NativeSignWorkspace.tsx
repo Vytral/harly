@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CheckCircle2, PenLine, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, CheckCircle2, PenLine, Plus } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   signDocumentNatively,
 } from "./native-sign-actions";
 import type { SignaturePlacement } from "@/lib/esign/native/bake";
+import type { VectorSignatureData } from "./signature-vector";
 
 const EMPTY_PNG =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
@@ -28,27 +29,64 @@ export function NativeSignWorkspace({
 }) {
   const router = useRouter();
   const [signature, setSignature] = useState("");
+  const [vectorSignature, setVectorSignature] = useState<VectorSignatureData | null>(null);
   const [consent, setConsent] = useState(false);
   const [placements, setPlacements] = useState<SignaturePlacement[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const [pageCount, setPageCount] = useState(1);
   const [allowSaved, setAllowSaved] = useState(false);
+  const [savedSignatureId, setSavedSignatureId] = useState<string | null>(null);
+  const [rotated, setRotated] = useState(false);
   const [pending, setPending] = useState(false);
 
   useEffect(() => {
-    void getNativeSignatureSettings().then((settings) =>
-      setAllowSaved(Boolean(settings?.savedSignaturesEnabled)),
-    );
+    void getNativeSignatureSettings().then((settings) => {
+      setAllowSaved(Boolean(settings?.savedSignaturesEnabled));
+    });
   }, []);
 
   function addPlacement() {
-    const current = placements[activeIndex] ??
-      placements[0] ?? { page: 1, x: 0.08, y: 0.7, w: 0.24, h: 0.055 };
-    setPlacements((items) => [
-      ...items,
-      { ...current, x: 0.08, y: 0.7, w: 0.24, h: 0.055 },
-    ]);
+    const base = placements[activeIndex] ?? placements[0];
+    // Offset new fields so they never stack exactly on top of each other.
+    const offset = (placements.length % 5) * 0.04;
+    const next = {
+      page: base?.page ?? 1,
+      x: Math.min(0.6, 0.08 + offset),
+      y: Math.min(0.8, 0.7 + offset),
+      w: base?.w ?? 0.24,
+      h: base?.h ?? 0.055,
+    };
+    setPlacements((items) => [...items, next]);
     setActiveIndex(placements.length);
+  }
+
+  function duplicatePlacement(index: number) {
+    const source = placements[index];
+    if (!source) return;
+    const copy = {
+      ...source,
+      x: Math.min(1 - source.w, source.x + 0.03),
+      y: Math.min(1 - source.h, source.y + 0.03),
+    };
+    setPlacements((items) => {
+      const next = [...items];
+      next.splice(index + 1, 0, copy);
+      return next;
+    });
+    setActiveIndex(index + 1);
+  }
+
+  function removePlacement(index: number) {
+    setPlacements((current) => current.filter((_, i) => i !== index));
+    setActiveIndex((current) =>
+      Math.max(0, Math.min(current, placements.length - 2)),
+    );
+  }
+
+  function changePlacementPage(index: number, page: number) {
+    setPlacements((current) =>
+      current.map((item, i) => (i === index ? { ...item, page } : item)),
+    );
   }
 
   function handleSignatureChange(value: string) {
@@ -60,13 +98,15 @@ export function NativeSignWorkspace({
   }
 
   async function submit() {
-    if (!signature || !consent) return;
+    if (rotated || !consent || (!vectorSignature?.compressed && !savedSignatureId)) return;
     setPending(true);
     try {
       const result = await signDocumentNatively({
         documentId,
         placements,
-        signaturePngBase64: signature,
+        ...(vectorSignature?.compressed
+          ? { signatureVectorBase64: vectorSignature.compressed }
+          : { savedSignatureId: savedSignatureId ?? undefined }),
       });
       if (!result.ok) {
         toast.error(result.error);
@@ -82,65 +122,69 @@ export function NativeSignWorkspace({
   }
 
   return (
-    <main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[1500px] flex-col px-4 py-5 sm:px-6 lg:px-8">
-      <header className="relative flex flex-col items-center border-b border-border/70 pb-5 text-center duration-500 animate-in fade-in slide-in-from-bottom-1">
+    <main className="mx-auto flex min-h-[calc(100dvh-4rem)] w-full max-w-[1600px] flex-col px-4 py-4 sm:px-6 lg:px-8">
+      <header className="flex items-center gap-3 border-b border-border/70 pb-3 duration-500 animate-in fade-in slide-in-from-top-1">
         <Button
           variant="ghost"
           size="sm"
-          className="absolute left-0 top-0"
+          className="-ml-2 shrink-0"
           onClick={() => router.back()}
         >
           <ArrowLeft className="size-4" />
-          Back to documents
+          <span className="hidden sm:inline">Back</span>
         </Button>
-        <div className="mb-1.5 flex items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-primary">
-          <PenLine className="size-3.5" />
-          Harly Signature
+        <span className="hidden h-5 w-px bg-border sm:block" aria-hidden />
+        <div className="flex min-w-0 items-center gap-2">
+          <PenLine className="size-4 shrink-0 text-primary" />
+          <h1 className="shrink-0 font-display text-base font-semibold tracking-tight">
+            Sign document
+          </h1>
+          <span className="text-muted-foreground/50" aria-hidden>
+            /
+          </span>
+          <p className="min-w-0 truncate text-sm text-muted-foreground">
+            {documentName}
+          </p>
         </div>
-        <h1 className="truncate font-display text-2xl font-semibold tracking-tight sm:text-3xl">
-          Sign document
-        </h1>
-        <p className="mx-auto mt-1 max-w-2xl truncate text-sm text-muted-foreground">
-          {documentName}
-        </p>
+        <span className="ml-auto shrink-0 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
+          {placements.length}{" "}
+          {placements.length === 1 ? "signature" : "signatures"}
+        </span>
       </header>
 
-      <div className="grid min-h-0 flex-1 gap-5 py-5 duration-500 animate-in fade-in slide-in-from-bottom-2 lg:grid-cols-[minmax(0,1fr)_380px]">
-        <section
-          data-signature-scroll
-          className="min-h-[520px] overflow-y-auto rounded-2xl border border-border/70 bg-muted/30 p-3 shadow-xs sm:p-5"
-        >
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 px-1">
-            <div>
-              <p className="text-sm font-semibold">Review PDF</p>
-              <p className="text-xs text-muted-foreground">
-                Place one or more signatures anywhere in the document.
-              </p>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="rounded-full bg-card px-2.5 py-1 text-xs text-muted-foreground shadow-xs">
-                {placements.length}{" "}
-                {placements.length === 1 ? "signature" : "signatures"}
-              </span>
-            </div>
+      <div className="grid min-h-0 flex-1 gap-5 py-4 duration-500 animate-in fade-in slide-in-from-bottom-2 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <section className="flex min-h-[520px] flex-col overflow-hidden rounded-2xl border border-border/70 bg-muted/30 shadow-xs">
+          <div
+            data-signature-scroll
+            className="min-h-0 flex-1 overflow-y-auto p-3 sm:p-4"
+          >
+            <PdfSignaturePlacer
+              fileUrl={`/api/documents/${documentId}`}
+              signatureDataUrl={signature || EMPTY_PNG}
+              hasSignature={Boolean(signature)}
+              placements={placements}
+              activeIndex={activeIndex}
+              onChange={setPlacements}
+              onActiveIndexChange={setActiveIndex}
+              onPageCountChange={setPageCount}
+              onRotationChange={setRotated}
+              onRemoveField={removePlacement}
+              onDuplicate={duplicatePlacement}
+              onPageChange={changePlacementPage}
+              onDeselect={() => setActiveIndex(-1)}
+              pageCount={pageCount}
+              maxPageWidth={960}
+            />
           </div>
-          <PdfSignaturePlacer
-            fileUrl={`/api/documents/${documentId}`}
-            signatureDataUrl={signature || EMPTY_PNG}
-            hasSignature={Boolean(signature)}
-            placements={placements}
-            activeIndex={activeIndex}
-            onChange={setPlacements}
-            onActiveIndexChange={setActiveIndex}
-            onPageCountChange={setPageCount}
-          />
-          <div className="sticky bottom-3 z-20 mx-auto mt-3 flex max-w-[720px] items-center justify-between gap-3 rounded-xl border border-primary/20 bg-card/95 px-3 py-2 shadow-lg backdrop-blur">
+          {/* Persistent action bar — pinned to the bottom of the PDF column,
+              always visible regardless of scroll. */}
+          <div className="flex shrink-0 items-center justify-between gap-3 border-t border-border/70 bg-card/80 px-3 py-2.5 backdrop-blur">
             <span className="text-xs text-muted-foreground">
               {placements.length === 0
-                ? "Draw a signature or add a field"
-                : `${placements.length} signature field${placements.length === 1 ? "" : "s"}`}
+                ? "Draw a signature, then place it on the document"
+                : "Select a field to move, resize, duplicate, or delete it"}
             </span>
-            <Button size="sm" variant="outline" onClick={addPlacement}>
+            <Button size="sm" variant="outline" onClick={addPlacement} disabled={!signature}>
               <Plus className="size-4" />
               Add signature
             </Button>
@@ -156,9 +200,10 @@ export function NativeSignWorkspace({
             </p>
           </div>
           <SignaturePad
-            value={signature}
             onChange={handleSignatureChange}
             allowSaved={allowSaved}
+            onVectorChange={setVectorSignature}
+            onSavedSignatureIdChange={setSavedSignatureId}
           />
           <label className="flex items-start gap-3 rounded-xl border border-border/70 bg-muted/20 p-3 text-sm">
             <Checkbox
@@ -181,70 +226,40 @@ export function NativeSignWorkspace({
             </p>
           </div>
           {placements.length > 0 ? (
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Signature placements
+            <div className="space-y-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Placed signatures
               </p>
-              {placements.map((placement, index) => (
-                <div
-                  key={index}
-                  className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${activeIndex === index ? "border-primary bg-accent/50" : "border-border/70"}`}
-                >
+              <div className="flex flex-wrap gap-1.5">
+                {placements.map((placement, index) => (
                   <button
+                    key={index}
                     type="button"
-                    className="min-w-0 flex-1 truncate text-left font-medium"
                     onClick={() => setActiveIndex(index)}
+                    className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition-colors ${activeIndex === index ? "border-primary bg-accent/60 text-foreground" : "border-border/70 text-muted-foreground hover:border-ring hover:text-foreground"}`}
                   >
-                    Signature {index + 1}
+                    Sig {index + 1}
+                    <span className="ml-1 text-muted-foreground/60">
+                      p{placement.page}
+                    </span>
                   </button>
-                  <select
-                    value={placement.page}
-                    onChange={(event) =>
-                      setPlacements((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index
-                            ? { ...item, page: Number(event.target.value) }
-                            : item,
-                        ),
-                      )
-                    }
-                    className="h-7 rounded-md border border-input bg-background px-2 text-xs"
-                    aria-label={`Page for signature ${index + 1}`}
-                  >
-                    {Array.from({ length: pageCount }, (_, pageIndex) => (
-                      <option key={pageIndex + 1} value={pageIndex + 1}>
-                        Page {pageIndex + 1}
-                      </option>
-                    ))}
-                  </select>
-                  {placements.length > 1 ? (
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="size-7 shrink-0"
-                      onClick={() => {
-                        setPlacements((current) =>
-                          current.filter(
-                            (_, itemIndex) => itemIndex !== index,
-                          ),
-                        );
-                        setActiveIndex((current) =>
-                          Math.max(0, Math.min(current, placements.length - 2)),
-                        );
-                      }}
-                      aria-label={`Remove signature ${index + 1}`}
-                    >
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  ) : null}
-                </div>
-              ))}
+                ))}
+              </div>
+              <p className="text-[11px] leading-4 text-muted-foreground/70">
+                Select a field on the document to move, resize, duplicate, or
+                delete it.
+              </p>
             </div>
+          ) : null}
+          {rotated ? (
+            <p className="text-xs text-destructive" role="alert">
+              This PDF has rotated pages. Re-export it without rotation before signing.
+            </p>
           ) : null}
           <Button
             size="lg"
             className="w-full"
-            disabled={pending || !signature || !consent}
+            disabled={pending || rotated || !consent || (!vectorSignature?.compressed && !savedSignatureId)}
             onClick={submit}
           >
             {pending ? "Signing…" : "Sign document"}

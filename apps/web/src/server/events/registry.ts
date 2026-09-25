@@ -13,6 +13,13 @@ const payloadSchemas = {
       status: z.string().optional(),
     })
     .passthrough(),
+  "application.status_changed": z
+    .object({
+      application: entitySchema,
+      fromStatus: z.string(),
+      toStatus: z.string(),
+    })
+    .passthrough(),
   "application.hired": z.object({ application: entitySchema }).passthrough(),
   "application.rejected": z.object({ application: entitySchema }).passthrough(),
   "candidate.created": z.object({ candidate: entitySchema }).passthrough(),
@@ -30,13 +37,65 @@ const payloadSchemas = {
   "job.closed": z.object({ job: entitySchema }).passthrough(),
   "task.created": z.object({ task: entitySchema }).passthrough(),
   "task.updated": z.object({ task: entitySchema }).passthrough(),
+  "task.completed": z.object({ task: entitySchema }).passthrough(),
   "task.deleted": z.object({ task: entitySchema }).passthrough(),
+  "document.signature_sent": z
+    .object({
+      document: entitySchema,
+      status: z.string().optional(),
+      provider: z.string().optional(),
+      application: entitySchema.optional(),
+      candidate: entitySchema.optional(),
+    })
+    .passthrough(),
+  "document.signature_changed": z
+    .object({
+      document: entitySchema,
+      status: z.string(),
+      provider: z.string().optional(),
+      application: entitySchema.optional(),
+      candidate: entitySchema.optional(),
+    })
+    .passthrough(),
+  "document.signature_voided": z
+    .object({
+      document: entitySchema,
+      status: z.string().optional(),
+      provider: z.string().optional(),
+      reason: z.string().optional(),
+      application: entitySchema.optional(),
+      candidate: entitySchema.optional(),
+    })
+    .passthrough(),
   "mail.received": z.object({ message: entitySchema }).passthrough(),
+  "evaluation.completed": z
+    .object({
+      application: entitySchema,
+      candidate: entitySchema,
+      evaluation: z
+        .object({
+          id: z.string(),
+          score: z.number(),
+          recommendation: z.string(),
+          source: z.string().optional(),
+        })
+        .passthrough(),
+    })
+    .passthrough(),
+  "webhook.received": z
+    .object({
+      eventId: z.string().min(1),
+      endpointId: z.string().min(1),
+      externalEventId: z.string().min(1),
+      payload: entitySchema,
+    })
+    .passthrough(),
 } as const;
 
 export const DOMAIN_EVENTS = {
   APPLICATION_CREATED: "application.created",
   APPLICATION_STAGE_CHANGED: "application.stage_changed",
+  APPLICATION_STATUS_CHANGED: "application.status_changed",
   APPLICATION_HIRED: "application.hired",
   APPLICATION_REJECTED: "application.rejected",
   CANDIDATE_CREATED: "candidate.created",
@@ -52,8 +111,14 @@ export const DOMAIN_EVENTS = {
   JOB_CLOSED: "job.closed",
   TASK_CREATED: "task.created",
   TASK_UPDATED: "task.updated",
+  TASK_COMPLETED: "task.completed",
   TASK_DELETED: "task.deleted",
+  DOCUMENT_SIGNATURE_SENT: "document.signature_sent",
+  DOCUMENT_SIGNATURE_CHANGED: "document.signature_changed",
+  DOCUMENT_SIGNATURE_VOIDED: "document.signature_voided",
   MAIL_RECEIVED: "mail.received",
+  EVALUATION_COMPLETED: "evaluation.completed",
+  WEBHOOK_RECEIVED: "webhook.received",
 } as const;
 
 export const REALTIME_EVENTS = {
@@ -84,7 +149,7 @@ export const EVENT_REGISTRY: Record<
       eventVersion: 1,
       schemaVersion: 1,
       durable: true,
-      realtime: true,
+      realtime: name !== DOMAIN_EVENTS.WEBHOOK_RECEIVED,
       payload: payloadSchemas[name],
     },
   ]),

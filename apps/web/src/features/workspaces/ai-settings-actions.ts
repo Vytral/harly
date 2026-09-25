@@ -14,6 +14,8 @@ import { fetchOpenRouterModels, getModel } from "@/lib/ai/registry";
 import { assertSafeAiBaseUrl } from "@/lib/ai/base-url";
 import { isAiProviderId, type OpenRouterModel } from "@/lib/ai/providers";
 
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
+
 export type AiSettingsActionResult = { ok: boolean; error?: string };
 
 const saveSchema = z.object({
@@ -33,6 +35,7 @@ export async function saveAiSettingsAction(input: {
   enabled: boolean;
   autoScore?: boolean;
 }): Promise<AiSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("settings:edit");
 
   if (!isEncryptionConfigured()) {
@@ -104,6 +107,7 @@ export async function saveAiSettingsAction(input: {
 }
 
 export async function disableAiAction(): Promise<AiSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("settings:edit");
 
   await db
@@ -121,6 +125,7 @@ export async function testAiConnectionAction(input: {
   apiKey?: string;
   baseUrl?: string;
 }): Promise<AiSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("settings:edit");
 
   if (!isEncryptionConfigured()) {
@@ -175,6 +180,7 @@ export async function testAiConnectionAction(input: {
 export async function saveAiAutoScoreAction(
   autoScore: boolean,
 ): Promise<AiSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("settings:edit");
 
   await db
@@ -192,6 +198,7 @@ export async function saveAiAutoScoreAction(
 export async function saveAiDuplicateCheckAction(
   duplicateCheck: boolean,
 ): Promise<AiSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("settings:edit");
 
   await db
@@ -209,6 +216,7 @@ export async function saveAiDuplicateCheckAction(
 export async function saveAiResumeAnonymizationAction(
   resumeAnonymization: boolean,
 ): Promise<AiSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("settings:edit");
 
   await db
@@ -229,6 +237,7 @@ export async function saveAiResumeAnonymizationAction(
 export async function searchOpenRouterModelsAction(
   query: string,
 ): Promise<OpenRouterModel[]> {
+  assertNotDemo();
   await requirePermission("settings:edit");
 
   const all = await fetchOpenRouterModels();

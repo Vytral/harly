@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   requireJobPermission: vi.fn(),
@@ -53,6 +53,9 @@ import { updateJobAction, updateJobStatusAction } from "./actions";
 const JOB_ID = "job-1";
 
 describe("job action authorization", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
   it("checks job scope before parsing or updating a job", async () => {
     mocks.requireJobPermission.mockRejectedValue(
       new Error("You are not assigned to this job."),
@@ -69,10 +72,11 @@ describe("job action authorization", () => {
     expect(mocks.updateJob).not.toHaveBeenCalled();
   });
 
-  it("checks job scope before changing publication status", async () => {
+  it("requires jobs:publish (not just jobs:edit) to open a job", async () => {
     mocks.requireJobPermission.mockRejectedValue(
       new Error("You are not assigned to this job."),
     );
+    mocks.jobStatusParse.mockReturnValue("open");
 
     const form = new FormData();
     form.set("jobId", JOB_ID);
@@ -81,7 +85,29 @@ describe("job action authorization", () => {
     await expect(updateJobStatusAction(form)).rejects.toThrow(
       "You are not assigned to this job.",
     );
-    expect(mocks.requireJobPermission).toHaveBeenCalledWith("jobs:edit", JOB_ID);
+    expect(mocks.requireJobPermission).toHaveBeenCalledWith(
+      "jobs:publish",
+      JOB_ID,
+    );
     expect(mocks.updateJobStatus).not.toHaveBeenCalled();
+  });
+
+  it("keeps jobs:edit for non-publishing transitions", async () => {
+    mocks.requireJobPermission.mockResolvedValue({
+      organization: { id: "ws" },
+      user: { id: "user-1", email: "recruiter@test.dev" },
+    });
+    mocks.jobStatusParse.mockReturnValue("draft");
+    const { getPendingJobApproval } = await import("./approval");
+    vi.mocked(getPendingJobApproval).mockResolvedValue(null as never);
+    mocks.updateJobStatus.mockResolvedValue({ id: JOB_ID });
+
+    const form = new FormData();
+    form.set("jobId", JOB_ID);
+    form.set("status", "draft");
+
+    await updateJobStatusAction(form);
+    expect(mocks.requireJobPermission).toHaveBeenCalledWith("jobs:edit", JOB_ID);
+    expect(mocks.updateJobStatus).toHaveBeenCalledWith(JOB_ID, "draft");
   });
 });

@@ -39,8 +39,7 @@ import { getNextStage } from "@/features/pipeline/data";
 import { listCandidateInterviews } from "@/features/interviews/data";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listOffersForCandidate } from "@/features/offers/data";
-import { listDocumentsForCandidate, listDocumentsForSigning } from "@/features/documents/data";
-import { listDocumentRequestsForCandidate } from "@/features/documents/requests-data";
+import { listDocumentsForCandidate } from "@/features/documents/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
   can,
@@ -99,7 +98,7 @@ export default async function CandidateDetailPage({
     notFound();
   }
 
-  const [profile, allCandidates, members, jobOptions, candidateInterviews, candidateOffers, emailTemplates, relatedDocuments, profileDocumentRequests, signableDocuments] =
+  const [profile, allCandidates, members, jobOptions, candidateInterviews, candidateOffers, emailTemplates, relatedDocuments] =
     await Promise.all([
       getCandidateProfile(candidateId),
       listCandidates(),
@@ -109,8 +108,6 @@ export default async function CandidateDetailPage({
       listOffersForCandidate(candidateId),
       listEmailTemplates(),
       listDocumentsForCandidate(candidateId),
-      listDocumentRequestsForCandidate(candidateId),
-      listDocumentsForSigning(),
     ]);
 
   if (!profile) {
@@ -164,10 +161,6 @@ export default async function CandidateDetailPage({
     profileAiEvaluations,
     visibleApplicationIds,
   );
-  const documentRequests = filterApplicationScopedItems(
-    profileDocumentRequests,
-    visibleApplicationIds,
-  );
   const interviews = candidateInterviews.filter((interview) =>
     visibleApplicationIds.has(interview.applicationId),
   );
@@ -189,14 +182,13 @@ export default async function CandidateDetailPage({
   ).filter((candidateRow): candidateRow is (typeof allCandidates)[number] => Boolean(candidateRow));
 
   const isHired = applications.some((application) => application.status === "hired");
-  const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canManageDocuments, canCollaborate, canEditCandidates] = await Promise.all([
+  const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canCollaborate, canEditCandidates] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
     getWorkspaceAiStatus(workspaceId),
     getWorkspaceEsignStatus(workspaceId),
     getWorkspaceContext(),
     can("dsar:manage"),
     can("candidates:delete"),
-    can("documents:manage"),
     can("collab:write"),
     can("candidates:edit"),
   ]);
@@ -545,9 +537,6 @@ export default async function CandidateDetailPage({
               createdAt: file.createdAt.toISOString(),
             }))}
             relatedDocuments={relatedDocuments}
-            signableDocuments={signableDocuments}
-            documentRequests={documentRequests}
-            canManageDocuments={canManageDocuments}
             activity={serializedActivity}
             scorecards={scorecards}
             messages={messages}

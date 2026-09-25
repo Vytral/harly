@@ -1,5 +1,7 @@
 import "server-only";
 
+import { isDemoMode } from "@harly/config";
+
 import { and, eq, isNull } from "drizzle-orm";
 
 import {
@@ -47,6 +49,13 @@ import type { Interview } from "@harly/db";
 const log = createLogger("interview-api-side-effects");
 
 type ApiInterviewAction = "scheduled" | "rescheduled" | "canceled";
+export type ApiMeetingProvider =
+  | "auto"
+  | "google_meet"
+  | "zoom"
+  | "teams"
+  | "jitsi"
+  | "external";
 
 const TYPE_LABEL: Record<string, string> = {
   screening: "Screening interview",
@@ -75,8 +84,9 @@ type InterviewContext = {
 async function getInterviewContext(
   workspaceId: string,
   interviewId: string,
+  database: typeof db = db,
 ): Promise<InterviewContext | null> {
-  const [row] = await db
+  const [row] = await database
     .select({
       email: candidates.email,
       firstName: candidates.firstName,
@@ -116,7 +126,7 @@ async function getInterviewContext(
 
   let interviewerEmail: string | null = null;
   if (row.interviewerId) {
-    const [interviewer] = await db
+    const [interviewer] = await database
       .select({ email: authUsers.email })
       .from(authUsers)
       .where(eq(authUsers.id, row.interviewerId))
@@ -133,6 +143,7 @@ async function sendInterviewEmail(
   action: ApiInterviewAction,
   interview: Interview,
   context: InterviewContext,
+  database: typeof db = db,
 ) {
   if (!context.email) return;
   const replyTo = await getInboundReplyTo(workspaceId, context.applicationId);
@@ -154,8 +165,9 @@ async function sendInterviewEmail(
     },
     undefined,
     actorUserId,
+    database,
   );
-  await processEmailOutbox({ ids: [outboxId], workspaceId });
+  await processEmailOutbox({ ids: [outboxId], workspaceId, database });
 }
 
 async function syncCalendarForApi(
@@ -163,6 +175,8 @@ async function syncCalendarForApi(
   interview: Interview,
   context: InterviewContext,
   action: ApiInterviewAction,
+  strict = false,
+  database: typeof db = db,
 ) {
   const attendees = [context.email, context.interviewerEmail].filter(
     (email): email is string => Boolean(email),
@@ -182,6 +196,8 @@ async function syncCalendarForApi(
           gcalEventId: interview.gcalEventId!,
         }),
       isSuccess: Boolean,
+      strict,
+      database,
     });
     return;
   }
@@ -203,6 +219,8 @@ async function syncCalendarForApi(
           timeZone: "UTC",
         }),
       isSuccess: Boolean,
+      strict,
+      database,
     });
     return;
   }
@@ -227,6 +245,8 @@ async function syncCalendarForApi(
     isSuccess: (result) => result.ok,
     resourceId: (result) => (result.ok ? result.eventId : undefined),
     resourceUrl: (result) => (result.ok ? result.meetLink : undefined),
+    strict,
+    database,
   });
 }
 
@@ -236,8 +256,19 @@ async function syncVideoForApi(input: {
   context: InterviewContext;
   previous?: Interview;
   action: ApiInterviewAction;
+  meetingProvider?: ApiMeetingProvider;
+  strict?: boolean;
+  database?: typeof db;
 }): Promise<"calendar" | "video" | "none"> {
-  const { workspaceId, interview, context, previous, action } = input;
+  const {
+    workspaceId,
+    interview,
+    context,
+    previous,
+    action,
+    strict = false,
+    database = db,
+  } = input;
   if (action === "canceled") {
     const providers = [
       previous?.teamsMeetingId
@@ -269,7 +300,10 @@ async function syncVideoForApi(input: {
             provider: "jitsi" as const,
             id: previous.jitsiRoom,
             run: () =>
-              cancelInterviewJitsiMeeting({ workspaceId, interviewId: interview.id }),
+              cancelInterviewJitsiMeeting({
+                workspaceId,
+                interviewId: interview.id,
+              }),
           }
         : null,
     ].filter(
@@ -283,6 +317,8 @@ async function syncVideoForApi(input: {
         operation: "cancel",
         run: provider.run,
         isSuccess: Boolean,
+        strict,
+        database,
       });
     }
     return "none";
@@ -302,6 +338,8 @@ async function syncVideoForApi(input: {
             teamsMeetingId: previous.teamsMeetingId!,
           }),
         isSuccess: Boolean,
+        strict,
+        database,
       });
     }
     if (previous?.zoomMeetingId) {
@@ -317,6 +355,8 @@ async function syncVideoForApi(input: {
             zoomMeetingId: previous.zoomMeetingId!,
           }),
         isSuccess: Boolean,
+        strict,
+        database,
       });
     }
     if (previous?.jitsiRoom) {
@@ -325,8 +365,14 @@ async function syncVideoForApi(input: {
         interviewId: interview.id,
         provider: "jitsi",
         operation: "cancel",
-        run: () => cancelInterviewJitsiMeeting({ workspaceId, interviewId: interview.id }),
+        run: () =>
+          cancelInterviewJitsiMeeting({
+            workspaceId,
+            interviewId: interview.id,
+          }),
         isSuccess: Boolean,
+        strict,
+        database,
       });
     }
     return "none";
@@ -336,23 +382,124 @@ async function syncVideoForApi(input: {
   // the same meaning as dashboard's explicit external provider: preserve it
   // and only mirror the interview to Calendar, instead of silently replacing
   // the candidate's link with whichever provider happens to be connected.
+  const meetingProvider = input.meetingProvider ?? "auto";
   if (
+    (meetingProvider === "auto" || meetingProvider === "external") &&
     interview.meetLink &&
     !previous?.teamsMeetingId &&
     !previous?.zoomMeetingId &&
     !previous?.jitsiRoom
   ) {
-    await syncCalendarForApi(workspaceId, interview, context, action);
+    await syncCalendarForApi(
+      workspaceId,
+      interview,
+      context,
+      action,
+      strict,
+      database,
+    );
     return "calendar";
   }
 
-  const [zoomToken, outlookConfig, gcalConfig, jitsiConfig] = await Promise.all([
-    getZoomToken(workspaceId),
-    getWorkspaceOutlookConfig(workspaceId),
-    getWorkspaceGCalConfig(workspaceId),
-    getWorkspaceJitsiConfig(workspaceId),
-  ]);
+  const [zoomToken, outlookConfig, gcalConfig, jitsiConfig] = await Promise.all(
+    [
+      getZoomToken(workspaceId),
+      getWorkspaceOutlookConfig(workspaceId),
+      getWorkspaceGCalConfig(workspaceId),
+      getWorkspaceJitsiConfig(workspaceId),
+    ],
+  );
   const summary = interview.title ?? TYPE_LABEL[interview.type] ?? "Interview";
+
+  if (
+    !previous?.teamsMeetingId &&
+    !previous?.zoomMeetingId &&
+    !previous?.jitsiRoom &&
+    meetingProvider !== "auto"
+  ) {
+    if (meetingProvider === "google_meet") {
+      await syncCalendarForApi(
+        workspaceId,
+        interview,
+        context,
+        action,
+        strict,
+        database,
+      );
+      return "calendar";
+    }
+    if (meetingProvider === "external") {
+      if (!interview.meetLink)
+        throw new Error("An external meeting URL is required.");
+      await syncCalendarForApi(
+        workspaceId,
+        interview,
+        context,
+        action,
+        strict,
+        database,
+      );
+      return "calendar";
+    }
+    if (meetingProvider === "zoom") {
+      await trackInterviewSync({
+        workspaceId,
+        interviewId: interview.id,
+        provider: "zoom",
+        operation: "upsert",
+        run: () =>
+          syncInterviewToZoom({
+            workspaceId,
+            interviewId: interview.id,
+            summary,
+            start: interview.scheduledAt,
+            durationMins: interview.durationMins,
+          }),
+        isSuccess: Boolean,
+        resourceId: (result) => result?.meetingId,
+        resourceUrl: (result) => result?.joinUrl,
+        strict,
+        database,
+      });
+      return "video";
+    }
+    if (meetingProvider === "teams") {
+      await trackInterviewSync({
+        workspaceId,
+        interviewId: interview.id,
+        provider: "microsoft_teams",
+        operation: "upsert",
+        run: () =>
+          syncInterviewToTeams({
+            workspaceId,
+            interviewId: interview.id,
+            summary,
+            start: interview.scheduledAt,
+            durationMins: interview.durationMins,
+          }),
+        isSuccess: Boolean,
+        resourceId: (result) => result?.meetingId,
+        resourceUrl: (result) => result?.joinUrl,
+        strict,
+        database,
+      });
+      return "video";
+    }
+    await trackInterviewSync({
+      workspaceId,
+      interviewId: interview.id,
+      provider: "jitsi",
+      operation: "upsert",
+      run: () =>
+        syncInterviewToJitsi({ workspaceId, interviewId: interview.id }),
+      isSuccess: Boolean,
+      resourceId: (result) => result?.room,
+      resourceUrl: (result) => result?.joinUrl,
+      strict,
+      database,
+    });
+    return "video";
+  }
 
   if (previous?.teamsMeetingId) {
     await trackInterviewSync({
@@ -373,6 +520,8 @@ async function syncVideoForApi(input: {
       isSuccess: (result) => result.ok,
       resourceId: (result) => (result.ok ? result.meetingId : undefined),
       resourceUrl: (result) => (result.ok ? result.joinUrl : undefined),
+      strict,
+      database,
     });
     return "video";
   }
@@ -395,6 +544,8 @@ async function syncVideoForApi(input: {
       isSuccess: (result) => result.ok,
       resourceId: (result) => (result.ok ? result.meetingId : undefined),
       resourceUrl: (result) => (result.ok ? result.joinUrl : undefined),
+      strict,
+      database,
     });
     return "video";
   }
@@ -417,6 +568,8 @@ async function syncVideoForApi(input: {
       isSuccess: Boolean,
       resourceId: (result) => result?.meetingId,
       resourceUrl: (result) => result?.joinUrl,
+      strict,
+      database,
     });
     return "video";
   } else if (outlookConfig) {
@@ -436,10 +589,19 @@ async function syncVideoForApi(input: {
       isSuccess: Boolean,
       resourceId: (result) => result?.meetingId,
       resourceUrl: (result) => result?.joinUrl,
+      strict,
+      database,
     });
     return "video";
   } else if (gcalConfig) {
-    await syncCalendarForApi(workspaceId, interview, context, action);
+    await syncCalendarForApi(
+      workspaceId,
+      interview,
+      context,
+      action,
+      strict,
+      database,
+    );
     return "calendar";
   } else if (jitsiConfig) {
     await trackInterviewSync({
@@ -447,10 +609,13 @@ async function syncVideoForApi(input: {
       interviewId: interview.id,
       provider: "jitsi",
       operation: "upsert",
-      run: () => syncInterviewToJitsi({ workspaceId, interviewId: interview.id }),
+      run: () =>
+        syncInterviewToJitsi({ workspaceId, interviewId: interview.id }),
       isSuccess: Boolean,
       resourceId: (result) => result?.room,
       resourceUrl: (result) => result?.joinUrl,
+      strict,
+      database,
     });
     return "video";
   }
@@ -464,10 +629,20 @@ export async function runApiInterviewSideEffects(input: {
   interview: Interview;
   previous?: Interview;
   action: ApiInterviewAction;
+  meetingProvider?: ApiMeetingProvider;
+  strictSideEffects?: boolean;
+  database?: typeof db;
 }): Promise<void> {
+  // Public demo: persist the interview locally, but never call Zoom/GCal/Outlook/Jitsi.
+  if (isDemoMode()) return;
+  const database = input.database ?? db;
   let context: InterviewContext | null;
   try {
-    context = await getInterviewContext(input.workspaceId, input.interview.id);
+    context = await getInterviewContext(
+      input.workspaceId,
+      input.interview.id,
+      database,
+    );
   } catch (error) {
     log.error(error, "REST interview context lookup failed after commit");
     return;
@@ -476,17 +651,22 @@ export async function runApiInterviewSideEffects(input: {
 
   let videoSync: "calendar" | "video" | "none" = "none";
   try {
-    videoSync = await syncVideoForApi({ ...input, context });
+    videoSync = await syncVideoForApi({
+      ...input,
+      context,
+      strict: input.strictSideEffects,
+      database,
+    });
   } catch (error) {
     log.error(error, "REST interview video side effect failed after commit");
+    if (input.strictSideEffects) throw error;
   }
 
   if (
     videoSync !== "calendar" &&
     (input.interview.mode !== "video" ||
       videoSync === "none" ||
-      (input.action === "rescheduled" &&
-        Boolean(input.interview.gcalEventId)))
+      (input.action === "rescheduled" && Boolean(input.interview.gcalEventId)))
   ) {
     try {
       await syncCalendarForApi(
@@ -494,9 +674,15 @@ export async function runApiInterviewSideEffects(input: {
         input.interview,
         context,
         input.action,
+        input.strictSideEffects,
+        database,
       );
     } catch (error) {
-      log.error(error, "REST interview calendar side effect failed after commit");
+      log.error(
+        error,
+        "REST interview calendar side effect failed after commit",
+      );
+      if (input.strictSideEffects) throw error;
     }
   }
 
@@ -507,6 +693,7 @@ export async function runApiInterviewSideEffects(input: {
       input.action,
       input.interview,
       context,
+      database,
     );
   } catch (error) {
     log.error(error, "REST interview email side effect failed after commit");
@@ -519,7 +706,10 @@ export function interviewPortalNotification(input: {
 }) {
   const labels: Record<ApiInterviewAction, { title: string; type: string }> = {
     scheduled: { title: "Interview scheduled", type: "interview_scheduled" },
-    rescheduled: { title: "Interview rescheduled", type: "interview_rescheduled" },
+    rescheduled: {
+      title: "Interview rescheduled",
+      type: "interview_rescheduled",
+    },
     canceled: { title: "Interview canceled", type: "interview_canceled" },
   };
   const label = labels[input.action];
@@ -532,6 +722,9 @@ export function interviewPortalNotification(input: {
         ? "Your interview has been canceled."
         : `${label.title} for ${input.interview.scheduledAt.toISOString()}.`,
     href: `/portal/applications/${input.interview.applicationId}`,
-    metadata: { interviewId: input.interview.id, applicationId: input.interview.applicationId },
+    metadata: {
+      interviewId: input.interview.id,
+      applicationId: input.interview.applicationId,
+    },
   };
 }

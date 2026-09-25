@@ -64,8 +64,7 @@ describe("evaluation rubric authorization", () => {
     expect(mocks.select).not.toHaveBeenCalled();
   });
 
-  it("checks the rubric's job scope before publishing", async () => {
-    mocks.requirePermission.mockResolvedValue({ organization: { id: "ws-1" } });
+  it("checks the rubric's job scope before publishing", async () => {    mocks.requirePermission.mockResolvedValue({ organization: { id: "ws-1" } });
     mocks.requireJobPermission.mockRejectedValue(
       new Error("You are not assigned to this job."),
     );
@@ -80,5 +79,28 @@ describe("evaluation rubric authorization", () => {
       publishEvaluationRubricAction({ rubricId: RUBRIC_ID }),
     ).rejects.toThrow("You are not assigned to this job.");
     expect(mocks.requireJobPermission).toHaveBeenCalledWith("jobs:edit", JOB_ID);
+  });
+
+  it("rejects preferred knockouts before touching auth or DB (Phase 2 §2.3)", async () => {
+    mocks.requireJobPermission.mockClear();
+    const result = await createEvaluationRubricAction({
+      jobId: JOB_ID,
+      criteria: [
+        {
+          key: "python",
+          label: "Python",
+          type: "skill",
+          importance: "preferred",
+          weight: 50,
+          aliases: [],
+          isKnockout: true,
+        },
+      ],
+    });
+    expect(result).toEqual({
+      success: false,
+      error: 'Knockout requires required importance ("python").',
+    });
+    expect(mocks.requireJobPermission).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,7 @@ import { z } from "zod";
 import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import {
   DEFAULT_CAL_BASE_URL,
   getWorkspaceCalConfig,
@@ -68,6 +69,7 @@ export async function saveCalSettingsAction(input: {
   bookingUrl?: string;
   defaultEventTypeId?: number | string;
 }): Promise<CalSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   if (!isEncryptionConfigured()) {
@@ -163,6 +165,7 @@ export async function saveCalSettingsAction(input: {
 }
 
 export async function disableCalAction(): Promise<CalSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   await db
@@ -182,6 +185,7 @@ export async function testCalConnectionAction(input: {
   apiKey?: string;
   baseUrl?: string;
 }): Promise<CalSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   let apiKey = input.apiKey?.trim() || null;
@@ -271,6 +275,7 @@ export async function testCalConnectionAction(input: {
  * the stored signing secret and the app's public URL.
  */
 export async function registerCalWebhookAction(): Promise<CalSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   const config = await getWorkspaceCalConfig(context.organization.id);

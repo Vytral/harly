@@ -24,14 +24,19 @@ export const SIGNATURE_EVIDENCE_RETENTION_MS =
 export async function purgeExpiredSignatureData(input: {
   workspaceId: string;
   now?: Date;
+  database?: typeof db;
 }): Promise<{
   otpChallenges: number;
   otpPayloads: number;
   invitationPayloads: number;
   evidence: number;
 }> {
+  const database = input.database ?? db;
   const now = input.now ?? new Date();
-  const challenges = await db
+  // `sql` fragments are bound by postgres-js directly. Keep this parameter a
+  // string so the driver does not try to encode a Date as a bytea value.
+  const cutoff = now.toISOString();
+  const challenges = await database
     .select({ id: nativeSignatureOtpChallenges.id })
     .from(nativeSignatureOtpChallenges)
     .where(
@@ -43,7 +48,7 @@ export async function purgeExpiredSignatureData(input: {
 
   let otpPayloads = 0;
   for (const challenge of challenges) {
-    const deleted = await db
+    const deleted = await database
       .delete(emailOutbox)
       .where(
         and(
@@ -57,7 +62,7 @@ export async function purgeExpiredSignatureData(input: {
 
   let otpChallenges = 0;
   if (challenges.length > 0) {
-    const deleted = await db
+    const deleted = await database
       .delete(nativeSignatureOtpChallenges)
       .where(inArray(nativeSignatureOtpChallenges.id, challenges.map((row) => row.id)));
     otpChallenges = Number((deleted as { rowCount?: number }).rowCount ?? challenges.length);
@@ -67,18 +72,18 @@ export async function purgeExpiredSignatureData(input: {
   // Once the matching signing link has expired there is no operational reason
   // to retain that ciphertext. Guard the cast so malformed legacy payloads do
   // not abort the maintenance run.
-  const deletedInvitations = await db
+  const deletedInvitations = await database
     .delete(emailOutbox)
     .where(
       and(
         eq(emailOutbox.workspaceId, input.workspaceId),
         eq(emailOutbox.kind, "native.signature.invitation"),
         sql`${emailOutbox.payload}->>'expiresAt' ~ '^\\d{4}-\\d{2}-\\d{2}T'`,
-        sql`(${emailOutbox.payload}->>'expiresAt')::timestamptz < ${now}`,
+        sql`(${emailOutbox.payload}->>'expiresAt')::timestamptz < ${cutoff}::timestamptz`,
       ),
     );
 
-  const deletedEvidence = await db
+  const deletedEvidence = await database
     .delete(signatureEvidenceEvents)
     .where(
       and(

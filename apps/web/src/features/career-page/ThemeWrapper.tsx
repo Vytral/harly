@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useRef } from "react";
+
 import { cn } from "@/lib/utils";
 
 import { isLightColor, MODE_BG, type CareerPageConfig } from "./config";
@@ -36,8 +38,27 @@ export function ThemeWrapper({
     mono: "font-mono",
   }[font ?? "sans"];
 
+  const surfaceRef = useRef<HTMLDivElement>(null);
+
+  // The cookie banner lives outside this tree, so it otherwise follows the
+  // admin shell's `.dark` class. Publish the career mode for it to mirror.
+  // Preview frames are excluded — they must not restyle the surrounding app.
+  useEffect(() => {
+    const node = surfaceRef.current;
+    if (!node || node.closest("[data-career-preview]")) return;
+    const root = document.documentElement;
+    const previous = root.dataset.careerTheme;
+    root.dataset.careerTheme = mode;
+    return () => {
+      if (root.dataset.careerTheme !== mode) return;
+      if (previous) root.dataset.careerTheme = previous;
+      else delete root.dataset.careerTheme;
+    };
+  }, [mode]);
+
   return (
     <div
+      ref={surfaceRef}
       className={cn(
         "min-h-screen transition-colors duration-150 ease-[cubic-bezier(0.25,0.46,0.45,0.94)] motion-reduce:transition-none",
         fontClass,

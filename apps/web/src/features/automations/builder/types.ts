@@ -6,6 +6,7 @@
  */
 
 import type { Action, Conditions, Trigger, WorkflowEvent } from "../schema";
+import type { EditorLayout, WorkflowGraphV2 } from "../definition/schema-v2";
 
 export type SerializedWorkflow = {
   id: string;
@@ -31,6 +32,13 @@ export type SerializedWorkflow = {
   createdById: string | null;
   createdAt: string;
   updatedAt: string;
+  draftRevision: number;
+  contentHash: string;
+  reviewHash: string | null;
+  hasUnpublishedChanges: boolean;
+  engineVersion: number;
+  graph?: WorkflowGraphV2;
+  layout?: EditorLayout;
 };
 
 export type SerializedRun = {
@@ -40,6 +48,7 @@ export type SerializedRun = {
   triggerPayload: unknown;
   conditionResult: unknown;
   status: "running" | "succeeded" | "failed" | "skipped" | "dead_letter" | "cancelled";
+  logicalStatus: string | null;
   sourceEventId: string | null;
   attemptCount: number;
   maxAttempts: number;
@@ -61,12 +70,16 @@ export type SerializedRun = {
 
 export type SerializedRunStep = {
   id: string;
+  nodeId?: string;
   runId: string;
   stepIndex: number | null;
   actionType: string;
   actionInput: unknown;
   result: unknown;
-  status: "running" | "succeeded" | "failed" | "skipped";
+  status: "running" | "waiting" | "succeeded" | "failed" | "uncertain" | "skipped" | "cancelled";
+  retryable?: boolean;
+  attemptCount?: number;
+  errorCode?: string | null;
   startedAt: string;
   finishedAt: string | null;
 };

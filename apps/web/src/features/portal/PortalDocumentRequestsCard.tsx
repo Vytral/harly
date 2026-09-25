@@ -5,7 +5,10 @@ import { toast } from "@/lib/notification-island/toast";
 import { useRouter } from "next/navigation";
 
 import { cn } from "@/lib/utils";
-import { submitDocumentRequestAction } from "@/features/portal/document-actions";
+import {
+  createDocumentSigningViewAction,
+  submitDocumentRequestAction,
+} from "@/features/portal/document-actions";
 import {
   DOCUMENT_REQUEST_STATUS_META,
   canCandidateUpload,
@@ -85,9 +88,11 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isPending, start] = useTransition();
+  const [isSigning, startSigning] = useTransition();
   const meta = DOCUMENT_REQUEST_STATUS_META[request.status];
   const uploadable = canCandidateUpload(request.status);
   const resolved = isTerminalRequestStatus(request.status);
+  const canSign = request.documentId && request.signatureStatus === "pending" && request.signatureProvider === "native";
 
   function pick() {
     inputRef.current?.click();
@@ -148,10 +153,22 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
     });
   }
 
-  // Resolved requests (waived / accepted) need no further action from the
-  // candidate — show them as a quiet closed-out row, not a full action card,
-  // so the checklist reads calm instead of every item competing for weight.
-  if (resolved) {
+  function openSigning() {
+    startSigning(async () => {
+      const result = await createDocumentSigningViewAction({ requestId: request.id });
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      window.location.assign(result.signingUrl);
+    });
+  }
+
+  // An accepted upload may still have a separate signature envelope attached
+  // by a later workflow step. Keep that request actionable until the envelope
+  // is signed; only fully resolved rows collapse into the quiet checklist
+  // treatment.
+  if (resolved && !canSign) {
     return (
       <div className="flex items-center gap-3 rounded-xl bg-row-wash px-4 py-3">
         <div
@@ -228,6 +245,19 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
               {isPending ? "Uploading…" : request.status === "declined" ? "Re-upload" : "Upload"}
             </button>
           </>
+        ) : canSign ? (
+          <button
+            type="button"
+            onClick={openSigning}
+            disabled={isSigning}
+            className={cn(
+              "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-pine px-4 py-2.5",
+              "text-sm font-semibold text-white shadow-sm transition-all hover:bg-pine-strong",
+              "disabled:cursor-not-allowed disabled:opacity-50",
+            )}
+          >
+            {isSigning ? "Preparing…" : "Review & sign"}
+          </button>
         ) : request.status === "submitted" ? (
           <span className="inline-flex shrink-0 items-center gap-1.5 text-sm text-muted-foreground">
             <SpinnerIcon className="size-3.5 animate-spin" />

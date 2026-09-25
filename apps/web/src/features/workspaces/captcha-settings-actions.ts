@@ -14,6 +14,8 @@ import {
   type CaptchaProvider,
 } from "@/lib/captcha";
 
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
+
 export type CaptchaSettingsActionResult = { ok: boolean; error?: string };
 
 /** Per-provider column names. Turnstile reuses its pre-existing columns. */
@@ -55,6 +57,7 @@ export async function saveCaptchaSettingsAction(input: {
   siteKey?: string;
   secretKey?: string;
 }): Promise<CaptchaSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   if (!isEncryptionConfigured()) {
@@ -131,6 +134,7 @@ export async function saveCaptchaSettingsAction(input: {
 }
 
 export async function disableCaptchaAction(): Promise<CaptchaSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   await db

@@ -9,7 +9,11 @@ function isUnsafeProductionHost(hostname: string) {
   const isIpv4Loopback =
     ipv4Parts.length === 4 &&
     ipv4Parts[0] === "127" &&
-    ipv4Parts.slice(1).every((part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255);
+    ipv4Parts
+      .slice(1)
+      .every(
+        (part) => /^(?:0|[1-9]\d{0,2})$/.test(part) && Number(part) <= 255,
+      );
   return (
     normalized === "localhost" ||
     normalized.endsWith(".localhost") ||
@@ -45,19 +49,32 @@ export function getHarlyPublicOrigin(): string {
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error("HARLY_URL must use HTTP or HTTPS.");
   }
+  const isExplicitE2ELoopback =
+    process.env.HARLY_E2E === "true" &&
+    url.protocol === "http:" &&
+    url.hostname === "127.0.0.1";
   if (
     process.env.NODE_ENV === "production" &&
-    isUnsafeProductionHost(url.hostname)
+    isUnsafeProductionHost(url.hostname) &&
+    !isExplicitE2ELoopback
   ) {
     if (process.env.NEXT_PHASE === "phase-production-build") {
       return BUILD_PUBLIC_ORIGIN;
     }
-    throw new Error("HARLY_URL must use a reachable public hostname, not a local or bind address.");
+    throw new Error(
+      "HARLY_URL must use a reachable public hostname, not a local or bind address.",
+    );
   }
   if (url.username || url.password || url.search || url.hash) {
-    throw new Error("HARLY_URL must be a public origin without credentials or query parameters.");
+    throw new Error(
+      "HARLY_URL must be a public origin without credentials or query parameters.",
+    );
   }
-  if (process.env.NODE_ENV === "production" && url.protocol !== "https:") {
+  if (
+    process.env.NODE_ENV === "production" &&
+    url.protocol !== "https:" &&
+    !isExplicitE2ELoopback
+  ) {
     throw new Error("HARLY_URL must use HTTPS in production.");
   }
 

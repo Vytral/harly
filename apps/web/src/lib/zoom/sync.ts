@@ -2,10 +2,36 @@ import { and, eq, exists, isNull } from "drizzle-orm";
 
 import { candidates, db, interviews } from "@harly/db";
 
-import { createMeeting, deleteMeeting } from "./client";
+import { createMeeting, deleteMeeting, findMeetingByTrackingField } from "./client";
 
 function formatZoomDateTime(date: Date): string {
   return date.toISOString().replace(/\.\d{3}Z$/, "");
+}
+
+const HARLY_TRACKING_FIELD = "harly_interview_effect";
+
+function zoomSyncMarker(interviewId: string, operation: string): string {
+  return `${operation}:${interviewId}`;
+}
+
+async function persistZoomMeeting(
+  workspaceId: string,
+  interviewId: string,
+  result: { id: number; join_url: string },
+): Promise<void> {
+  await db
+    .update(interviews)
+    .set({
+      meetLink: result.join_url,
+      zoomMeetingId: String(result.id),
+    })
+    .where(
+      and(
+        eq(interviews.id, interviewId),
+        eq(interviews.workspaceId, workspaceId),
+        activeCandidateForInterview(workspaceId),
+      ),
+    );
 }
 
 type SyncInterviewToZoomParams = {
@@ -22,26 +48,37 @@ export async function syncInterviewToZoom(params: SyncInterviewToZoomParams) {
       return null;
     }
 
-    const result = await createMeeting(params.workspaceId, {
-      topic: params.summary,
-      type: 2,
-      start_time: formatZoomDateTime(params.start),
-      duration: params.durationMins,
-    });
+    const marker = zoomSyncMarker(
+      params.interviewId,
+      `create:${params.start.getTime()}:${params.durationMins}`,
+    );
+    let result: { id: number; join_url: string };
+    try {
+      result = await createMeeting(params.workspaceId, {
+        topic: params.summary,
+        tracking_fields: [
+          { field: HARLY_TRACKING_FIELD, value: marker, visible: false },
+        ],
+        type: 2,
+        start_time: formatZoomDateTime(params.start),
+        duration: params.durationMins,
+      });
+    } catch (error) {
+      // The provider may have committed before the response was lost. Recover
+      // only an exact Harly marker; never guess from title or start time.
+      const recovered = await findMeetingByTrackingField(
+        params.workspaceId,
+        HARLY_TRACKING_FIELD,
+        marker,
+      ).catch((lookupError) => {
+        console.error("[zoom] Failed to reconcile ambiguous meeting create", lookupError);
+        return null;
+      });
+      if (!recovered) throw error;
+      result = recovered;
+    }
 
-    await db
-      .update(interviews)
-      .set({
-        meetLink: result.join_url,
-        zoomMeetingId: String(result.id),
-      })
-      .where(
-        and(
-          eq(interviews.id, params.interviewId),
-          eq(interviews.workspaceId, params.workspaceId),
-          activeCandidateForInterview(params.workspaceId),
-        ),
-      );
+    await persistZoomMeeting(params.workspaceId, params.interviewId, result);
 
     return { joinUrl: result.join_url, meetingId: String(result.id) };
   } catch (error) {
@@ -138,6 +175,16 @@ export async function replaceInterviewToZoom(params: {
   try {
     replacement = await createMeeting(params.workspaceId, {
       topic: params.summary,
+      tracking_fields: [
+        {
+          field: HARLY_TRACKING_FIELD,
+          value: zoomSyncMarker(
+            params.interviewId,
+            `replace:${params.start.getTime()}:${params.durationMins}`,
+          ),
+          visible: false,
+        },
+      ],
       type: 2,
       start_time: formatZoomDateTime(params.start),
       duration: params.durationMins,

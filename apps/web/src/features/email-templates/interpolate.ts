@@ -32,6 +32,7 @@ export const TEMPLATE_VARIABLES = [
   // Workspace
   { key: "company_name", label: "Company name", group: "Workspace" },
   { key: "portal_link", label: "Candidate portal link", group: "Workspace" },
+  { key: "booking_link", label: "Candidate booking link", group: "Workspace" },
   { key: "sender_name", label: "Your name", group: "Workspace" },
 ] as const;
 

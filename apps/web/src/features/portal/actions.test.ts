@@ -25,6 +25,7 @@ vi.mock("drizzle-orm", () => ({
   count: vi.fn(),
   eq: vi.fn(),
   gt: vi.fn(),
+  inArray: vi.fn(),
   isNull: vi.fn(),
   sql: vi.fn(),
 }));
@@ -54,6 +55,7 @@ vi.mock("@/lib/portal-auth", () => ({
 vi.mock("@/features/jobs/config", () => ({
   normalizeJobApplicationConfig: () => ({
     sections: { profile: { resume: { visibility: "optional" } } },
+    questions: [],
   }),
 }));
 vi.mock("@/features/portal/application-validation", () => ({

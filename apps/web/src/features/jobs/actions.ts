@@ -101,6 +101,9 @@ export async function createJobAction(formData: FormData) {
   // job unpublished. Without this, a new job always sat in draft regardless
   // of which button was pressed.
   if (formData.get("intent") !== "draft") {
+    // Creating open on day one is publishing: enforce jobs:publish on top of
+    // jobs:create so the approve/publish split holds at creation too.
+    await requireJobPermission("jobs:publish", job.id);
     await updateJobStatus(job.id, "open");
   }
 
@@ -134,8 +137,13 @@ export async function updateJobAction(formData: FormData) {
 
 export async function updateJobStatusAction(formData: FormData) {
   const jobId = String(formData.get("jobId") ?? "");
-  const context = await requireJobPermission("jobs:edit", jobId);
   const status = jobStatusSchema.parse(formData.get("status"));
+  // Publishing is its own permission (approve ≠ publish by design): flipping
+  // a job open must not ride on jobs:edit alone.
+  const context = await requireJobPermission(
+    status === "open" ? "jobs:publish" : "jobs:edit",
+    jobId,
+  );
   if (status === "open" && await getPendingJobApproval(jobId)) {
     throw new Error("Job has a pending approval request.");
   }

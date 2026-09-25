@@ -10,6 +10,7 @@ const schema = z.object({
   nativeSignEnabled: z.boolean(),
   remoteSignEnabled: z.boolean(),
   savedSignaturesEnabled: z.boolean(),
+  vectorSignaturesEnabled: z.boolean(),
   signatureOtpEnabled: z.boolean(),
   signatureTimelineEnabled: z.boolean(),
   signatureSecurityMode: z.enum(["link_only", "email_otp", "sso"]),
@@ -21,7 +22,7 @@ export async function saveSignatureSettings(input: unknown) {
   const parsed = schema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid signature settings." };
   if (parsed.data.signatureSecurityMode === "sso") return { ok: false, error: "SSO signing is reserved for a future release." };
-  const data = { ...parsed.data, signatureSecurityMode: parsed.data.signatureOtpEnabled ? "email_otp" : parsed.data.signatureSecurityMode, updatedAt: new Date() };
+  const data = { ...parsed.data, vectorSignaturesEnabled: true, signatureSecurityMode: parsed.data.signatureOtpEnabled ? "email_otp" : parsed.data.signatureSecurityMode, updatedAt: new Date() };
   await db.insert(workspaceSettings).values({ organizationId: context.organization.id, ...data }).onConflictDoUpdate({ target: workspaceSettings.organizationId, set: data });
   revalidatePath("/settings/signature");
   revalidatePath("/dashboard/documents");

@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { randomUUID } from "node:crypto";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@harly/db";
@@ -57,8 +57,9 @@ import {
 import { updateApplicationStatus } from "@/features/pipeline/actions";
 import {
   permanentlyDeleteCandidate,
-  deleteCandidate,
   restoreCandidate,
+  trashCandidate,
+  trashCandidates,
 } from "./data";
 import {
   listCandidateDirectory,
@@ -684,8 +685,8 @@ export async function createCandidate(input: {
     await emitWebhookEvent(
       workspace.id,
       "candidate.created",
-      { candidate: serializeCandidate(candidate) },
-      { skipDomainEvent: true, actorId: user.id },
+      { candidate: serializeCandidate(candidate), eventId: candidateEvent.eventId },
+      { skipDomainEvent: true, actorId: user.id, eventId: candidateEvent.eventId },
     );
     await logAuditEvent({
       workspaceId: workspace.id,
@@ -703,8 +704,8 @@ export async function createCandidate(input: {
       await emitWebhookEvent(
         workspace.id,
         "candidate.referred",
-        { referral: serializeCandidateReferral(referralResult.referral) },
-        { skipDomainEvent: true, actorId: user.id },
+        { referral: serializeCandidateReferral(referralResult.referral), eventId: referralResult.event.eventId },
+        { skipDomainEvent: true, actorId: user.id, eventId: referralResult.event.eventId },
       );
       await logAuditEvent({
         workspaceId: workspace.id,
@@ -765,13 +766,32 @@ export async function updateCandidateProfile(input: {
 
     await requireCandidatePermission("candidates:edit", input.candidateId);
 
-    const [candidate] = await db.transaction(async (tx) => {
+    const newEmail = parsed.data.email.trim().toLowerCase();
+
+    const result = await db.transaction(async (tx) => {
+      const [existingEmail] = await tx
+        .select({ id: candidates.id })
+        .from(candidates)
+        .where(
+          and(
+            eq(candidates.workspaceId, input.workspaceId),
+            sql`lower(${candidates.email}) = ${newEmail}`,
+            ne(candidates.id, input.candidateId),
+            isNull(candidates.deletedAt),
+          ),
+        )
+        .limit(1);
+
+      if (existingEmail) {
+        return { error: "A candidate with this email already exists." } as const;
+      }
+
       const [row] = await tx
         .update(candidates)
         .set({
           firstName: parsed.data.firstName,
           lastName: parsed.data.lastName,
-          email: parsed.data.email.toLowerCase(),
+          email: newEmail,
           phone: parsed.data.phone,
           address: parsed.data.address,
           linkedinUrl: parsed.data.linkedinUrl,
@@ -790,7 +810,9 @@ export async function updateCandidateProfile(input: {
         )
         .returning({ id: candidates.id });
 
-      if (!row) return [undefined];
+      if (!row) {
+        return { error: "Candidate not found." } as const;
+      }
 
       await tx.insert(activityEvents).values({
         workspaceId: input.workspaceId,
@@ -803,11 +825,11 @@ export async function updateCandidateProfile(input: {
         },
       });
 
-      return [row];
+      return { candidate: row } as const;
     });
 
-    if (!candidate) {
-      return { success: false, error: "Candidate not found." };
+    if ("error" in result && result.error) {
+      return { success: false, error: result.error };
     }
 
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
@@ -815,11 +837,8 @@ export async function updateCandidateProfile(input: {
 
     return { success: true };
   } catch (error) {
-    const message = "Unable to update candidate.";
-
-    console.error("Failed to update candidate profile", error);
-
-    return { success: false, error: message };
+    emailLog.error(error, "Failed to update candidate profile");
+    return { success: false, error: "Unable to update candidate." };
   }
 }
 
@@ -1152,16 +1171,43 @@ export async function createScorecard(input: {
       }
       stageName = stage.name;
     }
-    await db.insert(scorecards).values({
-      workspaceId: input.workspaceId,
-      candidateId: input.candidateId,
-      applicationId: application.id,
-      stageId: parsed.data.stageId ?? null,
-      authorId: user.id,
-      rating: parsed.data.rating,
-      comment: parsed.data.comment?.trim() || null,
-      stageName,
-    });
+    const [existingScorecard] = await db
+      .select({ id: scorecards.id })
+      .from(scorecards)
+      .where(
+        and(
+          eq(scorecards.workspaceId, input.workspaceId),
+          eq(scorecards.applicationId, application.id),
+          eq(scorecards.authorId, user.id),
+          parsed.data.stageId
+            ? eq(scorecards.stageId, parsed.data.stageId)
+            : isNull(scorecards.stageId),
+        ),
+      )
+      .limit(1);
+
+    if (existingScorecard) {
+      await db
+        .update(scorecards)
+        .set({
+          rating: parsed.data.rating,
+          comment: parsed.data.comment?.trim() || null,
+          stageName,
+          updatedAt: new Date(),
+        })
+        .where(eq(scorecards.id, existingScorecard.id));
+    } else {
+      await db.insert(scorecards).values({
+        workspaceId: input.workspaceId,
+        candidateId: input.candidateId,
+        applicationId: application.id,
+        stageId: parsed.data.stageId ?? null,
+        authorId: user.id,
+        rating: parsed.data.rating,
+        comment: parsed.data.comment?.trim() || null,
+        stageName,
+      });
+    }
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
     return { success: true };
   } catch {
@@ -1861,69 +1907,30 @@ export async function sendCandidateMessage(input: {
   }
 }
 
-// ── Candidate permanent deletion ──
+// ── Candidate deletion lifecycle ──
 
 const candidateIdsSchema = z.array(z.string().min(1)).min(1).max(200);
 
-/** Permanently delete a candidate and all related records. */
+/** Move a candidate to trash. Does not enqueue a durable purge job. */
 export async function trashCandidateAction(
   candidateId: string,
 ): Promise<CandidateActionState> {
   await requireCandidatePermission("candidates:delete", candidateId);
   const { user, organization } = await getWorkspaceContext();
-  const job = await enqueueCandidateDeletionJob({
-    workspaceId: organization.id,
-    candidateId,
-    requestedBy: user.email,
-  });
-  if (!job)
-    return { success: false, error: "Could not queue candidate deletion." };
-  if (job.status === "completed") return { success: true };
-  if (["processing", "blocked", "dead_letter"].includes(job.status)) {
-    return {
-      success: false,
-      error: "Candidate deletion is already being processed or blocked.",
-    };
-  }
-  const claimed = await startCandidateDeletionJob(job.id, `request:${user.id}`);
-  if (!claimed) {
-    return {
-      success: false,
-      error: "Candidate deletion is already being processed.",
-    };
-  }
-  const result = await deleteCandidate(candidateId, user.email);
+  const result = await trashCandidate(candidateId);
 
   if (!result.ok) {
-    if (result.error.includes("legal hold")) {
-      await markCandidateDeletionBlocked(
-        job.id,
-        result.error,
-        `request:${user.id}`,
-      );
-    } else {
-      await markCandidateDeletionFailed(
-        job.id,
-        result.error,
-        `request:${user.id}`,
-      );
-    }
     return { success: false, error: result.error };
   }
-  await markCandidateDeletionCompleted(
-    job.id,
-    result.stats,
-    `request:${user.id}`,
-  );
 
   await logAuditEvent({
     workspaceId: organization.id,
     actorId: user.id,
     actorEmail: user.email,
-    action: "candidate.deleted",
+    action: "candidate.trashed",
     resourceType: "candidate",
     resourceId: candidateId,
-    severity: "critical",
+    severity: "warning",
   });
 
   revalidatePath("/dashboard/candidates");
@@ -1933,7 +1940,7 @@ export async function trashCandidateAction(
   return { success: true };
 }
 
-/** Permanently delete multiple candidates and all related records. */
+/** Move multiple candidates to trash. Does not enqueue durable purge jobs. */
 export async function bulkTrashCandidatesAction(
   candidateIds: string[],
 ): Promise<CandidateActionState & { count?: number }> {
@@ -1943,71 +1950,12 @@ export async function bulkTrashCandidatesAction(
   }
 
   await requirePermission("candidates:delete");
-  const { user, organization } = await getWorkspaceContext();
-  const results = [];
-  for (const candidateId of parsed.data) {
-    const job = await enqueueCandidateDeletionJob({
-      workspaceId: organization.id,
-      candidateId,
-      requestedBy: user.email,
-    });
-    if (!job) {
-      results.push({ ok: false, error: "Could not queue candidate deletion." });
-      continue;
-    }
-    if (job.status === "completed") {
-      results.push({ ok: true });
-      continue;
-    }
-    if (["processing", "blocked", "dead_letter"].includes(job.status)) {
-      results.push({
-        ok: false,
-        error: "Candidate deletion is already being processed or blocked.",
-      });
-      continue;
-    }
-    const claimed = await startCandidateDeletionJob(job.id, `bulk:${user.id}`);
-    if (!claimed) {
-      results.push({
-        ok: false,
-        error: "Candidate deletion is already being processed.",
-      });
-      continue;
-    }
-    const result = await deleteCandidate(candidateId, user.email);
-    if (result.ok)
-      await markCandidateDeletionCompleted(
-        job.id,
-        result.stats,
-        `bulk:${user.id}`,
-      );
-    else if (result.error.includes("legal hold"))
-      await markCandidateDeletionBlocked(
-        job.id,
-        result.error,
-        `bulk:${user.id}`,
-      );
-    else
-      await markCandidateDeletionFailed(
-        job.id,
-        result.error,
-        `bulk:${user.id}`,
-      );
-    results.push(result);
-  }
-  const count = results.filter((result) => result.ok).length;
-  if (count !== results.length) {
-    return {
-      success: false,
-      error: "Some candidates could not be deleted.",
-      count,
-    };
-  }
+  const result = await trashCandidates(parsed.data);
 
   revalidatePath("/dashboard/candidates");
   revalidatePath("/dashboard/pipeline");
   revalidatePath("/dashboard");
-  return { success: true, count };
+  return { success: true, count: result.count };
 }
 
 /** Restore a candidate out of the trash. */
@@ -2038,10 +1986,10 @@ export async function permanentlyDeleteCandidateAction(
     workspaceId: organization.id,
     candidateId,
     requestedBy: user.email,
+    requeueCompleted: true,
   });
   if (!job)
     return { success: false, error: "Could not queue candidate deletion." };
-  if (job.status === "completed") return { success: true };
   if (["processing", "blocked", "dead_letter"].includes(job.status)) {
     return {
       success: false,

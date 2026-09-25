@@ -11,7 +11,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
   const { token } = await params;
   const target = await resolveNativeSigningToken(token);
   if (!target) return NextResponse.json({ error: "Signing link is invalid or expired." }, { status: 404, headers: { "Cache-Control": "private, no-store" } });
-  return NextResponse.json({ documentName: target.documentName, recipientName: target.name, securityMode: target.securityMode, expiresAt: target.expiresAt.toISOString(), requiresOtp: target.securityMode === "email_otp" }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ documentName: target.documentName, recipientName: target.name, securityMode: target.securityMode, routingOrder: target.routingOrder, signerCount: target.signerCount, expiresAt: target.expiresAt.toISOString(), requiresOtp: target.securityMode === "email_otp" }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(request: NextRequest, { params }: Params) {

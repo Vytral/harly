@@ -17,7 +17,7 @@ without a command result, screenshot, log excerpt, or linked review.
 - [ ] Publish the container image to the intended registry and record its digest.
 - [ ] Update `release-manifest.json` and the generated CLI release metadata to
   point to the same image and digest.
-- [ ] Confirm the release does not rely on a floating `latest` tag.
+- [ ] Confirm the release tag is `vX.Y.Z`, `vX.Y.Z-beta.N`, or `vX.Y.Z-rc.N`. A stable tag also moves `latest` to the same digest. A prerelease does not. No `edge` or `sha-*` tag is published.
 - [ ] Prepare a rollback version and confirm the operator knows where its
   backup, image, and migration notes are stored.
 
@@ -74,7 +74,7 @@ not use local generated files, stale build output, or production candidate data.
 - [ ] Test the exact upgrade command on a disposable installation:
 
   ```bash
-  npx @harly/cli update --to <release-version>
+  npx @harly/cli update
   npx @harly/cli doctor
   ```
 

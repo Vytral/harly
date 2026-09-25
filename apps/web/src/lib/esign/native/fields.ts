@@ -9,6 +9,8 @@ export type NativeSnapshotField = {
   label?: string | null;
   required?: boolean;
   order?: number;
+  /** Zero-based signer slot. Omitted legacy fields belong to the first signer. */
+  recipientIndex?: number;
 };
 
 function isFiniteNumber(value: unknown): value is number {
@@ -18,6 +20,7 @@ function isFiniteNumber(value: unknown): value is number {
 function isValidSnapshotField(value: unknown): value is NativeSnapshotField {
   if (!value || typeof value !== "object") return false;
   const field = value as Record<string, unknown>;
+  const recipientIndex = field.recipientIndex;
   return (
     typeof field.id === "string" &&
     (field.type === "signature" || field.type === "text") &&
@@ -38,6 +41,7 @@ function isValidSnapshotField(value: unknown): value is NativeSnapshotField {
     (field.label === undefined || field.label === null || typeof field.label === "string") &&
     (field.required === undefined || typeof field.required === "boolean") &&
     (field.order === undefined || Number.isInteger(field.order))
+    && (recipientIndex === undefined || (typeof recipientIndex === "number" && Number.isInteger(recipientIndex) && recipientIndex >= 0 && recipientIndex < 10))
   );
 }
 

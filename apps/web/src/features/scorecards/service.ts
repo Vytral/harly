@@ -217,6 +217,37 @@ export async function createScorecardForApi(input: {
     throw ApiError.unprocessable("Stage name does not match stage id.");
   }
 
+  if (application) {
+    const [existingScorecard] = await db
+      .select({ id: scorecards.id })
+      .from(scorecards)
+      .where(
+        and(
+          eq(scorecards.workspaceId, input.workspaceId),
+          eq(scorecards.applicationId, application.id),
+          eq(scorecards.authorId, actor.userId),
+          stage ? eq(scorecards.stageId, stage.id) : isNull(scorecards.stageId),
+        ),
+      )
+      .limit(1);
+
+    if (existingScorecard) {
+      const [updated] = await db
+        .update(scorecards)
+        .set({
+          rating: input.values.rating,
+          comment: input.values.comment?.trim() || null,
+          criteria: input.values.criteria ?? [],
+          stageId: stage?.id ?? null,
+          stageName: stage?.name ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(scorecards.id, existingScorecard.id))
+        .returning();
+      return updated;
+    }
+  }
+
   const [created] = await db
     .insert(scorecards)
     .values({

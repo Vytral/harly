@@ -1,27 +1,29 @@
 "use client";
 
-import { useCallback } from "react";
-
-import { cn } from "@/lib/utils";
-
+import { useCallback, useId } from "react";
+import { Plus, RefreshCw, X } from "lucide-react";
 import type { ConditionNode, FieldRef, LeafCondition, Operator } from "../schema";
-import { OPERATORS } from "../schema";
-import { FIELD_KIND_CATALOG, fieldKindMeta, operatorMeta } from "./catalog";
+import { FIELD_KIND_CATALOG, fieldKindMeta, operatorMeta, RECRUITER_OPERATORS } from "./catalog";
+import { BuilderSelect } from "./inspector/BuilderSelect";
+import { builderFieldClass } from "./field-styles";
 
 /**
- * The IF panel: a visual editor for the recursive AND/OR/NOT condition tree.
- * The builder stores conditions as an array of root nodes (implicit AND).
- * Empty = always match (the WHEN → DO case).
- *
- * All edits are structural clones (never mutate in place), so React state
- * updates stay correct and the Zod schema can re-validate on save.
+ * The IF panel: Recruiter-friendly condition builder.
+ * Supports quick-presets for Job, Stage, Tag, AI score, and Candidate source,
+ * while remaining 100% compatible with the recursive ConditionNode AST schema.
  */
 export function ConditionPanel({
   value,
   onChange,
+  stageNames = [],
+  jobs = [],
+  tags = [],
 }: {
   value: ConditionNode[];
   onChange: (nodes: ConditionNode[]) => void;
+  stageNames?: string[];
+  jobs?: { id: string; title: string }[];
+  tags?: string[];
 }) {
   const update = useCallback(
     (index: number, node: ConditionNode) => {
@@ -31,12 +33,23 @@ export function ConditionPanel({
     },
     [value, onChange],
   );
+
   const remove = useCallback(
     (index: number) => onChange(value.filter((_, i) => i !== index)),
     [value, onChange],
   );
+
   const addRoot = useCallback(
-    () => onChange([...value, { type: "leaf", field: { kind: "candidate", path: "firstName" }, op: "eq", value: "" }]),
+    () =>
+      onChange([
+        ...value,
+        {
+          type: "leaf",
+          field: { kind: "candidate", path: "source" },
+          op: "eq",
+          value: "",
+        },
+      ]),
     [value, onChange],
   );
 
@@ -54,6 +67,9 @@ export function ConditionPanel({
               onRemove={() => remove(i)}
               depth={0}
               joiner={i < value.length - 1 ? "and" : undefined}
+              stageNames={stageNames}
+              jobs={jobs}
+              tags={tags}
             />
           ))}
         </TreeList>
@@ -63,9 +79,10 @@ export function ConditionPanel({
         <button
           type="button"
           onClick={addRoot}
-          className="w-full rounded-md border border-dashed border-mist-border py-2 text-xs font-medium text-ink-soft transition-colors hover:border-foreground/20 hover:bg-row-wash/50 hover:text-foreground"
+          className="w-full rounded-xl border border-dashed border-border py-2.5 text-xs font-medium text-soft-ink transition-colors duration-150 ease-out hover:border-foreground/30 hover:bg-soft-kraft/40 hover:text-foreground"
         >
-          + add another condition
+          <Plus className="mr-1 inline size-3.5" aria-hidden />
+          Add another filter condition
         </button>
       )}
     </div>
@@ -74,39 +91,42 @@ export function ConditionPanel({
 
 function EmptyConditions({ onAdd }: { onAdd: () => void }) {
   return (
-    <div className="rounded-lg border border-dashed border-mist-border bg-kraft/30 px-4 py-6 text-center">
-      <p className="text-sm font-medium text-foreground">No conditions — runs every time.</p>
-      <p className="mt-1 text-xs text-ink-soft">Add an IF to only run when something is true.</p>
+    <div className="rounded-xl border border-dashed border-border bg-warm-paper px-4 py-5 text-center">
+      <p className="text-sm font-semibold text-foreground">
+        No conditions — runs for every candidate
+      </p>
+      <p className="mt-1 text-xs text-soft-ink">
+        Add filters to only run when specific criteria match (e.g. source, job, AI score, tag).
+      </p>
       <button
         type="button"
         onClick={onAdd}
-        className="mt-3 rounded-md bg-foreground px-3 py-1.5 text-xs font-medium text-background transition-colors hover:bg-foreground/85"
+        className="mt-3 inline-flex items-center gap-1 rounded-full bg-foreground px-3.5 py-1.5 text-xs font-medium text-background transition-opacity hover:opacity-90"
       >
-        + add condition
+        <Plus className="size-3.5" aria-hidden />
+        Add condition
       </button>
     </div>
   );
 }
 
-/** A joiner pill ("and" / "or") that sits centered on the tree's connector rail. */
 function Joiner({ word }: { word: "and" | "or" }) {
   return (
     <div className="relative flex h-6 items-center pl-[15px]" aria-hidden>
-      <span className="rounded-full bg-paper px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-soft ring-4 ring-paper">
+      <span className="font-chrome rounded-full bg-soft-kraft px-2 py-0.5 text-[11px] uppercase tracking-wider text-soft-ink">
         {word}
       </span>
     </div>
   );
 }
 
-/** Vertical rail connecting sibling nodes at the top level — no group chrome, just a tree guide. */
 function TreeList({ children }: { children: React.ReactNode }) {
-  return <div className="relative space-y-0 border-l border-dashed border-mist-border pl-4">{children}</div>;
+  return (
+    <div className="relative space-y-0 border-l border-dashed border-border/80 pl-4">
+      {children}
+    </div>
+  );
 }
-
-// ---------------------------------------------------------------------------
-// Recursive node editor
-// ---------------------------------------------------------------------------
 
 function NodeEditor({
   node,
@@ -114,20 +134,44 @@ function NodeEditor({
   onRemove,
   depth,
   joiner,
+  stageNames,
+  jobs,
+  tags,
 }: {
   node: ConditionNode;
   onChange: (n: ConditionNode) => void;
   onRemove: () => void;
   depth: number;
   joiner?: "and" | "or";
+  stageNames: string[];
+  jobs: { id: string; title: string }[];
+  tags: string[];
 }) {
   return (
     <div className="relative">
-      <div className="absolute -left-4 top-4 h-px w-4 border-t border-dashed border-mist-border" aria-hidden />
+      <div
+        className="absolute -left-4 top-4 h-px w-4 border-t border-dashed border-border"
+        aria-hidden
+      />
       {node.type === "leaf" ? (
-        <LeafEditor node={node} onChange={onChange} onRemove={onRemove} />
+        <LeafEditor
+          node={node}
+          onChange={onChange}
+          onRemove={onRemove}
+          stageNames={stageNames}
+          jobs={jobs}
+          tags={tags}
+        />
       ) : (
-        <GroupEditor node={node} onChange={onChange} onRemove={onRemove} depth={depth} />
+        <GroupEditor
+          node={node}
+          onChange={onChange}
+          onRemove={onRemove}
+          depth={depth}
+          stageNames={stageNames}
+          jobs={jobs}
+          tags={tags}
+        />
       )}
       {joiner && <Joiner word={joiner} />}
     </div>
@@ -139,21 +183,23 @@ function GroupEditor({
   onChange,
   onRemove,
   depth,
+  stageNames,
+  jobs,
+  tags,
 }: {
   node: Extract<ConditionNode, { type: "and" | "or" | "not" }>;
   onChange: (n: ConditionNode) => void;
   onRemove: () => void;
   depth: number;
+  stageNames: string[];
+  jobs: { id: string; title: string }[];
+  tags: string[];
 }) {
-  const groupLabel = node.type === "and" ? "All of" : node.type === "or" ? "Any of" : "Not";
-  const badgeClass =
-    node.type === "or" ? "bg-sage text-sage-ink" : node.type === "not" ? "bg-rust/10 text-rust" : "bg-kraft text-ink-soft";
-
   return (
-    <div className="rounded-lg border border-mist-border bg-paper-raised p-3 shadow-soft">
+    <div className="rounded-xl border border-border bg-warm-paper p-3 shadow-xs">
       <div className="mb-2.5 flex items-center justify-between">
-        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide", badgeClass)}>
-          {groupLabel}
+        <span className="font-chrome rounded-full bg-soft-kraft px-2.5 py-0.5 text-[11px] uppercase tracking-wider text-foreground">
+          {node.type === "and" ? "All of these" : node.type === "or" ? "Any of these" : "Exclude"}
         </span>
         <div className="flex items-center gap-1">
           {(node.type === "and" || node.type === "or") && (
@@ -163,41 +209,65 @@ function GroupEditor({
                 onClick={() =>
                   onChange({
                     ...node,
-                    children: [...node.children, { type: "leaf", field: { kind: "candidate", path: "firstName" }, op: "eq", value: "" }],
+                    children: [
+                      ...node.children,
+                      {
+                        type: "leaf",
+                        field: { kind: "candidate", path: "source" },
+                        op: "eq",
+                        value: "",
+                      },
+                    ],
                   })
                 }
-                className="rounded px-2 py-1 text-xs font-medium text-foreground hover:bg-row-wash"
+                className="rounded-md px-2 py-1 text-xs font-medium text-foreground hover:bg-soft-kraft"
               >
-                + add
+                <Plus className="mr-1 inline size-3.5" aria-hidden />
+                add
               </button>
               <button
                 type="button"
-                onClick={() => onChange({ ...node, type: node.type === "and" ? "or" : "and" })}
-                className="rounded px-1.5 py-1 text-xs text-ink-soft hover:bg-kraft hover:text-foreground"
+                onClick={() =>
+                  onChange({
+                    ...node,
+                    type: node.type === "and" ? "or" : "and",
+                  })
+                }
+                className="rounded-md px-2 py-1 text-xs text-soft-ink hover:bg-soft-kraft hover:text-foreground"
                 title="Switch AND / OR"
-                aria-label="Switch AND / OR"
               >
-                ⇄
+                <RefreshCw className="mr-1 inline size-3.5" aria-hidden />
+                Switch
               </button>
             </>
           )}
           <button
             type="button"
             onClick={onRemove}
-            className="rounded px-1.5 py-1 text-xs text-ink-soft hover:text-rust"
+            className="rounded p-1 text-xs text-soft-ink hover:text-danger-rust"
             aria-label="Remove group"
           >
-            ✕
+            <X className="size-3.5" aria-hidden />
           </button>
         </div>
       </div>
 
       {node.type === "not" ? (
         <TreeList>
-          <NodeEditor node={node.child} onChange={(child) => onChange({ ...node, child })} onRemove={onRemove} depth={depth + 1} />
+          <NodeEditor
+            node={node.child}
+            onChange={(child) => onChange({ ...node, child })}
+            onRemove={onRemove}
+            depth={depth + 1}
+            stageNames={stageNames}
+            jobs={jobs}
+            tags={tags}
+          />
         </TreeList>
       ) : node.children.length === 0 ? (
-        <p className="px-2 py-1 text-xs italic text-ink-soft">{node.type === "and" ? "always true" : "never"}</p>
+        <p className="px-2 py-1 text-xs italic text-soft-ink">
+          {node.type === "and" ? "Always matches" : "Never matches"}
+        </p>
       ) : (
         <TreeList>
           {node.children.map((child, i) => (
@@ -214,7 +284,16 @@ function GroupEditor({
                 onChange({ ...node, children });
               }}
               depth={depth + 1}
-              joiner={i < node.children.length - 1 ? (node.type === "and" ? "and" : "or") : undefined}
+              joiner={
+                i < node.children.length - 1
+                  ? node.type === "and"
+                    ? "and"
+                    : "or"
+                  : undefined
+              }
+              stageNames={stageNames}
+              jobs={jobs}
+              tags={tags}
             />
           ))}
         </TreeList>
@@ -223,146 +302,370 @@ function GroupEditor({
   );
 }
 
+// Preset definitions for recruiters
+type PresetKey =
+  | "job"
+  | "source"
+  | "stage"
+  | "tag"
+  | "ai_score"
+  | "location"
+  | "custom";
+
+function getPresetKey(field: FieldRef): PresetKey {
+  if (field.kind === "job" && (field.path === "id" || field.path === "title")) return "job";
+  if (field.kind === "candidate" && field.path === "source") return "source";
+  if (field.kind === "application" && (field.path === "stage" || field.path === "stageId")) return "stage";
+  if (field.kind === "candidate" && field.path === "tags") return "tag";
+  if (field.kind === "ai" && field.path === "score") return "ai_score";
+  if (field.kind === "candidate" && field.path === "location") return "location";
+  return "custom";
+}
+
 function LeafEditor({
   node,
   onChange,
   onRemove,
+  stageNames,
+  jobs,
+  tags,
 }: {
   node: Extract<ConditionNode, { type: "leaf" }>;
   onChange: (n: ConditionNode) => void;
   onRemove: () => void;
+  stageNames: string[];
+  jobs: { id: string; title: string }[];
+  tags: string[];
 }) {
-  const opMeta = operatorMeta(node.op);
-  const field = node.field;
+  const preset = getPresetKey(node.field);
 
-  function setField(patch: Partial<FieldRef>) {
-    onChange({ ...node, field: { ...field, ...patch } as FieldRef });
+  function setPreset(p: PresetKey) {
+    switch (p) {
+      case "job":
+        onChange({
+          type: "leaf",
+          field: { kind: "job", path: "title" },
+          op: "eq",
+          value: jobs[0]?.title ?? "",
+        });
+        break;
+      case "source":
+        onChange({
+          type: "leaf",
+          field: { kind: "candidate", path: "source" },
+          op: "eq",
+          value: "LinkedIn",
+        });
+        break;
+      case "stage":
+        onChange({
+          type: "leaf",
+          field: { kind: "application", path: "stage" },
+          op: "eq",
+          value: stageNames[0] ?? "",
+        });
+        break;
+      case "tag":
+        onChange({
+          type: "leaf",
+          field: { kind: "candidate", path: "tags" },
+          op: "includes",
+          value: tags[0] ?? "",
+        });
+        break;
+      case "ai_score":
+        onChange({
+          type: "leaf",
+          field: { kind: "ai", path: "score" },
+          op: "gte",
+          value: 75,
+        });
+        break;
+      case "location":
+        onChange({
+          type: "leaf",
+          field: { kind: "candidate", path: "location" },
+          op: "contains",
+          value: "",
+        });
+        break;
+      case "custom":
+        onChange({
+          type: "leaf",
+          field: { kind: "candidate", path: "firstName" },
+          op: "eq",
+          value: "",
+        });
+        break;
+    }
   }
+
   function setOp(op: Operator) {
-    // Coerce value to the operator's expected kind when switching.
     let value: LeafCondition["value"] = node.value;
     if (op === "is_set" || op === "is_empty") value = null;
     else if (operatorMeta(op).valueKind === "number" && typeof value !== "number") value = 0;
     else if (operatorMeta(op).valueKind === "list" && !Array.isArray(value)) value = [];
-    else if (operatorMeta(op).valueKind === "text" && Array.isArray(value)) value = value.join(", ");
     onChange({ ...node, op, value });
   }
 
   return (
-    <div className="rounded-lg border border-mist-border bg-paper-raised p-3 shadow-soft">
-      <div className="flex items-start gap-2">
-        <div className="grid flex-1 grid-cols-1 gap-2 sm:grid-cols-[1fr_auto_1fr]">
-          {/* Field */}
-          <div className="flex gap-1.5">
-            <select
-              value={field.kind}
-              onChange={(e) => {
-                const kind = e.target.value as FieldRef["kind"];
-                if (kind === "literal") setField({ kind, value: "" } as FieldRef);
-                else setField({ kind, path: fieldKindMeta(kind).paths[0] ?? "" } as FieldRef);
-              }}
-              className="h-9 w-[42%] rounded-md border border-mist-border bg-kraft/40 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-            >
-              {FIELD_KIND_CATALOG.map((f) => (
-                <option key={f.kind} value={f.kind}>{f.label}</option>
-              ))}
-            </select>
-            {field.kind === "literal" ? (
-              <input
-                value={String((field as Extract<FieldRef, { kind: "literal" }>).value ?? "")}
-                onChange={(e) => setField({ kind: "literal", value: e.target.value } as FieldRef)}
-                placeholder="value"
-                className="h-9 flex-1 rounded-md border border-mist-border bg-kraft/40 px-2.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-              />
-            ) : (
-              <select
-                value={(field as Extract<FieldRef, { kind: "candidate" }>).path}
-                onChange={(e) => setField({ path: e.target.value } as FieldRef)}
-                className="h-9 flex-1 rounded-md border border-mist-border bg-kraft/40 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
-              >
-                {(fieldKindMeta(field.kind).paths.length ? fieldKindMeta(field.kind).paths : ["custom"]).map((p) => (
-                  <option key={p} value={p}>{p}</option>
-                ))}
-                {/* Allow a free-text path if the user typed one not in the quick-picks */}
-                {(field as Extract<FieldRef, { kind: "candidate" }>).path &&
-                  !fieldKindMeta(field.kind).paths.includes((field as Extract<FieldRef, { kind: "candidate" }>).path) && (
-                    <option value={(field as Extract<FieldRef, { kind: "candidate" }>).path}>
-                      {(field as Extract<FieldRef, { kind: "candidate" }>).path}
-                    </option>
-                  )}
-              </select>
-            )}
-          </div>
-
-          {/* Operator */}
-          <select
-            value={node.op}
-            onChange={(e) => setOp(e.target.value as Operator)}
-            className="h-9 rounded-md border border-mist-border bg-kraft/40 px-2 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+    <div className="rounded-2xl border border-border/80 bg-pure-snow p-3.5 shadow-2xs">
+      <div className="flex flex-col gap-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <span className="font-chrome text-[10px] font-semibold uppercase tracking-wider text-soft-ink">
+            Field
+          </span>
+          <button
+            type="button"
+            onClick={onRemove}
+            className="rounded p-1 text-soft-ink hover:text-danger-rust transition-colors"
+            aria-label="Remove condition"
           >
-            {OPERATORS.map((op) => (
-              <option key={op} value={op}>{operatorMeta(op).label}</option>
-            ))}
-          </select>
-
-          {/* Value */}
-          <ValueInput op={node.op} value={node.value} onChange={(value) => onChange({ ...node, value })} />
+            <X className="size-3.5" aria-hidden />
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={onRemove}
-          className="mt-0.5 shrink-0 rounded p-1.5 text-ink-soft hover:text-rust"
-          aria-label="Remove condition"
+        <BuilderSelect
+          value={preset}
+          onChange={(e) => setPreset(e.target.value as PresetKey)}
+          aria-label="Condition field"
+          className={builderFieldClass({ className: "w-full font-medium" })}
         >
-          ✕
-        </button>
+          <option value="source">Candidate source</option>
+          <option value="job">Job applied for</option>
+          <option value="stage">Current stage</option>
+          <option value="tag">Candidate tag</option>
+          <option value="ai_score">AI match score</option>
+          <option value="location">Location</option>
+          <option value="custom">Custom field…</option>
+        </BuilderSelect>
+
+        <span className="font-chrome text-[10px] font-semibold uppercase tracking-wider text-soft-ink">
+          Operator
+        </span>
+        <BuilderSelect
+          value={node.op}
+          onChange={(e) => setOp(e.target.value as Operator)}
+          aria-label="Condition operator"
+          className={builderFieldClass({ className: "w-full" })}
+        >
+          {RECRUITER_OPERATORS.map((op) => (
+            <option key={op} value={op}>
+              {operatorMeta(op).label}
+            </option>
+          ))}
+        </BuilderSelect>
+
+        {node.op !== "is_set" && node.op !== "is_empty" && (
+          <>
+            <span className="font-chrome text-[10px] font-semibold uppercase tracking-wider text-soft-ink">
+              Value
+            </span>
+            <div className="min-w-0 w-full">
+              <SmartValueInput
+                preset={preset}
+                op={node.op}
+                value={node.value}
+                onChange={(v) => onChange({ ...node, value: v })}
+                stageNames={stageNames}
+                jobs={jobs}
+                tags={tags}
+              />
+            </div>
+          </>
+        )}
       </div>
-      {!opMeta.wantsValue && (
-        <p className="mt-1.5 text-[11px] text-ink-soft">{opMeta.label} — no value needed.</p>
+
+      {/* Fallback Custom Field Details (only if 'custom' is selected) */}
+      {preset === "custom" && (
+        <div className="mt-2.5 flex items-center gap-2 border-t border-hairline-c pt-2 text-xs">
+          <span className="text-soft-ink">Field:</span>
+          <BuilderSelect
+            value={node.field.kind}
+            onChange={(e) => {
+              const kind = e.target.value as FieldRef["kind"];
+              if (kind === "literal") {
+                onChange({ ...node, field: { kind, value: "" } as FieldRef });
+              } else {
+                onChange({
+                  ...node,
+                  field: { kind, path: fieldKindMeta(kind).paths[0] ?? "" } as FieldRef,
+                });
+              }
+            }}
+            aria-label="Custom field source"
+            className="h-7 rounded border border-border bg-pure-snow px-2 text-xs text-foreground"
+          >
+            {FIELD_KIND_CATALOG.map((f) => (
+              <option key={f.kind} value={f.kind}>
+                {f.label}
+              </option>
+            ))}
+          </BuilderSelect>
+          {node.field.kind !== "literal" && (
+            <input
+              value={(node.field as { path: string }).path}
+              onChange={(e) =>
+                onChange({
+                  ...node,
+                  field: { ...node.field, path: e.target.value } as FieldRef,
+                })
+              }
+              placeholder="property (e.g. headline)"
+              className="h-7 flex-1 rounded border border-border bg-pure-snow px-2 text-xs text-foreground"
+            />
+          )}
+        </div>
       )}
     </div>
   );
 }
 
-function ValueInput({
+function SmartValueInput({
+  preset,
   op,
   value,
   onChange,
+  stageNames,
+  jobs,
+  tags,
 }: {
+  preset: PresetKey;
   op: Operator;
-  value: string | number | boolean | null | Array<string | number | boolean>;
+  value: unknown;
   onChange: (v: string | number | boolean | null | Array<string | number | boolean>) => void;
+  stageNames: string[];
+  jobs: { id: string; title: string }[];
+  tags: string[];
 }) {
+  const uniqueId = useId().replace(/:/g, "");
   const meta = operatorMeta(op);
-  if (!meta.wantsValue) return <span />;
+  if (!meta.wantsValue) {
+    return (
+      <div className="flex h-9 items-center px-2 text-xs italic text-soft-ink">
+        No value required
+      </div>
+    );
+  }
 
-  if (meta.valueKind === "number") {
+  // Job picker preset
+  if (preset === "job" && jobs.length > 0) {
+    return (
+      <BuilderSelect
+        value={String(value ?? "")}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="Job condition value"
+        className={builderFieldClass()}
+      >
+        <option value="">Select a job…</option>
+        {jobs.map((j) => (
+          <option key={j.id} value={j.title}>
+            {j.title}
+          </option>
+        ))}
+      </BuilderSelect>
+    );
+  }
+
+  // Stage picker preset
+  if (preset === "stage" && stageNames.length > 0) {
+    return (
+      <BuilderSelect
+        value={String(value ?? "")}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="Stage condition value"
+        className={builderFieldClass()}
+      >
+        <option value="">Select a stage…</option>
+        {stageNames.map((s) => (
+          <option key={s} value={s}>
+            {s}
+          </option>
+        ))}
+      </BuilderSelect>
+    );
+  }
+
+  // Tag picker preset
+  if (preset === "tag") {
+    const listId = `preset-tags-${uniqueId}`;
+    return (
+      <div className="relative">
+        <input
+          list={listId}
+          value={String(value ?? "")}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Tag label (e.g. vip)"
+          aria-label="Candidate tag"
+          className={builderFieldClass()}
+        />
+        <datalist id={listId}>
+          {tags.map((t) => (
+            <option key={t} value={t} />
+          ))}
+        </datalist>
+      </div>
+    );
+  }
+
+  // Candidate source quick suggestions
+  if (preset === "source") {
+    const listId = `preset-sources-${uniqueId}`;
+    return (
+      <div className="relative">
+        <input
+          list={listId}
+          value={String(value ?? "")}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder="Source (e.g. LinkedIn, Referral)"
+          aria-label="Candidate source"
+          className={builderFieldClass()}
+        />
+        <datalist id={listId}>
+          {["LinkedIn", "Referral", "Indeed", "Career page", "Inbound", "Agency"].map(
+            (s) => (
+              <option key={s} value={s} />
+            ),
+          )}
+        </datalist>
+      </div>
+    );
+  }
+
+  // Number input for AI score or numbers
+  if (preset === "ai_score" || meta.valueKind === "number") {
     return (
       <input
         type="number"
         value={typeof value === "number" ? value : Number(value) || 0}
         onChange={(e) => onChange(Number(e.target.value))}
-        className="h-9 w-full rounded-md border border-mist-border bg-kraft/40 px-2.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+        placeholder="Score (0-100)"
+        className={builderFieldClass()}
       />
     );
   }
+
+  // List input
   if (meta.valueKind === "list") {
     return (
       <input
         value={Array.isArray(value) ? value.join(", ") : String(value ?? "")}
-        onChange={(e) => onChange(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))}
+        onChange={(e) =>
+          onChange(e.target.value.split(",").map((s) => s.trim()).filter(Boolean))
+        }
         placeholder="one, two, three"
-        className="h-9 w-full rounded-md border border-mist-border bg-kraft/40 px-2.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+        className={builderFieldClass()}
       />
     );
   }
+
+  // Standard text input
   return (
     <input
       value={typeof value === "string" ? value : String(value ?? "")}
       onChange={(e) => onChange(e.target.value)}
-      placeholder="value"
-      className="h-9 w-full rounded-md border border-mist-border bg-kraft/40 px-2.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-foreground/20"
+      placeholder="Value"
+      className={builderFieldClass()}
     />
   );
 }

@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { logAuditEvent } from "@/lib/audit-log";
 import { createLogger } from "@/lib/logger";
 import { DEFAULT_JITSI_BASE_URL } from "@/lib/jitsi/config";
@@ -46,6 +47,7 @@ export async function saveJitsiSettingsAction(input: {
   enabled: boolean;
   baseUrl: string;
 }): Promise<JitsiActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   const parsed = saveSchema.safeParse(input);
@@ -88,6 +90,7 @@ export async function saveJitsiSettingsAction(input: {
 }
 
 export async function disconnectJitsiAction(): Promise<JitsiActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   await db
@@ -113,6 +116,7 @@ export async function disconnectJitsiAction(): Promise<JitsiActionResult> {
 export async function testJitsiConnectionAction(input: {
   baseUrl?: string;
 }): Promise<JitsiActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   let target = input.baseUrl?.trim() || null;

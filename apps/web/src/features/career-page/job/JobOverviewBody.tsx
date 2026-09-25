@@ -3,6 +3,7 @@ import {
   parseKeywords,
   parseOfficePhotos,
 } from "@/features/jobs/config";
+import { ThirdPartyEmbed } from "@/components/ThirdPartyEmbed";
 import { RichBody } from "@/features/career-page/RichBody";
 
 type JobLike = {
@@ -87,11 +88,10 @@ export function JobOverviewBody({ job }: { job: JobLike }) {
             <p className="mt-2 text-zinc-600 dark:text-zinc-400">{job.officeAddress}</p>
           ) : null}
           {mapSrc ? (
-            <iframe
+            <ThirdPartyEmbed
               src={mapSrc}
               title="Office location"
               className="mt-3 h-64 w-full rounded-lg border border-zinc-200 dark:border-zinc-800"
-              loading="lazy"
             />
           ) : null}
           {officePhotos.length > 0 ? (

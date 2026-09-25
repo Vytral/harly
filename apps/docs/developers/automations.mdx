@@ -1,11 +1,19 @@
 ---
 title: "Automations"
-description: "Build safe recruiting automations with triggers, conditions, actions, retries, and human approval points."
+description: "Build safe recruiting automations in Harly using triggers, conditions, actions, retries, dry-run mode, and human approval checkpoints for risky steps."
 ---
 
 Automations connect a Harly event to one or more actions. Use them for
 repeatable notifications and task creation, while keeping consequential hiring
-decisions explicit and human-owned.
+decisions explicit, reviewable, and authorized by the workspace owner.
+
+<Warning>
+  The public HTTP API at `/api/v1/automations` returns **410 Gone**. That
+  surface is withdrawn, not temporarily down, even when Automations is enabled
+  in the dashboard. Build recipes, inspect runs, retry, and cancel in the
+  dashboard (`automations:manage`). A versioned v2 contract will replace this
+  API; do not treat 410 as an outage of the builder.
+</Warning>
 
 ## A safe automation shape
 
@@ -33,6 +41,7 @@ Typical examples:
     | --- | --- |
     | `application.created` | Application submitted |
     | `application.stage_changed` | Application moves to a different stage |
+    | `application.status_changed` | Application status changes |
     | `application.hired` | Application marked as hired |
     | `application.rejected` | Application rejected |
     | `candidate.created` | Candidate record created |
@@ -41,7 +50,13 @@ Typical examples:
     | `interview.rescheduled` | Interview rescheduled |
     | `interview.canceled` | Interview canceled |
     | `interview.completed` | Interview marked complete |
+    | `task.completed` | A recruiting task is completed |
     | `job.published` | Job published to career page |
+    | `document.signature_sent` | A document signature request is sent |
+    | `document.signature_changed` | A document signature status changes |
+    | `document.signature_voided` | A document signature request is voided |
+    | `evaluation.completed` | An AI candidate evaluation is completed |
+    | `webhook.received` | A validated inbound webhook is received |
   </Step>
   <Step title="Add conditions">
     Narrow the trigger with conditions:
@@ -49,6 +64,8 @@ Typical examples:
     - **Job** — only fire for a specific job or department.
     - **Stage** — only fire when entering a specific pipeline stage.
     - **Status** — only fire when a field has a specific value.
+    - **AI score** — after an `ai_score` action, branch on `ai.score` such as
+      `ai.score < 50` or `ai.score >= 80`.
 
     Conditions prevent a notification workflow from firing on every job in the
     workspace when you only want it for one department.
@@ -61,6 +78,19 @@ Typical examples:
     | **Create task** | Assigns a task to a workspace member with a due date |
     | **Slack message** | Posts to a configured Slack channel |
     | **Discord message** | Posts to a Discord channel via webhook |
+    | **Telegram message** | Posts to a configured Telegram chat |
+    | **Email** | Queues an email through Harly's durable outbox |
+    | **Request documents** | Creates an upload request in the candidate portal |
+    | **Generate document** | Creates a deterministic PDF from text and approved workflow variables; the result can feed a later signature step |
+    | **Send for signature** | Sends a PDF signing invitation in the portal; the v2 inspector supports up to ten ordered signers, while an empty signing order uses the candidate |
+    | **Schedule interview** | Books a conflict-checked interview and syncs providers |
+    | **Reschedule / cancel interview** | Changes or cancels an upcoming interview and records provider state |
+    | **Move stage / set status** | Updates the candidate pipeline or application status |
+    | **Add note / add or remove tag** | Adds a timeline note or maintains candidate labels |
+    | **Create offer / send offer** | Prepares or sends an approved offer |
+    | **Send booking link** | Queues a personal Cal.com scheduling link |
+    | **AI evaluation** | Scores an application against job criteria and exposes `ai.score` for later branches |
+    | **Erase candidate data** | Hides the candidate from normal views and queues durable, permissioned erasure with retry and legal-hold handling |
     | **HTTP request** | Calls an external endpoint with the event payload |
 
     HTTP actions support workspace secret references so credentials do not appear
@@ -68,10 +98,25 @@ Typical examples:
     webhooks — loopback, private, and metadata addresses are blocked.
   </Step>
   <Step title="Preview and enable">
-    Run the workflow preview to confirm the trigger and action match your intent.
+    Use the Test tab to choose a candidate, set a reproducible virtual start, and
+    configure synthetic results for each action or wait. You can inspect the
+    visited path, skipped branches, wait time, provider reference, failures, and
+    uncertain outcomes. Simulation never sends messages, calls webhooks, or
+    changes domain records. Run the workflow preview to confirm the trigger and
+    action match your intent.
     Enable the workflow. It begins processing new events immediately.
   </Step>
 </Steps>
+
+### Ordered document signing
+
+For a multi-signer document, place at least one required signature field for
+each signer and assign every field to a signer before sending. Harly activates
+only signer 1 initially. After that signer completes, the next recipient is
+activated transactionally and receives a new capability through the durable
+email outbox. Intermediate PDF versions and evidence are retained; the
+document remains `pending` and an automation wait does not continue until the
+last required signer completes.
 
 ## Reliability and run history
 
@@ -79,6 +124,14 @@ Each run records:
 - The trigger event that fired it
 - The conditions that matched
 - The action configuration
+
+If an external provider times out after the request may have been accepted, the
+run stops as `uncertain` instead of retrying blindly. An authorized operator can
+open that step in run history, verify the provider, record success or failure,
+add a required reconciliation note, and optionally provide a provider reference
+and JSON output. The resolver updates the persisted attempt and resumes v2
+without calling the provider again; this decision is also written to the audit
+log.
 - The result (success, failure, or skipped)
 - The error message if it failed
 
@@ -87,31 +140,84 @@ detail. Fix configuration failures before replaying — a misconfigured action
 retries successfully once you correct it.
 
 <Warning>
-  Do not build an automation that rejects candidates, deletes records, or sends
-  an offer without a human review step. Keep irreversible actions explicitly
-  human — automate the preparation and notification, not the decision.
+  Harly AI does not make a hiring decision from a chat response or silently
+  apply a workflow. A workspace owner may explicitly authorize a workflow to
+  reject an application, send a defined message, or queue candidate-data
+  erasure. Use an approval or delay for consequential decisions when your
+  policy requires it. Candidate erasure is durable work performed by the
+  worker: legal holds, retention rules, retries, and provider limitations can
+  affect its final status, so do not claim permanent deletion until the run
+  reports it.
 </Warning>
 
 ## HTTP action details
 
-The HTTP action sends a POST request to the configured URL with a JSON payload
-matching the trigger event's schema. Configure a secret to verify the request:
+The HTTP action sends a request to the configured URL with a JSON payload
+matching the trigger event's schema. It adds an `Idempotency-Key` derived from
+the durable workflow effect unless you provide one yourself. Configure a
+secret to verify the request:
 
 ```json
 {
   "event": "application.stage_changed",
+  "eventId": "evt_01j1abc",
+  "eventVersion": 1,
+  "schemaVersion": 1,
+  "occurredAt": "2026-07-27T12:00:00Z",
+  "workspace": "ws_01j1abc",
   "workspaceId": "ws_01j1abc",
-  "applicationId": "app_01j1abc",
-  "candidateId": "cnd_01j1abc",
-  "jobId": "job_01j1abc",
-  "fromStage": "screen",
-  "toStage": "interview",
-  "changedAt": "2026-07-27T12:00:00Z"
+  "aggregate": { "type": "application", "id": "app_01j1abc" },
+  "data": {
+    "application": {
+      "id": "app_01j1abc",
+      "candidateId": "cnd_01j1abc",
+      "jobId": "job_01j1abc"
+    },
+    "fromStageId": "screen",
+    "toStageId": "interview"
+  }
 }
 ```
 
 The receiver must return `2xx` within 10 seconds. Failed requests are retried
-by the scheduler using the same retry policy as webhooks.
+by the scheduler using the durable webhook policy. The same event ID and
+delivery ID are retained across retries so receivers can deduplicate safely.
+
+## Inbound webhook trigger
+
+Use the **Inbound webhook received** trigger when another system should start a
+workflow. Create the endpoint from the workflow's block library or its
+server-side action. Harly shows the URL and signing secret once; store both in
+the sending system's secret manager. Disabling an endpoint immediately stops
+new runs without changing the published workflow graph.
+
+Send a JSON object with these headers:
+
+```text
+POST /api/webhooks/automations/{endpointId}/{token}
+Content-Type: application/json
+X-Harly-Timestamp: 1780000000
+X-Harly-Signature: sha256=<hex HMAC-SHA256(timestamp + "." + trimmed_event_id + "." + raw_body)>
+X-Event-Id: invoice_123
+```
+
+Sign the exact raw UTF-8 request body, the timestamp, and the trimmed event ID
+header, separated by periods. The event-ID segment is empty when the header is
+omitted (so the signed message still has two periods); in that case an `eventId`
+or `id` inside the signed body is used when present, otherwise Harly hashes the
+body. The timestamp must be within five minutes of Harly's clock. The request
+must use `application/json` or an `application/*+json` content type and stay
+within 256 KiB. Harly authenticates the HMAC before parsing JSON, then validates
+the object against the endpoint's JSON Schema Draft 7 payload rules. Configure
+and edit those rules in the trigger inspector; `{}` accepts any JSON object.
+A schema mismatch returns `422` and creates no receipt or workflow event.
+
+`X-Event-Id` (or `X-External-Event-Id`) is both signed and used as the
+idempotency key. Reusing an ID with a different payload is rejected as a
+conflict. A new request returns `202`, while an already accepted duplicate
+returns `200` and does not create a second workflow event. The trigger payload
+contains `endpointId`, `externalEventId`, and the original JSON under
+`payload`.
 
 ## Next steps
 

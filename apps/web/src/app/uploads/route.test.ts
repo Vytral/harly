@@ -53,6 +53,19 @@ describe("local upload serving", () => {
     expect(isPrivateResumeStorageKey("workspaces/ws-1/images/avatar.png")).toBe(false);
   });
 
+  it("serves uploaded SVG logos as safe inline images", async () => {
+    const response = await GET(new Request("http://harly.test/uploads/logo.svg"), {
+      params: Promise.resolve({
+        key: ["workspaces", "ws-1", "images", "logo.svg"],
+      }),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toBe("image/svg+xml");
+    expect(response.headers.get("Content-Disposition")).toBeNull();
+    expect(response.headers.get("Content-Security-Policy")).toContain("sandbox");
+  });
+
   it("does not serve a resume to an anonymous URL request", async () => {
     mocks.getWorkspaceContextOrNull.mockResolvedValue(null);
 

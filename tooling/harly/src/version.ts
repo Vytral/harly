@@ -22,6 +22,75 @@ export type ImageIdentity = {
 
 const semverPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
+/** Versions Harly will publish or install: 0.2.0, 0.2.0-beta.1, 0.2.0-rc.1. */
+export const releaseVersionPattern = /^\d+\.\d+\.\d+(?:-(?:beta|rc)\.\d+)?$/;
+
+export function isReleaseVersion(value: string): boolean {
+  return releaseVersionPattern.test(value);
+}
+
+/**
+ * A stable release: `0.2.0`. A numbered beta or rc is a release Harly will
+ * publish and install on request, but it is not what the stable channel serves.
+ */
+export function isStableVersion(value: string): boolean {
+  return isReleaseVersion(value) && !value.includes("-");
+}
+
+type ParsedSemver = {
+  major: number;
+  minor: number;
+  patch: number;
+  pre: string[];
+};
+
+function parseSemver(value: string): ParsedSemver | null {
+  const match = value
+    .replace(/^v(?=\d)/, "")
+    .match(/^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A-Za-z.-]+)?$/);
+  if (!match) return null;
+  return {
+    major: Number(match[1]),
+    minor: Number(match[2]),
+    patch: Number(match[3]),
+    pre: match[4] ? match[4].split(".") : [],
+  };
+}
+
+function compareIdentifiers(left: string[], right: string[]): number {
+  if (left.length === 0 && right.length === 0) return 0;
+  // 1.0.0 is newer than 1.0.0-beta.1.
+  if (left.length === 0) return 1;
+  if (right.length === 0) return -1;
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    const a = left[index];
+    const b = right[index];
+    if (a === undefined) return -1;
+    if (b === undefined) return 1;
+    const aNumeric = /^\d+$/.test(a);
+    const bNumeric = /^\d+$/.test(b);
+    if (aNumeric && bNumeric) {
+      const diff = Number(a) - Number(b);
+      if (diff !== 0) return diff;
+    } else if (aNumeric) return -1;
+    else if (bNumeric) return 1;
+    else if (a !== b) return a < b ? -1 : 1;
+  }
+  return 0;
+}
+
+/** Negative when `left` is older. Null when either value is not SemVer. */
+export function compareSemver(left: string, right: string): number | null {
+  const a = parseSemver(left);
+  const b = parseSemver(right);
+  if (!a || !b) return null;
+  if (a.major !== b.major) return a.major - b.major;
+  if (a.minor !== b.minor) return a.minor - b.minor;
+  if (a.patch !== b.patch) return a.patch - b.patch;
+  return compareIdentifiers(a.pre, b.pre);
+}
+
 /** `sha256:91935a0b…` — enough to compare two deployments by eye. */
 export function shortDigest(reference: string): string {
   const digest = reference.split("@sha256:")[1];

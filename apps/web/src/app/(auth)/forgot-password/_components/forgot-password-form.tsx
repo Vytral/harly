@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { authClient } from "@/lib/auth-client";
+import { AuthSpinner } from "../../_components/auth-methods";
 
 export function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -37,7 +38,7 @@ export function ForgotPasswordForm() {
 
   if (sent) {
     return (
-      <div className="space-y-4">
+      <div className="auth-stagger space-y-4">
         <p className="text-sm leading-6 text-foreground">
           If an account exists for{" "}
           <span className="font-medium">{email.trim()}</span>, we&apos;ve sent
@@ -48,7 +49,7 @@ export function ForgotPasswordForm() {
           <button
             type="button"
             onClick={() => setSent(false)}
-            className="cursor-pointer font-medium text-pine underline-offset-4 hover:underline"
+            className="cursor-pointer font-medium text-foreground underline-offset-4 hover:underline"
           >
             try again
           </button>
@@ -59,7 +60,7 @@ export function ForgotPasswordForm() {
   }
 
   return (
-    <form className="space-y-7" onSubmit={requestReset}>
+    <form className="auth-stagger space-y-6" onSubmit={requestReset}>
       <div>
         <label
           htmlFor="email"
@@ -78,18 +79,26 @@ export function ForgotPasswordForm() {
             setError(null);
           }}
           placeholder="you@company.com"
-          className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
+          className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition-colors placeholder:text-muted-foreground focus:border-ring"
         />
       </div>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="text-center text-sm text-danger-rust">{error}</p> : null}
 
       <button
         type="submit"
-        disabled={isPending || !email.trim() || undefined}
-        className="w-full rounded-lg bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-pine-strong disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+        autoComplete="off"
+        disabled={isPending || !email.trim() ? true : undefined}
+        className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-[var(--pine-strong)] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
       >
-        {isPending ? "Sending…" : "Send reset link"}
+        {isPending ? (
+          <>
+            <AuthSpinner />
+            <span>Sending…</span>
+          </>
+        ) : (
+          <span>Send reset link</span>
+        )}
       </button>
     </form>
   );

@@ -27,14 +27,14 @@ export function PasskeyQuickSetup() {
       try {
         const optRes = await fetch("/api/passkey/register");
         if (!optRes.ok) throw new Error("Failed to start passkey setup");
-        const options = await optRes.json();
+        const { challengeId, ...options } = await optRes.json();
 
         const attestation = await startRegistration({ optionsJSON: options });
 
         const verRes = await fetch("/api/passkey/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ response: attestation, name: "Passkey" }),
+          body: JSON.stringify({ challengeId, response: attestation, name: "Passkey" }),
         });
         if (!verRes.ok) {
           const err = await verRes.json();

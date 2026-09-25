@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { Route } from "next";
+import { CookiePreferencesButton } from "@/components/CookiePreferencesButton";
 import { SocialIcon, socialLabel } from "@/features/career-page/social-icons";
 import type { CareerSocialLink } from "@/features/career-page/config";
 
@@ -115,6 +116,7 @@ export function PortalFooter({
                 {LEGAL_LINK_LABELS[slug] ?? slug}
               </a>
             ))}
+            <CookiePreferencesButton className="hover:text-foreground" />
           </div>
 
           {/* Powered by Harly */}

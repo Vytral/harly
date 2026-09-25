@@ -1,3 +1,4 @@
+import { isDemoMode } from "@harly/config";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { auth } from "@/lib/auth";
@@ -23,6 +24,9 @@ const SCOPES = [
  * acting user + workspace, then redirects to Microsoft's consent screen.
  */
 export async function GET(req: NextRequest) {
+  if (isDemoMode()) {
+    return NextResponse.json({ error: "This action is disabled in the demo." }, { status: 403 });
+  }
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

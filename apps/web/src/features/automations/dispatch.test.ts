@@ -13,7 +13,13 @@ const dbState: {
   workflows: Array<{ id: string; trigger: { filter?: Record<string, unknown> } | null }>;
   runsInserted: Array<{ workflowId: string; triggerEvent: string; triggerPayload: unknown; sourceEventId?: string | null }>;
   runningRuns: Array<{ workflowId: string; triggerEvent: string; triggerPayload?: unknown }>;
-} = { workflows: [], runsInserted: [], runningRuns: [] };
+  /** When set, the anti-loop query rejects — exercises fail-closed dispatch. */
+  antiLoopError: Error | null;
+} = { workflows: [], runsInserted: [], runningRuns: [], antiLoopError: null };
+
+const { findDueWorkflowRuns } = vi.hoisted(() => ({
+  findDueWorkflowRuns: vi.fn(),
+}));
 
 vi.mock("@harly/db", () => ({
   db: {
@@ -31,12 +37,14 @@ vi.mock("@harly/db", () => ({
         } = Promise.resolve(dbState.workflows) as never;
         thenable.orderBy = () => ({
           limit: () =>
-            Promise.resolve(
-              dbState.runningRuns.map((r) => ({
-                id: `run-${r.workflowId}`,
-                triggerPayload: r.triggerPayload ?? { application: { id: "app-1" } },
-              })),
-            ),
+            dbState.antiLoopError
+              ? Promise.reject(dbState.antiLoopError)
+              : Promise.resolve(
+                  dbState.runningRuns.map((r) => ({
+                    id: `run-${r.workflowId}`,
+                    triggerPayload: r.triggerPayload ?? { application: { id: "app-1" } },
+                  })),
+                ),
         });
         thenable.limit = () => Promise.resolve(dbState.workflows);
         return {
@@ -52,7 +60,12 @@ vi.mock("@harly/db", () => ({
           triggerPayload: row.triggerPayload,
           sourceEventId: row.sourceEventId as string | null | undefined,
         });
-        return { returning: () => Promise.resolve([{ id: `run-${row.workflowId}` }]) };
+        return {
+          returning: () => Promise.resolve([{ id: `run-${row.workflowId}` }]),
+          onConflictDoNothing: () => ({
+            returning: () => Promise.resolve([{ id: `run-${row.workflowId}` }]),
+          }),
+        };
       }),
     })),
     update: vi.fn(() => ({
@@ -70,9 +83,28 @@ vi.mock("./engine", () => ({
   runWorkflow: vi.fn().mockResolvedValue({ status: "succeeded", run: { id: "x" } }),
 }));
 
-// Exercise the dispatcher internals explicitly; production is disabled by the
-// kill switch in `status.ts` until the creator is ready again.
-vi.mock("./status", () => ({ AUTOMATIONS_ENABLED: true }));
+// The dispatcher delegates execution and wait resolution to the v2 worker.
+// Keep these unit tests focused on trigger selection; the worker has its own
+// Postgres integration suite with the real graph tables.
+vi.mock("./runtime/worker", () => ({
+  resumeWorkflowEventWaits: vi.fn().mockResolvedValue(0),
+  runWorkflowV2: vi.fn().mockResolvedValue({ status: "succeeded" }),
+}));
+
+vi.mock("./runtime/due-runs", () => ({ findDueWorkflowRuns }));
+
+vi.mock("./runtime/operational-policy", () => ({
+  reserveRunAdmissionPolicy: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
+// Exercise the dispatcher internals explicitly with the v2 launch switch on.
+vi.mock("./status", () => ({ AUTOMATIONS_ENABLED: true, legacyWorkflowDispatchDisabled: () => false }));
+
+vi.mock("next/server", () => ({
+  after: (fn: () => unknown) => {
+    void fn();
+  },
+}));
 
 vi.mock("@/lib/logger", () => ({
   createLogger: () => ({
@@ -82,13 +114,21 @@ vi.mock("@/lib/logger", () => ({
   }),
 }));
 
-import { dispatchWorkflowEvent } from "./dispatch";
+import { dispatchDueWorkflowRuns, dispatchWorkflowEvent, reclaimStalledWorkflowRuns } from "./dispatch";
 
 describe("workflow dispatcher — FASE 2.3 trigger matching", () => {
   beforeEach(() => {
     dbState.workflows = [];
     dbState.runsInserted = [];
     dbState.runningRuns = [];
+    dbState.antiLoopError = null;
+    findDueWorkflowRuns.mockReset();
+  });
+
+  it("surfaces a due-queue database failure to the scheduler", async () => {
+    findDueWorkflowRuns.mockRejectedValue(new Error("database unavailable"));
+
+    await expect(dispatchDueWorkflowRuns()).rejects.toThrow("database unavailable");
   });
 
   it("creates a run for each enabled workflow whose trigger event matches", async () => {
@@ -114,11 +154,35 @@ describe("workflow dispatcher — FASE 2.3 trigger matching", () => {
 
     await dispatchWorkflowEvent("ws-1", "application.created", {
       application: { id: "app-1", jobId: "job-1" },
-      jobId: "job-1",
     });
 
     expect(dbState.runsInserted).toHaveLength(1);
     expect(dbState.runsInserted[0]?.workflowId).toBe("wf-match");
+  });
+
+  it("matches a stage filter against nested toStageId payloads", async () => {
+    dbState.workflows = [
+      { id: "wf-stage", trigger: { filter: { toStageId: "stage-tech" } } },
+    ];
+
+    await dispatchWorkflowEvent("ws-1", "application.stage_changed", {
+      application: { id: "app-1", jobId: "job-1" },
+      toStageId: "stage-tech",
+    });
+
+    expect(dbState.runsInserted).toHaveLength(1);
+    expect(dbState.runsInserted[0]?.workflowId).toBe("wf-stage");
+  });
+
+  it("records eventId from the payload when sourceEventId is omitted", async () => {
+    dbState.workflows = [{ id: "wf-a", trigger: null }];
+
+    await dispatchWorkflowEvent("ws-1", "application.created", {
+      application: { id: "app-1" },
+      eventId: "event-from-payload",
+    });
+
+    expect(dbState.runsInserted[0]?.sourceEventId).toBe("event-from-payload");
   });
 
   it("runs a workflow with no filter on every matching event", async () => {
@@ -131,13 +195,12 @@ describe("workflow dispatcher — FASE 2.3 trigger matching", () => {
     expect(dbState.runsInserted).toHaveLength(1);
   });
 
-  it("ignores events that are not valid workflow triggers", async () => {
+  it("dispatches interview cancellation now that it is a workflow trigger", async () => {
     dbState.workflows = [{ id: "wf-x", trigger: null }];
 
-    // interview.canceled is a webhook event but NOT a workflow trigger.
     await dispatchWorkflowEvent("ws-1", "interview.canceled", { interview: { id: "iv-1" } });
 
-    expect(dbState.runsInserted).toHaveLength(0);
+    expect(dbState.runsInserted).toHaveLength(1);
   });
 
   it("does nothing when no workflows match the event", async () => {
@@ -174,6 +237,7 @@ describe("workflow dispatcher — FASE 2.4 anti-loop", () => {
     dbState.workflows = [];
     dbState.runsInserted = [];
     dbState.runningRuns = [];
+    dbState.antiLoopError = null;
   });
 
   it("skips a workflow that has a recent running run for the same event", async () => {
@@ -210,5 +274,40 @@ describe("workflow dispatcher — FASE 2.4 anti-loop", () => {
     });
 
     expect(dbState.runsInserted).toHaveLength(1);
+  });
+
+  it("fail-closes when the anti-loop check errors (no run, returns false)", async () => {
+    dbState.workflows = [{ id: "wf-a", trigger: null }];
+    dbState.runningRuns = [];
+    dbState.antiLoopError = new Error("database unavailable");
+
+    const ok = await dispatchWorkflowEvent("ws-1", "application.stage_changed", {
+      application: { id: "app-1" },
+    });
+
+    expect(ok).toBe(false);
+    expect(dbState.runsInserted).toHaveLength(0);
+  });
+
+  it("blocks direct event dispatch in public demo before creating a run", async () => {
+    vi.stubEnv("DEMO_MODE", "true");
+    dbState.workflows = [{ id: "wf-demo", trigger: null }];
+
+    await expect(
+      dispatchWorkflowEvent("ws-1", "application.created", { application: { id: "app-1" } }),
+    ).rejects.toMatchObject({ code: "DEMO_ACTION_DISABLED" });
+
+    expect(dbState.runsInserted).toHaveLength(0);
+    vi.unstubAllEnvs();
+  });
+
+  it("blocks direct scheduler reconciliation and due-run dispatch in public demo", async () => {
+    vi.stubEnv("DEMO_MODE", "true");
+
+    await expect(reclaimStalledWorkflowRuns()).rejects.toMatchObject({ code: "DEMO_ACTION_DISABLED" });
+    await expect(dispatchDueWorkflowRuns()).rejects.toMatchObject({ code: "DEMO_ACTION_DISABLED" });
+    expect(findDueWorkflowRuns).not.toHaveBeenCalled();
+
+    vi.unstubAllEnvs();
   });
 });

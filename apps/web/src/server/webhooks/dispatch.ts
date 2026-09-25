@@ -13,13 +13,24 @@ import {
   type WebhookDelivery,
   type WebhookEndpoint,
 } from "@harly/db";
+import { isDemoMode } from "@harly/config";
+
 import { decryptSecret } from "@/lib/crypto";
 import { safeFetchWebhook } from "@/lib/ssrf";
+import { createLogger } from "@/lib/logger";
 
 import { MAX_WEBHOOK_ATTEMPTS, RETRY_BACKOFF_MS } from "./events";
 
+const demoLog = createLogger("webhooks");
+
 const REQUEST_TIMEOUT_MS = 10_000;
 const RESPONSE_BODY_LIMIT = 500;
+
+function envelopeRecord(payload: unknown): Record<string, unknown> {
+  return payload && typeof payload === "object" && !Array.isArray(payload)
+    ? payload as Record<string, unknown>
+    : {};
+}
 
 function nextRetryAt(attempts: number): Date | null {
   // `attempts` already includes the failed attempt. The first failure must
@@ -37,6 +48,17 @@ export async function deliverWebhook(
   endpoint: WebhookEndpoint,
   options?: { workerId?: string },
 ): Promise<"success" | "failed" | "exhausted"> {
+  // Public demo: never make real outbound webhook requests to arbitrary URLs.
+  // Treat the delivery as terminally done so the queue drains instead of
+  // retrying forever.
+  if (isDemoMode()) {
+    demoLog.info(
+      { deliveryId: delivery.id, event: delivery.event },
+      "[webhooks] Suppressed delivery (demo mode)",
+    );
+    return "success";
+  }
+
   const attemptNumber = delivery.attempts + 1;
   const startedAt = new Date();
   const body = JSON.stringify(delivery.payload);
@@ -53,12 +75,16 @@ export async function deliverWebhook(
       tag: endpoint.secretTag,
     });
 
-    const response = await safeFetchWebhook(endpoint.url, {
+  const response = await safeFetchWebhook(endpoint.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "User-Agent": "Harly-Webhooks/1.0",
         [EVENT_HEADER]: delivery.event,
+        "X-Harly-Event-Id": typeof envelopeRecord(delivery.payload).eventId === "string" ? String(envelopeRecord(delivery.payload).eventId) : "",
+        "X-Harly-Event-Version": String(envelopeRecord(delivery.payload).eventVersion ?? 1),
+        "X-Harly-Schema-Version": String(envelopeRecord(delivery.payload).schemaVersion ?? 1),
+        "X-Harly-Workspace": delivery.workspaceId,
         [SIGNATURE_HEADER]: signWebhookPayload({ secret, body, timestamp }),
         "X-Harly-Delivery": delivery.id,
       },

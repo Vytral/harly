@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -322,16 +322,10 @@ export async function createPublicApplication(
         )
         .limit(1);
 
-      if (existingCandidate?.deletedAt) {
-        return {
-          ok: false,
-          message: "This candidate profile is no longer available.",
-        };
-      }
-
-      // A duplicate application must be rejected before updating an existing
-      // candidate. A retry should never overwrite contact/profile fields just
-      // because the application itself is not accepted.
+      let candidate = existingCandidate;
+      // A duplicate application must be rejected before restoring or updating
+      // an existing candidate. A retry must never undelete a trashed profile
+      // just because the application itself is not accepted.
       if (existingCandidate) {
         const [duplicateApplication] = await tx
           .select({ id: applications.id })
@@ -341,6 +335,7 @@ export async function createPublicApplication(
               eq(applications.workspaceId, workspaceId),
               eq(applications.candidateId, existingCandidate.id),
               eq(applications.jobId, job.id),
+              inArray(applications.status, ["active", "hired"]),
             ),
           )
           .limit(1);
@@ -353,30 +348,69 @@ export async function createPublicApplication(
         }
       }
 
-      const candidate =
-        existingCandidate ??
-        (
-          await tx
-            .insert(candidates)
-            .values({
-              workspaceId,
-              firstName: values.firstName,
-              lastName: values.lastName,
-              email: values.email,
-              phone: values.phone,
-              address: submittedAddress,
-              linkedinUrl: values.linkedinUrl,
-              githubUrl: values.githubUrl,
-              websiteUrl: values.websiteUrl,
-              avatarUrl: values.photoUrl,
-              headline: values.headline,
-              educationEntries,
-              experienceEntries,
-              skills: values.skills ?? [],
-              experienceYears: values.experienceYears ?? null,
-            })
-            .returning()
-        )[0];
+      if (existingCandidate?.deletedAt) {
+        const [restored] = await tx
+          .update(candidates)
+          .set({
+            deletedAt: null,
+            firstName: values.firstName,
+            lastName: values.lastName,
+            phone: values.phone ?? existingCandidate.phone,
+            address: submittedAddress ?? existingCandidate.address,
+            linkedinUrl: values.linkedinUrl ?? existingCandidate.linkedinUrl,
+            githubUrl: values.githubUrl ?? existingCandidate.githubUrl,
+            websiteUrl: values.websiteUrl ?? existingCandidate.websiteUrl,
+            avatarUrl: values.photoUrl ?? existingCandidate.avatarUrl,
+            headline: values.headline ?? existingCandidate.headline,
+            educationEntries:
+              educationEntries.length > 0
+                ? educationEntries
+                : existingCandidate.educationEntries,
+            experienceEntries:
+              experienceEntries.length > 0
+                ? experienceEntries
+                : existingCandidate.experienceEntries,
+            skills:
+              values.skills && values.skills.length > 0
+                ? values.skills
+                : existingCandidate.skills,
+            experienceYears:
+              values.experienceYears ?? existingCandidate.experienceYears,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(candidates.id, existingCandidate.id),
+              eq(candidates.workspaceId, workspaceId),
+            ),
+          )
+          .returning();
+        candidate = restored ?? existingCandidate;
+      }
+
+      if (!candidate) {
+        const [created] = await tx
+          .insert(candidates)
+          .values({
+            workspaceId,
+            firstName: values.firstName,
+            lastName: values.lastName,
+            email: values.email,
+            phone: values.phone,
+            address: submittedAddress,
+            linkedinUrl: values.linkedinUrl,
+            githubUrl: values.githubUrl,
+            websiteUrl: values.websiteUrl,
+            avatarUrl: values.photoUrl,
+            headline: values.headline,
+            educationEntries,
+            experienceEntries,
+            skills: values.skills ?? [],
+            experienceYears: values.experienceYears ?? null,
+          })
+          .returning();
+        candidate = created;
+      }
 
       if (!candidate) {
         throw new Error("Candidate could not be created.");
@@ -511,6 +545,19 @@ export async function createPublicApplication(
           resumeFileName: verifiedResume?.fileName ?? null,
           resumeKey: values.resumeKey ?? null,
           questionAnswers: values.questionAnswers,
+          acceptedAgreements: applicationConfig.questions
+            .filter(
+              (question) =>
+                question.type === "consent" &&
+                values.questionAnswers[question.id] === "agree",
+            )
+            .map((question) => ({
+              questionId: question.id,
+              title: question.label,
+              text: question.description ?? "",
+              acceptedLabel: question.agreeLabel ?? "I agree",
+              declinedLabel: question.disagreeLabel ?? "I do not agree",
+            })),
         },
       });
 
@@ -598,7 +645,8 @@ export async function createPublicApplication(
         name: event.candidateName,
       },
       job: { id: event.jobId, title: event.jobTitle },
-    }, { skipDomainEvent: true });
+      eventId: createdDomainEvent.current?.eventId,
+    }, { skipDomainEvent: true, eventId: createdDomainEvent.current?.eventId });
   }
 
   return result;

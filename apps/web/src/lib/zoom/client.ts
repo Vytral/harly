@@ -6,6 +6,8 @@ type ZoomMeeting = {
   id: number;
   join_url: string;
   topic: string;
+  agenda?: string;
+  tracking_fields?: Array<{ field: string; value: string; visible?: boolean }>;
   start_time: string;
   duration: number;
   status: string;
@@ -76,6 +78,8 @@ export async function createMeeting(
   workspaceId: string,
   params: {
     topic: string;
+    /** Stable, non-user-visible marker used to recover an ambiguous create. */
+    tracking_fields?: Array<{ field: string; value: string; visible?: boolean }>;
     type?: number;
     start_time?: string;
     duration?: number;
@@ -86,12 +90,51 @@ export async function createMeeting(
     method: "POST",
     body: JSON.stringify({
       topic: params.topic,
+      tracking_fields: params.tracking_fields,
       type: params.type ?? 2,
       start_time: params.start_time,
       duration: params.duration,
       timezone: params.timezone ?? "UTC",
     }),
   });
+}
+
+/**
+ * Find a meeting created by Harly after a create request timed out. Zoom does
+ * not expose a create idempotency header, so the sync adapter places a stable
+ * hidden tracking-field marker and requires an exact match before recovering it.
+ * The bounded pagination avoids turning reconciliation into an unbounded API
+ * scan for large accounts.
+ */
+export async function findMeetingByTrackingField(
+  workspaceId: string,
+  field: string,
+  value: string,
+): Promise<ZoomMeeting | null> {
+  let nextPageToken: string | undefined;
+  for (let page = 0; page < 5; page += 1) {
+    const params = new URLSearchParams({
+      type: "scheduled",
+      page_size: "300",
+    });
+    if (nextPageToken) params.set("next_page_token", nextPageToken);
+
+    const response = await zoomFetch<{
+      meetings?: ZoomMeeting[];
+      next_page_token?: string;
+    }>(workspaceId, `/v2/users/me/meetings?${params.toString()}`);
+    const match = response.meetings?.find((meeting) =>
+      meeting.tracking_fields?.some(
+        (trackingField) =>
+          trackingField.field === field && trackingField.value === value,
+      ),
+    );
+    if (match) return match;
+
+    nextPageToken = response.next_page_token;
+    if (!nextPageToken) break;
+  }
+  return null;
 }
 
 export async function deleteMeeting(

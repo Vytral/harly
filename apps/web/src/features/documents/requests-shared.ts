@@ -14,6 +14,8 @@ export const DOCUMENT_REQUEST_STATUS_META = {
 
 export type DocumentRequestStatus = keyof typeof DOCUMENT_REQUEST_STATUS_META;
 
+export type DocumentSignatureStatus = "unsigned" | "pending" | "signed" | "declined" | "expired";
+
 /** Terminal states can't be re-uploaded or re-reviewed. */
 const TERMINAL = new Set<DocumentRequestStatus>(["accepted", "waived"]);
 
@@ -35,12 +37,15 @@ export type DocumentRequestItem = {
   id: string;
   applicationId: string;
   candidateId: string;
+  packageId: string | null;
   title: string;
   instructions: string | null;
   status: DocumentRequestStatus;
   dueAt: string | null;
   documentId: string | null;
   documentName: string | null;
+  signatureStatus: DocumentSignatureStatus | null;
+  signatureProvider: string | null;
   requestedByName: string | null;
   submittedAt: string | null;
   reviewedByName: string | null;

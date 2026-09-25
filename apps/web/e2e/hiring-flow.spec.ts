@@ -1,8 +1,5 @@
 import { expect, test } from "@playwright/test";
-import {
-  readFileSync,
-  statSync,
-} from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { simpleParser } from "mailparser";
 
 import { E2E_SMTP_CAPTURE, FIXTURE, STAGE_IDS } from "./constants";
@@ -18,8 +15,12 @@ test.describe("candidate-to-hire native signing flow", () => {
     // Candidate application is a public browser flow. The candidate portal
     // uses a separate context so recruiter and candidate cookies cannot leak.
     await page.goto(`/apply/${FIXTURE.jobSlug}`);
-    await page.locator('input[name="firstName"]').fill(FIXTURE.candidateFirstName);
-    await page.locator('input[name="lastName"]').fill(FIXTURE.candidateLastName);
+    await page
+      .locator('input[name="firstName"]')
+      .fill(FIXTURE.candidateFirstName);
+    await page
+      .locator('input[name="lastName"]')
+      .fill(FIXTURE.candidateLastName);
     await page.locator('input[name="email"]').fill(FIXTURE.candidateEmail);
 
     const consent = page.locator('input[type="checkbox"]');
@@ -27,8 +28,13 @@ test.describe("candidate-to-hire native signing flow", () => {
       await consent.first().check();
     }
 
-    await page.getByRole("button", { name: /submit application/i }).last().click();
-    await expect(page.getByText(/application (submitted|received|thank)/i).last()).toBeVisible({
+    await page
+      .getByRole("button", { name: /submit application/i })
+      .last()
+      .click();
+    await expect(
+      page.getByText(/application (submitted|received|thank)/i).last(),
+    ).toBeVisible({
       timeout: 30_000,
     });
     await expect
@@ -52,27 +58,69 @@ test.describe("candidate-to-hire native signing flow", () => {
     await page.locator("input#password").fill(FIXTURE.recruiterPassword);
     await page.getByRole("button", { name: "Continue", exact: true }).click();
     await expect(page).toHaveURL(/\/dashboard(?:\/|$)/, { timeout: 30_000 });
-    const acceptCookies = page.getByRole("button", { name: "Accept all", exact: true });
+    const acceptCookies = page.getByRole("button", {
+      name: "Accept all",
+      exact: true,
+    });
     if (await acceptCookies.isVisible()) {
       await acceptCookies.click();
     }
 
     // Open the candidate in the dashboard and confirm recruiter-facing review.
-    await page.goto(`/dashboard/candidates/${candidateId}`);
-    await expect(page.getByText(`${FIXTURE.candidateFirstName} ${FIXTURE.candidateLastName}`).first()).toBeVisible();
+    await page.goto(`/dashboard/candidates/${candidateId}`, {
+      timeout: 90_000,
+    });
+    await expect(
+      page
+        .getByText(`${FIXTURE.candidateFirstName} ${FIXTURE.candidateLastName}`)
+        .first(),
+    ).toBeVisible();
 
     async function moveTo(stageName: string, stageId: string) {
       const moveButton = page
         .getByRole("button", { name: `Move to ${stageName}`, exact: true })
         .last();
       await expect(moveButton).toBeVisible();
+      const actionResponsePromise = page.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          Boolean(response.request().headers()["next-action"]),
+        { timeout: 25_000 },
+      );
       await moveButton.click();
       await expect
-        .poll(async () => (await readHiringState()).application?.currentStageId ?? null, {
-          timeout: 30_000,
-          message: `application did not move to ${stageName}`,
-        })
+        .poll(
+          async () =>
+            (await readHiringState()).application?.currentStageId ?? null,
+          {
+            timeout: 30_000,
+            message: `application did not move to ${stageName}`,
+          },
+        )
         .toBe(stageId);
+      const actionResponse = await actionResponsePromise;
+      expect(
+        actionResponse.status(),
+        `server action response moving to ${stageName}`,
+      ).toBe(200);
+
+      // The database commit precedes the server action's completion and the
+      // router refresh. Do not start a stage-specific action against stale
+      // server-rendered props while the primary CTA still says "Moving…".
+      const stagePosition =
+        STAGE_IDS.findIndex(
+          (candidateStageId) => candidateStageId === stageId,
+        ) + 1;
+      await expect(
+        page.getByRole("img", {
+          name: `Stage: ${stageName} (${stagePosition} of ${STAGE_IDS.length})`,
+        }),
+      ).toBeVisible({ timeout: 30_000 });
+      await expect(
+        page.getByRole("button", { name: "Moving…", exact: true }),
+      ).toHaveCount(0, {
+        timeout: 30_000,
+      });
     }
 
     // Review decision begins by advancing the application through the visible
@@ -88,12 +136,20 @@ test.describe("candidate-to-hire native signing flow", () => {
     await expect(scheduleButton).toBeVisible();
     await scheduleButton.click();
     const scheduleDrawer = page.getByRole("dialog").last();
-    await expect(scheduleDrawer.getByRole("heading", { name: "Schedule interview" })).toBeVisible();
+    await expect(
+      scheduleDrawer.getByRole("heading", { name: "Schedule interview" }),
+    ).toBeVisible();
     await scheduleDrawer.locator("#schedule-date").fill(localDateOffset(2));
     await scheduleDrawer.locator("#schedule-time").fill("10:30");
-    await scheduleDrawer.locator("#schedule-location").fill("https://meet.example.test/harly-e2e");
-    await scheduleDrawer.locator("#schedule-notes").fill("E2E product sense interview");
-    await scheduleDrawer.getByRole("button", { name: "Schedule", exact: true }).click();
+    await scheduleDrawer
+      .locator("#schedule-location")
+      .fill("https://meet.example.test/harly-e2e");
+    await scheduleDrawer
+      .locator("#schedule-notes")
+      .fill("E2E product sense interview");
+    await scheduleDrawer
+      .getByRole("button", { name: "Schedule", exact: true })
+      .click();
     await expect
       .poll(async () => Boolean((await readHiringState()).interview), {
         timeout: 30_000,
@@ -107,14 +163,24 @@ test.describe("candidate-to-hire native signing flow", () => {
     // Record the recruiter decision with the real evaluation drawer before
     // advancing to Offer.
     await page.getByRole("tab", { name: /Evaluation/ }).click();
-    await page.getByRole("button", { name: "Add evaluation", exact: true }).click();
+    await page
+      .getByRole("button", { name: "Add evaluation", exact: true })
+      .click();
     const evaluationDrawer = page.getByRole("dialog").last();
-    await expect(evaluationDrawer.getByRole("heading", { name: /Add evaluation/ })).toBeVisible();
-    await evaluationDrawer.getByRole("button", { name: "Strong", exact: true }).click();
-    await evaluationDrawer.locator("#evaluation-comment").fill(
-      "Strong product thinking and clear communication; recommend proceeding.",
-    );
-    await evaluationDrawer.getByRole("button", { name: "Save evaluation", exact: true }).click();
+    await expect(
+      evaluationDrawer.getByRole("heading", { name: /Add evaluation/ }),
+    ).toBeVisible();
+    await evaluationDrawer
+      .getByRole("button", { name: "Strong", exact: true })
+      .click();
+    await evaluationDrawer
+      .locator("#evaluation-comment")
+      .fill(
+        "Strong product thinking and clear communication; recommend proceeding.",
+      );
+    await evaluationDrawer
+      .getByRole("button", { name: "Save evaluation", exact: true })
+      .click();
     await expect
       .poll(async () => Boolean((await readHiringState()).scorecard), {
         timeout: 30_000,
@@ -130,11 +196,17 @@ test.describe("candidate-to-hire native signing flow", () => {
     await page.getByRole("tab", { name: /Offers/ }).click();
     await page.getByRole("button", { name: "New offer", exact: true }).click();
     const offerDrawer = page.getByRole("dialog").last();
-    await expect(offerDrawer.getByRole("heading", { name: "New offer" })).toBeVisible();
+    await expect(
+      offerDrawer.getByRole("heading", { name: "New offer" }),
+    ).toBeVisible();
     await offerDrawer.locator("#offer-title").fill("Product Engineer");
     await offerDrawer.locator("#offer-salary").fill("120000");
-    await offerDrawer.locator("#offer-notes").fill("Harly E2E native-signing offer");
-    await offerDrawer.getByRole("button", { name: "Create draft", exact: true }).click();
+    await offerDrawer
+      .locator("#offer-notes")
+      .fill("Harly E2E native-signing offer");
+    await offerDrawer
+      .getByRole("button", { name: "Create draft", exact: true })
+      .click();
     await expect
       .poll(async () => (await readHiringState()).offer?.status ?? null, {
         timeout: 30_000,
@@ -142,7 +214,10 @@ test.describe("candidate-to-hire native signing flow", () => {
       })
       .toBe("draft");
 
-    await page.getByRole("button", { name: "Send offer", exact: true }).last().click();
+    await page
+      .getByRole("button", { name: "Send offer", exact: true })
+      .last()
+      .click();
     const placementDialog = page.getByRole("dialog").last();
     await expect(
       placementDialog.getByRole("heading", { name: "Place signature fields" }),
@@ -150,7 +225,9 @@ test.describe("candidate-to-hire native signing flow", () => {
     await expect(placementDialog.getByText(/1 field placed\./i)).toBeVisible({
       timeout: 30_000,
     });
-    await placementDialog.getByRole("button", { name: "Send offer", exact: true }).click();
+    await placementDialog
+      .getByRole("button", { name: "Send offer", exact: true })
+      .click();
     await expect
       .poll(async () => (await readHiringState()).offer?.status ?? null, {
         timeout: 30_000,
@@ -165,47 +242,103 @@ test.describe("candidate-to-hire native signing flow", () => {
     // that one-time link in the browser instead of querying a token directly.
     const candidatePage = await browser.newPage();
     const captureOffset = captureSize();
-    await candidatePage.goto("/portal/login");
-    await candidatePage.locator('input[name="email"]').fill(FIXTURE.candidateEmail);
-    await candidatePage.getByRole("button", { name: "Continue with email", exact: true }).click();
-    await expect(candidatePage.getByText("Check your inbox", { exact: true })).toBeVisible({
+    await candidatePage.goto("/portal/login", {
+      waitUntil: "domcontentloaded",
+    });
+    const acceptCandidateCookies = candidatePage.getByRole("button", {
+      name: "Accept all",
+      exact: true,
+    });
+    await expect(acceptCandidateCookies).toBeVisible();
+    await acceptCandidateCookies.click();
+    await candidatePage
+      .locator('input[name="email"]')
+      .fill(FIXTURE.candidateEmail);
+    await candidatePage
+      .getByRole("button", { name: "Continue with email", exact: true })
+      .click();
+    await expect(
+      candidatePage.getByText("Check your inbox", { exact: true }),
+    ).toBeVisible({
       timeout: 30_000,
     });
     const magicLink = await waitForMagicLink(captureOffset);
-    await candidatePage.goto(magicLink);
+    await candidatePage.goto(magicLink, { waitUntil: "domcontentloaded" });
     await expect(candidatePage).toHaveURL(/\/portal\//, { timeout: 30_000 });
 
-    await candidatePage.goto(`/portal/applications/${applicationId}`);
-    await expect(candidatePage.getByText("You have an offer to sign", { exact: true })).toBeVisible({
+    await candidatePage.goto(`/portal/applications/${applicationId}`, {
+      waitUntil: "domcontentloaded",
+    });
+    await expect(
+      candidatePage.getByText("You have an offer to sign", { exact: true }),
+    ).toBeVisible({
       timeout: 30_000,
     });
-    await candidatePage.getByRole("button", { name: "Review & sign", exact: true }).click();
+    const offerId = state.offer?.id;
+    expect(offerId).toBeTruthy();
+    const letterResponsePromise = candidatePage.waitForResponse(
+      (response) =>
+        response.request().method() === "GET" &&
+        response.url().endsWith(`/api/portal/offers/${offerId}/letter`),
+      { timeout: 25_000 },
+    );
+    await candidatePage
+      .getByRole("button", { name: "Review & sign", exact: true })
+      .click();
 
     const signingDialog = candidatePage.getByRole("dialog").last();
-    await expect(signingDialog.getByRole("heading", { name: "Sign your offer" })).toBeVisible();
-    await expect(signingDialog.locator('[data-page="1"]')).toBeVisible({ timeout: 30_000 });
-    await signingDialog.getByRole("button", { name: "Type", exact: true }).click();
-    await signingDialog.getByLabel("Name", { exact: true }).fill("Ada Lovelace");
+    await expect(
+      signingDialog.getByRole("heading", { name: "Sign your offer" }),
+    ).toBeVisible();
+    const letterResponse = await letterResponsePromise;
+    expect(
+      letterResponse.status(),
+      "candidate offer letter endpoint status",
+    ).toBe(200);
+    expect(letterResponse.headers()["content-type"]).toMatch(
+      /^application\/pdf\b/i,
+    );
+    await expect(signingDialog.locator('[data-page="1"]')).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(
+      signingDialog.locator('[data-page="1"] canvas[data-pdf-rendered="true"]'),
+    ).toBeVisible({ timeout: 30_000 });
+    await signingDialog
+      .getByRole("button", { name: "Type", exact: true })
+      .click();
+    await signingDialog
+      .getByLabel("Name", { exact: true })
+      .fill("Ada Lovelace");
     const intent = signingDialog.getByRole("checkbox");
     await intent.click();
     await expect(intent).toHaveAttribute("aria-checked", "true");
-    await signingDialog.getByRole("button", { name: "Sign offer", exact: true }).click();
-    await expect(candidatePage.getByText("Offer accepted", { exact: true })).toBeVisible({
+    await signingDialog
+      .getByRole("button", { name: "Sign offer", exact: true })
+      .click();
+    await expect(
+      candidatePage.getByText("Offer accepted", { exact: true }),
+    ).toBeVisible({
       timeout: 30_000,
     });
 
     await expect
-      .poll(async () => {
-        const finalState = await readHiringState();
-        return finalState.application?.status === "hired" &&
-          finalState.application.currentStageId === STAGE_IDS[4] &&
-          finalState.offer?.status === "accepted" &&
-          finalState.envelope?.status === "completed" &&
-          finalState.document?.signatureStatus === "signed";
-      }, {
-        timeout: 30_000,
-        message: "native signing did not finalize the hiring state",
-      })
+      .poll(
+        async () => {
+          const finalState = await readHiringState();
+          return (
+            finalState.application?.status === "hired" &&
+            finalState.application.currentStageId === STAGE_IDS[4] &&
+            finalState.offer?.status === "accepted" &&
+            finalState.envelope?.status === "completed" &&
+            finalState.document?.signatureStatus === "signed"
+          );
+        },
+        {
+          timeout: 30_000,
+          message: "native signing did not finalize the hiring state",
+        },
+      )
       .toBe(true);
 
     state = await readHiringState();
@@ -240,7 +373,8 @@ function captureSize() {
 
 async function waitForMagicLink(offset: number) {
   const deadline = Date.now() + 30_000;
-  const pattern = /https?:\/\/[^\s"'<>]+\/api\/portal\/auth\/magic\?token=([A-Za-z0-9_-]+)/;
+  const pattern =
+    /https?:\/\/[^\s"'<>]+\/api\/portal\/auth\/magic\?token=([A-Za-z0-9_-]+)/;
 
   while (Date.now() < deadline) {
     try {

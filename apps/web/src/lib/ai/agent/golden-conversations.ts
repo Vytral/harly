@@ -11,6 +11,7 @@ export type HarlyGoldenConversation = {
     | "distribution"
     | "integration"
     | "candidate_review"
+    | "automation_build"
     | "product_docs"
     | "general_advice";
   userMessage: string;
@@ -211,6 +212,124 @@ const ADDITIONAL_GOLDEN_CONVERSATIONS: HarlyGoldenConversation[] = [
   ),
 ];
 
+/**
+ * Automation acceptance cases are intentionally part of the same versioned
+ * behavior set as the workspace conversations. They describe the orchestration
+ * contract that a provider must satisfy; they are not prompts for training.
+ */
+const AUTOMATION_GOLDEN_CONVERSATIONS: HarlyGoldenConversation[] = [
+  {
+    id: "automation-low-score-rejection",
+    category: "automation_build",
+    userMessage:
+      "Crea una automatización: cuando llegue una postulación, calcula su score; si es menor que 50, recházala, envía el correo de rechazo y encola el borrado durable de sus datos. Si no, agrega la etiqueta Revisar manualmente.",
+    requiredToolSequence: [
+      "listAutomationTools",
+      "resolveAutomationResources",
+      "prepareAutomationPlan",
+      "simulateAutomationProposal",
+      "applyAutomationProposal",
+    ],
+    responseMustInclude: [
+      "propuesta revisable",
+      "ramas verdadera y falsa",
+      "simulación",
+      "borrador no publicado",
+    ],
+    forbiddenClaims: [
+      "publicada",
+      "correo enviado durante la simulación",
+      "borrado permanente antes del estado final",
+    ],
+  },
+  {
+    id: "automation-large-workflow-edit",
+    category: "automation_build",
+    userMessage:
+      "Modifica la automatización de seguimiento de candidatos para agregar un recordatorio después de una espera, conservando todas sus ramas y configuraciones actuales.",
+    requiredToolSequence: [
+      "searchAutomations",
+      "getAutomationContext",
+      "prepareAutomationPatch",
+      "simulateAutomationProposal",
+      "applyAutomationProposal",
+    ],
+    responseMustInclude: [
+      "cambios focalizados",
+      "revisión/hash base",
+      "ramas conservadas",
+      "diff",
+    ],
+    forbiddenClaims: [
+      "reemplazar el grafo completo sin justificarlo",
+      "publicar automáticamente",
+      "ignorar una edición concurrente",
+    ],
+  },
+  {
+    id: "automation-documents-wait-approval",
+    category: "automation_build",
+    userMessage:
+      "Diseña un flujo que solicite documentos, espere hasta recibirlos o vencer, pida aprobación humana y envíe el contrato para firma.",
+    requiredToolSequence: [
+      "listAutomationTools",
+      "resolveAutomationResources",
+      "prepareAutomationPlan",
+      "simulateAutomationProposal",
+    ],
+    responseMustInclude: [
+      "espera recibida o vencida",
+      "aprobación humana",
+      "requisitos de integración",
+      "cobertura de escenarios",
+    ],
+    forbiddenClaims: [
+      "documento enviado sin aprobación",
+      "firma completada durante la simulación",
+      "inventar una plantilla",
+    ],
+  },
+  {
+    id: "automation-failed-run-repair",
+    category: "automation_build",
+    userMessage:
+      "El último run de esta automatización quedó incierto. Diagnostica qué ocurrió y prepara una reparación que pueda revisar antes de aplicarla.",
+    requiredToolSequence: [
+      "diagnoseWorkflowRun",
+      "prepareAutomationRepair",
+      "simulateAutomationProposal",
+      "applyAutomationProposal",
+    ],
+    responseMustInclude: [
+      "evidencia del run",
+      "causa o incertidumbre",
+      "propuesta de reparación",
+      "historial preservado",
+    ],
+    forbiddenClaims: [
+      "reescribir el run histórico",
+      "reintentar un efecto incierto sin reconciliarlo",
+      "reparación aplicada sin confirmación",
+    ],
+  },
+  {
+    id: "automation-ambiguous-workflow",
+    category: "automation_build",
+    userMessage:
+      "Actualiza la automatización de seguimiento.",
+    requiredToolSequence: ["searchAutomations"],
+    responseMustInclude: [
+      "alternativas reales",
+      "una sola aclaración concreta",
+    ],
+    forbiddenClaims: [
+      "elegir una automatización por nombre parcial",
+      "crear un patch antes de resolver el workflow",
+      "inventar una revisión",
+    ],
+  },
+];
+
 export const HARLY_GOLDEN_CONVERSATIONS: readonly HarlyGoldenConversation[] = [
   {
     id: "job-distribution-linkedin",
@@ -290,4 +409,5 @@ export const HARLY_GOLDEN_CONVERSATIONS: readonly HarlyGoldenConversation[] = [
     forbiddenClaims: ["atribuir la recomendación a datos de este workspace"],
   },
   ...ADDITIONAL_GOLDEN_CONVERSATIONS,
+  ...AUTOMATION_GOLDEN_CONVERSATIONS,
 ];

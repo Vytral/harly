@@ -125,8 +125,8 @@ export async function referCandidate(
     await emitWebhookEvent(
       workspace.id,
       "candidate.referred",
-      { referral: serializeReferral(result.referral) },
-      { skipDomainEvent: true, actorId: user.id },
+      { referral: serializeReferral(result.referral), eventId: result.event.eventId },
+      { skipDomainEvent: true, actorId: user.id, eventId: result.event.eventId },
     );
     await logAuditEvent({
       workspaceId: workspace.id,
@@ -283,8 +283,8 @@ export async function deleteReferral(
       await emitWebhookEvent(
         workspace.id,
         "candidate.referral_deleted",
-        { referralId: referral.id, candidateId },
-        { skipDomainEvent: true, actorId: user.id },
+        { referralId: referral.id, candidateId, eventId: event.eventId },
+        { skipDomainEvent: true, actorId: user.id, eventId: event.eventId },
       );
       await logAuditEvent({
         workspaceId: workspace.id,

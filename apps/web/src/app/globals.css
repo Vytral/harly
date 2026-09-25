@@ -312,6 +312,18 @@
     box-shadow: 0 0 0 1000px var(--background) inset;
     transition: background-color 600000s 0s, color 600000s 0s;
   }
+  /* Auth screens use borderless underline inputs on a white card. The generic
+     autofill repaint above fills with the paper `--background`, which reads as
+     a hard gray rectangle on the white card. Repaint these with the card
+     surface so the autofilled value blends into the underline field instead of
+     showing a boxed fill. */
+  .auth-field:-webkit-autofill,
+  .auth-field:-webkit-autofill:hover,
+  .auth-field:-webkit-autofill:focus,
+  .auth-field:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 1000px var(--pure-snow) inset;
+    box-shadow: 0 0 0 1000px var(--pure-snow) inset;
+  }
   /* Tailwind v4 ships buttons as cursor:default , give every interactive
      control the pointer so hovers never feel dead. Disabled stays default.
      Elements that opt into their own cursor-* utility keep it (utilities layer
@@ -472,6 +484,107 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* ── Auth motion (login / signup / forgot / reset) ──
+   Values reference the transitions.dev motion-token scale (see
+   .agents/skills/transitions-dev). Duration-fast 250ms / smooth-out easing for
+   surface entrance; a staggered blurred rise for stacked auth rows. */
+@keyframes auth-rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+    filter: blur(3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+/* Each row lifts on a 40ms stagger; total kept under ~300ms per polish rules. */
+.auth-stagger > * {
+  animation: auth-rise 400ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.auth-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.auth-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.auth-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.auth-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.auth-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.auth-stagger > *:nth-child(6) { animation-delay: 200ms; }
+
+/* Card entrance: modal-like scale-up (0.98 pre-scale) with smooth-out. */
+@keyframes auth-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.auth-card-enter {
+  animation: auth-card-in 250ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Exit before a hard navigation (setup → signup → onboarding). A quiet rise +
+   fade + soft blur so the leaving surface hands off instead of snapping to a
+   blank reload. Pairs with the arriving page's entrance. */
+@keyframes auth-leave {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-8px);
+    filter: blur(3px);
+  }
+}
+.auth-leaving {
+  animation: auth-leave 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Button loading spinner. */
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.auth-spinner {
+  animation: auth-spin 700ms linear infinite;
+}
+
+/* Harly Sign — contextual field toolbar. Pops from the field with a small
+   scale + fade (dropdown-open token: 250ms, smooth-out, 0.97 pre-scale). */
+@keyframes t-field-toolbar-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+.t-field-toolbar {
+  animation: t-field-toolbar-in 200ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: bottom center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-stagger > *,
+  .auth-card-enter,
+  .auth-leaving,
+  .t-field-toolbar {
+    animation: none;
+  }
+  .auth-spinner {
+    animation-duration: 1400ms;
   }
 }
 

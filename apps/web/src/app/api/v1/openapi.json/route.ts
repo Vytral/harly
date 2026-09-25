@@ -111,7 +111,7 @@ export const GET = withApi(async (request) => {
     openapi: "3.1.0",
     info: {
       title: "Harly API",
-      version: process.env.HARLY_VERSION ?? "1.0.0",
+      version: process.env.HARLY_VERSION ?? "0.1.0-dev",
     },
     servers: [{ url: baseUrl() }],
     paths,
