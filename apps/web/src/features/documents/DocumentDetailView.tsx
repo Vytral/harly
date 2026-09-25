@@ -4,6 +4,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import type { Route } from "next";
 import Link from "next/link";
 import {
   Archive,
@@ -997,7 +998,9 @@ export function DocumentDetailView({
                   document.mimeType !== "application/pdf"
                 }
                 onClick={() =>
-                  router.push(`/dashboard/documents/${document.id}/sign`)
+                  router.push(
+                    `/dashboard/documents/${document.id}/sign` as Route,
+                  )
                 }
               >
                 <LockKeyhole className="size-4" />

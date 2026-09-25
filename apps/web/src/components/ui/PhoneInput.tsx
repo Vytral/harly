@@ -91,6 +91,7 @@ export function PhoneInput({
   value,
   onChange,
   name,
+  autoComplete,
   disabled,
   className,
   inputClassName,
@@ -98,6 +99,7 @@ export function PhoneInput({
   value: string;
   onChange: (value: string) => void;
   name?: string;
+  autoComplete?: string;
   disabled?: boolean;
   className?: string;
   inputClassName?: string;
@@ -193,6 +195,7 @@ export function PhoneInput({
         <input
           type="tel"
           inputMode="tel"
+          autoComplete={autoComplete}
           value={national}
           disabled={disabled}
           onChange={(e) => onNationalChange(e.target.value)}

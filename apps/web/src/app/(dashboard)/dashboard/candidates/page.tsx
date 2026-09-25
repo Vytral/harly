@@ -143,7 +143,7 @@ const initialImportSource: ImportSource | undefined =
       <div className="flex w-fit items-center gap-1 rounded-lg border bg-card p-1 text-sm">
         <Tab href="/dashboard/candidates" active={!isTrash}>
           All
-          <span className="ml-1.5 tabular-nums text-muted-foreground">{rows.length}</span>
+          <span className="ml-1.5 tabular-nums text-muted-foreground">{directory.total}</span>
         </Tab>
         <Tab href="/dashboard/candidates?view=trash" active={isTrash}>
           <Trash2 className="size-3.5" />
