@@ -52,7 +52,7 @@
     "typescript": "^6.0.3"
   },
   "dependencies": {
-    "@clack/prompts": "^1.7.0",
+    "@clack/prompts": "^1.8.1",
     "picocolors": "^1.1.1"
   }
 }
