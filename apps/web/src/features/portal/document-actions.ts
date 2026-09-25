@@ -13,16 +13,86 @@ import {
   documentVersions,
   documents,
   notifications,
+  signatureEnvelopes,
+  signatureRecipients,
 } from "@harly/db";
 
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { canCandidateUpload } from "@/features/documents/requests-shared";
 import { verifyUploadedDocument } from "@/features/documents/verify";
 import { createLogger } from "@/lib/logger";
+import { resumeWorkflowDocumentWaits } from "@/features/automations/runtime/worker";
+import { reconcileDocumentRequestPackage } from "@/features/documents/requests-service";
+import { rotateNativePortalSigningLink } from "@/lib/esign/native/remote";
 
 const log = createLogger("portal-document-submit");
 
 export type PortalSubmitResult = { ok: true } | { ok: false; error: string };
+
+const signingViewSchema = z.object({ requestId: z.uuid() });
+
+/**
+ * Return a fresh, single-recipient native signing capability from the
+ * authenticated candidate portal. The request/document joins are deliberately
+ * repeated here instead of trusting a client-supplied document or envelope id.
+ */
+export async function createDocumentSigningViewAction(input: unknown): Promise<{ ok: true; signingUrl: string; expiresAt: string } | { ok: false; error: string }> {
+  const cookieStore = await cookies();
+  const token = cookieStore.get(PORTAL_SESSION_COOKIE)?.value;
+  if (!token) return { ok: false, error: "Your session has expired." };
+  const session = await resolvePortalSession(token);
+  if (!session) return { ok: false, error: "Your session has expired." };
+  const parsed = signingViewSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Invalid signing request." };
+
+  const [request] = await db
+    .select({
+      requestId: documentRequests.id,
+      applicationId: documentRequests.applicationId,
+      documentId: documents.id,
+      signatureStatus: documents.signatureStatus,
+      signatureProvider: documents.signatureProvider,
+      envelopeId: signatureEnvelopes.id,
+    })
+    .from(documentRequests)
+    .innerJoin(documents, eq(documents.id, documentRequests.documentId))
+    .innerJoin(signatureEnvelopes, eq(signatureEnvelopes.id, documents.signatureEnvelopeRefId))
+    .where(and(
+      eq(documentRequests.id, parsed.data.requestId),
+      eq(documentRequests.workspaceId, session.workspaceId),
+      eq(documentRequests.candidateId, session.candidateId),
+      eq(documents.workspaceId, session.workspaceId),
+      eq(signatureEnvelopes.workspaceId, session.workspaceId),
+    ))
+    .limit(1);
+  if (!request || !request.documentId || !request.envelopeId) {
+    return { ok: false, error: "This signing request was not found." };
+  }
+  if (request.signatureProvider !== "native" || request.signatureStatus !== "pending") {
+    return { ok: false, error: "This document is not available for portal signing." };
+  }
+
+  const [recipient] = await db
+    .select({ id: signatureRecipients.id })
+    .from(signatureRecipients)
+    .where(and(
+      eq(signatureRecipients.workspaceId, session.workspaceId),
+      eq(signatureRecipients.envelopeId, request.envelopeId),
+      eq(signatureRecipients.role, "signer"),
+      eq(signatureRecipients.status, "sent"),
+    ))
+    .orderBy(signatureRecipients.routingOrder, signatureRecipients.createdAt)
+    .limit(1);
+  if (!recipient) return { ok: false, error: "This signing request is not ready." };
+
+  const result = await rotateNativePortalSigningLink({
+    workspaceId: session.workspaceId,
+    recipientId: recipient.id,
+  });
+  if (!result.ok) return result;
+  revalidatePath(`/portal/applications/${request.applicationId}`);
+  return { ok: true, signingUrl: result.signingUrl, expiresAt: result.expiresAt.toISOString() };
+}
 
 const submitSchema = z.object({
   requestId: z.uuid(),
@@ -63,6 +133,7 @@ export async function submitDocumentRequestAction(input: {
       status: documentRequests.status,
       title: documentRequests.title,
       applicationId: documentRequests.applicationId,
+      packageId: documentRequests.packageId,
       requestedById: documentRequests.requestedById,
     })
     .from(documentRequests)
@@ -159,6 +230,7 @@ export async function submitDocumentRequestAction(input: {
         )
         .returning({ id: documentRequests.id });
       if (!advanced) throw new Error("This document was already submitted.");
+      if (request.packageId) await reconcileDocumentRequestPackage(tx, { workspaceId: session.workspaceId, packageId: request.packageId });
 
       await tx.insert(activityEvents).values({
         workspaceId: session.workspaceId,
@@ -198,6 +270,12 @@ export async function submitDocumentRequestAction(input: {
     };
   }
 
+  // The upload transaction is committed before the resolver reads it. The
+  // resolver rechecks the complete package under a workflow lease.
+  await resumeWorkflowDocumentWaits({
+    workspaceId: session.workspaceId,
+    resourceId: request.packageId ?? request.applicationId,
+  });
   revalidatePath(`/portal/applications/${request.applicationId}`);
   return { ok: true };
 }

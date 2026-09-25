@@ -49,4 +49,45 @@ describe("validatePortalApplication", () => {
       }),
     ).toEqual({ ok: true, answers: { work_authorization: "Yes" } });
   });
+
+  it("requires agreement for a required consent question and ignores info blocks", () => {
+    const consentQuestions = [
+      {
+        id: "agreement-row",
+        key: "agreement",
+        type: "consent",
+        required: true,
+        minLength: null,
+        options: ["agree", "disagree"],
+      },
+      {
+        id: "info-row",
+        key: "mission",
+        type: "info",
+        required: true,
+        minLength: null,
+        options: [],
+      },
+    ];
+
+    expect(
+      validatePortalApplication({
+        workspaceId,
+        resumeRequired: false,
+        answers: { agreement: "disagree" },
+        questions: consentQuestions,
+      }),
+    ).toEqual({
+      ok: false,
+      error: "You must agree to continue with your application.",
+    });
+    expect(
+      validatePortalApplication({
+        workspaceId,
+        resumeRequired: false,
+        answers: { agreement: "agree" },
+        questions: consentQuestions,
+      }),
+    ).toEqual({ ok: true, answers: { agreement: "agree" } });
+  });
 });

@@ -7,74 +7,38 @@ import { z } from "zod";
 
 import {
   candidates,
+  applications,
   db,
   documentAssociations,
+  documents,
   offers,
-  savedSignatures,
 } from "@harly/db";
 
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
-import { isNativeOfferSubmission } from "@/lib/esign/native/offer-signing";
 import { finalizeNativeSignature } from "@/lib/esign/native/finalize";
-import type { SignaturePlacement } from "@/lib/esign/native/bake";
-import { decideOfferForApi } from "@/features/offers/service";
+import {
+  ensureNativeOfferEnvelope,
+  isNativeOfferSubmission,
+} from "@/lib/esign/native/offer-signing";
+import {
+  isNativeOfferAcceptanceAvailable,
+  isSignableNativeFieldsSnapshot,
+} from "@/lib/esign/native/fields";
 import { createLogger } from "@/lib/logger";
-import { storage } from "@/lib/storage";
+import {
+  MAX_VECTOR_COMPRESSED_CHARS,
+  validateVectorSaveInput,
+} from "@/features/documents/signature-vector";
 
 const log = createLogger("portal-native-sign");
 
-const placementSchema = z.object({
-  page: z.number().int().positive(),
-  x: z.number().min(0).max(1),
-  y: z.number().min(0).max(1),
-  w: z.number().positive().max(1),
-  h: z.number().positive().max(1),
-});
-
 const inputSchema = z.object({
   offerId: z.uuid(),
-  placements: z.array(placementSchema).min(1).max(20),
-  signaturePngBase64: z.string().max(700_000).optional(),
-  savedSignatureId: z.uuid().optional(),
+  signatureVectorBase64: z.string().min(1).max(MAX_VECTOR_COMPRESSED_CHARS),
+  textValues: z.record(z.string(), z.string().max(200)).optional(),
 });
 
 export type PortalNativeSignResult = { ok: true } | { ok: false; error: string };
-
-function decodePng(value: string) {
-  const raw = value.startsWith("data:") ? value.slice(value.indexOf(",") + 1) : value;
-  const bytes = Buffer.from(raw, "base64");
-  const pngHeader = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
-  if (bytes.length < pngHeader.length || !bytes.subarray(0, 8).equals(pngHeader)) {
-    throw new Error("Signature must be a valid PNG image.");
-  }
-  return bytes;
-}
-
-async function getSignatureBytes(input: {
-  workspaceId: string;
-  candidateId: string;
-  signaturePngBase64?: string;
-  savedSignatureId?: string;
-}) {
-  if (input.signaturePngBase64) return decodePng(input.signaturePngBase64);
-  if (!input.savedSignatureId) throw new Error("Choose or draw a signature.");
-  const [saved] = await db
-    .select({ storageKey: savedSignatures.storageKey })
-    .from(savedSignatures)
-    .where(
-      and(
-        eq(savedSignatures.id, input.savedSignatureId),
-        eq(savedSignatures.workspaceId, input.workspaceId),
-        eq(savedSignatures.ownerType, "portal_candidate"),
-        eq(savedSignatures.ownerId, input.candidateId),
-        isNull(savedSignatures.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (!saved) throw new Error("Saved signature not found.");
-  const bytes = await storage.read(saved.storageKey);
-  return decodePng(bytes.toString("base64"));
-}
 
 async function getCandidatePortalSession() {
   const token = (await cookies()).get(PORTAL_SESSION_COOKIE)?.value;
@@ -97,6 +61,11 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
       applicationId: offers.applicationId,
       createdById: offers.createdById,
       esignSubmissionId: offers.esignSubmissionId,
+      signatureEnvelopeRefId: offers.signatureEnvelopeRefId,
+      jobId: offers.jobId,
+      title: offers.title,
+      expiresAt: offers.expiresAt,
+      applicationStatus: applications.status,
     })
     .from(offers)
     .innerJoin(
@@ -105,6 +74,13 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
         eq(candidates.id, offers.candidateId),
         eq(candidates.workspaceId, offers.workspaceId),
         isNull(candidates.deletedAt),
+      ),
+    )
+    .innerJoin(
+      applications,
+      and(
+        eq(applications.id, offers.applicationId),
+        eq(applications.workspaceId, offers.workspaceId),
       ),
     )
     .where(
@@ -120,10 +96,23 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
   if (!isNativeOfferSubmission(offer.esignSubmissionId)) {
     return { ok: false, error: "This offer is not set up for native signing." };
   }
+  if (
+    !isNativeOfferAcceptanceAvailable({
+      offerStatus: offer.status,
+      applicationStatus: offer.applicationStatus,
+      expiresAt: offer.expiresAt,
+    })
+  ) {
+    return { ok: false, error: "This offer is no longer available for signing." };
+  }
 
   const [association] = await db
-    .select({ documentId: documentAssociations.documentId })
+    .select({
+      documentId: documentAssociations.documentId,
+      fieldsSnapshot: documents.fieldsSnapshot,
+    })
     .from(documentAssociations)
+    .innerJoin(documents, eq(documents.id, documentAssociations.documentId))
     .where(
       and(
         eq(documentAssociations.workspaceId, session.workspaceId),
@@ -133,6 +122,9 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
     )
     .limit(1);
   if (!association) return { ok: false, error: "The offer letter could not be found." };
+  if (!isSignableNativeFieldsSnapshot(association.fieldsSnapshot)) {
+    return { ok: false, error: "This offer is not ready for signing." };
+  }
 
   const [candidate] = await db
     .select({ firstName: candidates.firstName, lastName: candidates.lastName, email: candidates.email })
@@ -143,27 +135,31 @@ export async function signOfferNatively(input: unknown): Promise<PortalNativeSig
   const signerName = [candidate.firstName, candidate.lastName].filter(Boolean).join(" ") || candidate.email || "Candidate";
 
   try {
-    const signatureBytes = await getSignatureBytes({
+    const envelope = await ensureNativeOfferEnvelope({
       workspaceId: session.workspaceId,
-      candidateId: session.candidateId,
-      signaturePngBase64: parsed.data.signaturePngBase64,
-      savedSignatureId: parsed.data.savedSignatureId,
+      offer: {
+        id: offer.id,
+        candidateId: offer.candidateId,
+        title: offer.title,
+        createdById: offer.createdById,
+      },
+      documentId: association.documentId,
+      fieldsSnapshot: association.fieldsSnapshot,
     });
+    const checked = validateVectorSaveInput({ vectorData: parsed.data.signatureVectorBase64 });
+    if (!checked.ok) return { ok: false, error: checked.error };
     await finalizeNativeSignature({
       workspaceId: session.workspaceId,
       documentId: association.documentId,
       actorId: null,
       signerName,
       signerEmail: candidate.email ?? "",
-      signaturePngBytes: signatureBytes,
-      placements: parsed.data.placements as SignaturePlacement[],
+      signatureVector: checked.vectorData,
+      textValues: parsed.data.textValues,
       verification: "self_sign",
-    });
-    await decideOfferForApi({
-      workspaceId: session.workspaceId,
-      actorUserId: offer.createdById,
+      existingEnvelopeId: envelope.envelopeId,
+      existingRecipientId: envelope.recipientId,
       offerId: offer.id,
-      decision: "accepted",
     });
   } catch (error) {
     log.error({ error, offerId: offer.id }, "native offer signature failed");

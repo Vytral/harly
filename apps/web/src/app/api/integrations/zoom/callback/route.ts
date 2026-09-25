@@ -1,3 +1,4 @@
+import { isDemoMode } from "@harly/config";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -6,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { getZoomCredentials } from "@/lib/zoom/config";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 
@@ -41,6 +43,9 @@ type ZoomUserInfoResponse = {
  * 6. Redirect back to settings/integrations
  */
 export async function GET(req: NextRequest) {
+  if (isDemoMode()) {
+    return NextResponse.json({ error: "This action is disabled in the demo." }, { status: 403 });
+  }
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
     return redirectWithError("Unauthorized. Please log in first.");
@@ -84,9 +89,7 @@ export async function GET(req: NextRequest) {
     return redirectWithError("Zoom credentials not found for this workspace.");
   }
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const redirectUri = `${appUrl}/api/integrations/zoom/callback`;
 
   // Exchange code for token
@@ -151,9 +154,7 @@ export async function GET(req: NextRequest) {
 }
 
 function redirectWithError(msg: string) {
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const url = new URL(`${appUrl}/settings/integrations`);
   url.searchParams.set("zoom_error", msg);
   return NextResponse.redirect(url.toString());

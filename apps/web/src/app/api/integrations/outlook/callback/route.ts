@@ -1,3 +1,4 @@
+import { isDemoMode } from "@harly/config";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -7,6 +8,7 @@ import { encryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { getWorkspaceOutlookCredentials } from "@/lib/outlook/config";
 import { getMe } from "@/lib/outlook/client";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 
@@ -25,6 +27,9 @@ export const runtime = "nodejs";
  * 5. Redirect to settings
  */
 export async function GET(req: NextRequest) {
+  if (isDemoMode()) {
+    return NextResponse.json({ error: "This action is disabled in the demo." }, { status: 403 });
+  }
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
     return redirectWithError("Unauthorized. Please log in first.");
@@ -70,9 +75,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const redirectUri = `${appUrl}/api/integrations/outlook/callback`;
 
   // Exchange code for tokens
@@ -146,9 +149,7 @@ export async function GET(req: NextRequest) {
 }
 
 function redirectWithError(msg: string) {
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const url = new URL(`${appUrl}/settings/integrations`);
   url.searchParams.set("outlook_error", msg);
   return NextResponse.redirect(url.toString());

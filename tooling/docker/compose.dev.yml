@@ -14,9 +14,9 @@ services:
         max-size: ${HARLY_DEV_LOG_MAX_SIZE:-10m}
         max-file: ${HARLY_DEV_LOG_MAX_FILES:-2}
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-harly}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-harly}
-      POSTGRES_DB: ${POSTGRES_DB:-harly}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     healthcheck:

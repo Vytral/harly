@@ -11,6 +11,7 @@ import {
   isPortalEnabled,
 } from "@/lib/portal-auth";
 import { PORTAL_OAUTH_STATE_COOKIE, verifyPortalOAuthState } from "@/lib/portal-oauth-state";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const runtime = "nodejs";
 
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+    const appUrl = getHarlyPublicOrigin();
     const redirectUri = `${appUrl}/api/portal/auth/callback/github`;
     const workspaceId = oauthState!.workspaceId;
     if (!(await isPortalEnabled(workspaceId))) redirect("/portal/login?error=no_workspace" as Route);

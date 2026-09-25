@@ -1,0 +1,2 @@
+ALTER TABLE "scorecards" DROP CONSTRAINT "scorecards_workspace_application_author_stage_uidx";--> statement-breakpoint
+CREATE UNIQUE INDEX "scorecards_workspace_application_author_stage_uidx" ON "scorecards" USING btree ("workspace_id","application_id","author_id",coalesce("stage_id"::text, '')) WHERE "scorecards"."application_id" is not null;

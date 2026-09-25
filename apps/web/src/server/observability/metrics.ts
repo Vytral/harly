@@ -1,11 +1,12 @@
 import "server-only";
 
-import { and, count, eq, isNull, lt, or } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, lte, lt, or } from "drizzle-orm";
 import {
   candidateDeletionJobs,
   db,
   mailIdempotencyKeys,
   sql,
+  workflowNodeExecutions,
   workflowRuns,
 } from "@harly/db";
 
@@ -19,6 +20,7 @@ type MetricsState = {
   counters: Map<string, number>;
   httpDuration: Histogram;
   sseLatency: Histogram;
+  workflowActionDuration: Histogram;
   sseConnections: number;
   sseEvents: number;
 };
@@ -37,9 +39,13 @@ const state: MetricsState = globalThis.harlyMetrics ?? {
   counters: new Map(),
   httpDuration: histogram(),
   sseLatency: histogram(),
+  workflowActionDuration: histogram(),
   sseConnections: 0,
   sseEvents: 0,
 };
+// Preserve counters across development hot reloads while initializing fields
+// added by a newer module version.
+state.workflowActionDuration ??= histogram();
 if (process.env.NODE_ENV !== "production") globalThis.harlyMetrics = state;
 
 const safeLabel = (value: string) => value.replaceAll(/[^a-zA-Z0-9_.:-]/g, "_");
@@ -75,6 +81,20 @@ export function recordSlackDelivery(
   status: "success" | "failed" | "dead_letter",
 ) {
   increment(`slack_delivery_${status}`);
+}
+export function recordWorkflowNodeAttempt(input: {
+  actionType: string;
+  status: "succeeded" | "failed" | "uncertain";
+  durationMs: number;
+}) {
+  increment(
+    `workflow_node_attempt|${safeLabel(input.actionType)}|${safeLabel(input.status)}`,
+  );
+  observe(state.workflowActionDuration, Math.max(0, input.durationMs) / 1000);
+}
+
+export function recordAutomationGuardDecision(code: string) {
+  increment(`automation_guard|${safeLabel(code)}`);
 }
 export function recordSseConnection(delta: 1 | -1) {
   state.sseConnections = Math.max(0, state.sseConnections + delta);
@@ -151,30 +171,64 @@ async function readMailDeliveryQueue() {
 }
 
 async function readWorkflowQueue() {
-  const [byStatus, staleRows] = await Promise.all([
+  const [byState, staleRows, dueRows, waitingRows, uncertainRows] = await Promise.all([
     db
-      .select({ status: workflowRuns.status, count: count() })
+      .select({
+        logicalStatus: workflowRuns.logicalStatus,
+        status: workflowRuns.status,
+        count: count(),
+      })
       .from(workflowRuns)
-      .groupBy(workflowRuns.status),
+      .groupBy(workflowRuns.logicalStatus, workflowRuns.status),
     db
       .select({ count: count() })
       .from(workflowRuns)
       .where(
-        and(
-          eq(workflowRuns.status, "running"),
-          lt(workflowRuns.startedAt, new Date(Date.now() - 5 * 60_000)),
+        or(
+          and(
+            eq(workflowRuns.engineVersion, 2),
+            eq(workflowRuns.logicalStatus, "running"),
+            or(
+              isNull(workflowRuns.leaseUntil),
+              lt(workflowRuns.leaseUntil, new Date()),
+            ),
+          ),
+          and(
+            eq(workflowRuns.engineVersion, 1),
+            eq(workflowRuns.status, "running"),
+            lt(workflowRuns.startedAt, new Date(Date.now() - 5 * 60_000)),
+          ),
         ),
       ),
+    db
+      .select({ count: count() })
+      .from(workflowRuns)
+      .where(and(
+        eq(workflowRuns.engineVersion, 2),
+        inArray(workflowRuns.logicalStatus, ["queued", "retrying"]),
+        lte(workflowRuns.nextAttemptAt, new Date()),
+      )),
+    db
+      .select({ kind: workflowNodeExecutions.waitingKind, count: count() })
+      .from(workflowNodeExecutions)
+      .where(eq(workflowNodeExecutions.status, "waiting"))
+      .groupBy(workflowNodeExecutions.waitingKind),
+    db
+      .select({ count: count() })
+      .from(workflowNodeExecutions)
+      .where(eq(workflowNodeExecutions.status, "uncertain")),
   ]);
-  const counts = new Map(byStatus.map((row) => [row.status, row.count]));
+  const counts = new Map<string, number>();
+  for (const row of byState) {
+    const state = row.logicalStatus ?? row.status;
+    counts.set(state, (counts.get(state) ?? 0) + Number(row.count));
+  }
   return {
-    running: counts.get("running") ?? 0,
-    succeeded: counts.get("succeeded") ?? 0,
-    failed: counts.get("failed") ?? 0,
-    skipped: counts.get("skipped") ?? 0,
-    deadLetter: counts.get("dead_letter") ?? 0,
-    cancelled: counts.get("cancelled") ?? 0,
-    stale: staleRows[0]?.count ?? 0,
+    states: counts,
+    due: Number(dueRows[0]?.count ?? 0),
+    waitingByKind: waitingRows.map((row) => ({ kind: row.kind ?? "unknown", count: Number(row.count) })),
+    uncertain: Number(uncertainRows[0]?.count ?? 0),
+    stale: Number(staleRows[0]?.count ?? 0),
   };
 }
 
@@ -219,6 +273,25 @@ export async function renderPrometheusMetrics() {
     `harly_slack_deliveries_total{status="success"} ${state.counters.get("slack_delivery_success") ?? 0}`,
     `harly_slack_deliveries_total{status="failed"} ${state.counters.get("slack_delivery_failed") ?? 0}`,
     `harly_slack_deliveries_total{status="dead_letter"} ${state.counters.get("slack_delivery_dead_letter") ?? 0}`,
+    "# TYPE harly_workflow_node_attempts_total counter",
+    ...[...state.counters.entries()]
+      .filter(([key]) => key.startsWith("workflow_node_attempt|"))
+      .map(([key, value]) => {
+        const [, actionType, status] = key.split("|");
+        return `harly_workflow_node_attempts_total{action_type="${actionType}",status="${status}"} ${value}`;
+      }),
+    "# TYPE harly_automation_guard_denials_total counter",
+    ...[...state.counters.entries()]
+      .filter(([key]) => key.startsWith("automation_guard|"))
+      .map(([key, value]) => {
+        const [, code] = key.split("|");
+        return `harly_automation_guard_denials_total{code="${code}"} ${value}`;
+      }),
+    "# TYPE harly_workflow_node_attempt_duration_seconds histogram",
+    ...histogramLines(
+      "harly_workflow_node_attempt_duration_seconds",
+      state.workflowActionDuration,
+    ),
   ];
   const queue = await sql`
     select
@@ -269,23 +342,36 @@ export async function renderPrometheusMetrics() {
     `harly_mail_idempotency_keys{state="stale"} ${mailCurrent.stale}`,
   );
   const workflowCurrent = await readWorkflowQueue().catch(() => ({
-    running: 0,
-    succeeded: 0,
-    failed: 0,
-    skipped: 0,
-    deadLetter: 0,
-    cancelled: 0,
+    states: new Map<string, number>(),
+    due: 0,
+    waitingByKind: [],
+    uncertain: 0,
     stale: 0,
   }));
+  const workflowStates = [
+    "queued",
+    "running",
+    "waiting",
+    "retrying",
+    "succeeded",
+    "completed_with_warnings",
+    "stopped",
+    "failed",
+    "dead_letter",
+    "cancelled",
+    "uncertain",
+  ];
   lines.push(
     "# TYPE harly_workflow_runs gauge",
-    `harly_workflow_runs{state="running"} ${workflowCurrent.running}`,
-    `harly_workflow_runs{state="succeeded"} ${workflowCurrent.succeeded}`,
-    `harly_workflow_runs{state="failed"} ${workflowCurrent.failed}`,
-    `harly_workflow_runs{state="skipped"} ${workflowCurrent.skipped}`,
-    `harly_workflow_runs{state="dead_letter"} ${workflowCurrent.deadLetter}`,
-    `harly_workflow_runs{state="cancelled"} ${workflowCurrent.cancelled}`,
-    `harly_workflow_runs{state="stale"} ${workflowCurrent.stale}`,
+    ...workflowStates.map((state) => `harly_workflow_runs{state="${state}"} ${workflowCurrent.states.get(state) ?? 0}`),
+    "# TYPE harly_workflow_runs_due gauge",
+    `harly_workflow_runs_due ${workflowCurrent.due}`,
+    "# TYPE harly_workflow_waiting_nodes gauge",
+    ...workflowCurrent.waitingByKind.map((row) => `harly_workflow_waiting_nodes{kind="${safeLabel(row.kind)}"} ${row.count}`),
+    "# TYPE harly_workflow_uncertain_nodes gauge",
+    `harly_workflow_uncertain_nodes ${workflowCurrent.uncertain}`,
+    "# TYPE harly_workflow_runs_stale gauge",
+    `harly_workflow_runs_stale ${workflowCurrent.stale}`,
   );
   return `${lines.join("\n")}\n`;
 }

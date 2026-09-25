@@ -1,8 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
-import Link from "next/link";
-import type { Route } from "next";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from "react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
@@ -10,20 +8,37 @@ import { FocusModeShell } from "@/components/focus-mode/FocusModeShell";
 import { FocusModeTopBar } from "@/components/focus-mode/FocusModeTopBar";
 import { useUnsavedChangesGuard } from "@/components/focus-mode/useUnsavedChangesGuard";
 import { UnsavedChangesDialog } from "@/components/focus-mode/UnsavedChangesDialog";
+import Image from "next/image";
 import {
-  ArrowLeftIcon,
-  CheckIcon,
-  EyeIcon,
-  LoaderIcon,
-} from "@/features/career-page/builder/builder-icons";
+  ArrowLeft,
+  Clock,
+  FlaskConical,
+  X,
+  Zap,
+} from "lucide-react";
+import { HarlyAIPanel, type AutomationContext } from "@/components/dashboard/HarlyAIPanel";
+import { semanticGraphHash } from "../definition/hash";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 import {
   createWorkflowAction,
   dryRunWorkflowAction,
+  getWorkflowAction,
   getWorkflowMetricsAction,
   listWorkflowVersionsAction,
   pauseWorkflowAction,
   publishWorkflowAction,
+  approveWorkflowAction,
   requestWorkflowApprovalAction,
   resumeWorkflowAction,
   rollbackWorkflowAction,
@@ -31,34 +46,81 @@ import {
   updateWorkflowAction,
 } from "../actions";
 import type { SerializedWorkflow } from "./types";
-import type {
-  Action,
-  ConditionNode,
-  Trigger,
-  WorkflowDefinitionInput,
-  WorkflowEvent,
-} from "../schema";
+import type { WorkflowDefinitionInput, WorkflowEvent } from "../schema";
 
-import { TriggerPanel } from "./TriggerPanel";
-import { ConditionPanel } from "./ConditionPanel";
-import { ActionsPanel } from "./ActionsPanel";
 import { DryRunPanel } from "./DryRunPanel";
-import { AddNodeIcon, BeakerIcon, NodeDotIcon, WhenGlyph } from "./builder-icons";
+import { RunsTimeline } from "./RunsTimeline";
 import { triggerMeta } from "./catalog";
-import { describeWorkflow } from "./preview";
+import type { WorkflowValidationIssue } from "../publish-validation";
+import { EditorWorkspace } from "./canvas/EditorWorkspace";
+import { editorReducer, initialEditorState } from "./state/editor-reducer";
+import { ConflictDialog } from "./ConflictDialog";
+import { SaveStatus } from "./SaveStatus";
+import { graphToLegacy } from "../definition/legacy-adapter";
+import {
+  diffGraphSummaries,
+  summarizeGraph,
+  type GraphDiffLine,
+} from "./graph-diff";
+import {
+  AUTOSAVE_DELAY_MS,
+  beginSave,
+  initialSaveState,
+  isDirty,
+  markDirty,
+  saveConflict,
+  saveFailed,
+  saveSucceededNow,
+  setOnline,
+  type SaveState,
+} from "./save-controller";
+import type { EditorLayout, WorkflowGraphV2 } from "../definition/schema-v2";
+import type { WorkflowDocumentTemplateSnapshot } from "@/features/document-templates/shared";
+import type { SafeAutomationToolManifest } from "./catalog";
 
-/**
- * The visual workflow builder — a full-page focus-mode editor (same shell as
- * the career page builder) laid out as a WHEN → IF → DO flow on a dotted
- * canvas. The recruiter edits a draft locally; "Save" persists it through the
- * server actions (create or update). "Test" runs a dry-run (T5) against a
- * sample candidate without saving.
- *
- * The draft is the exact `WorkflowDefinitionInput` shape the Zod schemas
- * validate, so what the recruiter builds is always persistable as-is.
- */
+export type WorkflowDraft = WorkflowDefinitionInput & {
+  id?: string;
+  draftRevision?: number;
+  contentHash?: string;
+};
 
-export type WorkflowDraft = WorkflowDefinitionInput & { id?: string };
+export type BuilderDataProps = {
+  toolManifests: SafeAutomationToolManifest[];
+  members: { id: string; name: string; email?: string }[];
+  stageNames: string[];
+  stages?: { id: string; name: string; jobId: string }[];
+  jobs: { id: string; title: string }[];
+  emailTemplates: { id: string; name: string; subject: string; type: string }[];
+  documentTemplates: WorkflowDocumentTemplateSnapshot[];
+  documents: { id: string; name: string; mimeType: string }[];
+  attachmentDocuments: {
+    id: string;
+    name: string;
+    mimeType: string;
+    checksum: string;
+  }[];
+  interviews: { id: string; label: string; hint?: string }[];
+  tags: string[];
+  webhookEndpoints: {
+    id: string;
+    name: string;
+    enabled: boolean;
+    lastReceivedAt: string | null;
+    payloadSchema: Record<string, unknown>;
+  }[];
+  defaultTimeZone: string;
+  candidates: { id: string; name: string; email: string }[];
+  /** The authenticated user's real display name, used by Harly AI greeting. */
+  userName: string;
+};
+
+function newBuilderChatKey(): string {
+  const id =
+    typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  return `builder:new:${id}`;
+}
 
 function toDraft(w: SerializedWorkflow): WorkflowDraft {
   return {
@@ -73,60 +135,112 @@ function toDraft(w: SerializedWorkflow): WorkflowDraft {
     maxExternalActionsPerMinute: w.maxExternalActionsPerMinute,
     circuitBreakerThreshold: w.circuitBreakerThreshold,
     circuitBreakerCooldownSeconds: w.circuitBreakerCooldownSeconds,
+    draftRevision: w.draftRevision,
+    contentHash: w.contentHash,
   };
 }
 
 export function WorkflowBuilder({
   initial,
   builderData,
-  isNew,
+  isNew = false,
 }: {
   initial: SerializedWorkflow | null;
-  builderData: { members: { id: string; name: string }[]; stageNames: string[]; candidates: { id: string; name: string; email: string }[] };
-  isNew: boolean;
+  builderData: BuilderDataProps;
+  isNew?: boolean;
 }) {
   const [draft, setDraft] = useState<WorkflowDraft>(() =>
     initial
       ? toDraft(initial)
       : {
-          name: "Untitled automation",
+          name: "",
           enabled: true,
           trigger: { event: "application.created" as WorkflowEvent },
           conditions: [],
-          actions: [{ type: "send_slack", config: { message: "New application received." }, continueOnError: true }],
+          actions: [],
           maxRunsPerMinute: 60,
           maxExternalActionsPerMinute: 30,
           circuitBreakerThreshold: 5,
           circuitBreakerCooldownSeconds: 300,
         },
   );
-  const [dirty, setDirty] = useState(isNew);
-  const [status, setStatus] = useState<SerializedWorkflow["status"]>(initial?.status ?? "draft");
+  const hasChosenTrigger = true;
+  const [save, setSave] = useState<SaveState>(() => initialSaveState(true, isNew));
+  const [status, setStatus] = useState<SerializedWorkflow["status"]>(
+    initial?.status ?? "draft",
+  );
   const [approved, setApproved] = useState(Boolean(initial?.approvedAt));
+  const [approvalRequested, setApprovalRequested] = useState(
+    Boolean(initial?.approvalRequestedAt),
+  );
+  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(
+    Boolean(initial?.hasUnpublishedChanges),
+  );
   const [saving, startSave] = useTransition();
-  const [tab, setTab] = useState<"build" | "test">("build");
+  const [tab, setTab] = useState<"build" | "test" | "runs">("build");
+  const [sampleScenario, setSampleScenario] = useState("success");
+  const [publishIssues, setPublishIssues] = useState<WorkflowValidationIssue[]>(
+    [],
+  );
+  const [editorState, editorDispatch] = useReducer(
+    editorReducer,
+    undefined,
+    () => initialEditorState(initial?.graph, initial?.layout),
+  );
+  const canvas = useMemo(
+    () => ({ graph: editorState.graph, layout: editorState.layout }),
+    [editorState.graph, editorState.layout],
+  );
+  const [conflictOpen, setConflictOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  // A new, unsaved automation has no durable id yet. Keep its chat isolated
+  // for this editor session instead of restoring another new draft's history.
+  const [newDraftChatKey] = useState(newBuilderChatKey);
+  const [serverGraph, setServerGraph] = useState<WorkflowGraphV2 | null>(null);
+  const [diffLines, setDiffLines] = useState<GraphDiffLine[] | null>(null);
+  const [comparing, setComparing] = useState(false);
+  const selectedNodeId = editorState.selection.nodeIds[0];
+  const dirty = isDirty(save);
   const { confirmDiscard, discardDialogProps } = useUnsavedChangesGuard(dirty);
+  const saveFnRef = useRef<(() => Promise<boolean>) | null>(null);
+  const savePromiseRef = useRef<Promise<boolean> | null>(null);
+  const draftRef = useRef(draft);
+  const canvasRef = useRef(canvas);
+  const saveRef = useRef(save);
 
-  const update = useCallback((producer: (d: WorkflowDraft) => void) => {
-    setDraft((prev) => {
-      const next = structuredClone(prev);
-      producer(next);
-      return next;
-    });
-    setDirty(true);
+  useEffect(() => {
+    canvasRef.current = {
+      graph: editorState.graph,
+      layout: editorState.layout,
+    };
+  }, [editorState.graph, editorState.layout]);
+
+  const commitSave = useCallback((next: SaveState) => {
+    saveRef.current = next;
+    setSave(next);
   }, []);
 
-  const setTrigger = useCallback(
-    (trigger: Trigger) => update((d) => { d.trigger = trigger; }),
-    [update],
-  );
-  const setConditions = useCallback(
-    (conditions: ConditionNode[]) => update((d) => { d.conditions = conditions; }),
-    [update],
-  );
-  const setActions = useCallback(
-    (actions: Action[]) => update((d) => { d.actions = actions; }),
-    [update],
+  const noteDirty = useCallback(() => {
+    commitSave(markDirty(saveRef.current));
+  }, [commitSave]);
+
+  const prevPastLengthRef = useRef(editorState.past.length);
+  useEffect(() => {
+    if (editorState.past.length !== prevPastLengthRef.current) {
+      prevPastLengthRef.current = editorState.past.length;
+      noteDirty();
+    }
+  }, [editorState.past.length, noteDirty]);
+
+  const update = useCallback(
+    (producer: (d: WorkflowDraft) => void) => {
+      const next = structuredClone(draftRef.current);
+      producer(next);
+      draftRef.current = next;
+      setDraft(next);
+      noteDirty();
+    },
+    [noteDirty],
   );
 
   async function handleExit() {
@@ -134,216 +248,926 @@ export function WorkflowBuilder({
     window.location.href = "/dashboard/automations";
   }
 
-  function handleSave() {
-    if (!dirty || saving) return;
-    startSave(async () => {
-      const payload: WorkflowDefinitionInput = {
-        name: draft.name,
-        description: draft.description,
-        enabled: draft.enabled,
-        trigger: draft.trigger,
-        conditions: draft.conditions,
-        actions: draft.actions,
-        maxRunsPerMinute: draft.maxRunsPerMinute,
-        maxExternalActionsPerMinute: draft.maxExternalActionsPerMinute,
-        circuitBreakerThreshold: draft.circuitBreakerThreshold,
-        circuitBreakerCooldownSeconds: draft.circuitBreakerCooldownSeconds,
-      };
-      const result = draft.id
-        ? await updateWorkflowAction(draft.id, payload)
-        : await createWorkflowAction(payload);
-      if (result.ok && result.workflow) {
-        toast.success("Automation saved.");
-        setDirty(false);
-        setStatus(result.workflow.status);
-        setApproved(Boolean(result.workflow.approvedAt));
-        // After a create, switch the draft to edit mode so subsequent saves update.
-        if (!draft.id) {
-          setDraft((d) => ({ ...d, id: result.workflow!.id }));
-        }
-      } else {
-        toast.error(result.error ?? "Could not save.");
-      }
-    });
+  function recipePayload(
+    currentDraft: WorkflowDraft,
+    graph: WorkflowGraphV2,
+  ): WorkflowDefinitionInput {
+    const legacy = graphToLegacy(graph);
+    return {
+      name: currentDraft.name.trim(),
+      description: currentDraft.description,
+      enabled: currentDraft.enabled,
+      trigger: legacy.trigger,
+      conditions: legacy.conditions,
+      actions: legacy.actions.map((action) => ({
+        ...action,
+        continueOnError: action.continueOnError ?? false,
+      })),
+      maxRunsPerMinute: currentDraft.maxRunsPerMinute,
+      maxExternalActionsPerMinute: currentDraft.maxExternalActionsPerMinute,
+      circuitBreakerThreshold: currentDraft.circuitBreakerThreshold,
+      circuitBreakerCooldownSeconds: currentDraft.circuitBreakerCooldownSeconds,
+    };
   }
 
+  const handleAutomationApplied = useCallback(
+    async ({ workflowId }: { workflowId: string; draftRevision?: number }) => {
+      const currentId = draftRef.current.id;
+      // Applying a proposal to a new automation creates a durable draft. Its
+      // canonical route is the only safe source of all server fields, so move
+      // directly there rather than leaving the old blank canvas on screen.
+      if (!currentId || currentId !== workflowId) {
+        window.location.assign(`/dashboard/automations/${workflowId}`);
+        return;
+      }
+
+      const result = await getWorkflowAction(workflowId);
+      if (!result.ok || !result.workflow?.graph || !result.workflow.layout) {
+        toast.error(
+          result.error ?? "The automation was applied, but the updated draft could not be loaded.",
+        );
+        return;
+      }
+
+      const nextDraft = toDraft(result.workflow);
+      draftRef.current = nextDraft;
+      setDraft(nextDraft);
+      editorDispatch({
+        type: "hydrate",
+        graph: result.workflow.graph,
+        layout: result.workflow.layout,
+      });
+      setStatus(result.workflow.status);
+      setApproved(Boolean(result.workflow.approvedAt));
+      setApprovalRequested(Boolean(result.workflow.approvalRequestedAt));
+      setHasUnpublishedChanges(Boolean(result.workflow.hasUnpublishedChanges));
+      setPublishIssues([]);
+      commitSave(initialSaveState(navigator.onLine, false));
+      toast.success("Automation updated in the builder.");
+    },
+    [commitSave],
+  );
+
+  async function performSave(): Promise<boolean> {
+    if (saveRef.current.inFlightGeneration !== null && savePromiseRef.current) {
+      return savePromiseRef.current;
+    }
+    const started = beginSave(saveRef.current);
+    commitSave(started.state);
+    if (started.skip || started.generation == null) {
+      return !isDirty(started.state) && started.state.kind === "saved";
+    }
+    const operation = performSaveGeneration(started.generation);
+    savePromiseRef.current = operation;
+    try {
+      return await operation;
+    } finally {
+      if (savePromiseRef.current === operation) savePromiseRef.current = null;
+    }
+  }
+
+  async function performSaveGeneration(generation: number): Promise<boolean> {
+    const currentDraft = draftRef.current;
+    const currentCanvas = canvasRef.current;
+    const payload = recipePayload(currentDraft, currentCanvas.graph);
+    const extras = { graph: currentCanvas.graph, layout: currentCanvas.layout };
+    try {
+      const result = currentDraft.id
+        ? await updateWorkflowAction(
+            currentDraft.id,
+            payload,
+            currentDraft.draftRevision,
+            extras,
+          )
+        : await createWorkflowAction(payload, extras);
+      if (result.ok && result.workflow) {
+        setPublishIssues([]);
+        setStatus(result.workflow.status);
+        setApproved(Boolean(result.workflow.approvedAt));
+        setApprovalRequested(Boolean(result.workflow.approvalRequestedAt));
+        setHasUnpublishedChanges(
+          Boolean(result.workflow.hasUnpublishedChanges),
+        );
+        const savedDraft = {
+          ...draftRef.current,
+          id: result.workflow!.id,
+          name: result.workflow!.name,
+          draftRevision: result.workflow!.draftRevision,
+          contentHash: result.workflow!.contentHash,
+        };
+        draftRef.current = savedDraft;
+        setDraft(savedDraft);
+        const next = saveSucceededNow(saveRef.current, generation);
+        commitSave(next);
+        if (next.queued) return performSave();
+        return !isDirty(saveRef.current) && saveRef.current.kind === "saved";
+      }
+      if (result.conflict) {
+        setConflictOpen(true);
+        setServerGraph(result.workflow?.graph ?? null);
+        setDiffLines(
+          result.workflow?.graph
+            ? diffGraphSummaries(
+                summarizeGraph(currentCanvas.graph),
+                summarizeGraph(result.workflow.graph),
+              )
+            : null,
+        );
+        commitSave(
+          saveConflict(
+            saveRef.current,
+            generation,
+            result.error ?? "This draft was saved elsewhere.",
+            result.workflow?.draftRevision ?? null,
+          ),
+        );
+        toast.error(result.error ?? "This draft was saved elsewhere.");
+        return false;
+      }
+      commitSave(
+        saveFailed(
+          saveRef.current,
+          generation,
+          result.error ?? "Could not save.",
+        ),
+      );
+      toast.error(result.error ?? "Could not save.");
+      return false;
+    } catch (error) {
+      const aborted =
+        error instanceof DOMException && error.name === "AbortError";
+      commitSave(
+        saveFailed(
+          saveRef.current,
+          generation,
+          error instanceof Error ? error.message : "Could not save.",
+          aborted,
+        ),
+      );
+      if (currentDraft.id) {
+        const latest = await getWorkflowAction(currentDraft.id);
+        if (latest.ok && latest.workflow) {
+          if (latest.workflow.draftRevision !== currentDraft.draftRevision) {
+            setConflictOpen(true);
+            setServerGraph(latest.workflow.graph ?? null);
+            commitSave(
+              saveConflict(
+                saveRef.current,
+                generation,
+                "The server may already have a newer revision. Compare before retrying.",
+                latest.workflow.draftRevision,
+              ),
+            );
+          } else {
+            const current = {
+              ...draftRef.current,
+              draftRevision: latest.workflow.draftRevision,
+            };
+            draftRef.current = current;
+            setDraft(current);
+          }
+        }
+      }
+      toast.error("Could not save.");
+      return false;
+    }
+  }
+
+  async function flushPendingSave(): Promise<boolean> {
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      const current = saveRef.current;
+      if (
+        !current.online ||
+        current.kind === "conflict" ||
+        current.kind === "error"
+      ) {
+        return false;
+      }
+      if (current.inFlightGeneration !== null) {
+        const inFlight = savePromiseRef.current;
+        if (!inFlight || !(await inFlight)) return false;
+        continue;
+      }
+      if (!isDirty(current)) return current.kind === "saved";
+      if (!(await performSave())) return false;
+    }
+    return false;
+  }
+
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
+  useEffect(() => {
+    canvasRef.current = canvas;
+  }, [canvas]);
+  useEffect(() => {
+    saveFnRef.current = () => {
+      return performSave();
+    };
+  });
+
+  useEffect(() => {
+    function onOnline() {
+      commitSave(setOnline(saveRef.current, navigator.onLine));
+    }
+    onOnline();
+    window.addEventListener("online", onOnline);
+    window.addEventListener("offline", onOnline);
+    return () => {
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener("offline", onOnline);
+    };
+  }, [commitSave]);
+
+  useEffect(() => {
+    if (!draft.id) return;
+    if (
+      !isDirty(save) ||
+      save.kind === "conflict" ||
+      save.kind === "saving" ||
+      !save.online
+    )
+      return;
+    const timer = window.setTimeout(() => {
+      void saveFnRef.current?.();
+    }, AUTOSAVE_DELAY_MS);
+    return () => window.clearTimeout(timer);
+    // Autosave is keyed off the dirty generation, not the save function identity.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [save.dirtyGeneration, save.kind, save.online, draft.id]);
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const typing =
+        target &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.isContentEditable);
+      if (typing) return;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void saveFnRef.current?.();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   function runGovernanceAction(
-    action: () => Promise<{ ok: boolean; error?: string }>,
+    action: (
+      id: string,
+      revision: number,
+    ) => Promise<{
+      ok: boolean;
+      error?: string;
+      issues?: WorkflowValidationIssue[];
+      conflict?: boolean;
+    }>,
     success: string,
     nextStatus: SerializedWorkflow["status"],
     nextApproved = approved,
+    nextApprovalRequested = approvalRequested,
   ) {
     startSave(async () => {
-      const result = await action();
+      if (!(await flushPendingSave())) {
+        toast.error(
+          "Save the latest draft before changing its approval or publish status.",
+        );
+        return;
+      }
+      const currentDraft = draftRef.current;
+      if (!currentDraft.id || currentDraft.draftRevision === undefined) {
+        toast.error(
+          "Save the recipe before changing its approval or publish status.",
+        );
+        return;
+      }
+      const result = await action(currentDraft.id, currentDraft.draftRevision);
       if (!result.ok) {
+        const issues = result.issues ?? [];
+        setPublishIssues(issues);
+        if (issues.length > 0) setTab("build");
+        if (result.conflict) {
+          const latest = await getWorkflowAction(currentDraft.id);
+          if (latest.ok && latest.workflow) {
+            setServerGraph(latest.workflow.graph ?? null);
+            setDiffLines(
+              latest.workflow.graph
+                ? diffGraphSummaries(
+                    summarizeGraph(canvasRef.current.graph),
+                    summarizeGraph(latest.workflow.graph),
+                  )
+                : null,
+            );
+            commitSave(
+              saveConflict(
+                saveRef.current,
+                saveRef.current.dirtyGeneration,
+                result.error ?? "This draft changed elsewhere.",
+                latest.workflow.draftRevision,
+              ),
+            );
+            setConflictOpen(true);
+          }
+        }
         toast.error(result.error ?? "Could not update workflow state.");
         return;
       }
+      setPublishIssues([]);
       toast.success(success);
       setStatus(nextStatus);
       setApproved(nextApproved);
+      setApprovalRequested(nextApprovalRequested);
+      if (success === "Workflow published.") setHasUnpublishedChanges(false);
     });
   }
-
-  const nl = useMemo(
-    () => describeWorkflow({ trigger: draft.trigger, conditions: draft.conditions, actions: draft.actions }),
-    [draft.trigger, draft.conditions, draft.actions],
-  );
 
   const meta = triggerMeta(draft.trigger.event);
 
   return (
     <>
-    <FocusModeShell
-      topBar={
-        <FocusModeTopBar
-          left={
-            <button
-              type="button"
-              onClick={handleExit}
-              className="group inline-flex items-center gap-2 rounded-full border border-border bg-paper-raised/60 py-1.5 pl-2.5 pr-3.5 text-sm font-medium text-ink-soft shadow-sm transition-all duration-150 hover:border-pine/30 hover:bg-kraft hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pine/30 active:scale-[0.97]"
-            >
-              <ArrowLeftIcon className="size-4 transition-transform duration-150 group-hover:-translate-x-0.5" />
-              <span className="hidden sm:inline">Back to automations</span>
-            </button>
-          }
-          center={
-            <div className="flex items-center gap-2">
-              <span className="font-cal inline-flex items-center gap-1.5 rounded-full border border-border bg-kraft/60 px-3 py-1 text-sm font-semibold text-ink-soft">
-                <WhenGlyph className="size-3.5 text-pine" />
-                {meta.label}
-              </span>
-              <input
-                value={draft.name}
-                onChange={(e) => update((d) => { d.name = e.target.value; })}
-                className="font-cal w-[min(34vw,260px)] truncate rounded-full border border-transparent bg-transparent px-3 py-1 text-sm font-semibold text-foreground outline-none transition-colors hover:border-border focus:border-pine/30 focus:bg-kraft/40"
-                aria-label="Automation name"
-              />
-            </div>
-          }
-          right={
-            <>
-              <span className={cn(
-                "hidden rounded-full px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide sm:inline",
-                status === "published" ? "bg-sage text-sage-ink" : status === "paused" ? "bg-kraft text-ink-soft" : "bg-amber-100 text-amber-900",
-              )}>
-                {status}
-              </span>
-              {draft.id && status === "draft" && !approved && (
-                <button type="button" onClick={() => runGovernanceAction(
-                  () => requestWorkflowApprovalAction(draft.id!),
-                  "Approval requested.", "draft",
-                )} disabled={saving} className="hidden text-xs font-medium text-ink-soft hover:text-foreground lg:inline">
-                  Request approval
-                </button>
-              )}
-              {draft.id && status === "draft" && approved && (
-                <button type="button" onClick={() => runGovernanceAction(
-                  () => publishWorkflowAction(draft.id!),
-                  "Workflow published.", "published",
-                )} disabled={saving} className="hidden rounded-lg bg-pine px-3 py-1.5 text-xs font-semibold text-white hover:bg-pine-strong lg:inline">
-                  Publish
-                </button>
-              )}
-              {draft.id && status === "published" && (
-                <button type="button" onClick={() => runGovernanceAction(
-                  () => pauseWorkflowAction(draft.id!),
-                  "Workflow paused.", "paused",
-                )} disabled={saving} className="hidden text-xs font-medium text-ink-soft hover:text-rust lg:inline">
-                  Pause
-                </button>
-              )}
-              {draft.id && status === "paused" && (
-                <button type="button" onClick={() => runGovernanceAction(
-                  () => resumeWorkflowAction(draft.id!),
-                  "Workflow resumed as a draft.", "draft", false,
-                )} disabled={saving} className="hidden text-xs font-medium text-ink-soft hover:text-foreground lg:inline">
-                  Resume editing
-                </button>
-              )}
-              <div className="hidden items-center gap-1 rounded-lg border border-border bg-kraft/40 p-0.5 sm:flex">
-                <TabButton active={tab === "build"} onClick={() => setTab("build")}>
-                  <AddNodeIcon className="size-3.5" /> Build
-                </TabButton>
-                <TabButton active={tab === "test"} onClick={() => setTab("test")}>
-                  <BeakerIcon className="size-3.5" /> Test
-                </TabButton>
-              </div>
+      <FocusModeShell
+        topBar={
+          <FocusModeTopBar
+            className="h-auto min-h-12 flex-wrap py-2 [&>div:first-child]:flex-none [&>div:nth-child(2)]:min-w-0 [&>div:nth-child(2)]:flex-1 [&>div:last-child]:basis-full [&>div:last-child]:flex-wrap xl:[&>div:last-child]:basis-auto"
+            left={
               <button
                 type="button"
-                onClick={handleSave}
-                disabled={saving || !dirty}
-                className={cn(
-                  "inline-flex items-center gap-1.5 rounded-lg px-3.5 py-1.5 text-sm font-medium transition-all duration-150",
-                  dirty && !saving
-                    ? "bg-pine text-white hover:bg-pine-strong active:scale-[0.97]"
-                    : "bg-kraft text-ink-soft",
-                  saving && "cursor-wait opacity-70",
-                )}
+                onClick={handleExit}
+                className="group inline-flex items-center gap-2 rounded-full border border-border bg-pure-snow/80 py-1.5 pl-2.5 pr-3.5 text-xs font-medium text-foreground shadow-xs transition-all duration-150 hover:bg-soft-kraft active:scale-[0.98]"
               >
-                {saving ? <LoaderIcon className="size-4 animate-spin" /> : dirty ? null : <CheckIcon className="size-4" />}
-                {saving ? "Saving…" : dirty ? "Save" : "Saved"}
+                <ArrowLeft className="size-4 transition-transform duration-150 group-hover:-translate-x-0.5" />
+                <span className="hidden sm:inline">Back to automations</span>
               </button>
-            </>
-          }
-        />
-      }
-    >
-      <BuilderCanvas tab={tab}>
-        {tab === "build" ? (
-          <BuildView
-            draft={draft}
-            builderData={builderData}
-            nl={nl}
-            onTrigger={setTrigger}
-            onConditions={setConditions}
-            onActions={setActions}
-            onGuardrails={(patch) => update((d) => Object.assign(d, patch))}
+            }
+            center={
+              <div className="flex min-w-0 w-full items-center gap-2">
+                {hasChosenTrigger ? (
+                  <span className="font-display hidden shrink-0 items-center gap-1.5 rounded-full border border-border bg-soft-kraft/60 px-3 py-1 text-xs font-semibold text-foreground 2xl:inline-flex">
+                    <Zap className="size-3 text-foreground" />
+                    {meta.label}
+                  </span>
+                ) : (
+                  <span className="font-display inline-flex items-center rounded-full border border-dashed border-border px-3 py-1 text-xs font-medium text-soft-ink">
+                    New automation
+                  </span>
+                )}
+                <input
+                  value={draft.name}
+                  onChange={(e) =>
+                    update((d) => {
+                      d.name = e.target.value;
+                    })
+                  }
+                  placeholder="Untitled automation"
+                  className="font-display w-[min(34vw,280px)] truncate rounded-full border border-transparent bg-transparent px-3 py-1 text-sm font-semibold text-foreground outline-none transition-colors duration-150 ease-out placeholder:font-medium placeholder:text-quiet-mist hover:border-border focus:border-foreground/30 focus:bg-soft-kraft/40"
+                  aria-label="Automation name"
+                />
+              </div>
+            }
+            right={
+              <>
+                <span
+                  className={cn(
+                    "font-chrome hidden rounded-full px-2.5 py-1 text-[11px] uppercase tracking-wider sm:inline",
+                    status === "published"
+                      ? "bg-foreground text-background"
+                      : status === "paused"
+                        ? "bg-soft-kraft text-soft-ink"
+                        : "bg-soft-kraft text-foreground",
+                  )}
+                >
+                  {hasUnpublishedChanges && status !== "draft"
+                    ? `${status} · edits`
+                    : status}
+                </span>
+                {draft.id &&
+                  (status === "draft" || hasUnpublishedChanges) &&
+                  !approvalRequested &&
+                  !approved && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        runGovernanceAction(
+                          (id, revision) =>
+                            requestWorkflowApprovalAction(id, revision),
+                          "Approval requested.",
+                          status,
+                          false,
+                          true,
+                        )
+                      }
+                      disabled={saving}
+                      className="hidden text-xs font-medium text-soft-ink hover:text-foreground lg:inline"
+                    >
+                      Request approval
+                    </button>
+                  )}
+                {draft.id &&
+                  (status === "draft" || hasUnpublishedChanges) &&
+                  approvalRequested &&
+                  !approved && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        runGovernanceAction(
+                          (id, revision) => approveWorkflowAction(id, revision),
+                          "Workflow approved.",
+                          status,
+                          true,
+                          true,
+                        )
+                      }
+                      disabled={saving}
+                      className="hidden rounded-lg border border-border bg-soft-kraft px-3 py-1.5 text-xs font-semibold text-foreground hover:bg-soft-kraft/70 active:scale-[0.98] lg:inline"
+                    >
+                      Approve workflow
+                    </button>
+                  )}
+                {draft.id &&
+                  (status === "draft" || hasUnpublishedChanges) &&
+                  approved && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        runGovernanceAction(
+                          (id, revision) => publishWorkflowAction(id, revision),
+                          "Workflow published.",
+                          status === "paused" ? "paused" : "published",
+                          true,
+                          false,
+                        )
+                      }
+                      disabled={saving}
+                      className="hidden rounded-lg bg-foreground px-3 py-1.5 text-xs font-semibold text-background hover:bg-foreground/90 active:scale-[0.98] lg:inline"
+                    >
+                      Publish
+                    </button>
+                  )}
+                {draft.id && status === "published" && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      runGovernanceAction(
+                        (id) => pauseWorkflowAction(id),
+                        "Workflow paused.",
+                        "paused",
+                      )
+                    }
+                    disabled={saving}
+                    className="hidden text-xs font-medium text-soft-ink hover:text-danger-rust lg:inline"
+                  >
+                    Pause
+                  </button>
+                )}
+                {draft.id && status === "paused" && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      runGovernanceAction(
+                        (id) => resumeWorkflowAction(id),
+                        "Automation turned back on.",
+                        "published",
+                        true,
+                      )
+                    }
+                    disabled={saving}
+                    className="hidden text-xs font-medium text-soft-ink hover:text-foreground lg:inline"
+                  >
+                    Turn back on
+                  </button>
+                )}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      className="inline-flex rounded-lg border border-border px-2.5 py-1.5 text-xs font-medium text-soft-ink hover:bg-soft-kraft hover:text-foreground lg:hidden"
+                      aria-label="More workflow actions"
+                    >
+                      More
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    {draft.id &&
+                    (status === "draft" || hasUnpublishedChanges) &&
+                    !approvalRequested &&
+                    !approved ? (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          runGovernanceAction(
+                            (id, revision) =>
+                              requestWorkflowApprovalAction(id, revision),
+                            "Approval requested.",
+                            status,
+                            false,
+                            true,
+                          )
+                        }
+                      >
+                        Request approval
+                      </DropdownMenuItem>
+                    ) : null}
+                    {draft.id &&
+                    (status === "draft" || hasUnpublishedChanges) &&
+                    approvalRequested &&
+                    !approved ? (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          runGovernanceAction(
+                            (id, revision) =>
+                              approveWorkflowAction(id, revision),
+                            "Workflow approved.",
+                            status,
+                            true,
+                            true,
+                          )
+                        }
+                      >
+                        Approve workflow
+                      </DropdownMenuItem>
+                    ) : null}
+                    {draft.id &&
+                    (status === "draft" || hasUnpublishedChanges) &&
+                    approved ? (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          runGovernanceAction(
+                            (id, revision) =>
+                              publishWorkflowAction(id, revision),
+                            "Workflow published.",
+                            status === "paused" ? "paused" : "published",
+                            true,
+                            false,
+                          )
+                        }
+                      >
+                        Publish
+                      </DropdownMenuItem>
+                    ) : null}
+                    {draft.id && status === "published" ? (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          runGovernanceAction(
+                            () => pauseWorkflowAction(draft.id!),
+                            "Workflow paused.",
+                            "paused",
+                          )
+                        }
+                      >
+                        Pause
+                      </DropdownMenuItem>
+                    ) : null}
+                    {draft.id && status === "paused" ? (
+                      <DropdownMenuItem
+                        onClick={() =>
+                          runGovernanceAction(
+                            () => resumeWorkflowAction(draft.id!),
+                            "Automation turned back on.",
+                            "published",
+                            true,
+                          )
+                        }
+                      >
+                        Turn back on
+                      </DropdownMenuItem>
+                    ) : null}
+                    {!draft.id && !hasUnpublishedChanges ? (
+                      <DropdownMenuItem disabled>
+                        Save the automation to publish it
+                      </DropdownMenuItem>
+                    ) : null}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <div className="flex items-center gap-1 rounded-lg border border-border bg-soft-kraft/40 p-0.5">
+                  <TabButton
+                    active={tab === "build"}
+                    onClick={() => setTab("build")}
+                  >
+                    <Zap className="size-3.5" /> Editor
+                  </TabButton>
+                  <TabButton
+                    active={tab === "test"}
+                    onClick={() => setTab("test")}
+                  >
+                    <FlaskConical className="size-3.5" /> Test
+                  </TabButton>
+                  {draft.id ? (
+                    <TabButton
+                      active={tab === "runs"}
+                      onClick={() => setTab("runs")}
+                    >
+                      <Clock className="size-3.5" /> Runs
+                    </TabButton>
+                  ) : null}
+                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => setAiOpen((prev) => !prev)}
+                      aria-label={aiOpen ? "Close Harly AI" : "Ask Harly AI"}
+                      aria-pressed={aiOpen}
+                      className={cn(
+                        "flex size-9 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink",
+                        aiOpen
+                          ? "bg-near-ink text-pure-snow"
+                          : "text-near-ink hover:bg-row-wash",
+                      )}
+                    >
+                      {aiOpen ? (
+                        <X className="size-[17px]" strokeWidth={2} />
+                      ) : (
+                        <Image
+                          src="/harly-ai-animado.svg"
+                          alt="Harly AI"
+                          width={22}
+                          height={22}
+                          className="size-[22px] shrink-0"
+                          unoptimized
+                        />
+                      )}
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>{aiOpen ? "Close Harly AI" : "Ask Harly AI"}</TooltipContent>
+                </Tooltip>
+                <SaveStatus state={save} onSave={() => void performSave()} isNew={!draft.id} />
+              </>
+            }
           />
-        ) : (
-          <TestView draft={draft} candidates={builderData.candidates} />
+        }
+      >
+        <div className={cn("flex min-h-0 flex-1 flex-col", tab !== "build" && "hidden")}>
+          {publishIssues.length > 0 ? (
+            <div className="border-b border-danger-rust/25 bg-danger-rust/5 px-4 py-3">
+              <p className="text-sm font-medium text-foreground">
+                Can’t publish yet
+              </p>
+              <ul className="mt-1 space-y-1">
+                {publishIssues.map((issue) => (
+                  <li
+                    key={`${issue.nodeId}:${issue.fieldPath}:${issue.message}`}
+                    className="text-sm text-danger-rust"
+                  >
+                    {issue.message}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <EditorWorkspace
+            state={editorState}
+            dispatch={editorDispatch}
+            graph={editorState.graph}
+            layout={editorState.layout}
+            workflowId={draft.id}
+            builderData={builderData}
+            onChange={(next) => {
+              canvasRef.current = next;
+              noteDirty();
+            }}
+          />
+        </div>
+        {tab === "test" && (
+          <BuilderCanvas>
+            <TestView
+              draft={draft}
+              graph={editorState.graph}
+              candidates={builderData.candidates}
+              webhookEndpoints={builderData.webhookEndpoints}
+              onScenarioChange={setSampleScenario}
+            />
+          </BuilderCanvas>
         )}
-      </BuilderCanvas>
-    </FocusModeShell>
-    {draft.id && <VersionHistory workflowId={draft.id} currentVersion={initial?.definitionVersion ?? 1} draft={draft} />}
-    {draft.id && <WorkflowMetrics workflowId={draft.id} />}
-    <UnsavedChangesDialog
-      open={discardDialogProps.open}
-      onConfirm={discardDialogProps.onConfirm}
-      onCancel={discardDialogProps.onCancel}
-    />
+        {tab === "runs" && draft.id && (
+          <BuilderCanvas>
+            <RunsView workflowId={draft.id} members={builderData.members} />
+          </BuilderCanvas>
+        )}
+      </FocusModeShell>
+      {draft.id && (
+        <VersionHistory
+          workflowId={draft.id}
+          currentVersion={initial?.definitionVersion ?? 1}
+          draft={draft}
+        />
+      )}
+      <ConflictDialog
+        open={conflictOpen}
+        localGraph={canvas.graph}
+        serverGraph={serverGraph}
+        message={save.conflictMessage ?? "This draft was saved elsewhere."}
+        comparing={comparing}
+        lines={diffLines}
+        onDismiss={() => setConflictOpen(false)}
+        onCompare={() => {
+          setComparing(true);
+          void (async () => {
+            if (!draft.id) {
+              setComparing(false);
+              return;
+            }
+            const latest = await getWorkflowAction(draft.id);
+            const graph = latest.workflow?.graph ?? null;
+            setServerGraph(graph);
+            setDiffLines(
+              graph
+                ? diffGraphSummaries(
+                    summarizeGraph(canvas.graph),
+                    summarizeGraph(graph),
+                  )
+                : [
+                    {
+                      id: "missing",
+                      message: "Could not load the server copy to compare.",
+                    },
+                  ],
+            );
+            setComparing(false);
+          })();
+        }}
+        onCopy={() => {
+          startSave(async () => {
+            const payload = recipePayload(draft, canvas.graph);
+            const result = await createWorkflowAction(
+              {
+                ...payload,
+                name: `${payload.name || "Untitled recipe"} (copy)`,
+              },
+              { graph: canvas.graph, layout: canvas.layout },
+            );
+            if (result.ok && result.workflow) {
+              toast.success("Copied your edits into a new recipe.");
+              window.location.assign(
+                `/dashboard/automations/${result.workflow.id}`,
+              );
+            } else {
+              toast.error(result.error ?? "Could not copy this draft.");
+            }
+          });
+        }}
+      />
+      <UnsavedChangesDialog
+        open={discardDialogProps.open}
+        onConfirm={discardDialogProps.onConfirm}
+        onCancel={discardDialogProps.onCancel}
+      />
+      {aiOpen && (
+        <HarlyAIPanel
+          userName={builderData.userName}
+          persistenceKey={draft.id ? `builder:${draft.id}` : newDraftChatKey}
+          aiEnabled={true}
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          automationContext={buildAutomationContext({
+            draft,
+            canvasGraph: canvas.graph,
+            canvasLayout: canvas.layout,
+            selectedNodeId,
+            unsaved: isDirty(save),
+            serverContentHash: draft.contentHash,
+            validationIssues: publishIssues,
+            activeTab: tab,
+            sampleScenario,
+          })}
+          surfaceContext={{
+            kind: "section",
+            label: draft.name || "Automation Builder",
+            path: draft.id ? `/dashboard/automations/${draft.id}` : "/dashboard/automations/new",
+          }}
+          onAutomationApplied={handleAutomationApplied}
+        />
+      )}
     </>
   );
 }
 
+// Max size, in bytes of UTF-8 JSON, of the local graph included in
+// automationContext. Keeps a chat request's total body comfortably under
+// MAX_CHAT_BODY_BYTES (384 KB in route.ts) even though a WorkflowGraphV2 can
+// theoretically reach 1 MiB (MAX_GRAPH_BYTES). Real-world drafts are far
+// smaller; a draft that happens to exceed this falls back to hash-only
+// context rather than risking the whole chat request being rejected.
+const MAX_LOCAL_GRAPH_CONTEXT_BYTES = 64_000;
+
+/**
+ * Builds the `automationContext` sent to Harly AI (D5). While the draft is
+ * clean, the server's own copy is already authoritative, so only revision +
+ * hash are sent. While there are unsaved local edits, the actual graph is
+ * included (size-capped) so the model reasons about what the user currently
+ * sees instead of silently falling back to the last-saved server revision.
+ */
+function buildAutomationContext(input: {
+  draft: {
+    id?: string | null;
+    draftRevision?: number | null;
+    contentHash?: string;
+  };
+  canvasGraph: WorkflowGraphV2;
+  canvasLayout: EditorLayout;
+  selectedNodeId?: string;
+  unsaved: boolean;
+  serverContentHash?: string;
+  validationIssues: WorkflowValidationIssue[];
+  activeTab: "build" | "test" | "runs";
+  sampleScenario: string;
+}): AutomationContext {
+  const {
+    draft,
+    canvasGraph,
+    canvasLayout,
+    selectedNodeId,
+    unsaved,
+    serverContentHash,
+    validationIssues,
+    activeTab,
+    sampleScenario,
+  } = input;
+  const localSnapshotHash = semanticGraphHash(canvasGraph);
+  let localGraph: Record<string, unknown> | undefined;
+  if (unsaved) {
+    const serialized = JSON.stringify(canvasGraph);
+    if (new TextEncoder().encode(serialized).byteLength <= MAX_LOCAL_GRAPH_CONTEXT_BYTES) {
+      localGraph = canvasGraph as unknown as Record<string, unknown>;
+    }
+  }
+  if (!draft.id) {
+    return {
+      workflowId: null,
+      isNew: true,
+      isUnsaved: unsaved,
+      contentHash: localSnapshotHash,
+      localSnapshotHash,
+      validationIssues,
+      activeTab,
+      sampleScenario,
+      ...(localGraph ? { graph: localGraph } : {}),
+      layout: canvasLayout as unknown as Record<string, unknown>,
+    };
+  }
+  return {
+    workflowId: draft.id,
+    draftRevision: draft.draftRevision ?? 1,
+    contentHash: localSnapshotHash,
+    serverContentHash,
+    localSnapshotHash,
+    selectedNodeId,
+    validationIssues,
+    activeTab,
+    sampleScenario,
+    isUnsaved: unsaved,
+    ...(localGraph ? { graph: localGraph } : {}),
+    layout: canvasLayout as unknown as Record<string, unknown>,
+  };
+}
+
 function WorkflowMetrics({ workflowId }: { workflowId: string }) {
   const [metrics, setMetrics] = useState<{
-    total: number; succeeded: number; failed: number; running: number; deadLetters: number; retries: number; successRate: number; averageDurationMs: number;
+    total: number;
+    succeeded: number;
+    failed: number;
+    running: number;
+    deadLetters: number;
+    retries: number;
+    successRate: number;
+    averageDurationMs: number;
   } | null>(null);
+
   useEffect(() => {
     let active = true;
     void getWorkflowMetricsAction(workflowId).then((result) => {
       if (active && result.ok && result.metrics) setMetrics(result.metrics);
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [workflowId]);
+
   if (!metrics) return null;
+
   return (
-    <section className="mx-auto w-full max-w-3xl border-t border-hairline px-5 py-8 sm:px-8">
-      <h2 className="font-display text-sm font-semibold text-foreground">Operational metrics</h2>
+    <section>
+      <h2 className="font-display text-sm font-semibold text-foreground">
+        Recent activity
+      </h2>
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
         {[
           ["Runs", metrics.total],
-          ["Success", `${Math.round(metrics.successRate * 100)}%`],
-          ["Retries", metrics.retries],
-          ["Dead letters", metrics.deadLetters],
+          [
+            "Succeeded",
+            metrics.total === 0 ? "—" : `${Math.round(metrics.successRate * 100)}%`,
+          ],
           ["Failed", metrics.failed],
-          ["Running", metrics.running],
-          ["Avg duration", `${metrics.averageDurationMs}ms`],
+          ["In progress", metrics.running],
         ].map(([label, value]) => (
-          <div key={String(label)} className="rounded-lg border border-hairline bg-paper-raised px-3 py-2">
-            <p className="text-[11px] text-ink-soft">{label}</p>
-            <p className="mt-0.5 text-sm font-semibold text-foreground">{value}</p>
+          <div
+            key={String(label)}
+            className="rounded-lg border border-border bg-warm-paper p-3"
+          >
+            <p className="text-[11px] text-soft-ink">{label}</p>
+            <p className="mt-0.5 text-sm font-semibold text-foreground">
+              {value}
+            </p>
           </div>
         ))}
       </div>
@@ -379,47 +1203,109 @@ function VersionHistory({
   useEffect(() => {
     let active = true;
     void listWorkflowVersionsAction(workflowId).then((result) => {
-      if (active && result.ok) setVersions((result.versions ?? []) as WorkflowVersionRow[]);
+      if (active && result.ok)
+        setVersions((result.versions ?? []) as WorkflowVersionRow[]);
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [workflowId]);
 
-  const selectedVersion = versions.find((version) => version.version === selected);
+  const selectedVersion = versions.find(
+    (version) => version.version === selected,
+  );
   const differs = selectedVersion
-    ? JSON.stringify({ trigger: draft.trigger, conditions: draft.conditions, actions: draft.actions }) !==
-      JSON.stringify({ trigger: selectedVersion.trigger, conditions: selectedVersion.conditions, actions: selectedVersion.actions })
+    ? JSON.stringify({
+        trigger: draft.trigger,
+        conditions: draft.conditions,
+        actions: draft.actions,
+      }) !==
+      JSON.stringify({
+        trigger: selectedVersion.trigger,
+        conditions: selectedVersion.conditions,
+        actions: selectedVersion.actions,
+      })
     : false;
 
   if (versions.length < 2) return null;
+
   return (
-    <section className="mx-auto w-full max-w-3xl border-t border-hairline px-5 py-8 sm:px-8">
+    <section className="mx-auto w-full max-w-3xl border-t border-hairline-c px-5 py-8 sm:px-8">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-display text-sm font-semibold text-foreground">Version history</h2>
-          <p className="mt-1 text-xs text-ink-soft">Immutable definitions used for audit and rollback.</p>
+          <h2 className="font-display text-sm font-semibold text-foreground">
+            Version history
+          </h2>
+          <p className="mt-1 text-xs text-soft-ink">
+            Immutable definitions used for audit and rollback.
+          </p>
         </div>
-        <span className="text-xs text-ink-soft">Current v{currentVersion}</span>
+        <span className="text-xs text-soft-ink">Current v{currentVersion}</span>
       </div>
       <div className="mt-4 space-y-2">
         {versions.map((version) => (
-          <div key={version.id} className="rounded-lg border border-hairline bg-paper-raised p-3">
-            <button type="button" onClick={() => setSelected(selected === version.version ? null : version.version)} className="flex w-full items-center justify-between text-left">
-              <span className="text-sm font-medium text-foreground">v{version.version} · {version.triggerEvent}</span>
-              <span className="text-xs text-ink-soft">{version.publishedAt ? "Published" : "Draft"}</span>
+          <div
+            key={version.id}
+            className="rounded-lg border border-border bg-warm-paper p-3"
+          >
+            <button
+              type="button"
+              onClick={() =>
+                setSelected(
+                  selected === version.version ? null : version.version,
+                )
+              }
+              className="flex w-full items-center justify-between text-left"
+            >
+              <span className="text-sm font-medium text-foreground">
+                v{version.version} · {version.triggerEvent}
+              </span>
+              <span className="text-xs text-soft-ink">
+                {version.publishedAt ? "Published" : "Draft"}
+              </span>
             </button>
             {selected === version.version && (
-              <div className="mt-3 border-t border-hairline pt-3 text-xs text-ink-soft">
-                <p>{Array.isArray(version.actions) ? version.actions.length : 0} actions · {Array.isArray(version.conditions) ? version.conditions.length : 0} conditions · created {new Date(version.createdAt).toLocaleString()}</p>
-                <p className={cn("mt-1 font-medium", differs ? "text-rust" : "text-pine")}>{differs ? "Differs from current draft" : "Matches current draft"}</p>
+              <div className="mt-3 border-t border-hairline-c pt-3 text-xs text-soft-ink">
+                <p>
+                  {Array.isArray(version.actions) ? version.actions.length : 0}{" "}
+                  actions ·{" "}
+                  {Array.isArray(version.conditions)
+                    ? version.conditions.length
+                    : 0}{" "}
+                  conditions · created{" "}
+                  {new Date(version.createdAt).toLocaleString()}
+                </p>
+                <p
+                  className={cn(
+                    "mt-1 font-medium",
+                    differs ? "text-danger-rust" : "text-foreground",
+                  )}
+                >
+                  {differs
+                    ? "Differs from current draft"
+                    : "Matches current draft"}
+                </p>
                 {version.version !== currentVersion && (
-                  <button type="button" disabled={pending} onClick={() => {
-                    if (!window.confirm(`Rollback to version ${version.version}? This creates a new draft version.`)) return;
-                    startTransition(async () => {
-                      const result = await rollbackWorkflowAction(workflowId, version.version);
-                      if (result.ok) window.location.reload();
-                      else toast.error(result.error ?? "Could not roll back.");
-                    });
-                  }} className="mt-2 rounded-md border border-border px-2.5 py-1.5 font-medium text-foreground hover:bg-kraft disabled:opacity-50">
+                  <button
+                    type="button"
+                    disabled={pending}
+                    onClick={() => {
+                      startTransition(async () => {
+                        const result = await rollbackWorkflowAction(
+                          workflowId,
+                          version.version,
+                        );
+                        if (result.ok) {
+                          toast.success(`Restored version ${version.version}.`);
+                          window.location.assign(
+                            `/dashboard/automations/${workflowId}`,
+                          );
+                        } else
+                          toast.error(result.error ?? "Could not roll back.");
+                      });
+                    }}
+                    className="mt-2 rounded-md border border-border px-2.5 py-1.5 font-medium text-foreground hover:bg-soft-kraft disabled:opacity-50"
+                  >
                     Roll back to v{version.version}
                   </button>
                 )}
@@ -447,7 +1333,9 @@ function TabButton({
       onClick={onClick}
       className={cn(
         "flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium transition-all duration-150",
-        active ? "bg-paper-raised text-foreground shadow-sm" : "text-ink-soft hover:text-foreground",
+        active
+          ? "bg-warm-paper text-foreground shadow-xs"
+          : "text-soft-ink hover:text-foreground",
       )}
     >
       {children}
@@ -455,222 +1343,81 @@ function TabButton({
   );
 }
 
-// ---------------------------------------------------------------------------
-// The dotted canvas — the modern "connect things on a grid" backdrop
-// ---------------------------------------------------------------------------
-
-function BuilderCanvas({ tab, children }: { tab: "build" | "test"; children: React.ReactNode }) {
+function BuilderCanvas({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className={cn(
-        "relative min-h-0 flex-1 overflow-y-auto",
-        // Dotted grid: tiny dots on the warm canvas, the modern visual-diagram
-        // backdrop. Pure CSS radial-gradient, no image asset.
-        tab === "build" && "bg-[radial-gradient(var(--hairline)_1px,transparent_1px)] [background-size:18px_18px]",
-        tab === "test" && "bg-paper",
-      )}
-    >
-      <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8 sm:py-12">{children}</div>
+    <div className="relative min-h-0 flex-1 overflow-y-auto bg-warm-paper">
+      <div className="mx-auto w-full max-w-3xl px-5 py-8 sm:px-8 sm:py-12">
+        {children}
+      </div>
     </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Build view — the WHEN → IF → DO vertical flow
-// ---------------------------------------------------------------------------
+function RunsView({
+  workflowId,
+  members,
+}: {
+  workflowId: string;
+  members: Array<{ id: string; name: string; email?: string }>;
+}) {
+  return (
+    <div className="space-y-6">
+      <WorkflowMetrics workflowId={workflowId} />
+      <section>
+        <h2 className="font-display text-sm font-semibold text-foreground">
+          Run history
+        </h2>
+        <p className="mt-1 text-xs text-soft-ink">
+          What fired, which action ran, and whether it succeeded. Retry or
+          cancel from a row.
+        </p>
+        <div className="mt-4">
+          <RunsTimeline workflowId={workflowId} members={members} />
+        </div>
+      </section>
+    </div>
+  );
+}
 
-function BuildView({
+function TestView({
   draft,
-  builderData,
-  nl,
-  onTrigger,
-  onConditions,
-  onActions,
-  onGuardrails,
+  graph,
+  candidates,
+  webhookEndpoints,
+  onScenarioChange,
 }: {
   draft: WorkflowDraft;
-  builderData: { members: { id: string; name: string }[]; stageNames: string[]; candidates: { id: string; name: string; email: string }[] };
-  nl: string;
-  onTrigger: (t: Trigger) => void;
-  onConditions: (c: ConditionNode[]) => void;
-  onActions: (a: Action[]) => void;
-  onGuardrails: (patch: Partial<Pick<WorkflowDraft, "maxRunsPerMinute" | "maxExternalActionsPerMinute" | "circuitBreakerThreshold" | "circuitBreakerCooldownSeconds">>) => void;
+  graph: WorkflowGraphV2;
+  candidates: Array<{ id: string; name: string; email: string }>;
+  webhookEndpoints: BuilderDataProps["webhookEndpoints"];
+  onScenarioChange?: (scenario: string) => void;
 }) {
+  const graphTrigger = graph.nodes.find((node) => node.type === "trigger");
+  const trigger =
+    graphTrigger?.type === "trigger"
+      ? { event: graphTrigger.event, filter: graphTrigger.filter }
+      : draft.trigger;
+
   return (
     <div className="space-y-5">
-      <PreviewStrip text={nl} />
-
-      <FlowStep
-        marker={<WhenGlyph className="size-4" />}
-        label="WHEN"
-        caption="Trigger"
-        summary={triggerMeta(draft.trigger.event).label}
-      >
-        <TriggerPanel value={draft.trigger} onChange={onTrigger} />
-      </FlowStep>
-
-      <Connector />
-
-      <FlowStep
-        marker={<IfGlyphSmall />}
-        label="IF"
-        caption="Condition"
-        summary={
-          (draft.conditions ?? []).length === 0
-            ? "Always runs"
-            : `${(draft.conditions ?? []).length} ${(draft.conditions ?? []).length === 1 ? "condition" : "conditions"}`
-        }
-      >
-        <ConditionPanel value={draft.conditions ?? []} onChange={onConditions} />
-      </FlowStep>
-
-      <Connector />
-
-      <FlowStep
-        marker={<DoGlyphSmall />}
-        label="DO"
-        caption="Actions"
-        summary={`${draft.actions.length} ${draft.actions.length === 1 ? "step" : "steps"}`}
-      >
-        <ActionsPanel
-          value={draft.actions}
-          onChange={onActions}
-          stageNames={builderData.stageNames}
-          members={builderData.members}
-        />
-      </FlowStep>
-      <GuardrailsPanel draft={draft} onChange={onGuardrails} />
-    </div>
-  );
-}
-
-function PreviewStrip({ text }: { text: string }) {
-  return (
-    <div className="flex items-start gap-2.5 rounded-2xl border border-mist-border bg-paper-raised px-4 py-3 shadow-soft">
-      <span className="mt-0.5 inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-sage text-sage-ink">
-        <EyeIcon className="size-3.5" />
-      </span>
-      <p className="text-sm leading-relaxed text-foreground">{text}</p>
-    </div>
-  );
-}
-
-function GuardrailsPanel({
-  draft,
-  onChange,
-}: {
-  draft: WorkflowDraft;
-  onChange: (patch: Partial<Pick<WorkflowDraft, "maxRunsPerMinute" | "maxExternalActionsPerMinute" | "circuitBreakerThreshold" | "circuitBreakerCooldownSeconds">>) => void;
-}) {
-  return (
-    <section className="rounded-2xl border border-border bg-paper-raised p-4 shadow-soft">
-      <div>
-        <h2 className="font-display text-sm font-semibold text-foreground">Operational guardrails</h2>
-        <p className="mt-1 text-xs text-ink-soft">Protect providers and pause noisy workflows automatically.</p>
-      </div>
-      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {([
-          ["maxRunsPerMinute", "Runs / min"],
-          ["maxExternalActionsPerMinute", "External / min"],
-          ["circuitBreakerThreshold", "Failures"],
-          ["circuitBreakerCooldownSeconds", "Cooldown (s)"],
-        ] as const).map(([key, label]) => (
-          <label key={key} className="text-xs text-ink-soft">
-            {label}
-            <input type="number" min={1} value={draft[key] ?? ""} onChange={(event) => onChange({ [key]: Number(event.target.value) })} className="mt-1 w-full rounded-lg border border-border bg-paper px-2.5 py-1.5 text-sm text-foreground" />
-          </label>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function FlowStep({
-  marker,
-  label,
-  caption,
-  summary,
-  children,
-}: {
-  marker: React.ReactNode;
-  label: string;
-  caption: string;
-  summary: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="overflow-hidden rounded-2xl border border-border bg-paper-raised shadow-soft">
-      <header className="flex items-center gap-3 border-b border-hairline px-4 py-3">
-        <span className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-kraft text-foreground">
-          {marker}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block font-display text-sm font-bold tracking-wide text-foreground">{label}</span>
-          <span className="block truncate text-xs text-ink-soft">{caption}</span>
-        </span>
-        <span className="shrink-0 rounded-full bg-kraft px-2.5 py-1 text-[11px] font-medium tracking-wide text-ink-soft">
-          {summary}
-        </span>
-      </header>
-      <div className="px-4 py-4">{children}</div>
-    </section>
-  );
-}
-
-function Connector() {
-  return (
-    <div className="relative flex h-6 justify-center" aria-hidden>
-      <svg width="2" height="24" className="text-mist-border">
-        <line x1="1" y1="0" x2="1" y2="24" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3" />
-      </svg>
-      <NodeDotIcon className="absolute top-1/2 size-1.5 -translate-y-1/2 text-quiet-mist" />
-    </div>
-  );
-}
-
-// Small inline glyphs re-used in the flow steps (kept here to avoid a circular
-// import with builder-icons for the lazy condition/action panels).
-function IfGlyphSmall() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-4">
-      <path d="M3 4h18l-7 8v6l-4 2v-8L3 4z" />
-    </svg>
-  );
-}
-function DoGlyphSmall() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" className="size-4">
-      <circle cx="12" cy="12" r="9" />
-      <path d="M9 8l8 4-8 4V8z" />
-    </svg>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Test view — dry-run against a sample candidate
-// ---------------------------------------------------------------------------
-
-function TestView({ draft, candidates }: { draft: WorkflowDraft; candidates: Array<{ id: string; name: string; email: string }> }) {
-  return (
-    <div className="space-y-5">
-      <div className="rounded-2xl border border-border bg-paper-raised px-4 py-3">
-        <h2 className="font-cal text-sm font-bold text-foreground">Test this automation</h2>
-        <p className="mt-1 text-sm text-ink-soft">
-          Choose a real workspace candidate and inspect the event payload. No actions run, nothing is saved.
+      <div className="rounded-2xl border border-border bg-warm-paper p-4 shadow-xs">
+        <h2 className="font-display text-sm font-semibold text-foreground">
+          Simulate workflow execution
+        </h2>
+        <p className="mt-1 text-xs text-soft-ink">
+          Test your workflow path with sample candidate data. No messages or emails will be sent, and no real candidate data is changed.
         </p>
       </div>
       <DryRunPanel
-        trigger={draft.trigger}
-        conditions={draft.conditions ?? []}
+        trigger={trigger}
+        graph={graph}
         candidates={candidates}
+        workflowId={draft.id}
+        webhookEndpoints={webhookEndpoints}
         preview={previewWorkflowPayloadAction}
         run={dryRunWorkflowAction}
+        onScenarioChange={onScenarioChange}
       />
-      <p className="text-center text-xs text-ink-soft">
-        <Link href={"/dashboard/automations" as Route} className="underline-offset-2 hover:underline">
-          ← Back to automations
-        </Link>
-      </p>
     </div>
   );
 }

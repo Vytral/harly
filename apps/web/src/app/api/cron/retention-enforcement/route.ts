@@ -9,6 +9,7 @@ import { pruneDomainEventOutbox } from "@/server/events/outbox";
 import { db } from "@harly/db";
 import { sql } from "drizzle-orm";
 import { startCronRun } from "@/server/cron-runs";
+import { purgeExpiredSignatureDataGlobally } from "@/lib/esign/maintenance";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +24,7 @@ export async function POST(request: NextRequest) {
   try {
     const domainEventsPruned = await pruneDomainEventOutbox();
     const auditLogsPruned = await pruneExpiredAuditLogs();
+    const signatureDataPruned = await purgeExpiredSignatureDataGlobally();
     const due = await findDueCandidatesForRetention(BATCH_SIZE);
     let anonymized = 0;
     let skipped = 0;
@@ -44,6 +46,7 @@ export async function POST(request: NextRequest) {
       failed,
       domainEventsPruned,
       auditLogsPruned,
+      signatureDataPruned,
     };
     await run.finish("succeeded", counters);
     return NextResponse.json({ ok: true, ...counters });

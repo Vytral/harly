@@ -56,7 +56,7 @@ web service, the scheduler, and Caddy when enabled. The command reports
 | `harly setup-secret [directory]` | Read the setup secret from the local `.env` file. |
 | `harly backup [directory]` | Create a private rollback archive. |
 | `harly restore <archive> [directory]` | Restore database and uploads after explicit confirmation. |
-| `harly update [directory]` | Back up, pull a pinned image, migrate, and restart safely. |
+| `harly update [directory]` | Find this install and update it to the current stable release. |
 | `harly uninstall [directory]` | Stop and remove Harly; data is kept unless `--remove-data` is used. |
 | `harly deploy railway` | Provision and deploy the Railway project. |
 | `harly deploy fly prepare` | Generate a Fly.io deployment configuration. |
@@ -97,7 +97,7 @@ Important `init` flags:
 | `--organization <name>` | Organization display name. |
 | `--storage <local\|s3>` | Choose local persistent storage or S3-compatible storage. |
 | `--resource-profile <profile>` | Select `compact`, `standard`, or `performance`. |
-| `--image <tag-or-digest>` | Override the pinned release image. `latest` is rejected. |
+| `--image <tag-or-digest>` | Pin `ghcr.io/vytral/harly:0.2.0`, `:latest`, or a digest. `:latest` is recorded as the current stable digest. `edge` is rejected. |
 | `--launch` | Launch after generating configuration. |
 | `--no-launch` | Generate only, even in an interactive session. |
 | `--output-dir <directory>` | Alias for the positional directory. Conflicting paths are rejected. |
@@ -135,6 +135,14 @@ npx --yes @harly/cli deploy railway \
 The command creates PostgreSQL, the web and scheduler services, a migration
 service, environment variables, a public Railway domain, and deployments. It
 waits for public readiness before returning `ready`.
+
+Railway also supports repository-native Config as Code. The root
+[`railway.toml`](../../railway.toml) is automatically read for the web service:
+it selects the Dockerfile, web start command, readiness endpoint, and restart
+policy. Railway applies this file to one service deployment; it does not
+provision PostgreSQL, the scheduler, or the migration service. Use the CLI
+above for the complete Railway topology. Railway Templates can eventually
+package that topology as a one-click multi-service install.
 
 Fly.io and DigitalOcean currently use a safe preparation flow:
 

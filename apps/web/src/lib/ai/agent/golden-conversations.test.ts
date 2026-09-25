@@ -2,6 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import { buildHarlySystemPrompt } from "./system-prompt";
 import { HARLY_GOLDEN_CONVERSATIONS } from "./golden-conversations";
+import { classifyHarlyIntent } from "./intent";
+import { buildHarlyTools } from "./index";
+import { resolveActiveToolGroups } from "./tool-routing";
 
 describe("Harly golden behavior set", () => {
   it("has unique cases with explicit tool and truthfulness contracts", () => {
@@ -22,6 +25,7 @@ describe("Harly golden behavior set", () => {
         "distribution",
         "integration",
         "candidate_review",
+        "automation_build",
         "product_docs",
         "general_advice",
       ]),
@@ -52,5 +56,30 @@ describe("Harly golden behavior set", () => {
     expect(prompt).toContain("source");
     expect(prompt).toContain("general recruiting knowledge");
     expect(prompt).toContain("final hiring decision");
+  });
+
+  it("keeps every automation golden case routable and exposed to the agent", () => {
+    const automationCases = HARLY_GOLDEN_CONVERSATIONS.filter(
+      (conversation) => conversation.category === "automation_build",
+    );
+    expect(automationCases.length).toBeGreaterThanOrEqual(5);
+
+    const tools = buildHarlyTools({
+      workspaceId: "golden-workspace",
+      userId: "golden-user",
+      permissions: ["automations:manage"],
+    });
+    const availableTools = new Set(Object.keys(tools));
+
+    for (const conversation of automationCases) {
+      const groups = resolveActiveToolGroups({
+        message: conversation.userMessage,
+        intent: classifyHarlyIntent(conversation.userMessage),
+      });
+      expect(groups.has("automations"), conversation.id).toBe(true);
+      for (const toolName of conversation.requiredToolSequence) {
+        expect(availableTools.has(toolName), `${conversation.id}: ${toolName}`).toBe(true);
+      }
+    }
   });
 });

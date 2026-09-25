@@ -22,6 +22,8 @@ import {
   updateWebhookEndpoint,
 } from "@/features/developers/data";
 
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
+
 export type DevActionResult = { ok: boolean; error?: string };
 
 const SETTINGS_PATH = "/settings/developers";
@@ -36,6 +38,7 @@ export async function createApiKeyAction(input: {
   scopes: string[];
   expiresInDays?: number | null;
 }): Promise<DevActionResult & { raw?: string }> {
+  assertNotDemo();
   try {
     const { organization, user } = await requirePermission(
       "integrations:manage",
@@ -64,6 +67,7 @@ export async function createApiKeyAction(input: {
 export async function revokeApiKeyAction(
   keyId: string,
 ): Promise<DevActionResult> {
+  assertNotDemo();
   try {
     const { organization } = await requirePermission("integrations:manage");
     await revokeApiKey({ workspaceId: organization.id, keyId });
@@ -79,6 +83,7 @@ export async function createWebhookAction(input: {
   events: string[];
   description?: string;
 }): Promise<DevActionResult & { secret?: string }> {
+  assertNotDemo();
   try {
     const { organization, user } = await requirePermission(
       "integrations:manage",
@@ -107,6 +112,7 @@ export async function updateWebhookAction(input: {
   enabled?: boolean;
   description?: string | null;
 }): Promise<DevActionResult> {
+  assertNotDemo();
   try {
     const { organization } = await requirePermission("integrations:manage");
     await updateWebhookEndpoint({
@@ -132,6 +138,7 @@ export async function updateWebhookAction(input: {
 export async function deleteWebhookAction(
   id: string,
 ): Promise<DevActionResult> {
+  assertNotDemo();
   try {
     const { organization } = await requirePermission("integrations:manage");
     await deleteWebhookEndpoint({ workspaceId: organization.id, id });
@@ -148,6 +155,7 @@ export async function deleteWebhookAction(
 export async function rotateWebhookSecretAction(
   id: string,
 ): Promise<DevActionResult & { secret?: string }> {
+  assertNotDemo();
   try {
     const { organization } = await requirePermission("integrations:manage");
     const { secret } = await rotateWebhookSecret({
@@ -188,6 +196,7 @@ export async function replayWebhookDeliveryAction(input: {
   endpointId: string;
   deliveryId: string;
 }): Promise<DevActionResult> {
+  assertNotDemo();
   try {
     const { organization } = await requirePermission("integrations:manage");
     await replayWebhookDelivery({
@@ -208,6 +217,7 @@ export async function replayWebhookDeliveryAction(input: {
 export async function testWebhookAction(
   id: string,
 ): Promise<DevActionResult & { status?: string }> {
+  assertNotDemo();
   try {
     const { organization } = await requirePermission("integrations:manage");
     const endpoint = await getWebhookEndpoint({

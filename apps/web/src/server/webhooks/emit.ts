@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db, webhookEndpoints, webhookDeliveries } from "@harly/db";
 
 import { dispatchDueWebhooks } from "./dispatch";
-import type { WebhookEvent } from "./events";
+import { buildWebhookEnvelope, type WebhookEvent } from "./events";
 import { notifySlackEvent } from "@/server/notify/slack";
 import { notifyChatEvent, notifyTelegramEvent } from "@/server/notify/dispatch";
 import { notifyInboxEvent } from "@/server/notify/inbox";
@@ -24,7 +24,22 @@ type EmitWebhookOptions = {
   skipDomainEvent?: boolean;
   /** Workflow run that caused this event; used for deterministic loop control. */
   parentRunId?: string;
+  /** Explicit database boundary for workflow workers and isolated tests. */
+  database?: typeof db;
 };
+
+/** Options for `emitWebhookEvent` after `persistDomainEvent` already ran. */
+export function webhookOptionsAfterPersist(
+  persisted: { eventId: string; actorId?: string },
+  extra?: { actorId?: string; parentRunId?: string },
+): EmitWebhookOptions {
+  return {
+    skipDomainEvent: true,
+    eventId: persisted.eventId,
+    actorId: extra?.actorId ?? persisted.actorId,
+    parentRunId: extra?.parentRunId,
+  };
+}
 
 /**
  * Emit a domain event to all subscribed webhook endpoints.
@@ -40,7 +55,12 @@ export async function emitWebhookEvent(
   data: Record<string, unknown>,
   options: EmitWebhookOptions = {},
 ): Promise<void> {
-  let persistedEventId = options.eventId;
+  const database = options.database ?? db;
+  let persistedEventId =
+    options.eventId ??
+    (typeof data.eventId === "string" && data.eventId.length > 0
+      ? data.eventId
+      : undefined);
   if (!options.skipDomainEvent) {
     const persistedEvent = await emitDomainEvent({
       name: event,
@@ -51,9 +71,15 @@ export async function emitWebhookEvent(
           ? "application"
           : typeof data.candidate === "object" && data.candidate
             ? "candidate"
-            : typeof data.job === "object" && data.job
-              ? "job"
-              : undefined,
+              : typeof data.interview === "object" && data.interview
+                ? "interview"
+                : typeof data.task === "object" && data.task
+                  ? "task"
+                  : typeof data.job === "object" && data.job
+                    ? "job"
+                    : typeof data.document === "object" && data.document
+                      ? "document"
+                    : undefined,
       aggregateId:
         typeof data.application === "object" &&
         data.application &&
@@ -63,19 +89,25 @@ export async function emitWebhookEvent(
               data.candidate &&
               "id" in data.candidate
             ? String(data.candidate.id)
-            : typeof data.job === "object" && data.job && "id" in data.job
-              ? String(data.job.id)
-              : undefined,
+            : typeof data.interview === "object" && data.interview && "id" in data.interview
+              ? String(data.interview.id)
+              : typeof data.task === "object" && data.task && "id" in data.task
+                ? String(data.task.id)
+                : typeof data.job === "object" && data.job && "id" in data.job
+                  ? String(data.job.id)
+                  : typeof data.document === "object" && data.document && "id" in data.document
+                    ? String(data.document.id)
+                  : undefined,
       payload: data,
       automationParentRunId: options.parentRunId,
-    }).catch((error) =>
+    }, database).catch((error) =>
       log.error({ workspaceId, event, error }, "domain event emit failed"),
     );
     persistedEventId ??= persistedEvent?.eventId;
   }
 
   try {
-    const endpoints = await db
+    const endpoints = await database
       .select()
       .from(webhookEndpoints)
       .where(
@@ -89,11 +121,45 @@ export async function emitWebhookEvent(
       (Array.isArray(endpoint.events) ? endpoint.events : []).includes(event),
     );
     if (subscribed.length > 0) {
-      const created = Math.floor(Date.now() / 1000);
+      const aggregateType:
+        | "application"
+        | "candidate"
+        | "interview"
+        | "task"
+        | "job"
+        | "document"
+        | undefined =
+          typeof data.application === "object" && data.application
+            ? "application"
+            : typeof data.candidate === "object" && data.candidate
+              ? "candidate"
+              : typeof data.interview === "object" && data.interview
+                ? "interview"
+                : typeof data.task === "object" && data.task
+                  ? "task"
+                  : typeof data.job === "object" && data.job
+                    ? "job"
+                    : typeof data.document === "object" && data.document
+                      ? "document"
+                    : undefined;
+      const aggregateEntity = aggregateType ? data[aggregateType] : undefined;
+      const aggregateId = aggregateEntity && typeof aggregateEntity === "object" && "id" in aggregateEntity
+        ? String(aggregateEntity.id)
+        : undefined;
 
       for (const endpoint of subscribed) {
-        const payload = { event, created, workspace: workspaceId, data };
-        const [row] = await db
+        const payload = buildWebhookEnvelope({
+          event,
+          workspaceId,
+          data,
+          eventId: persistedEventId,
+          eventVersion: 1,
+          schemaVersion: 1,
+          parentRunId: options.parentRunId,
+          aggregateType,
+          aggregateId,
+        });
+        const [row] = await database
           .insert(webhookDeliveries)
           .values({
             workspaceId,
@@ -151,6 +217,7 @@ export async function emitWebhookEvent(
       persistedEventId ??
       (typeof data.eventId === "string" ? data.eventId : undefined),
     parentRunId: options.parentRunId,
+    database,
   }).catch((err) =>
     log.error(err, "dispatchWorkflowEvent failed"),
   );

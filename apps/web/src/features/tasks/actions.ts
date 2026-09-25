@@ -10,7 +10,7 @@ import { activityEvents, notifications, tasks } from "@harly/db";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 import { logAuditEvent } from "@/lib/audit-log";
-import { assertTaskReferences } from "./service";
+import { assertTaskReferences, serializeTask } from "./service";
 import { emitRealtimeInvalidation } from "@/server/events/emit";
 import {
   persistDomainEvent,
@@ -18,6 +18,7 @@ import {
   type PersistedDomainEvent,
 } from "@/server/events/emit";
 import { REALTIME_EVENTS } from "@/server/events/registry";
+import { emitWebhookEvent, webhookOptionsAfterPersist } from "@/server/webhooks/emit";
 
 const log = createLogger("tasks");
 
@@ -295,7 +296,7 @@ export async function updateTask(
             isNull(tasks.deletedAt),
           ),
         )
-        .returning({ id: tasks.id, ownerId: tasks.ownerId });
+        .returning();
 
       if (!task) throw ApiError.notFound("Task not found.");
 
@@ -324,18 +325,26 @@ export async function updateTask(
       }
 
       domainEvent = await persistDomainEvent(tx, {
-        name: "task.updated",
+        name: fields.status === "completed" ? "task.completed" : "task.updated",
         workspaceId: workspace.id,
         actorId: user.id,
         aggregateType: "task",
         aggregateId: task.id,
-        payload: { task: { id: task.id, status: fields.status ?? null } },
+        payload: { task: serializeTask(task) },
       });
 
       return task;
     });
 
     if (domainEvent) await publishPersistedDomainEvents([domainEvent]);
+    if (domainEvent && fields.status === "completed") {
+      await emitWebhookEvent(
+        workspace.id,
+        "task.completed",
+        domainEvent.payload,
+        webhookOptionsAfterPersist(domainEvent),
+      );
+    }
 
     await logAuditEvent({
       workspaceId: workspace.id,
@@ -394,7 +403,7 @@ export async function completeMyOpenTasks(): Promise<{
             or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
           ),
         )
-        .returning({ id: tasks.id });
+        .returning();
 
       for (const row of rows) {
         await tx.insert(activityEvents).values({
@@ -407,12 +416,12 @@ export async function completeMyOpenTasks(): Promise<{
         });
         domainEvents.push(
           await persistDomainEvent(tx, {
-            name: "task.updated",
+            name: "task.completed",
             workspaceId: workspace.id,
             actorId: user.id,
             aggregateType: "task",
             aggregateId: row.id,
-            payload: { task: { id: row.id, status: "completed" } },
+            payload: { task: serializeTask(row) },
           }),
         );
       }
@@ -420,6 +429,16 @@ export async function completeMyOpenTasks(): Promise<{
     });
 
     await publishPersistedDomainEvents(domainEvents);
+    await Promise.all(
+      domainEvents.map((event) =>
+        emitWebhookEvent(
+          workspace.id,
+          "task.completed",
+          event.payload,
+          webhookOptionsAfterPersist(event),
+        ),
+      ),
+    );
 
     if (updated.length > 0) {
       await logAuditEvent({

@@ -18,6 +18,7 @@ import { JobActionsMenu } from "@/features/jobs/JobActionsMenu";
 import { JobShareButton } from "@/features/jobs/JobShareButton";
 import { JobStatusActions } from "@/features/jobs/JobStatusActions";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { countCandidatePool } from "@/features/matching/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
@@ -50,8 +51,9 @@ export default async function DashboardJobPage({
   }
 
   const { job } = result;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const publicUrl = `${appUrl}/jobs/${job.slug}`;
+  const appUrl = getHarlyPublicOrigin();
+  // Canonical public job details (overview), never the apply form.
+  const publicUrl = `${appUrl}/board/${workspace.slug}/jobs/${job.slug}`;
 
   return (
     <JobForm

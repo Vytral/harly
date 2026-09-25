@@ -3,10 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
   describeAction,
   describeConditions,
+  describeGraphWorkflow,
   describeTrigger,
   describeWorkflow,
+  graphActionCount,
 } from "./preview";
 import type { Action, ConditionNode, Trigger } from "../schema";
+import type { WorkflowGraphV2 } from "../definition/schema-v2";
 
 const trigger = (event: Trigger["event"]): Trigger => ({ event });
 
@@ -98,6 +101,11 @@ describe("preview — describeAction", () => {
     expect(describeAction(a)).toBe("POST https://x.dev/h");
   });
 
+  it("summarizes a self-scheduling booking link", () => {
+    const a: Action = { type: "send_booking_link", config: {}, continueOnError: false };
+    expect(describeAction(a)).toBe("send a self-scheduling link to the candidate");
+  });
+
   it("falls back to the catalog label for an unregistered type", () => {
     const a = { type: "ai_decide", config: {}, continueOnError: false } as unknown as Action;
     expect(describeAction(a)).toBe("ai: decide");
@@ -144,5 +152,29 @@ describe("preview — describeWorkflow (full sentence)", () => {
       ],
     });
     expect(out).toBe("When a candidate applies, then set status to rejected and add the \"auto-rejected\" tag.");
+  });
+});
+
+describe("preview — v2 graph summary", () => {
+  it("keeps waits, approvals, and branching visible instead of flattening them", () => {
+    const graph: WorkflowGraphV2 = {
+      schemaVersion: 2,
+      entryNodeId: "trigger",
+      nodes: [
+        { id: "trigger", type: "trigger", event: "application.created" },
+        { id: "if", type: "condition", tree: [] },
+        { id: "delay", type: "delay", mode: "duration", durationMs: 86_400_000 },
+        { id: "approval", type: "approval", eligibleActorIds: [], rule: "any" },
+        { id: "wait", type: "wait", kind: "event", eventName: "application.status_changed" },
+        { id: "action", type: "action", actionType: "add_tag", toolVersion: 1, failurePolicy: "stop", input: {} },
+        { id: "end", type: "end", result: "completed" },
+      ],
+      edges: [],
+    };
+
+    expect(graphActionCount(graph)).toBe(1);
+    expect(describeGraphWorkflow(graph)).toBe(
+      "When a candidate applies, then 1 action, branching, a delay, an approval, an event wait.",
+    );
   });
 });

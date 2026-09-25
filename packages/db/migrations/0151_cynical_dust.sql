@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "enabled_login_methods" jsonb DEFAULT '[]'::jsonb NOT NULL;

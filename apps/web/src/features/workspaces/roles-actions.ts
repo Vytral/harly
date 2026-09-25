@@ -5,12 +5,15 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { logAuditEvent } from "@/lib/audit-log";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 
 import { db } from "@harly/db";
 import { customRoles, member as authMembers } from "@harly/db";
 
 import {
+  assignRolePrivilegeError,
   grantRolePolicyPrivilegeError,
+  manageMemberRolePrivilegeError,
   requirePermission,
 } from "@/features/workspaces/permissions-server";
 import {
@@ -45,6 +48,7 @@ export async function createCustomRole(input: {
   permissions: string[];
   scope?: RoleScope;
 }): Promise<RoleActionResult> {
+  assertNotDemo();
   const context = await requirePermission("roles:manage");
 
   const parsed = roleSchema.safeParse(input);
@@ -105,6 +109,7 @@ export async function updateCustomRole(input: {
   permissions: string[];
   scope?: RoleScope;
 }): Promise<RoleActionResult> {
+  assertNotDemo();
   const context = await requirePermission("roles:manage");
 
   // Owner is the locked keyholder , never editable.
@@ -175,10 +180,21 @@ export async function updateCustomRole(input: {
 export async function deleteCustomRole(input: {
   key: string;
 }): Promise<RoleActionResult> {
+  assertNotDemo();
   const context = await requirePermission("roles:manage");
 
   if (isBuiltinRole(input.key)) {
     return { ok: false, error: "Built-in roles can't be deleted." };
+  }
+
+  const privilegeError = await manageMemberRolePrivilegeError(
+    context,
+    input.key,
+  );
+  if (privilegeError) return { ok: false, error: privilegeError };
+  const reassignmentError = await assignRolePrivilegeError(context, "recruiter");
+  if (reassignmentError) {
+    return { ok: false, error: "Members cannot be moved to a role above your privileges." };
   }
 
   await db.transaction(async (tx) => {

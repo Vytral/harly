@@ -509,6 +509,12 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
   const [searching, startSearch] = useTransition();
   const [testing, startTest] = useTransition();
   const [saving, startSave] = useTransition();
+  // Inline test-connection result so success reads clearly (not just a toast).
+  const [testResult, setTestResult] = useState<
+    | { state: "ok"; model: string }
+    | { state: "error"; message: string }
+    | null
+  >(null);
 
   const info = getProvider(provider);
 
@@ -529,6 +535,7 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
     setModelId(nextInfo?.models[0]?.id ?? "");
     setResults([]);
     setQuery("");
+    setTestResult(null);
     if (!showCustomEndpoint) {
       setCustomEndpoint(nextInfo?.baseUrl ?? "");
     }
@@ -547,6 +554,7 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
   }
 
   function runTest() {
+    setTestResult(null);
     startTest(async () => {
       const result = await testAiConnectionAction({
         provider,
@@ -556,8 +564,13 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
           showCustomEndpoint && customEndpoint ? customEndpoint : undefined,
       });
       if (result.ok) {
+        setTestResult({ state: "ok", model: modelId });
         toast.success("Connection OK");
       } else {
+        setTestResult({
+          state: "error",
+          message: result.error ?? "Connection failed.",
+        });
         toast.error(result.error ?? "Connection failed.");
       }
     });
@@ -578,6 +591,9 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
         return;
       }
       toast.success("AI settings saved");
+      // Guide the user back to the AI settings overview instead of leaving
+      // them on the same form (which reads as "nothing happened").
+      router.push("/settings/ai" as Route);
       router.refresh();
     });
   }
@@ -587,12 +603,6 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
       title="Configure AI"
       description="Your API key is encrypted at rest and never shown again."
       surface="page"
-      footer={
-        <Button onClick={save} disabled={saving || !modelId.trim()}>
-          {saving ? <SpinnerIcon className="size-4" /> : null}
-          Save changes
-        </Button>
-      }
     >
       <div className="space-y-5">
         <div className="space-y-2">
@@ -634,7 +644,10 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
           <Input
             id="ai-model"
             value={modelId}
-            onChange={(event) => setModelId(event.target.value)}
+            onChange={(event) => {
+              setModelId(event.target.value);
+              setTestResult(null);
+            }}
             placeholder={
               isOpenRouter
                 ? "e.g. openai/gpt-4o"
@@ -675,7 +688,10 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
                     <button
                       key={model.id}
                       type="button"
-                      onClick={() => setModelId(model.id)}
+                      onClick={() => {
+                        setModelId(model.id);
+                        setTestResult(null);
+                      }}
                       className={cn(
                         "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted/60",
                         model.id === modelId && "bg-sage/40",
@@ -701,7 +717,10 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
                 <button
                   key={model.id}
                   type="button"
-                  onClick={() => setModelId(model.id)}
+                  onClick={() => {
+                    setModelId(model.id);
+                    setTestResult(null);
+                  }}
                   className={cn(
                     "rounded-full border px-2.5 py-1 text-xs font-medium transition hover:bg-muted",
                     model.id === modelId
@@ -728,7 +747,10 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
             id="ai-key"
             type="password"
             value={apiKey}
-            onChange={(event) => setApiKey(event.target.value)}
+            onChange={(event) => {
+              setApiKey(event.target.value);
+              setTestResult(null);
+            }}
             placeholder={
               status.hasApiKey
                 ? "•••••••• (stored, leave blank to keep)"
@@ -737,7 +759,17 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
             autoComplete="off"
           />
           {info ? (
-            <p className="text-xs text-muted-foreground">{info.apiKeyHint}</p>
+            <p className="text-xs text-muted-foreground">
+              {info.apiKeyHint}{" "}
+              <a
+                href={info.apiKeyUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-foreground underline underline-offset-2 hover:text-pine"
+              >
+                Get a key
+              </a>
+            </p>
           ) : null}
         </div>
 
@@ -755,7 +787,10 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
           {showCustomEndpoint ? (
             <Input
               value={customEndpoint}
-              onChange={(event) => setCustomEndpoint(event.target.value)}
+              onChange={(event) => {
+                setCustomEndpoint(event.target.value);
+                setTestResult(null);
+              }}
               placeholder={info?.baseUrl ?? "https://api.openai.com/v1"}
               className="font-mono text-sm"
             />
@@ -776,20 +811,62 @@ export function AiSettingsForm({ status }: { status: WorkspaceAiStatus }) {
           <Switch checked={enabled} onCheckedChange={setEnabled} />
         </div>
 
-        <Button
-          type="button"
-          variant="outline"
-          className="w-full"
-          onClick={runTest}
-          disabled={testing || !modelId.trim()}
-        >
-          {testing ? (
-            <SpinnerIcon className="size-4" />
+        {/* Test connection + inline result. Success is a clear green banner,
+            not just a transient toast. */}
+        <div className="space-y-2.5">
+          <Button
+            type="button"
+            variant="outline"
+            className="w-full"
+            onClick={runTest}
+            disabled={testing || !modelId.trim()}
+          >
+            {testing ? (
+              <SpinnerIcon className="size-4" />
+            ) : (
+              <LightningIcon className="size-4" />
+            )}
+            Test connection
+          </Button>
+          {testResult?.state === "ok" ? (
+            <div className="flex items-start gap-2 rounded-xl border border-pine/20 bg-sage/30 px-3 py-2.5 text-sm text-pine">
+              <CheckIcon className="mt-0.5 size-4 shrink-0" />
+              <p>
+                <span className="font-medium">Connection healthy.</span>{" "}
+                <span className="text-pine/80">
+                  {providerLabel(provider)} responded with{" "}
+                  <span className="font-mono text-[13px]">
+                    {testResult.model}
+                  </span>
+                  .
+                </span>
+              </p>
+            </div>
+          ) : testResult?.state === "error" ? (
+            <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2.5 text-sm text-clay">
+              <GlobeIcon className="mt-0.5 size-4 shrink-0" />
+              <p>
+                <span className="font-medium">Couldn&apos;t connect.</span>{" "}
+                {testResult.message}
+              </p>
+            </div>
           ) : (
-            <CheckIcon className="size-4" />
+            <p className="text-center text-xs text-muted-foreground">
+              Verify your key and model before saving.
+            </p>
           )}
-          Test connection
-        </Button>
+        </div>
+
+        {/* Save is inline at the end — scroll to it, no floating bar. */}
+        <div className="flex items-center justify-end gap-2 border-t pt-5">
+          <Button asChild variant="ghost">
+            <Link href={"/settings/ai" as Route}>Cancel</Link>
+          </Button>
+          <Button onClick={save} disabled={saving || !modelId.trim()}>
+            {saving ? <SpinnerIcon className="size-4" /> : null}
+            Save changes
+          </Button>
+        </div>
       </div>
     </DrawerLayout>
   );

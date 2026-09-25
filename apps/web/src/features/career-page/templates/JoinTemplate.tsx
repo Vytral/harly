@@ -437,7 +437,6 @@ export function JoinTemplate({
           <CareerFooter
             config={config}
             workspaceName={workspace.name}
-            portalWorkspaceSlug={workspace.slug}
             maxWidth="max-w-4xl"
             iconRounded="rounded-full"
             portalEnabled={portalEnabled}

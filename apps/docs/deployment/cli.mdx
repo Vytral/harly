@@ -89,7 +89,7 @@ Public values can be passed as flags:
 | `--organization <name>` | Organization display name. |
 | `--storage <provider>` | `local` or `s3`. |
 | `--resource-profile <profile>` | `compact`, `standard`, or `performance`. |
-| `--image <reference>` | Exact tag or digest. `latest` is rejected. |
+| `--image <reference>` | Exact version, `:latest`, or a digest. `:latest` is pinned to the current stable digest. `edge` is rejected. |
 | `--output-dir <directory>` | Alias for the `init` positional directory. |
 | `--launch` | Launch after generation. |
 | `--no-launch` | Generate only. |
@@ -255,6 +255,15 @@ the verified deployment URL. The requested custom domain is returned as
 `requestedUrl` with an explicit follow-up step to attach and verify it in
 Railway.
 
+### Railway Config as Code
+
+The repository also includes [`railway.toml`](https://github.com/vytral/harly/blob/main/railway.toml). Railway detects
+this file automatically and applies its Dockerfile, web start command,
+readiness path, and restart policy to the current service deployment. This is a
+service-level configuration file, not a full project manifest: it does not
+create PostgreSQL, the scheduler, or the migration service. Use the CLI API
+flow above when you need the complete Harly topology.
+
 ### Fly.io and DigitalOcean
 
 These providers currently use a preparation flow and finish with
@@ -272,7 +281,11 @@ npx @harly/cli deploy digitalocean prepare \
 
 The CLI writes `fly.toml` or `app.yaml`, validates the resolved configuration,
 and prints the exact provider commands still required. It does not create
-provider resources. Use `--save-env` if you explicitly need a local `0600`
+provider resources. The repository's [`.do/app.yaml`](https://github.com/vytral/harly/blob/main/.do/app.yaml) is the
+canonical DigitalOcean App Platform spec and can also be used directly with
+`doctl apps create --spec .do/app.yaml` or
+`doctl apps update APP_ID --spec .do/app.yaml`; it provisions the multi-service
+App Platform topology. Use `--save-env` if you explicitly need a local `0600`
 secrets file.
 
 ## Operate an installation
@@ -291,11 +304,15 @@ services or bring the Compose project back up.
 
 ```bash
 npx @harly/cli backup ./harly
-npx @harly/cli update ./harly --to 0.4.0
+npx @harly/cli update
 ```
 
-The update flow creates a rollback archive, pulls the pinned image, runs the
-database migration once, restarts the services, and waits for readiness.
+Run `update` from the installation directory, or from any directory inside it.
+It reads the current stable release and moves this install there. It does
+nothing when that version is already running. `--to 0.2.1-beta.1` opts into a
+prerelease. The flow creates a rollback archive, pulls that exact version,
+runs the database migration once, restarts the services, and waits for
+readiness.
 
 ### Restore or uninstall
 

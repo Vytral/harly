@@ -7,6 +7,7 @@ export function SetupClaimForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [done, setDone] = useState(false);
+  const [leaving, setLeaving] = useState(false);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -24,9 +25,11 @@ export function SetupClaimForm() {
         setPending(false);
         return;
       }
-      // Hold the success state briefly so the checkmark reads before we leave.
+      // Hold the success state briefly so the checkmark reads, then play the
+      // exit animation before the hard navigation so it doesn't snap to blank.
       setDone(true);
-      setTimeout(() => window.location.replace("/signup"), 650);
+      setTimeout(() => setLeaving(true), 500);
+      setTimeout(() => window.location.replace("/signup"), 800);
     } catch {
       setError("Setup could not be authorized.");
       setPending(false);
@@ -34,7 +37,10 @@ export function SetupClaimForm() {
   }
 
   return (
-    <form className="mt-8 space-y-6" onSubmit={submit}>
+    <form
+      className={`mt-8 space-y-6 ${leaving ? "auth-leaving" : ""}`}
+      onSubmit={submit}
+    >
       <div>
         <label
           htmlFor="setup-token"

@@ -2,6 +2,7 @@ import "server-only";
 
 import { eq } from "drizzle-orm";
 
+import { isDemoMode } from "@harly/config";
 import {
   ApiError,
   hashApiKey,
@@ -38,6 +39,8 @@ const LAST_USED_THROTTLE_MS = 60_000;
 
 // Per-key budget so a single API key can't abuse the developer API (F2-07).
 const API_KEY_RATE_LIMIT = 1000;
+/** Public demo: ~1 req/sec average over the window — enough to try the API. */
+const DEMO_API_KEY_RATE_LIMIT = 120;
 const API_KEY_RATE_WINDOW_MS = 10 * 60_000;
 
 export function hasApiScope(
@@ -134,8 +137,11 @@ export async function authenticateApiKey(
   // didn't cover for authenticated API keys.
   let rateLimit: RateLimitResult;
   try {
+    // Tighter budget on the public demo so one shared workspace can't be
+    // hammered via minted API keys between resets.
+    const limit = isDemoMode() ? DEMO_API_KEY_RATE_LIMIT : API_KEY_RATE_LIMIT;
     rateLimit = await enforceRateLimit(`apikey:${row.id}`, {
-      limit: API_KEY_RATE_LIMIT,
+      limit,
       windowMs: API_KEY_RATE_WINDOW_MS,
     });
   } catch (error) {

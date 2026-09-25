@@ -5,6 +5,9 @@ import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { activityEvents, db, documents } from "@harly/db";
 
 import { persistSignedDocumentForEnvelope } from "@/lib/esign/signed-artifact";
+import { resumeWorkflowDocumentWaits } from "@/features/automations/runtime/worker";
+import { persistDomainEvent, publishPersistedDomainEvents } from "@/server/events/emit";
+import { documentAutomationContext } from "@/lib/esign/document-automation-context";
 
 /**
  * Propagate a submission's terminal state to every ATS document attached to its
@@ -43,7 +46,7 @@ export async function syncDocumentsForEnvelope(input: {
 
   if (attached.length === 0) return;
 
-  await db.transaction(async (tx) => {
+  const changedDocuments = await db.transaction(async (tx) => {
     const current = await tx
       .select({ id: documents.id, signatureStatus: documents.signatureStatus })
       .from(documents)
@@ -55,7 +58,7 @@ export async function syncDocumentsForEnvelope(input: {
       }
       return document.signatureStatus === "unsigned" || document.signatureStatus === "pending";
     });
-    if (changed.length === 0) return;
+    if (changed.length === 0) return { changed: [], events: [] };
     await tx
       .update(documents)
       .set({
@@ -84,5 +87,43 @@ export async function syncDocumentsForEnvelope(input: {
         },
       })),
     );
+    const events = await Promise.all(changed.map(async (document) => {
+      const targetContext = await documentAutomationContext(tx, input.workspaceId, document.id);
+      const event = await persistDomainEvent(tx, {
+        name: "document.signature_changed",
+        workspaceId: input.workspaceId,
+        actorId: input.actorId ?? undefined,
+        aggregateType: "document",
+        aggregateId: document.id,
+        payload: { document: { id: document.id }, ...targetContext, status: input.signatureStatus, provider: "docuseal", envelopeId: input.envelopeId },
+      });
+      return { event, targetContext };
+    }));
+    return { changed, events };
   });
+
+  await publishPersistedDomainEvents(changedDocuments.events.map((item) => item.event));
+  const { emitWebhookEvent } = await import("@/server/webhooks/emit");
+  await Promise.all(
+    changedDocuments.changed.map((document, index) =>
+      emitWebhookEvent(input.workspaceId, "document.signature_changed", {
+        document: { id: document.id },
+        ...changedDocuments.events[index]?.targetContext,
+        status: input.signatureStatus,
+        provider: "docuseal",
+        envelopeId: input.envelopeId,
+      }, { actorId: input.actorId ?? undefined, skipDomainEvent: true, eventId: changedDocuments.events[index]?.event.eventId }),
+    ),
+  );
+
+  if (input.signatureStatus === "signed" || input.signatureStatus === "declined") {
+    await Promise.all(
+      attached.map((document) =>
+        resumeWorkflowDocumentWaits({
+          workspaceId: input.workspaceId,
+          resourceId: document.id,
+        }),
+      ),
+    );
+  }
 }

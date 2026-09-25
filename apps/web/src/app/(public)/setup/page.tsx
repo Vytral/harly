@@ -35,7 +35,7 @@ export default async function SetupPage() {
       </header>
 
       <main className="flex flex-1 flex-col items-center justify-center px-6 pb-16 sm:px-8">
-        <div className="w-full max-w-sm">
+        <div className="auth-card-enter w-full max-w-sm">
           <span className="inline-flex items-center gap-2 rounded-full bg-sage/60 px-3 py-1 text-xs font-semibold text-sage-ink">
             <span className="size-1.5 rounded-full bg-pine" />
             First-run setup

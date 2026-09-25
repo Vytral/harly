@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from "react";
 import { toast } from "@/lib/notification-island/toast";
+import { useRouter } from "next/navigation";
 import type { Job } from "@harly/db";
 
 import {
@@ -151,6 +152,7 @@ const FIELD_TO_SECTION: Record<string, SectionKey> = {
   slug: "advanced",
   experienceLevel: "advanced",
   education: "advanced",
+  evaluationMode: "advanced",
   keywordsJson: "advanced",
   officeAddress: "advanced",
   officePhotosJson: "advanced",
@@ -189,6 +191,7 @@ export function JobForm({
   previewWorkspace,
   previewConfig,
 }: JobFormProps) {
+  const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const applicationConfig = normalizeJobApplicationConfig(
@@ -317,7 +320,7 @@ export function JobForm({
 
   async function handleExit() {
     if (!(await confirmDiscard())) return;
-    window.location.href = "/dashboard/jobs";
+    router.push("/dashboard/jobs");
   }
 
   function jumpToSection(key: SectionKey) {
@@ -346,6 +349,7 @@ export function JobForm({
       workplaceType: fd.get("workplaceType"),
       experienceLevel: fd.get("experienceLevel"),
       education: fd.get("education"),
+      evaluationMode: fd.get("evaluationMode"),
       keywordsJson: fd.get("keywordsJson"),
       description: fd.get("description"),
       contentSectionsJson: fd.get("contentSectionsJson"),

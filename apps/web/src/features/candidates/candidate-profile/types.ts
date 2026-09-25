@@ -1,4 +1,3 @@
-import type { DocumentRequestItem } from "@/features/documents/requests-shared";
 import type {
   ScheduleApplicationOption,
   ScheduleCalConfig,
@@ -55,6 +54,7 @@ export type CandidateFile = {
 
 export type Scorecard = {
   id: string;
+  applicationId: string | null;
   rating: "strong" | "mixed" | "weak";
   comment: string | null;
   stageName: string | null;
@@ -97,14 +97,6 @@ export type CandidatePrivacyRow = Omit<
   completedAt: string | null;
 };
 
-export type SignableDocument = {
-  id: string;
-  name: string;
-  mimeType: string;
-  sizeBytes: number;
-  updatedAt: Date | string;
-};
-
 export type RelatedDocument = { id: string; name: string; mimeType: string };
 
 export type CandidateProfileTabsProps = {
@@ -125,15 +117,6 @@ export type CandidateProfileTabsProps = {
   notes: CandidateNoteItem[];
   files: CandidateFile[];
   relatedDocuments: RelatedDocument[];
-  signableDocuments: Array<{
-    id: string;
-    name: string;
-    mimeType: string;
-    sizeBytes: number;
-    updatedAt: Date;
-  }>;
-  documentRequests: DocumentRequestItem[];
-  canManageDocuments: boolean;
   activity: CandidateActivityRow[];
   scorecards: Scorecard[];
   messages: CandidateMessage[];
@@ -142,6 +125,7 @@ export type CandidateProfileTabsProps = {
   aiEvaluations: CandidateAiEvaluationItem[];
   aiConfigured: boolean;
   offers: CandidateOfferItem[];
+  offerSignatureChannel: "email" | "esign" | "native";
   emailTemplates?: EmailTemplateOption[];
   emailTemplateValues?: TemplateValues;
   scheduleApplications: ScheduleApplicationOption[];

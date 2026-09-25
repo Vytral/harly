@@ -17,6 +17,7 @@ import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { deletePasskeyAction } from "@/features/security/actions";
+import { DemoLockedNotice } from "@/features/demo/DemoLockedNotice";
 
 type PasskeyView = {
   id: string;
@@ -29,8 +30,10 @@ type PasskeyView = {
 
 export function PasskeysCard({
   initialPasskeys,
+  demoLocked = false,
 }: {
   initialPasskeys: PasskeyView[];
+  demoLocked?: boolean;
 }) {
   const [passkeyList, setPasskeyList] = useState(initialPasskeys);
   const [adding, setAdding] = useState(false);
@@ -38,12 +41,13 @@ export function PasskeysCard({
   const [isPending, startTransition] = useTransition();
 
   async function handleRegister() {
+    if (demoLocked) return;
     startTransition(async () => {
       try {
         // 1. Get registration options from server
         const optRes = await fetch("/api/passkey/register");
         if (!optRes.ok) throw new Error("Failed to get registration options");
-        const options = await optRes.json();
+        const { challengeId, ...options } = await optRes.json();
 
         // 2. Browser creates credential
         const attestation = await startRegistration({ optionsJSON: options });
@@ -52,7 +56,7 @@ export function PasskeysCard({
         const verRes = await fetch("/api/passkey/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ response: attestation, name: passkeyName || "Passkey" }),
+          body: JSON.stringify({ challengeId, response: attestation, name: passkeyName || "Passkey" }),
         });
 
         if (!verRes.ok) {
@@ -87,6 +91,7 @@ export function PasskeysCard({
   }
 
   function handleDelete(id: string) {
+    if (demoLocked) return;
     startTransition(async () => {
       await deletePasskeyAction(id);
       setPasskeyList((prev) => prev.filter((p) => p.id !== id));
@@ -96,6 +101,11 @@ export function PasskeysCard({
 
   return (
     <Card className="gap-5 p-6">
+      {demoLocked ? (
+        <DemoLockedNotice>
+          Passkeys stay off in the demo so the shared account cannot be gated.
+        </DemoLockedNotice>
+      ) : null}
       <SectionHeader
         icon={FingerPrintDuotoneIcon}
         title="Passkeys"
@@ -108,7 +118,7 @@ export function PasskeysCard({
           </StatusPill>
         }
         action={
-          !adding ? (
+          !demoLocked && !adding ? (
             <Button size="sm" onClick={() => setAdding(true)}>
               <PlusIcon className="mr-1.5 size-3.5" />
               Add passkey
@@ -139,7 +149,7 @@ export function PasskeysCard({
             <Button
               size="sm"
               onClick={handleRegister}
-              disabled={isPending}
+              disabled={demoLocked || isPending}
             >
               {isPending ? (
                 <SpinnerIcon className="mr-1.5 size-3.5" />
@@ -189,7 +199,7 @@ export function PasskeysCard({
                 size="sm"
                 className="shrink-0 text-muted-foreground hover:text-destructive"
                 onClick={() => handleDelete(pk.id)}
-                disabled={isPending}
+                disabled={demoLocked || isPending}
               >
                 <TrashIcon className="size-4" />
                 <span className="sr-only">Remove</span>

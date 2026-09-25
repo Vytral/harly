@@ -310,7 +310,6 @@ export function MinimalTemplate({
           <CareerFooter
             config={config}
             workspaceName={workspace.name}
-            portalWorkspaceSlug={workspace.slug}
             maxWidth="max-w-3xl"
             iconRounded="rounded-md"
             portalEnabled={portalEnabled}

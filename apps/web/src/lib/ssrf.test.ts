@@ -4,7 +4,7 @@ const mocks = vi.hoisted(() => ({ lookup: vi.fn() }));
 
 vi.mock("node:dns/promises", () => ({ lookup: mocks.lookup }));
 
-import { isBlockedHost, resolveSafeAddress } from "./ssrf";
+import { isBlockedHost, resolveSafeAddress, safeFetchHttp } from "./ssrf";
 
 describe("SSRF host filtering", () => {
   beforeEach(() => {
@@ -18,6 +18,12 @@ describe("SSRF host filtering", () => {
     "192.168.1.1",
     "169.254.169.254",
     "[::1]",
+    "::",
+    "[fe81::1]",
+    "[febf::1]",
+    "[::ffff:127.0.0.1]",
+    "[0:0:0:0:0:ffff:169.254.169.254]",
+    "0.0.0.0",
     "localhost",
   ])("blocks private destination %s", (host) => {
     expect(isBlockedHost(host)).toBe(true);
@@ -25,6 +31,13 @@ describe("SSRF host filtering", () => {
 
   it("allows a public IP", () => {
     expect(isBlockedHost("8.8.8.8")).toBe(false);
+    expect(isBlockedHost("[::ffff:8.8.8.8]")).toBe(false);
+  });
+
+  it("rejects an IPv4-mapped loopback before opening an outbound request", async () => {
+    await expect(
+      safeFetchHttp("http://[::ffff:127.0.0.1]/health"),
+    ).rejects.toThrow("blocked host");
   });
 
   it("rejects a hostname when any DNS answer is private", async () => {

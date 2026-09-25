@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
 
 import { authClient } from "@/lib/auth-client";
+import { AuthSpinner } from "../../_components/auth-methods";
 
 export function ResetPasswordForm({
   token,
@@ -60,13 +61,13 @@ export function ResetPasswordForm({
 
   if (invalidLink) {
     return (
-      <div className="space-y-4">
+      <div className="auth-stagger space-y-4">
         <p className="text-sm leading-6 text-foreground">
           This password reset link is invalid or has expired.
         </p>
         <Link
           href="/forgot-password"
-          className="inline-block text-sm font-medium text-pine underline-offset-4 hover:underline"
+          className="inline-block text-sm font-medium text-foreground underline-offset-4 hover:underline"
         >
           Request a new reset link
         </Link>
@@ -75,7 +76,7 @@ export function ResetPasswordForm({
   }
 
   return (
-    <form className="space-y-7" onSubmit={resetPassword}>
+    <form className="auth-stagger space-y-6" onSubmit={resetPassword}>
       <div>
         <label
           htmlFor="new-password"
@@ -94,7 +95,7 @@ export function ResetPasswordForm({
             setError(null);
           }}
           placeholder="At least 8 characters"
-          className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
+          className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
         />
       </div>
 
@@ -116,18 +117,26 @@ export function ResetPasswordForm({
             setError(null);
           }}
           placeholder="Repeat your new password"
-          className="mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
+          className="auth-field mt-2 w-full border-0 border-b border-input bg-transparent pb-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-ring"
         />
       </div>
 
-      {error ? <p className="text-sm text-destructive">{error}</p> : null}
+      {error ? <p className="text-center text-sm text-danger-rust">{error}</p> : null}
 
       <button
         type="submit"
-        disabled={isPending || !password || !confirm || undefined}
-        className="w-full rounded-lg bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-pine-strong disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+        autoComplete="off"
+        disabled={isPending || !password || !confirm ? true : undefined}
+        className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-[var(--pine-strong)] disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
       >
-        {isPending ? "Updating…" : "Update password"}
+        {isPending ? (
+          <>
+            <AuthSpinner />
+            <span>Updating…</span>
+          </>
+        ) : (
+          <span>Update password</span>
+        )}
       </button>
     </form>
   );

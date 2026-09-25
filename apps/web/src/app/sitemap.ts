@@ -3,8 +3,9 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { db, jobs, organization, workspaceSettings } from "@harly/db";
 import { normalizeCareerPageConfig } from "@/features/career-page/config";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
-const origin = (process.env.HARLY_URL ?? process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const origin = getHarlyPublicOrigin();
 
 // Queries the DB at request time; must never be prerendered at build (no DB in
 // the image) — otherwise `next build` fails with ECONNREFUSED on :5432.

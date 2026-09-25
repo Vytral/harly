@@ -1,8 +1,15 @@
 import "server-only";
 
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
-import { activityEvents, db, notifications } from "@harly/db";
+import {
+  activityEvents,
+  db,
+  notifications,
+  signatureEnvelopes,
+  signatureEvents,
+  signatureRecipients,
+} from "@harly/db";
 
 const BATCH_SIZE = 200;
 
@@ -12,39 +19,56 @@ type ExpiredDocument = {
   name: string;
   ownerId: string | null;
   createdById: string | null;
+  signatureStatus: string;
+  signatureProvider: string | null;
+  signatureEnvelopeRefId: string | null;
 };
 
 /**
  * Flip documents whose real-world validity (`expiresAt`) has lapsed to
- * `signatureStatus: "expired"`. Only touches `unsigned`/`signed` documents —
- * `pending` is left alone (an in-flight DocuSeal envelope's own expiry is
- * handled by the webhook/reconciliation cron), and `declined`/`expired` are
- * already terminal. Bypasses the manual-edit immutability guard in
+ * `signatureStatus: "expired"`. Native signing links are included because
+ * their expiry is owned by Harly; an in-flight DocuSeal envelope's expiry is
+ * still owned by its webhook/reconciliation cron. Declined/expired documents
+ * are already terminal. Bypasses the manual-edit immutability guard in
  * `saveDocumentSignature` the same way the DocuSeal webhook does: this is a
  * system-driven transition, not a user edit.
  */
-export async function expireOverdueDocuments(): Promise<{ expired: number }> {
-  const rows = (await db.execute(sql`
+export async function expireOverdueDocuments(database: typeof db = db): Promise<{
+  expired: number;
+  documents: Array<{ workspaceId: string; documentId: string }>;
+}> {
+  const rows = await database.transaction(async (tx) => {
+    const rows = (await tx.execute(sql`
     with due as (
-      select "id" from "documents"
+      select "id", "workspace_id", "name", "owner_id", "created_by_id",
+        "signature_status", "signature_provider", "signature_envelope_ref_id"
+      from "documents"
       where "status" = 'active'
         and "expires_at" is not null
         and "expires_at" <= now()
-        and "signature_status" in ('unsigned', 'signed')
+        and (
+          "signature_status" in ('unsigned', 'signed')
+          or ("signature_status" = 'pending' and "signature_provider" = 'native')
+        )
       order by "expires_at" asc
       limit ${BATCH_SIZE}
+    ), updated as (
+      update "documents" as d
+      set "signature_status" = 'expired', "updated_at" = now()
+      from due
+      where d."id" = due."id"
+      returning d."id" as "id"
     )
-    update "documents" as d
-    set "signature_status" = 'expired', "updated_at" = now()
+    select due."id" as "id", due."workspace_id" as "workspaceId", due."name" as "name",
+      due."owner_id" as "ownerId", due."created_by_id" as "createdById",
+      due."signature_status" as "signatureStatus", due."signature_provider" as "signatureProvider",
+      due."signature_envelope_ref_id" as "signatureEnvelopeRefId"
     from due
-    where d."id" = due."id"
-    returning d."id" as "id", d."workspace_id" as "workspace_id", d."name" as "name",
-      d."owner_id" as "owner_id", d."created_by_id" as "created_by_id"
-  `)) as unknown as ExpiredDocument[];
+    inner join updated on updated."id" = due."id"
+    `)) as unknown as ExpiredDocument[];
 
-  if (rows.length === 0) return { expired: 0 };
+    if (rows.length === 0) return rows;
 
-  await db.transaction(async (tx) => {
     for (const doc of rows) {
       await tx.insert(activityEvents).values({
         workspaceId: doc.workspaceId,
@@ -54,6 +78,50 @@ export async function expireOverdueDocuments(): Promise<{ expired: number }> {
         type: "document.expired",
         metadata: { name: doc.name },
       });
+
+      if (
+        doc.signatureStatus === "pending" &&
+        doc.signatureProvider === "native" &&
+        doc.signatureEnvelopeRefId
+      ) {
+        const now = new Date();
+        const [envelope] = await tx
+          .update(signatureEnvelopes)
+          .set({
+            status: "voided",
+            voidedAt: now,
+            lastEventAt: now,
+            lastEventKey: `native:${doc.signatureEnvelopeRefId}:expired`,
+            updatedAt: now,
+          })
+          .where(and(
+            eq(signatureEnvelopes.id, doc.signatureEnvelopeRefId),
+            eq(signatureEnvelopes.workspaceId, doc.workspaceId),
+          ))
+          .returning({ id: signatureEnvelopes.id });
+        if (envelope) {
+          await tx
+            .update(signatureRecipients)
+            .set({ status: "expired", updatedAt: now })
+            .where(and(
+              eq(signatureRecipients.workspaceId, doc.workspaceId),
+              eq(signatureRecipients.envelopeId, doc.signatureEnvelopeRefId),
+              eq(signatureRecipients.status, "sent"),
+            ));
+          await tx
+            .insert(signatureEvents)
+            .values({
+              workspaceId: doc.workspaceId,
+              envelopeId: doc.signatureEnvelopeRefId,
+              eventKey: `native:${doc.signatureEnvelopeRefId}:expired`,
+              eventType: "envelope_expired",
+              generatedAt: now,
+              payload: { source: "native_expiry_cron", documentId: doc.id },
+              processedAt: now,
+            })
+            .onConflictDoNothing();
+        }
+      }
 
       const recipientId = doc.ownerId ?? doc.createdById;
       if (recipientId) {
@@ -75,7 +143,13 @@ export async function expireOverdueDocuments(): Promise<{ expired: number }> {
           });
       }
     }
+    return rows;
   });
 
-  return { expired: rows.length };
+  if (rows.length === 0) return { expired: 0, documents: [] };
+
+  return {
+    expired: rows.length,
+    documents: rows.map((row) => ({ workspaceId: row.workspaceId, documentId: row.id })),
+  };
 }

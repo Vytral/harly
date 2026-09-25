@@ -22,6 +22,7 @@ import {
   member as authMembers,
   offers,
   signatureEnvelopes,
+  signatureRecipients,
 } from "@harly/db";
 
 import { getDocumentAccessForUser } from "./access";
@@ -33,6 +34,9 @@ import { sendDocumentForEnvelope } from "@/lib/esign/document-signing";
 import { archiveSubmission, freshEsignContext } from "@/lib/esign/client";
 import { createLogger } from "@/lib/logger";
 import { storage } from "@/lib/storage";
+import { persistDomainEvent, publishPersistedDomainEvents } from "@/server/events/emit";
+import { documentAutomationContext } from "@/lib/esign/document-automation-context";
+import { WORKING_DOCUMENT_KIND } from "@/lib/esign/native/working-pdf";
 
 const log = createLogger("documents-actions");
 
@@ -618,10 +622,29 @@ export async function saveDocumentSignature(input: { documentId: string; status:
     parsed.data.status === "signed"
       ? { manualSignedById: context.user.id, manualSignedAt: new Date(), manualSignatureNote: attestationNote }
       : { manualSignedById: null, manualSignedAt: null, manualSignatureNote: null };
-  await db.transaction(async (tx) => {
+  const signatureChange = await db.transaction(async (tx) => {
     await tx.update(documents).set({ signatureStatus: parsed.data.status, signatureProvider: parsed.data.provider ?? null, signatureEnvelopeId: parsed.data.envelopeId ?? null, signatureUrl: parsed.data.url ?? null, expiresAt: parsed.data.expiresAt ? new Date(parsed.data.expiresAt) : null, ...manualAttestation }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
     await logDocumentActivity(tx, { workspaceId: context.organization.id, actorId: context.user.id, documentId: input.documentId, type: "document.signature_changed", metadata: { status: parsed.data.status, provider: parsed.data.provider ?? null, envelopeId: parsed.data.envelopeId ?? null, attestationNote: manualAttestation.manualSignatureNote } });
+    const targetContext = await documentAutomationContext(tx, context.organization.id, input.documentId);
+    const event = await persistDomainEvent(tx, {
+      name: "document.signature_changed",
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      aggregateType: "document",
+      aggregateId: input.documentId,
+      payload: { document: { id: input.documentId }, ...targetContext, status: parsed.data.status, provider: parsed.data.provider ?? undefined, envelopeId: parsed.data.envelopeId ?? undefined },
+    });
+    return { event, targetContext };
   });
+  await publishPersistedDomainEvents([signatureChange.event]);
+  const { emitWebhookEvent } = await import("@/server/webhooks/emit");
+  await emitWebhookEvent(context.organization.id, "document.signature_changed", {
+    document: { id: input.documentId },
+    ...signatureChange.targetContext,
+    status: parsed.data.status,
+    ...(parsed.data.provider ? { provider: parsed.data.provider } : {}),
+    ...(parsed.data.envelopeId ? { envelopeId: parsed.data.envelopeId } : {}),
+  }, { actorId: context.user.id, skipDomainEvent: true, eventId: signatureChange.event.eventId });
   revalidatePath("/dashboard/documents");
   return { ok: true };
 }
@@ -748,8 +771,92 @@ export async function voidDocumentSignature(input: {
   const archivedError = archivedDocumentError(access.document);
   if (archivedError) return { ok: false, error: archivedError };
   const document = access.document;
+  if (document.signatureProvider === "native") {
+    if (document.signatureStatus !== "pending") {
+      return { ok: false, error: "Only an in-progress native signature request can be voided." };
+    }
+    if (!document.signatureEnvelopeRefId) {
+      return { ok: false, error: "Could not resolve the native signing envelope." };
+    }
+    const signatureChange = await db.transaction(async (tx) => {
+      const [envelope] = await tx
+        .select({ id: signatureEnvelopes.id, status: signatureEnvelopes.status })
+        .from(signatureEnvelopes)
+        .where(and(eq(signatureEnvelopes.workspaceId, context.organization.id), eq(signatureEnvelopes.id, document.signatureEnvelopeRefId!)))
+        .for("update")
+        .limit(1);
+      if (!envelope || envelope.status !== "sent") {
+        throw new Error("This signature request is already complete.");
+      }
+      const [working] = await tx
+        .select({ id: signatureArtifacts.id, storageKey: signatureArtifacts.storageKey })
+        .from(signatureArtifacts)
+        .where(and(
+          eq(signatureArtifacts.workspaceId, context.organization.id),
+          eq(signatureArtifacts.envelopeId, envelope.id),
+          eq(signatureArtifacts.kind, WORKING_DOCUMENT_KIND),
+        ))
+        .limit(1);
+      const recipients = await tx
+        .select({ id: signatureRecipients.id })
+        .from(signatureRecipients)
+        .where(and(eq(signatureRecipients.envelopeId, envelope.id), eq(signatureRecipients.workspaceId, context.organization.id)));
+      for (const recipient of recipients) {
+        await tx.update(signatureRecipients).set({
+          status: "voided",
+          providerRecipientId: `native-voided:${recipient.id}`,
+          updatedAt: new Date(),
+        }).where(eq(signatureRecipients.id, recipient.id));
+      }
+      await tx.update(signatureEnvelopes).set({ status: "voided", voidedAt: new Date(), updatedAt: new Date() }).where(eq(signatureEnvelopes.id, envelope.id));
+      if (working) await tx.delete(signatureArtifacts).where(eq(signatureArtifacts.id, working.id));
+      await tx.update(documents).set({
+        signatureStatus: "unsigned",
+        signatureProvider: null,
+        signatureEnvelopeId: null,
+        signatureEnvelopeRefId: null,
+        signatureUrl: null,
+        expiresAt: null,
+        updatedAt: new Date(),
+      }).where(and(eq(documents.id, input.documentId), eq(documents.workspaceId, context.organization.id)));
+      await logDocumentActivity(tx, {
+        workspaceId: context.organization.id,
+        actorId: context.user.id,
+        documentId: input.documentId,
+        type: "document.signature_voided",
+        metadata: { provider: "native", envelopeId: envelope.id, reason: parsed.data.reason },
+      });
+      const targetContext = await documentAutomationContext(tx, context.organization.id, input.documentId);
+      const event = await persistDomainEvent(tx, {
+        name: "document.signature_voided",
+        workspaceId: context.organization.id,
+        actorId: context.user.id,
+        aggregateType: "document",
+        aggregateId: input.documentId,
+        payload: { document: { id: input.documentId }, ...targetContext, status: "unsigned", provider: "native", envelopeId: envelope.id, reason: parsed.data.reason },
+      });
+      return { event, targetContext, workingKey: working?.storageKey ?? null, envelopeId: envelope.id };
+    }).catch((error: unknown) => {
+      log.error({ error, documentId: input.documentId }, "voidDocumentSignature: native void failed");
+      return { error: error instanceof Error ? error.message : "Could not void the signature request." };
+    });
+    if ("error" in signatureChange) return { ok: false, error: signatureChange.error };
+    if (signatureChange.workingKey) await storage.delete(signatureChange.workingKey).catch(() => undefined);
+    await publishPersistedDomainEvents([signatureChange.event]);
+    const { emitWebhookEvent } = await import("@/server/webhooks/emit");
+    await emitWebhookEvent(context.organization.id, "document.signature_voided", {
+      document: { id: input.documentId },
+      ...signatureChange.targetContext,
+      status: "unsigned",
+      provider: "native",
+      envelopeId: signatureChange.envelopeId,
+      reason: parsed.data.reason,
+    }, { actorId: context.user.id, skipDomainEvent: true, eventId: signatureChange.event.eventId });
+    revalidatePath("/dashboard/documents");
+    return { ok: true };
+  }
   if (!isExternallyManagedSignatureProvider(document.signatureProvider)) {
-    return { ok: false, error: "This document is not part of a DocuSeal submission." };
+    return { ok: false, error: "This document is not part of a signature request that can be voided." };
   }
   if (document.signatureStatus === "signed") {
     return { ok: false, error: "Signed documents are immutable and cannot be voided." };
@@ -791,7 +898,7 @@ export async function voidDocumentSignature(input: {
     };
   }
 
-  await db.transaction(async (tx) => {
+  const signatureChange = await db.transaction(async (tx) => {
     await tx
       .update(documents)
       .set({ signatureStatus: "declined", updatedAt: new Date() })
@@ -803,7 +910,27 @@ export async function voidDocumentSignature(input: {
       type: "document.signature_voided",
       metadata: { provider: "docuseal", submissionId, reason: parsed.data.reason },
     });
+    const targetContext = await documentAutomationContext(tx, context.organization.id, input.documentId);
+    const event = await persistDomainEvent(tx, {
+      name: "document.signature_voided",
+      workspaceId: context.organization.id,
+      actorId: context.user.id,
+      aggregateType: "document",
+      aggregateId: input.documentId,
+      payload: { document: { id: input.documentId }, ...targetContext, status: "declined", provider: "docuseal", envelopeId: submissionId, reason: parsed.data.reason },
+    });
+    return { event, targetContext };
   });
+  await publishPersistedDomainEvents([signatureChange.event]);
+  const { emitWebhookEvent } = await import("@/server/webhooks/emit");
+  await emitWebhookEvent(context.organization.id, "document.signature_voided", {
+    document: { id: input.documentId },
+    ...signatureChange.targetContext,
+    status: "declined",
+    provider: "docuseal",
+    envelopeId: submissionId,
+    reason: parsed.data.reason,
+  }, { actorId: context.user.id, skipDomainEvent: true, eventId: signatureChange.event.eventId });
   revalidatePath("/dashboard/documents");
   return { ok: true };
 }

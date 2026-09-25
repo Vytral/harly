@@ -39,4 +39,15 @@ describe("domain event registry", () => {
     ).toThrow();
     expect(isDomainEventName("not-a-domain-event")).toBe(false);
   });
+
+  it("requires a document identity and status for signature lifecycle events", () => {
+    expect(assertDomainEventPayload(DOMAIN_EVENTS.DOCUMENT_SIGNATURE_CHANGED, {
+      document: { id: "document-1" },
+      status: "signed",
+      provider: "native",
+    })).toMatchObject({ document: { id: "document-1" }, status: "signed" });
+    expect(() => assertDomainEventPayload(DOMAIN_EVENTS.DOCUMENT_SIGNATURE_CHANGED, {
+      document: { id: "document-1" },
+    })).toThrow();
+  });
 });

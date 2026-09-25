@@ -90,6 +90,7 @@ describe("jobFormSchema", () => {
       salaryMin: 100000,
       salaryMax: 200000,
       currency: "USD",
+      salaryPeriod: "annual",
     });
 
     expect(result.success).toBe(true);
@@ -128,6 +129,33 @@ describe("jobFormSchema", () => {
     if (result.success) {
       expect(result.data.title).toBe("Senior Engineer");
     }
+  });
+
+  it("rejects salary min greater than max", () => {
+    const result = jobFormSchema.safeParse({
+      title: "Senior Engineer",
+      employmentType: "full_time",
+      workplaceType: "remote",
+      description: "We are looking for a senior engineer to join our team.",
+      salaryMin: 200000,
+      salaryMax: 100000,
+      currency: "USD",
+      salaryPeriod: "annual",
+    });
+
+    expect(result.success).toBe(false);
+  });
+
+  it("requires currency and period when a salary amount is set", () => {
+    const result = jobFormSchema.safeParse({
+      title: "Senior Engineer",
+      employmentType: "full_time",
+      workplaceType: "remote",
+      description: "We are looking for a senior engineer to join our team.",
+      salaryMin: 100000,
+    });
+
+    expect(result.success).toBe(false);
   });
 
   it("rejects negative salary", () => {

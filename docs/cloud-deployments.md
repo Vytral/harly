@@ -2,8 +2,8 @@
 
 Two ways to run Harly on a managed platform: click a **Deploy** button (Render,
 DigitalOcean — provisions everything from a spec file in this repo, no local
-tooling needed), or run `npx @harly/cli` (Railway, Fly.io — the wizard writes
-independent secrets and drives the platform's API/CLI for you). Vercel is not
+tooling needed), or run `npx @harly/cli` (Railway, Fly.io — the wizard drives
+the platform's API/CLI for you). Vercel is not
 supported: Harly's scheduler needs a persistent background process, which
 serverless functions can't provide.
 
@@ -39,12 +39,19 @@ provisions a dev PostgreSQL database, the `web` service, the `scheduler`
 worker, and a `migrate` pre-deploy job from the pinned GHCR image, prompting
 for the SECRET-type variables (S3 credentials, runtime secrets) inline.
 
+For automation without the button, use the same spec with `doctl`:
+
+```bash
+doctl apps create --spec .do/app.yaml
+doctl apps update APP_ID --spec .do/app.yaml
+```
+
 For a production-grade database, edit the `databases` entry in
 `.do/app.yaml` to reference an existing DigitalOcean Managed PostgreSQL
 cluster (`production: true`, `cluster_name: ...`) before deploying, or
 migrate to one afterward. A manual, placeholder-based copy of the same spec
 is at [`deploy/digitalocean/app.template.yaml`](../deploy/digitalocean/app.template.yaml)
-for `doctl apps create --spec`. App Platform storage is ephemeral, so S3 is
+for reference. App Platform storage is ephemeral, so S3 is
 mandatory; the runtime image must stay `linux/amd64`, which App Platform
 requires.
 
@@ -57,6 +64,12 @@ dashboard never shows them again, and the only recovery is setting a new
 value and redeploying.
 
 ## Railway
+
+Railway automatically reads [`railway.toml`](../railway.toml) when deploying a
+service from this repository. It configures the Harly web container and
+readiness check, but Railway Config as Code is intentionally limited to one
+service's build/deploy settings. It is not equivalent to the full
+multi-service `.do/app.yaml` or `render.yaml`.
 
 Run `npx @harly/cli` and choose **Deploy on Railway**. For automation, use:
 

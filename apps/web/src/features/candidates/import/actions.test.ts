@@ -179,7 +179,7 @@ describe("importCandidatesAction", () => {
         application: expect.objectContaining({ id: "cand-new" }),
         source: "csv_import",
       }),
-      { actorId: "user-1", skipDomainEvent: true },
+      expect.objectContaining({ actorId: "user-1", skipDomainEvent: true }),
     );
   });
 

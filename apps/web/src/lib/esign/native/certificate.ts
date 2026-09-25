@@ -8,6 +8,7 @@ export type CompletionCertificateInput = {
   documentName: string;
   signerName: string;
   signerEmail: string | null;
+  signers?: Array<{ name: string; email: string | null; signedAt: Date | null }>;
   signedAt: Date;
   originalSha256: string;
   signedDocumentSha256: string;
@@ -45,6 +46,9 @@ export async function createCompletionCertificate(
   field("DOCUMENT", input.documentName);
   field("SIGNED BY", input.signerName);
   field("EMAIL", input.signerEmail);
+  if (input.signers && input.signers.length > 1) {
+    field("ALL SIGNERS", input.signers.map((signer, index) => `${index + 1}. ${signer.name} <${signer.email ?? "—"}>`).join(" | "));
+  }
   field("SIGNED AT (UTC)", input.signedAt.toISOString());
   field("VERIFICATION METHOD", input.verification);
 

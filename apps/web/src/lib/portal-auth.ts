@@ -373,10 +373,18 @@ export async function consumeMagicLinkToken(
     .where(eq(candidatePortalMagicLinks.tokenHash, tokenHash))
     .limit(1);
   if (!row || row.usedAt || row.expiresAt < now) return null;
-  await db
+  const [consumed] = await db
     .update(candidatePortalMagicLinks)
     .set({ usedAt: now })
-    .where(eq(candidatePortalMagicLinks.id, row.id));
+    .where(
+      and(
+        eq(candidatePortalMagicLinks.id, row.id),
+        isNull(candidatePortalMagicLinks.usedAt),
+        gt(candidatePortalMagicLinks.expiresAt, now),
+      ),
+    )
+    .returning({ id: candidatePortalMagicLinks.id });
+  if (!consumed) return null;
   return { email: row.email, workspaceId: row.workspaceId };
 }
 

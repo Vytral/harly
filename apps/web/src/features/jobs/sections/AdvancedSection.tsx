@@ -3,10 +3,21 @@ import { MapPin, X } from "lucide-react";
 
 import type { Job } from "@harly/db";
 
-import { FieldBox, fieldBoxControlClassName } from "@/components/ui/field-box";
+import {
+  FieldBox,
+  fieldBoxControlClassName,
+  fieldBoxSelectTriggerClassName,
+} from "@/components/ui/field-box";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export function AdvancedSection({
   job,
@@ -84,6 +95,27 @@ export function AdvancedSection({
             placeholder="Not required / Bachelor's"
             className={fieldBoxControlClassName}
           />
+        </FieldBox>
+
+        <FieldBox
+          className="sm:col-span-2"
+          label="AI evaluation style"
+          htmlFor="evaluationMode"
+          hint="Controls how strictly missing or teachable requirements affect recommendations."
+        >
+          <Select
+            name="evaluationMode"
+            defaultValue={job?.evaluationMode ?? "balanced"}
+          >
+            <SelectTrigger id="evaluationMode" className={fieldBoxSelectTriggerClassName}>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="relaxed">Relaxed · transferable skills</SelectItem>
+              <SelectItem value="balanced">Balanced · recommended</SelectItem>
+              <SelectItem value="strict">Strict · hard requirements</SelectItem>
+            </SelectContent>
+          </Select>
         </FieldBox>
       </div>
 

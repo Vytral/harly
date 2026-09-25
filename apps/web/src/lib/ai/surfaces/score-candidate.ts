@@ -7,16 +7,23 @@ import { recordAiUsage } from "@/lib/ai/usage";
 import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
 import { candidateScoreSchema, type CandidateScore } from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
+import type { EvaluationMode } from "@/lib/evaluation/mode";
 
 const SYSTEM_PROMPT =
   "You are a rigorous recruiting analyst. Score how well a candidate fits a " +
   "specific job using ONLY the evidence provided , never invent experience. " +
-  "Be calibrated and willing to score low: 80-100 exceptional fit, 60-79 solid, " +
-  "40-59 partial, 0-39 weak. `criteria` must contain 3-6 job-derived dimensions " +
-  "(e.g. core skills, seniority, domain experience), each scored 0-100 with a " +
-  "short evidence quote or null when nothing supports it. `strengths` and `gaps` " +
+  "Be conservative and willing to score low. This is an absolute fit score, not a " +
+  "percentile: 85-100 exceptional, 70-84 good, 45-69 mixed or incomplete, " +
+  "0-44 weak. A candidate cannot be exceptional when a required job criterion is " +
+  "missing, contradicted, or unverifiable. Missing information is a gap and must " +
+  "reduce the score; never average only the evidence that happens to exist. " +
+  "`criteria` must contain 3-6 job-derived dimensions (including the most important " +
+  "requirements), each scored 0-100 with a short exact evidence quote or null when " +
+  "nothing supports it. `strengths` and `gaps` " +
   "are concise bullet phrases. `summary` is 2-3 plain sentences for a recruiter. " +
-  "Missing information is a gap, not a guess." + "\n\n" + UNTRUSTED_DATA_GUARDRAIL;
+  "Include specific missing or unverified requirements in `gaps`. Use `strong_yes` " +
+  "only for an exceptional fit with strong evidence across the job's core criteria; " +
+  "use `maybe` or `no` when evidence is incomplete." + "\n\n" + UNTRUSTED_DATA_GUARDRAIL;
 
 export type ScoreCandidateInput = {
   job: {
@@ -27,6 +34,7 @@ export type ScoreCandidateInput = {
     experienceLevel: string | null;
     education: string | null;
     keywords: string[];
+    evaluationMode?: EvaluationMode;
   };
   candidate: {
     fullName: string;
@@ -56,6 +64,7 @@ export async function scoreCandidateWithAI(
   input: ScoreCandidateInput,
 ): Promise<CandidateScore> {
   const { job, candidate } = input;
+  const mode = job.evaluationMode ?? "balanced";
 
   const jobBlock = [
     `Title: ${job.title}`,
@@ -99,7 +108,7 @@ export async function scoreCandidateWithAI(
   const result = await generateText({
     model: getModel(config),
     system: SYSTEM_PROMPT,
-    prompt: `Score this candidate against this job.\n\n## Job\n${jobBlock}\n\n## Candidate\n${candidateBlock}`,
+    prompt: `Score this candidate against this job using the ${mode} evaluation style.\n\nEvaluation style guidance:\n- relaxed: value transferable skills and reasonable trainability; a teachable gap should not automatically prevent a yes.\n- balanced: weigh direct evidence most heavily, but allow one or two teachable gaps for a yes.\n- strict: treat missing or unverified required criteria as blockers.\n\n## Job\n${jobBlock}\n\n## Candidate\n${candidateBlock}`,
     output: Output.object({
       schema: candidateScoreSchema,
       name: "candidate_fit_evaluation",
@@ -123,14 +132,36 @@ export async function scoreCandidateWithAI(
 
   const clamp = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 
+  const criteria = output.criteria.slice(0, 6).map((c) => ({
+    ...c,
+    score: clamp(c.score),
+  }));
+  const evidenceCoverage = criteria.length === 0
+    ? 0
+    : criteria.filter((criterion) => criterion.evidence?.trim()).length / criteria.length;
+  const gapCount = output.gaps.filter((gap) => gap.trim()).length;
+  const evidenceCap = evidenceCoverage < 0.5 ? 59 : evidenceCoverage < 0.8 ? 79 : 100;
+  const calibratedScore = Math.min(clamp(output.score), evidenceCap);
+  const thresholds = {
+    relaxed: { strong: 85, yes: 65, coverageStrong: 60, coverageYes: 40, maxGapsStrong: 2, maxGapsYes: 4 },
+    balanced: { strong: 85, yes: 70, coverageStrong: 80, coverageYes: 60, maxGapsStrong: 1, maxGapsYes: 3 },
+    strict: { strong: 90, yes: 80, coverageStrong: 90, coverageYes: 80, maxGapsStrong: 0, maxGapsYes: 1 },
+  }[mode];
+  const recommendation =
+    calibratedScore >= thresholds.strong && evidenceCoverage * 100 >= thresholds.coverageStrong && gapCount <= thresholds.maxGapsStrong
+      ? "strong_yes"
+      : calibratedScore >= thresholds.yes && evidenceCoverage * 100 >= thresholds.coverageYes && gapCount <= thresholds.maxGapsYes
+        ? "yes"
+        : calibratedScore >= 45
+          ? "maybe"
+          : "no";
+
   return {
     ...output,
-    score: clamp(output.score),
+    score: calibratedScore,
+    recommendation,
     strengths: output.strengths.slice(0, 8),
     gaps: output.gaps.slice(0, 8),
-    criteria: output.criteria.slice(0, 6).map((c) => ({
-      ...c,
-      score: clamp(c.score),
-    })),
+    criteria,
   };
 }

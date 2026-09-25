@@ -33,7 +33,7 @@ export default async function SettingsLayout({
         </p>
       </div>
       <div className="grid gap-6 lg:grid-cols-[248px_minmax(0,1fr)] xl:gap-8">
-        <aside className="lg:sticky lg:top-20 lg:self-start">
+        <aside className="lg:sticky lg:top-20 lg:max-h-[calc(100vh-6rem)] lg:self-start lg:overflow-y-auto scrollbar-hide">
           <SettingsNav deniedHrefs={deniedHrefs} />
         </aside>
         <div className="min-w-0">{children}</div>

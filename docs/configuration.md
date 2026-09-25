@@ -67,7 +67,10 @@ The scheduler calls these private endpoints with
 
 - `POST /api/cron/email-outbox` every 60 seconds
 - `POST /api/cron/domain-events` every 15 seconds (replay committed realtime events after a failed fast publish)
-- `POST /api/cron/webhooks/dispatch` every 60 seconds
+- `POST /api/cron/automations` every 10 seconds where supported, or every 60 seconds as a declared fallback (drain v1/v2 workflow runs, retries, waits, and lease recovery)
+- `POST /api/cron/webhooks/dispatch` every 60 seconds (webhook and chat delivery only)
+- `POST /api/cron/esign-reminders` every 60 minutes (native signing reminders,
+  at most one per recipient per day)
 - `POST /api/cron/interview-sync` every 60 seconds
 - `POST /api/cron/mailbox-sync` every 120 seconds
 - `POST /api/cron/mail-reconciliation` every 60 seconds

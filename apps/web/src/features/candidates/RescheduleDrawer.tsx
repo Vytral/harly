@@ -17,12 +17,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SidePanel } from "@/components/ui/side-panel";
+import {
+  getBrowserTimeZone,
+  parseScheduledAt,
+} from "@/features/interviews/shared";
 
 const DURATIONS = [30, 45, 60, 90] as const;
 
 export function RescheduleDrawer({
   interviewId,
-  candidateId,
   currentScheduledAt,
   currentDurationMins,
   currentLocation,
@@ -57,7 +60,8 @@ export function RescheduleDrawer({
     }
     setCheckingAvailability(true);
     try {
-      const start = new Date(`${newDate}T${newTime}`);
+      const timeZone = getBrowserTimeZone();
+      const start = parseScheduledAt(`${newDate}T${newTime}`, timeZone);
       const end = new Date(start.getTime() + Number(duration) * 60_000);
       const result = await checkAvailability({ timeMin: start, timeMax: end, excludeInterviewId: interviewId });
       if (result.gcalBusy.length > 0) {
@@ -80,10 +84,11 @@ export function RescheduleDrawer({
       return;
     }
     startTransition(async () => {
+      const timeZone = getBrowserTimeZone();
       const result = await rescheduleInterview({
         interviewId,
-        candidateId,
         scheduledAt: `${date}T${time}`,
+        timeZone,
         durationMins: Number(durationMins),
         location: location.trim() || null,
       });
@@ -91,6 +96,7 @@ export function RescheduleDrawer({
         toast.error(result.error ?? "Could not reschedule.");
         return;
       }
+      if (result.warning) toast.warning(result.warning);
       toast.success("Interview rescheduled");
       setOpen(false);
       router.refresh();

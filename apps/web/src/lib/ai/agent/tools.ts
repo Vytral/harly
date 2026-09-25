@@ -45,7 +45,12 @@ import {
 } from "@/features/interviews/actions";
 import { getNextStage } from "@/features/pipeline/data";
 import { getIntegrationStatuses } from "@/features/workspaces/integrations-registry";
-import { getCurrentPermissions } from "@/features/workspaces/permissions-server";
+import {
+  getCurrentPermissions,
+  requireActorPermission,
+} from "@/features/workspaces/permissions-server";
+import type { Permission } from "@/features/workspaces/permissions";
+import { isToolAllowed } from "./tool-permissions";
 import { searchHarlyProductKnowledge } from "@/lib/ai/knowledge/harly-product-knowledge";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { listAgentActionReceipts } from "./action-receipts";
@@ -58,6 +63,57 @@ import {
   prepareInterviewScheduling,
   type MeetingProviderChoice,
 } from "./interview-preparation";
+import {
+  getAutomationAiContext,
+  getAutomationSubgraph,
+  nextStepAfterAutomationSimulation,
+  prepareAutomationProposal,
+  searchAutomationAiWorkflows,
+  simulateAutomationProposal,
+} from "@/features/automations/ai-proposals";
+import {
+  enqueueAutomationAiJob,
+  getAutomationAiJob,
+} from "@/features/automations/ai-jobs";
+import {
+  listAutomationToolManifests,
+  listAutomationToolManifestsV2,
+} from "@/features/automations/registry";
+import { resolveAutomationResources } from "@/features/automations/resource-resolution";
+import {
+  compilePlanToGraph,
+  applyPatchToGraph,
+  automationPlanV1Schema,
+  automationPatchV1Schema,
+  type OperationalPolicyPatch,
+} from "@/features/automations/definition/plan-compiler";
+import { rebaseAutomationPatch } from "@/features/automations/definition/subgraph";
+import { semanticGraphHash } from "@/features/automations/definition/hash";
+import {
+  emptyCanvasGraph,
+  editorLayoutSchema,
+  emptyLayout,
+  parseGraph,
+} from "@/features/automations/definition/schema-v2";
+import {
+  getWorkflowRunDiagnosis,
+  prepareAutomationRepair,
+} from "@/features/automations/run-repair";
+import { SIMULATION_SCENARIOS } from "@/features/automations/simulation-coverage";
+import type { SimulationScenario } from "@/features/automations/simulation-coverage";
+
+const simulationScenarioSchema = z.enum(
+  [...SIMULATION_SCENARIOS] as [SimulationScenario, ...SimulationScenario[]],
+);
+const simulationConditionContextSchema = z
+  .object({
+    workspaceId: z.string().max(200).optional(),
+    candidate: z.record(z.string(), z.unknown()).nullable().optional(),
+    application: z.record(z.string(), z.unknown()).nullable().optional(),
+    job: z.record(z.string(), z.unknown()).nullable().optional(),
+    ai: z.record(z.string(), z.unknown()).nullable().optional(),
+  })
+  .partial();
 
 /**
  * Context the tools run under. The cached widget/data fns resolve the workspace
@@ -67,11 +123,52 @@ import {
 export type HarlyToolContext = {
   workspaceId: string;
   userId: string;
+  permissions?: Permission[];
   /** Candidate visible on the current dashboard surface, if any. */
   activeCandidateId?: string;
   /** Candidate ids selected through the current chat's @mention picker. */
   mentionedCandidateIds?: string[];
+  /** Immutable editor snapshot supplied by the Automations panel, if open. */
+  activeAutomation?: {
+    workflowId?: string | null;
+    draftRevision?: number;
+    serverContentHash?: string;
+    localSnapshotHash?: string;
+    contentHash?: string;
+    selectedNodeId?: string;
+    validationIssues?: Array<{
+      nodeId: string;
+      fieldPath: string;
+      message: string;
+    }>;
+    activeTab?: "build" | "test" | "runs";
+    sampleScenario?: string;
+    isNew?: boolean;
+    isUnsaved?: boolean;
+    /**
+     * The user's actual unsaved WorkflowGraphV2, present only while
+     * isUnsaved is true (D5). Verified server-side against `contentHash`
+     * before use — the client's claimed hash is never trusted blindly.
+     */
+    graph?: unknown;
+    layout?: unknown;
+  };
 };
+
+async function assertToolPermission(
+  ctx: HarlyToolContext,
+  permission: Permission,
+): Promise<void> {
+  if (ctx.permissions) {
+    if (!ctx.permissions.includes(permission)) {
+      throw new Error(
+        `You do not have permission to perform this action (${permission}).`,
+      );
+    }
+    return;
+  }
+  await requireActorPermission(ctx.workspaceId, ctx.userId, permission);
+}
 
 /** Cap a string field so large blobs don't blow up the model context. */
 function clip(value: string | null | undefined, max: number): string | null {
@@ -106,6 +203,111 @@ function evidence(
 }
 
 /**
+ * Returns the caller's local, unsaved graph ONLY when it is genuinely usable
+ * as evidence (D5): the active automation is the one being asked about, the
+ * client reported unsaved edits, a graph snapshot was actually sent, it
+ * parses as a valid WorkflowGraphV2, and its semantic hash matches the
+ * `contentHash` the client itself claimed. That last check means the client
+ * can never smuggle a graph that doesn't match its own declared hash — the
+ * server independently verifies it rather than trusting the claim.
+ */
+export function resolveVerifiedLocalGraph(
+  ctx: HarlyToolContext,
+  workflowId: string,
+): { graph: ReturnType<typeof parseGraph>; contentHash: string } | null {
+  const active = ctx.activeAutomation;
+  if (!active || active.workflowId !== workflowId) return null;
+  const claimedHash = active.localSnapshotHash ?? active.contentHash;
+  if (!active.isUnsaved || !active.graph || !claimedHash) return null;
+  let graph: ReturnType<typeof parseGraph>;
+  try {
+    graph = parseGraph(active.graph);
+  } catch {
+    return null;
+  }
+  const actualHash = semanticGraphHash(graph);
+  if (actualHash !== claimedHash) return null;
+  return { graph, contentHash: actualHash };
+}
+
+const automationResourceTypeSchema = z.enum([
+  "stage",
+  "member",
+  "email_template",
+  "document_template",
+  "document",
+  "webhook_secret",
+  "webhook_endpoint",
+  "interview",
+  "offer",
+  "cal_event_type",
+  "integration",
+  "job",
+]);
+
+const automationResourceRequestSchema = z.object({
+  resourceType: automationResourceTypeSchema,
+  query: z.string().trim().max(100).nullable(),
+  jobId: z.string().uuid().nullable(),
+  limit: z.number().int().min(1).max(50).nullable(),
+  cursor: z.string().trim().max(200).nullable(),
+});
+
+/**
+ * Keep this as one object rather than a union. OpenAI's strict function
+ * schemas reject a top-level Zod union as `type: None`, which prevented the
+ * real provider from seeing any Automations tools. `requests: null` means a
+ * single lookup; `resourceType: null` means a batch lookup.
+ */
+const resolveAutomationResourcesInputSchema = z.object({
+  resourceType: automationResourceTypeSchema
+    .nullable()
+    .describe("Resource type for one lookup, or null when using requests."),
+  query: z
+    .string()
+    .trim()
+    .max(100)
+    .nullable()
+    .describe("Search query, or null."),
+  jobId: z
+    .string()
+    .uuid()
+    .nullable()
+    .describe("Context job ID when resolving stages, or null."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(50)
+    .nullable()
+    .describe("Max items, or null."),
+  cursor: z
+    .string()
+    .trim()
+    .max(200)
+    .nullable()
+    .describe("Opaque pagination cursor returned by a previous lookup, or null."),
+  requests: z
+    .array(automationResourceRequestSchema)
+    .min(1)
+    .max(12)
+    .nullable()
+    .describe("Batch requests, or null for a single lookup."),
+});
+
+function safeAutomationToolError(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message.slice(0, 600);
+  }
+  if (typeof error === "object" && error !== null && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim())
+      return message.slice(0, 600);
+  }
+  return "The automation operation failed without a recoverable diagnostic.";
+}
+
+/**
  * Build the Harly AI READ tool set for a request.
  *
  * Every tool wraps an existing data/widget function (already workspace-scoped)
@@ -113,7 +315,7 @@ function evidence(
  * `write-tools.ts` and are merged in `buildHarlyTools`.
  */
 function buildReadTools(ctx: HarlyToolContext) {
-  return {
+  const tools = {
     workspaceCapabilities: tool({
       strict: true,
       description:
@@ -128,6 +330,669 @@ function buildReadTools(ctx: HarlyToolContext) {
       }),
     }),
 
+    listAutomationTools: tool({
+      strict: true,
+      description:
+        "List Harly automation tools, their supported versions, safe inputs/outputs, permissions, integration requirements, and simulation capability. Use before proposing an automation; never invent tool ids, versions, or provider capabilities.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        await assertToolPermission(ctx, "automations:manage");
+        try {
+          return {
+            ...evidence("automation tool registry"),
+            tools: listAutomationToolManifests(),
+            toolsV2: listAutomationToolManifestsV2(),
+          };
+        } catch (error) {
+          return {
+            ...evidence("automation tool registry unavailable"),
+            ok: false as const,
+            error: safeAutomationToolError(error),
+          };
+        }
+      },
+    }),
+
+    getAutomationContext: tool({
+      strict: true,
+      description:
+        "Read one workspace automation draft and its revision/hash, graph, validation issues, and available tool contracts. Use before modifying an existing automation. Never infer a workflow id from its name; use searchAutomations or an explicit id. For large workflows pass nodeIds/depth/cursor/limit to also receive a paginated subgraph slice with its own hash.",
+      inputSchema: z.object({
+        workflowId: z
+          .string()
+          .uuid()
+          .nullable()
+          .describe(
+            "The workflow ID to inspect, or null to use active automation.",
+          ),
+        nodeIds: z
+          .array(z.string().min(1).max(80))
+          .max(200)
+          .nullable()
+          .describe("Focus node IDs for a subgraph slice, or null for the whole draft."),
+        depth: z
+          .number()
+          .int()
+          .min(0)
+          .max(5)
+          .nullable()
+          .describe("Neighborhood hops around nodeIds, or null."),
+        cursor: z.string().max(200).nullable(),
+        limit: z.number().int().min(1).max(100).nullable(),
+      }),
+      execute: async ({ workflowId, nodeIds, depth, cursor, limit }) => {
+        await assertToolPermission(ctx, "automations:manage");
+        const resolvedWorkflowId =
+          workflowId ?? ctx.activeAutomation?.workflowId;
+        if (!resolvedWorkflowId) {
+          throw new Error(
+            "Choose an automation with searchAutomations before reading its draft.",
+          );
+        }
+        const serverContext = await getAutomationAiContext({
+          workspaceId: ctx.workspaceId,
+          actorId: ctx.userId,
+          workflowId: resolvedWorkflowId,
+          permissions: ctx.permissions,
+          nodeIds: nodeIds ?? undefined,
+          depth: depth ?? undefined,
+          cursor: cursor ?? undefined,
+          limit: limit ?? undefined,
+        });
+        const verifiedLocal = resolveVerifiedLocalGraph(
+          ctx,
+          resolvedWorkflowId,
+        );
+        return {
+          ...evidence("current automation draft", [], resolvedWorkflowId),
+          ...serverContext,
+          ...(verifiedLocal
+            ? {
+                graph: verifiedLocal.graph,
+                graphSource: "local_unsaved_edits" as const,
+                graphSourceNote:
+                  "This graph is the user's current unsaved editor state, verified against its own content hash. It reflects edits the user has NOT saved yet and may differ from the last-published or last-saved version.",
+              }
+            : {
+                graphSource: "server_saved_draft" as const,
+              }),
+          ...(ctx.activeAutomation?.workflowId === resolvedWorkflowId
+            ? {
+                selectedNodeId: ctx.activeAutomation.selectedNodeId,
+                activeTab: ctx.activeAutomation.activeTab,
+                sampleScenario: ctx.activeAutomation.sampleScenario,
+                validationIssues: ctx.activeAutomation.validationIssues,
+                serverContentHash: ctx.activeAutomation.serverContentHash,
+                localSnapshotHash: ctx.activeAutomation.localSnapshotHash,
+              }
+            : {}),
+        };
+      },
+    }),
+
+    getAutomationSubgraph: tool({
+      strict: true,
+      description:
+        "Read a deterministic, paginated automation subgraph with revision, server hash, subgraph hash, nodes, and internal edges. Use this before editing a large workflow or before rebasing a patch; the hash is the formal concurrency anchor. Pass depth to expand nodeIds by graph neighborhood instead of enumerating every id.",
+      inputSchema: z.object({
+        workflowId: z.string().uuid().nullable(),
+        nodeIds: z
+          .array(z.string().min(1).max(80))
+          .max(200)
+          .nullable()
+          .describe("Focus node IDs, or null for the whole workflow."),
+        depth: z
+          .number()
+          .int()
+          .min(0)
+          .max(5)
+          .nullable()
+          .describe("Neighborhood hops around nodeIds, or null."),
+        cursor: z.string().max(200).nullable(),
+        limit: z.number().int().min(1).max(100).nullable(),
+      }),
+      execute: async ({ workflowId, nodeIds, depth, cursor, limit }) => {
+        await assertToolPermission(ctx, "automations:manage");
+        const resolvedWorkflowId = workflowId ?? ctx.activeAutomation?.workflowId;
+        if (!resolvedWorkflowId) {
+          throw new Error("Choose an automation before reading a subgraph.");
+        }
+        return {
+          ...evidence("automation subgraph", [], resolvedWorkflowId),
+          ...(await getAutomationSubgraph({
+            workspaceId: ctx.workspaceId,
+            actorId: ctx.userId,
+            workflowId: resolvedWorkflowId,
+            nodeIds: nodeIds ?? undefined,
+            depth: depth ?? undefined,
+            cursor: cursor ?? undefined,
+            limit: limit ?? undefined,
+            permissions: ctx.permissions,
+          })),
+        };
+      },
+    }),
+
+    searchAutomations: tool({
+      strict: true,
+      description:
+        "Search automations in the current workspace and return compact ids, names, state, and update time. Use this to resolve an existing automation before getAutomationContext; never choose among ambiguous matches without asking the user.",
+      inputSchema: z.object({
+        query: z
+          .string()
+          .trim()
+          .max(120)
+          .nullable()
+          .describe("Filter by name or description, or null."),
+        limit: z
+          .number()
+          .int()
+          .min(1)
+          .max(25)
+          .nullable()
+          .describe("Max results (1-25), or null."),
+      }),
+      execute: async ({ query, limit }) => {
+        await assertToolPermission(ctx, "automations:manage");
+        return {
+          ...evidence("workspace automation search"),
+          workflows: await searchAutomationAiWorkflows({
+            workspaceId: ctx.workspaceId,
+            actorId: ctx.userId,
+            query: query ?? undefined,
+            limit: limit ?? undefined,
+            permissions: ctx.permissions,
+          }),
+        };
+      },
+    }),
+
+    resolveAutomationResources: tool({
+      strict: true,
+      description:
+        "Resolve real workspace entities (stages, active team members, email templates, document templates, active documents, interviews, offers, configured Cal.com event types, secret names, webhook endpoints, email delivery, meeting providers, and connected integrations) for configuring automation actions. Use requests to resolve several resources in one call when a workflow needs multiple IDs. NEVER invent entity IDs or secret names. Never returns secret values.",
+      inputSchema: resolveAutomationResourcesInputSchema,
+      execute: async (input) => {
+        await assertToolPermission(ctx, "automations:manage");
+        if (input.requests) {
+          return {
+            ...evidence("automation resources: batch"),
+            resources: await Promise.all(
+              input.requests.map((request) =>
+                resolveAutomationResources({
+                  workspaceId: ctx.workspaceId,
+                  actorId: ctx.userId,
+                  resourceType: request.resourceType,
+                  query: request.query ?? undefined,
+                  jobId: request.jobId ?? undefined,
+                  limit: request.limit ?? undefined,
+                  cursor: request.cursor ?? undefined,
+                  permissions: ctx.permissions,
+                }),
+              ),
+            ),
+          };
+        }
+        if (!input.resourceType) {
+          throw new Error(
+            "Provide resourceType for a single lookup or requests for a batch lookup.",
+          );
+        }
+        return {
+          ...evidence(`automation resources: ${input.resourceType}`),
+          ...(await resolveAutomationResources({
+            workspaceId: ctx.workspaceId,
+            actorId: ctx.userId,
+            resourceType: input.resourceType,
+            query: input.query ?? undefined,
+            jobId: input.jobId ?? undefined,
+            limit: input.limit ?? undefined,
+            cursor: input.cursor ?? undefined,
+            permissions: ctx.permissions,
+          })),
+        };
+      },
+    }),
+
+    prepareAutomationPatch: tool({
+      description:
+        "Prepare a reviewable automation proposal. Prefer compact patch operations (addNode, configureNode, removeNode, connect/disconnect, replaceSubgraph, rename, description, setOperationalPolicy, or autoLayoutSubset) for edits to an existing workflow; use the full graph form for a new or wholesale graph. This does not save a draft, publish, execute nodes, send messages, or call providers. Existing workflows require the revision and content hash returned by getAutomationContext unless the active Builder context supplies them. After this, call simulateAutomationProposal and then propose applyAutomationProposal for human confirmation.",
+      inputSchema: z
+        .object({
+          workflowId: z
+            .string()
+            .uuid()
+            .nullable()
+            .describe(
+              "Workflow ID if updating an existing workflow, or null for new.",
+            ),
+          expectedRevision: z
+            .number()
+            .int()
+            .positive()
+            .nullable()
+            .describe("Draft revision expected, or null for new."),
+          expectedContentHash: z
+            .string()
+            .length(64)
+            .nullable()
+            .describe("Content hash expected, or null for new."),
+          name: z.string().trim().min(1).max(120),
+          description: z
+            .string()
+            .max(2000)
+            .nullable()
+            .describe("Workflow description, or null."),
+          graph: z
+            .record(z.string(), z.unknown())
+            .optional()
+            .describe(
+              "Complete WorkflowGraphV2 definition. Omit when using patch.",
+            ),
+          patch: automationPatchV1Schema
+            .optional()
+            .describe("Compact graph edit operations. Omit when using graph."),
+          layout: z
+            .record(z.string(), z.unknown())
+            .nullable()
+            .describe("EditorLayout, or null."),
+        })
+        .refine((input) => Boolean(input.graph) !== Boolean(input.patch), {
+          message: "Provide exactly one of graph or patch.",
+          path: ["graph"],
+        }),
+      execute: async (input) => {
+        await assertToolPermission(ctx, "automations:manage");
+        const active = ctx.activeAutomation;
+        const workflowId = input.workflowId ?? active?.workflowId;
+        let graph = input.graph;
+        let layout = input.layout ?? undefined;
+        let name = input.name;
+        let description = input.description;
+        let operationalPolicy: OperationalPolicyPatch | undefined;
+
+        if (input.patch) {
+          let baseGraph = emptyCanvasGraph();
+          let baseLayout = emptyLayout();
+
+          if (workflowId) {
+            const local = resolveVerifiedLocalGraph(ctx, workflowId);
+            if (local) {
+              baseGraph = local.graph;
+              if (active?.layout) {
+                baseLayout = editorLayoutSchema.parse(active.layout);
+              }
+            } else {
+              const context = await getAutomationAiContext({
+                workspaceId: ctx.workspaceId,
+                actorId: ctx.userId,
+                workflowId,
+                permissions: ctx.permissions,
+              });
+              baseGraph = parseGraph(context.graph);
+              baseLayout = editorLayoutSchema.parse(
+                context.layout ?? emptyLayout(),
+              );
+            }
+          } else if (active?.isNew && active.graph && active.contentHash) {
+            // A new Builder draft has no workflow id yet. It can still carry
+            // a verified local graph, so a compact patch must target what the
+            // user sees instead of rebuilding from the trigger-only canvas.
+            const localGraph = parseGraph(active.graph);
+            if (semanticGraphHash(localGraph) === active.contentHash) {
+              baseGraph = localGraph;
+              if (active.layout) {
+                baseLayout = editorLayoutSchema.parse(active.layout);
+              }
+            }
+          }
+
+          const hasPatchBase =
+            input.patch.baseRevision !== undefined ||
+            input.patch.baseContentHash !== undefined ||
+            input.patch.baseGraphHash !== undefined ||
+            input.patch.baseSubgraphHash !== undefined ||
+            input.patch.baseNodeIds !== undefined;
+          if (workflowId && hasPatchBase) {
+            const expectedRevision =
+              input.expectedRevision ??
+              (active?.workflowId === workflowId ? active.draftRevision : undefined);
+            const expectedContentHash =
+              input.expectedContentHash ??
+              (active?.workflowId === workflowId
+                ? active.serverContentHash ?? active.contentHash
+                : undefined);
+            if (!expectedRevision || !expectedContentHash) {
+              throw new Error(
+                "A patch base requires the current workflow revision and content hash.",
+              );
+            }
+            const rebaseCheck = rebaseAutomationPatch({
+              patch: input.patch,
+              currentGraph: baseGraph,
+              currentRevision: expectedRevision,
+              currentContentHash: expectedContentHash,
+            });
+            if (!rebaseCheck.ok) {
+              throw new Error(
+                `The patch base is stale for nodes: ${rebaseCheck.conflicts.join(", ") || "the workflow metadata"}. Fetch a fresh subgraph and rebase it before preparing the proposal.`,
+              );
+            }
+          }
+
+          const patched = applyPatchToGraph({
+            graph: baseGraph,
+            layout: baseLayout,
+            patch: input.patch,
+            name,
+            description,
+          });
+          graph = patched.graph;
+          layout = patched.layout;
+          name = patched.name ?? name;
+          description = patched.description ?? description;
+          operationalPolicy = patched.operationalPolicy;
+        }
+
+        const proposal = await prepareAutomationProposal({
+          workspaceId: ctx.workspaceId,
+          actorId: ctx.userId,
+          name,
+          description,
+          graph,
+          layout,
+          operationalPolicy,
+          ...(workflowId ? { workflowId } : {}),
+          ...(workflowId && active?.workflowId === workflowId
+            ? {
+                expectedRevision:
+                  input.expectedRevision ?? active.draftRevision,
+                expectedContentHash:
+                  input.expectedContentHash ??
+                  active.serverContentHash ??
+                  active.contentHash,
+                localSnapshotHash: active.localSnapshotHash,
+              }
+            : {
+                expectedRevision: input.expectedRevision ?? undefined,
+                expectedContentHash: input.expectedContentHash ?? undefined,
+              }),
+          permissions: ctx.permissions,
+        });
+        return {
+          ...evidence("prepared automation proposal", [], proposal.id),
+          proposal,
+          nextStep:
+            "Simulate this proposal with a safe trigger envelope before asking for confirmation.",
+        };
+      },
+    }),
+
+    rebaseAutomationPatch: tool({
+      description:
+        "Rebase a compact automation patch against the current server draft only when its declared subgraph is unchanged. Returns a new base revision/hash or explicit node conflicts; it never silently merges changed nodes.",
+      inputSchema: z.object({
+        workflowId: z.string().uuid().nullable(),
+        patch: automationPatchV1Schema,
+      }),
+      execute: async ({ workflowId, patch }) => {
+        await assertToolPermission(ctx, "automations:manage");
+        const resolvedWorkflowId = workflowId ?? ctx.activeAutomation?.workflowId;
+        if (!resolvedWorkflowId) {
+          throw new Error("Choose an automation before rebasing a patch.");
+        }
+        const context = await getAutomationAiContext({
+          workspaceId: ctx.workspaceId,
+          actorId: ctx.userId,
+          workflowId: resolvedWorkflowId,
+          permissions: ctx.permissions,
+        });
+        return {
+          ...evidence("automation patch rebase", [], resolvedWorkflowId),
+          ...rebaseAutomationPatch({
+            patch,
+            currentGraph: parseGraph(context.graph),
+            currentRevision: context.draftRevision,
+            currentContentHash: context.contentHash,
+          }),
+        };
+      },
+    }),
+
+    simulateAutomationProposal: tool({
+      description:
+        "Run a safe, fixture-only branch-coverage simulation of one prepared automation proposal across true/false, failures, uncertainty, timeout, approval expiry/rejection and wait matched/expired branches. It never executes providers or workflow handlers. The coverage report is persisted on the proposal and is required before applyAutomationProposal will succeed. When a passing report already exists for the same graph the existing report is returned with reused: true — do not re-simulate; call applyAutomationProposal next. Pass force: true only after a failed simulation was fixed or the user explicitly asked for deeper coverage. Report this as a simulation, not a confirmed delivery or execution.",
+      inputSchema: z.object({
+        proposalId: z.string().uuid(),
+        trigger: z.record(z.string(), z.unknown()),
+        scenarios: z
+          .array(
+            simulationScenarioSchema,
+          )
+          .optional()
+          .describe("Defaults to all supported scenarios when omitted."),
+        conditionContext: simulationConditionContextSchema.optional(),
+        force: z
+          .boolean()
+          .optional()
+          .describe(
+            "Re-run even when a passing simulation already covers this graph. Omit unless the previous simulation failed or the user asked for deeper coverage.",
+          ),
+      }),
+      execute: async ({ proposalId, trigger, scenarios, conditionContext, force }) => {
+        await assertToolPermission(ctx, "automations:manage");
+        const result = await simulateAutomationProposal({
+          workspaceId: ctx.workspaceId,
+          actorId: ctx.userId,
+          proposalId,
+          trigger,
+          scenarios,
+          conditionContext,
+          permissions: ctx.permissions,
+          force,
+        });
+        return {
+          ...evidence("automation proposal simulation", [], proposalId),
+          result,
+          nextStep: nextStepAfterAutomationSimulation(result),
+        };
+      },
+    }),
+
+    queueAutomationSimulation: tool({
+      description:
+        "Queue a durable automation proposal simulation when the graph or scenario set may exceed the current HTTP request. The job is leased, retried, and processed by the automation cron; it never executes providers or applies a draft. Poll with getAutomationJob until succeeded, then use the persisted proposal simulation for confirmation.",
+      inputSchema: z.object({
+        proposalId: z.string().uuid(),
+        trigger: z.record(z.string(), z.unknown()),
+        scenarios: z.array(simulationScenarioSchema).optional(),
+        conditionContext: simulationConditionContextSchema.optional(),
+        idempotencyKey: z.string().trim().min(8).max(200).optional(),
+      }),
+      execute: async ({ proposalId, trigger, scenarios, conditionContext, idempotencyKey }) => {
+        await assertToolPermission(ctx, "automations:manage");
+        const job = await enqueueAutomationAiJob({
+          workspaceId: ctx.workspaceId,
+          actorId: ctx.userId,
+          kind: "proposal_simulation",
+          payload: { proposalId, trigger, scenarios, conditionContext },
+          idempotencyKey:
+            idempotencyKey ?? `proposal-simulation:${proposalId}:${JSON.stringify(trigger)}`,
+        });
+        return {
+          ...evidence("durable automation simulation job", [], job.id),
+          job,
+          nextStep: "Poll getAutomationJob until the job succeeds.",
+        };
+      },
+    }),
+
+    getAutomationJob: tool({
+      strict: true,
+      description:
+        "Read the status and bounded result of a durable Harly AI automation job created for this workspace. Use after queueAutomationSimulation; never claim a simulation is complete while the status is queued or running.",
+      inputSchema: z.object({ jobId: z.string().uuid() }),
+      execute: async ({ jobId }) => {
+        await assertToolPermission(ctx, "automations:manage");
+        const job = await getAutomationAiJob({
+          workspaceId: ctx.workspaceId,
+          actorId: ctx.userId,
+          jobId,
+        });
+        if (!job) throw new Error("Durable automation job not found.");
+        return { ...evidence("durable automation job status", [], jobId), job };
+      },
+    }),
+
+    runBranchCoverage: tool({
+      description:
+        "Run multi-scenario branch coverage simulation on an automation proposal, including true/false branches, action failure/uncertainty/timeout, approval rejection/expiry and wait match/expiry. It is fixture-only and persists coverage; use it to pick scenarios or re-run with a richer trigger context. When a passing report already exists for the same graph the existing report is returned with reused: true — do not re-run coverage; call applyAutomationProposal next. Pass force: true only after a failed simulation was fixed or the user explicitly asked for deeper coverage.",
+      inputSchema: z.object({
+        proposalId: z.string().uuid(),
+        trigger: z.record(z.string(), z.unknown()),
+        scenarios: z
+          .array(
+            simulationScenarioSchema,
+          )
+          .optional(),
+        conditionContext: simulationConditionContextSchema.optional(),
+        force: z
+          .boolean()
+          .optional()
+          .describe(
+            "Re-run even when a passing simulation already covers this graph. Omit unless the previous simulation failed or the user asked for deeper coverage.",
+          ),
+      }),
+      execute: async ({ proposalId, trigger, scenarios, conditionContext, force }) => {
+        await assertToolPermission(ctx, "automations:manage");
+        const result = await simulateAutomationProposal({
+          workspaceId: ctx.workspaceId,
+          actorId: ctx.userId,
+          proposalId,
+          trigger,
+          scenarios,
+          conditionContext,
+          permissions: ctx.permissions,
+          force,
+        });
+        return {
+          ...evidence("automation branch coverage", [], proposalId),
+          report: result,
+          nextStep: nextStepAfterAutomationSimulation(result),
+        };
+      },
+    }),
+
+    prepareAutomationPlan: tool({
+      description:
+        "Compile an intent-based automation plan into a valid DAG graph proposal without guessing node IDs or coordinates (Phase 2). Prefer the composable flow form when order matters: it can nest actions, branches, delays, approvals, and event/document waits in any supported sequence. The legacy steps/branches/delays/approvals/waits fields remain supported. When the Automations Builder is open, omit workflowId and base revision/hash to target the active draft context supplied by the editor.",
+      inputSchema: z.object({
+        workflowId: z.string().uuid().optional(),
+        expectedRevision: z.number().int().positive().optional(),
+        expectedContentHash: z.string().length(64).optional(),
+        plan: automationPlanV1Schema,
+      }),
+      execute: async (input) => {
+        await assertToolPermission(ctx, "automations:manage");
+        try {
+          const compiled = compilePlanToGraph(input.plan);
+          const active = ctx.activeAutomation;
+          const workflowId =
+            input.workflowId ?? active?.workflowId ?? undefined;
+          const expectedRevision =
+            input.expectedRevision ??
+            (workflowId && active?.workflowId === workflowId
+              ? active.draftRevision
+              : undefined);
+          const expectedContentHash =
+            input.expectedContentHash ??
+            (workflowId && active?.workflowId === workflowId
+              ? active.serverContentHash ?? active.contentHash
+              : undefined);
+          const proposal = await prepareAutomationProposal({
+            workspaceId: ctx.workspaceId,
+            actorId: ctx.userId,
+            workflowId,
+            expectedRevision,
+            expectedContentHash,
+            localSnapshotHash:
+              workflowId && active?.workflowId === workflowId
+                ? active.localSnapshotHash
+                : undefined,
+            name: input.plan.name,
+            description: input.plan.description,
+            graph: compiled.graph,
+            layout: compiled.layout,
+            operationalPolicy: compiled.operationalPolicy,
+            permissions: ctx.permissions,
+          });
+          return {
+            ...evidence("prepared automation plan", [], proposal.id),
+            ok: true as const,
+            proposal,
+            nextStep:
+              "Simulate this proposal before asking for human confirmation to apply.",
+          };
+        } catch (error) {
+          return {
+            ...evidence("automation plan preparation failed"),
+            ok: false as const,
+            error: safeAutomationToolError(error),
+            nextStep:
+              "Do not repeat the identical plan. Fix the reported issue or explain the exact unsupported capability to the user.",
+          };
+        }
+      },
+    }),
+
+    diagnoseWorkflowRun: tool({
+      strict: true,
+      description:
+        "Inspect a failed or uncertain automation workflow run, including timeline, executed node statuses, and redacted error diagnostics (Phase 5).",
+      inputSchema: z.object({
+        runId: z.string().uuid(),
+      }),
+      execute: async ({ runId }) => {
+        await assertToolPermission(ctx, "automations:manage");
+        return {
+          ...evidence("workflow run diagnosis", [], runId),
+          ...(await getWorkflowRunDiagnosis({
+            workspaceId: ctx.workspaceId,
+            actorId: ctx.userId,
+            runId,
+            permissions: ctx.permissions,
+          })),
+        };
+      },
+    }),
+
+    prepareAutomationRepair: tool({
+      description:
+        "Prepare an automated repair proposal for a failed automation workflow based on run error evidence (Phase 5). Modifies the draft, never historical run data.",
+      inputSchema: z.object({
+        runId: z.string().uuid(),
+        explanation: z.string().min(1).max(500),
+        patch: automationPatchV1Schema,
+      }),
+      execute: async (input) => {
+        await assertToolPermission(ctx, "automations:manage");
+        const proposal = await prepareAutomationRepair({
+          workspaceId: ctx.workspaceId,
+          actorId: ctx.userId,
+          runId: input.runId,
+          patch: input.patch,
+          explanation: input.explanation,
+          permissions: ctx.permissions,
+        });
+        return {
+          ...evidence("prepared automation repair proposal", [], proposal.id),
+          proposal,
+          nextStep:
+            "Simulate this repair proposal and ask the user to confirm applying it to the draft.",
+        };
+      },
+    }),
+
     userPermissions: tool({
       strict: true,
       description:
@@ -135,7 +1000,7 @@ function buildReadTools(ctx: HarlyToolContext) {
       inputSchema: z.object({}),
       execute: async () => ({
         ...evidence("live effective workspace permissions"),
-        permissions: await getCurrentPermissions(),
+        permissions: ctx.permissions ?? (await getCurrentPermissions()),
       }),
     }),
 
@@ -399,6 +1264,15 @@ function buildReadTools(ctx: HarlyToolContext) {
           ),
           integrations: [
             {
+              name: "Email delivery",
+              slug: "email",
+              status: state(
+                statuses.email.enabled || statuses.email.usingPlatformDefault,
+                statuses.email.enabled || statuses.email.usingPlatformDefault,
+              ),
+              provider: statuses.email.provider,
+            },
+            {
               name: "Google Calendar",
               slug: "google-calendar",
               status: state(
@@ -487,6 +1361,19 @@ function buildReadTools(ctx: HarlyToolContext) {
                   statuses.chat.encryptionReady,
                 statuses.chat.enabled || statuses.chat.hasWebhook,
               ),
+            },
+            {
+              name: "DocuSeal",
+              slug: "docuseal",
+              status: state(
+                statuses.docuseal.enabled && statuses.docuseal.hasToken,
+                statuses.docuseal.enabled || statuses.docuseal.hasToken,
+              ),
+            },
+            {
+              name: "Harly Sign",
+              slug: "harly-sign",
+              status: "connected",
             },
           ],
         };
@@ -1627,6 +2514,15 @@ function buildReadTools(ctx: HarlyToolContext) {
       },
     }),
   };
+
+  if (!ctx.permissions) return tools;
+  const filtered: Record<string, unknown> = {};
+  for (const [name, toolDef] of Object.entries(tools)) {
+    if (isToolAllowed(name, ctx.permissions)) {
+      filtered[name] = toolDef;
+    }
+  }
+  return filtered as typeof tools;
 }
 
 export { buildReadTools };

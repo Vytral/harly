@@ -67,6 +67,11 @@ export async function listWorkspaceMembers(): Promise<WorkspaceMemberOption[]> {
     })
     .from(authMembers)
     .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
-    .where(eq(authMembers.organizationId, workspace.id))
+    .where(
+      and(
+        eq(authMembers.organizationId, workspace.id),
+        eq(authMembers.status, "active"),
+      ),
+    )
     .orderBy(authUsers.name);
 }

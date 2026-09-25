@@ -5,6 +5,9 @@ on:
     branches: [main, develop]
   pull_request:
     branches: [main, develop]
+  # Called by release-image.yml so the exact tagged commit is linted, typechecked,
+  # built and tested before any image is published.
+  workflow_call:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -14,8 +17,10 @@ env:
   # Used by packages/db to build the client; tests that touch DB logic mock the
   # module, so this never needs a real Postgres instance in CI.
   DATABASE_URL: postgresql://harly:harly@localhost:5432/harly
-  NEXT_PUBLIC_APP_URL: http://localhost:3000
-  HARLY_URL: http://localhost:3000
+  # Keep CI's public-origin variables routable-looking and non-local. The
+  # production config intentionally rejects localhost/loopback origins.
+  NEXT_PUBLIC_APP_URL: https://ci.example.invalid
+  HARLY_URL: https://ci.example.invalid
   DOCUSEAL_SECRET_KEY_BASE: ci-docuseal-secret-key-base-do-not-use-in-production
   BETTER_AUTH_SECRET: ci-test-secret-do-not-use-in-production
   NODE_ENV: test
@@ -139,6 +144,30 @@ jobs:
       - name: Type-check
         run: pnpm typecheck
 
+  automation-capabilities:
+    name: Automation capability matrix
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+            tooling/*/node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Verify generated automation capability matrix
+        run: pnpm --filter web check:automation-capabilities
+
   build:
     name: Production web build
     runs-on: ubuntu-latest
@@ -146,8 +175,8 @@ jobs:
     env:
       NODE_ENV: production
       DATABASE_URL: postgresql://harly:harly@localhost:5432/harly
-      NEXT_PUBLIC_APP_URL: http://localhost:3000
-      HARLY_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_URL: https://ci.example.invalid
+      HARLY_URL: https://ci.example.invalid
       BETTER_AUTH_SECRET: ci-test-secret-do-not-use-in-production
       AI_ENCRYPTION_KEY: bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
       STORAGE_UPLOAD_SECRET: cccccccccccccccccccccccccccccccc
@@ -359,7 +388,7 @@ jobs:
       - name: Validate Compose profiles
         run: |
           export HARLY_IMAGE="$(node -p 'const r=require("./release-manifest.json"); r.image + "@" + r.digest')"
-          export HARLY_VERSION="$(node -p 'require("./release-manifest.json").version')" HARLY_URL=http://localhost:3000
+          export HARLY_VERSION="$(node -p 'require("./release-manifest.json").version')" HARLY_URL=https://ci.example.invalid
           export POSTGRES_USER=harly POSTGRES_PASSWORD=harly POSTGRES_DB=harly
           export BETTER_AUTH_SECRET=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa AI_ENCRYPTION_KEY=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           export STORAGE_UPLOAD_SECRET=cccccccccccccccccccccccccccccccc CRON_SECRET=dddddddddddddddddddddddddddddddd
@@ -392,7 +421,7 @@ jobs:
           COMPOSE_PROJECT_NAME: harly-ci
           HARLY_IMAGE: harly:ci
           HARLY_VERSION: ci
-          HARLY_URL: http://127.0.0.1:3099
+          HARLY_URL: https://ci.example.invalid
           HARLY_PORT: 3099
           POSTGRES_USER: harly
           POSTGRES_PASSWORD: harly-ci-postgres-password

@@ -2,22 +2,22 @@
 
 import { useRouter } from "next/navigation";
 import { useMemo } from "react";
-import { Download } from "lucide-react";
+import {
+  ArrowDownRight,
+  ArrowUpRight,
+  Briefcase,
+  Clock,
+  Download,
+  Funnel,
+  Hourglass,
+  LineChart,
+  Target,
+  TrendingUp,
+  Users,
+} from "lucide-react";
 import { motion, useReducedMotion } from "motion/react";
 
-import { Tile } from "@/components/dashboard/widgets/primitives";
-import {
-  ArrowDownRightIcon,
-  ArrowUpRightIcon,
-  BriefcaseIcon,
-  ChartLineUpDuotoneIcon,
-  ClockCountdownDuotoneIcon,
-  ClockIcon,
-  FunnelDuotoneIcon,
-  TargetDuotoneIcon,
-  TrendUpIcon,
-  UsersIcon,
-} from "@/components/ui/icons/phosphor";
+import { Tile, tileClass } from "@/components/dashboard/widgets/primitives";
 import {
   Select,
   SelectContent,
@@ -51,26 +51,26 @@ function formatSource(source: string) {
   return source.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-type IconComponent = React.ComponentType<{ className?: string }>;
+type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
 
 function EmptyPanel({ icon: Icon, text }: { icon: IconComponent; text: string }) {
   return (
-    <div className="m-3 flex flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-dashed px-6 py-10 text-center">
-      <Icon className="size-5 text-muted-foreground" />
-      <p className="text-sm text-muted-foreground">{text}</p>
+    <div className="m-3 flex flex-1 flex-col items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-mist-border px-6 py-10 text-center">
+      <Icon className="size-5 text-quiet-mist" strokeWidth={1.6} />
+      <p className="text-sm text-soft-ink">{text}</p>
     </div>
   );
 }
 
 function DeltaBadge({ value, invert = false }: { value: number; invert?: boolean }) {
   const positive = invert ? value <= 0 : value >= 0;
-  const Icon = positive ? ArrowUpRightIcon : ArrowDownRightIcon;
+  const Icon = positive ? ArrowUpRight : ArrowDownRight;
   const shown = invert ? -value : value;
   return (
     <span
       className={cn(
         "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums",
-        positive ? "bg-pine/10 text-pine" : "bg-destructive/10 text-destructive",
+        positive ? "bg-success-olive/10 text-success-olive" : "bg-danger-rust/10 text-danger-rust",
       )}
     >
       <Icon className="size-3" />
@@ -80,7 +80,7 @@ function DeltaBadge({ value, invert = false }: { value: number; invert?: boolean
   );
 }
 
-function StatCard({
+function StatCell({
   icon: Icon,
   label,
   value,
@@ -103,19 +103,19 @@ function StatCard({
       initial={shouldReduceMotion ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, ease: EASE_OUT, delay: index * 0.05 }}
-      className="rounded-2xl border border-border/60 bg-card p-4 shadow-[0_1px_2px_rgba(23,23,23,0.04)]"
+      className="p-4 sm:p-5"
     >
       <div className="flex items-center justify-between gap-3">
-        <span className="flex size-8 items-center justify-center rounded-xl bg-muted text-muted-foreground">
-          <Icon className="size-4" />
+        <span className="flex size-8 items-center justify-center rounded-[var(--radius-sm)] bg-warm-paper text-soft-ink">
+          <Icon className="size-4" strokeWidth={1.8} />
         </span>
         {typeof delta === "number" ? (
           <DeltaBadge value={delta} invert={invertDelta} />
         ) : null}
       </div>
-      <p className="mt-4 text-xs font-medium text-muted-foreground">{label}</p>
-      <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums">{value}</p>
-      <p className="mt-1 truncate text-xs text-muted-foreground">{hint}</p>
+      <p className="mt-4 text-xs font-medium text-soft-ink">{label}</p>
+      <p className="mt-1 text-2xl font-semibold tracking-tight tabular-nums text-near-ink">{value}</p>
+      <p className="mt-1 truncate text-xs text-soft-ink">{hint}</p>
     </motion.div>
   );
 }
@@ -130,14 +130,12 @@ function CardHead({
   subtitle: string;
 }) {
   return (
-    <div className="flex items-start gap-3">
-      <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-        <Icon className="size-5" />
-      </span>
-      <div className="min-w-0">
-        <h2 className="text-sm font-semibold">{title}</h2>
-        <p className="mt-0.5 text-sm text-muted-foreground">{subtitle}</p>
-      </div>
+    <div className="space-y-0.5">
+      <h2 className="flex items-center gap-2 text-[15px] font-medium text-near-ink">
+        <Icon className="size-4 text-soft-ink" strokeWidth={1.8} />
+        {title}
+      </h2>
+      <p className="text-sm text-soft-ink">{subtitle}</p>
     </div>
   );
 }
@@ -207,21 +205,21 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
 
   const stats = [
     {
-      icon: UsersIcon,
+      icon: Users,
       label: "Applications",
       value: comparison.applications.current.toLocaleString(),
       hint: `${data.summary.applications90d.toLocaleString()} in the last 90 days`,
       delta: comparison.applications.deltaPct,
     },
     {
-      icon: BriefcaseIcon,
+      icon: Briefcase,
       label: "Hires",
       value: comparison.hires.current.toLocaleString(),
       hint: `${data.summary.hires.toLocaleString()} hires all-time`,
       delta: comparison.hires.deltaPct,
     },
     {
-      icon: ClockIcon,
+      icon: Clock,
       label: "Avg time to hire",
       value: comparison.avgTimeToHireDays.current > 0 ? `${comparison.avgTimeToHireDays.current}d` : "No data",
       hint:
@@ -232,7 +230,7 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
       invertDelta: true,
     },
     {
-      icon: TrendUpIcon,
+      icon: TrendingUp,
       label: "Offer acceptance",
       value: data.summary.offerAcceptRate != null ? `${data.summary.offerAcceptRate}%` : "No data",
       hint: topSource ? `${formatSource(topSource.source)} leads source volume` : "No source data yet",
@@ -242,33 +240,46 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
 
   return (
     <div className="space-y-5">
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={exportReportCsv}>
-          <Download className="size-4" />
-          Export CSV
-        </Button>
-        <Select
-          value={String(comparison.rangeDays)}
-          onValueChange={(v) => router.push(`/dashboard/reports?range=${v}`)}
-        >
-          <SelectTrigger className="h-8 w-auto min-w-40 text-xs">
-            <SelectValue>{rangeLabel}</SelectValue>
-          </SelectTrigger>
-          <SelectContent>
-            {RANGE_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight text-near-ink">Reports</h1>
+          <p className="mt-1 text-sm text-soft-ink">
+            {`Hiring performance and pipeline health, ${rangeLabel.toLowerCase()}.`}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Select
+            value={String(comparison.rangeDays)}
+            onValueChange={(v) => router.push(`/dashboard/reports?range=${v}`)}
+          >
+            <SelectTrigger className="h-9 w-auto min-w-40 text-sm">
+              <SelectValue>{rangeLabel}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {RANGE_OPTIONS.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="sm" onClick={exportReportCsv}>
+            <Download className="size-4" />
+            Export CSV
+          </Button>
+        </div>
       </div>
 
-      <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div
+        className={cn(
+          tileClass,
+          "grid grid-cols-1 divide-y divide-hairline sm:grid-cols-2 sm:divide-y-0 sm:divide-x xl:grid-cols-4",
+        )}
+      >
         {stats.map((s, i) => (
-          <StatCard key={s.label} {...s} index={i} />
+          <StatCell key={s.label} {...s} index={i} />
         ))}
-      </section>
+      </div>
 
       <motion.div
         initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
@@ -276,7 +287,7 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
         transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.15 }}
       >
         <Tile className="gap-5 p-5">
-          <CardHead icon={ChartLineUpDuotoneIcon} title="Hiring trend" subtitle="Applications received vs. hires made, by month." />
+          <CardHead icon={LineChart} title="Hiring trend" subtitle="Applications received vs. hires made, by month." />
           <TrendChart series={trendSeries} />
         </Tile>
       </motion.div>
@@ -288,16 +299,16 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
         className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]"
       >
         <Tile className="gap-5 p-5">
-          <CardHead icon={FunnelDuotoneIcon} title="Pipeline funnel" subtitle="Stage reach and step-to-step conversion. Hover a stage." />
-          {data.funnel[0]?.count ? (
+          <CardHead icon={Funnel} title="Pipeline by stage" subtitle="Where active candidates sit right now." />
+          {data.funnel.some((s) => s.count > 0) ? (
             <FunnelChart stages={data.funnel} />
           ) : (
-            <EmptyPanel icon={FunnelDuotoneIcon} text="Funnel data appears once candidates move through stages." />
+            <EmptyPanel icon={Funnel} text="Stage distribution appears once candidates move through your pipeline." />
           )}
         </Tile>
 
         <Tile className="gap-5 p-5">
-          <CardHead icon={ClockCountdownDuotoneIcon} title="Time to hire" subtitle="How long filled roles took, from apply to hire." />
+          <CardHead icon={Hourglass} title="Time to hire" subtitle="How long filled roles took, from apply to hire." />
           <Histogram data={data.timeToHire} />
         </Tile>
       </motion.section>
@@ -308,16 +319,16 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
         transition={{ duration: 0.35, ease: EASE_OUT, delay: 0.25 }}
       >
         <Tile className="gap-5 p-5">
-          <CardHead icon={TargetDuotoneIcon} title="Source effectiveness" subtitle="Volume and hire conversion by application source." />
+          <CardHead icon={Target} title="Source effectiveness" subtitle="Volume and hire conversion by application source." />
           {sourceData.length ? (
             <SourceBars sources={sourceData} />
           ) : (
-            <EmptyPanel icon={UsersIcon} text="No applications yet. Sources appear once candidates apply." />
+            <EmptyPanel icon={Users} text="No applications yet. Sources appear once candidates apply." />
           )}
         </Tile>
       </motion.div>
 
-      <p className="px-1 text-xs text-muted-foreground">
+      <p className="px-1 text-xs text-soft-ink">
         {`${totalApplications.toLocaleString()} applications · ${last12Hires.toLocaleString()} hires in the last 12 months · ${data.summary.totalCandidates.toLocaleString()} candidates tracked · comparing to ${rangeLabel.toLowerCase()}.`}
       </p>
     </div>

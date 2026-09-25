@@ -26,6 +26,10 @@ export const AGENT_WRITE_TOOLS = [
   "sendCandidateEmail",
   "generateCandidateScore",
   "bulkScoreJob",
+  "applyAutomationProposal",
+  "retryAutomationRun",
+  "reconcileAutomationRun",
+  "replayAutomationRun",
 ] as const;
 
 export type AgentWriteTool = (typeof AGENT_WRITE_TOOLS)[number];

@@ -10,7 +10,7 @@ export const runtime = "nodejs";
  *
  *   <div id="harly-jobs-container"></div>
  *   <script src="https://<host>/embed/widget.js"
- *           data-workspace="acme" data-pk="harly_pk_live_..." defer></script>
+ *           data-pk="harly_pk_live_..." defer></script>
  *
  * It fetches the public API, renders a searchable job list with filters, and
  * offers an inline apply form (POSTing to the public intake endpoint) with a
@@ -18,7 +18,6 @@ export const runtime = "nodejs";
  * host page's typography so it blends into any site.
  *
  * Attributes:
- *   data-workspace  workspace slug (or use data-pk)
  *   data-pk         publishable API key
  *   data-container  target element id (default "harly-jobs-container")
  *   data-job        render ONLY this job's apply form (skip the board)
@@ -38,7 +37,6 @@ const WIDGET = String.raw`(function () {
     script = all[all.length - 1];
   }
   var origin = new URL(script.src).origin;
-  var workspace = script.getAttribute("data-workspace") || "";
   var pk = script.getAttribute("data-pk") || "";
   var containerId = script.getAttribute("data-container") || "harly-jobs-container";
   var singleJobSlug = script.getAttribute("data-job") || "";
@@ -46,9 +44,7 @@ const WIDGET = String.raw`(function () {
 
   function api(path) {
     var url = origin + path;
-    var sep = path.indexOf("?") === -1 ? "?" : "&";
-    if (workspace) url += sep + "workspace=" + encodeURIComponent(workspace);
-    if (pk) url += "&pk=" + encodeURIComponent(pk);
+    if (pk) url += (path.indexOf("?") === -1 ? "?" : "&") + "pk=" + encodeURIComponent(pk);
     return url;
   }
 
@@ -99,6 +95,8 @@ const WIDGET = String.raw`(function () {
       ".oh-btn.secondary{background:var(--oh-surface-2);color:var(--oh-fg)}" +
       ".oh-btn:active{transform:scale(.97)}" +
       ".oh-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}" +
+      ".oh-consent label{display:flex;align-items:flex-start;gap:8px;font-size:.85em;font-weight:400}" +
+      ".oh-consent input{margin-top:3px;accent-color:var(--oh-accent)}" +
       ".oh-field label{font-size:.85em;font-weight:600}" +
       ".oh-req{color:var(--oh-accent);margin-left:2px}" +
       ".oh-empty,.oh-error{padding:16px;color:var(--oh-muted)}" +
@@ -182,8 +180,10 @@ const WIDGET = String.raw`(function () {
         if (job.location) bits.push(job.location);
         if (job.workplaceType) bits.push(job.workplaceType);
         info.appendChild(el("div", "oh-meta", bits.join(" · ")));
-        var btn = el("button", "oh-btn", "Apply");
-        btn.onclick = function () { openApply(container, job, board, jobs); };
+        var btn = el("a", "oh-btn", "View job");
+        btn.href = job.hostedJobUrl || job.hostedApplyUrl || "#";
+        btn.target = "_blank";
+        btn.rel = "noopener noreferrer";
         card.appendChild(info);
         card.appendChild(btn);
         list.appendChild(card);
@@ -266,6 +266,7 @@ const WIDGET = String.raw`(function () {
     var resume = null;
     var questionInputs = [];
     var captchaToken = null;
+    var consentInput = null;
 
     var submitWrap = el("div");
     var submit = el("button", "oh-btn", "Submit application");
@@ -297,6 +298,18 @@ const WIDGET = String.raw`(function () {
       if (required) input.required = true;
       extra[key] = input;
       form.insertBefore(field(labelText, input, required), captchaBox);
+    }
+
+    function addConsent(text) {
+      var wrap = el("div", "oh-field oh-consent");
+      var label = el("label");
+      consentInput = el("input");
+      consentInput.type = "checkbox";
+      consentInput.required = true;
+      label.appendChild(consentInput);
+      label.appendChild(document.createTextNode(text));
+      wrap.appendChild(label);
+      form.insertBefore(wrap, captchaBox);
     }
 
     fetch(api("/api/public/v1/jobs/" + encodeURIComponent(job.slug)))
@@ -338,6 +351,12 @@ const WIDGET = String.raw`(function () {
           form.insertBefore(field(qn.label, input, qn.required), captchaBox);
         });
 
+        // Keep the embed aligned with the hosted form. The public job endpoint
+        // exposes this non-sensitive policy configuration inside applicationConfig.
+        if (cfg && cfg.legalConfigured === true) {
+          addConsent(cfg.consentText || "I agree to the privacy policy and consent to the processing of my personal data.");
+        }
+
         // Render the active CAPTCHA provider if the workspace requires it.
         // Falls back to the legacy turnstileSiteKey field for older API shapes.
         var captchaProvider = data.captchaProvider || (data.turnstileSiteKey ? "turnstile" : null);
@@ -365,7 +384,8 @@ const WIDGET = String.raw`(function () {
       questionInputs.forEach(function (q) { answers[q.id] = q.input.value; });
       var payload = {
         firstName: first.value, lastName: last.value, email: email.value,
-        questionAnswers: answers
+        questionAnswers: answers,
+        consentGiven: Boolean(consentInput && consentInput.checked)
       };
       Object.keys(extra).forEach(function (k) {
         if (extra[k] && extra[k].value) payload[k] = extra[k].value;
@@ -431,11 +451,12 @@ const WIDGET = String.raw`(function () {
     injectStyles();
     if (!workspace && !pk) {
       container.innerHTML = "";
-      container.appendChild(el("div", "oh-error", "Harly widget: set data-workspace or data-pk."));
+      container.appendChild(el("div", "oh-error", "Harly widget is not configured."));
       return;
     }
 
-    // Single-job mode: mount only that job's apply form, no board listing.
+    // Single-job mode: deep-link to hosted job details (overview), never the
+    // apply form directly — candidates should land on the real job page.
     if (singleJobSlug) {
       container.appendChild(el("div", "oh-empty", "Loading…"));
       fetch(api("/api/public/v1/jobs/" + encodeURIComponent(singleJobSlug)))
@@ -443,8 +464,20 @@ const WIDGET = String.raw`(function () {
         .then(function (body) {
           var job = body && body.data && body.data.job;
           if (!job) throw new Error("not found");
+          var href = job.hostedJobUrl || job.hostedApplyUrl;
           container.innerHTML = "";
-          openApply(container, job, null, null);
+          if (href) {
+            var root = el("div", "oh-root");
+            root.appendChild(el("h3", null, job.title || "Open role"));
+            var link = el("a", "oh-btn", "View job details");
+            link.href = href;
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+            root.appendChild(link);
+            container.appendChild(root);
+          } else {
+            openApply(container, job, null, null);
+          }
         })
         .catch(function () {
           container.innerHTML = "";

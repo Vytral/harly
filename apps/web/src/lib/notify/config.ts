@@ -77,10 +77,11 @@ export async function getWorkspaceChatStatus(
  */
 export async function getWorkspaceChatConfig(
   workspaceId: string,
+  database: typeof db = db,
 ): Promise<ChatConfig | null> {
   if (!isEncryptionConfigured()) return null;
 
-  const [row] = await db
+  const [row] = await database
     .select({
       chatEnabled: workspaceSettings.chatEnabled,
       chatProvider: workspaceSettings.chatProvider,

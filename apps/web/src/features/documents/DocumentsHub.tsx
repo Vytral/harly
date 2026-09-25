@@ -21,6 +21,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { DocumentsWorkspaceTabs } from "./DocumentsWorkspaceTabs";
 import {
   bulkDeleteDocuments,
   bulkSetDocumentCategory,
@@ -130,9 +131,11 @@ function FilterSelect({
 export function DocumentsHub({
   data,
   initialCandidateId,
+  canManageTemplates = false,
 }: {
   data: DocumentHubData;
   initialCandidateId?: string;
+  canManageTemplates?: boolean;
 }) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -349,6 +352,11 @@ export function DocumentsHub({
           </div>
         </div>
       ) : null}
+      <DocumentsWorkspaceTabs
+        active="files"
+        canReadDocuments
+        canManageTemplates={canManageTemplates}
+      />
       <header className="flex flex-col gap-4 border-b border-border/70 pb-5 duration-500 animate-in fade-in slide-in-from-bottom-1 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold tracking-tight">

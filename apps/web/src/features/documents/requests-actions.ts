@@ -15,6 +15,8 @@ import {
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 import { canReviewRequest } from "./requests-shared";
+import { reconcileDocumentRequestPackage } from "./requests-service";
+import { resumeWorkflowDocumentWaits } from "@/features/automations/runtime/worker";
 
 const log = createLogger("document-requests");
 
@@ -152,6 +154,7 @@ export async function reviewDocumentRequest(input: {
       status: documentRequests.status,
       candidateId: documentRequests.candidateId,
       applicationId: documentRequests.applicationId,
+      packageId: documentRequests.packageId,
       title: documentRequests.title,
     })
     .from(documentRequests)
@@ -168,7 +171,7 @@ export async function reviewDocumentRequest(input: {
   }
 
   await db.transaction(async (tx) => {
-    await tx
+    const [updated] = await tx
       .update(documentRequests)
       .set({
         status: parsed.data.decision,
@@ -183,7 +186,10 @@ export async function reviewDocumentRequest(input: {
           eq(documentRequests.id, request.id),
           eq(documentRequests.status, "submitted"),
         ),
-      );
+      )
+      .returning({ id: documentRequests.id });
+    if (!updated) throw new Error("This document request changed while it was being reviewed.");
+    if (request.packageId) await reconcileDocumentRequestPackage(tx, { workspaceId: context.organization.id, packageId: request.packageId });
 
     await tx.insert(candidatePortalNotifications).values({
       workspaceId: context.organization.id,
@@ -199,6 +205,10 @@ export async function reviewDocumentRequest(input: {
     });
   });
 
+  await resumeWorkflowDocumentWaits({
+    workspaceId: context.organization.id,
+    resourceId: request.packageId ?? request.applicationId,
+  });
   revalidatePath(`/dashboard/candidates/${request.candidateId}`);
   return { ok: true };
 }
@@ -216,23 +226,35 @@ export async function waiveDocumentRequest(input: {
   const parsed = waiveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid request." };
 
-  const [updated] = await db
-    .update(documentRequests)
-    .set({
-      status: "waived",
-      reviewedById: context.user.id,
-      reviewedAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(documentRequests.workspaceId, context.organization.id),
-        eq(documentRequests.id, parsed.data.requestId),
-      ),
-    )
-    .returning({ candidateId: documentRequests.candidateId });
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(documentRequests)
+      .set({
+        status: "waived",
+        reviewedById: context.user.id,
+        reviewedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(documentRequests.workspaceId, context.organization.id),
+          eq(documentRequests.id, parsed.data.requestId),
+        ),
+      )
+      .returning({
+        candidateId: documentRequests.candidateId,
+        applicationId: documentRequests.applicationId,
+        packageId: documentRequests.packageId,
+      });
+    if (row?.packageId) await reconcileDocumentRequestPackage(tx, { workspaceId: context.organization.id, packageId: row.packageId });
+    return row;
+  });
   if (!updated) return { ok: false, error: "Document request not found." };
 
+  await resumeWorkflowDocumentWaits({
+    workspaceId: context.organization.id,
+    resourceId: updated.packageId ?? updated.applicationId,
+  });
   revalidatePath(`/dashboard/candidates/${updated.candidateId}`);
   return { ok: true };
 }
@@ -251,7 +273,12 @@ export async function cancelDocumentRequest(input: {
   if (!parsed.success) return { ok: false, error: "Invalid request." };
 
   const [request] = await db
-    .select({ status: documentRequests.status, candidateId: documentRequests.candidateId })
+    .select({
+      status: documentRequests.status,
+      candidateId: documentRequests.candidateId,
+      applicationId: documentRequests.applicationId,
+      packageId: documentRequests.packageId,
+    })
     .from(documentRequests)
     .where(
       and(
@@ -265,16 +292,24 @@ export async function cancelDocumentRequest(input: {
     return { ok: false, error: "This document was already submitted. Decline or accept it instead." };
   }
 
-  await db
-    .delete(documentRequests)
-    .where(
-      and(
-        eq(documentRequests.workspaceId, context.organization.id),
-        eq(documentRequests.id, parsed.data.requestId),
-      ),
-    );
+  await db.transaction(async (tx) => {
+    await tx
+      .delete(documentRequests)
+      .where(
+        and(
+          eq(documentRequests.workspaceId, context.organization.id),
+          eq(documentRequests.id, parsed.data.requestId),
+          eq(documentRequests.status, request.status),
+        ),
+      );
+    if (request.packageId) await reconcileDocumentRequestPackage(tx, { workspaceId: context.organization.id, packageId: request.packageId });
+  });
 
   log.info({ requestId: parsed.data.requestId }, "document request cancelled");
+  await resumeWorkflowDocumentWaits({
+    workspaceId: context.organization.id,
+    resourceId: request.packageId ?? request.applicationId,
+  });
   revalidatePath(`/dashboard/candidates/${request.candidateId}`);
   return { ok: true };
 }

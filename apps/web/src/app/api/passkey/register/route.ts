@@ -5,14 +5,31 @@ import {
 } from "@simplewebauthn/server";
 import { eq } from "drizzle-orm";
 import { db, passkeys } from "@harly/db";
+import { isDemoMode } from "@harly/config";
 import { auth } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { RP_ID, RP_NAME, ORIGIN, storeChallenge, consumeChallenge } from "@/lib/passkey";
 
 const log = createLogger("api-passkey-register");
 
+// Demo lockdown, Layer 3: passkey registration is a hand-rolled WebAuthn route
+// outside Better Auth, so Layer 1's hook can't reach it. Adding a passkey to the
+// shared demo account persists across resets and could gate every future
+// visitor behind a credential they don't hold. Refuse both the options (GET) and
+// the verify+store (POST) steps in demo mode. Server-side, keyed off DEMO_MODE.
+function demoBlockedResponse(): NextResponse {
+  return NextResponse.json(
+    { error: "This action is disabled in the demo." },
+    { status: 403 },
+  );
+}
+
 // GET , generate registration options for the authenticated user.
 export async function GET(req: NextRequest) {
+  if (isDemoMode()) {
+    return demoBlockedResponse();
+  }
+
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -32,18 +49,24 @@ export async function GET(req: NextRequest) {
       id: p.credentialId,
     })),
     authenticatorSelection: {
-      residentKey: "preferred",
+      // Passwordless login is username-less, so every newly registered
+      // credential must be discoverable by the authenticator.
+      residentKey: "required",
       userVerification: "preferred",
     },
   });
 
-  await storeChallenge(session.user.id, options.challenge, "registration");
+  const challenge = await storeChallenge(session.user.id, options.challenge, "registration");
 
-  return NextResponse.json(options);
+  return NextResponse.json({ ...options, challengeId: challenge.id });
 }
 
 // POST , verify and store the registration response.
 export async function POST(req: NextRequest) {
+  if (isDemoMode()) {
+    return demoBlockedResponse();
+  }
+
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -52,7 +75,9 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
   const { response, name } = body;
 
-  const expectedChallenge = await consumeChallenge(session.user.id, "registration");
+  const expectedChallenge = typeof body.challengeId === "string"
+    ? await consumeChallenge(body.challengeId, session.user.id, "registration")
+    : null;
   if (!expectedChallenge) {
     return NextResponse.json(
       { error: "Challenge expired or not found" },

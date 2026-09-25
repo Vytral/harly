@@ -6,9 +6,11 @@ import { z } from "zod";
 import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { logAuditEvent } from "@/lib/audit-log";
 import { createLogger } from "@/lib/logger";
 import { DEFAULT_JITSI_BASE_URL } from "@/lib/jitsi/config";
+import { safeFetchWebhook } from "@/lib/ssrf";
 import { eq } from "drizzle-orm";
 
 const log = createLogger("workspace-jitsi-settings");
@@ -45,6 +47,7 @@ export async function saveJitsiSettingsAction(input: {
   enabled: boolean;
   baseUrl: string;
 }): Promise<JitsiActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   const parsed = saveSchema.safeParse(input);
@@ -87,6 +90,7 @@ export async function saveJitsiSettingsAction(input: {
 }
 
 export async function disconnectJitsiAction(): Promise<JitsiActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   await db
@@ -112,6 +116,7 @@ export async function disconnectJitsiAction(): Promise<JitsiActionResult> {
 export async function testJitsiConnectionAction(input: {
   baseUrl?: string;
 }): Promise<JitsiActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   let target = input.baseUrl?.trim() || null;
@@ -130,19 +135,21 @@ export async function testJitsiConnectionAction(input: {
   try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    if (!res.ok) {
-      return {
-        ok: false,
-        error: `Instance responded with HTTP ${res.status}.`,
-      };
+    try {
+      const res = await safeFetchWebhook(url, {
+        method: "GET",
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        return {
+          ok: false,
+          error: `Instance responded with HTTP ${res.status}.`,
+        };
+      }
+      return { ok: true };
+    } finally {
+      clearTimeout(timeout);
     }
-    return { ok: true };
   } catch (err) {
     log.error(err, "testJitsiConnectionAction failed");
     return {

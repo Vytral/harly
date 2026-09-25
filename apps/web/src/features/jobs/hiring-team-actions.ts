@@ -3,8 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 
-import { db, jobHiringTeam, jobs, member as workspaceMembers } from "@harly/db";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import { db, jobHiringTeam, member as workspaceMembers } from "@harly/db";
+import { requireJobPermission } from "@/features/workspaces/permissions-server";
 import { logAuditEvent } from "@/lib/audit-log";
 import type { HiringTeamRole } from "@/features/jobs/hiring-team-data";
 
@@ -16,44 +16,29 @@ const HIRING_TEAM_ROLES = new Set<HiringTeamRole>([
   "interviewer",
 ]);
 
-async function validateJob(
-  context: Awaited<ReturnType<typeof requirePermission>>,
-  jobId: string,
-) {
-  const [job] = await db
-    .select({ id: jobs.id })
-    .from(jobs)
-    .where(
-      and(eq(jobs.id, jobId), eq(jobs.workspaceId, context.organization.id)),
-    )
-    .limit(1);
-  return job ?? null;
-}
-
 export async function addHiringTeamMember(input: {
   jobId: string;
   userId: string;
   role: HiringTeamRole;
 }): Promise<Result> {
   try {
-    const context = await requirePermission("hiring_team:manage");
+    const context = await requireJobPermission(
+      "hiring_team:manage",
+      input.jobId,
+    );
     if (!HIRING_TEAM_ROLES.has(input.role)) {
       return { success: false, error: "Invalid hiring-team role." };
     }
-    const [job, member] = await Promise.all([
-      validateJob(context, input.jobId),
-      db
-        .select({ userId: workspaceMembers.userId })
-        .from(workspaceMembers)
-        .where(
-          and(
-            eq(workspaceMembers.organizationId, context.organization.id),
-            eq(workspaceMembers.userId, input.userId),
-          ),
-        )
-        .limit(1),
-    ]);
-    if (!job) return { success: false, error: "Job not found." };
+    const member = await db
+      .select({ userId: workspaceMembers.userId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          eq(workspaceMembers.organizationId, context.organization.id),
+          eq(workspaceMembers.userId, input.userId),
+        ),
+      )
+      .limit(1);
     if (!member[0]) {
       return {
         success: false,
@@ -95,12 +80,12 @@ export async function updateHiringTeamRole(input: {
   role: HiringTeamRole;
 }): Promise<Result> {
   try {
-    const context = await requirePermission("hiring_team:manage");
+    const context = await requireJobPermission(
+      "hiring_team:manage",
+      input.jobId,
+    );
     if (!HIRING_TEAM_ROLES.has(input.role)) {
       return { success: false, error: "Invalid hiring-team role." };
-    }
-    if (!(await validateJob(context, input.jobId))) {
-      return { success: false, error: "Job not found." };
     }
     await db
       .update(jobHiringTeam)
@@ -137,10 +122,10 @@ export async function removeHiringTeamMember(input: {
   jobId: string;
 }): Promise<Result> {
   try {
-    const context = await requirePermission("hiring_team:manage");
-    if (!(await validateJob(context, input.jobId))) {
-      return { success: false, error: "Job not found." };
-    }
+    const context = await requireJobPermission(
+      "hiring_team:manage",
+      input.jobId,
+    );
     await db
       .delete(jobHiringTeam)
       .where(

@@ -189,11 +189,13 @@ export function ReplyHandlingSettingsForm({
   inboundStatus,
   workspaceId,
   initialMode,
+  appUrl,
 }: {
   mailboxStatus: MailboxStatus;
   inboundStatus: WorkspaceInboundEmailStatus;
   workspaceId: string;
   initialMode: ReplyMode;
+  appUrl: string;
 }) {
   const router = useRouter();
   const [mode, setMode] = useState<ReplyMode>(initialMode);
@@ -233,10 +235,7 @@ export function ReplyHandlingSettingsForm({
   const setMailboxField = (key: keyof typeof form, value: string | boolean) =>
     setForm((current) => ({ ...current, [key]: value }));
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
-  const webhookUrl = appUrl
-    ? `${appUrl}/api/webhooks/email/${provider}?ws=${workspaceId}`
-    : null;
+  const webhookUrl = `${appUrl}/api/webhooks/email/${provider}?ws=${workspaceId}`;
 
   function save() {
     startSave(async () => {

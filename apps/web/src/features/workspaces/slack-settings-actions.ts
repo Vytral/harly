@@ -16,6 +16,7 @@ import {
 import { isWebhookEvent } from "@/server/webhooks/events";
 import { logAuditEvent } from "@/lib/audit-log";
 import { dispatchDueSlack } from "@/server/notify/slack";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 
 const log = createLogger("workspace-slack-settings");
 
@@ -83,6 +84,7 @@ export async function saveSlackCredentialsAction(input: {
   clientId: string;
   clientSecret: string;
 }): Promise<SlackActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   if (!isEncryptionConfigured()) {
@@ -127,6 +129,7 @@ export async function saveSlackCredentialsAction(input: {
 export async function listSlackChannelsAction(): Promise<
   { ok: true; channels: SlackChannel[] } | { ok: false; error: string }
 > {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const botToken = await getWorkspaceSlackBotToken(context.organization.id);
   if (!botToken) return { ok: false, error: "Slack not connected." };
@@ -170,6 +173,7 @@ export async function saveSlackSettingsAction(input: {
   events: string[];
   enabled: boolean;
 }): Promise<SlackActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   const cleanEvents = input.events.filter(isWebhookEvent);
@@ -222,6 +226,7 @@ export async function saveSlackSettingsAction(input: {
 
 /** Disconnect Slack: revoke token and clear all slack columns. */
 export async function disconnectSlackAction(): Promise<SlackActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const botToken = await getWorkspaceSlackBotToken(context.organization.id);
 
@@ -265,6 +270,7 @@ export async function disconnectSlackAction(): Promise<SlackActionResult> {
 
 /** Send a test message to the configured channel. */
 export async function testSlackAction(): Promise<SlackActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const config = await getWorkspaceSlackConfig(context.organization.id);
   if (!config) return { ok: false, error: "Slack not connected." };
@@ -335,6 +341,7 @@ export async function listSlackDeliveriesAction(): Promise<
 export async function replaySlackDeliveryAction(
   deliveryId: string,
 ): Promise<SlackActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const [source] = await db
     .select()

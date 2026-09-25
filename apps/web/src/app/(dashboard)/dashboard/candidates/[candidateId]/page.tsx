@@ -28,7 +28,10 @@ import { CandidateActivityRail } from "@/features/candidates/CandidateActivityRa
 import { CandidatePager } from "@/features/candidates/CandidatePager";
 import { CandidateStickyHeader } from "@/features/candidates/CandidateStickyHeader";
 import { CandidateProfileTabs } from "@/features/candidates/CandidateProfileTabs";
+import { filterApplicationScopedItems } from "@/features/candidates/profile-scope";
 import { CandidateTags } from "@/features/candidates/CandidateTags";
+import { CandidateReferrals } from "@/features/candidates/referrals/CandidateReferrals";
+import { ReferCandidateDrawer } from "@/features/candidates/referrals/ReferCandidateDrawer";
 import { DuplicateDetectionCard } from "@/features/candidates/DuplicateDetectionCard";
 import { IdentityShield, Redact, RedactLink } from "@/features/candidates/IdentityShield";
 import { getCandidateProfile, listCandidates, findSuspectDuplicates } from "@/features/candidates/data";
@@ -36,13 +39,18 @@ import { getNextStage } from "@/features/pipeline/data";
 import { listCandidateInterviews } from "@/features/interviews/data";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listOffersForCandidate } from "@/features/offers/data";
-import { listDocumentsForCandidate, listDocumentsForSigning } from "@/features/documents/data";
-import { listDocumentRequestsForCandidate } from "@/features/documents/requests-data";
+import { listDocumentsForCandidate } from "@/features/documents/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { can } from "@/features/workspaces/permissions-server";
+import {
+  can,
+  requireApplicationPermission,
+  requireCandidatePermission,
+} from "@/features/workspaces/permissions-server";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
+import { listJobOptions } from "@/features/jobs/data";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceCalStatus } from "@/lib/cal/config";
+import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 
 export const dynamic = "force-dynamic";
@@ -83,33 +91,106 @@ export default async function CandidateDetailPage({
   params,
 }: CandidateDetailPageProps) {
   const { candidateId } = await params;
-  const [profile, allCandidates, members, interviews, offers, emailTemplates, relatedDocuments, documentRequests, signableDocuments] =
+
+  try {
+    await requireCandidatePermission("candidates:view", candidateId);
+  } catch {
+    notFound();
+  }
+
+  const [profile, allCandidates, members, jobOptions, candidateInterviews, candidateOffers, emailTemplates, relatedDocuments] =
     await Promise.all([
       getCandidateProfile(candidateId),
       listCandidates(),
       listWorkspaceMembers(),
+      listJobOptions(),
       listCandidateInterviews(candidateId),
       listOffersForCandidate(candidateId),
       listEmailTemplates(),
       listDocumentsForCandidate(candidateId),
-      listDocumentRequestsForCandidate(candidateId),
-      listDocumentsForSigning(),
     ]);
 
   if (!profile) {
     notFound();
   }
 
-  const { candidate, applications, notes, files, activity, workspaceId, scorecards, messages, tags, aiEvaluations, inPool, privacyRequests } =
-    profile;
+  const {
+    candidate,
+    applications: candidateApplications,
+    notes,
+    files,
+    activity: profileActivity,
+    workspaceId,
+    scorecards: profileScorecards,
+    messages: profileMessages,
+    tags,
+    aiEvaluations: profileAiEvaluations,
+    inPool,
+    privacyRequests,
+    referrals,
+  } = profile;
+  const applications = (
+    await Promise.all(
+      candidateApplications.map(async (application) => {
+        try {
+          await requireApplicationPermission("candidates:view", application.id);
+          return application;
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((application): application is (typeof candidateApplications)[number] => Boolean(application));
+
+  const visibleApplicationIds = new Set(
+    applications.map((application) => application.id),
+  );
+  const activity = filterApplicationScopedItems(
+    profileActivity,
+    visibleApplicationIds,
+  );
+  const scorecards = filterApplicationScopedItems(
+    profileScorecards,
+    visibleApplicationIds,
+  );
+  const messages = filterApplicationScopedItems(
+    profileMessages,
+    visibleApplicationIds,
+  );
+  const aiEvaluations = filterApplicationScopedItems(
+    profileAiEvaluations,
+    visibleApplicationIds,
+  );
+  const interviews = candidateInterviews.filter((interview) =>
+    visibleApplicationIds.has(interview.applicationId),
+  );
+  const offers = candidateOffers.filter((offer) =>
+    visibleApplicationIds.has(offer.applicationId),
+  );
+
+  const scopedCandidates = (
+    await Promise.all(
+      allCandidates.map(async (candidateRow) => {
+        try {
+          await requireCandidatePermission("candidates:view", candidateRow.id);
+          return candidateRow;
+        } catch {
+          return null;
+        }
+      }),
+    )
+  ).filter((candidateRow): candidateRow is (typeof allCandidates)[number] => Boolean(candidateRow));
+
   const isHired = applications.some((application) => application.status === "hired");
-  const [calStatus, aiStatus, workspaceContext, canManageDsar, canDeleteCandidates, canManageDocuments] = await Promise.all([
+  const [calStatus, aiStatus, esignStatus, workspaceContext, canManageDsar, canDeleteCandidates, canCollaborate, canEditCandidates] = await Promise.all([
     getWorkspaceCalStatus(workspaceId),
     getWorkspaceAiStatus(workspaceId),
+    getWorkspaceEsignStatus(workspaceId),
     getWorkspaceContext(),
     can("dsar:manage"),
     can("candidates:delete"),
-    can("documents:manage"),
+    can("collab:write"),
+    can("candidates:edit"),
   ]);
   const workspaceName = workspaceContext.organization.name;
   const currentUserName = workspaceContext.user.name;
@@ -118,7 +199,7 @@ export default async function CandidateDetailPage({
   const latestApplication = applications[0] ?? null;
   const avatarFallbackSrcs = candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl);
 
-  const [suspectCandidates, nextStage] = await Promise.all([
+  const [suspectCandidates, moveTargets] = await Promise.all([
     // Fuzzy duplicate check (heuristic only, no AI at load time)
     findSuspectDuplicates(
       candidate.id,
@@ -126,12 +207,20 @@ export default async function CandidateDetailPage({
       candidate.lastName,
       workspaceId,
     ),
-    latestApplication
-      ? getNextStage(latestApplication.jobId, latestApplication.currentStageId)
-      : Promise.resolve(null),
+    Promise.all(
+      applications.map(async (application) => ({
+        applicationId: application.id,
+        fromStageId: application.currentStageId,
+        workspaceId: application.workspaceId,
+        nextStage: await getNextStage(
+          application.jobId,
+          application.currentStageId,
+        ),
+      })),
+    ),
   ]);
 
-  const railCandidates = allCandidates
+  const railCandidates = scopedCandidates
     .slice()
     .sort((a, b) => {
       const aTime = a.latestApplication?.appliedAt?.getTime() ?? 0;
@@ -185,14 +274,7 @@ export default async function CandidateDetailPage({
     company_name: workspaceName,
     sender_name: currentUserName,
   };
-  const moveTarget = latestApplication
-    ? {
-        applicationId: latestApplication.id,
-        fromStageId: latestApplication.currentStageId,
-        workspaceId: latestApplication.workspaceId,
-        nextStage,
-      }
-    : null;
+  const moveTarget = moveTargets[0] ?? null;
   const serializedActivity = activity.map((event) => ({
     ...event,
     createdAt: event.createdAt.toISOString(),
@@ -237,6 +319,7 @@ export default async function CandidateDetailPage({
                 members={members}
                 cal={actionCal}
                 move={moveTarget}
+                moveTargets={moveTargets}
                 emailTemplates={emailTemplates}
                 emailTemplateValues={actionTemplateValues}
                 inPool={inPool}
@@ -364,10 +447,33 @@ export default async function CandidateDetailPage({
                     />
                   ) : null}
 
-                  <CandidateTags
-                    candidateId={candidate.id}
-                    workspaceId={workspaceId}
-                    tags={tags}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <CandidateTags
+                      candidateId={candidate.id}
+                      workspaceId={workspaceId}
+                      tags={tags}
+                    />
+                    {canCollaborate ? (
+                      <ReferCandidateDrawer
+                        candidateId={candidate.id}
+                        workspaceId={workspaceId}
+                        jobs={jobOptions.map((job) => ({ id: job.id, title: job.title }))}
+                        members={members}
+                        currentUserId={workspaceContext.user.id}
+                        canAttributeToOthers={canEditCandidates}
+                        trigger={
+                          <Button type="button" variant="outline" size="sm">
+                            <UserPlus className="size-4" />
+                            Refer
+                          </Button>
+                        }
+                      />
+                    ) : null}
+                  </div>
+                  <CandidateReferrals
+                    referrals={referrals}
+                    currentUserId={workspaceContext.user.id}
+                    canEditCandidates={canEditCandidates}
                   />
                 </div>
               </div>
@@ -387,6 +493,7 @@ export default async function CandidateDetailPage({
                   members={members}
                   cal={actionCal}
                   move={moveTarget}
+                  moveTargets={moveTargets}
                   emailTemplates={emailTemplates}
                   emailTemplateValues={actionTemplateValues}
                   inPool={inPool}
@@ -430,9 +537,6 @@ export default async function CandidateDetailPage({
               createdAt: file.createdAt.toISOString(),
             }))}
             relatedDocuments={relatedDocuments}
-            signableDocuments={signableDocuments}
-            documentRequests={documentRequests}
-            canManageDocuments={canManageDocuments}
             activity={serializedActivity}
             scorecards={scorecards}
             messages={messages}
@@ -450,6 +554,7 @@ export default async function CandidateDetailPage({
               aiStatus.enabled && aiStatus.hasApiKey && aiStatus.encryptionReady
             }
             offers={offers}
+            offerSignatureChannel={esignStatus.offerSignatureChannel}
             privacyRequests={canManageDsar ? privacyRequests.map((request) => ({
               ...request,
               createdAt: request.createdAt.toISOString(),

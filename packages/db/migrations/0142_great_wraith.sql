@@ -1,0 +1,5 @@
+CREATE UNIQUE INDEX "applications_workspace_id_candidate_job_uidx" ON "applications" USING btree ("workspace_id","id","candidate_id","job_id");--> statement-breakpoint
+ALTER TABLE "interviews" ADD CONSTRAINT "interviews_application_context_fk" FOREIGN KEY ("workspace_id","application_id","candidate_id","job_id") REFERENCES "public"."applications"("workspace_id","id","candidate_id","job_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "offers" ADD CONSTRAINT "offers_application_context_fk" FOREIGN KEY ("workspace_id","application_id","candidate_id","job_id") REFERENCES "public"."applications"("workspace_id","id","candidate_id","job_id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "interviews" ADD CONSTRAINT "interviews_duration_mins_check" CHECK ("interviews"."duration_mins" between 1 and 1440);--> statement-breakpoint
+ALTER TABLE "interviews" ADD CONSTRAINT "interviews_single_video_provider_check" CHECK (num_nonnulls("interviews"."teams_meeting_id", "interviews"."zoom_meeting_id", "interviews"."jitsi_room") <= 1);

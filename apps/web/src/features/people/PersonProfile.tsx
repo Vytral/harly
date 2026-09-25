@@ -31,12 +31,35 @@ export function PersonProfile({
 }) {
   const hasAbout = Boolean(profile.bio);
   const hasJobs = jobs.length > 0;
+  const hasSpecialties = Boolean(
+    profile.specialties?.length || profile.languages?.length,
+  );
+  const hasContact = Boolean(
+    profile.phone ||
+      profile.linkedinUrl ||
+      profile.githubUrl ||
+      profile.websiteUrl,
+  );
+  const hasAvailability = Boolean(
+    profile.timezone ||
+      profile.capacityHoursPerWeek ||
+      (profile.weeklyAvailability &&
+        Object.values(profile.weeklyAvailability).some(
+          (ranges) => ranges.length > 0,
+        )),
+  );
+
+  // The right sidebar only renders cards that have content; when it would be
+  // empty, the main column goes full-width so there's no dangling 320px gap.
+  const hasSidebar = hasContact || hasSpecialties || hasAvailability;
+  // A profile is "sparse" when the main column has no real content to show.
+  const mainColumnEmpty = !hasAbout && !hasJobs;
 
   return (
     <div className="space-y-6">
       <Link
         href={"/people" as Route}
-        className="inline-flex w-fit items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-offset-4 hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+        className="inline-flex w-fit items-center gap-1.5 rounded-sm text-sm text-muted-foreground outline-offset-4 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
       >
         <ArrowLeft className="size-3.5" />
         Back to People
@@ -44,7 +67,13 @@ export function PersonProfile({
 
       <PersonHeader profile={profile} />
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+      <div
+        className={
+          hasSidebar
+            ? "grid items-start gap-6 lg:grid-cols-[1fr_320px]"
+            : "grid items-start gap-6"
+        }
+      >
         <div className="space-y-6">
           {hasAbout && (
             <Card>
@@ -63,9 +92,9 @@ export function PersonProfile({
 
           {hasJobs ? (
             <PersonJobsSection jobs={jobs} />
-          ) : !hasAbout ? (
-            <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-xl border border-dashed bg-card px-6 py-12 text-center">
-              <div className="mb-4 flex size-11 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+          ) : mainColumnEmpty ? (
+            <div className="flex min-h-[16rem] flex-col items-center justify-center rounded-3xl border border-dashed bg-card px-6 py-12 text-center">
+              <div className="mb-4 flex size-11 items-center justify-center rounded-2xl bg-accent text-accent-foreground">
                 <UserRoundX className="size-5" />
               </div>
               <h2 className="text-sm font-semibold text-foreground">
@@ -76,21 +105,41 @@ export function PersonProfile({
                 jobs or hiring teams yet.
               </p>
             </div>
-          ) : null}
+          ) : (
+            // Bio present but no jobs: keep the column from collapsing into a
+            // lonely card by showing a quiet "on no jobs yet" note.
+            <div className="rounded-3xl border border-dashed bg-card px-5 py-6 text-center text-sm text-muted-foreground">
+              Not on any jobs or hiring teams yet.
+            </div>
+          )}
         </div>
 
-        <div className="space-y-6">
-          <ContactCard profile={profile} />
-          {(profile.specialties?.length || profile.languages?.length) && (
-            <SpecialtiesCard profile={profile} />
-          )}
-          <PersonAvailabilityCard
-            timezone={profile.timezone}
-            weeklyAvailability={profile.weeklyAvailability}
-            capacityHoursPerWeek={profile.capacityHoursPerWeek}
-          />
-        </div>
+        {hasSidebar && (
+          <div className="space-y-6">
+            <ContactCard profile={profile} />
+            {hasSpecialties && <SpecialtiesCard profile={profile} />}
+            <PersonAvailabilityCard
+              timezone={profile.timezone}
+              weeklyAvailability={profile.weeklyAvailability}
+              capacityHoursPerWeek={profile.capacityHoursPerWeek}
+            />
+          </div>
+        )}
       </div>
+
+      <NothingElseFooter />
+    </div>
+  );
+}
+
+/** A quiet end-of-page marker so sparse profiles don't trail into blank space. */
+function NothingElseFooter() {
+  return (
+    <div className="flex flex-col items-center gap-1.5 pt-2 pb-6 text-center">
+      <div className="h-px w-10 bg-border" />
+      <p className="text-xs text-muted-foreground/70">
+        Nothing else to see here.
+      </p>
     </div>
   );
 }
@@ -101,28 +150,36 @@ function PersonHeader({ profile }: { profile: PersonProfileData }) {
       <UserAvatar name={profile.name} src={profile.image} size="xl" />
       <div className="min-w-0">
         <h1 className="text-xl font-semibold tracking-tight">{profile.name}</h1>
-        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+        {profile.username && (
+          <p className="mt-0.5 text-sm text-muted-foreground/70">
+            @{profile.username}
+          </p>
+        )}
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
           {profile.jobTitle && <span>{profile.jobTitle}</span>}
-          {profile.username && (
-            <span className="text-muted-foreground/70">
-              @{profile.username}
+          {profile.location && (
+            <span className="flex items-center gap-1.5">
+              <MapPin className="size-3.5" />
+              {profile.location}
             </span>
           )}
+          <a
+            href={`mailto:${profile.email}`}
+            className="flex items-center gap-1.5 rounded-sm outline-offset-4 transition-colors hover:text-foreground focus-visible:outline-2 focus-visible:outline-primary"
+          >
+            <Mail className="size-3.5" />
+            {profile.email}
+          </a>
         </div>
-        {profile.location && (
-          <div className="mt-1.5 flex items-center gap-1.5 text-sm text-muted-foreground">
-            <MapPin className="size-3.5" />
-            {profile.location}
-          </div>
-        )}
       </div>
     </div>
   );
 }
 
 function ContactCard({ profile }: { profile: PersonProfileData }) {
+  // Email lives in the header; this card only surfaces the *other* channels so
+  // it never renders as a lonely duplicate of the address up top.
   const links = [
-    { icon: Mail, label: profile.email, href: `mailto:${profile.email}` },
     profile.phone && {
       icon: Phone,
       label: profile.phone,
@@ -145,6 +202,8 @@ function ContactCard({ profile }: { profile: PersonProfileData }) {
     },
   ].filter(Boolean) as { icon: typeof Mail; label: string; href: string }[];
 
+  if (links.length === 0) return null;
+
   return (
     <Card>
       <CardHeader>
@@ -159,7 +218,7 @@ function ContactCard({ profile }: { profile: PersonProfileData }) {
             href={link.href}
             target={link.href.startsWith("http") ? "_blank" : undefined}
             rel={link.href.startsWith("http") ? "noreferrer" : undefined}
-            className="flex items-center gap-2 rounded-sm text-sm outline-offset-4 hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
+            className="flex items-center gap-2 rounded-sm text-sm outline-offset-4 transition-colors hover:text-primary focus-visible:outline-2 focus-visible:outline-primary"
           >
             <link.icon className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="truncate">{link.label}</span>

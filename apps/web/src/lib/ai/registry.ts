@@ -9,6 +9,7 @@ import type { LanguageModel } from "ai";
 
 import type { AiModelConfig, OpenRouterModel } from "./providers";
 import { assertSafeAiBaseUrl } from "./base-url";
+import { xaiCompatibleFetch } from "./provider-tools";
 
 /** Build a Vercel AI SDK LanguageModel for the given provider + key + model id. */
 export function getModel(config: AiModelConfig): LanguageModel {
@@ -28,7 +29,7 @@ export function getModel(config: AiModelConfig): LanguageModel {
     case "google":
       return createGoogleGenerativeAI(opts)(modelId);
     case "xai":
-      return createXai(opts)(modelId);
+      return createXai({ ...opts, fetch: xaiCompatibleFetch })(modelId);
     case "openrouter":
       return createOpenRouter({ apiKey, baseURL: baseUrl })(modelId);
     default:

@@ -1,3 +1,4 @@
+import { isDemoMode } from "@harly/config";
 import { eq } from "drizzle-orm";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -12,6 +13,7 @@ export async function notifyZoomEvent(
   event: WebhookEvent,
   data: Record<string, unknown>,
 ): Promise<void> {
+  if (isDemoMode()) return;
   const webhookUrl = process.env.ZOOM_WEBHOOK_URL;
   if (!webhookUrl) return;
 

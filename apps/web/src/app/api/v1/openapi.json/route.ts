@@ -7,14 +7,12 @@ import { apiContracts } from "@/server/api/contracts/registry";
 import { jsonSchema } from "@/server/api/contracts";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { withApi } from "@/server/api/respond";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const runtime = "nodejs";
 
 function baseUrl(): string {
-  return (process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000").replace(
-    /\/$/,
-    "",
-  );
+  return getHarlyPublicOrigin();
 }
 
 function parameterList(contract: (typeof apiContracts)[number]) {
@@ -113,7 +111,7 @@ export const GET = withApi(async (request) => {
     openapi: "3.1.0",
     info: {
       title: "Harly API",
-      version: process.env.HARLY_VERSION ?? "1.0.0",
+      version: process.env.HARLY_VERSION ?? "0.1.0-dev",
     },
     servers: [{ url: baseUrl() }],
     paths,

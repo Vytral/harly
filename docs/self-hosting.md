@@ -178,7 +178,7 @@ TypeScript toolchain are build-time only.
 ```bash
 # Works everywhere: a private local rollback point (mode 0600).
 npx @harly/cli backup
-npx @harly/cli update --to <release-version> --yes
+npx @harly/cli update
 npx @harly/cli restore backups/harly-2026-...tar.gz --force
 
 # Optional advanced encryption for a portable backup.
@@ -238,6 +238,5 @@ It lives at `tooling/docker/compose.dev.yml` and is not the production stack.
 Development needs Node 22+, pnpm, Docker, about 4 GB of available RAM and 10 GB
 of free disk for a comfortable full-monorepo workflow. Turbopack's persistent
 filesystem cache is disabled to prevent multi-gigabyte `.next` growth, and its
-memory graph defaults to 1024 MB. Larger workstations can set
-`HARLY_DEV_MEMORY_MB=2048`; values below 512 MB are ignored. `pnpm clean`
-removes generated workspace caches without touching PostgreSQL volumes.
+`pnpm clean` removes generated workspace caches without touching PostgreSQL
+volumes.

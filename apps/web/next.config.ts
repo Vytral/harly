@@ -1,12 +1,6 @@
 import type { NextConfig } from "next";
 import path from "node:path";
 
-const devMemoryMb = Number.parseInt(process.env.HARLY_DEV_MEMORY_MB ?? "1024", 10);
-const turbopackMemoryLimit =
-  Number.isFinite(devMemoryMb) && devMemoryMb >= 512
-    ? devMemoryMb * 1024 * 1024
-    : 1024 * 1024 * 1024;
-
 const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingRoot: path.join(process.cwd(), "../.."),
@@ -26,13 +20,11 @@ const nextConfig: NextConfig = {
           // Some constrained runners can leave the isolated worker waiting
           // indefinitely. CI keeps the faster worker by default, while this
           // escape hatch makes the build recoverable for those environments.
-          webpackBuildWorker: process.env.HARLY_DISABLE_WEBPACK_BUILD_WORKER !== "1",
+          webpackBuildWorker:
+            process.env.HARLY_DISABLE_WEBPACK_BUILD_WORKER !== "1",
           webpackMemoryOptimizations: true,
         }
       : {
-          // Keep Turbopack's graph bounded. Override with HARLY_DEV_MEMORY_MB
-          // on larger workstations; values below 512 MiB are rejected.
-          turbopackMemoryLimit,
           // Keep development predictable across machines. Turbopack's
           // persistent cache can otherwise grow to several GB under .next/dev.
           turbopackFileSystemCacheForDev: false,
@@ -47,6 +39,39 @@ const nextConfig: NextConfig = {
     "@harly/config",
   ],
   serverExternalPackages: ["postgres", "unpdf"],
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          {
+            key: "X-Content-Type-Options",
+            value: "nosniff",
+          },
+          {
+            key: "X-Frame-Options",
+            value: "SAMEORIGIN",
+          },
+          {
+            key: "Referrer-Policy",
+            value: "strict-origin-when-cross-origin",
+          },
+          {
+            key: "Permissions-Policy",
+            value: "camera=(), microphone=(), geolocation=()",
+          },
+          ...(process.env.NODE_ENV === "production"
+            ? [
+                {
+                  key: "Strict-Transport-Security",
+                  value: "max-age=31536000; includeSubDomains",
+                },
+              ]
+            : []),
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

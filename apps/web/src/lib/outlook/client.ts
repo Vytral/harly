@@ -140,6 +140,7 @@ export async function createEvent(
     attendees?: string[];
     location?: string;
     onlineMeeting?: boolean;
+    timeZone?: string;
   },
 ): Promise<OutlookEvent> {
   const startIso = event.start.toISOString();
@@ -147,7 +148,7 @@ export async function createEvent(
     event.start.getTime() + event.durationMins * 60_000,
   ).toISOString();
 
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = event.timeZone ?? "UTC";
 
   const body: Record<string, unknown> = {
     subject: event.subject,
@@ -186,9 +187,10 @@ export async function updateEvent(
     durationMins?: number;
     attendees?: string[];
     location?: string;
+    timeZone?: string;
   },
 ): Promise<OutlookEvent> {
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const timeZone = updates.timeZone ?? "UTC";
 
   const body: Record<string, unknown> = {};
   if (updates.subject) body.subject = updates.subject;
@@ -269,13 +271,18 @@ export async function sendMail(
   });
 }
 
-/** Create a standalone Teams online meeting. */
+/**
+ * Create or recover a standalone Teams online meeting. The external ID is
+ * provider-supported idempotency: a retry after a lost response returns the
+ * existing meeting instead of creating another one.
+ */
 export async function createTeamsMeeting(
   accessToken: string,
   meeting: {
     subject: string;
     start: Date;
     durationMins: number;
+    externalId: string;
   },
 ): Promise<OutlookOnlineMeeting> {
   const startIso = meeting.start.toISOString();
@@ -283,12 +290,13 @@ export async function createTeamsMeeting(
     meeting.start.getTime() + meeting.durationMins * 60_000,
   ).toISOString();
 
-  return outlookFetch<OutlookOnlineMeeting>(accessToken, "/me/onlineMeetings", {
+  return outlookFetch<OutlookOnlineMeeting>(accessToken, "/me/onlineMeetings/createOrGet", {
     method: "POST",
     body: JSON.stringify({
       subject: meeting.subject,
       startDateTime: startIso,
       endDateTime: endIso,
+      externalId: meeting.externalId,
     }),
   });
 }

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => {
     getWorkspaceContext: vi.fn(),
     requirePermission: vi.fn(),
     requireApplicationPermission: vi.fn(),
+    emitWebhookEvent: vi.fn(),
   };
 });
 
@@ -59,7 +60,7 @@ vi.mock("@/lib/email", () => ({
   getWorkspaceEmailBranding: vi.fn(async () => ({})),
 }));
 vi.mock("@/server/webhooks/emit", () => ({
-  emitWebhookEvent: vi.fn(),
+  emitWebhookEvent: mocks.emitWebhookEvent,
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
@@ -164,6 +165,7 @@ describe("F1-08 pipeline move concurrency guard", () => {
       user: { id: "user-1" },
     });
     mocks.requirePermission.mockResolvedValue(undefined);
+    mocks.emitWebhookEvent.mockReset();
   });
 
   it("rejects the move when the application stays modified concurrently (optimistic lock)", async () => {
@@ -183,9 +185,7 @@ describe("F1-08 pipeline move concurrency guard", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error ?? "").toMatch(
-      /changed by another recruiter|unable to move/i,
-    );
+    expect(result.error ?? "").toMatch(/changed by another recruiter/i);
     expect(mocks.transactionImpl).toHaveBeenCalledTimes(3);
   });
 
@@ -226,6 +226,20 @@ describe("F1-08 pipeline move concurrency guard", () => {
 
     expect(result.success).toBe(true);
     expect(mocks.transactionImpl).toHaveBeenCalledTimes(2);
+    expect(mocks.emitWebhookEvent).toHaveBeenCalledTimes(1);
+    const [workspaceId, eventName, payload, options] =
+      mocks.emitWebhookEvent.mock.calls[0] ?? [];
+    expect(workspaceId).toBe(WORKSPACE_ID);
+    expect(eventName).toBe("application.stage_changed");
+    expect(payload).toMatchObject({
+      application: { id: "app-1" },
+      eventId: expect.any(String),
+    });
+    expect(options).toMatchObject({
+      actorId: "user-1",
+      eventId: payload.eventId,
+      skipDomainEvent: true,
+    });
   });
 
   it("surfaces the real error after exhausting all retries instead of hanging", async () => {
@@ -245,9 +259,7 @@ describe("F1-08 pipeline move concurrency guard", () => {
     });
 
     expect(result.success).toBe(false);
-    expect(result.error ?? "").toMatch(
-      /changed by another recruiter|unable to move/i,
-    );
+    expect(result.error ?? "").toMatch(/changed by another recruiter/i);
     expect(mocks.transactionImpl).toHaveBeenCalledTimes(3);
   });
 });

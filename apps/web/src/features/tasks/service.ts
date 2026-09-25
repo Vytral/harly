@@ -19,6 +19,7 @@ import {
   publishPersistedDomainEvents,
   type PersistedDomainEvent,
 } from "@/server/events/emit";
+import { emitWebhookEvent, webhookOptionsAfterPersist } from "@/server/webhooks/emit";
 
 /**
  * Workspace-scoped task service for the REST API.  It deliberately accepts an
@@ -492,7 +493,7 @@ export async function updateTaskForApi(input: {
       metadata: { taskId: task.id, status: input.values.status ?? null },
     });
     domainEvent = await persistDomainEvent(tx, {
-      name: input.values.status === "completed" ? "task.updated" : "task.updated",
+      name: input.values.status === "completed" ? "task.completed" : "task.updated",
       workspaceId: input.workspaceId,
       actorId: input.actorId,
       aggregateType: "task",
@@ -502,6 +503,14 @@ export async function updateTaskForApi(input: {
     return task;
   });
   if (domainEvent) await publishPersistedDomainEvents([domainEvent]);
+  if (domainEvent && input.values.status === "completed") {
+    await emitWebhookEvent(
+      input.workspaceId,
+      "task.completed",
+      domainEvent.payload,
+      webhookOptionsAfterPersist(domainEvent),
+    );
+  }
   return task;
 }
 

@@ -4,9 +4,10 @@ import {
   buildGoogleAuthUrl,
   buildGitHubAuthUrl,
   buildLinkedInAuthUrl,
-  getPortalWorkspaceBySlug,
+  getSinglePortalWorkspace,
 } from "@/lib/portal-auth";
 import { createLogger } from "@/lib/logger";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { createPortalOAuthState, PORTAL_OAUTH_STATE_COOKIE } from "@/lib/portal-oauth-state";
 
 const log = createLogger("api-portal-auth");
@@ -17,11 +18,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const provider = searchParams.get("provider");
   const next = searchParams.get("next") ?? "/portal/dashboard";
-  const workspaceSlug = searchParams.get("workspace");
-  if (!workspaceSlug) {
-    return NextResponse.json({ error: "Workspace is required." }, { status: 400 });
-  }
-  const workspace = await getPortalWorkspaceBySlug(workspaceSlug);
+  const workspace = await getSinglePortalWorkspace();
 
   if (!workspace) {
     return NextResponse.json({ error: "Portal not enabled." }, { status: 404 });
@@ -29,7 +26,7 @@ export async function GET(request: NextRequest) {
 
   const state = createPortalOAuthState(next, workspace.id);
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const appUrl = getHarlyPublicOrigin();
 
   try {
     if (provider === "google") {

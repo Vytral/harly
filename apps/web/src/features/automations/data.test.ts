@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MAX_ACTIONS_PER_WORKFLOW } from "./schema";
 
 /**
  * Data-layer tests (§3.5). We stub the DB and assert the data layer:
@@ -83,6 +84,7 @@ vi.mock("@harly/db", () => ({
   },
   workflowDefinitions: {},
   workflowDefinitionVersions: {},
+  workflowDrafts: {},
   workflowRuns: {},
   workflowRunSteps: {},
 }));
@@ -145,23 +147,26 @@ describe("automations data — createWorkflow re-validates jsonb (§3.4)", () =>
     expect(dbState.inserted).toHaveLength(0);
   });
 
-  it("rejects an empty actions array", async () => {
-    await expect(
-      createWorkflow({
-        workspaceId: "ws-1",
-        values: { ...validInput, actions: [] } as unknown as WorkflowDefinitionInput,
-        createdById: "user-1",
-      }),
-    ).rejects.toThrow();
+  it("persists an incomplete draft with zero actions", async () => {
+    await createWorkflow({
+      workspaceId: "ws-1",
+      values: { ...validInput, name: "", actions: [] },
+      createdById: "user-1",
+    });
+    expect(dbState.inserted[0]).toMatchObject({
+      name: "Untitled recipe",
+      actions: [],
+      triggerEvent: "application.created",
+    });
   });
 
-  it("rejects more than 10 actions", async () => {
+  it("rejects more than the safe action cap", async () => {
     await expect(
       createWorkflow({
         workspaceId: "ws-1",
         values: {
           ...validInput,
-          actions: Array(11).fill({ type: "add_note", config: { body: "hi" } }),
+          actions: Array(MAX_ACTIONS_PER_WORKFLOW + 1).fill({ type: "add_note", config: { body: "hi" } }),
         } as unknown as WorkflowDefinitionInput,
         createdById: "user-1",
       }),
@@ -192,44 +197,7 @@ describe("automations data — createWorkflow re-validates jsonb (§3.4)", () =>
 });
 
 describe("automations data — updateWorkflow", () => {
-  beforeEach(() => {
-    dbState.updated = [];
-  });
-
-  it("re-validates trigger on update and re-syncs triggerEvent", async () => {
-    await updateWorkflow({
-      workspaceId: "ws-1",
-      id: "wf-1",
-      patch: { trigger: { event: "interview.completed" } },
-    });
-
-    expect(dbState.updated).toHaveLength(1);
-    const { set } = dbState.updated[0]!;
-    expect(set.trigger).toEqual({ event: "interview.completed", filter: undefined });
-    expect(set.triggerEvent).toBe("interview.completed");
-  });
-
-  it("validates actions on update", async () => {
-    await expect(
-      updateWorkflow({
-        workspaceId: "ws-1",
-        id: "wf-1",
-        patch: { actions: [] },
-      }),
-    ).rejects.toThrow();
-  });
-
-  it("accepts a partial patch (enabled only) without touching other fields", async () => {
-    await updateWorkflow({
-      workspaceId: "ws-1",
-      id: "wf-1",
-      patch: { enabled: false },
-    });
-    expect(dbState.updated[0]?.set).toMatchObject({ enabled: false });
-    expect(dbState.updated[0]?.set.trigger).toBeUndefined();
-  });
-
-  it("rejects an invalid trigger on update", async () => {
+  it("rejects an invalid trigger before touching storage", async () => {
     await expect(
       updateWorkflow({
         workspaceId: "ws-1",
@@ -260,6 +228,26 @@ describe("automations data — scoping + notFound", () => {
   it("listWorkflows returns the rows the DB yields", async () => {
     dbState.workflows = [{ id: "wf-a", workspaceId: "ws-1" }];
     const rows = await listWorkflows("ws-1");
-    expect(rows).toEqual([{ id: "wf-a", workspaceId: "ws-1" }]);
+    expect(rows[0]).toMatchObject({ id: "wf-a", workspaceId: "ws-1" });
+  });
+});
+
+describe("automations data mutations in public demo", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it("blocks direct create and delete calls before storage writes", async () => {
+    vi.stubEnv("DEMO_MODE", "true");
+    const insertedBefore = dbState.inserted.length;
+    const deletedBefore = dbState.deleted.length;
+
+    await expect(
+      createWorkflow({ workspaceId: "ws-demo", values: validInput, createdById: "user-demo" }),
+    ).rejects.toMatchObject({ code: "DEMO_ACTION_DISABLED" });
+    await expect(deleteWorkflow({ workspaceId: "ws-demo", id: "workflow-demo" })).rejects.toMatchObject({
+      code: "DEMO_ACTION_DISABLED",
+    });
+
+    expect(dbState.inserted).toHaveLength(insertedBefore);
+    expect(dbState.deleted).toHaveLength(deletedBefore);
   });
 });

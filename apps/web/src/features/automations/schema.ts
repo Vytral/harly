@@ -25,13 +25,22 @@ import { z } from "zod";
 export const WORKFLOW_EVENTS = [
   "application.created",
   "application.stage_changed",
+  "application.status_changed",
   "application.hired",
   "application.rejected",
   "candidate.created",
   "candidate.updated",
   "interview.scheduled",
+  "interview.rescheduled",
   "interview.completed",
+  "interview.canceled",
+  "task.completed",
   "job.published",
+  "document.signature_sent",
+  "document.signature_changed",
+  "document.signature_voided",
+  "evaluation.completed",
+  "webhook.received",
 ] as const;
 
 export type WorkflowEvent = (typeof WORKFLOW_EVENTS)[number];
@@ -47,7 +56,7 @@ export function isWorkflowEvent(value: string): value is WorkflowEvent {
  *
  * Values are primitives or arrays of primitives; arrays use `in` membership.
  */
-const triggerFilterSchema = z
+export const triggerFilterSchema = z
   .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.string())]))
   .optional();
 
@@ -57,6 +66,27 @@ export const triggerSchema = z.object({
 });
 
 export type Trigger = z.infer<typeof triggerSchema>;
+export type TriggerFilter = NonNullable<Trigger["filter"]>;
+
+/**
+ * Apply several filter keys in one update. Sequential `onChange` calls each
+ * clone the *previous* filter, so the last write wins and earlier keys vanish
+ * (job + stage on the same select change). Empty string deletes a key.
+ */
+export function patchTriggerFilter(
+  current: Trigger["filter"],
+  patch: Record<string, string | number | boolean | null | string[] | undefined>,
+): Trigger["filter"] {
+  const next: TriggerFilter = { ...(current ?? {}) };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === undefined || value === null || value === "") {
+      delete next[key];
+    } else {
+      next[key] = value;
+    }
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Conditions — a serializable AND/OR/NOT tree over domain fields
@@ -192,7 +222,9 @@ export type Conditions = z.infer<typeof conditionsSchema>;
 
 /**
  * Action type identifiers. The registry (registry.ts) maps each of these to a
- * handler. v1 ships a subset; the catalog is append-only.
+ * handler. v2 ships the executable subset; the catalog is append-only. The
+ * historical linear runner may still read older definitions, but it is not a
+ * creation target for the builder.
  */
 export const ACTION_TYPES = [
   // Pipeline
@@ -202,16 +234,24 @@ export const ACTION_TYPES = [
   "add_note",
   "add_tag",
   "remove_tag",
+  "request_documents",
+  "generate_document",
+  "send_document_for_signature",
   // Communication
   "send_email",
+  "send_booking_link",
   "send_slack",
   "send_telegram",
   "send_discord",
+  "send_in_app_alert",
   // Interview / offer / task
   "schedule_interview",
+  "reschedule_interview",
+  "cancel_interview",
   "create_offer",
   "send_offer",
   "create_task",
+  "erase_candidate_data",
   // External
   "http_request",
   // AI
@@ -242,13 +282,20 @@ export const actionSchema = z.object({
 
 export type Action = z.infer<typeof actionSchema>;
 
-/** v1 cap on actions per workflow (decision D8). */
-export const MAX_ACTIONS_PER_WORKFLOW = 10;
+/** Safe action cap shared by the graph editor and the compatibility facade. */
+export const MAX_ACTIONS_PER_WORKFLOW = 100;
 
-export const actionsSchema = z
+/** Drafts may have zero actions; publishing still requires at least one. */
+export const draftActionsSchema = z
   .array(actionSchema)
-  .min(1, "A workflow must have at least one action.")
   .max(MAX_ACTIONS_PER_WORKFLOW, `A workflow can have at most ${MAX_ACTIONS_PER_WORKFLOW} actions.`);
+
+export const actionsSchema = draftActionsSchema.min(
+  1,
+  "A workflow must have at least one action.",
+);
+
+export const UNTITLED_WORKFLOW_NAME = "Untitled recipe";
 
 // ---------------------------------------------------------------------------
 // The whole workflow definition
@@ -278,13 +325,26 @@ export const workflowInputSchema = workflowDefinitionSchema
     actions: true,
   })
   .extend({
+    // Drafts may be unnamed; the data layer stores UNTITLED_WORKFLOW_NAME.
+    name: z.string().trim().max(120),
+    // Drafts may have zero actions; publishing validates completeness separately.
+    actions: draftActionsSchema,
     // `conditions` is optional on input; normalize to [] when absent.
     conditions: conditionsSchema.optional(),
     maxRunsPerMinute: z.number().int().min(1).max(10_000).optional(),
     maxExternalActionsPerMinute: z.number().int().min(1).max(10_000).optional(),
     circuitBreakerThreshold: z.number().int().min(1).max(100).optional(),
     circuitBreakerCooldownSeconds: z.number().int().min(30).max(86_400).optional(),
+    // An operator may open the live circuit immediately. Clearing or
+    // shortening an already-open circuit is handled as a policy relaxation.
+    circuitOpenUntil: z.string().datetime().nullable().optional(),
   });
+
+/** Structural completeness required to request approval or publish. */
+export const workflowPublishInputSchema = workflowInputSchema.extend({
+  name: z.string().trim().min(1).max(120),
+  actions: actionsSchema,
+});
 
 export type WorkflowDefinitionInput = z.infer<typeof workflowInputSchema>;
 export type WorkflowDefinition = z.infer<typeof workflowDefinitionSchema>;

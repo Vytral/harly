@@ -28,7 +28,8 @@ type Context = { params: Promise<{ slug: string }> };
  */
 export const POST = withApi(
   async (request, context) => {
-    enforceRateLimit(`public:apply:${clientIp(request)}`, {
+    const remoteIp = clientIp(request);
+    await enforceRateLimit(`public:apply:${remoteIp}`, {
       limit: 10,
       windowMs: 60_000,
     });
@@ -97,15 +98,33 @@ export const POST = withApi(
       throw ApiError.unprocessable("Some answers are invalid.", questionErrors);
     }
 
+    const consentGiven = body.consentGiven === true;
+    if (jobContext.applicationConfig.legalConfigured && !consentGiven) {
+      throw ApiError.unprocessable(
+        "You must agree to the privacy policy to submit your application.",
+      );
+    }
+
     const result = await createPublicApplication(
       { jobSlug: slug, workspaceSlug: workspace.slug },
       parsed.data,
+      {
+        consent: consentGiven
+          ? {
+              consentText: jobContext.applicationConfig.consentText,
+              ipAddress: remoteIp,
+              userAgent: request.headers.get("user-agent"),
+            }
+          : null,
+      },
     );
     if (!result.ok) {
       throw ApiError.conflict(result.message);
     }
 
-    void sendApplicationReceivedEmails(result.email);
+    // Wait until the durable email outbox rows exist before acknowledging the
+    // application. Delivery itself remains retryable by the outbox worker.
+    await sendApplicationReceivedEmails(result.email);
     after(async () => {
       await Promise.allSettled([
         scheduleAutoScore(result.applicationId, jobContext.workspaceId),

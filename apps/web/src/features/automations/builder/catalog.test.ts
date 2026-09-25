@@ -20,7 +20,7 @@ describe("catalog — action metadata covers every action type", () => {
     }
   });
 
-  it("pickable actions are exactly the v1-registered types", () => {
+  it("pickable actions are exactly the registered types", () => {
     const registered = [
       "move_stage",
       "set_status",
@@ -30,10 +30,36 @@ describe("catalog — action metadata covers every action type", () => {
       "create_task",
       "send_slack",
       "send_email",
+      "send_booking_link",
+      "request_documents",
+      "generate_document",
+      "reschedule_interview",
+      "cancel_interview",
+      "send_document_for_signature",
+      "schedule_interview",
       "http_request",
+      "send_telegram",
+      "send_discord",
+      "send_in_app_alert",
+      "create_offer",
+      "send_offer",
+      "ai_score",
+      "erase_candidate_data",
     ];
     const pickable = pickableActions().map((a) => a.type).sort();
     expect(pickable).toEqual([...registered].sort());
+  });
+
+  it("uses the server manifest as the source of available action versions", () => {
+    const actions = pickableActions([
+      { type: "send_email", version: 2 },
+      { type: "add_note", version: 1 },
+    ]);
+
+    expect(actions).toEqual([
+      expect.objectContaining({ type: "add_note", toolVersion: 1 }),
+      expect.objectContaining({ type: "send_email", toolVersion: 2 }),
+    ]);
   });
 
   it("every available action has at least one config field or is config-free on purpose", () => {

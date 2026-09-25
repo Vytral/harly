@@ -12,8 +12,9 @@ import { db, member } from "@harly/db";
 export async function findWorkspaceMember(
   workspaceId: string,
   userId: string,
+  database: typeof db = db,
 ) {
-  const [row] = await db
+  const [row] = await database
     .select({ userId: member.userId })
     .from(member)
     .where(

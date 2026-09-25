@@ -1,11 +1,10 @@
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import Link from "next/link";
-import { eq, and, asc, isNull } from "drizzle-orm";
+import { eq, and, inArray, isNull } from "drizzle-orm";
 import type { Route } from "next";
 
 import {
-  applicationQuestions,
   applications,
   candidates,
   db,
@@ -14,6 +13,8 @@ import {
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { PortalShell } from "@/features/portal/PortalShellServer";
 import { JobApplyForm } from "@/features/portal/JobApplyForm";
+import { normalizeJobApplicationConfig } from "@/features/jobs/config";
+import { RichBody } from "@/features/career-page/RichBody";
 import {
   MapPinIcon,
   CurrencyDollarIcon,
@@ -60,6 +61,7 @@ export default async function JobDetailPage({ params }: PageProps) {
   const [job] = await db
     .select({
       id: jobs.id,
+      applicationConfig: jobs.applicationConfig,
       title: jobs.title,
       description: jobs.description,
       department: jobs.department,
@@ -100,24 +102,27 @@ export default async function JobDetailPage({ params }: PageProps) {
         eq(applications.candidateId, session.candidateId),
         eq(applications.jobId, jobId),
         eq(applications.workspaceId, session.workspaceId),
+        inArray(applications.status, ["active", "hired"]),
       ),
     )
     .limit(1);
 
-  const questions = await db
-    .select({
-      id: applicationQuestions.id,
-      key: applicationQuestions.key,
-      label: applicationQuestions.label,
-      type: applicationQuestions.type,
-      required: applicationQuestions.required,
-      minLength: applicationQuestions.minLength,
-      placeholder: applicationQuestions.placeholder,
-      options: applicationQuestions.options,
-    })
-    .from(applicationQuestions)
-    .where(eq(applicationQuestions.jobId, jobId))
-    .orderBy(asc(applicationQuestions.order));
+  const questions = normalizeJobApplicationConfig(job.applicationConfig).questions.map(
+    (question) => ({
+      id: question.id,
+      key: question.id,
+      label: question.label,
+      type: question.type,
+      required: question.required,
+      minLength: question.minLength ?? null,
+      placeholder: question.placeholder ?? null,
+      options: question.options ?? [],
+      description: question.description ?? null,
+      optionDescriptions: question.optionDescriptions ?? [],
+      agreeLabel: question.agreeLabel ?? null,
+      disagreeLabel: question.disagreeLabel ?? null,
+    }),
+  );
 
   const salary = formatSalary(job.salaryMin, job.salaryMax, job.currency, job.salaryPeriod);
 
@@ -164,9 +169,7 @@ export default async function JobDetailPage({ params }: PageProps) {
         {job.description && (
           <div className="rounded-xl border border-border bg-card p-5">
             <h2 className="mb-2 text-sm font-semibold text-foreground">About the role</h2>
-            <div className="prose prose-sm max-w-none text-muted-foreground">
-              {job.description}
-            </div>
+            <RichBody html={job.description} className="prose prose-sm max-w-none text-muted-foreground" />
           </div>
         )}
 

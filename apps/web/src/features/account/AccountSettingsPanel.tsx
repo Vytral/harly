@@ -41,6 +41,7 @@ import { GithubIcon } from "@/components/ui/icons/GithubIcon";
 import { LinkedinLogo } from "@/components/ui/icons/brands";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import { Badge } from "@/components/ui/badge";
+import { DemoLockedNotice } from "@/features/demo/DemoLockedNotice";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -314,10 +315,12 @@ export function AccountSettingsPanel({
   user,
   securitySlot,
   sessions,
+  demoLocked = false,
 }: {
   user: AccountUser;
   securitySlot?: React.ReactNode;
   sessions: SessionDevice[];
+  demoLocked?: boolean;
 }) {
   const router = useRouter();
   const avatarInputRef = useRef<HTMLInputElement>(null);
@@ -600,7 +603,8 @@ export function AccountSettingsPanel({
   function handleSignOut() {
     startSignOut(async () => {
       await signOut();
-      window.location.href = "/login";
+      router.replace("/login");
+      router.refresh();
     });
   }
 
@@ -613,7 +617,8 @@ export function AccountSettingsPanel({
       }
       if (result.current) {
         await signOut();
-        window.location.href = "/login";
+        router.replace("/login");
+        router.refresh();
       } else {
         toast.success("Session revoked.");
         router.refresh();
@@ -632,6 +637,11 @@ export function AccountSettingsPanel({
 
   return (
     <div className="mx-auto max-w-3xl space-y-8">
+      {demoLocked ? (
+        <DemoLockedNotice>
+          Account identity changes are locked in the demo so the shared login stays usable for everyone.
+        </DemoLockedNotice>
+      ) : null}
       {/* ─── Profile header ─── */}
       <div className="flex flex-col items-center gap-4 pt-2 sm:flex-row sm:items-center sm:gap-6">
         <div className="group relative shrink-0">
@@ -639,12 +649,12 @@ export function AccountSettingsPanel({
             name={displayName}
             src={image || null}
             size="xl"
-            className="size-20 text-2xl ring-2 ring-border/50 ring-offset-2 ring-offset-background"
+            className="ring-2 ring-border/50 ring-offset-2 ring-offset-background"
           />
           <button
             type="button"
             onClick={() => avatarInputRef.current?.click()}
-            disabled={savingProfile}
+            disabled={demoLocked || savingProfile}
             aria-label="Change avatar"
             className="absolute inset-0 flex items-center justify-center rounded-full bg-black/0 text-white/0 transition-all duration-150 ease-out hover:bg-black/40 hover:text-white/90 focus-visible:bg-black/40 focus-visible:text-white/90 focus-visible:outline-none active:scale-[0.97]"
           >
@@ -1057,14 +1067,14 @@ export function AccountSettingsPanel({
                     );
                     setProfileDirty(false);
                   }}
-                  disabled={savingProfile}
+                  disabled={demoLocked || savingProfile}
                 >
                   Discard
                 </Button>
                 <Button
                   size="sm"
                   onClick={saveProfile}
-                  disabled={savingProfile}
+                  disabled={demoLocked || savingProfile}
                 >
                   <PencilLine className="size-4" />
                   {savingProfile ? "Saving…" : "Save profile"}
@@ -1083,7 +1093,7 @@ export function AccountSettingsPanel({
               <Button
                 variant="outline"
                 onClick={saveEmail}
-                disabled={savingEmail || !newEmail.trim()}
+                disabled={demoLocked || savingEmail || !newEmail.trim()}
               >
                 {savingEmail ? "Updating…" : "Update email"}
               </Button>
@@ -1118,7 +1128,7 @@ export function AccountSettingsPanel({
               <Button
                 variant="outline"
                 onClick={savePassword}
-                disabled={savingPassword || !canSavePassword}
+                disabled={demoLocked || savingPassword || !canSavePassword}
               >
                 {savingPassword ? "Saving…" : "Change password"}
               </Button>

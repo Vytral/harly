@@ -4,6 +4,7 @@ import {
   ACTION_TYPES,
   MAX_ACTIONS_PER_WORKFLOW,
   OPERATORS,
+  UNTITLED_WORKFLOW_NAME,
   WORKFLOW_EVENTS,
   actionSchema,
   actionsSchema,
@@ -11,9 +12,11 @@ import {
   fieldRefSchema,
   isActionType,
   isWorkflowEvent,
+  patchTriggerFilter,
   triggerEventOf,
   triggerSchema,
   workflowInputSchema,
+  workflowPublishInputSchema,
 } from "./schema";
 
 describe("automations schema — triggers", () => {
@@ -59,6 +62,9 @@ describe("automations schema — triggers", () => {
   it("exports the full event catalog", () => {
     expect(WORKFLOW_EVENTS).toContain("application.created");
     expect(WORKFLOW_EVENTS).toContain("job.published");
+    expect(WORKFLOW_EVENTS).toContain("interview.rescheduled");
+    expect(WORKFLOW_EVENTS).toContain("interview.canceled");
+    expect(WORKFLOW_EVENTS).toContain("task.completed");
     expect(isWorkflowEvent("application.created")).toBe(true);
     expect(isWorkflowEvent("nope")).toBe(false);
   });
@@ -67,6 +73,36 @@ describe("automations schema — triggers", () => {
     expect(
       triggerEventOf({ event: "interview.completed", filter: undefined }),
     ).toBe("interview.completed");
+  });
+});
+
+describe("T01 — patchTriggerFilter is atomic", () => {
+  it("changing job clears stage keys and keeps the new job in one update", () => {
+    const next = patchTriggerFilter(
+      { jobId: "job-a", toStageId: "stage-1", toStageName: "Interview" },
+      { jobId: "job-b", toStageId: "", toStageName: "" },
+    );
+    expect(next).toEqual({ jobId: "job-b" });
+  });
+
+  it("sequential single-key writes from the same snapshot can drop the new job", () => {
+    const previous = { jobId: "job-a", toStageId: "stage-1", toStageName: "Interview" };
+    const lastWrite = patchTriggerFilter(previous, { toStageName: "" });
+    expect(lastWrite).toEqual({ jobId: "job-a", toStageId: "stage-1" });
+    expect(lastWrite).not.toHaveProperty("jobId", "job-b");
+  });
+
+  it("clearing the job leaves stage-name filters when they are not in the patch", () => {
+    const next = patchTriggerFilter({ jobId: "job-a", toStageName: "Offer" }, { jobId: "" });
+    expect(next).toEqual({ toStageName: "Offer" });
+  });
+
+  it("setting a stage keeps the selected job", () => {
+    const next = patchTriggerFilter(
+      { jobId: "job-b" },
+      { toStageId: "stage-9", toStageName: "Hired", stageName: "" },
+    );
+    expect(next).toEqual({ jobId: "job-b", toStageId: "stage-9", toStageName: "Hired" });
   });
 });
 
@@ -236,7 +272,7 @@ describe("automations schema — actions", () => {
     expect(res.success).toBe(false);
   });
 
-  it("enforces the v1 cap of 10 actions", () => {
+  it("enforces the safe cap of 100 actions", () => {
     const actions = Array(MAX_ACTIONS_PER_WORKFLOW).fill({
       type: "add_note",
       config: { body: "hi" },
@@ -300,9 +336,11 @@ describe("automations schema — workflow input", () => {
       maxExternalActionsPerMinute: 40,
       circuitBreakerThreshold: 6,
       circuitBreakerCooldownSeconds: 600,
+      circuitOpenUntil: "2030-01-02T03:04:05.000Z",
     });
     expect(parsed.maxRunsPerMinute).toBe(120);
     expect(parsed.circuitBreakerCooldownSeconds).toBe(600);
+    expect(parsed.circuitOpenUntil).toBe("2030-01-02T03:04:05.000Z");
   });
 
   it("rejects unsafe operational guardrail values", () => {
@@ -310,24 +348,39 @@ describe("automations schema — workflow input", () => {
       ...validInput,
       maxRunsPerMinute: 0,
       circuitBreakerCooldownSeconds: 1,
+      circuitOpenUntil: "not-a-date",
     });
     expect(res.success).toBe(false);
   });
 
-  it("rejects an empty name", () => {
+  it("accepts an empty name on a draft", () => {
     const res = workflowInputSchema.safeParse({ ...validInput, name: "" });
-    expect(res.success).toBe(false);
+    expect(res.success).toBe(true);
   });
 
-  it("rejects an empty actions array (a workflow must do something)", () => {
+  it("accepts an empty actions array on a draft", () => {
     const res = workflowInputSchema.safeParse({ ...validInput, actions: [] });
+    expect(res.success).toBe(true);
+  });
+
+  it("rejects an empty name when publishing", () => {
+    const res = workflowPublishInputSchema.safeParse({ ...validInput, name: "" });
     expect(res.success).toBe(false);
   });
 
-  it("rejects more than 10 actions at the workflow level", () => {
+  it("rejects an empty actions array when publishing", () => {
+    const res = workflowPublishInputSchema.safeParse({ ...validInput, actions: [] });
+    expect(res.success).toBe(false);
+  });
+
+  it("exports the untitled draft label", () => {
+    expect(UNTITLED_WORKFLOW_NAME.length).toBeGreaterThan(0);
+  });
+
+  it("rejects more than the safe action cap at the workflow level", () => {
     const res = workflowInputSchema.safeParse({
       ...validInput,
-      actions: Array(11).fill({ type: "add_note", config: { body: "hi" } }),
+      actions: Array(MAX_ACTIONS_PER_WORKFLOW + 1).fill({ type: "add_note", config: { body: "hi" } }),
     });
     expect(res.success).toBe(false);
   });

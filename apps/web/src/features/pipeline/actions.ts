@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, desc, eq, inArray, isNull, isNotNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
@@ -71,11 +71,21 @@ type UpdateStageEmailSettingsInput = {
 
 type StageTransitionEvent = {
   applicationId: string;
+  eventId: string;
+  hiredEventId?: string;
+  rejectedEventId?: string;
   fromStageId: string | null;
   toStageId: string;
+  toStageName: string;
   status: ApplicationStatus;
   becameHired: boolean;
   becameRejected: boolean;
+};
+
+type StatusTransitionEvent = {
+  applicationId: string;
+  eventId: string;
+  event: "application.hired" | "application.rejected";
 };
 
 type PipelineEmail =
@@ -100,6 +110,7 @@ type PipelineEmail =
 import { createLogger } from "@/lib/logger";
 import {
   ConcurrencyConflictError,
+  isConcurrencyConflict,
   withConcurrencyRetry,
 } from "@/lib/concurrent";
 
@@ -151,6 +162,7 @@ async function getApplicationsForAction(
       jobId: applications.jobId,
       currentStageId: applications.currentStageId,
       updatedAt: applications.updatedAt,
+      updatedAtVersion: sql<string>`${applications.updatedAt}::text`,
       status: applications.status,
       candidateEmail: candidates.email,
       candidateFirstName: candidates.firstName,
@@ -184,6 +196,22 @@ async function getApplicationsForAction(
     );
 }
 
+/**
+ * Bulk pipeline actions must be all-or-nothing at the authorization boundary.
+ * Checking the workspace permission alone is insufficient for scoped roles:
+ * every application can belong to a different job assignment.
+ */
+async function requireAllApplicationPermissions(
+  permission: "candidates:move" | "candidates:edit",
+  applicationIds: string[],
+) {
+  await Promise.all(
+    applicationIds.map((applicationId) =>
+      requireApplicationPermission(permission, applicationId),
+    ),
+  );
+}
+
 export async function moveApplicationInPipeline(
   input: MoveApplicationInPipelineInput,
 ): Promise<{ success: boolean; error?: string }> {
@@ -211,6 +239,7 @@ export async function moveApplicationInPipeline(
 
     const emails = await withConcurrencyRetry(
       async () => {
+        stageEvents.length = 0;
         domainEvents.length = 0;
         return db.transaction<PipelineEmail[]>(async (tx) => {
           const [application] = await tx
@@ -218,7 +247,7 @@ export async function moveApplicationInPipeline(
               id: applications.id,
               candidateId: applications.candidateId,
               currentStageId: applications.currentStageId,
-              updatedAt: applications.updatedAt,
+              updatedAtVersion: sql<string>`${applications.updatedAt}::text`,
               status: applications.status,
               candidateEmail: candidates.email,
               candidateFirstName: candidates.firstName,
@@ -290,7 +319,7 @@ export async function moveApplicationInPipeline(
                 input.fromStageId
                   ? eq(applications.currentStageId, input.fromStageId)
                   : undefined,
-                eq(applications.updatedAt, application.updatedAt),
+                sql`${applications.updatedAt} = ${application.updatedAtVersion}::timestamptz`,
               ),
             )
             .returning({ id: applications.id });
@@ -353,56 +382,61 @@ export async function moveApplicationInPipeline(
               },
             });
 
-            stageEvents.push({
+            const stageEvent: StageTransitionEvent = {
               applicationId: input.applicationId,
+              eventId: "",
               fromStageId: application.currentStageId,
               toStageId: input.toStageId,
+              toStageName: application.toStageName,
               status: nextStatus,
               becameHired:
                 application.status !== "hired" && nextStatus === "hired",
               becameRejected:
                 application.status !== "rejected" && nextStatus === "rejected",
-            });
+            };
 
-            domainEvents.push(
-              await persistDomainEvent(tx, {
-                name: "application.stage_changed",
+            const stageDomainEvent = await persistDomainEvent(tx, {
+              name: "application.stage_changed",
+              workspaceId: input.workspaceId,
+              actorId: user.id,
+              aggregateType: "application",
+              aggregateId: input.applicationId,
+              payload: {
+                application: { id: input.applicationId },
+                fromStageId: application.currentStageId,
+                toStageId: input.toStageId,
+                toStageName: application.toStageName,
+                status: nextStatus,
+              },
+            });
+            stageEvent.eventId = stageDomainEvent.eventId;
+            domainEvents.push(stageDomainEvent);
+
+            if (application.status !== "hired" && nextStatus === "hired") {
+              const hiredDomainEvent = await persistDomainEvent(tx, {
+                name: "application.hired",
                 workspaceId: input.workspaceId,
                 actorId: user.id,
                 aggregateType: "application",
                 aggregateId: input.applicationId,
-                payload: {
-                  application: { id: input.applicationId },
-                  fromStageId: application.currentStageId,
-                  toStageId: input.toStageId,
-                  status: nextStatus,
-                },
-              }),
-            );
-            if (application.status !== "hired" && nextStatus === "hired") {
-              domainEvents.push(
-                await persistDomainEvent(tx, {
-                  name: "application.hired",
-                  workspaceId: input.workspaceId,
-                  actorId: user.id,
-                  aggregateType: "application",
-                  aggregateId: input.applicationId,
-                  payload: { application: { id: input.applicationId } },
-                }),
-              );
+                payload: { application: { id: input.applicationId } },
+              });
+              stageEvent.hiredEventId = hiredDomainEvent.eventId;
+              domainEvents.push(hiredDomainEvent);
             }
             if (application.status !== "rejected" && nextStatus === "rejected") {
-              domainEvents.push(
-                await persistDomainEvent(tx, {
-                  name: "application.rejected",
-                  workspaceId: input.workspaceId,
-                  actorId: user.id,
-                  aggregateType: "application",
-                  aggregateId: input.applicationId,
-                  payload: { application: { id: input.applicationId } },
-                }),
-              );
+              const rejectedDomainEvent = await persistDomainEvent(tx, {
+                name: "application.rejected",
+                workspaceId: input.workspaceId,
+                actorId: user.id,
+                aggregateType: "application",
+                aggregateId: input.applicationId,
+                payload: { application: { id: input.applicationId } },
+              });
+              stageEvent.rejectedEventId = rejectedDomainEvent.eventId;
+              domainEvents.push(rejectedDomainEvent);
             }
+            stageEvents.push(stageEvent);
           }
 
           if (changedStatus) {
@@ -507,9 +541,15 @@ export async function moveApplicationInPipeline(
           application: { id: event.applicationId },
           fromStageId: event.fromStageId,
           toStageId: event.toStageId,
+          toStageName: event.toStageName,
           status: event.status,
+          eventId: event.eventId,
         },
-        { actorId: user.id, skipDomainEvent: true },
+        {
+          actorId: user.id,
+          eventId: event.eventId,
+          skipDomainEvent: true,
+        },
       );
       if (event.becameHired) {
         await emitWebhookEvent(
@@ -517,8 +557,13 @@ export async function moveApplicationInPipeline(
           "application.hired",
           {
             application: { id: event.applicationId },
+            eventId: event.hiredEventId,
           },
-          { actorId: user.id, skipDomainEvent: true },
+          {
+            actorId: user.id,
+            eventId: event.hiredEventId,
+            skipDomainEvent: true,
+          },
         );
       }
       if (event.becameRejected) {
@@ -527,8 +572,13 @@ export async function moveApplicationInPipeline(
           "application.rejected",
           {
             application: { id: event.applicationId },
+            eventId: event.rejectedEventId,
           },
-          { actorId: user.id, skipDomainEvent: true },
+          {
+            actorId: user.id,
+            eventId: event.rejectedEventId,
+            skipDomainEvent: true,
+          },
         );
       }
     }
@@ -536,6 +586,9 @@ export async function moveApplicationInPipeline(
     return { success: true };
   } catch (error) {
     log.error(error, "moveApplicationInPipeline failed");
+    if (isConcurrencyConflict(error) && error instanceof Error) {
+      return { success: false, error: error.message };
+    }
     return { success: false, error: "Unable to move application." };
   }
 }
@@ -570,6 +623,11 @@ export async function bulkMoveApplications(
       return { success: false, error: "Workspace access denied." };
     }
 
+    await requireAllApplicationPermissions(
+      "candidates:move",
+      uniqueApplicationIds,
+    );
+
     const [portalSettings] = await db
       .select({
         showApplicationStatus: workspaceSettings.portalShowApplicationStatus,
@@ -585,6 +643,7 @@ export async function bulkMoveApplications(
 
     const emails = await withConcurrencyRetry(
       async () => {
+        stageEvents.length = 0;
         domainEvents.length = 0;
         return db.transaction<PipelineEmail[]>(async (tx) => {
           const [targetStage] = await tx
@@ -620,7 +679,11 @@ export async function bulkMoveApplications(
           );
 
           const targetStageApplications = await tx
-            .select({ id: applications.id, updatedAt: applications.updatedAt })
+            .select({
+              id: applications.id,
+              updatedAt: applications.updatedAt,
+              updatedAtVersion: sql<string>`${applications.updatedAt}::text`,
+            })
             .from(applications)
             .innerJoin(
               jobs,
@@ -644,7 +707,7 @@ export async function bulkMoveApplications(
             targetStageApplications.map((item) => item.id),
           );
           const versionById = new Map(
-            targetStageApplications.map((item) => [item.id, item.updatedAt]),
+            targetStageApplications.map((item) => [item.id, item.updatedAtVersion]),
           );
           const orderedIds = [
             ...targetStageApplications.map((item) => item.id),
@@ -658,6 +721,7 @@ export async function bulkMoveApplications(
               candidateId: applications.candidateId,
               currentStageId: applications.currentStageId,
               updatedAt: applications.updatedAt,
+              updatedAtVersion: sql<string>`${applications.updatedAt}::text`,
               status: applications.status,
               candidateEmail: candidates.email,
               candidateFirstName: candidates.firstName,
@@ -741,7 +805,7 @@ export async function bulkMoveApplications(
                   and(
                     eq(applications.id, applicationId),
                     eq(applications.workspaceId, input.workspaceId),
-                    eq(applications.updatedAt, appData.updatedAt),
+                    sql`${applications.updatedAt} = ${appData.updatedAtVersion}::timestamptz`,
                   ),
                 )
                 .returning({ id: applications.id });
@@ -750,7 +814,7 @@ export async function bulkMoveApplications(
                   "An application changed by another recruiter. Refresh and try again.",
                 );
               }
-              versionById.set(applicationId, now);
+              versionById.set(applicationId, now.toISOString());
             }
 
             await tx.insert(applicationStageHistory).values(
@@ -789,54 +853,58 @@ export async function bulkMoveApplications(
               const becameHired =
                 appData.status !== "hired" && resolvedStatus === "hired";
 
-              stageEvents.push({
+              const stageEvent: StageTransitionEvent = {
                 applicationId,
+                eventId: "",
                 fromStageId,
                 toStageId: input.toStageId,
+                toStageName,
                 status: resolvedStatus,
                 becameHired,
                 becameRejected,
-              });
+              };
 
-              domainEvents.push(
-                await persistDomainEvent(tx, {
-                  name: "application.stage_changed",
+              const stageDomainEvent = await persistDomainEvent(tx, {
+                name: "application.stage_changed",
+                workspaceId: input.workspaceId,
+                actorId: user.id,
+                aggregateType: "application",
+                aggregateId: applicationId,
+                payload: {
+                  application: { id: applicationId },
+                  fromStageId,
+                  toStageId: input.toStageId,
+                  toStageName,
+                  status: resolvedStatus,
+                },
+              });
+              stageEvent.eventId = stageDomainEvent.eventId;
+              domainEvents.push(stageDomainEvent);
+              if (becameHired) {
+                const hiredDomainEvent = await persistDomainEvent(tx, {
+                  name: "application.hired",
                   workspaceId: input.workspaceId,
                   actorId: user.id,
                   aggregateType: "application",
                   aggregateId: applicationId,
-                  payload: {
-                    application: { id: applicationId },
-                    fromStageId,
-                    toStageId: input.toStageId,
-                    status: resolvedStatus,
-                  },
-                }),
-              );
-              if (becameHired) {
-                domainEvents.push(
-                  await persistDomainEvent(tx, {
-                    name: "application.hired",
-                    workspaceId: input.workspaceId,
-                    actorId: user.id,
-                    aggregateType: "application",
-                    aggregateId: applicationId,
-                    payload: { application: { id: applicationId } },
-                  }),
-                );
+                  payload: { application: { id: applicationId } },
+                });
+                stageEvent.hiredEventId = hiredDomainEvent.eventId;
+                domainEvents.push(hiredDomainEvent);
               }
               if (becameRejected) {
-                domainEvents.push(
-                  await persistDomainEvent(tx, {
-                    name: "application.rejected",
-                    workspaceId: input.workspaceId,
-                    actorId: user.id,
-                    aggregateType: "application",
-                    aggregateId: applicationId,
-                    payload: { application: { id: applicationId } },
-                  }),
-                );
+                const rejectedDomainEvent = await persistDomainEvent(tx, {
+                  name: "application.rejected",
+                  workspaceId: input.workspaceId,
+                  actorId: user.id,
+                  aggregateType: "application",
+                  aggregateId: applicationId,
+                  payload: { application: { id: applicationId } },
+                });
+                stageEvent.rejectedEventId = rejectedDomainEvent.eventId;
+                domainEvents.push(rejectedDomainEvent);
               }
+              stageEvents.push(stageEvent);
 
               if (shouldNotifyPortalStatus && (becameRejected || becameHired)) {
                 await tx.insert(candidatePortalNotifications).values({
@@ -902,7 +970,7 @@ export async function bulkMoveApplications(
                   eq(applications.id, applicationId),
                   eq(applications.workspaceId, input.workspaceId),
                   eq(applications.currentStageId, input.toStageId),
-                  eq(applications.updatedAt, expectedVersion),
+                  sql`${applications.updatedAt} = ${expectedVersion}::timestamptz`,
                 ),
               )
               .returning({ id: applications.id });
@@ -911,7 +979,7 @@ export async function bulkMoveApplications(
                 "Application ordering changed. Refresh and try again.",
               );
             }
-            versionById.set(applicationId, now);
+            versionById.set(applicationId, now.toISOString());
           }
 
           return collectedEmails;
@@ -938,9 +1006,15 @@ export async function bulkMoveApplications(
           application: { id: evt.applicationId },
           fromStageId: evt.fromStageId,
           toStageId: input.toStageId,
+          toStageName: evt.toStageName,
           status: evt.status,
+          eventId: evt.eventId,
         },
-        { actorId: user.id, skipDomainEvent: true },
+        {
+          actorId: user.id,
+          eventId: evt.eventId,
+          skipDomainEvent: true,
+        },
       );
       if (evt.becameHired) {
         void emitWebhookEvent(
@@ -948,8 +1022,13 @@ export async function bulkMoveApplications(
           "application.hired",
           {
             application: { id: evt.applicationId },
+            eventId: evt.hiredEventId,
           },
-          { actorId: user.id, skipDomainEvent: true },
+          {
+            actorId: user.id,
+            eventId: evt.hiredEventId,
+            skipDomainEvent: true,
+          },
         );
       }
       if (evt.becameRejected) {
@@ -958,8 +1037,13 @@ export async function bulkMoveApplications(
           "application.rejected",
           {
             application: { id: evt.applicationId },
+            eventId: evt.rejectedEventId,
           },
-          { actorId: user.id, skipDomainEvent: true },
+          {
+            actorId: user.id,
+            eventId: evt.rejectedEventId,
+            skipDomainEvent: true,
+          },
         );
       }
     }
@@ -967,6 +1051,9 @@ export async function bulkMoveApplications(
     return { success: true };
   } catch (error) {
     log.error(error, "bulkMoveApplications failed");
+    if (isConcurrencyConflict(error) && error instanceof Error) {
+      return { success: false, error: error.message };
+    }
     return { success: false, error: "Unable to move applications." };
   }
 }
@@ -993,6 +1080,11 @@ export async function updateApplicationStatus(
       return { success: false, error: "Workspace access denied." };
     }
 
+    await requireAllApplicationPermissions(
+      "candidates:edit",
+      input.applicationIds,
+    );
+
     let applicationRows = await getApplicationsForAction(
       input.applicationIds,
       input.workspaceId,
@@ -1016,7 +1108,7 @@ export async function updateApplicationStatus(
     const shouldNotifyStatus = portalSettings?.showApplicationStatus !== false;
 
     const stageEvents: StageTransitionEvent[] = [];
-    const statusEvents: string[] = [];
+    const statusEvents: StatusTransitionEvent[] = [];
     const domainEvents: PersistedDomainEvent[] = [];
     const emails = await withConcurrencyRetry(
       async () => {
@@ -1055,7 +1147,7 @@ export async function updateApplicationStatus(
                   and(
                     eq(jobStages.workspaceId, input.workspaceId),
                     eq(jobStages.jobId, application.jobId),
-                    eq(jobStages.name, terminalStageName),
+                    sql`lower(${jobStages.name}) = ${terminalStageName.toLowerCase()}`,
                   ),
                 )
                 .limit(1);
@@ -1161,7 +1253,7 @@ export async function updateApplicationStatus(
                 and(
                   eq(applications.workspaceId, input.workspaceId),
                   eq(applications.id, application.id),
-                  eq(applications.updatedAt, application.updatedAt),
+                  sql`${applications.updatedAt} = ${application.updatedAtVersion}::timestamptz`,
                 ),
               )
               .returning({ id: applications.id });
@@ -1191,50 +1283,60 @@ export async function updateApplicationStatus(
                   source: "status_change",
                 },
               });
-              stageEvents.push({
+              const stageEvent: StageTransitionEvent = {
                 applicationId: application.id,
+                eventId: "",
                 fromStageId: application.currentStageId,
                 toStageId: targetStageId,
+                toStageName: targetStage?.name ?? "",
                 status: input.status,
                 becameHired:
                   application.status !== "hired" && input.status === "hired",
                 becameRejected:
                   application.status !== "rejected" &&
                   input.status === "rejected",
+              };
+              const stageDomainEvent = await persistDomainEvent(tx, {
+                name: "application.stage_changed",
+                workspaceId: input.workspaceId,
+                actorId: user.id,
+                aggregateType: "application",
+                aggregateId: application.id,
+                payload: {
+                  application: { id: application.id },
+                  fromStageId: application.currentStageId,
+                  toStageId: targetStageId,
+                  toStageName: targetStage?.name ?? "",
+                  status: input.status,
+                },
               });
-              domainEvents.push(
-                await persistDomainEvent(tx, {
-                  name: "application.stage_changed",
+              stageEvent.eventId = stageDomainEvent.eventId;
+              domainEvents.push(stageDomainEvent);
+              stageEvents.push(stageEvent);
+            }
+
+            if (statusChanged) {
+              if (input.status === "hired" || input.status === "rejected") {
+                const statusDomainEvent = await persistDomainEvent(tx, {
+                  name:
+                    input.status === "hired"
+                      ? "application.hired"
+                      : "application.rejected",
                   workspaceId: input.workspaceId,
                   actorId: user.id,
                   aggregateType: "application",
                   aggregateId: application.id,
-                  payload: {
-                    application: { id: application.id },
-                    fromStageId: application.currentStageId,
-                    toStageId: targetStageId,
-                    status: input.status,
-                  },
-                }),
-              );
-            }
-
-            if (statusChanged) {
-              statusEvents.push(application.id);
-              if (input.status === "hired" || input.status === "rejected") {
-                domainEvents.push(
-                  await persistDomainEvent(tx, {
-                    name:
-                      input.status === "hired"
-                        ? "application.hired"
-                        : "application.rejected",
-                    workspaceId: input.workspaceId,
-                    actorId: user.id,
-                    aggregateType: "application",
-                    aggregateId: application.id,
-                    payload: { application: { id: application.id } },
-                  }),
-                );
+                  payload: { application: { id: application.id } },
+                });
+                domainEvents.push(statusDomainEvent);
+                statusEvents.push({
+                  applicationId: application.id,
+                  eventId: statusDomainEvent.eventId,
+                  event:
+                    input.status === "hired"
+                      ? "application.hired"
+                      : "application.rejected",
+                });
               }
               await tx.insert(activityEvents).values({
                 workspaceId: input.workspaceId,
@@ -1316,24 +1418,34 @@ export async function updateApplicationStatus(
     revalidatePath("/dashboard/pipeline");
     await publishPersistedDomainEvents(domainEvents);
 
-    for (const applicationId of statusEvents) {
-      if (input.status === "hired") {
+    for (const statusEvent of statusEvents) {
+      if (statusEvent.event === "application.hired") {
         void emitWebhookEvent(
           input.workspaceId,
           "application.hired",
           {
-            application: { id: applicationId },
+            application: { id: statusEvent.applicationId },
+            eventId: statusEvent.eventId,
           },
-          { actorId: user.id, skipDomainEvent: true },
+          {
+            actorId: user.id,
+            eventId: statusEvent.eventId,
+            skipDomainEvent: true,
+          },
         );
-      } else if (input.status === "rejected") {
+      } else {
         void emitWebhookEvent(
           input.workspaceId,
           "application.rejected",
           {
-            application: { id: applicationId },
+            application: { id: statusEvent.applicationId },
+            eventId: statusEvent.eventId,
           },
-          { actorId: user.id, skipDomainEvent: true },
+          {
+            actorId: user.id,
+            eventId: statusEvent.eventId,
+            skipDomainEvent: true,
+          },
         );
       }
     }
@@ -1345,9 +1457,15 @@ export async function updateApplicationStatus(
           application: { id: event.applicationId },
           fromStageId: event.fromStageId,
           toStageId: event.toStageId,
+          toStageName: event.toStageName,
           status: event.status,
+          eventId: event.eventId,
         },
-        { actorId: user.id, skipDomainEvent: true },
+        {
+          actorId: user.id,
+          eventId: event.eventId,
+          skipDomainEvent: true,
+        },
       );
     }
     void sendPipelineEmails(input.workspaceId, emails, user.id);
@@ -1355,6 +1473,9 @@ export async function updateApplicationStatus(
     return { success: true };
   } catch (error) {
     log.error(error, "updateApplicationStatus failed");
+    if (isConcurrencyConflict(error) && error instanceof Error) {
+      return { success: false, error: error.message };
+    }
     return { success: false, error: "Unable to update status." };
   }
 }

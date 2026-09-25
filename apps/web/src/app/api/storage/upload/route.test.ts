@@ -45,6 +45,7 @@ describe("local storage upload route", () => {
         method: "PUT",
         headers: {
           "Content-Type": "image/png",
+          "Content-Length": String(bytes.byteLength),
           Origin: "https://jobs.example",
         },
         body: bytes,

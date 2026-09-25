@@ -7,6 +7,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceInboundEmailStatus } from "@/lib/email/config";
 import { getMailboxStatus } from "@/lib/mailbox/config";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export default async function ConfigureReplyHandlingPage() {
         inboundStatus={inboundStatus}
         workspaceId={organization.id}
         initialMode={initialMode}
+        appUrl={getHarlyPublicOrigin()}
       />
     </div>
   );

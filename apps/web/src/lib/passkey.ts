@@ -1,14 +1,10 @@
 import "server-only";
 
-import { eq, and, lt } from "drizzle-orm";
+import { eq, and, gt, isNull, lt } from "drizzle-orm";
 import { db, passkeys, passkeyChallenge } from "@harly/db";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
-const publicUrl = new URL(
-  process.env.HARLY_URL ??
-    process.env.NEXT_PUBLIC_APP_URL ??
-    process.env.BETTER_AUTH_URL ??
-    "http://localhost:3000",
-);
+const publicUrl = new URL(getHarlyPublicOrigin());
 const RP_ID = publicUrl.hostname;
 const RP_NAME = "Harly";
 const ORIGIN = publicUrl.origin;
@@ -16,9 +12,9 @@ const ORIGIN = publicUrl.origin;
 export { RP_ID, RP_NAME, ORIGIN };
 
 export async function storeChallenge(
-  userId: string,
+  userId: string | null,
   challenge: string,
-  type: "registration" | "authentication",
+  type: "login" | "registration" | "authentication",
 ) {
   // Purge stale challenges first.
   await db
@@ -39,25 +35,26 @@ export async function storeChallenge(
 }
 
 export async function consumeChallenge(
-  userId: string,
-  type: "registration" | "authentication",
+  challengeId: string,
+  userId: string | null,
+  type: "login" | "registration" | "authentication",
 ) {
+  const scope = userId === null
+    ? isNull(passkeyChallenge.userId)
+    : eq(passkeyChallenge.userId, userId);
   const [row] = await db
-    .select()
-    .from(passkeyChallenge)
+    .delete(passkeyChallenge)
     .where(
       and(
-        eq(passkeyChallenge.userId, userId),
+        eq(passkeyChallenge.id, challengeId),
+        scope,
         eq(passkeyChallenge.type, type),
+        gt(passkeyChallenge.expiresAt, new Date()),
       ),
     )
-    .limit(1);
+    .returning({ challenge: passkeyChallenge.challenge });
 
-  if (!row || row.expiresAt < new Date()) return null;
-
-  await db.delete(passkeyChallenge).where(eq(passkeyChallenge.id, row.id));
-
-  return row.challenge;
+  return row?.challenge ?? null;
 }
 
 export async function getUserPasskeys(userId: string) {

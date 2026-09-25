@@ -409,7 +409,9 @@ export async function submitApplicationAction(
       };
     }
 
-    void sendApplicationReceivedEmails(result.email);
+    // The helper awaits durable outbox inserts before returning. Keep this
+    // awaited so serverless runtimes cannot finish the response first.
+    await sendApplicationReceivedEmails(result.email);
 
     // Run opted-in AI automations after the response without risking a dropped
     // fire-and-forget promise in serverless runtimes.

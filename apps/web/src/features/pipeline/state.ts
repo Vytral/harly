@@ -15,6 +15,7 @@ export function statusForStageName(
   const normalized = stageName.trim().toLowerCase();
   if (normalized === "hired") return "hired";
   if (normalized === "rejected") return "rejected";
+  if (normalized === "withdrawn") return "withdrawn";
   return "active";
 }
 
@@ -23,5 +24,6 @@ export function terminalStageNameForStatus(
 ) {
   if (status === "hired") return "Hired";
   if (status === "rejected") return "Rejected";
+  if (status === "withdrawn") return "Withdrawn";
   return null;
 }

@@ -144,6 +144,7 @@ const cases: { file: string; html: Promise<string> }[] = [
         startDate="August 1, 2026"
         expiresAt="July 10, 2026"
         equity="0.15% over 4 years"
+        offerUrl="https://app.harly.dev/portal/applications/application-123"
       />,
     ),
   },

@@ -2,6 +2,11 @@ import { z } from "zod";
 
 import { slugify } from "@/lib/utils";
 import {
+  DEFAULT_EVALUATION_MODE,
+  EVALUATION_MODES,
+  type EvaluationMode,
+} from "@/lib/evaluation/mode";
+import {
   defaultJobApplicationConfig,
   parseJobApplicationQuestions,
   parseJobContentSections,
@@ -67,6 +72,7 @@ export const jobFormSchema = z
     workplaceType: z.enum(["remote", "hybrid", "onsite"]),
     experienceLevel: optionalText,
     education: optionalText,
+    evaluationMode: z.enum(EVALUATION_MODES).default(DEFAULT_EVALUATION_MODE),
     keywordsJson: z.string().optional(),
     description: z.string().optional(),
     contentSectionsJson: z.string().optional(),
@@ -119,8 +125,14 @@ export const jobFormSchema = z
     applicationQuestionsJson: z.string().optional(),
   })
   .superRefine((values, ctx) => {
+    const strippedDescription = (values.description ?? "")
+      .replace(/<[^>]*>/g, "")
+      .trim();
+    const isPlaceholder =
+      strippedDescription.toLowerCase() ===
+      "describe the role, the team, and the impact this person will have.";
     const hasDescription =
-      (values.description ?? "").replace(/<[^>]*>/g, "").trim().length >= 10;
+      !isPlaceholder && strippedDescription.length >= 10;
     const hasSections =
       parseJobContentSections(values.contentSectionsJson).length > 0;
     if (!hasDescription && !hasSections) {
@@ -129,6 +141,41 @@ export const jobFormSchema = z
         path: ["description"],
         message:
           "Add a description or fill in at least one section (requirements, responsibilities, or benefits).",
+      });
+    }
+
+    if (
+      values.salaryMin != null &&
+      values.salaryMax != null &&
+      values.salaryMin > values.salaryMax
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["salaryMax"],
+        message:
+          "Maximum salary must be greater than or equal to minimum salary.",
+      });
+    }
+
+    if (
+      (values.salaryMin != null || values.salaryMax != null) &&
+      !values.currency
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["currency"],
+        message: "Currency is required when a salary amount is specified.",
+      });
+    }
+
+    if (
+      (values.salaryMin != null || values.salaryMax != null) &&
+      !values.salaryPeriod
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["salaryPeriod"],
+        message: "Pay period is required when a salary amount is specified.",
       });
     }
   })
@@ -187,6 +234,7 @@ export const jobFormSchema = z
       workplaceType: values.workplaceType,
       experienceLevel: values.experienceLevel,
       education: values.education,
+      evaluationMode: values.evaluationMode as EvaluationMode,
       keywords: parseKeywords(values.keywordsJson),
       // Column is NOT NULL; a sections-only job submits no description.
       description: values.description ?? "",

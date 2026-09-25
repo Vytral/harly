@@ -8,6 +8,56 @@ import { Readable } from "node:stream";
 
 const MAX_REDIRECTS = 5;
 
+function parseIpv6Groups(value: string): number[] | null {
+  const halves = value.split("::");
+  if (halves.length > 2) return null;
+
+  const parseHalf = (half: string): number[] => {
+    if (!half) return [];
+    const groups = half.split(":");
+    if (groups.some((group) => !/^[0-9a-f]{1,4}$/i.test(group))) return [];
+    return groups.map((group) => Number.parseInt(group, 16));
+  };
+
+  const left = parseHalf(halves[0] ?? "");
+  const right = parseHalf(halves[1] ?? "");
+  if (left.length + right.length > 8) return null;
+
+  if (halves.length === 1) return left.length === 8 ? left : null;
+
+  const compressed = 8 - left.length - right.length;
+  if (compressed < 1) return null;
+  return [...left, ...Array.from({ length: compressed }, () => 0), ...right];
+}
+
+/** Return the IPv4 tail when hostname is an IPv4-mapped IPv6 address. */
+function mappedIpv4Address(hostname: string): string | null {
+  const match = /:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(hostname);
+  let groups: number[] | null;
+  if (match && match.index !== undefined && isIP(match[1]) === 4) {
+    const octets = match[1].split(".").map(Number);
+    const mapped = `${hostname.slice(0, match.index)}:${((octets[0]! << 8) | octets[1]!).toString(16)}:${((octets[2]! << 8) | octets[3]!).toString(16)}`;
+    groups = parseIpv6Groups(mapped);
+  } else if (isIP(hostname) === 6) {
+    groups = parseIpv6Groups(hostname);
+  } else {
+    return null;
+  }
+
+  if (!groups || groups.length !== 8) return null;
+  if (groups.slice(0, 5).some((group) => group !== 0) || groups[5] !== 0xffff)
+    return null;
+  return (
+    match?.[1] ??
+    [
+      groups[6]! >> 8,
+      groups[6]! & 0xff,
+      groups[7]! >> 8,
+      groups[7]! & 0xff,
+    ].join(".")
+  );
+}
+
 /**
  * Reject URLs that point at the loopback interface, link-local / private
  * ranges, or non-http(s) schemes. Used wherever we fetch a user-supplied
@@ -23,21 +73,34 @@ export function isBlockedHost(hostname: string): boolean {
     ? lower.slice(1, -1)
     : lower;
 
+  const mappedIpv4 = mappedIpv4Address(bare);
+  if (mappedIpv4) return isBlockedHost(mappedIpv4);
+
   const ipKind = isIP(bare);
   if (ipKind === 4) {
     const [a, b] = bare.split(".").map(Number);
-    // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, 169.254.0.0/16
+    // Unspecified, private, loopback, link-local, and carrier-grade ranges.
+    if (a === 0) return true;
     if (a === 10) return true;
+    if (a === 100 && b >= 64 && b <= 127) return true;
     if (a === 172 && b >= 16 && b <= 31) return true;
     if (a === 192 && b === 168) return true;
+    if (a === 192 && b === 0) return true;
+    if (a === 198 && b >= 18 && b <= 19) return true;
     if (a === 127) return true;
     if (a === 169 && b === 254) return true;
     return false;
   }
   if (ipKind === 6) {
-    if (bare === "::1") return true;
-    if (bare.startsWith("fc") || bare.startsWith("fd") || bare.startsWith("fe80"))
-      return true;
+    const groups = parseIpv6Groups(bare);
+    if (!groups) return true;
+    const first = groups[0]!;
+    const firstSixZero = groups.slice(0, 6).every((group) => group === 0);
+    if (firstSixZero) return true; // ::/96, including :: and IPv4-compatible forms
+    if ((first & 0xfe00) === 0xfc00) return true; // fc00::/7 unique local
+    if ((first & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+    if ((first & 0xffc0) === 0xfec0) return true; // fec0::/10 site-local
+    if ((first & 0xff00) === 0xff00) return true; // ff00::/8 multicast
     return false;
   }
 
@@ -110,6 +173,27 @@ async function fetchPinned(
   });
 }
 
+/** Make one validated request without following redirects or forwarding secrets to a new host. */
+export async function safeFetchHttp(
+  url: string,
+  init: RequestInit = {},
+  allowPrivate = false,
+): Promise<Response> {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    throw new Error("Invalid outbound URL.");
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Only http(s) URLs are allowed.");
+  }
+  if (parsed.username || parsed.password) {
+    throw new Error("Outbound URLs cannot contain credentials.");
+  }
+  return fetchPinned(parsed, init, allowPrivate);
+}
+
 export async function safeFetchImage(url: string): Promise<Response> {
   let parsed: URL;
   try {
@@ -171,7 +255,11 @@ export async function safeFetchWebhook(
     if (!location || redirects === MAX_REDIRECTS) {
       throw new Error("Webhook redirect limit exceeded.");
     }
-    current = await validateWebhookUrl(new URL(location, current).toString());
+    const next = new URL(location, current);
+    if (next.origin !== current.origin) {
+      throw new Error("Webhook redirects must stay on the configured origin.");
+    }
+    current = await validateWebhookUrl(next.toString());
   }
   throw new Error("Webhook redirect limit exceeded.");
 }

@@ -9,6 +9,8 @@ describe("pipeline state mapping", () => {
   it.each([
     ["Hired", "hired"],
     [" rejected ", "rejected"],
+    ["Withdrawn", "withdrawn"],
+    ["WITHDRAWN", "withdrawn"],
     ["Interview", "active"],
     ["Offer", "active"],
   ] as const)("maps %s to %s", (stageName, status) => {
@@ -19,6 +21,6 @@ describe("pipeline state mapping", () => {
     expect(terminalStageNameForStatus("hired")).toBe("Hired");
     expect(terminalStageNameForStatus("rejected")).toBe("Rejected");
     expect(terminalStageNameForStatus("active")).toBeNull();
-    expect(terminalStageNameForStatus("withdrawn")).toBeNull();
+    expect(terminalStageNameForStatus("withdrawn")).toBe("Withdrawn");
   });
 });

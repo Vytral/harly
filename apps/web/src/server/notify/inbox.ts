@@ -12,6 +12,7 @@ import { emitRealtimeInvalidation } from "@/server/events/emit";
 import { REALTIME_EVENTS } from "@/server/events/registry";
 
 type NotifyParams = {
+  database?: typeof db;
   workspaceId: string;
   recipientIds: string[];
   actorId?: string;
@@ -24,12 +25,12 @@ type NotifyParams = {
 };
 
 export async function createNotification(params: NotifyParams): Promise<void> {
-  const { recipientIds, ...rest } = params;
+  const { database = db, recipientIds, ...rest } = params;
   if (recipientIds.length === 0) return;
 
   const unique = [...new Set(recipientIds)];
 
-  await db
+  await database
     .insert(notifications)
     .values(
       unique.map((userId) => ({

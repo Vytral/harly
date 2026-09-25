@@ -13,7 +13,7 @@ serverless functions cannot provide the scheduler lifecycle Harly requires.
 | --- | --- | --- | --- | --- |
 | Render | Blueprint-based setup | Managed PostgreSQL | S3-compatible bucket | Deploy from `render.yaml` |
 | DigitalOcean | App Platform and managed infrastructure | Managed PostgreSQL | S3-compatible bucket | Deploy from `.do/app.yaml` |
-| Railway | CLI-driven setup | Railway PostgreSQL | S3-compatible bucket | `npx @harly/cli` |
+| Railway | Config-as-code for one service; CLI for the full stack | Railway PostgreSQL | S3-compatible bucket | `railway.toml` or `npx @harly/cli` |
 | Fly.io | Teams comfortable with Fly processes | Managed PostgreSQL | S3-compatible bucket | `npx @harly/cli`, then `fly deploy` |
 
 <Warning>
@@ -33,12 +33,41 @@ serverless functions cannot provide the scheduler lifecycle Harly requires.
 
 ## DigitalOcean App Platform
 
-Use `.do/app.yaml` as the canonical spec. For production, replace the
-development database entry with a managed PostgreSQL cluster and keep the
-runtime on `linux/amd64`. Configure S3 before the first upload. The `migrate`
-job must finish before the web and scheduler services receive traffic.
+Use `.do/app.yaml` as the canonical App Platform spec. It describes the web
+service, scheduler worker, pre-deploy migration job, managed PostgreSQL, health
+check, and runtime variables in one file. The repository's **Deploy to
+DigitalOcean** button reads this file automatically. With `doctl`, the same
+spec can be created or updated explicitly:
 
-## Railway and Fly.io
+```bash
+doctl apps create --spec .do/app.yaml
+doctl apps update APP_ID --spec .do/app.yaml
+```
+
+For production, replace the development database entry with a managed
+PostgreSQL cluster and keep the runtime on `linux/amd64`. Configure S3 before
+the first upload. The `migrate` job must finish before the web and scheduler
+services receive traffic.
+
+## Railway
+
+Railway automatically reads `railway.toml` (or `railway.json`) from the source
+repository and applies its build/deploy settings to the current service
+deployment. Harly's file selects the root Dockerfile, starts the web role, and
+uses `/api/health/ready` for readiness. Railway config-as-code is intentionally
+service-scoped; it does not create the database, scheduler, or migration
+service. Use the CLI for a complete project:
+
+```bash
+npx @harly/cli deploy railway --non-interactive
+```
+
+Railway Templates are the native multi-service equivalent, but publishing one
+is a Railway-account operation. Once Harly has an official template, the
+template can be deployed with Railway's template workflow; until then the CLI
+API path is the reproducible full-stack path.
+
+## Fly.io
 
 Run the CLI from a secure workstation:
 
@@ -46,10 +75,12 @@ Run the CLI from a secure workstation:
 npx @harly/cli
 ```
 
-Choose the provider in the deploy menu. The CLI creates separate web,
-scheduler, and migration roles, writes generated secrets to a local file, and
-prints where the setup secret is stored. Do not commit that file. Complete
-`/setup` only after readiness is green.
+For Fly.io, the CLI prepares `fly.toml`; run `fly deploy` after attaching a
+database and setting secrets. For Railway, the CLI creates separate web,
+scheduler, and migration roles through the API. Secrets are never written to a
+local file unless `--save-env` is explicitly supplied; that opt-in file is
+written with mode `0600` and a warning. Complete `/setup` only after readiness
+is green.
 
 ## Production checklist
 

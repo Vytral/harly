@@ -70,10 +70,11 @@ export async function getWorkspaceTelegramStatus(
  */
 export async function getWorkspaceTelegramConfig(
   workspaceId: string,
+  database: typeof db = db,
 ): Promise<TelegramConfig | null> {
   if (!isEncryptionConfigured()) return null;
 
-  const [row] = await db
+  const [row] = await database
     .select({
       telegramEnabled: workspaceSettings.telegramEnabled,
       telegramBotTokenCiphertext: workspaceSettings.telegramBotTokenCiphertext,

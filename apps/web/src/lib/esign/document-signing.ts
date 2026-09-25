@@ -16,10 +16,12 @@ import {
   getDocusealSubmissionUrl,
   type CreateSubmissionFromPdfInput,
 } from "@/lib/esign/client";
-import { OFFER_SIGNER_ROLE, pickSigner, signerSigningUrl } from "@/lib/esign/offer-signing";
+import { OFFER_SIGNER_ROLE } from "@/lib/esign/offer-signing";
 import { createLogger } from "@/lib/logger";
 import { getWorkspaceEsignConfig } from "@/lib/esign/config";
 import { storage } from "@/lib/storage";
+import { persistDomainEvent, publishPersistedDomainEvents } from "@/server/events/emit";
+import { documentAutomationContext } from "@/lib/esign/document-automation-context";
 
 const log = createLogger("esign-document-signing");
 
@@ -173,12 +175,9 @@ export async function sendDocumentForEnvelope(
   };
 
   let submissionId: string;
-  let signingUrl: string | null;
   try {
     const submission = await createSubmissionFromPdf(ctx, submissionInput);
     submissionId = String(submission.id);
-    const signer = pickSigner(submission.submitters, OFFER_SIGNER_ROLE);
-    signingUrl = signerSigningUrl(ctx.baseUrl, signer);
   } catch (error) {
     log.error(
       { error, workspaceId: input.workspaceId, documentId: input.documentId },
@@ -195,7 +194,7 @@ export async function sendDocumentForEnvelope(
 
   const senderUrl = getDocusealSubmissionUrl(ctx.baseUrl, submissionId);
 
-  const signatureEnvelopeId = await db.transaction(async (tx) => {
+  const { signatureEnvelopeId, event, targetContext } = await db.transaction(async (tx) => {
     const [signatureEnvelope] = await tx
       .insert(signatureEnvelopes)
       .values({
@@ -219,7 +218,7 @@ export async function sendDocumentForEnvelope(
       email: recipientEmail,
       name: recipientName,
       routingOrder: 1,
-      signingUrl,
+      signingUrl: null,
       status: "sent",
     });
 
@@ -255,8 +254,27 @@ export async function sendDocumentForEnvelope(
         subject,
       },
     });
-    return signatureEnvelope.id;
+    const targetContext = await documentAutomationContext(tx, input.workspaceId, input.documentId);
+    const event = await persistDomainEvent(tx, {
+      name: "document.signature_sent",
+      workspaceId: input.workspaceId,
+      actorId: input.actorId,
+      aggregateType: "document",
+      aggregateId: input.documentId,
+      payload: { document: { id: input.documentId }, ...targetContext, status: "pending", provider: "docuseal", envelopeId: signatureEnvelope.id },
+    });
+    return { signatureEnvelopeId: signatureEnvelope.id, event, targetContext };
   });
+
+  await publishPersistedDomainEvents([event]);
+  const { emitWebhookEvent } = await import("@/server/webhooks/emit");
+  await emitWebhookEvent(input.workspaceId, "document.signature_sent", {
+    document: { id: input.documentId },
+    ...targetContext,
+    status: "pending",
+    provider: "docuseal",
+    envelopeId: signatureEnvelopeId,
+  }, { actorId: input.actorId, skipDomainEvent: true, eventId: event.eventId });
 
   return {
     ok: true,

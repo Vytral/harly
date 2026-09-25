@@ -40,6 +40,23 @@ export async function syncInterviewToJitsi(params: SyncInterviewToJitsiParams) {
     const config = await getWorkspaceJitsiConfig(params.workspaceId);
     if (!config) return null;
 
+    const [existing] = await db
+      .select({ room: interviews.jitsiRoom })
+      .from(interviews)
+      .where(
+        and(
+          eq(interviews.id, params.interviewId),
+          eq(interviews.workspaceId, params.workspaceId),
+        ),
+      )
+      .limit(1);
+    if (existing?.room) {
+      return {
+        room: existing.room,
+        joinUrl: `${config.baseUrl.replace(/\/$/, "")}/${existing.room}`,
+      };
+    }
+
     const room = generateJitsiRoom();
     const joinUrl = `${config.baseUrl.replace(/\/$/, "")}/${room}`;
 

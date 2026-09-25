@@ -99,6 +99,7 @@ export type DocumentHubData = {
   canManage: boolean;
   canDelete: boolean;
   canShare: boolean;
+  remoteSignEnabled: boolean;
   associationOptions: Array<{ type: "candidate" | "job"; id: string; label: string }>;
   esign: { connected: boolean; hasWebhookSecret: boolean };
 };

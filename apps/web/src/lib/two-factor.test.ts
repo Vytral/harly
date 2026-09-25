@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { isExemptFrom2fa, mustSetUp2fa } from "@/lib/two-factor";
 
 describe("isExemptFrom2fa", () => {
-  it("exempts the owner", () => {
-    expect(isExemptFrom2fa("owner")).toBe(true);
+  it("does not exempt the owner", () => {
+    expect(isExemptFrom2fa("owner")).toBe(false);
   });
 
   it("does not exempt other roles", () => {
@@ -50,13 +50,13 @@ describe("mustSetUp2fa", () => {
     ).toBe(true);
   });
 
-  it("exempts the owner even when the workspace requires 2FA", () => {
+  it("also requires the owner to set up 2FA when required", () => {
     expect(
       mustSetUp2fa({
         workspaceRequires2fa: true,
         userHas2fa: false,
         roleKey: "owner",
       }),
-    ).toBe(false);
+    ).toBe(true);
   });
 });

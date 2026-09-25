@@ -4,6 +4,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   Archive,
   ArchiveRestore,
@@ -51,7 +52,7 @@ import {
   setDocumentStatus,
   voidDocumentSignature,
 } from "./actions";
-import { sendDocumentForNativeSignature } from "./native-sign-actions";
+import { DocumentFieldPlacementDialog } from "./DocumentFieldPlacementDialog";
 import {
   AccessDialog,
   StatusPill,
@@ -258,83 +259,6 @@ function SendForSignatureDialog({
   );
 }
 
-function NativeSendForSignatureDialog({
-  document,
-  open,
-  onOpenChange,
-}: {
-  document: DocumentListItem;
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const router = useRouter();
-  const [email, setEmail] = useState("");
-  const [name, setName] = useState("");
-  const [pending, startTransition] = useTransition();
-  function submit() {
-    startTransition(async () => {
-      const result = await sendDocumentForNativeSignature({
-        documentId: document.id,
-        recipientEmail: email,
-        recipientName: name,
-      });
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success("Native signing link sent");
-      setEmail("");
-      setName("");
-      onOpenChange(false);
-      router.refresh();
-    });
-  }
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Send with Harly Signature</DialogTitle>
-          <DialogDescription>
-            Send a secure signing link to any email address — a candidate, a
-            hiring manager, or anyone else. The workspace security setting
-            controls whether email OTP is required.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid gap-4 py-2 sm:grid-cols-2">
-          <div className="space-y-2">
-            <Label htmlFor="native-recipient-email">Recipient email</Label>
-            <Input
-              id="native-recipient-email"
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="native-recipient-name">Recipient name</Label>
-            <Input
-              id="native-recipient-name"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={submit}
-            disabled={pending || !email.trim() || !name.trim()}
-          >
-            {pending ? "Sending…" : "Send signing link"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function VoidSignatureDialog({
   document,
   open,
@@ -371,8 +295,8 @@ function VoidSignatureDialog({
         <DialogHeader>
           <DialogTitle>Void signature request</DialogTitle>
           <DialogDescription>
-            This cancels the DocuSeal submission. The recipient can no longer
-            sign it.
+            This cancels the signing request. Recipients can no longer sign it,
+            and the original document is left unsigned.
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-4 py-2">
@@ -1073,16 +997,14 @@ export function DocumentDetailView({
                   document.mimeType !== "application/pdf"
                 }
                 onClick={() =>
-                  window.location.assign(
-                    `/dashboard/documents/${document.id}/sign`,
-                  )
+                  router.push(`/dashboard/documents/${document.id}/sign`)
                 }
               >
                 <LockKeyhole className="size-4" />
                 Sign now
               </Button>
               {document.signatureStatus === "pending" &&
-              document.signatureProvider === "docuseal" ? (
+              (document.signatureProvider === "docuseal" || document.signatureProvider === "native") ? (
                 <Button
                   size="sm"
                   variant="outline"
@@ -1093,16 +1015,22 @@ export function DocumentDetailView({
                   Void request
                 </Button>
               ) : canSendForSignature ? (
-                <div className={data.esign.connected ? "grid grid-cols-2 gap-2" : "grid gap-2"}>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    disabled={isArchived}
-                    onClick={() => setNativeSendOpen(true)}
-                  >
-                    <LockKeyhole className="size-4" />
-                    Native link
-                  </Button>
+                <div className={data.esign.connected && data.remoteSignEnabled ? "grid grid-cols-2 gap-2" : "grid gap-2"}>
+                  {data.remoteSignEnabled ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={isArchived}
+                      onClick={() => setNativeSendOpen(true)}
+                    >
+                      <LockKeyhole className="size-4" />
+                      Native link
+                    </Button>
+                  ) : (
+                    <p className="rounded-lg border border-border/70 bg-muted/30 p-3 text-xs leading-5 text-muted-foreground">
+                      Remote signing links are disabled. <Link href="/settings/signature" className="font-medium text-foreground underline underline-offset-2">Enable them in Signature settings</Link>.
+                    </p>
+                  )}
                   {data.esign.connected ? (
                     <Button
                       size="sm"
@@ -1215,7 +1143,7 @@ export function DocumentDetailView({
         open={sendSignOpen}
         onOpenChange={setSendSignOpen}
       />
-      <NativeSendForSignatureDialog
+      <DocumentFieldPlacementDialog
         document={document}
         open={nativeSendOpen}
         onOpenChange={setNativeSendOpen}

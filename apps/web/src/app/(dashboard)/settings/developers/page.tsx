@@ -17,6 +17,7 @@ import {
   WEBHOOK_EVENTS,
   WEBHOOK_EVENT_LABELS,
 } from "@/server/webhooks/events";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -41,14 +42,11 @@ export default async function DevelopersSettingsPage() {
     })),
   );
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
 
   return (
     <DevelopersSettings
       canManage={canManage}
-      workspaceSlug={organization.slug}
       appUrl={appUrl}
       apiKeys={keys.map(serializeApiKey)}
       webhooks={webhooks}

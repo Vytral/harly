@@ -53,6 +53,7 @@ describe.skipIf(!live)("live Maximiliano Harly AI agent smoke test", () => {
         { resolveCandidateReference },
         { resolveCandidateApplication },
         { getModel },
+        { toolsForProvider },
         { generateText, stepCountIs },
       ] = await Promise.all([
         import("@harly/db"),
@@ -64,6 +65,7 @@ describe.skipIf(!live)("live Maximiliano Harly AI agent smoke test", () => {
         import("@/lib/ai/agent/candidate-resolution"),
         import("@/lib/ai/agent/application-resolution"),
         import("@/lib/ai/registry"),
+        import("@/lib/ai/provider-tools"),
         import("ai"),
       ]);
 
@@ -131,11 +133,14 @@ describe.skipIf(!live)("live Maximiliano Harly AI agent smoke test", () => {
 
       const aiConfig = await getWorkspaceAiConfig(liveState.workspaceId);
       expect(aiConfig).not.toBeNull();
-      const tools = buildHarlyTools({
-        workspaceId: liveState.workspaceId,
-        userId: liveState.userId,
-        activeCandidateId: target!.id,
-      });
+      const tools = toolsForProvider(
+        buildHarlyTools({
+          workspaceId: liveState.workspaceId,
+          userId: liveState.userId,
+          activeCandidateId: target!.id,
+        }),
+        aiConfig!.provider,
+      );
       const system = buildHarlySystemPrompt({
         workspaceName: "Syntrix",
         userName: liveState.userName,

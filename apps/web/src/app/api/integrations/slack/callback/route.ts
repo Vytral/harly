@@ -1,3 +1,4 @@
+import { isDemoMode } from "@harly/config";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -8,6 +9,7 @@ import { getWorkspaceSlackCredentials } from "@/lib/slack/config";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 import { logAuditEvent } from "@/lib/audit-log";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 
 export const runtime = "nodejs";
 
@@ -22,6 +24,9 @@ export const runtime = "nodejs";
  * 5. Redirect back to settings/integrations
  */
 export async function GET(req: NextRequest) {
+  if (isDemoMode()) {
+    return NextResponse.json({ error: "This action is disabled in the demo." }, { status: 403 });
+  }
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
     return redirectWithError("Unauthorized. Please log in first.");
@@ -65,9 +70,7 @@ export async function GET(req: NextRequest) {
     return redirectWithError("Slack credentials not found for this workspace.");
   }
 
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const redirectUri = `${appUrl}/api/integrations/slack/callback`;
 
   let tokenRes: Response;
@@ -160,9 +163,7 @@ export async function GET(req: NextRequest) {
 }
 
 function redirectWithError(msg: string) {
-  const appUrl = (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  const appUrl = getHarlyPublicOrigin();
   const url = new URL(`${appUrl}/settings/integrations`);
   url.searchParams.set("slack_error", msg);
   return NextResponse.redirect(url.toString());

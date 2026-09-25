@@ -1,3 +1,5 @@
+import { CookiePreferencesButton } from "@/components/CookiePreferencesButton";
+
 import { SocialIcon, socialLabel } from "./social-icons";
 import type { CareerPageConfig } from "./config";
 
@@ -15,7 +17,6 @@ export function CareerFooter({
   maxWidth = "max-w-5xl",
   iconRounded = "rounded-full",
   portalEnabled = false,
-  portalWorkspaceSlug,
   legalBasePath = "/legal",
 }: {
   config: CareerPageConfig;
@@ -23,7 +24,6 @@ export function CareerFooter({
   maxWidth?: string;
   iconRounded?: string;
   portalEnabled?: boolean;
-  portalWorkspaceSlug?: string;
   legalBasePath?: string;
 }) {
   const socials = config.footer.socials.filter((s) => s.url.trim());
@@ -83,27 +83,26 @@ export function CareerFooter({
         <p>
           © {year} {workspaceName}
         </p>
-        {portalEnabled || legalLinks.length > 0 ? (
-          <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
-            {portalEnabled ? (
-              <a
-                href={portalWorkspaceSlug ? `/portal/login?workspace=${encodeURIComponent(portalWorkspaceSlug)}` : "/portal"}
-                className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
-              >
-                Candidate portal
-              </a>
-            ) : null}
-            {legalLinks.map((slug) => (
-              <a
-                key={slug}
-                href={`${legalBasePath}/${slug}`}
-                className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
-              >
-                {LEGAL_LINK_LABELS[slug] ?? slug}
-              </a>
-            ))}
-          </nav>
-        ) : null}
+        <nav className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
+          {portalEnabled ? (
+            <a
+              href="/portal"
+              className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
+            >
+              Candidate portal
+            </a>
+          ) : null}
+          {legalLinks.map((slug) => (
+            <a
+              key={slug}
+              href={`${legalBasePath}/${slug}`}
+              className="transition-colors hover:text-zinc-700 dark:hover:text-zinc-300"
+            >
+              {LEGAL_LINK_LABELS[slug] ?? slug}
+            </a>
+          ))}
+          <CookiePreferencesButton />
+        </nav>
       </div>
     </div>
   );

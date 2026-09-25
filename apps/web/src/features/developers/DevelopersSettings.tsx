@@ -115,7 +115,6 @@ type EventOption = { value: string; label: string };
 
 export function DevelopersSettings(props: {
   canManage: boolean;
-  workspaceSlug: string;
   appUrl: string;
   apiKeys: ApiKeyView[];
   webhooks: WebhookView[];
@@ -138,7 +137,6 @@ export function DevelopersSettings(props: {
       />
       <EmbedSection
         appUrl={props.appUrl}
-        workspaceSlug={props.workspaceSlug}
         publishableKey={props.apiKeys.find(
           (k) => k.type === "publishable" && !k.revokedAt,
         )}
@@ -1013,11 +1011,9 @@ function WebhooksSection({
 
 function EmbedSection({
   appUrl,
-  workspaceSlug,
   publishableKey,
 }: {
   appUrl: string;
-  workspaceSlug: string;
   publishableKey?: ApiKeyView;
 }) {
   const [copied, setCopied] = useState(false);
@@ -1040,7 +1036,7 @@ function EmbedSection({
       code: `<div id="harly-jobs-container"></div>
 <script
   src="${appUrl}/embed/widget.js"
-  data-workspace="${workspaceSlug}"${pkAttr}
+  ${pkAttr.trim()}
   data-theme="auto"
   defer
 ></script>`,
@@ -1052,7 +1048,7 @@ function EmbedSection({
       code: `<div id="harly-jobs-container"></div>
 <script
   src="${appUrl}/embed/widget.js"
-  data-workspace="${workspaceSlug}"${pkAttr}
+  ${pkAttr.trim()}
   data-job="your-job-slug"
   data-theme="auto"
   defer
@@ -1061,26 +1057,54 @@ function EmbedSection({
     html: {
       label: "Custom form",
       lang: "HTML",
-      note: "Build your own markup and POST to the public API. You own every pixel.",
-      code: `<form id="apply">
-  <input name="firstName" required />
-  <input name="lastName" required />
-  <input name="email" type="email" required />
+      note: "Loads this job's questions, renders them, and submits a complete application.",
+      code: `<form id="harly-apply">
+  <label>First name <input name="firstName" required /></label>
+  <label>Last name <input name="lastName" required /></label>
+  <label>Email <input name="email" type="email" required /></label>
+  <div id="harly-questions"></div>
   <button type="submit">Apply</button>
 </form>
 <script>
-  document.getElementById("apply").addEventListener("submit", async (e) => {
-    e.preventDefault();
-    const f = new FormData(e.target);
-    const res = await fetch(
-      "${appUrl}/api/public/v1/jobs/your-job-slug/applications?workspace=${workspaceSlug}",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(Object.fromEntries(f)),
-      }
+  const jobApi = "${appUrl}/api/public/v1/jobs/your-job-slug";
+  const form = document.getElementById("harly-apply");
+  const questions = document.getElementById("harly-questions");
+
+  fetch(jobApi)
+    .then((r) => r.json())
+    .then(({ data }) => {
+      (data.applicationConfig?.questions || []).forEach((q) => {
+        const label = document.createElement("label");
+        label.textContent = q.label + (q.required ? " *" : "");
+        let input = document.createElement(q.type === "textarea" ? "textarea" : "input");
+        if (q.type === "select") {
+          input = document.createElement("select");
+          (q.options || []).forEach((option) => input.add(new Option(option, option)));
+        }
+        input.dataset.questionId = q.id;
+        input.required = q.required;
+        if (q.placeholder) input.placeholder = q.placeholder;
+        label.appendChild(input);
+        questions.appendChild(label);
+      });
+    });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const body = Object.fromEntries(new FormData(form));
+    body.questionAnswers = Object.fromEntries(
+      [...questions.querySelectorAll("[data-question-id]")].map((input) => [
+        input.dataset.questionId,
+        input.value,
+      ])
     );
-    alert(res.ok ? "Applied!" : "Something went wrong.");
+    const response = await fetch(jobApi + "/applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error("Application failed");
+    form.innerHTML = "<p>Application received. Thank you!</p>";
   });
 </script>`,
     },
@@ -1094,7 +1118,7 @@ function EmbedSection({
   email: string;
 }) {
   const res = await fetch(
-    "${appUrl}/api/public/v1/jobs/your-job-slug/applications?workspace=${workspaceSlug}",
+    "${appUrl}/api/public/v1/jobs/your-job-slug/applications",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

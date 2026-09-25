@@ -333,7 +333,6 @@ export function PlayfulTemplate({
           <CareerFooter
             config={config}
             workspaceName={workspace.name}
-            portalWorkspaceSlug={workspace.slug}
             maxWidth="max-w-5xl"
             portalEnabled={portalEnabled}
             legalBasePath={boardRoot === "/" ? "/legal" : `${boardRoot}/legal`}

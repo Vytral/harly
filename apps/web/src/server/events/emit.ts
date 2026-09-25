@@ -83,6 +83,7 @@ export async function persistDomainEvent(
 
 export async function publishPersistedDomainEvents(
   events: readonly PersistedDomainEvent[],
+  database: typeof db = db,
 ): Promise<void> {
   for (const event of events) {
     if (!EVENT_REGISTRY[event.eventName].realtime) continue;
@@ -100,7 +101,7 @@ export async function publishPersistedDomainEvents(
         occurredAt: event.occurredAt,
       });
       try {
-        await db
+        await database
           .update(domainEventOutbox)
           .set({ publishedAt: new Date(), lastError: null })
           .where(eq(domainEventOutbox.eventId, event.eventId));
@@ -138,9 +139,12 @@ export type DomainEventInput = {
   automationParentRunId?: string;
 };
 
-export async function emitDomainEvent(input: DomainEventInput): Promise<PersistedDomainEvent> {
-  const event = await db.transaction((tx) => persistDomainEvent(tx, input));
-  await publishPersistedDomainEvents([event]);
+export async function emitDomainEvent(
+  input: DomainEventInput,
+  database: typeof db = db,
+): Promise<PersistedDomainEvent> {
+  const event = await database.transaction((tx) => persistDomainEvent(tx, input));
+  await publishPersistedDomainEvents([event], database);
   return event;
 }
 

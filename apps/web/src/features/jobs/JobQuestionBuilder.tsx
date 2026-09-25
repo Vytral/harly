@@ -42,6 +42,8 @@ const questionTypes: Array<{ value: JobQuestionType; label: string }> = [
   { value: "textarea", label: "Long text" },
   { value: "url", label: "URL" },
   { value: "select", label: "Select" },
+  { value: "info", label: "Text / disclaimer" },
+  { value: "consent", label: "Agree / do not agree" },
 ];
 
 function createQuestion(index: number): JobApplicationQuestion {
@@ -63,6 +65,14 @@ function textToOptions(value: string) {
     .split("\n")
     .map((option) => option.trim())
     .filter(Boolean);
+}
+
+function descriptionsToText(descriptions: readonly string[] | undefined) {
+  return descriptions?.join("\n") ?? "";
+}
+
+function textToDescriptions(value: string) {
+  return value.split("\n").map((description) => description.trim());
 }
 
 export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionBuilderProps) {
@@ -202,7 +212,15 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
       {questions.map((question, index) => (
         <div key={`${question.id}-${index}`} className="space-y-3 rounded-lg border bg-muted/30 p-4">
           <div className="grid gap-3 md:grid-cols-[1fr_180px]">
-            <FieldBox label="Question label">
+            <FieldBox
+              label={
+                question.type === "info"
+                  ? "Heading"
+                  : question.type === "consent"
+                    ? "Agreement title"
+                    : "Question label"
+              }
+            >
               <Input
                 value={question.label}
                 onChange={(event) => updateQuestion(index, { label: event.target.value })}
@@ -231,7 +249,25 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
             </FieldBox>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
+          {question.type === "info" || question.type === "consent" ? (
+            <FieldBox label={question.type === "info" ? "Text" : "Agreement details"}>
+              <Textarea
+                value={question.description ?? ""}
+                onChange={(event) =>
+                  updateQuestion(index, { description: event.target.value })
+                }
+                rows={question.type === "info" ? 4 : 6}
+                placeholder={
+                  question.type === "info"
+                    ? "Share context, resources, or instructions with applicants."
+                    : "Write the full agreement or disclaimer applicants must review."
+                }
+                className={fieldBoxControlClassName}
+              />
+            </FieldBox>
+          ) : null}
+
+          {question.type !== "info" && question.type !== "consent" ? <div className="grid gap-3 md:grid-cols-2">
             <FieldBox label="Placeholder">
               <Input
                 value={question.placeholder ?? ""}
@@ -253,32 +289,68 @@ export function JobQuestionBuilder({ initialQuestions, aiContext }: JobQuestionB
                 className={fieldBoxControlClassName}
               />
             </FieldBox>
-          </div>
+          </div> : null}
 
           {question.type === "select" ? (
-            <FieldBox label="Options">
-              <Textarea
-                value={optionsToText(question.options)}
-                onChange={(event) =>
-                  updateQuestion(index, { options: textToOptions(event.target.value) })
-                }
-                rows={4}
-                placeholder={"One option per line\nRemote\nHybrid\nOn-site"}
-                className={fieldBoxControlClassName}
-              />
-            </FieldBox>
+            <div className="grid gap-3 md:grid-cols-2">
+              <FieldBox label="Options">
+                <Textarea
+                  value={optionsToText(question.options)}
+                  onChange={(event) =>
+                    updateQuestion(index, { options: textToOptions(event.target.value) })
+                  }
+                  rows={4}
+                  placeholder={"One option per line\nRemote\nHybrid\nOn-site"}
+                  className={fieldBoxControlClassName}
+                />
+              </FieldBox>
+              <FieldBox label="Option descriptions (optional, same order)">
+                <Textarea
+                  value={descriptionsToText(question.optionDescriptions)}
+                  onChange={(event) =>
+                    updateQuestion(index, {
+                      optionDescriptions: textToDescriptions(event.target.value),
+                    })
+                  }
+                  rows={4}
+                  placeholder={"One description per option\nWork from anywhere\nSplit time between home and office"}
+                  className={fieldBoxControlClassName}
+                />
+              </FieldBox>
+            </div>
+          ) : null}
+
+          {question.type === "consent" ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <FieldBox label="Accept label">
+                <Input
+                  value={question.agreeLabel ?? "I agree"}
+                  onChange={(event) => updateQuestion(index, { agreeLabel: event.target.value })}
+                  className={fieldBoxControlClassName}
+                />
+              </FieldBox>
+              <FieldBox label="Decline label">
+                <Input
+                  value={question.disagreeLabel ?? "I do not agree"}
+                  onChange={(event) => updateQuestion(index, { disagreeLabel: event.target.value })}
+                  className={fieldBoxControlClassName}
+                />
+              </FieldBox>
+            </div>
           ) : null}
 
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <label className="inline-flex items-center gap-2 text-sm font-medium">
-              <Checkbox
-                checked={question.required}
-                onCheckedChange={(checked) =>
-                  updateQuestion(index, { required: checked === true })
-                }
-              />
-              Required
-            </label>
+            {question.type !== "info" ? (
+              <label className="inline-flex items-center gap-2 text-sm font-medium">
+                <Checkbox
+                  checked={question.required}
+                  onCheckedChange={(checked) =>
+                    updateQuestion(index, { required: checked === true })
+                  }
+                />
+                {question.type === "consent" ? "Require agreement" : "Required"}
+              </label>
+            ) : <span />}
             <Button
               type="button"
               variant="ghost"

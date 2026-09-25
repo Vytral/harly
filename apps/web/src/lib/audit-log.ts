@@ -3,6 +3,7 @@ import "server-only";
 import { db, auditLogs } from "@harly/db";
 
 import { createLogger } from "@/lib/logger";
+import { getTrustedClientIp } from "@/server/security/policy";
 
 const log = createLogger("audit");
 
@@ -98,10 +99,7 @@ export async function logAuditEvent(params: LogAuditEventParams): Promise<boolea
 }
 
 export function extractRequestMeta(req: Request) {
-  const forwarded = req.headers.get("x-forwarded-for");
-  const ip = forwarded
-    ? forwarded.split(",")[0].trim()
-    : req.headers.get("x-real-ip") ?? undefined;
+  const ip = getTrustedClientIp(req);
   const ua = req.headers.get("user-agent") ?? undefined;
   return { ipAddress: ip, userAgent: ua };
 }

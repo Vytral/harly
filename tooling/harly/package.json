@@ -1,6 +1,6 @@
 {
   "name": "@harly/cli",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "private": false,
   "type": "module",
   "description": "Official operations CLI for self-hosted Harly — guided install, day-2 management, and disaster recovery for the Docker Compose distribution.",
@@ -48,7 +48,7 @@
   },
   "devDependencies": {
     "@types/node": "^20",
-    "esbuild": "^0.27.7",
+    "esbuild": "^0.28.2",
     "typescript": "^6.0.3"
   },
   "dependencies": {

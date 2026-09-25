@@ -22,12 +22,15 @@ function mapRow(row: {
   id: string;
   applicationId: string;
   candidateId: string;
+  packageId: string | null;
   title: string;
   instructions: string | null;
   status: string;
   dueAt: Date | null;
   documentId: string | null;
   documentName: string | null;
+  signatureStatus: string | null;
+  signatureProvider: string | null;
   requestedByName: string | null;
   submittedAt: Date | null;
   reviewedByName: string | null;
@@ -39,12 +42,15 @@ function mapRow(row: {
     id: row.id,
     applicationId: row.applicationId,
     candidateId: row.candidateId,
+    packageId: row.packageId,
     title: row.title,
     instructions: row.instructions,
     status: row.status as DocumentRequestItem["status"],
     dueAt: row.dueAt?.toISOString() ?? null,
     documentId: row.documentId,
     documentName: row.documentName,
+    signatureStatus: (row.signatureStatus as DocumentRequestItem["signatureStatus"]) ?? null,
+    signatureProvider: row.signatureProvider,
     requestedByName: row.requestedByName,
     submittedAt: row.submittedAt?.toISOString() ?? null,
     reviewedByName: row.reviewedByName,
@@ -58,12 +64,15 @@ const baseColumns = {
   id: documentRequests.id,
   applicationId: documentRequests.applicationId,
   candidateId: documentRequests.candidateId,
+  packageId: documentRequests.packageId,
   title: documentRequests.title,
   instructions: documentRequests.instructions,
   status: documentRequests.status,
   dueAt: documentRequests.dueAt,
   documentId: documentRequests.documentId,
   documentName: documents.name,
+  signatureStatus: documents.signatureStatus,
+  signatureProvider: documents.signatureProvider,
   requestedByName: requestedByUser.name,
   submittedAt: documentRequests.submittedAt,
   reviewedByName: authUsers.name,

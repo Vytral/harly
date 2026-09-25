@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db, interviews } from "@harly/db";
 
@@ -48,6 +48,7 @@ export async function syncInterviewToGCal(opts: {
   attendees?: string[];
   location?: string;
   mode?: string;
+  timeZone?: string;
 }): Promise<GCalSyncResult> {
   try {
     const config = await getWorkspaceGCalConfig(opts.workspaceId);
@@ -65,6 +66,7 @@ export async function syncInterviewToGCal(opts: {
         attendees: opts.attendees,
         location: opts.location,
         conferenceData: opts.mode === "video",
+        timeZone: opts.timeZone ?? "UTC",
       });
     } catch (error) {
       // A timeout can happen after Google committed the event but before Harly
@@ -83,7 +85,12 @@ export async function syncInterviewToGCal(opts: {
     await db
       .update(interviews)
       .set(update)
-      .where(eq(interviews.id, opts.interviewId));
+      .where(
+        and(
+          eq(interviews.id, opts.interviewId),
+          eq(interviews.workspaceId, opts.workspaceId),
+        ),
+      );
     return {
       ok: true,
       eventId: event.id,
@@ -117,7 +124,12 @@ export async function cancelInterviewGCalEvent(opts: {
     await db
       .update(interviews)
       .set({ gcalEventId: null })
-      .where(eq(interviews.id, opts.interviewId));
+      .where(
+        and(
+          eq(interviews.id, opts.interviewId),
+          eq(interviews.workspaceId, opts.workspaceId),
+        ),
+      );
     return true;
   } catch (err) {
     log.error(err, "[gcal-sync] Failed to cancel event");
@@ -137,10 +149,11 @@ export async function updateInterviewGCalEvent(opts: {
   attendees?: string[];
   location?: string;
   status?: "confirmed" | "cancelled";
-}): Promise<void> {
+  timeZone?: string;
+}): Promise<boolean> {
   try {
     const config = await getWorkspaceGCalConfig(opts.workspaceId);
-    if (!config) return;
+    if (!config) return false;
 
     await updateEvent(
       config.oauth2Client,
@@ -153,9 +166,12 @@ export async function updateInterviewGCalEvent(opts: {
         attendees: opts.attendees,
         location: opts.location,
         status: opts.status,
+        timeZone: opts.timeZone ?? "UTC",
       },
     );
+    return true;
   } catch (err) {
     log.error(err, "[gcal-sync] Failed to update event");
+    return false;
   }
 }

@@ -14,6 +14,7 @@ import { toast } from "@/lib/notification-island/toast";
 
 import { decideOffer, sendOffer, withdrawOffer } from "@/features/offers/actions";
 import { OfferDrawer } from "@/features/offers/OfferDrawer";
+import { OfferFieldPlacementDialog } from "@/features/offers/OfferFieldPlacementDialog";
 import {
   formatOfferComp,
   OFFER_STATUS_META,
@@ -35,15 +36,18 @@ export function OffersPanel({
   offers,
   applications,
   documents,
+  offerSignatureChannel,
 }: {
   offers: CandidateOfferItem[];
   applications: Array<{ id: string; jobTitle: string }>;
   documents: Array<{ id: string; name: string; mimeType: string }>;
+  offerSignatureChannel: "email" | "esign" | "native";
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [editing, setEditing] = useState<CandidateOfferItem | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
+  const [placingFieldsFor, setPlacingFieldsFor] = useState<CandidateOfferItem | null>(null);
 
   function run(action: () => Promise<{ success: boolean; error?: string }>, ok: string) {
     startTransition(async () => {
@@ -122,7 +126,9 @@ export function OffersPanel({
                             size="sm"
                             disabled={isPending}
                             onClick={() =>
-                              run(() => sendOffer({ offerId: offer.id }), "Offer sent")
+                              offerSignatureChannel === "native"
+                                ? setPlacingFieldsFor(offer)
+                                : run(() => sendOffer({ offerId: offer.id }), "Offer sent")
                             }
                           >
                             <Send className="size-4" />
@@ -244,6 +250,17 @@ export function OffersPanel({
         documents={documents}
         offer={editing}
       />
+
+      {placingFieldsFor ? (
+        <OfferFieldPlacementDialog
+          offerId={placingFieldsFor.id}
+          offerTitle={placingFieldsFor.title}
+          open={placingFieldsFor !== null}
+          onOpenChange={(open) => {
+            if (!open) setPlacingFieldsFor(null);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

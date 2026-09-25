@@ -1,4 +1,0 @@
-interface:
-  display_name: "Harly Self-Host"
-  short_description: "Install and operate Harly safely"
-  default_prompt: "Use $harly-self-host to install or operate Harly on my infrastructure."

@@ -8,8 +8,10 @@ import { z } from "zod";
 import { db, workspaceSettings } from "@harly/db";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { getWorkspaceEsignConfig, getWorkspaceEsignStatus } from "@/lib/esign/config";
+import { resolveSafeAddress, safeFetchHttp } from "@/lib/ssrf";
 
 export type EsignSettingsActionResult = { ok: boolean; error?: string };
 
@@ -28,6 +30,21 @@ function cleanUrl(value: string): string {
   return `${u.origin}${path}`;
 }
 
+async function validateDocusealUrl(value: string): Promise<string> {
+  const parsed = new URL(value);
+  if (parsed.protocol !== "https:") {
+    throw new Error("DocuSeal URL must use HTTPS.");
+  }
+  if (parsed.username || parsed.password || parsed.search || parsed.hash) {
+    throw new Error(
+      "DocuSeal URL must not contain credentials, a query, or a fragment.",
+    );
+  }
+  const cleaned = cleanUrl(value);
+  await resolveSafeAddress(new URL(cleaned).hostname);
+  return cleaned;
+}
+
 /**
  * Save the DocuSeal instance URL + API token. The token is encrypted at rest.
  * A webhook secret is generated on first save so the inbound webhook endpoint
@@ -38,6 +55,7 @@ export async function saveEsignSettingsAction(input: {
   apiToken?: string;
   enabled: boolean;
 }): Promise<EsignSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   if (!isEncryptionConfigured()) {
@@ -52,7 +70,38 @@ export async function saveEsignSettingsAction(input: {
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Enter a valid DocuSeal URL." };
   }
 
+  let docusealUrl: string;
+  try {
+    docusealUrl = await validateDocusealUrl(parsed.data.url);
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Enter a safe DocuSeal URL.",
+    };
+  }
+
   const status = await getWorkspaceEsignStatus(context.organization.id);
+  const existingUrl = (() => {
+    try {
+      const rawConfiguredUrl = status.configuredUrl ?? status.url;
+      return rawConfiguredUrl
+        ? new URL(rawConfiguredUrl).origin +
+            new URL(rawConfiguredUrl).pathname.replace(/\/?api\/?$/i, "").replace(/\/$/, "")
+        : null;
+    } catch {
+      return null;
+    }
+  })();
+  if (
+    !parsed.data.apiToken &&
+    status.hasToken &&
+    (!existingUrl || docusealUrl !== existingUrl)
+  ) {
+    return {
+      ok: false,
+      error: "Enter the DocuSeal API token when changing the instance URL.",
+    };
+  }
   const willHaveToken = Boolean(parsed.data.apiToken || status.hasToken);
   if (input.enabled && !willHaveToken) {
     return { ok: false, error: "Add the API token before enabling DocuSeal." };
@@ -79,7 +128,7 @@ export async function saveEsignSettingsAction(input: {
     .values({
       organizationId: context.organization.id,
       docusealEnabled: input.enabled,
-      docusealUrl: cleanUrl(parsed.data.url),
+      docusealUrl,
       ...tokenColumns,
       ...webhookSecret,
     })
@@ -87,7 +136,7 @@ export async function saveEsignSettingsAction(input: {
       target: workspaceSettings.organizationId,
       set: {
         docusealEnabled: input.enabled,
-        docusealUrl: cleanUrl(parsed.data.url),
+        docusealUrl,
         ...tokenColumns,
         ...webhookSecret,
         updatedAt: new Date(),
@@ -102,6 +151,7 @@ export async function saveEsignSettingsAction(input: {
 export async function saveOfferSignatureChannelAction(
   channel: "email" | "esign" | "native",
 ): Promise<EsignSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   const status = await getWorkspaceEsignStatus(context.organization.id);
@@ -123,6 +173,7 @@ export async function saveOfferSignatureChannelAction(
 
 /** Disconnect DocuSeal: clear config columns + reset offer channel to email. */
 export async function disconnectEsignAction(): Promise<EsignSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
 
   await db
@@ -145,13 +196,16 @@ export async function disconnectEsignAction(): Promise<EsignSettingsActionResult
 
 /** Verify the connection by listing templates against the DocuSeal instance. */
 export async function testEsignAction(): Promise<EsignSettingsActionResult> {
+  assertNotDemo();
   const context = await requirePermission("integrations:manage");
   const config = await getWorkspaceEsignConfig(context.organization.id);
   if (!config) return { ok: false, error: "DocuSeal is not connected." };
 
   try {
-    const res = await fetch(`${config.apiUrl}/templates?limit=1`, {
+    const res = await safeFetchHttp(`${config.apiUrl}/templates?limit=1`, {
       headers: { "X-Auth-Token": config.apiToken, Accept: "application/json" },
+      redirect: "manual",
+      signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) {
       const body = await res.text();

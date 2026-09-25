@@ -47,6 +47,32 @@ function niceMax(value: number): number {
   return Math.ceil(value / 5) * 5;
 }
 
+/**
+ * Catmull-Rom → cubic Bezier smoothing. A straight point-to-point join turns
+ * a mostly-flat, occasionally-spiky series (typical for monthly hiring
+ * counts) into a harsh shark-fin. This keeps the same data but rounds the
+ * approach and departure from each point.
+ */
+function smoothPath(points: { x: number; y: number }[]): string {
+  if (points.length === 0) return "";
+  if (points.length < 3) {
+    return points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
+  }
+  let d = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 0; i < points.length - 1; i++) {
+    const p0 = points[i === 0 ? i : i - 1];
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    const p3 = points[i + 2 < points.length ? i + 2 : i + 1];
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+  }
+  return d;
+}
+
 const fmt = new Intl.NumberFormat("en");
 
 // ── Trend chart , multi-series area + line with inspector ────────────────────
@@ -110,13 +136,13 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
                 }
                 aria-pressed={!off}
                 className={cn(
-                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition",
-                  off ? "text-muted-foreground" : "text-foreground hover:bg-muted/60",
+                  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors",
+                  off ? "text-soft-ink" : "text-near-ink hover:bg-soft-kraft",
                 )}
               >
                 <span
                   className="size-2.5 rounded-full transition"
-                  style={{ backgroundColor: off ? "var(--muted-foreground)" : s.color, opacity: off ? 0.4 : 1 }}
+                  style={{ backgroundColor: off ? "var(--soft-ink)" : s.color, opacity: off ? 0.4 : 1 }}
                 />
                 {s.label}
               </button>
@@ -124,7 +150,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
           })}
         </div>
         <div className="flex items-baseline gap-2 text-right">
-          <span className="text-xs text-muted-foreground">{subs[active]}</span>
+          <span className="text-xs text-soft-ink">{subs[active]}</span>
         </div>
       </div>
 
@@ -154,10 +180,10 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
                 x2={W - padR}
                 y1={y(g)}
                 y2={y(g)}
-                stroke="var(--border)"
+                stroke="var(--hairline)"
                 strokeDasharray={g === 0 ? undefined : "3 6"}
               />
-              <text x={padL - 8} y={y(g) + 4} textAnchor="end" className="fill-muted-foreground text-[10px] tabular-nums">
+              <text x={padL - 8} y={y(g) + 4} textAnchor="end" className="fill-soft-ink text-[10px] tabular-nums">
                 {Math.round(g)}
               </text>
             </g>
@@ -165,12 +191,12 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
 
           {/* active guide */}
           {n > 0 && (
-            <line x1={activeX} x2={activeX} y1={padT} y2={H - padB} stroke="var(--ink-soft)" strokeOpacity="0.25" />
+            <line x1={activeX} x2={activeX} y1={padT} y2={H - padB} stroke="var(--soft-ink)" strokeOpacity="0.25" />
           )}
 
           {visible.map((s) => {
             const coords = s.points.map((p, i) => ({ x: x(i), y: y(p.value) }));
-            const line = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x} ${c.y}`).join(" ");
+            const line = smoothPath(coords);
             const area = coords.length
               ? `${line} L ${coords[coords.length - 1].x} ${H - padB} L ${coords[0].x} ${H - padB} Z`
               : "";
@@ -194,7 +220,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
                   animate={{ pathLength: 1 }}
                   transition={{ duration: 0.7, ease: EASE_OUT }}
                 />
-                <circle cx={x(active)} cy={y(s.points[active]?.value ?? 0)} r={4.5} fill="var(--card)" stroke={s.color} strokeWidth={2.5} />
+                <circle cx={x(active)} cy={y(s.points[active]?.value ?? 0)} r={4.5} fill="var(--pure-snow)" stroke={s.color} strokeWidth={2.5} />
               </g>
             );
           })}
@@ -219,7 +245,7 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
 
           {labels.map((label, i) =>
             i % 2 === 0 || i === n - 1 ? (
-              <text key={`lbl-${i}`} x={x(i)} y={H - 8} textAnchor="middle" className="fill-muted-foreground text-[10px]">
+              <text key={`lbl-${i}`} x={x(i)} y={H - 8} textAnchor="middle" className="fill-soft-ink text-[10px]">
                 {label}
               </text>
             ) : null,
@@ -230,17 +256,17 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
         {n > 0 && (
           <div
             className={cn(
-              "pointer-events-none absolute top-0 z-10 rounded-xl border border-border/70 bg-popover/95 px-3 py-2 shadow-md backdrop-blur",
+              "pointer-events-none absolute top-0 z-10 rounded-xl border border-hairline bg-pure-snow/95 px-3 py-2 shadow-[var(--shadow-float)] backdrop-blur",
               tipShift,
             )}
             style={{ left: `${(activeX / W) * 100}%` }}
           >
-            <p className="mb-1 text-[11px] font-medium text-muted-foreground">{subs[active]}</p>
+            <p className="mb-1 text-[11px] font-medium text-soft-ink">{subs[active]}</p>
             <div className="space-y-0.5">
               {visible.map((s) => (
                 <div key={s.key} className="flex items-center gap-2 text-xs">
                   <span className="size-2 rounded-full" style={{ backgroundColor: s.color }} />
-                  <span className="text-muted-foreground">{s.label}</span>
+                  <span className="text-soft-ink">{s.label}</span>
                   <span className="ml-auto font-semibold tabular-nums">{s.points[active]?.value ?? 0}</span>
                 </div>
               ))}
@@ -252,93 +278,50 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
   );
 }
 
-// ── Funnel chart , vertical, with stage-to-stage conversion ──────────────────
+// ── Pipeline by stage , where active candidates sit right now ────────────────
+//
+// `count` is a live snapshot (candidates currently sitting in that stage),
+// not a cumulative "reached at least this far" total — a later stage can
+// hold more people than an earlier one just because candidates linger there.
+// Showing an adjacent-stage "% conversion" on top of that would claim a
+// funnel that isn't there (it can read over 100%). So this shows the one
+// thing the data actually supports: how the active pipeline is distributed.
 
 export type FunnelDatum = { name: string; count: number; pct: number };
 
 export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
   const shouldReduceMotion = useReducedMotion();
-  const [selected, setSelected] = useState(0);
-  const top = stages[0]?.count ?? 0;
-  const minPct = 14; // keep the narrowest band tappable/legible
-
-  const sel = stages[selected];
-  const prev = selected > 0 ? stages[selected - 1] : null;
-  const stepConv =
-    prev && prev.count > 0 ? Math.round((sel.count / prev.count) * 100) : null;
+  const total = stages.reduce((s, st) => s + st.count, 0);
+  const max = Math.max(1, ...stages.map((s) => s.count));
 
   return (
-    <div className="space-y-4">
-      <div className="mx-auto w-full max-w-md space-y-1.5">
-        {stages.map((stage, i) => {
-          const isSel = i === selected;
-          const barPct =
-            top > 0 ? Math.max((stage.count / top) * 100, minPct) : minPct;
-          // Fade colour with depth so the funnel reads top-to-bottom.
-          const depth = stages.length > 1 ? i / (stages.length - 1) : 0;
-          const prevStage = i > 0 ? stages[i - 1] : null;
-          const drop =
-            prevStage && prevStage.count > 0
-              ? Math.round((stage.count / prevStage.count) * 100)
-              : null;
-          return (
-            <motion.div
-              key={stage.name}
-              initial={shouldReduceMotion ? false : { opacity: 0, y: -6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.28, ease: EASE_OUT, delay: i * 0.05 }}
-            >
-              {drop != null ? (
-                <div className="flex items-center justify-center py-0.5">
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium tabular-nums text-muted-foreground">
-                    {drop}%
-                  </span>
-                </div>
-              ) : null}
-              <button
-                type="button"
-                onMouseEnter={() => setSelected(i)}
-                onFocus={() => setSelected(i)}
-                onClick={() => setSelected(i)}
-                aria-label={`${stage.name}: ${stage.count} (${stage.pct}% of top)`}
-                aria-pressed={isSel}
-                className="group flex w-full items-center justify-center outline-none"
-              >
-                <span
-                  className="flex h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl px-3 text-[var(--primary-foreground)] transition-[width,opacity,transform] duration-300 group-active:scale-[0.98] group-focus-visible:ring-2 group-focus-visible:ring-primary group-focus-visible:ring-offset-1 group-focus-visible:ring-offset-card"
-                  style={{
-                    width: `${barPct}%`,
-                    minWidth: "fit-content",
-                    backgroundColor: "var(--chart-1)",
-                    opacity: isSel ? 1 : 0.92 - depth * 0.28,
-                  }}
-                >
-                  <span className="text-[13px] font-semibold">{stage.name}</span>
-                  <span className="text-[11px] tabular-nums opacity-90">
-                    {fmt.format(stage.count)} · {stage.pct}%
-                  </span>
-                </span>
-              </button>
-            </motion.div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-3 gap-2 rounded-2xl border border-border/60 bg-muted/20 p-3">
-        <Stat label="Stage" value={sel?.name ?? "No stage selected"} />
-        <Stat label="Reached" value={`${sel?.pct ?? 0}%`} />
-        <Stat label="Step conversion" value={stepConv != null ? `${stepConv}%` : "Top"} />
-      </div>
-    </div>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <p className="text-[11px] text-muted-foreground">{label}</p>
-      <p className="mt-0.5 truncate text-sm font-semibold tabular-nums">{value}</p>
-    </div>
+    <ul className="space-y-3">
+      {stages.map((stage, i) => (
+        <motion.li
+          key={stage.name}
+          initial={shouldReduceMotion ? false : { opacity: 0, x: -6 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.25, ease: EASE_OUT, delay: i * 0.04 }}
+          className="grid grid-cols-[minmax(90px,120px)_1fr_auto] items-center gap-3 sm:gap-4"
+        >
+          <span className="truncate text-sm font-medium text-near-ink">{stage.name}</span>
+          <span className="relative h-7 overflow-hidden rounded-lg bg-warm-paper">
+            <span
+              className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-300"
+              style={{ width: `${Math.max((stage.count / max) * 100, stage.count > 0 ? 4 : 0)}%`, backgroundColor: "var(--chart-1)" }}
+            />
+          </span>
+          <span className="w-20 shrink-0 text-right text-sm tabular-nums">
+            <span className="font-semibold text-near-ink">{fmt.format(stage.count)}</span>
+            <span className="text-soft-ink"> · {stage.pct}%</span>
+          </span>
+        </motion.li>
+      ))}
+      <li className="flex items-center justify-between border-t border-hairline pt-2 text-xs text-soft-ink">
+        <span>Share of applied currently in each stage</span>
+        <span className="tabular-nums">{fmt.format(total)} active</span>
+      </li>
+    </ul>
   );
 }
 
@@ -364,7 +347,7 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <div className="flex rounded-full bg-muted p-1">
+        <div className="flex rounded-full bg-soft-kraft p-1">
           {(["candidates", "hires", "conversion"] as const).map((key) => (
             <button
               key={key}
@@ -372,10 +355,17 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
               onClick={() => setSort(key)}
               aria-pressed={sort === key}
               className={cn(
-                "rounded-full px-3 py-1 text-xs font-medium capitalize transition active:scale-[0.97]",
-                sort === key ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
+                "relative rounded-full px-3 py-1 text-xs font-medium capitalize transition-colors active:scale-[0.97]",
+                sort === key ? "text-near-ink" : "text-soft-ink hover:text-near-ink",
               )}
             >
+              {sort === key ? (
+                <motion.span
+                  layoutId="source-sort-pill"
+                  className="absolute inset-0 -z-10 rounded-full bg-pure-snow shadow-[var(--shadow-soft)]"
+                  transition={{ type: "spring", stiffness: 500, damping: 35 }}
+                />
+              ) : null}
               {key}
             </button>
           ))}
@@ -393,25 +383,28 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
             className="grid grid-cols-[minmax(110px,160px)_1fr_auto] items-center gap-3 sm:gap-4"
           >
             <span className="flex min-w-0 items-center gap-2">
-              <span className="flex size-5 shrink-0 items-center justify-center text-muted-foreground">
+              <span className="flex size-5 shrink-0 items-center justify-center text-soft-ink">
                 <SourceLogo source={row.source} className="size-4" />
               </span>
-              <span className="truncate text-sm font-medium">{row.label}</span>
+              <span className="truncate text-sm font-medium text-near-ink">{row.label}</span>
             </span>
-            <span className="relative h-7 overflow-hidden rounded-lg bg-muted">
-              <span
-                className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-300"
-                style={{ width: `${Math.max((row.candidates / maxC) * 100, 4)}%`, backgroundColor: "var(--chart-1)", opacity: 0.18 }}
-              />
-              <span
-                className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-300"
-                style={{ width: `${Math.max((row.hires / maxC) * 100, row.hires > 0 ? 3 : 0)}%`, backgroundColor: "var(--chart-1)" }}
-              />
-              <span className="absolute inset-y-0 left-2.5 flex items-center text-[11px] font-medium tabular-nums text-foreground/80">
-                {row.candidates} cand · {row.hires} hired
+            <span className="flex min-w-0 flex-col gap-1">
+              <span className="flex items-baseline justify-between text-[11px] tabular-nums text-soft-ink">
+                <span>{fmt.format(row.candidates)} candidates</span>
+                <span>{fmt.format(row.hires)} hired</span>
+              </span>
+              <span className="relative h-5 overflow-hidden rounded-lg bg-warm-paper">
+                <span
+                  className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-300"
+                  style={{ width: `${Math.max((row.candidates / maxC) * 100, 4)}%`, backgroundColor: "var(--chart-1)", opacity: 0.18 }}
+                />
+                <span
+                  className="absolute inset-y-0 left-0 rounded-lg transition-[width] duration-300"
+                  style={{ width: `${Math.max((row.hires / maxC) * 100, row.hires > 0 ? 3 : 0)}%`, backgroundColor: "var(--chart-1)" }}
+                />
               </span>
             </span>
-            <span className="w-12 text-right text-sm font-semibold tabular-nums">{row.conversion}%</span>
+            <span className="w-12 text-right text-sm font-semibold tabular-nums text-near-ink">{row.conversion}%</span>
           </motion.li>
         ))}
       </ul>
@@ -428,8 +421,8 @@ export function Histogram({ data, color = "var(--chart-2)" }: { data: { bucket: 
   if (total === 0) {
     return (
       <div className="flex h-40 flex-col items-center justify-center gap-1 text-center">
-        <p className="text-sm text-muted-foreground">No hires yet</p>
-        <p className="text-xs text-muted-foreground">Distribution appears once roles are filled.</p>
+        <p className="text-sm text-soft-ink">No hires yet</p>
+        <p className="text-xs text-soft-ink">Distribution appears once roles are filled.</p>
       </div>
     );
   }
@@ -440,14 +433,16 @@ export function Histogram({ data, color = "var(--chart-2)" }: { data: { bucket: 
     <div className="flex h-44 items-end gap-2" role="img" aria-label={summary}>
       {data.map((d) => (
         <div key={d.bucket} className="flex flex-1 flex-col items-center gap-2">
-          <span className="text-xs font-semibold tabular-nums">{d.count}</span>
-          <div className="flex w-full flex-1 items-end">
+          <span className={cn("text-xs font-semibold tabular-nums", d.count > 0 ? "text-near-ink" : "text-quiet-mist")}>
+            {d.count}
+          </span>
+          <div className="flex w-full flex-1 items-end border-b border-hairline">
             <div
               className="w-full rounded-t-md transition-[height] duration-300"
               style={{ height: `${(d.count / max) * 100}%`, minHeight: d.count > 0 ? 4 : 0, backgroundColor: color }}
             />
           </div>
-          <span className="text-[11px] text-muted-foreground">{d.bucket}</span>
+          <span className="text-[11px] text-soft-ink">{d.bucket}</span>
         </div>
       ))}
     </div>

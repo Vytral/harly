@@ -129,4 +129,51 @@ describe("parseJobApplicationQuestions", () => {
 
     expect(questions).toEqual([]);
   });
+
+  it("keeps informational blocks, consent choices, and option descriptions", () => {
+    const questions = parseJobApplicationQuestions(
+      JSON.stringify([
+        {
+          id: "resources",
+          label: "A note before you apply",
+          type: "info",
+          description: "Read about our mission before submitting.",
+        },
+        {
+          id: "arbitration",
+          label: "Agreement to Arbitrate",
+          type: "consent",
+          required: true,
+          description: "Review the full terms.",
+        },
+        {
+          id: "workplace",
+          label: "Workplace preference",
+          type: "select",
+          options: ["Remote", "Hybrid"],
+          optionDescriptions: ["Work from anywhere", "Split time in office"],
+        },
+      ]),
+    );
+
+    expect(questions).toHaveLength(3);
+    expect(questions[0]).toMatchObject({ type: "info", description: "Read about our mission before submitting." });
+    expect(questions[1]).toMatchObject({
+      type: "consent",
+      options: ["agree", "disagree"],
+      required: true,
+    });
+    expect(questions[2]?.optionDescriptions).toEqual([
+      "Work from anywhere",
+      "Split time in office",
+    ]);
+  });
+
+  it("drops informational blocks without body text", () => {
+    expect(
+      parseJobApplicationQuestions(
+        JSON.stringify([{ label: "Notice", type: "info", description: " " }]),
+      ),
+    ).toEqual([]);
+  });
 });

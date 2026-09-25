@@ -342,10 +342,19 @@ export function validateApplicationQuestionAnswers(
   const errors: Record<string, string[]> = {};
 
   for (const question of questions) {
+    if (question.type === "info") {
+      continue;
+    }
+
     const value = answers[question.id]?.trim() ?? "";
 
     if (question.required && value.length === 0) {
       errors[question.id] = ["This question is required."];
+      continue;
+    }
+
+    if (question.type === "consent" && question.required && value !== "agree") {
+      errors[question.id] = ["You must agree to continue with your application."];
       continue;
     }
 

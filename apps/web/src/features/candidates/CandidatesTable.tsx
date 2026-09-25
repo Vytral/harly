@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import {
@@ -25,6 +26,7 @@ import {
   trashCandidateAction,
 } from "@/features/candidates/actions";
 import { addToPoolAction, removeFromPoolAction } from "@/features/pool/actions";
+import { bulkDecisionConfirmationMessage } from "@/features/pipeline/confirmation";
 import { toSafeCsv } from "@/lib/csv";
 import { BulkEmailDrawer } from "@/features/candidates/BulkEmailDrawer";
 import type { EmailTemplateOption } from "@/features/candidates/EmailDrawer";
@@ -33,6 +35,9 @@ import {
   type ImportJobOption,
   type ImportSource,
 } from "@/features/candidates/import/ImportCandidatesDrawer";
+import { AddCandidateDrawer } from "@/features/candidates/AddCandidateDrawer";
+import { ReferralBadge } from "@/features/candidates/referrals/ReferralBadge";
+import type { WorkspaceMemberOption } from "@/features/jobs/hiring-team-data";
 import { ApplicationStatusBadge } from "@/components/ui/StatusBadge";
 import { PipelineSpine } from "@/components/ui/PipelineSpine";
 import { UserAvatar } from "@/components/ui/UserAvatar";
@@ -75,6 +80,8 @@ export type CandidateRow = {
   inPool: boolean;
   /** Has a pending or in-progress data-export/erasure request awaiting review. */
   hasOpenPrivacyRequest: boolean;
+  isReferred: boolean;
+  isFeaturedReferral: boolean;
 };
 
 type SortKey = "recent" | "oldest" | "modified" | "name";
@@ -137,6 +144,7 @@ export function CandidatesTable({
   emailTemplates = [],
   importJobs = [],
   initialImportSource,
+  manualCandidate,
 }: {
   rows: CandidateRow[];
   pageInfo?: { page: number; pageSize: number; total: number; hasNextPage: boolean };
@@ -160,6 +168,11 @@ export function CandidatesTable({
   emailTemplates?: EmailTemplateOption[];
   importJobs?: ImportJobOption[];
   initialImportSource?: ImportSource;
+  manualCandidate?: {
+    workspaceId: string;
+    members: WorkspaceMemberOption[];
+    currentUserId: string;
+  };
 }) {
   const router = useRouter();
   const [query, setQuery] = useState(initialFilters?.query ?? "");
@@ -279,6 +292,13 @@ export function CandidatesTable({
       toast.error("Selected candidates have no application to update.");
       return;
     }
+    if (
+      applicationIds.length > 1 &&
+      (next === "hired" || next === "rejected") &&
+      !window.confirm(bulkDecisionConfirmationMessage(next, applicationIds.length))
+    ) {
+      return;
+    }
     startTransition(async () => {
       const result = await bulkUpdateCandidateStatusAction({
         applicationIds,
@@ -321,7 +341,7 @@ export function CandidatesTable({
   function runDelete(row: CandidateRow) {
     if (
       !window.confirm(
-        `Delete ${row.fullName} permanently? This removes their profile and related records.`,
+        `Move ${row.fullName} to trash? You can restore them later from the Trash tab.`,
       )
     ) {
       return;
@@ -329,7 +349,7 @@ export function CandidatesTable({
     startTransition(async () => {
       const result = await trashCandidateAction(row.id);
       if (result.success) {
-        toast.success(`${row.fullName} deleted permanently.`);
+        toast.success(`${row.fullName} moved to trash.`);
         setSelected((prev) => {
           const next = new Set(prev);
           next.delete(row.id);
@@ -371,7 +391,7 @@ export function CandidatesTable({
     if (ids.length === 0) return;
     if (
       !window.confirm(
-        `Delete ${ids.length} candidate${ids.length === 1 ? "" : "s"} permanently? This cannot be undone.`,
+        `Move ${ids.length} candidate${ids.length === 1 ? "" : "s"} to trash? You can restore them later.`,
       )
     ) {
       return;
@@ -381,7 +401,7 @@ export function CandidatesTable({
       if (result.success) {
         const count = result.count ?? ids.length;
         toast.success(
-          `Deleted ${count} candidate${count === 1 ? "" : "s"} permanently.`,
+          `Moved ${count} candidate${count === 1 ? "" : "s"} to trash.`,
         );
         setSelected(new Set());
         router.refresh();
@@ -471,6 +491,14 @@ export function CandidatesTable({
             {selectedCount > 0 ? `(${selectedCount})` : "CSV"}
           </span>
         </Button>
+        {manualCandidate ? (
+          <AddCandidateDrawer
+            workspaceId={manualCandidate.workspaceId}
+            jobs={importJobs}
+            members={manualCandidate.members}
+            currentUserId={manualCandidate.currentUserId}
+          />
+        ) : null}
         <ImportCandidatesDrawer
           jobs={importJobs}
           initialSource={initialImportSource}
@@ -690,7 +718,11 @@ export function CandidatesTable({
                   </div>
 
                   {/* Identity */}
-                  <div className="flex min-w-0 items-center gap-3">
+                  <Link
+                    href={`/dashboard/candidates/${row.id}` as Route}
+                    onClick={(event) => event.stopPropagation()}
+                    className="flex min-w-0 items-center gap-3"
+                  >
                     <UserAvatar
                       name={row.fullName}
                       src={row.avatarUrl}
@@ -717,6 +749,9 @@ export function CandidatesTable({
                             <BookmarkSimpleIcon className="size-3 fill-current" />
                             In Pool
                           </span>
+                        ) : null}
+                        {row.isReferred ? (
+                          <ReferralBadge featured={row.isFeaturedReferral} />
                         ) : null}
                         {row.hasOpenPrivacyRequest ? (
                           <span
@@ -750,7 +785,7 @@ export function CandidatesTable({
                         </div>
                       ) : null}
                     </div>
-                  </div>
+                  </Link>
 
                   {/* Pipeline */}
                   <div className="col-start-2 min-w-0 sm:col-auto">

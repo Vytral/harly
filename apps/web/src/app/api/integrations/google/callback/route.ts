@@ -1,3 +1,4 @@
+import { isDemoMode } from "@harly/config";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
@@ -6,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { createOAuth2Client } from "@/lib/gcal/config";
 import { createLogger } from "@/lib/logger";
+import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import {
   verifyAndConsumeOauthStateNonce,
@@ -22,6 +24,9 @@ export const runtime = "nodejs";
  * encrypt the refresh token, fetch the user's email, and store everything.
  */
 export async function GET(req: NextRequest) {
+  if (isDemoMode()) {
+    return NextResponse.json({ error: "This action is disabled in the demo." }, { status: 403 });
+  }
   const session = await auth.api.getSession({ headers: req.headers });
   if (!session) {
     return redirectWithError("Unauthorized. Please log in first.");
@@ -121,9 +126,7 @@ export async function GET(req: NextRequest) {
 }
 
 function getAppUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  ).replace(/\/$/, "");
+  return getHarlyPublicOrigin();
 }
 
 function redirectWithError(msg: string) {

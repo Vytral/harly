@@ -1,7 +1,8 @@
-import { Text } from "@react-email/components";
+import { Button, Section, Text } from "@react-email/components";
 
 import { WorkspaceLayout } from "./WorkspaceLayout";
 import { DetailTable } from "./DetailTable";
+import { EmailFallbackLink } from "./EmailFallbackLink";
 import type { SocialLink } from "./HarlyLayout";
 
 export type OfferExtendedProps = {
@@ -16,6 +17,7 @@ export type OfferExtendedProps = {
   startDate?: string;
   expiresAt?: string;
   equity?: string;
+  offerUrl: string;
 };
 
 export function offerExtendedSubject({
@@ -37,6 +39,7 @@ export function OfferExtended({
   startDate,
   expiresAt,
   equity,
+  offerUrl,
 }: OfferExtendedProps) {
   const rows = [
     { label: "Role", value: jobTitle },
@@ -64,8 +67,18 @@ export function OfferExtended({
         <span className="text-fg font-semibold">{jobTitle}</span>. Here&apos;s what we&apos;re offering:
       </Text>
       <DetailTable rows={rows} />
+      <Section className="mt-3">
+        <Button
+          href={offerUrl}
+          className="bg-brand text-[14px] leading-[1.5] font-inter text-fg-inverted inline-block border-none px-4 py-2.5 text-center box-border no-underline"
+        >
+          Review offer
+        </Button>
+        <EmailFallbackLink url={offerUrl} />
+      </Section>
       <Text className="text-[14px] leading-[1.5] font-inter text-fg-2 m-0 mb-4">
-        Reply to this email to accept or ask any questions. We&apos;re excited to hear from you.
+        Review the offer using the link above, or reply to this email with any questions.
+        We&apos;re excited to hear from you.
       </Text>
     </WorkspaceLayout>
   );
@@ -79,4 +92,5 @@ OfferExtended.PreviewProps = {
   startDate: "August 1, 2026",
   expiresAt: "July 10, 2026",
   equity: "0.15% over 4 years",
+  offerUrl: "https://app.harly.dev/portal/applications/application-123",
 } satisfies OfferExtendedProps;

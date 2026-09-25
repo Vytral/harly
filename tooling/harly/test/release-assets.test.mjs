@@ -51,7 +51,7 @@ test("local Markdown links in self-host documentation resolve", () => {
     "README.md",
     "docs/self-hosting.md",
     "docs/cloud-deployments.md",
-    "docs/launch-checklist.md",
+    "docs/release-readiness.md",
     "tooling/harly/README.md",
     "tooling/harly/README.md",
   ];

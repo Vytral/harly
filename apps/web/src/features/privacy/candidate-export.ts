@@ -4,6 +4,7 @@ import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 
 import {
   aiEvaluations,
+  aiEvaluationRevisions,
   applicationAnswers,
   applicationQuestions,
   applications,
@@ -103,7 +104,7 @@ export async function buildCandidateDataExport(input: {
     answersByApplication.set(answer.applicationId, list);
   }
 
-  const [files, tags, consents, evaluations, evaluationEvidence, messages] = await Promise.all([
+  const [files, tags, consents, evaluations, evaluationRevisions, evaluationEvidence, messages] = await Promise.all([
     db
       .select({
         fileName: candidateFiles.fileName,
@@ -160,6 +161,11 @@ export async function buildCandidateDataExport(input: {
         rubricVersion: aiEvaluations.rubricVersion,
         inputHash: aiEvaluations.inputHash,
         outputHash: aiEvaluations.outputHash,
+        candidateFactsSnapshot: aiEvaluations.candidateFactsSnapshot,
+        skillProfilesSnapshot: aiEvaluations.skillProfilesSnapshot,
+        evaluationMetadataSnapshot: aiEvaluations.evaluationMetadataSnapshot,
+        criterionDetailsSnapshot: aiEvaluations.criterionDetailsSnapshot,
+        impactHighlightsSnapshot: aiEvaluations.impactHighlightsSnapshot,
         evidenceCoverage: aiEvaluations.evidenceCoverage,
         confidence: aiEvaluations.confidence,
         requiresHumanReview: aiEvaluations.requiresHumanReview,
@@ -183,6 +189,24 @@ export async function buildCandidateDataExport(input: {
         ),
       )
       .orderBy(desc(aiEvaluations.updatedAt)),
+    applicationIds.length
+      ? db
+          .select({
+            evaluationId: aiEvaluationRevisions.evaluationId,
+            applicationId: aiEvaluationRevisions.applicationId,
+            revision: aiEvaluationRevisions.revision,
+            snapshot: aiEvaluationRevisions.snapshot,
+            createdAt: aiEvaluationRevisions.createdAt,
+          })
+          .from(aiEvaluationRevisions)
+          .where(
+            and(
+              eq(aiEvaluationRevisions.workspaceId, input.workspaceId),
+              inArray(aiEvaluationRevisions.applicationId, applicationIds),
+            ),
+          )
+          .orderBy(desc(aiEvaluationRevisions.createdAt))
+      : Promise.resolve([]),
     db
       .select({
         evaluationId: evaluationCriterionResults.evaluationId,
@@ -253,6 +277,7 @@ export async function buildCandidateDataExport(input: {
     tags,
     consents,
     aiEvaluations: evaluations,
+    aiEvaluationRevisions: evaluationRevisions,
     evaluationEvidence,
     messages,
   };

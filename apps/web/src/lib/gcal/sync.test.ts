@@ -6,25 +6,36 @@ const mocks = vi.hoisted(() => ({
   getWorkspaceGCalConfig: vi.fn(),
   invalidateWorkspaceGCalConnection: vi.fn(),
   update: vi.fn(),
+  updateEvent: vi.fn(),
+  deleteEvent: vi.fn(),
+  and: vi.fn((...conditions: unknown[]) => conditions),
 }));
 
 vi.mock("@harly/db", () => ({
   db: { update: mocks.update },
   interviews: { id: "interviews.id" },
 }));
-vi.mock("drizzle-orm", () => ({ eq: vi.fn() }));
+vi.mock("drizzle-orm", () => ({
+  and: mocks.and,
+  eq: vi.fn(),
+}));
 vi.mock("@/lib/gcal/config", () => ({
   getWorkspaceGCalConfig: mocks.getWorkspaceGCalConfig,
   invalidateWorkspaceGCalConnection: mocks.invalidateWorkspaceGCalConnection,
 }));
 vi.mock("@/lib/gcal/client", () => ({
   createEvent: mocks.createEvent,
-  deleteEvent: vi.fn(),
+  deleteEvent: mocks.deleteEvent,
   getEvent: mocks.getEvent,
-  updateEvent: vi.fn(),
+  updateEvent: mocks.updateEvent,
 }));
 
-import { gcalEventIdForInterview, syncInterviewToGCal } from "./sync";
+import {
+  cancelInterviewGCalEvent,
+  gcalEventIdForInterview,
+  syncInterviewToGCal,
+  updateInterviewGCalEvent,
+} from "./sync";
 
 describe("Google Calendar interview sync", () => {
   it("derives a stable provider event id", () => {
@@ -73,5 +84,43 @@ describe("Google Calendar interview sync", () => {
       "primary",
       "harl50321e912e2c75386aa2a462826d3e839f78f522dcf10e8f8a61f23a41200bf3",
     );
+    expect(mocks.and).toHaveBeenCalled();
+    expect(mocks.and.mock.calls[0]).toHaveLength(2);
+  });
+
+  it("returns failure when updating Google Calendar fails", async () => {
+    mocks.getWorkspaceGCalConfig.mockResolvedValue({
+      oauth2Client: {},
+      calendarId: "primary",
+    });
+    mocks.updateEvent.mockRejectedValue(new Error("calendar unavailable"));
+
+    await expect(
+      updateInterviewGCalEvent({
+        workspaceId: "workspace-1",
+        gcalEventId: "event-1",
+        start: new Date("2026-07-21T13:00:00.000Z"),
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it("scopes the interview row cleanup to the workspace", async () => {
+    mocks.getWorkspaceGCalConfig.mockResolvedValue({
+      oauth2Client: {},
+      calendarId: "primary",
+    });
+    mocks.deleteEvent.mockResolvedValue(undefined);
+    mocks.update.mockReturnValue({
+      set: () => ({ where: vi.fn().mockResolvedValue(undefined) }),
+    });
+
+    await expect(
+      cancelInterviewGCalEvent({
+        workspaceId: "workspace-1",
+        interviewId: "interview-1",
+        gcalEventId: "event-1",
+      }),
+    ).resolves.toBe(true);
+    expect(mocks.and.mock.calls.at(-1)).toHaveLength(2);
   });
 });

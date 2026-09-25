@@ -9,9 +9,16 @@ import {
   evaluationRubrics,
   jobs,
 } from "@harly/db";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  requireJobPermission,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
 import { hashEvaluationInput } from "./service";
-import { evaluationRubricInputSchema } from "./rubric-schema";
+import {
+  evaluationRubricInputSchema,
+  toEffectiveCriterion,
+  validateRubricGates,
+} from "./rubric-schema";
 
 export type RubricActionResult =
   | { success: true; rubricId: string; version: number }
@@ -23,7 +30,10 @@ export async function createEvaluationRubricAction(
 ): Promise<RubricActionResult> {
   const parsed = evaluationRubricInputSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: "Invalid evaluation rubric." };
-  const context = await requirePermission("jobs:edit");
+  // Phase 2 governance (§2.3): reject invalid gates before touching auth/DB.
+  const gateError = validateRubricGates(parsed.data.criteria);
+  if (gateError) return { success: false, error: gateError };
+  const context = await requireJobPermission("jobs:edit", parsed.data.jobId);
 
   const [job] = await db
     .select({ id: jobs.id })
@@ -59,13 +69,7 @@ export async function createEvaluationRubricAction(
     await tx.insert(evaluationCriteria).values(
       parsed.data.criteria.map((criterion) => ({
         rubricId: rubric.id,
-        key: criterion.key,
-        label: criterion.label,
-        type: criterion.type,
-        importance: criterion.importance,
-        weight: criterion.weight,
-        aliases: criterion.aliases,
-        minimumValue: criterion.minimumValue ?? null,
+        ...toEffectiveCriterion(criterion),
       })),
     );
     return { id: rubric.id, version };
@@ -79,6 +83,19 @@ export async function publishEvaluationRubricAction(input: unknown): Promise<Rub
   const parsed = z.object({ rubricId: z.uuid() }).safeParse(input);
   if (!parsed.success) return { success: false, error: "Invalid rubric." };
   const context = await requirePermission("jobs:edit");
+
+  const [targetRubric] = await db
+    .select({ jobId: evaluationRubrics.jobId })
+    .from(evaluationRubrics)
+    .where(
+      and(
+        eq(evaluationRubrics.id, parsed.data.rubricId),
+        eq(evaluationRubrics.workspaceId, context.organization.id),
+      ),
+    )
+    .limit(1);
+  if (!targetRubric) return { success: false, error: "Rubric not found." };
+  await requireJobPermission("jobs:edit", targetRubric.jobId);
 
   const result = await db.transaction(async (tx) => {
     const [rubric] = await tx

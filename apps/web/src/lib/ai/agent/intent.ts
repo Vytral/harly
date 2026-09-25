@@ -3,6 +3,7 @@ import "server-only";
 export type HarlyIntent =
   | "workspace_fact"
   | "action"
+  | "automation_build"
   | "capability"
   | "product_docs"
   | "general_advice"
@@ -12,6 +13,40 @@ export type HarlyIntent =
 export function classifyHarlyIntent(message: string): HarlyIntent {
   const text = message.trim().toLowerCase();
   if (!text) return "ambiguous";
+
+  // Automation requests are planning requests, even when they contain an
+  // action verb such as "reject" or "send". Keep this ahead of the generic
+  // capability/action/workspace checks so natural phrasing reaches the
+  // automation orchestration path.
+  const mentionsAutomation =
+    /\b(automat(?:izaci[oó]n|izacion|ion)|workflow|flujo|disparador|trigger)\w*/i.test(
+      text,
+    );
+  const hasBuildIntent =
+    /\b(quier[oa]|want|need|would like|necesito|me gustar[ií]a|haz(?:me)?|make|modify|update|improve|crear|crea|armar|configurar|configura|construir|diseñar|dise[nñ]a|build|set up|cuando|when|whenever)\b/i.test(
+      text,
+    );
+  const describesWorkflow =
+    /\b(whenever|cuando|automatically|autom[aá]ticamente|if|si)\b[\s\S]*\b(apply|applies|applicant|candidate|candidat[oa]s?|position|role|contact|email|evaluate|evaluat|puntaje|score)\b/i.test(
+      text,
+    );
+  if (
+    (mentionsAutomation && hasBuildIntent) ||
+    (hasBuildIntent && describesWorkflow) ||
+    describesWorkflow ||
+    (hasBuildIntent &&
+      /\b(cuando|when)\b.*\b(candidat[oa]s?|applicant|postulant)\b/i.test(
+        text,
+      )) ||
+    (/\b(cuando|when)\b.*\b(candidat[oa]s?|applicant|postulant)\b/i.test(
+      text,
+    ) &&
+      /\b(rechaz|reject|email|correo|borr|delete|puntaje|score|evalu)/i.test(
+        text,
+      ))
+  ) {
+    return "automation_build";
+  }
 
   if (
     /\b(puede|puedes|puedo|can harly|does harly|integraci[oó]n|conectad[oa]|linkedin|sync|sincroniz)/i.test(

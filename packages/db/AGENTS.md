@@ -19,6 +19,7 @@ Drizzle ORM + drizzle-kit. Schema source of truth: `src/schema.ts`. Migrations: 
 - **Always** change the schema by editing `src/schema.ts` then running `pnpm db:generate`. Let drizzle write the `.sql`, the snapshot, and the journal entry together — they stay in sync automatically.
 - Run `pnpm db:migrate` to apply. Then run `pnpm db:generate` once more and confirm it prints **"No schema changes, nothing to migrate"** — that proves schema.ts, the migration chain, and snapshots all agree (no drift).
 - Run `npx drizzle-kit check` after any migration work — it audits the chain and should print "Everything's fine".
+- Run `pnpm db:verify-migrations` before applying or debugging migrations. It is read-only and compares migration files, the journal, and `drizzle.__drizzle_migrations` hashes/timestamps; it must pass before trusting `db:migrate`.
 - Commit the `.sql`, its `meta/NNNN_snapshot.json`, AND the `meta/_journal.json` change together in the same commit. Never commit one without the others.
 - Keep migrations append-only. To change something already applied, write a NEW migration.
 

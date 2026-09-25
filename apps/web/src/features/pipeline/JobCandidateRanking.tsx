@@ -21,6 +21,16 @@ const RECOMMENDATION_META = {
   no: { label: "No", className: "bg-destructive/10 text-destructive" },
 } as const;
 
+const CURRENT_RULES_VERSION = "rules-v3";
+
+function needsEvaluation(application: PipelineApplication) {
+  return (
+    application.aiScore == null ||
+    (application.evaluationSource === "rules" &&
+      application.evaluationEngineVersion !== CURRENT_RULES_VERSION)
+  );
+}
+
 function scoreTone(score: number) {
   if (score >= 60) return "text-primary";
   if (score >= 40) return "text-clay";
@@ -61,13 +71,13 @@ export function JobCandidateRanking({
         }),
     [applications],
   );
-  const scored = activeApplications.filter((application) => application.aiScore != null).length;
-  const unscored = activeApplications.length - scored;
+  const scored = activeApplications.filter((application) => !needsEvaluation(application)).length;
+  const unscored = activeApplications.filter(needsEvaluation).length;
   const scoredRankById = useMemo(
     () =>
       new Map(
         activeApplications
-          .filter((application) => application.aiScore != null)
+          .filter((application) => !needsEvaluation(application))
           .map((application, index) => [application.id, index + 1]),
       ),
     [activeApplications],
@@ -181,7 +191,7 @@ export function JobCandidateRanking({
               const meta = recommendation
                 ? RECOMMENDATION_META[recommendation]
                 : null;
-              const hasEvaluation = application.aiScore != null;
+              const hasEvaluation = application.aiScore != null && !needsEvaluation(application);
 
               return (
                 <div
@@ -232,7 +242,7 @@ export function JobCandidateRanking({
                             "text-base font-semibold tabular-nums",
                             scoreTone(application.aiScore),
                           )}
-                          title={`${application.evaluationSource === "rules" ? "Harly Algorithm rules-v2" : "Automatic evaluation"}. ${application.aiUsedResume ? "Based on resume + profile" : "Profile only. No readable resume"}`}
+                          title={`${application.evaluationSource === "rules" ? `Harly Algorithm ${application.evaluationEngineVersion ?? "rules"}` : "Automatic evaluation"}. ${application.aiUsedResume ? "Based on resume + profile" : "Profile only. No readable resume"}`}
                         >
                           {application.aiScore}
                         </span>

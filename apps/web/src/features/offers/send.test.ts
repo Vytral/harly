@@ -34,6 +34,7 @@ vi.mock("@harly/db", () => {
     q.innerJoin = () => q;
     q.leftJoin = () => q;
     q.orderBy = () => q;
+    q.for = () => q;
     q.limit = async () => mocks.selectQueue.shift() ?? [];
     return q;
   };
@@ -58,6 +59,7 @@ vi.mock("@harly/db", () => {
     emailOutbox: {},
     activityEvents: {},
     candidates: {},
+    jobs: {},
     organization: {},
     applications: {},
     jobStages: {},
@@ -65,6 +67,10 @@ vi.mock("@harly/db", () => {
     jobHiringTeam: {},
     notifications: {},
     workspaceSettings: {},
+    documents: {},
+    documentAssociations: {},
+    signatureFields: {},
+    signatureEnvelopes: {},
   };
 });
 
@@ -135,6 +141,7 @@ const RECIPIENT = {
   lastName: "Date",
   companyName: "Acme",
 };
+const APPLICATION_ACTIVE = { id: "app-1", status: "active" };
 
 describe("F1-13 offer delivery via durable outbox", () => {
   beforeEach(() => {
@@ -155,7 +162,7 @@ describe("F1-13 offer delivery via durable outbox", () => {
   });
 
   it("inserts the outbox row, delegates delivery, and marks the offer sent only on success", async () => {
-    mocks.selectQueue.push([OFFER], [RECIPIENT], [{ status: "sent" }]);
+    mocks.selectQueue.push([OFFER], [APPLICATION_ACTIVE], [RECIPIENT], [{ status: "sent" }]);
     mocks.processEmailOutbox.mockResolvedValue({
       processed: 1,
       sent: 1,
@@ -181,7 +188,7 @@ describe("F1-13 offer delivery via durable outbox", () => {
   });
 
   it("keeps the offer draft and queues the outbox when delivery fails", async () => {
-    mocks.selectQueue.push([OFFER], [RECIPIENT], [{ status: "pending" }]);
+    mocks.selectQueue.push([OFFER], [APPLICATION_ACTIVE], [RECIPIENT], [{ status: "pending" }]);
     mocks.processEmailOutbox.mockResolvedValue({
       processed: 1,
       sent: 0,
@@ -212,10 +219,21 @@ describe("F1-13 offer delivery via durable outbox", () => {
     expect(mocks.processEmailOutbox).not.toHaveBeenCalled();
   });
 
+  it("refuses to send when the application is no longer active", async () => {
+    mocks.selectQueue.push([OFFER], [{ id: OFFER.applicationId, status: "rejected" }]);
+
+    const result = await sendOffer({ offerId: OFFER.id });
+
+    expect(result.success).toBe(false);
+    expect(result.error ?? "").toMatch(/active applications/i);
+    expect(mocks.enqueueEmailOutbox).not.toHaveBeenCalled();
+    expect(mocks.processEmailOutbox).not.toHaveBeenCalled();
+  });
+
   it("dedupes a double send: enqueueEmailOutbox is called twice but delivery runs once per id", async () => {
     // Second call returns a different id to simulate the dedupe key colliding
     // and reusing the original row — enqueueEmailOutbox's real behaviour.
-    mocks.selectQueue.push([OFFER], [RECIPIENT], [{ status: "sent" }]);
+    mocks.selectQueue.push([OFFER], [APPLICATION_ACTIVE], [RECIPIENT], [{ status: "sent" }]);
     mocks.processEmailOutbox.mockResolvedValue({
       processed: 1,
       sent: 1,
@@ -224,7 +242,7 @@ describe("F1-13 offer delivery via durable outbox", () => {
 
     await sendOffer({ offerId: OFFER.id });
     // Second send: same offer, same dedupe key -> enqueue returns the same id.
-    mocks.selectQueue.push([OFFER], [RECIPIENT], [{ status: "sent" }]);
+    mocks.selectQueue.push([OFFER], [APPLICATION_ACTIVE], [RECIPIENT], [{ status: "sent" }]);
     await sendOffer({ offerId: OFFER.id });
 
     // Enqueue was called twice (once per user click), but both resolve to the

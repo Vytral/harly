@@ -31,6 +31,10 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import {
+  getBrowserTimeZone,
+  parseScheduledAt,
+} from "@/features/interviews/shared";
 
 export type ScheduleApplicationOption = {
   applicationId: string;
@@ -123,7 +127,8 @@ export function ScheduleDialog({
     }
     setCheckingAvailability(true);
     try {
-      const start = new Date(`${newDate}T${newTime}`);
+      const timeZone = getBrowserTimeZone();
+      const start = parseScheduledAt(`${newDate}T${newTime}`, timeZone);
       const end = new Date(start.getTime() + duration * 60_000);
       const result = await checkAvailability({
         timeMin: start,
@@ -196,6 +201,7 @@ export function ScheduleDialog({
       return;
     }
     startTransition(async () => {
+      const timeZone = getBrowserTimeZone();
       const result = await scheduleInterview({
         workspaceId,
         candidateId,
@@ -203,6 +209,7 @@ export function ScheduleDialog({
         type,
         mode,
         scheduledAt: `${date}T${time}`,
+        timeZone,
         durationMins,
         interviewerId: interviewerId || null,
         location: location.trim() || null,

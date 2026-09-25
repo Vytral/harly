@@ -67,15 +67,17 @@ export function UserAvatar({
         />
       ) : null}
       <AvatarFallback className="overflow-hidden rounded-full">
-        <Seedface
-          value={name}
-          size={seedfacePixels[size]}
-          radius="full"
-          style="character"
-          variant="light"
-          displayValue={getInitials(name)}
-          className="size-full"
-        />
+        <span className="flex size-full items-center justify-center">
+          <Seedface
+            value={name}
+            size={seedfacePixels[size]}
+            radius="full"
+            style="character"
+            variant="light"
+            displayValue={getInitials(name)}
+            className="size-full"
+          />
+        </span>
       </AvatarFallback>
     </Avatar>
   );

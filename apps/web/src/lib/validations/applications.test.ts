@@ -413,4 +413,34 @@ describe("validateApplicationQuestionAnswers", () => {
     const errors = validateApplicationQuestionAnswers({}, questions);
     expect(errors.work_authorization).toBeDefined();
   });
+
+  it("requires an affirmative answer for a required agreement", () => {
+    const agreement = {
+      id: "arbitration",
+      label: "Agreement to Arbitrate",
+      type: "consent",
+      required: true,
+      options: ["agree", "disagree"],
+    } as const;
+
+    expect(
+      validateApplicationQuestionAnswers({ arbitration: "disagree" }, [agreement])
+        .arbitration,
+    ).toEqual(["You must agree to continue with your application."]);
+    expect(
+      validateApplicationQuestionAnswers({ arbitration: "agree" }, [agreement]),
+    ).toEqual({});
+  });
+
+  it("does not treat informational blocks as unanswered required questions", () => {
+    const info = {
+      id: "mission",
+      label: "Our mission",
+      type: "info",
+      required: true,
+      description: "Read about our mission.",
+    } as const;
+
+    expect(validateApplicationQuestionAnswers({}, [info])).toEqual({});
+  });
 });

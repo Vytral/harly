@@ -40,6 +40,33 @@ export function isIpAllowed(ip: string | null | undefined, allowlist: string[]):
   });
 }
 
+/**
+ * Resolve the client address without trusting attacker-controlled leftmost
+ * forwarding headers. The original address is used only when the immediate
+ * peer is explicitly configured as a trusted proxy.
+ */
+export function getTrustedClientIp(
+  request: Pick<Request, "headers">,
+): string | undefined {
+  const forwarded = request.headers.get("x-forwarded-for");
+  const realIp = request.headers.get("x-real-ip");
+  if (forwarded) {
+    const hops = forwarded.split(",").map((h) => h.trim()).filter(Boolean);
+    if (hops.length > 0) {
+      const trusted = (process.env.TRUSTED_PROXY_IPS ?? "")
+        .split(",")
+        .map((h) => h.trim())
+        .filter(Boolean);
+      const peerIp = request.headers.get("x-forwarded-peer") ?? realIp ?? null;
+      if (trusted.length > 0 && peerIp && trusted.includes(peerIp)) {
+        return hops[0];
+      }
+      return hops[hops.length - 1];
+    }
+  }
+  return realIp ?? undefined;
+}
+
 export function isEmailDomainAllowed(email: string, domains: string[]): boolean {
   if (domains.length === 0) return true;
   const domain = email.trim().toLowerCase().split("@").pop() ?? "";

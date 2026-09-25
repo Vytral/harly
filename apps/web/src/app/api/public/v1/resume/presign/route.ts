@@ -7,6 +7,7 @@ import {
 import { storage, storageProvider } from "@/lib/storage";
 import { privateResumeFileUrl } from "@/lib/resume/storage-key";
 import { appendStorageUploadIntent, createStorageUploadIntent } from "@/lib/storage-upload-intent";
+import { toHarlyPublicUrl } from "@/lib/public-origin";
 import { resolvePublicWorkspace } from "@/server/api/public";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { apiOk, corsPreflight, withApi } from "@/server/api/respond";
@@ -18,13 +19,13 @@ export const runtime = "nodejs";
  * embed widget / custom forms. Mirrors the in-app presign route but CORS-open.
  */
 export const POST = withApi(async (request) => {
-  enforceRateLimit(`public:resume-presign:${clientIp(request)}`, {
+  await enforceRateLimit(`public:resume-presign:${clientIp(request)}`, {
     limit: 20,
     windowMs: 60_000,
   });
 
-  // Anchor the request to a workspace (key or ?workspace=slug) to avoid open
-  // upload abuse from arbitrary origins.
+  // Anchor the request to the configured workspace (or publishable key) to
+  // avoid open upload abuse from arbitrary origins.
   const workspace = await resolvePublicWorkspace(request, "applications:write");
 
   const parsed = resumeUploadRequestSchema.safeParse(
@@ -42,7 +43,7 @@ export const POST = withApi(async (request) => {
   });
 
   const intent = createStorageUploadIntent({ workspaceId: workspace.workspaceId, key, contentType: parsed.data.contentType, contentLength: parsed.data.contentLength, expiresAt: Date.now() + 10 * 60_000 });
-  return apiOk({ ...result, fileUrl: new URL(privateResumeFileUrl(key), request.url).toString(), uploadUrl: storageProvider === "local" ? new URL(appendStorageUploadIntent(result.uploadUrl, intent), request.url).toString() : result.uploadUrl, key }, { cors: true });
+  return apiOk({ ...result, fileUrl: toHarlyPublicUrl(privateResumeFileUrl(key)), uploadUrl: storageProvider === "local" ? toHarlyPublicUrl(appendStorageUploadIntent(result.uploadUrl, intent)) : result.uploadUrl, key }, { cors: true });
 }, { cors: true });
 
 export function OPTIONS() {

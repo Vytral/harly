@@ -35,4 +35,28 @@ describe("career page SEO", () => {
     expect(metadata.title).toBe("Syntrix");
     expect(metadata.icons).toEqual({ icon: "https://cdn.example.com/syntrix.svg" });
   });
+
+  it("uses the Harly favicon when workspace branding has no logo", () => {
+    const metadata = publicBoardMetadata(
+      {
+        name: "Syntrix",
+        slug: "syntrix",
+        logoUrl: null,
+        fullLogoUrl: null,
+        tagline: null,
+        description: null,
+        websiteUrl: null,
+        primaryColor: "#123456",
+        heroImageUrl: null,
+        boardStyle: "minimal",
+        logoStyle: "bordered",
+        legalConfigured: false,
+        consentCheckboxText: null,
+        legalPages: null,
+      },
+      normalizeCareerPageConfig({}),
+    );
+
+    expect(metadata.icons).toEqual({ icon: "/favicon.svg" });
+  });
 });

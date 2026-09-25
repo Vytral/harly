@@ -39,9 +39,9 @@ export async function GET(req: NextRequest) {
     })),
   });
 
-  await storeChallenge(session.user.id, options.challenge, "authentication");
+  const challenge = await storeChallenge(session.user.id, options.challenge, "authentication");
 
-  return NextResponse.json(options);
+  return NextResponse.json({ ...options, challengeId: challenge.id });
 }
 
 // POST , verify authentication response (used for passkey-as-2FA or re-auth).
@@ -52,8 +52,11 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
+  const { challengeId, ...authenticationResponse } = body;
 
-  const expectedChallenge = await consumeChallenge(session.user.id, "authentication");
+  const expectedChallenge = typeof challengeId === "string"
+    ? await consumeChallenge(challengeId, session.user.id, "authentication")
+    : null;
   if (!expectedChallenge) {
     return NextResponse.json(
       { error: "Challenge expired or not found" },
@@ -79,7 +82,7 @@ export async function POST(req: NextRequest) {
   let verification;
   try {
     verification = await verifyAuthenticationResponse({
-      response: body,
+      response: authenticationResponse,
       expectedChallenge,
       expectedOrigin: ORIGIN,
       expectedRPID: RP_ID,

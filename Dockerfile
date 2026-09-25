@@ -20,7 +20,7 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1 \
     NODE_OPTIONS=--max-old-space-size=4096 \
     HARLY_DISABLE_WEBPACK_BUILD_WORKER=1 \
-    HARLY_URL=http://localhost:3000 \
+    HARLY_URL=https://build.invalid \
     DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build \
     BETTER_AUTH_SECRET=build-only-better-auth-secret-000000000000 \
     AI_ENCRYPTION_KEY=build-only-ai-encryption-key-0000000000000 \
@@ -28,7 +28,11 @@ ENV NEXT_TELEMETRY_DISABLED=1 \
     CRON_SECRET=build-only-cron-secret-000000000000000000 \
     HARLY_SETUP_SECRET=build-only-setup-secret-0000000000000000 \
     HARLY_INITIAL_ADMIN_EMAIL=owner@example.com
-RUN --mount=type=cache,id=harly-next-cache,target=/src/apps/web/.next/cache \
+# The Next build cache is architecture-specific. A single shared id let the
+# amd64 and arm64 builds of the same multi-platform build write into one cache,
+# mixing artifacts from both.
+ARG TARGETPLATFORM
+RUN --mount=type=cache,id=harly-next-cache-${TARGETPLATFORM},target=/src/apps/web/.next/cache \
     pnpm --filter @harly/cli build && pnpm --filter web build
 RUN pnpm exec esbuild tooling/runtime/src/entrypoint.ts --bundle --platform=node --format=esm --target=node22 --outfile=/tmp/harly-runtime.mjs
 

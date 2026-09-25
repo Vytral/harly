@@ -7,11 +7,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => {
   const selectQueue: unknown[][] = [];
   const insertQueue: unknown[][] = [];
+  const transactionReturningQueue: unknown[][] = [];
   const updateCalls: Array<{ set: Record<string, unknown> }> = [];
   const transactionImpl = vi.fn();
   return {
     selectQueue,
     insertQueue,
+    transactionReturningQueue,
     updateCalls,
     transactionImpl,
     sendWorkspaceEmail: vi.fn(),
@@ -55,6 +57,7 @@ vi.mock("@harly/db", () => {
     activityEvents: {},
     documentAssociations: {},
     documents: {},
+    applications: {},
   };
 });
 
@@ -82,13 +85,27 @@ const PENDING = {
   nextRetryAt: null,
 };
 
-const OFFER_DRAFT = { id: "offer-1", status: "draft", title: "Engineer", applicationId: "app-1" };
+const OFFER_DRAFT = {
+  id: "offer-1",
+  status: "draft",
+  title: "Engineer",
+  applicationId: "app-1",
+  candidateId: "cand-1",
+  jobId: "job-1",
+};
 const OFFER_SENT = { ...OFFER_DRAFT, status: "sent" };
+const APPLICATION_ACTIVE = {
+  id: "app-1",
+  status: "active",
+  candidateId: "cand-1",
+  jobId: "job-1",
+};
 const RECIPIENT = { email: "c@example.com", firstName: "C", lastName: "D", companyName: "Acme" };
 
 function reset() {
   mocks.selectQueue.length = 0;
   mocks.insertQueue.length = 0;
+  mocks.transactionReturningQueue.length = 0;
   mocks.updateCalls.length = 0;
   mocks.transactionImpl.mockReset();
   mocks.sendWorkspaceEmail.mockReset();
@@ -99,11 +116,19 @@ function reset() {
   mocks.getWorkspaceEmailConfig.mockReset();
   mocks.getWorkspaceEmailConfig.mockResolvedValue(null);
   mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+    let updateCount = 0;
     const tx = {
       update: () => ({
         set: (set: Record<string, unknown>) => {
           mocks.updateCalls.push({ set });
-          return { where: () => ({ returning: async () => [] }) };
+          return {
+            where: () => ({
+              returning: async () => {
+                updateCount += 1;
+                return mocks.transactionReturningQueue.shift() ?? (updateCount === 1 ? [{ id: "offer-1" }] : []);
+              },
+            }),
+          };
         },
       }),
     };
@@ -115,7 +140,7 @@ describe("email_outbox worker", () => {
   beforeEach(reset);
 
   it("sends the email and flips the offer + outbox to sent on success", async () => {
-    mocks.selectQueue.push([PENDING], [OFFER_DRAFT], [RECIPIENT]);
+    mocks.selectQueue.push([PENDING], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
     mocks.sendWorkspaceEmail.mockResolvedValue(true);
 
     const result = await processEmailOutbox();
@@ -136,7 +161,7 @@ describe("email_outbox worker", () => {
   });
 
   it("queues a retry (keeps pending + bumps attempts) when delivery fails", async () => {
-    mocks.selectQueue.push([PENDING], [OFFER_DRAFT], [RECIPIENT]);
+    mocks.selectQueue.push([PENDING], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
     mocks.sendWorkspaceEmail.mockResolvedValue(false);
 
     const result = await processEmailOutbox();
@@ -150,8 +175,7 @@ describe("email_outbox worker", () => {
   });
 
   it("records the sent offer in the canonical conversation model", async () => {
-    const offerWithCandidate = { ...OFFER_DRAFT, candidateId: "cand-1" };
-    mocks.selectQueue.push([PENDING], [offerWithCandidate], [RECIPIENT]);
+    mocks.selectQueue.push([PENDING], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
     mocks.sendWorkspaceEmail.mockResolvedValue(true);
 
     const result = await processEmailOutbox();
@@ -166,5 +190,28 @@ describe("email_outbox worker", () => {
       direction: "outbound",
       source: "provider",
     });
+  });
+
+  it("does not send an offer after its application becomes terminal", async () => {
+    mocks.selectQueue.push([
+      PENDING,
+    ], [OFFER_DRAFT], [{ ...APPLICATION_ACTIVE, status: "rejected" }]);
+
+    const result = await processEmailOutbox();
+
+    expect(result).toEqual({ processed: 1, sent: 0, failed: 1 });
+    expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not revive a withdrawn offer when delivery races its final transition", async () => {
+    mocks.selectQueue.push([PENDING], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
+    mocks.transactionReturningQueue.push([], []);
+    mocks.sendWorkspaceEmail.mockResolvedValue(true);
+
+    const result = await processEmailOutbox();
+
+    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+    expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
+    expect(mocks.insertCanonicalMessage).not.toHaveBeenCalled();
   });
 });

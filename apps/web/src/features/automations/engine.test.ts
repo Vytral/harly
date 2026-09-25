@@ -14,14 +14,21 @@ const dbState: {
   definitions: Record<string, unknown>[];
   steps: Record<string, unknown>[];
   effects: Record<string, unknown>[];
-} = { runs: [], definitions: [], steps: [], effects: [] };
+  policies: Record<string, unknown>[];
+} = { runs: [], definitions: [], steps: [], effects: [], policies: [] };
 
 // Distinguishable table markers so db.select() can route to the right state.
 // Declared with vi.hoisted so they exist when the vi.mock factory runs.
-const { RUNS, DEFS, EFFECTS } = vi.hoisted(() => ({
+const { RUNS, DEFS, EFFECTS, POLICIES } = vi.hoisted(() => ({
   RUNS: { __table: "runs" } as unknown,
   DEFS: { __table: "definitions" } as unknown,
   EFFECTS: { __table: "effects" } as unknown,
+  POLICIES: { __table: "policies" } as unknown,
+}));
+const policyMocks = vi.hoisted(() => ({
+  reserveExternalActionPolicy: vi.fn(),
+  workspaceAutomationsEnabled: vi.fn(),
+  withWorkspaceAutomationEffectPermit: vi.fn(),
 }));
 
 // Stable implementations so vi.clearAllMocks() doesn't wipe them between tests.
@@ -54,22 +61,145 @@ function selectImpl() {
     },
   };
 }
+
+function transactionSelectImpl(selection?: Record<string, unknown>) {
+  return {
+    from: (table: { __table?: string }) => {
+      const source =
+        table?.__table === "runs"
+          ? dbState.runs
+          : table?.__table === "definitions"
+            ? dbState.definitions
+            : table?.__table === "policies"
+              ? dbState.policies
+              : [];
+      const rows =
+        table?.__table === "runs" && selection && "count" in selection
+          ? [
+              {
+                count: dbState.runs.filter(
+                  (run) =>
+                    (run.engineVersion === 1 &&
+                      run.status === "running" &&
+                      Boolean(run.lockedBy) &&
+                      run.lockedAt instanceof Date &&
+                      run.lockedAt.getTime() > Date.now() - 5 * 60_000) ||
+                    (run.engineVersion === 2 &&
+                      run.logicalStatus === "running" &&
+                      Boolean(run.lockedBy) &&
+                      run.leaseUntil instanceof Date &&
+                      run.leaseUntil.getTime() > Date.now()),
+                ).length,
+              },
+            ]
+          : source;
+      const query = {
+        where: () => query,
+        for: () => Promise.resolve(rows),
+        limit: (limit?: number) =>
+          Promise.resolve(limit === undefined ? rows : rows.slice(0, limit)),
+        then: (
+          resolve: (value: Record<string, unknown>[]) => unknown,
+          reject?: (reason: unknown) => unknown,
+        ) => Promise.resolve(rows).then(resolve, reject),
+      };
+      return query;
+    },
+  };
+}
+
+function transactionUpdateImpl(table: { __table?: string }) {
+  return {
+    set: (values: Record<string, unknown>) => ({
+      where: () => ({
+        returning: () => {
+          const run = dbState.runs[0];
+          if (table?.__table !== "runs" || !run) return Promise.resolve([]);
+          if (!("lockedBy" in values)) {
+            dbState.runs[0] = {
+              ...run,
+              nextAttemptAt: new Date(Date.now() + 60_000),
+            };
+            return Promise.resolve([]);
+          }
+          const due =
+            !(run.nextAttemptAt instanceof Date) ||
+            run.nextAttemptAt.getTime() <= Date.now();
+          const leaseExpired =
+            !(run.lockedAt instanceof Date) ||
+            run.lockedAt.getTime() < Date.now() - 5 * 60_000;
+          if (
+            run.engineVersion !== 1 ||
+            run.status !== "running" ||
+            !due ||
+            !leaseExpired
+          ) {
+            return Promise.resolve([]);
+          }
+          dbState.runs[0] = {
+            ...run,
+            ...values,
+            attemptCount: Number(run.attemptCount ?? 0) + 1,
+          };
+          return Promise.resolve([{ id: run.id }]);
+        },
+      }),
+    }),
+  };
+}
+
+function transactionInsertImpl(table: { __table?: string }) {
+  return {
+    values: (rows: Record<string, unknown>) => ({
+      onConflictDoNothing: () => {
+        if (
+          table?.__table === "policies" &&
+          !dbState.policies.some(
+            (policy) => policy.workspaceId === rows.workspaceId,
+          )
+        ) {
+          dbState.policies.push({
+            enabled: true,
+            maxConcurrentRuns: 20,
+            ...rows,
+          });
+        }
+        return Promise.resolve();
+      },
+    }),
+  };
+}
+
+function transactionImpl<T>(callback: (tx: unknown) => Promise<T>) {
+  const tx = {
+    select: vi.fn(transactionSelectImpl),
+    insert: vi.fn(transactionInsertImpl),
+    update: vi.fn(transactionUpdateImpl),
+  };
+  return callback(tx);
+}
 function insertImpl(rows: Record<string, unknown> | Record<string, unknown>[]) {
   const arr = Array.isArray(rows) ? rows : [rows];
   dbState.steps.push(...arr);
   return {
     returning: () => Promise.resolve([{ id: "step-1" }]),
     onConflictDoNothing: () => ({ returning: () => Promise.resolve([{ id: "step-1" }]) }),
+    onConflictDoUpdate: () => ({ returning: () => Promise.resolve([{ id: "step-1" }]) }),
   };
 }
 
 vi.mock("@harly/db", () => ({
   db: {
+    transaction: vi.fn(transactionImpl),
     select: vi.fn(selectImpl),
-    update: vi.fn(() => ({
+    update: vi.fn((table: unknown) => ({
       set: vi.fn(() => ({
         where: vi.fn(() => ({
-          returning: () => Promise.resolve([{ id: "run-1", status: "updated" }]),
+          returning: () => Promise.resolve(
+            table === RUNS && dbState.runs[0]?.engineVersion === 2
+              ? []
+              : [{ id: "run-1", status: "updated" }],
+          ),
         })),
       })),
     })),
@@ -88,6 +218,7 @@ vi.mock("@harly/db", () => ({
   workflowDefinitions: DEFS,
   workflowRunSteps: {},
   workflowActionEffects: EFFECTS,
+  workspaceAutomationPolicies: POLICIES,
   member: { __table: "member" },
 }));
 
@@ -121,6 +252,12 @@ function getActionHandlerImpl(type: string) {
 vi.mock("./registry", () => ({
   getActionHandler: vi.fn(getActionHandlerImpl),
 }));
+vi.mock("./runtime/operational-policy", () => ({
+  reserveExternalActionPolicy: policyMocks.reserveExternalActionPolicy,
+  workspaceAutomationsEnabled: policyMocks.workspaceAutomationsEnabled,
+  withWorkspaceAutomationEffectPermit:
+    policyMocks.withWorkspaceAutomationEffectPermit,
+}));
 
 vi.mock("@/features/workspaces/permissions-server", () => ({
   getRolePermissions: vi.fn().mockResolvedValue(["candidates:edit", "candidates:move"]),
@@ -142,6 +279,7 @@ const baseRun = {
   workflowId: "wf-1",
   triggerEvent: "application.created",
   triggerPayload: { application: { id: "app-1" }, candidateId: "cand-1", jobId: "job-1" },
+  engineVersion: 1,
   status: "running",
   startedAt: new Date(),
 };
@@ -177,6 +315,9 @@ describe("workflow engine — end-to-end", () => {
     dbState.definitions = [{ ...baseDefinition }];
     dbState.steps = [];
     dbState.effects = [];
+    dbState.policies = [
+      { workspaceId: "ws-1", enabled: true, maxConcurrentRuns: 20 },
+    ];
     // clearAllMocks wipes implementations; re-install the stable ones so the
     // engine can read runs/definitions, record steps, and resolve handlers.
     vi.clearAllMocks();
@@ -189,6 +330,14 @@ describe("workflow engine — end-to-end", () => {
       ),
     }));
     (getActionHandler as ReturnType<typeof vi.fn>).mockImplementation(getActionHandlerImpl);
+    policyMocks.reserveExternalActionPolicy.mockResolvedValue({ ok: true });
+    policyMocks.workspaceAutomationsEnabled.mockResolvedValue(true);
+    policyMocks.withWorkspaceAutomationEffectPermit.mockImplementation(
+      async ({ effect }: { effect: () => Promise<unknown> }) => ({
+        started: true,
+        value: await effect(),
+      }),
+    );
     (getRolePermissions as ReturnType<typeof vi.fn>).mockResolvedValue([
       "candidates:edit",
       "candidates:move",
@@ -243,6 +392,39 @@ describe("workflow engine — end-to-end", () => {
       "add_note",
       "add_tag",
     ]);
+  });
+
+  it("does not run a legacy external action when the atomic policy reservation is denied", async () => {
+    dbState.runs = [{ ...baseRun, attemptCount: 0, maxAttempts: 3 }];
+    const handler = getActionHandlerImpl("http_request");
+    vi.mocked(getActionHandler).mockReturnValue(handler as never);
+    policyMocks.reserveExternalActionPolicy.mockResolvedValue({
+      ok: false,
+      code: "EXTERNAL_RATE_LIMITED",
+    });
+    setDefinition({
+      conditions: [],
+      maxExternalActionsPerMinute: 1,
+      actions: [{ type: "http_request", config: { body: "request" } }],
+    });
+    vi.mocked(loadConditionContext).mockResolvedValue(ctxWith({ experienceYears: 1 }));
+
+    const outcome = await runWorkflow("run-1");
+
+    expect(policyMocks.reserveExternalActionPolicy).toHaveBeenCalledWith({
+      workspaceId: "ws-1",
+      workflowId: "wf-1",
+      runId: "run-1",
+      database: undefined,
+    });
+    expect(handler?.run).not.toHaveBeenCalled();
+    expect(dbState.steps[0]).toMatchObject({
+      actionType: "http_request",
+      status: "failed",
+      errorCode: "external_rate_limited",
+      retryable: true,
+    });
+    expect(outcome.status).toBe("running");
   });
 
   it("fails the run when an action fails and continueOnError is false", async () => {
@@ -311,8 +493,18 @@ describe("workflow engine — end-to-end", () => {
     expect(dbState.steps).toHaveLength(0);
   });
 
-  it("throws when the run row does not exist", async () => {
+  it("does not claim a run row that does not exist", async () => {
     dbState.runs = [];
-    await expect(runWorkflow("nonexistent")).rejects.toThrow("not found");
+    await expect(runWorkflow("nonexistent")).rejects.toThrow(
+      "already leased or not due",
+    );
+  });
+
+  it("never lets the historical runner claim a v2 graph run", async () => {
+    dbState.runs = [{ ...baseRun, engineVersion: 2 }];
+    setDefinition({ actions: [{ type: "set_status", config: { status: "rejected" } }] });
+
+    await expect(runWorkflow("run-1")).rejects.toThrow("already leased or not due");
+    expect(dbState.steps).toHaveLength(0);
   });
 });

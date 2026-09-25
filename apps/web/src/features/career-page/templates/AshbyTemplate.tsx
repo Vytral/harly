@@ -337,7 +337,6 @@ export function AshbyTemplate({
           <CareerFooter
             config={config}
             workspaceName={workspace.name}
-            portalWorkspaceSlug={workspace.slug}
             maxWidth="max-w-6xl"
             iconRounded="rounded-md"
             portalEnabled={portalEnabled}

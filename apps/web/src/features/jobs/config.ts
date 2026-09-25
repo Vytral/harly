@@ -2,7 +2,14 @@ import { z } from "zod";
 
 import { slugify } from "@/lib/utils";
 
-export const jobQuestionTypes = ["text", "textarea", "url", "select"] as const;
+export const jobQuestionTypes = [
+  "text",
+  "textarea",
+  "url",
+  "select",
+  "info",
+  "consent",
+] as const;
 
 export type JobQuestionType = (typeof jobQuestionTypes)[number];
 
@@ -14,6 +21,10 @@ export type JobApplicationQuestion = {
   minLength?: number;
   placeholder?: string;
   options?: readonly string[];
+  optionDescriptions?: readonly string[];
+  description?: string;
+  agreeLabel?: string;
+  disagreeLabel?: string;
 };
 
 /** Per-platform link setting: show it at all, and whether candidates must fill it. */
@@ -246,6 +257,10 @@ const questionSchema = z
     minLength: z.coerce.number().int().min(0).max(5000).optional(),
     placeholder: optionalTrimmed,
     options: z.array(z.string().trim().min(1).max(120)).max(20).optional(),
+    optionDescriptions: z.array(z.string().trim().max(500)).max(20).optional(),
+    description: z.string().trim().max(8000).optional(),
+    agreeLabel: optionalTrimmed,
+    disagreeLabel: optionalTrimmed,
   })
   .transform((question): JobApplicationQuestion => {
     const id = slugify(question.id || question.label || "question");
@@ -257,9 +272,17 @@ const questionSchema = z
       required: question.required,
       minLength: question.minLength,
       placeholder: question.placeholder,
-      options:
-        question.type === "select"
+      description: question.description || undefined,
+      agreeLabel: question.agreeLabel || undefined,
+      disagreeLabel: question.disagreeLabel || undefined,
+      options: question.type === "consent"
+        ? ["agree", "disagree"]
+        : question.type === "select"
           ? Array.from(new Set(question.options ?? []))
+          : undefined,
+      optionDescriptions:
+        question.type === "select"
+          ? question.optionDescriptions
           : undefined,
     };
   })
@@ -268,6 +291,16 @@ const questionSchema = z
       question.type !== "select" ||
       Boolean(question.options && question.options.length > 0),
     "Select questions require at least one option.",
+  )
+  .refine(
+    (question) =>
+      question.type !== "info" || Boolean(question.description?.trim()),
+    "Information blocks require a description.",
+  )
+  .refine(
+    (question) =>
+      question.type !== "consent" || Boolean(question.description?.trim()),
+    "Agreement questions require agreement details.",
   );
 
 // Accepts the new {enabled, required} shape or a legacy bare boolean

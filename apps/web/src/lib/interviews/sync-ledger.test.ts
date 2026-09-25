@@ -4,6 +4,7 @@ const mocks = vi.hoisted(() => ({
   insertValues: vi.fn(),
   insertConflictUpdate: vi.fn(),
   updateSet: vi.fn(),
+  update: vi.fn(),
   selectResult: [] as unknown[],
 }));
 
@@ -35,6 +36,9 @@ vi.mock("@harly/db", () => ({
     attempts: "attempts",
     status: "status",
     nextRetryAt: "nextRetryAt",
+    id: "id",
+    lockedAt: "lockedAt",
+    lockedBy: "lockedBy",
   },
   db: {
     insert: () => ({
@@ -49,7 +53,7 @@ vi.mock("@harly/db", () => ({
       },
     }),
     select: () => query(mocks.selectResult),
-    update,
+    update: (...args: unknown[]) => mocks.update(...args),
     transaction: async (fn: (tx: unknown) => Promise<unknown>) =>
       fn({ select: () => query(mocks.selectResult), update }),
   },
@@ -69,12 +73,14 @@ vi.mock("@/lib/logger", () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn() }),
 }));
 
-import { trackInterviewSync } from "./sync-ledger";
+import { claimInterviewSync, InterviewProviderSyncError, trackInterviewSync } from "./sync-ledger";
 
 beforeEach(() => {
   mocks.insertValues.mockReset();
   mocks.insertConflictUpdate.mockReset();
   mocks.updateSet.mockReset();
+  mocks.update.mockReset();
+  mocks.update.mockImplementation(update);
   mocks.selectResult.length = 0;
   mocks.selectResult.push({ attempts: 2 });
 });
@@ -136,6 +142,21 @@ describe("interview sync ledger", () => {
     expect(update.nextRetryAt.getTime()).toBeGreaterThan(Date.now());
   });
 
+  it("can fail a workflow action after recording provider failure", async () => {
+    await expect(
+      trackInterviewSync({
+        ...baseInput,
+        run: async () => null,
+        isSuccess: Boolean,
+        strict: true,
+      }),
+    ).rejects.toBeInstanceOf(InterviewProviderSyncError);
+
+    expect(mocks.updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed" }),
+    );
+  });
+
   it("records thrown provider errors without reclassifying them", async () => {
     await expect(
       trackInterviewSync({
@@ -175,5 +196,39 @@ describe("interview sync ledger", () => {
     expect(mocks.updateSet).toHaveBeenCalledWith(
       expect.objectContaining({ lockedBy: "worker-1", lockedAt: expect.any(Date) }),
     );
+  });
+
+  it("does not restart a claimed row before provider retry", async () => {
+    await trackInterviewSync({
+      ...baseInput,
+      workerId: "worker-1",
+      run: async () => ({ meetingId: "zoom-1" }),
+      isSuccess: Boolean,
+      resourceId: (value) => value.meetingId,
+    });
+
+    expect(mocks.insertValues).not.toHaveBeenCalled();
+    expect(mocks.insertConflictUpdate).not.toHaveBeenCalled();
+    expect(mocks.updateSet).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "synced", lockedBy: null, lockedAt: null }),
+    );
+  });
+
+  it("supports an atomic single-row retry claim", async () => {
+    const updateRows = [{ id: "sync-1" }];
+    const returning = vi.fn().mockResolvedValue(updateRows);
+    const where = vi.fn().mockReturnValue({ returning });
+    const set = vi.fn().mockReturnValue({ where });
+    mocks.update.mockReturnValue({ set });
+
+    const result = await claimInterviewSync({
+      workspaceId: "ws-1",
+      syncId: "sync-1",
+      workerId: "worker-1",
+    });
+
+    expect(result).toBe(true);
+    expect(mocks.update).toHaveBeenCalled();
+    expect(set).toHaveBeenCalledWith(expect.objectContaining({ lockedBy: "worker-1", lockedAt: expect.any(Date) }));
   });
 });

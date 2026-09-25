@@ -27,6 +27,24 @@ describe("interpolateTemplate", () => {
     ).toBe("Ava, the Engineer role at Acme. Thanks Ava!");
   });
 
+  it("supports the canonical offer review link variable", () => {
+    expect(
+      interpolateTemplate("Review your offer: {{offer_url}}", {
+        offer_url: "https://harly.test/portal/applications/app-1",
+      }),
+    ).toBe("Review your offer: https://harly.test/portal/applications/app-1");
+    expect(findUnknownVariables("{{offer_url}}")).toEqual([]);
+  });
+
+  it("supports the booking link variable used by autoscheduling", () => {
+    expect(
+      interpolateTemplate("Choose a time: {{booking_link}}", {
+        booking_link: "https://cal.com/acme/interview?email=ava%40example.test",
+      }),
+    ).toBe("Choose a time: https://cal.com/acme/interview?email=ava%40example.test");
+    expect(findUnknownVariables("{{booking_link}}")).toEqual([]);
+  });
+
   it("tolerates whitespace inside braces", () => {
     expect(
       interpolateTemplate("Hi {{ candidate_first_name }}", {

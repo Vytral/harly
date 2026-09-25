@@ -3,7 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSessionCookie } from "@harly/auth/cookies";
 
 import { mustSetUp2fa } from "@/lib/two-factor";
-import { detectSuspiciousSession, isEmailDomainAllowed, isIpAllowed } from "@/server/security/policy";
+import { detectSuspiciousSession, getTrustedClientIp, isEmailDomainAllowed, isIpAllowed } from "@/server/security/policy";
 
 const PORTAL_SESSION_COOKIE = "harly_portal_session";
 
@@ -14,7 +14,13 @@ const PUBLIC_PATHS = [
   "/forgot-password",
   "/reset-password",
   "/setup",
+  // Demo mode entry screen + its sign-in action (no-op when DEMO_MODE unset).
+  "/enter",
+  "/api/demo",
   "/api/auth",
+  // Passkey login starts from the anonymous login form (register and
+  // authenticate verify the session in-route, so they stay gated).
+  "/api/passkey/login",
   "/api/health",
   "/api/metrics",
   // SSE authenticates in the route so unauthenticated EventSource clients get
@@ -35,11 +41,20 @@ const PUBLIC_PATHS = [
   "/jobs",
   "/apply",
   "/board",
+  // Workspace legal pages (privacy, terms, cookies…) linked from every
+  // public footer. The board-scoped variant is covered by "/board".
+  "/legal",
+  // Invite-link landing: renders a "Sign in to join" CTA for anonymous
+  // visitors, so the proxy must let them through (page handles !session).
+  "/join",
   "/invite",
   // Portal public routes , pages enforce isPortalEnabled themselves
   "/portal",
   "/api/portal",
   "/setup-2fa",
+  "/sign",
+  "/api/native-sign",
+  "/api/pdfjs",
 ];
 
 const PROTECTED_PATH_PREFIXES = ["/dashboard", "/settings"];
@@ -63,14 +78,36 @@ function isPortalProtected(pathname: string): boolean {
   return PORTAL_PROTECTED.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+function publicRedirectUrl(request: NextRequest, pathname: string): URL {
+  const configuredOrigin =
+    process.env.HARLY_URL ??
+    process.env.NEXT_PUBLIC_APP_URL ??
+    process.env.BETTER_AUTH_URL;
+  return new URL(pathname, configuredOrigin ?? request.nextUrl.origin);
+}
+
+// In demo mode the standard auth entry points are replaced by the shared-
+// credential `/enter` screen. The career board at `/` is untouched.
+const DEMO_REDIRECT_TO_ENTER = ["/login", "/signup", "/forgot-password", "/setup"];
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // ── Demo mode: funnel the normal auth pages to the shared /enter screen ──
+  // Whole-instance behavior (this is a dedicated demo VPS). `/` (the board),
+  // `/enter`, and `/api/*` are left alone so entry + APIs keep working.
+  if (
+    process.env.DEMO_MODE === "true" &&
+    DEMO_REDIRECT_TO_ENTER.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  ) {
+    return NextResponse.redirect(publicRedirectUrl(request, "/enter"));
+  }
 
   // ── Candidate portal protected routes (cookie-only, no DB) ──────────────
   if (isPortalProtected(pathname)) {
     const token = request.cookies.get(PORTAL_SESSION_COOKIE)?.value;
     if (!token) {
-      const loginUrl = new URL("/portal/login", request.url);
+      const loginUrl = publicRedirectUrl(request, "/portal/login");
       loginUrl.searchParams.set("next", pathname);
       return NextResponse.redirect(loginUrl);
     }
@@ -89,7 +126,7 @@ export async function proxy(request: NextRequest) {
   const sessionCookie = getSessionCookie(request);
 
   if (!sessionCookie) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(publicRedirectUrl(request, "/login"));
   }
 
   // 2FA + org enforcement for protected paths
@@ -98,7 +135,7 @@ export async function proxy(request: NextRequest) {
     const session = await auth.api.getSession({ headers: request.headers });
 
     if (!session?.user) {
-      const loginUrl = new URL("/login", request.url);
+      const loginUrl = publicRedirectUrl(request, "/login");
       loginUrl.searchParams.set("redirect", pathname);
       return NextResponse.redirect(loginUrl);
     }
@@ -164,8 +201,7 @@ export async function proxy(request: NextRequest) {
             .limit(1),
         ]);
 
-        const forwarded = request.headers.get("x-forwarded-for");
-        const requestIp = forwarded?.split(",")[0]?.trim() ?? request.headers.get("x-real-ip");
+        const requestIp = getTrustedClientIp(request);
         const ipAllowlist = Array.isArray(wsRow?.ipAllowlist) ? wsRow.ipAllowlist as string[] : [];
         if (!isIpAllowed(requestIp, ipAllowlist)) {
           return new NextResponse("Workspace access is restricted by IP policy.", { status: 403 });
@@ -197,7 +233,7 @@ export async function proxy(request: NextRequest) {
           !CHANGE_PASSWORD_EXEMPT.some((p) => pathname.startsWith(p))
         ) {
           return NextResponse.redirect(
-            new URL("/change-password", request.url),
+            publicRedirectUrl(request, "/change-password"),
           );
         }
 
@@ -209,11 +245,11 @@ export async function proxy(request: NextRequest) {
             roleKey: memberRow?.role,
           })
         ) {
-          return NextResponse.redirect(new URL("/setup-2fa", request.url));
+          return NextResponse.redirect(publicRedirectUrl(request, "/setup-2fa"));
         }
 
         if (wsRow?.requirePasskey && !existingPasskey) {
-          return NextResponse.redirect(new URL("/setup-2fa", request.url));
+          return NextResponse.redirect(publicRedirectUrl(request, "/setup-2fa"));
         }
       }
     } catch {

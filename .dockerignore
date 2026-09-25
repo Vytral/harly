@@ -5,6 +5,7 @@
 .agents
 .codegraph
 .firecrawl
+.worktrees
 graphify-out
 **/node_modules
 **/.next

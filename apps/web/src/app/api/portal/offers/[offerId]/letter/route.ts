@@ -3,10 +3,14 @@ import { cookies } from "next/headers";
 import { and, eq } from "drizzle-orm";
 
 import { db, documentAssociations, documents, offers } from "@harly/db";
+import { offerHasExpired } from "@/features/offers/core";
 import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
+import { isNativeOfferSubmission } from "@/lib/esign/native/offer-signing";
 import { storage } from "@/lib/storage";
+import { createLogger } from "@/lib/logger";
 
 export const runtime = "nodejs";
+const log = createLogger("api-portal-offer-letter");
 
 /** Streams the native offer-letter PDF to the candidate signing it in-portal —
  *  the native counterpart to DocuSeal's hosted signing page. Never exposes the
@@ -18,11 +22,20 @@ export async function GET(
   try {
     const token = (await cookies()).get(PORTAL_SESSION_COOKIE)?.value;
     const session = token ? await resolvePortalSession(token) : null;
-    if (!session) return NextResponse.json({ error: "Not authenticated." }, { status: 401 });
+    if (!session)
+      return NextResponse.json(
+        { error: "Not authenticated." },
+        { status: 401 },
+      );
 
     const { offerId } = await params;
     const [offer] = await db
-      .select({ id: offers.id })
+      .select({
+        id: offers.id,
+        status: offers.status,
+        expiresAt: offers.expiresAt,
+        esignSubmissionId: offers.esignSubmissionId,
+      })
       .from(offers)
       .where(
         and(
@@ -32,10 +45,25 @@ export async function GET(
         ),
       )
       .limit(1);
-    if (!offer) return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+    if (!offer)
+      return NextResponse.json({ error: "Offer not found." }, { status: 404 });
+    if (
+      offer.status !== "sent" ||
+      offerHasExpired(offer.expiresAt) ||
+      !isNativeOfferSubmission(offer.esignSubmissionId)
+    ) {
+      return NextResponse.json(
+        { error: "Offer is not available for signing." },
+        { status: 404 },
+      );
+    }
 
     const [row] = await db
-      .select({ storageKey: documents.storageKey, mimeType: documents.mimeType, name: documents.name })
+      .select({
+        storageKey: documents.storageKey,
+        mimeType: documents.mimeType,
+        name: documents.name,
+      })
       .from(documentAssociations)
       .innerJoin(documents, eq(documents.id, documentAssociations.documentId))
       .where(
@@ -46,7 +74,11 @@ export async function GET(
         ),
       )
       .limit(1);
-    if (!row) return NextResponse.json({ error: "Offer letter not found." }, { status: 404 });
+    if (!row)
+      return NextResponse.json(
+        { error: "Offer letter not found." },
+        { status: 404 },
+      );
 
     const bytes = await storage.read(row.storageKey);
     return new Response(bytes as unknown as BodyInit, {
@@ -58,7 +90,11 @@ export async function GET(
         "X-Content-Type-Options": "nosniff",
       },
     });
-  } catch {
-    return NextResponse.json({ error: "Offer letter not found." }, { status: 404 });
+  } catch (error) {
+    log.error(error, "Native offer letter request failed.");
+    return NextResponse.json(
+      { error: "Could not load offer letter." },
+      { status: 503 },
+    );
   }
 }

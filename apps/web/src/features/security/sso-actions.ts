@@ -4,6 +4,7 @@ import { headers } from "next/headers";
 import { auth } from "@/lib/auth";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { createLogger } from "@/lib/logger";
 import { logAuditEvent } from "@/lib/audit-log";
 import { loadHarlyConfig } from "@harly/config";
@@ -77,6 +78,7 @@ export async function registerSSOProviderAction(
   input: SSORegisterInput,
 ): Promise<SSOActionResult> {
   try {
+    assertNotDemo();
     const { organization, user, roleKey } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
       return { ok: false, error: "Only the workspace owner can configure enterprise SSO." };
@@ -223,6 +225,7 @@ export async function updateSSOProviderAction(
   input: SSORegisterInput,
 ): Promise<SSOActionResult> {
   try {
+    assertNotDemo();
     const { organization, user, roleKey } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
       return { ok: false, error: "Only the workspace owner can manage enterprise SSO." };
@@ -316,6 +319,7 @@ export async function deleteSSOProviderAction(
   providerId: string,
 ): Promise<SSOActionResult> {
   try {
+    assertNotDemo();
     const { organization, user, roleKey } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
       return { ok: false, error: "Only the workspace owner can manage enterprise SSO." };
@@ -358,6 +362,7 @@ export async function requestSSODomainVerificationAction(
   providerId: string,
 ): Promise<SSOActionResult & { token?: string }> {
   try {
+    assertNotDemo();
     const { organization, roleKey } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
       return { ok: false, error: "Only the workspace owner can verify enterprise SSO domains." };
@@ -381,6 +386,7 @@ export async function requestSSODomainVerificationAction(
 /** Verify the DNS TXT challenge for an existing provider. */
 export async function verifySSODomainAction(providerId: string): Promise<SSOActionResult> {
   try {
+    assertNotDemo();
     const { organization, user, roleKey } = await requirePermission("security:manage");
     if (roleKey !== "owner") {
       return { ok: false, error: "Only the workspace owner can verify enterprise SSO domains." };

@@ -15,20 +15,27 @@ import {
   jobs,
 } from "@harly/db";
 
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  getRolePolicy,
+  requireCandidatePermission,
+  requireApplicationPermission,
+  requireJobPermission,
+} from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { logAiCandidateDecision } from "@/lib/ai/governance";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
 import {
-  evaluateCandidateWithRules,
+  evaluateCandidateWithRulesAsync,
   RULES_EVALUATION_VERSION,
 } from "@/lib/evaluation/rules";
 import {
+  findReusableCandidateFacts,
   getPublishedRulesRubric,
   persistCandidateEvaluation,
 } from "@/features/evaluations/service";
-import { loadResumeText } from "@/lib/resume/load-resume-text";
+import { loadResumeDocument } from "@/lib/resume/load-resume-text";
 import { enforceRateLimit } from "@/server/api/ratelimit";
+import type { EvaluationMode } from "@/lib/evaluation/mode";
 import {
   detectCandidateDuplicatesForWorkspace,
   type DuplicateMatch,
@@ -53,7 +60,10 @@ export async function generateAiEvaluationAction(input: {
 
   let context;
   try {
-    context = await requirePermission("collab:write");
+    context = await requireApplicationPermission(
+      "collab:write",
+      parsed.data.applicationId,
+    );
   } catch {
     return {
       success: false,
@@ -61,6 +71,17 @@ export async function generateAiEvaluationAction(input: {
     };
   }
   const workspaceId = context.organization.id;
+  try {
+    await enforceRateLimit(`ai-score:${workspaceId}:${context.user.id}`, {
+      limit: 30,
+      windowMs: 10 * 60_000,
+    });
+  } catch {
+    return {
+      success: false,
+      error: "Too many scoring requests. Slow down and try again shortly.",
+    };
+  }
 
   const [row] = await db
     .select({
@@ -80,6 +101,9 @@ export async function generateAiEvaluationAction(input: {
       jobExperienceLevel: jobs.experienceLevel,
       jobEducation: jobs.education,
       jobKeywords: jobs.keywords,
+      evaluationMode: jobs.evaluationMode,
+      appliedAt: applications.appliedAt,
+      applicationCreatedAt: applications.createdAt,
     })
     .from(applications)
     .innerJoin(
@@ -106,8 +130,14 @@ export async function generateAiEvaluationAction(input: {
   }
 
   const aiConfig = await getWorkspaceAiConfig(workspaceId);
+  const evaluationMode: EvaluationMode = row.evaluationMode === "relaxed" || row.evaluationMode === "strict"
+    ? row.evaluationMode
+    : "balanced";
+  const candidateSkills = Array.isArray(row.skills)
+    ? (row.skills as string[])
+    : [];
   const [resume, answerRows] = await Promise.all([
-    loadResumeText({ workspaceId, candidateId: row.candidateId }),
+    loadResumeDocument({ workspaceId, candidateId: row.candidateId }),
     db
       .select({
         question: applicationQuestions.label,
@@ -129,6 +159,11 @@ export async function generateAiEvaluationAction(input: {
       )
       .orderBy(applicationQuestions.order),
   ]);
+  const referenceDateValue = row.appliedAt ?? row.applicationCreatedAt;
+  const parsedReferenceDate = referenceDateValue ? new Date(referenceDateValue) : null;
+  const pinnedReferenceDate = parsedReferenceDate && !Number.isNaN(parsedReferenceDate.getTime())
+    ? parsedReferenceDate.toISOString()
+    : "1970-01-01T00:00:00.000Z";
 
   try {
     const scoreInput = {
@@ -142,6 +177,7 @@ export async function generateAiEvaluationAction(input: {
         keywords: Array.isArray(row.jobKeywords)
           ? (row.jobKeywords as string[])
           : [],
+        evaluationMode,
       },
       candidate: {
         fullName: `${row.firstName} ${row.lastName}`,
@@ -149,20 +185,47 @@ export async function generateAiEvaluationAction(input: {
         location: row.location,
         resumeText: resume.text,
         answers: answerRows,
-        skills: Array.isArray(row.skills) ? (row.skills as string[]) : [],
+        skills: candidateSkills,
         experienceYears: row.experienceYears,
       },
+      // Pin current-role math to an immutable application event. A missing
+      // appliedAt must not silently fall through to wall-clock time.
+      referenceDate: pinnedReferenceDate,
+      sourceDocument: resume.document ?? undefined,
     };
-    const source = aiConfig ? "ai" : "rules";
-    const publishedRubric = aiConfig
+    // Rules-first: deterministic evaluation is always the primary path and the
+    // persisted authority for criterion assessments. When AI is configured we
+    // may overlay an AI scorecard, but AI failure/timeout/unavailability MUST
+    // fall back to rules — never fail the entire eval solely because AI failed.
+    const publishedRubric = await getPublishedRulesRubric(workspaceId, row.jobId);
+    const reusableFacts = !resume.text
       ? null
-      : await getPublishedRulesRubric(workspaceId, row.jobId);
-    const rulesEvaluation = aiConfig
-      ? null
-      : evaluateCandidateWithRules({ ...scoreInput, rubric: publishedRubric ?? undefined });
-    const result = aiConfig
-      ? await scoreCandidateWithAI(aiConfig, scoreInput)
-      : rulesEvaluation!.result;
+      : await findReusableCandidateFacts({
+          workspaceId,
+          applicationId: row.applicationId,
+          resumeText: resume.text,
+        });
+    const rulesEvaluation = await evaluateCandidateWithRulesAsync({
+      ...scoreInput,
+      rubric: publishedRubric ?? undefined,
+      candidateFacts: reusableFacts ?? undefined,
+    });
+
+    let source: "ai" | "rules" = "rules";
+    let result = rulesEvaluation.result;
+    if (aiConfig) {
+      try {
+        result = await scoreCandidateWithAI(aiConfig, scoreInput);
+        source = "ai";
+      } catch (aiError) {
+        console.warn(
+          "AI evaluation unavailable; falling back to deterministic rules",
+          aiError,
+        );
+        source = "rules";
+        result = rulesEvaluation.result;
+      }
+    }
 
     const persisted = await persistCandidateEvaluation({
       workspaceId,
@@ -170,17 +233,26 @@ export async function generateAiEvaluationAction(input: {
       applicationId: row.applicationId,
       jobId: row.jobId,
       source,
-      provider: aiConfig?.provider ?? "harly",
-      modelId: aiConfig?.modelId ?? RULES_EVALUATION_VERSION,
-      engine: aiConfig ? "provider-ai" : "harly-rules",
-      engineVersion: aiConfig?.modelId ?? RULES_EVALUATION_VERSION,
-      rubricVersion: rulesEvaluation?.rubric.version ?? "ai-generated",
-      rubricSnapshot: rulesEvaluation?.rubric ?? null,
+      provider: source === "ai" && aiConfig ? aiConfig.provider : "harly",
+      modelId: source === "ai" && aiConfig ? aiConfig.modelId : RULES_EVALUATION_VERSION,
+      engine: source === "ai" ? "provider-ai" : "harly-rules",
+      engineVersion:
+        source === "ai" && aiConfig
+          ? `${aiConfig.modelId}:${evaluationMode}`
+          : `${RULES_EVALUATION_VERSION}:${evaluationMode}`,
+      // Prefer rules as persisted authority for rubric / assessments / coverage.
+      rubricVersion: rulesEvaluation.rubric.version,
+      rubricSnapshot: rulesEvaluation.rubric,
       result,
-      criterionResults: rulesEvaluation?.criterionResults,
-      evidenceCoverage: rulesEvaluation?.evidenceCoverage,
-      confidence: rulesEvaluation?.confidence,
-      requiresHumanReview: rulesEvaluation?.requiresHumanReview ?? true,
+      criterionResults: rulesEvaluation.criterionResults,
+      candidateFactsSnapshot: rulesEvaluation.candidateFacts,
+      skillProfilesSnapshot: rulesEvaluation.skillProfiles,
+      evaluationMetadataSnapshot: rulesEvaluation.metadata,
+      criterionDetailsSnapshot: rulesEvaluation.criterionAssessments,
+      impactHighlightsSnapshot: rulesEvaluation.impactHighlights,
+      evidenceCoverage: rulesEvaluation.evidenceCoverage,
+      confidence: rulesEvaluation.confidence,
+      requiresHumanReview: rulesEvaluation.requiresHumanReview || source === "ai",
       usedResume: resume.text !== null,
       generatedById: context.user.id,
       inputFingerprintSource: scoreInput,
@@ -201,7 +273,7 @@ export async function generateAiEvaluationAction(input: {
       },
     });
 
-    if (aiConfig) await logAiCandidateDecision({
+    if (source === "ai" && aiConfig) await logAiCandidateDecision({
       workspaceId,
       candidateId: row.candidateId,
       applicationId: row.applicationId,
@@ -214,7 +286,7 @@ export async function generateAiEvaluationAction(input: {
       inputSummary: {
         usedResume: resume.text !== null,
         answerCount: answerRows.length,
-        skillsCount: 0,
+        skillsCount: candidateSkills.length,
       },
       outputSummary: {
         score: result.score,
@@ -259,7 +331,7 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
 
   let context;
   try {
-    context = await requirePermission("collab:write");
+    context = await requireJobPermission("collab:write", parsed.data.jobId);
   } catch {
     return { success: false, error: "Permission denied." };
   }
@@ -279,11 +351,35 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
     };
   }
 
-  // Find application IDs that don't have an evaluation yet.
+  const aiConfig = await getWorkspaceAiConfig(workspaceId);
+  const currentEvaluationSource = aiConfig ? "ai" : "rules";
+  const [job] = await db
+    .select({ evaluationMode: jobs.evaluationMode })
+    .from(jobs)
+    .where(
+      and(eq(jobs.id, parsed.data.jobId), eq(jobs.workspaceId, workspaceId)),
+    )
+    .limit(1);
+  const evaluationMode: EvaluationMode = job?.evaluationMode === "relaxed" || job?.evaluationMode === "strict"
+    ? job.evaluationMode
+    : "balanced";
+  const currentEvaluationVersion = aiConfig
+    ? `${aiConfig.modelId}:${evaluationMode}`
+    : `${RULES_EVALUATION_VERSION}:${evaluationMode}`;
+
+  // Re-score applications without an evaluation or with an obsolete engine
+  // version. This makes rubric/engine improvements actually reach existing
+  // candidates instead of leaving stale scores visible forever.
   const scoredIds = db
     .select({ applicationId: aiEvaluations.applicationId })
     .from(aiEvaluations)
-    .where(eq(aiEvaluations.workspaceId, workspaceId));
+    .where(
+      and(
+        eq(aiEvaluations.workspaceId, workspaceId),
+        eq(aiEvaluations.source, currentEvaluationSource),
+        eq(aiEvaluations.engineVersion, currentEvaluationVersion),
+      ),
+    );
 
   const unscoredApps = await db
     .select({ applicationId: applications.id })
@@ -295,8 +391,21 @@ export async function bulkGenerateAiEvaluationsForJobAction(input: {
         eq(applications.status, "active"),
         notInArray(applications.id, scoredIds),
       ),
-    )
-    .limit(BULK_BATCH_SIZE + 1); // +1 to know if there are more
+    );
+
+  // The job permission is necessary but not sufficient: a candidate can be
+  // deleted or otherwise unavailable even when the job itself is assigned.
+  // Authorize every application in the batch before starting any provider
+  // call, so a mixed-scope request cannot partially score candidates.
+  try {
+    await Promise.all(
+      unscoredApps.map(({ applicationId }) =>
+        requireApplicationPermission("collab:write", applicationId),
+      ),
+    );
+  } catch {
+    return { success: false, error: "Permission denied." };
+  }
 
   const remaining = Math.max(0, unscoredApps.length - BULK_BATCH_SIZE);
   const batch = unscoredApps.slice(0, BULK_BATCH_SIZE);
@@ -349,7 +458,24 @@ export async function detectCandidateDuplicatesAction(input: {
 
   let context;
   try {
-    context = await requirePermission("collab:write");
+    context = await requireCandidatePermission(
+      "collab:write",
+      parsed.data.candidateId,
+    );
+    const scope = (await getRolePolicy(
+      context.organization.id,
+      context.roleKey,
+    )).scope;
+    if (
+      scope.jobAccess !== "all" ||
+      scope.departments.length > 0 ||
+      scope.regions.length > 0
+    ) {
+      return {
+        ok: false,
+        error: "Duplicate detection requires workspace-wide candidate access.",
+      };
+    }
   } catch {
     return {
       ok: false,

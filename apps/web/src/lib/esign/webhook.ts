@@ -1,13 +1,12 @@
 import "server-only";
 
-import { timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 /**
- * DocuSeal webhook payload helpers. DocuSeal's built-in webhook auth is weaker
- * than DocuSign HMAC (no per-body signature on self-hosted by default), so we
- * gate the endpoint on an unguessable per-workspace shared secret carried in the
- * callback URL (`?secret=`) and compared in constant time. The payload itself is
- * tolerant JSON — extra fields are ignored.
+ * DocuSeal webhook payload helpers. Prefer a body HMAC when the provider or a
+ * proxy supplies one, with a per-workspace secret header as the self-hosted
+ * fallback. Secrets never belong in the callback URL because URLs are commonly
+ * logged by proxies, browsers, and observability tools.
  */
 
 export type DocusealWebhookSubmitter = {
@@ -60,6 +59,58 @@ export function verifyDocusealSecret(
   const b = Buffer.from(expected, "utf8");
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
+}
+
+/**
+ * Authenticate a webhook using a body signature or the header-only fallback.
+ * The HMAC accepts the conventional `sha256=<hex>` form as well as bare hex.
+ */
+export function verifyDocusealWebhookAuth(input: {
+  rawBody: string;
+  signature: string | null;
+  sharedSecret: string | null;
+  expectedSecret: string | null;
+}): boolean {
+  const expectedSecret = input.expectedSecret?.trim() ?? "";
+  if (!expectedSecret) return false;
+
+  if (input.signature) {
+    const provided = input.signature.trim().replace(/^sha256=/i, "");
+    const expected = createHmac("sha256", expectedSecret)
+      .update(input.rawBody)
+      .digest("hex");
+    if (!/^[a-f0-9]+$/i.test(provided)) return false;
+    return verifyDocusealSecret(provided.toLowerCase(), expected);
+  }
+
+  return verifyDocusealSecret(input.sharedSecret, expectedSecret);
+}
+
+/**
+ * A terminal webhook is actionable only when its event name and the status
+ * returned by DocuSeal agree. The route uses this after an active provider GET.
+ */
+export function isVerifiedDocusealTerminalEvent(
+  eventType: string,
+  providerStatus: string | null | undefined,
+): boolean {
+  const event = eventType.trim().toLowerCase();
+  const status = providerStatus?.trim().toLowerCase();
+  if (!status) return false;
+
+  if (event === "submission.completed" || event === "form.completed") {
+    return status === "completed";
+  }
+  if (event === "submission.declined" || event === "form.declined") {
+    return status === "declined";
+  }
+  if (event === "submission.expired" || event === "form.expired") {
+    return status === "expired";
+  }
+  if (event === "submission.archived" || event === "form.archived") {
+    return status === "archived" || status === "voided";
+  }
+  return false;
 }
 
 /** The DocuSeal submission id (our providerEnvelopeId) from any event shape. */

@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   postMessage: vi.fn(),
+  getWorkspaceSlackConfig: vi.fn(),
   select: vi.fn(),
   updates: [] as Array<Record<string, unknown>>,
 }));
@@ -40,18 +41,25 @@ vi.mock("@harly/db", () => ({
   workspaceSettings: { organizationId: "organization_id" },
 }));
 vi.mock("@/lib/slack/config", () => ({
-  getWorkspaceSlackConfig: vi.fn(async () => ({
+  getWorkspaceSlackConfig: mocks.getWorkspaceSlackConfig,
+}));
+
+const defaultSlackConfig = {
     botToken: "xoxb-test",
     channelId: "C123",
     events: ["candidate.created"],
-  })),
-}));
+};
 vi.mock("@/server/observability/metrics", () => ({ recordSlackDelivery: vi.fn() }));
 vi.mock("@/lib/logger", () => ({ createLogger: () => ({ error: vi.fn(), warn: vi.fn() }) }));
 
 import { buildSlackPayload, deliverSlack } from "./slack";
 
 describe("Slack notification payload", () => {
+  beforeEach(() => {
+    mocks.getWorkspaceSlackConfig.mockReset();
+    mocks.getWorkspaceSlackConfig.mockResolvedValue(defaultSlackConfig);
+  });
+
   it("never includes candidate contact data", () => {
     const payload = buildSlackPayload("candidate.created", {
       candidate: {
@@ -140,5 +148,35 @@ describe("Slack notification payload", () => {
       status: "dead_letter",
       slackError: "candidate_deleted",
     });
+  });
+
+  it("uses the worker database for provider config and durable delivery state", async () => {
+    const injectedDatabase = {
+      insert: vi.fn(() => ({
+        values: vi.fn(() => ({ onConflictDoNothing: vi.fn(async () => undefined) })),
+      })),
+      update: vi.fn(() => ({
+        set: vi.fn(() => ({ where: vi.fn(async () => undefined) })),
+      })),
+    };
+    mocks.postMessage.mockResolvedValue({ ok: true });
+
+    const result = await deliverSlack(
+      {
+        id: "delivery-injected-db",
+        workspaceId: "workspace-1",
+        event: "candidate.created",
+        channelId: "C123",
+        payload: { text: "Candidate created", blocks: [] },
+        attempts: 0,
+      } as Parameters<typeof deliverSlack>[0],
+      "worker-injected-db",
+      injectedDatabase as never,
+    );
+
+    expect(result).toBe("success");
+    expect(mocks.getWorkspaceSlackConfig).toHaveBeenCalledWith("workspace-1", injectedDatabase);
+    expect(injectedDatabase.insert).toHaveBeenCalled();
+    expect(injectedDatabase.update).toHaveBeenCalled();
   });
 });
