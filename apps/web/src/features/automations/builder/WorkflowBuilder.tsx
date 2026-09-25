@@ -280,7 +280,7 @@ export function WorkflowBuilder({
       // canonical route is the only safe source of all server fields, so move
       // directly there rather than leaving the old blank canvas on screen.
       if (!currentId || currentId !== workflowId) {
-        window.location.assign(`/dashboard/automations/${workflowId}`);
+        router.push(`/dashboard/automations/${workflowId}` as Route);
         return;
       }
 
@@ -308,7 +308,7 @@ export function WorkflowBuilder({
       commitSave(initialSaveState(navigator.onLine, false));
       toast.success("Automation updated in the builder.");
     },
-    [commitSave],
+    [commitSave, router],
   );
 
   async function performSave(): Promise<boolean> {
@@ -1001,8 +1001,8 @@ export function WorkflowBuilder({
             );
             if (result.ok && result.workflow) {
               toast.success("Copied your edits into a new recipe.");
-              window.location.assign(
-                `/dashboard/automations/${result.workflow.id}`,
+              router.push(
+                `/dashboard/automations/${result.workflow.id}` as Route,
               );
             } else {
               toast.error(result.error ?? "Could not copy this draft.");
@@ -1199,6 +1199,7 @@ function VersionHistory({
   currentVersion: number;
   draft: WorkflowDraft;
 }) {
+  const router = useRouter();
   const [versions, setVersions] = useState<WorkflowVersionRow[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
@@ -1300,8 +1301,8 @@ function VersionHistory({
                         );
                         if (result.ok) {
                           toast.success(`Restored version ${version.version}.`);
-                          window.location.assign(
-                            `/dashboard/automations/${workflowId}`,
+                          router.push(
+                            `/dashboard/automations/${workflowId}` as Route,
                           );
                         } else
                           toast.error(result.error ?? "Could not roll back.");
