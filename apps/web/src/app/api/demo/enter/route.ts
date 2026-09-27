@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import { demoLoginEmail, demoWorkspaceId, isDemoMode } from "@harly/config";
+import { demoLoginEmail, demoWorkspaceId, isDemoMode, loadHarlyConfig } from "@harly/config";
 import { db, member, user as userTable } from "@harly/db";
 import { eq, sql as dsql } from "drizzle-orm";
 
@@ -14,8 +14,8 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("demo-enter");
 
-function publicUrl(path: string, request: NextRequest): URL {
-  return new URL(path, process.env.HARLY_URL ?? request.nextUrl.origin);
+function publicUrl(path: string): URL {
+  return new URL(path, loadHarlyConfig().publicUrl);
 }
 
 /**
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const passed = await verifyTurnstile(token, ip);
   if (!passed) {
-    const url = publicUrl("/enter", request);
+    const url = publicUrl("/enter");
     url.searchParams.set("error", "captcha");
     return NextResponse.redirect(url, { status: 303 });
   }
@@ -124,7 +124,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     activeOrganizationId: membership.organizationId,
   });
 
-  const response = NextResponse.redirect(publicUrl("/dashboard", request), { status: 303 });
+  const response = NextResponse.redirect(publicUrl("/dashboard"), { status: 303 });
 
   const cookieName = ctx.authCookies.sessionToken.name;
   const cookieAttributes = ctx.authCookies.sessionToken.attributes;
