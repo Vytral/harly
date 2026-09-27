@@ -1,6 +1,6 @@
 {
   "name": "@harly/cli",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": false,
   "type": "module",
   "description": "Official CLI for self-hosted Harly deployments.",
@@ -33,12 +33,13 @@
     "access": "public"
   },
   "files": [
+    "bin",
     "dist",
     "README.md",
     "CHANGELOG.md"
   ],
   "bin": {
-    "harly": "dist/index.js"
+    "harly": "bin/harly.mjs"
   },
   "scripts": {
     "build": "esbuild src/index.ts --bundle --packages=external --platform=node --format=esm --target=node20 --outfile=dist/index.js",

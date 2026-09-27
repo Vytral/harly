@@ -11,18 +11,11 @@ deployment from the command line.
 Requires Node.js 20.12 or newer. A local installation also requires Docker
 Engine 24+ and Docker Compose 2.20+.
 
-## What's new in 0.5.0
+## What's new in 0.5.1
 
-- `harly update` follows the published stable release by default and pins the
-  selected image to its immutable digest. Use `--to <version>` to choose a
-  numbered release explicitly; `--to latest` follows the same stable channel.
-- Stable updates refuse to downgrade a newer installation and skip backup,
-  pulls, and migrations when the install already matches the current release.
-- Version reporting identifies numbered tags and published digests, uses OCI
-  image labels when available, and falls back to a short digest instead of
-  displaying an opaque full image reference.
-- Update failures after migrations keep the target image configured and point
-  to the local safety backup for recovery.
+- The guided installer checks host requirements before asking for a domain.
+- Older Node.js versions show the required version and a Quickstart link.
+- Installer guides now point to docs.harly.dev.
 
 See [CHANGELOG.md](CHANGELOG.md) for the release notes.
 

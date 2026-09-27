@@ -105,10 +105,13 @@ test(
 
     const composeConfig = spawnSync(
       "docker",
-      ["compose", "--project-directory", target, "-f", path.join(target, "compose.yaml"), "config", "--quiet"],
+      ["compose", "--project-directory", target, "-f", path.join(target, "compose.yaml"), "config", "--format", "json"],
       { cwd: target, encoding: "utf8" },
     );
     assert.equal(composeConfig.status, 0, composeConfig.stderr || composeConfig.stdout);
+    const resolvedCompose = JSON.parse(composeConfig.stdout);
+    assert.deepEqual(resolvedCompose.services.app.tmpfs, ["/tmp:size=256m,mode=1777"]);
+    assert.deepEqual(resolvedCompose.services.scheduler.tmpfs, ["/tmp:size=64m,mode=1777"]);
   } finally {
     await rm(parent, { recursive: true, force: true });
   }

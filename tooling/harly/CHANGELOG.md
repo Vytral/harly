@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.1 — 2026-09-25
+
+### First-install experience
+
+- The guided installer checks Node.js, Docker, Compose, disk, and RAM before
+  asking for a domain or proxy mode. It checks ports and DNS after those choices.
+- Unsupported Node.js versions now receive a clear requirement and Quickstart
+  link before the interactive dependencies load.
+- Installer guidance links to docs.harly.dev instead of the repository guide.
+- Generated Compose files quote tmpfs options for the app and scheduler so YAML
+  keeps `mode=1777` in the mount options instead of treating it as another path.
+
 ## 0.5.0 — 2026-09-25
 
 ### Stable release updates

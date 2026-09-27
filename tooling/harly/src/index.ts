@@ -169,7 +169,7 @@ const verbose = flags.has("--verbose");
 const interactive = Boolean(
   !json && !flags.has("--non-interactive") && process.stdin.isTTY && process.stdout.isTTY && !process.env.CI,
 );
-const cliVersion = "0.5.0";
+const cliVersion = "0.5.1";
 let jsonResultWritten = false;
 
 function humanOut(message: string): void {
@@ -614,9 +614,10 @@ export type HostSummary = {
  * the full `preflight()`. */
 async function preflightHost(directory: string): Promise<HostSummary> {
   if (!atLeast(parseVersion(process.versions.node), [20, 12, 0]))
-    throw new DockerMissing(
-      "not-installed",
-      `Node.js 20.12 or newer is required (running ${process.versions.node}).`,
+    throw new CliError(
+      `Node.js 20.12 or newer is required (running ${process.versions.node}). See https://docs.harly.dev/quickstart.`,
+      1,
+      "PREFLIGHT_FAILED",
     );
   const docker = await readDockerInfo().catch((error: unknown) => {
     if (error instanceof DockerMissing) throw error;
@@ -1051,10 +1052,28 @@ async function collectInteractiveAnswers(
     [
       "Point a public domain to this server.",
       "For automatic HTTPS, allow TCP 80/443 and UDP 443.",
-      soft("Guide: github.com/Vytral/harly/blob/main/docs/self-hosting.md#vps-requirements"),
+      soft("Quickstart: https://docs.harly.dev/quickstart"),
+      soft("VPS requirements: https://docs.harly.dev/self-hosting/overview"),
     ].join("\n"),
     "Before you begin",
   );
+
+  const hostSpinner = p.spinner(spinnerStyle);
+  hostSpinner.start("Checking Node.js, Docker, Compose, disk, and RAM");
+  let host: HostSummary;
+  try {
+    host = await preflightHost(directory);
+    hostSpinner.stop("Host requirements checked");
+  } catch (error) {
+    hostSpinner.stop("Host preflight failed");
+    throw error;
+  }
+  p.log.success(`Server detected  ${soft(`· ${hostSummary(host)} · ${detectResourceProfile()}`)}`);
+  if (host.memoryGb < 1.75) {
+    p.log.warn(
+      "Harly needs a VPS with about 2 GB RAM and 1 GB swap at minimum. See https://docs.harly.dev/self-hosting/overview.",
+    );
+  }
 
   const publicOrigin = unwrapPrompt(
     await p.text({
@@ -1089,17 +1108,18 @@ async function collectInteractiveAnswers(
   }
 
   const preflightSpinner = p.spinner(spinnerStyle);
-  preflightSpinner.start("Checking Docker, ports, and DNS");
+  preflightSpinner.start("Checking ports and DNS");
   let dnsAnswers: string[] = [];
   let requestedPort = Number(
     option(parsed, "--port") ?? process.env.HARLY_PORT ?? (mode === "local" && url.port ? url.port : 3000),
   );
-  let host: Awaited<ReturnType<typeof preflight>> | undefined;
+  let preflightComplete = false;
   try {
     for (let attempt = 0; attempt < 3; attempt += 1) {
       try {
-        host = await preflight(mode, true, requestedPort, directory);
+        await checkRequiredPorts(mode, requestedPort);
         dnsAnswers = mode === "local" ? [] : await verifyPublicDns(url);
+        preflightComplete = true;
         break;
       } catch (error) {
         if (error instanceof RetryWithOptions) {
@@ -1114,7 +1134,7 @@ async function collectInteractiveAnswers(
         throw error;
       }
     }
-    if (!host) {
+    if (!preflightComplete) {
       preflightSpinner.stop("Host preflight failed");
       throw new CliError(
         "Could not complete preflight after adjusting options. Re-run the installer.",
@@ -1216,9 +1236,6 @@ async function collectInteractiveAnswers(
       : null;
 
   const detectedProfile = detectResourceProfile();
-  p.log.success(
-    `Server detected  ${soft(`· ${hostSummary(host)} · ${detectedProfile}`)}`,
-  );
   const resourceProfile = unwrapPrompt(
     await p.select<ResourceProfile>({
       message: "Resource profile",
@@ -1358,7 +1375,7 @@ services:
     cpus: \${HARLY_APP_CPUS:-2.0}
     logging: *logging
     read_only: true
-    tmpfs: [/tmp:size=256m,mode=1777]
+    tmpfs: ["/tmp:size=256m,mode=1777"]
     environment: { <<: *env, NODE_OPTIONS: "\${HARLY_APP_NODE_OPTIONS:---max-old-space-size=1024}" }
     depends_on: { migrate: { condition: service_completed_successfully } }
     ports: ["127.0.0.1:\${HARLY_PORT:-3000}:3000"]
@@ -1373,7 +1390,7 @@ services:
     cpus: \${HARLY_SCHEDULER_CPUS:-0.5}
     logging: *logging
     read_only: true
-    tmpfs: [/tmp:size=64m,mode=1777]
+    tmpfs: ["/tmp:size=64m,mode=1777"]
     environment: { <<: *env, HARLY_INTERNAL_URL: http://app:3000, NODE_OPTIONS: "\${HARLY_SCHEDULER_NODE_OPTIONS:---max-old-space-size=160}" }
     depends_on: { app: { condition: service_healthy } }
     healthcheck: { test: [CMD, node, /app/runtime.mjs, doctor], interval: 30s, timeout: 10s, start_period: 45s, retries: 3 }

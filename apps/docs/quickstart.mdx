@@ -68,8 +68,8 @@ firewall setup before you install.
 
     The guided installer:
 
-    1. Checks the server for Docker, Compose, Node, free disk, and RAM.
-    2. Asks for the public URL (`https://careers.example.com`).
+    1. Checks Node, Docker, Compose, free disk, and RAM before asking for configuration.
+    2. Asks for the public URL (`https://careers.example.com`) and checks its DNS and required ports.
     3. Asks for the first owner email.
     4. Generates all secrets and writes `.env` with mode `0600`.
     5. Pulls the Harly image from the registry.
