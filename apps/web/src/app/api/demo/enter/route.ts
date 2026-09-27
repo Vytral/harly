@@ -14,6 +14,10 @@ export const dynamic = "force-dynamic";
 
 const log = createLogger("demo-enter");
 
+function publicUrl(path: string, request: NextRequest): URL {
+  return new URL(path, process.env.HARLY_URL ?? request.nextUrl.origin);
+}
+
 /**
  * Public demo entry. Only mounted when DEMO_MODE=true. Verifies a Cloudflare
  * Turnstile token, rate-limits by IP, then signs the visitor in as the shared
@@ -68,7 +72,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const passed = await verifyTurnstile(token, ip);
   if (!passed) {
-    const url = new URL("/enter", request.url);
+    const url = publicUrl("/enter", request);
     url.searchParams.set("error", "captcha");
     return NextResponse.redirect(url, { status: 303 });
   }
@@ -120,7 +124,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     activeOrganizationId: membership.organizationId,
   });
 
-  const response = NextResponse.redirect(new URL("/dashboard", request.url), { status: 303 });
+  const response = NextResponse.redirect(publicUrl("/dashboard", request), { status: 303 });
 
   const cookieName = ctx.authCookies.sessionToken.name;
   const cookieAttributes = ctx.authCookies.sessionToken.attributes;
