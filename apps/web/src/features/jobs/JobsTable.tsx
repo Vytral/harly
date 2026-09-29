@@ -119,11 +119,12 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
     <div className="space-y-4">
       {/* Search */}
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
+        <Search aria-hidden className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search jobs by title, department or location…"
+          aria-label="Search jobs"
           className="h-11 rounded-full pl-11"
         />
       </div>
