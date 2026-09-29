@@ -14,6 +14,7 @@ import {
 } from "@harly/db";
 
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
+import { isDemoBlockedAgentTool } from "@/lib/ai/demo";
 import {
   moveApplicationStage,
   updateApplicationStatus,
@@ -1632,6 +1633,11 @@ export async function confirmAgentWriteAction(
 ): Promise<WriteResult> {
   if (!isAgentWriteTool(tool)) {
     return { success: false, error: "Unknown action." };
+  }
+  // Public demo: the chat route never offers these tools, but a crafted
+  // confirm call must not reach them either.
+  if (isDemoBlockedAgentTool(tool)) {
+    return { success: false, error: "This action is disabled in the demo." };
   }
 
   const context = await getWorkspaceContextOrNull();

@@ -30,7 +30,15 @@ import {
 } from "@/lib/ai/agent/tool-routing";
 import { persistConversation } from "@/features/ai-chat/data";
 import { recordAiUsage } from "@/lib/ai/usage";
-import { enforceRateLimit } from "@/server/api/ratelimit";
+import {
+  DEMO_CHAT_MAX_OUTPUT_TOKENS,
+  DEMO_CHAT_STEP_BUDGET,
+  withDemoSystemNote,
+  withoutDemoBlockedTools,
+} from "@/lib/ai/demo";
+import { enforceDemoChatIpLimits } from "@/lib/ai/demo-budget";
+import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
+import { isDemoMode } from "@harly/config";
 
 export const runtime = "nodejs";
 // Self-hosted (no serverless wall): automation builds chain discovery →
@@ -280,7 +288,34 @@ export async function POST(req: Request) {
     return Response.json({ error: "Invalid request body." }, { status: 400 });
   }
 
+  // Public demo: every visitor shares one account, so add a per-IP budget
+  // before resolving config (which spends the instance-wide daily budget).
+  if (isDemoMode()) {
+    try {
+      await enforceDemoChatIpLimits(clientIp(req));
+    } catch {
+      return Response.json(
+        {
+          error:
+            "You've reached the Harly AI limit for the demo. Try again later.",
+        },
+        { status: 429 },
+      );
+    }
+  }
+
   const config = await getWorkspaceAiConfig(context.organization.id);
+  if (!config && isDemoMode()) {
+    // Demo AI is env-backed; a null config here means the daily budget ran out
+    // (or no demo key is set), not that the visitor should open Settings.
+    return Response.json(
+      {
+        error: "Harly AI has reached today's demo limit. Try again tomorrow.",
+        reason: "demo_budget_exhausted",
+      },
+      { status: 429 },
+    );
+  }
   if (!config) {
     return Response.json(
       {
@@ -293,6 +328,7 @@ export async function POST(req: Request) {
 
   const workspaceId = context.organization.id;
   const userId = context.user.id;
+  const demo = isDemoMode();
   const latestMessageText = latestUserText(rawMessages);
   const intent = classifyHarlyIntent(latestMessageText);
   const agentStartedAt = Date.now();
@@ -303,14 +339,19 @@ export async function POST(req: Request) {
     context.organization.name,
   );
   const tools = toolsForProvider(
-    buildHarlyTools({
-      workspaceId,
-      userId,
-      permissions: userPermissions,
-      activeCandidateId: candidateId,
-      mentionedCandidateIds,
-      activeAutomation: automationContext,
-    }),
+    // Public demo: strip automation, outbound-email and fan-out scoring tools
+    // (no-op on normal installs).
+    withoutDemoBlockedTools(
+      buildHarlyTools({
+        workspaceId,
+        userId,
+        permissions: userPermissions,
+        activeCandidateId: candidateId,
+        mentionedCandidateIds,
+        activeAutomation: automationContext,
+      }),
+      demo,
+    ),
     config.provider,
   );
 
@@ -374,7 +415,7 @@ export async function POST(req: Request) {
 
   const result = streamText({
     model: getModel(config),
-    system: buildHarlySystemPrompt({
+    system: withDemoSystemNote(buildHarlySystemPrompt({
       workspaceName: context.organization.name,
       userName: context.user.name,
       role: context.role,
@@ -392,7 +433,7 @@ export async function POST(req: Request) {
       }).format(new Date()),
       timeZone,
       activeAutomation: automationContext,
-    }),
+    }), demo),
     messages: await convertToModelMessages(messages),
     tools,
     activeTools: initialActiveTools,
@@ -412,9 +453,18 @@ export async function POST(req: Request) {
     // resolution, compilation, branch simulation, and the confirmation card
     // in one turn. This remains a request budget; work past ~110s must use
     // the durable simulation job and continue next turn.
-    stopWhen: stepCountIs(intent === "automation_build" ? AUTOMATION_STEP_BUDGET : 8),
-    maxOutputTokens:
-      intent === "automation_build" ? MAX_AUTOMATION_OUTPUT_TOKENS : MAX_CHAT_OUTPUT_TOKENS,
+    stopWhen: stepCountIs(
+      demo
+        ? DEMO_CHAT_STEP_BUDGET
+        : intent === "automation_build"
+          ? AUTOMATION_STEP_BUDGET
+          : 8,
+    ),
+    maxOutputTokens: demo
+      ? DEMO_CHAT_MAX_OUTPUT_TOKENS
+      : intent === "automation_build"
+        ? MAX_AUTOMATION_OUTPUT_TOKENS
+        : MAX_CHAT_OUTPUT_TOKENS,
     abortSignal: req.signal,
     timeout: 110_000,
     onStepFinish: ({ toolCalls }) => {

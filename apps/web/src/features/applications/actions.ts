@@ -6,6 +6,7 @@ import { headers } from "next/headers";
 import { after } from "next/server";
 
 import { db, workspaceSettings } from "@harly/db";
+import { isDemoMode } from "@harly/config";
 import { createPublicApplication } from "@/features/applications/data";
 import {
   CAPTCHA_RESPONSE_FIELDS,
@@ -115,7 +116,9 @@ export async function parseResumeAction(input: {
     const jobKeywords = jobContext.keywords;
     let aiConfig: Awaited<ReturnType<typeof getWorkspaceAiConfig>> = null;
 
-    aiConfig = await getWorkspaceAiConfig(jobContext.workspaceId);
+    // Public demo: this path is anonymous (no demo session, no Turnstile), so
+    // keep it on the heuristic parser rather than the platform demo key.
+    aiConfig = isDemoMode() ? null : await getWorkspaceAiConfig(jobContext.workspaceId);
 
     if (aiConfig) {
       const startedAt = Date.now();

@@ -168,6 +168,17 @@ export function enforceRateLimit(
 }
 
 /**
+ * Like `enforceRateLimit`, but always on the Postgres-backed store regardless
+ * of RATE_LIMIT_STORE, for budgets that must survive restarts/redeploys.
+ */
+export function enforcePersistentRateLimit(
+  key: string,
+  options: RateLimitOptions,
+): Promise<RateLimitResult> {
+  return enforceRateLimit(key, options, databaseStore);
+}
+
+/**
  * Best-effort client IP from proxy headers (works behind Vercel / nginx).
  *
  * The LEFTmost `x-forwarded-for` value is attacker-controllable, so by default
