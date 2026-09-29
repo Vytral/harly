@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db, workspaceSettings } from "@harly/db";
+import { isDemoMode } from "@harly/config";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 
@@ -41,6 +42,11 @@ export type LegalSettingsInput = z.infer<typeof saveSchema>;
 export async function saveLegalSettingsAction(
   input: LegalSettingsInput,
 ): Promise<LegalSettingsActionResult> {
+  // Legal pages are public and retention settings drive purge jobs; several of
+  // these columns are not restored by the demo reseed.
+  if (isDemoMode()) {
+    return { ok: false, error: "This action is disabled in the demo." };
+  }
   const context = await requirePermission("settings:edit");
 
   const parsed = saveSchema.safeParse(input);

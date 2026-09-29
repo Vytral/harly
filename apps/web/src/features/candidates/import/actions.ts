@@ -13,6 +13,7 @@ import {
   jobs,
   jobStages,
 } from "@harly/db";
+import { isDemoMode } from "@harly/config";
 
 import { requireJobPermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
@@ -180,12 +181,20 @@ export type ImportCandidatesResult =
     }
   | { success: false; error: string };
 
+/** External ATS importers call third-party APIs with visitor-supplied keys;
+ * the public demo has no reason to make those outbound requests. */
+const DEMO_IMPORT_DISABLED = {
+  success: false as const,
+  error: "Importing from other ATS providers is disabled in the demo.",
+};
+
 /** Imports a full Greenhouse candidate export into one existing Harly pipeline.
  * The credential is used only for this request and is never written to the DB or logs. */
 export async function importGreenhouseCandidatesAction(input: {
   jobId: string;
   apiKey: string;
 }): Promise<ImportCandidatesResult & { skipped?: number }> {
+  if (isDemoMode()) return DEMO_IMPORT_DISABLED;
   if (
     !z.uuid().safeParse(input.jobId).success ||
     typeof input.apiKey !== "string"
@@ -244,6 +253,7 @@ export async function importWorkableCandidatesAction(input: {
   subdomain: string;
   apiToken: string;
 }): Promise<ImportCandidatesResult & { skipped?: number }> {
+  if (isDemoMode()) return DEMO_IMPORT_DISABLED;
   if (
     !z.uuid().safeParse(input.jobId).success ||
     typeof input.subdomain !== "string" ||
@@ -292,6 +302,7 @@ export async function importAshbyCandidatesAction(input: {
   jobId: string;
   apiKey: string;
 }): Promise<ImportCandidatesResult & { skipped?: number }> {
+  if (isDemoMode()) return DEMO_IMPORT_DISABLED;
   if (
     !z.uuid().safeParse(input.jobId).success ||
     typeof input.apiKey !== "string"
@@ -336,6 +347,7 @@ export async function importLeverCandidatesAction(input: {
   jobId: string;
   apiKey: string;
 }): Promise<ImportCandidatesResult & { skipped?: number }> {
+  if (isDemoMode()) return DEMO_IMPORT_DISABLED;
   if (
     !z.uuid().safeParse(input.jobId).success ||
     typeof input.apiKey !== "string"
@@ -382,6 +394,7 @@ export async function importJoinCandidatesAction(input: {
   jobId: string;
   apiToken: string;
 }): Promise<ImportCandidatesResult & { skipped?: number }> {
+  if (isDemoMode()) return DEMO_IMPORT_DISABLED;
   if (
     !z.uuid().safeParse(input.jobId).success ||
     typeof input.apiToken !== "string"

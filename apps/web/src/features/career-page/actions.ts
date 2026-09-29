@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { db, workspaceSettings } from "@harly/db";
+import { isDemoMode } from "@harly/config";
 
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import {
@@ -23,6 +24,11 @@ export type SaveCareerPageResult = { success: boolean; error?: string };
 export async function saveCareerPageConfigAction(
   rawConfig: unknown,
 ): Promise<SaveCareerPageResult> {
+  // The public board is served under the demo's own domain; don't let visitors
+  // publish arbitrary content (phishing/SEO spam) between resets.
+  if (isDemoMode()) {
+    return { success: false, error: "This action is disabled in the demo." };
+  }
   let context;
   try {
     context = await requirePermission("settings:edit");
