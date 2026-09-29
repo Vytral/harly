@@ -30,6 +30,9 @@ export const POST = withApi(async (request) => {
       workspaceId: workspace.workspaceId,
       key: parsed.data.key,
       mode: "image",
+      // Only images uploaded through the public apply presign; never logos,
+      // banners or other assets already in use by the workspace.
+      keyPrefix: `workspaces/${workspace.workspaceId}/images/public-applications/`,
     });
     return NextResponse.json(result);
   } catch (error) {

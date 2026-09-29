@@ -51,6 +51,9 @@ export async function POST(request: NextRequest) {
     const result = await normalizeStoredWorkspaceImage({
       workspaceId,
       ...parsed.data,
+      // A portal (candidate) session may normalize its own upload but must not
+      // be able to delete workspace assets it merely knows the key of.
+      deleteSource: workspaceId === appWorkspaceId,
     });
     return NextResponse.json(result);
   } catch (error) {
