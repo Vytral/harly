@@ -1,6 +1,6 @@
 {
   "name": "@harly/cli",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": false,
   "type": "module",
   "description": "Official CLI for self-hosted Harly deployments.",

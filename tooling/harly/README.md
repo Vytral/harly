@@ -11,11 +11,10 @@ deployment from the command line.
 Requires Node.js 20.12 or newer. A local installation also requires Docker
 Engine 24+ and Docker Compose 2.20+.
 
-## What's new in 0.5.1
+## What's new in 0.5.2
 
-- The guided installer checks host requirements before asking for a domain.
-- Older Node.js versions show the required version and a Quickstart link.
-- Installer guides now point to docs.harly.dev.
+- Resume interrupted installations from the menu or with `harly resume`.
+- Caddy waits for public readiness with up to 15 minutes for automatic HTTPS.
 
 See [CHANGELOG.md](CHANGELOG.md) for the release notes.
 
@@ -49,8 +48,8 @@ check → init → launch → doctor → backup/update → uninstall
 
 `init` generates configuration. It does not pull images or start containers
 unless `--launch` is supplied. `launch` waits for PostgreSQL, migrations, the
-web service, the scheduler, and Caddy when enabled. The command reports
-`Harly is ready` only after the public readiness endpoint succeeds.
+web service, the scheduler, and Caddy when enabled. With automatic HTTPS,
+`Harly is ready` also requires the public readiness endpoint to succeed.
 
 ## Commands
 
@@ -60,6 +59,7 @@ web service, the scheduler, and Caddy when enabled. The command reports
 | `harly check [directory]` | Check Docker, Compose, disk, memory, firewall, and required public ports. |
 | `harly init [directory]` | Generate a new installation. Use `--launch` to start it in the same run. |
 | `harly launch [directory]` | Pull images, start services, and wait for readiness. |
+| `harly resume [directory]` | Retry startup with saved configuration and secrets. |
 | `harly doctor [directory]` | Check service health and public readiness. |
 | `harly setup-secret [directory]` | Read the setup secret from the local `.env` file. |
 | `harly backup [directory]` | Create a private rollback archive. |
@@ -71,6 +71,38 @@ web service, the scheduler, and Caddy when enabled. The command reports
 | `harly deploy digitalocean prepare` | Generate a DigitalOcean App Platform specification. |
 
 Run `npx @harly/cli --help` for the compact command list.
+
+After a successful interactive install, launch, or resume through npx, the CLI
+offers to install the same CLI version globally. Accepting lets you use `harly`
+directly. The offer is skipped when the CLI is already installed globally, and
+is never accepted automatically by `--yes`. Declining or an npm permissions
+error keeps the deployment running; you can keep using npx.
+
+Run management commands from the installation directory. `harly update` updates
+the application; update the global CLI separately with:
+
+```bash
+npm install -g @harly/cli@latest
+```
+
+If installation fails after configuration was saved, fix the reported problem
+and retry without repeating the setup questions:
+
+```bash
+npx @harly/cli resume ./harly --yes
+```
+
+Without a path, `resume` checks the installation containing the current
+directory, then the exact `./harly` default. The guided menu recognizes that
+default directory too. Saved files and secrets are reused; Docker reuses cached
+images and reconciles the existing containers. `--dry-run` previews the target.
+
+Caddy is checked after the app and scheduler. It must be running and the public
+`/api/health/ready` endpoint must respond successfully, including valid TLS for
+HTTPS. The default wait is 900 seconds for Caddy and 90 seconds for each other
+service. `launch` and `resume` accept `--timeout <seconds>` to override each wait.
+During the wait, the CLI reports elapsed time and the latest connection or HTTP
+status. If it times out, it includes the command to inspect Caddy's logs.
 
 ## Local installer
 
