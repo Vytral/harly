@@ -92,6 +92,7 @@ Automations tour. No migrations.
   the call is crafted by hand.
 - Public job applications on a demo instance parse resumes without AI, so
   anonymous traffic cannot spend the demo key.
+- `fast-uri` is pinned to 3.1.7 (GHSA-qw65-cvwx-89v3, GHSA-58mr-gqgx-xq4g).
 
 ### Upgrading
 
