@@ -72,6 +72,8 @@ Automations tour. No migrations.
   drops automation, outbound-email, and bulk-scoring tools.
 - Chat errors show the server's message instead of a raw JSON body.
 - `/enter` copy no longer uses em dashes.
+- The profile menu's "Star on GitHub" badge shows the release version from the
+  root `package.json`, inlined at build time, instead of a hardcoded `v0.1.0`.
 
 ### Fixed
 

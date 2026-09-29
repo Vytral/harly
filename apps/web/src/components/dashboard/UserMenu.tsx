@@ -21,7 +21,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { WorkspaceOption } from "@/features/workspaces/data";
 
-const VERSION = "v0.1.0";
+// Root package.json version, inlined by next.config.ts at build time.
+const VERSION = process.env.NEXT_PUBLIC_HARLY_VERSION
+  ? `v${process.env.NEXT_PUBLIC_HARLY_VERSION}`
+  : null;
 const REPO_URL = "https://github.com/Vytral/harly";
 
 type UserMenuProps = {
@@ -233,12 +236,14 @@ export function UserMenu({
                 >
                   <GithubIcon className="size-4 text-muted-foreground" />
                   <span className="flex-1">Star on GitHub</span>
-                  <Badge
-                    variant="secondary"
-                    className="font-mono text-[0.65rem] font-normal"
-                  >
-                    {VERSION}
-                  </Badge>
+                  {VERSION ? (
+                    <Badge
+                      variant="secondary"
+                      className="font-mono text-[0.65rem] font-normal"
+                    >
+                      {VERSION}
+                    </Badge>
+                  ) : null}
                   <ExternalLink className="size-3 text-muted-foreground/60" />
                 </a>
               </div>
