@@ -1,107 +1,206 @@
-import Link from "next/link";
+import { cn } from "@/lib/utils";
+import {
+  ArrowUpRightIcon,
+  InfoIcon,
+  LightningIcon,
+  LockSimpleIcon,
+} from "@/components/ui/icons/phosphor";
 
-const examples = [
+import { WORKFLOW_TEMPLATES, getTemplate } from "./builder/templates";
+import { triggerMeta } from "./builder/catalog";
+
+/**
+ * Demo-mode Automations page. Mirrors the real AutomationsManager layout
+ * (header → recipe cards → starter recipes) so the section reads like the
+ * product, but everything is static: no workspace reads, no links into the
+ * builder (it redirects in demo), no toggles, no mutating controls.
+ */
+
+type SampleRecipe = {
+  templateId: string;
+  /** Plain-language sentence for the card; the builder preview is too technical for a tour. */
+  summary: string;
+  lastRun: string;
+};
+
+const SAMPLE_RECIPES: SampleRecipe[] = [
   {
-    number: "01",
-    title: "A new candidate applies",
-    trigger: "When an application arrives",
-    steps: ["Check the role and application details", "Add a review task for the hiring team"],
-    outcome: "A task would be prepared for review.",
+    templateId: "notify-slack-on-apply",
+    summary:
+      "When a candidate applies, post a message to the team channel with their name and the role.",
+    lastRun: "12 min ago",
   },
   {
-    number: "02",
-    title: "An interview is completed",
-    trigger: "When an interview is marked complete",
-    steps: ["Check whether feedback is still missing", "Remind the interview team"],
-    outcome: "A reminder would be prepared for the team.",
+    templateId: "screening-task-on-stage",
+    summary:
+      "When a candidate moves to Phone screen, create a task for the recruiter to book the call.",
+    lastRun: "1 hour ago",
   },
   {
-    number: "03",
-    title: "A candidate reaches a decision stage",
-    trigger: "When a candidate enters a stage",
-    steps: ["Check the stage and candidate status", "Prepare the next follow-up task"],
-    outcome: "A follow-up task would be prepared for review.",
+    templateId: "interview-prep-task",
+    summary:
+      "When an interview is scheduled, create a prep task so the interviewer reviews the profile first.",
+    lastRun: "yesterday",
+  },
+  {
+    templateId: "tag-vip-candidates",
+    summary:
+      "When a candidate applies with a match score of 80 or more, tag them as high-fit and tell the team.",
+    lastRun: "3 days ago",
   },
 ];
 
+// Paused on purpose so the list shows both states, like a real workspace.
+const PAUSED = new Set(["tag-vip-candidates"]);
+
+const recipes = SAMPLE_RECIPES.flatMap((sample) => {
+  const template = getTemplate(sample.templateId);
+  if (!template) return [];
+  const definition = template.build();
+  return [
+    {
+      ...sample,
+      name: template.name,
+      trigger: triggerMeta(definition.trigger.event).label,
+      actionCount: definition.actions.length,
+      enabled: !PAUSED.has(sample.templateId),
+    },
+  ];
+});
+
+const starterRecipes = WORKFLOW_TEMPLATES.filter(
+  (template) => !SAMPLE_RECIPES.some((sample) => sample.templateId === template.id),
+);
+
 export function AutomationsDemo() {
   return (
-    <main className="mx-auto w-full max-w-5xl px-6 py-10">
-      <div className="max-w-3xl">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-soft-ink">
-          Guided demo · examples only
-        </p>
-        <h1 className="mt-2 font-display text-3xl font-semibold tracking-tight text-near-ink">
-          Automations
-        </h1>
-        <p className="mt-3 text-base leading-7 text-soft-ink">
-          Automations connect hiring events to helpful follow-up steps. Explore these
-          sample recipes to see the shape of a workflow.
-        </p>
+    <div className="mx-auto w-full max-w-5xl px-6 py-10">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-semibold tracking-tight text-near-ink">
+            Automations
+          </h1>
+          <p className="mt-1 text-sm text-soft-ink">
+            {recipes.length} recipes · when something happens, Harly can email, tag,
+            task, or move a candidate.
+          </p>
+        </div>
+        <span className="font-chrome inline-flex items-center gap-1.5 rounded-full bg-soft-kraft px-3 py-1 text-[12px] text-soft-ink">
+          <LockSimpleIcon className="size-3.5" /> View only
+        </span>
       </div>
 
-      <section
-        aria-labelledby="demo-safety-title"
-        className="mt-7 rounded-2xl border border-mist-border bg-soft-kraft/50 p-5 sm:p-6"
+      <p
+        role="note"
+        className="mt-6 flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-xl border border-hairline bg-pure-snow px-4 py-3 text-sm text-soft-ink"
       >
-        <h2 id="demo-safety-title" className="font-semibold text-near-ink">
-          Safe simulation, no workflow execution
-        </h2>
-        <p className="mt-2 max-w-3xl text-sm leading-6 text-soft-ink">
-          These examples are fixed and display-only. Nothing is created, published,
-          scheduled, or sent to candidates or external services. A simulation previews
-          what steps might happen; execution runs a saved workflow against live data.
-          This demo only explains the idea and does not run either one.
-        </p>
-      </section>
+        <InfoIcon className="size-4 shrink-0 text-near-ink" />
+        <span>
+          These are sample recipes. In the demo nothing runs and editing is off.
+        </span>
+        <a
+          href="https://docs.harly.dev/self-hosting/overview"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-0.5 font-medium text-near-ink underline-offset-4 hover:underline"
+        >
+          Self-host Harly
+          <ArrowUpRightIcon className="size-3.5" />
+          <span className="sr-only"> (opens in a new tab)</span>
+        </a>
+        <span>to build your own.</span>
+      </p>
 
-      <section aria-label="Example automation recipes" className="mt-7 grid gap-4 md:grid-cols-3">
-        {examples.map((example) => (
+      <section
+        aria-label="Sample automations"
+        className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2"
+      >
+        {recipes.map((recipe) => (
           <article
-            key={example.number}
-            className="flex flex-col rounded-2xl border border-mist-border bg-pure-snow p-5"
+            key={recipe.templateId}
+            className={cn(
+              "flex flex-col rounded-2xl border bg-pure-snow p-5 shadow-xs",
+              recipe.enabled ? "border-mist-border" : "border-hairline opacity-65",
+            )}
           >
-            <p className="text-xs font-semibold tracking-wide text-soft-ink">
-              EXAMPLE {example.number}
-            </p>
-            <h2 className="mt-3 text-lg font-semibold leading-6 text-near-ink">
-              {example.title}
-            </h2>
-            <p className="mt-4 text-xs font-medium uppercase tracking-wide text-soft-ink">
-              Starts when
-            </p>
-            <p className="mt-1 text-sm text-near-ink">{example.trigger}</p>
-            <p className="mt-4 text-xs font-medium uppercase tracking-wide text-soft-ink">
-              Example steps
-            </p>
-            <ol className="mt-2 list-inside list-decimal space-y-2 text-sm leading-5 text-near-ink">
-              {example.steps.map((step) => <li key={step}>{step}</li>)}
-            </ol>
-            <p className="mt-auto border-t border-mist-border pt-4 text-sm leading-5 text-soft-ink">
-              <span className="font-medium text-near-ink">Illustrative result: </span>
-              {example.outcome}
-            </p>
+            <div className="flex items-start gap-3">
+              <span
+                className={cn(
+                  "mt-0.5 inline-flex size-8 shrink-0 items-center justify-center rounded-lg",
+                  recipe.enabled
+                    ? "bg-near-ink text-primary-foreground"
+                    : "bg-soft-kraft text-soft-ink",
+                )}
+              >
+                <LightningIcon className="size-4" />
+              </span>
+              <div className="min-w-0">
+                <h2 className="truncate font-display text-base font-semibold text-near-ink">
+                  {recipe.name}
+                </h2>
+                <p className="mt-1 text-xs leading-relaxed text-soft-ink">
+                  {recipe.summary}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-4 pl-11">
+              <span className="inline-flex items-center rounded-full bg-soft-kraft px-2.5 py-0.5 text-[11px] font-medium text-near-ink">
+                {recipe.trigger}
+              </span>
+              <span className="inline-flex items-center rounded-full bg-soft-kraft px-2.5 py-0.5 text-[11px] font-medium text-soft-ink">
+                {recipe.actionCount} {recipe.actionCount === 1 ? "action" : "actions"}
+              </span>
+              <span
+                className={cn(
+                  "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium",
+                  recipe.enabled
+                    ? "bg-near-ink text-primary-foreground"
+                    : "bg-soft-kraft text-soft-ink",
+                )}
+              >
+                {recipe.enabled ? "On" : "Paused"}
+              </span>
+              <span className="ml-auto text-[11px] text-soft-ink">
+                last run {recipe.lastRun}
+              </span>
+            </div>
           </article>
         ))}
       </section>
 
-      <aside className="mt-8 rounded-2xl bg-near-ink p-6 text-primary-foreground sm:flex sm:items-center sm:justify-between sm:gap-6">
-        <div>
-          <h2 className="text-lg font-semibold">Ready to build real automations?</h2>
-          <p className="mt-1 max-w-2xl text-sm leading-6 text-primary-foreground/75">
-            Run Harly in your own self-hosted workspace to create, configure, simulate,
-            and publish workflows for your team.
-          </p>
-        </div>
-        <Link
-          href="https://docs.harly.dev/self-hosting/overview"
-          target="_blank"
-          rel="noreferrer"
-          className="mt-5 inline-flex shrink-0 items-center justify-center rounded-full bg-pure-snow px-5 py-2.5 text-sm font-medium text-near-ink transition-colors hover:bg-soft-kraft sm:mt-0"
+      <section
+        aria-labelledby="demo-starter-recipes-title"
+        className="mt-6 rounded-2xl border border-mist-border bg-pure-snow p-6 shadow-xs"
+      >
+        <h2
+          id="demo-starter-recipes-title"
+          className="font-display text-lg font-semibold text-near-ink"
         >
-          Self-host Harly <span className="sr-only"> (opens in a new tab)</span>
-        </Link>
-      </aside>
-    </main>
+          Starter recipes
+        </h2>
+        <p className="mt-0.5 text-xs text-soft-ink">
+          Every workspace ships with these. Pick one and adjust each step in the editor.
+        </p>
+        <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {starterRecipes.map((template) => (
+            <li
+              key={template.id}
+              className="flex flex-col rounded-xl border border-mist-border/80 bg-warm-paper p-4"
+            >
+              <span className="font-chrome text-[11px] uppercase tracking-[0.04em] text-soft-ink">
+                {template.category}
+              </span>
+              <span className="font-display mt-1 text-sm font-semibold text-near-ink">
+                {template.name}
+              </span>
+              <span className="mt-1 text-xs leading-relaxed text-soft-ink">
+                {template.description}
+              </span>
+            </li>
+          ))}
+        </ul>
+      </section>
+    </div>
   );
 }
