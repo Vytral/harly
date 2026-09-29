@@ -179,6 +179,7 @@ for request and response examples.
 | `POST` | `/api/public/v1/jobs/{slug}/applications` | `workspace` or `pk_` | Submit an application |
 | `POST` | `/api/public/v1/resume/presign` | `workspace` or `pk_` | Create a resume upload URL |
 | `POST` | `/api/public/v1/image/presign` | `workspace` or `pk_` | Create a profile-image upload URL |
+| `POST` | `/api/public/v1/image/normalize` | `workspace` or `pk_` | Convert an uploaded profile image to a stable format |
 
 Publishable keys are limited to `jobs:read` and `applications:write`. They are
 safe to expose in browser code, but they are not authentication for a person;

@@ -293,6 +293,56 @@ to the same `workspace` or publishable key. The resume fields are
 `resumeKey`, `resumeFileName`, `resumeFileType`, and `resumeFileSize`; the image
 field is `photoUrl`.
 
+#### Normalize a profile image
+
+After you upload a profile image, call the normalize endpoint to convert it to
+a stable raster format before you use it:
+
+```text
+POST /api/public/v1/image/normalize
+```
+
+The flow has three steps:
+
+1. Call `POST /api/public/v1/image/presign` and keep the returned `key`.
+2. `PUT` the file to the returned `uploadUrl`.
+3. Call `POST /api/public/v1/image/normalize` with `{ "key": "<key>" }`.
+
+```js
+const response = await fetch(
+  "https://hiring.example.com/api/public/v1/image/normalize",
+  {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": "harly_pk_live_YOUR_PUBLISHABLE_KEY",
+    },
+    body: JSON.stringify({ key: presign.data.key }),
+  },
+);
+
+const image = await response.json();
+// { key, contentType, fileUrl }
+```
+
+Harly accepts PNG, JPEG, WebP, and SVG input up to 25 million pixels. It
+converts the image to WebP and scales it to fit within 2400 × 2400 pixels
+without enlarging it. The response contains the new `key`, its `contentType`,
+and a `fileUrl` for the normalized image.
+
+The endpoint requires the `applications:write` scope, is CORS-enabled, and is
+rate-limited to 20 requests per minute per IP address. It only accepts keys
+returned by the public image presign endpoint. Harly deletes the temporary
+upload after a successful conversion, so resubmitting the same key returns
+`404`.
+
+| Status | Meaning |
+| ---: | --- |
+| `400` | Invalid request body or unsupported image |
+| `404` | Key not found, outside the public upload area, or already normalized |
+| `422` | Harly could not process the image |
+| `429` | Rate limited |
+
 For a browser integration, the publishable-key variant is usually preferable:
 
 ```js
