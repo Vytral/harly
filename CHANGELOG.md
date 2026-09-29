@@ -77,6 +77,9 @@ Automations tour. No migrations.
 
 ### Fixed
 
+- The Postgres rate limiter (`RATE_LIMIT_STORE=database` and the demo AI
+  budgets) now counts with a single atomic upsert. Concurrent first hits of a
+  window could each be admitted while only one was recorded.
 - `/enter` redirected to `http://0.0.0.0:<port>/dashboard` behind a reverse
   proxy after the Turnstile check. Both redirects now use the configured public
   origin.
@@ -95,6 +98,9 @@ Automations tour. No migrations.
 - Public job applications on a demo instance parse resumes without AI, so
   anonymous traffic cannot spend the demo key.
 - `fast-uri` is pinned to 3.1.7 (GHSA-qw65-cvwx-89v3, GHSA-58mr-gqgx-xq4g).
+- Image normalization never deletes the source when conversion fails. The public
+  normalize route only accepts keys from the public apply upload area, and only
+  workspace sessions (not candidate portal sessions) delete the original.
 
 ### Upgrading
 
@@ -108,6 +114,8 @@ for the next scheduled reset, to load the new demo tasks.
 
 - `harly resume` and a guided menu action retry startup with the saved
   configuration and secrets.
+- The global install runs npm through a shell on Windows, where npm is a
+  `.cmd` shim.
 - Caddy readiness checks the public endpoint once the app is healthy, with
   elapsed time and the last status shown. `launch` and `resume` accept
   `--timeout <seconds>`.

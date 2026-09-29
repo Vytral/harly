@@ -180,7 +180,7 @@ export function AutomationsDemo() {
           Starter recipes
         </h2>
         <p className="mt-0.5 text-xs text-soft-ink">
-          Every workspace ships with these. Pick one and adjust each step in the editor.
+          Every workspace ships with these. On your own install you can start from one and adjust each step.
         </p>
         <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {starterRecipes.map((template) => (

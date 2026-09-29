@@ -20,8 +20,12 @@ function runNpm(args: string[], env: NodeJS.ProcessEnv, cwd: string, timeout: nu
     // manager installs where a different npm may be first on PATH.
     const npmPath = env.npm_execpath;
     const useNode = npmPath && path.basename(npmPath) === "npm-cli.js";
+    // Windows ships npm as a .cmd shim, which Node only runs through a shell.
+    // The arguments are fixed install flags plus a validated version, never
+    // user input, so the shell does not widen the command surface.
     const child = spawn(useNode ? process.execPath : "npm", useNode ? [npmPath, ...args] : args, {
       cwd, env, timeout, stdio: ["ignore", "pipe", "pipe"],
+      shell: !useNode && process.platform === "win32",
     });
     let stdout = "";
     let stderr = "";
