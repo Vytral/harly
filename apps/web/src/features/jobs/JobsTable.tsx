@@ -211,30 +211,43 @@ export function JobsTable({ jobs }: { jobs: JobRow[] }) {
               {formatWorkplaceType(job.workplaceType)}
             </div>
 
-            {/* Applicants , count + mini bar (the "graph") */}
-            <div className="hidden min-w-0 sm:block">
+            {/* Applicants: count + mini bar. The bar's length is volume relative
+                to the busiest role; its solid segment is the share still active
+                in the pipeline (details in the tooltip, not a third text line). */}
+            <div
+              className="hidden min-w-0 sm:block"
+              title={`${job.applicants} ${job.applicants === 1 ? "candidate" : "candidates"}, ${job.activeApplicants} active`}
+            >
               <div className="flex items-baseline justify-between gap-2">
-                <span className="text-sm font-semibold tabular-nums">
-                  {job.applicants}
+                <span className="truncate text-xs text-muted-foreground">
+                  <span className="text-sm font-semibold tabular-nums text-foreground">
+                    {job.applicants}
+                  </span>{" "}
+                  {job.applicants === 1 ? "candidate" : "candidates"}
                 </span>
                 {job.newApplicants > 0 ? (
-                  <span className="text-[0.65rem] font-medium text-primary">
+                  <span className="shrink-0 text-[0.65rem] font-medium text-primary">
                     +{job.newApplicants} new
                   </span>
                 ) : null}
               </div>
-              <div className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted"
+                role="img"
+                aria-label={`${job.activeApplicants} of ${job.applicants} candidates active`}
+              >
                 <div
-                  className="h-full rounded-full bg-primary/70"
+                  className="flex h-full overflow-hidden rounded-full bg-primary/25"
                   style={{ width: `${(job.applicants / maxApplicants) * 100}%` }}
-                />
+                >
+                  <div
+                    className="h-full bg-primary/80"
+                    style={{
+                      width: `${job.applicants > 0 ? (job.activeApplicants / job.applicants) * 100 : 0}%`,
+                    }}
+                  />
+                </div>
               </div>
-              <p className="mt-1 text-[0.65rem] text-muted-foreground">
-                {job.applicants === 1 ? "Candidate" : "Candidates"}
-                {job.activeApplicants > 0
-                  ? ` · ${job.activeApplicants} active`
-                  : ""}
-              </p>
             </div>
 
             <div className="col-start-2 row-start-1 flex items-center justify-end gap-2 sm:col-auto sm:row-auto">
