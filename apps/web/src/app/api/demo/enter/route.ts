@@ -7,6 +7,7 @@ import { eq, sql as dsql } from "drizzle-orm";
 import { auth } from "@/lib/auth";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { createLogger } from "@/lib/logger";
+import { toHarlyPublicUrl } from "@/lib/public-origin";
 import { signSessionCookieValue } from "@/lib/session-cookie";
 
 export const runtime = "nodejs";
@@ -68,7 +69,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const passed = await verifyTurnstile(token, ip);
   if (!passed) {
-    const url = new URL("/enter", request.url);
+    // Never build redirects off request.url: behind the reverse proxy it is
+    // the container listen address (http://0.0.0.0:<port>), not the public host.
+    const url = new URL(toHarlyPublicUrl("/enter"));
     url.searchParams.set("error", "captcha");
     return NextResponse.redirect(url, { status: 303 });
   }
@@ -120,7 +123,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     activeOrganizationId: membership.organizationId,
   });
 
-  const response = NextResponse.redirect(new URL("/dashboard", request.url), { status: 303 });
+  const response = NextResponse.redirect(toHarlyPublicUrl("/dashboard"), { status: 303 });
 
   const cookieName = ctx.authCookies.sessionToken.name;
   const cookieAttributes = ctx.authCookies.sessionToken.attributes;

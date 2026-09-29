@@ -78,7 +78,7 @@ export function EnterBrandPanel() {
         <a
           href={LANDING_URL}
           className="inline-flex rounded-sm outline-none ring-lime/60 transition focus-visible:ring-2"
-          aria-label="Harly — visit harly.dev"
+          aria-label="Harly, visit harly.dev"
         >
           <motion.img
             src="/harly-full-white.svg"

@@ -55,7 +55,7 @@ export default async function EnterPage({
           </h1>
           <p className="mt-2 text-sm text-muted-foreground">
             Explore a hiring workspace that&apos;s ready to click around in.
-            Change jobs, move candidates, try the tools — nothing here is
+            Change jobs, move candidates and try the tools. Nothing here is
             permanent.
           </p>
 
