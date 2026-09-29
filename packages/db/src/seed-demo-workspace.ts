@@ -502,13 +502,38 @@ const MESSAGES = [
   { c: 16, subject: "Quick comp conversation", body: "Hi Hannah, great to connect. Could we chat briefly about compensation expectations before the next round?" },
 ];
 
-const TASKS = [
-  { title: "Review Ava Thompson's offer letter", status: "pending", priority: "high", owner: "sarah", dueDaysFromNow: 2 },
-  { title: "Schedule portfolio review with Sofía Martínez", status: "pending", priority: "medium", owner: "emma", dueDaysFromNow: 3 },
-  { title: "Send onboarding docs to Noah Williams", status: "completed", priority: "high", owner: "james", dueDaysFromNow: -1 },
-  { title: "Prepare technical assessment for Backend Engineer role", status: "in_progress", priority: "medium", owner: "diego", dueDaysFromNow: 4 },
-  { title: "Follow up with Isabella Rossi on marketing role", status: "pending", priority: "low", owner: "sofia", dueDaysFromNow: 5 },
-  { title: "Update job description for DevOps contract", status: "pending", priority: "medium", owner: "diego", dueDaysFromNow: 6 },
+// `owner` is a teammate key, or "me" for the demo visitor's own account so the
+// Home "My tasks" card is populated. `c`/`j` link the task to a seeded
+// candidate / job (indexes into CANDIDATES / JOBS) so rows open real records;
+// when both are set and an application exists, it is linked too.
+const TASKS: {
+  title: string;
+  status: "pending" | "in_progress" | "completed" | "canceled";
+  priority: "low" | "medium" | "high" | "urgent";
+  owner: string;
+  dueDaysFromNow: number;
+  c?: number;
+  j?: number;
+  description?: string;
+}[] = [
+  // Assigned to the demo visitor (Alex Morgan).
+  { title: "Approve Ava Thompson's offer", status: "pending", priority: "urgent", owner: "me", dueDaysFromNow: 0, c: 0, j: 0, description: "Sarah drafted the offer letter. Check comp band and start date, then approve." },
+  { title: "Give feedback on Priya Nair's interview", status: "pending", priority: "high", owner: "me", dueDaysFromNow: -1, c: 6, j: 0, description: "Scorecard is still missing from yesterday's technical round." },
+  { title: "Screen Liam Chen's application", status: "in_progress", priority: "medium", owner: "me", dueDaysFromNow: 1, c: 1, j: 0 },
+  { title: "Decide on Hannah Schmidt's counter-offer", status: "pending", priority: "high", owner: "me", dueDaysFromNow: 2, c: 16, j: 4 },
+  { title: "Review new applicants for Sales Development Representative", status: "pending", priority: "medium", owner: "me", dueDaysFromNow: 3, j: 6 },
+  { title: "Sync with James on Backend Engineer (Go) shortlist", status: "pending", priority: "low", owner: "me", dueDaysFromNow: 5, j: 1 },
+  { title: "Welcome call with Noah Williams", status: "completed", priority: "medium", owner: "me", dueDaysFromNow: -2, c: 3, j: 1 },
+  // Assigned to teammates.
+  { title: "Review Ava Thompson's offer letter", status: "pending", priority: "high", owner: "sarah", dueDaysFromNow: 2, c: 0, j: 0 },
+  { title: "Schedule portfolio review with Sofía Martínez", status: "pending", priority: "medium", owner: "emma", dueDaysFromNow: 3, c: 2, j: 2 },
+  { title: "Send onboarding docs to Noah Williams", status: "completed", priority: "high", owner: "james", dueDaysFromNow: -1, c: 3, j: 1 },
+  { title: "Prepare technical assessment for Backend Engineer role", status: "in_progress", priority: "medium", owner: "diego", dueDaysFromNow: 4, j: 1 },
+  { title: "Follow up with Isabella Rossi on marketing role", status: "pending", priority: "low", owner: "sofia", dueDaysFromNow: 5, c: 10, j: 4 },
+  { title: "Update job description for DevOps contract", status: "pending", priority: "medium", owner: "diego", dueDaysFromNow: 6, j: 5 },
+  { title: "Collect references for Mei Tanaka", status: "pending", priority: "medium", owner: "emma", dueDaysFromNow: 1, c: 8, j: 2 },
+  { title: "Book onsite for Emma Müller", status: "in_progress", priority: "high", owner: "james", dueDaysFromNow: 0, c: 4, j: 1 },
+  { title: "Prepare interview panel for Lucas Oliveira", status: "pending", priority: "medium", owner: "sarah", dueDaysFromNow: -1, c: 7, j: 5 },
 ];
 
 // Interviews reference an application by `${c}-${j}`; `interviewer` = teammate key.
@@ -692,6 +717,10 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
           // Re-assert every real integration OFF on reseed (clears anything a
           // visitor or prior manual test connected).
           aiEnabled: false,
+          // Background AI stays off: public applies on the demo board must not
+          // spend the platform DEMO_AI_API_KEY.
+          aiAutoScore: false,
+          aiDuplicateCheck: false,
           aiProvider: null,
           aiModelId: null,
           aiApiKeyCiphertext: null,
@@ -783,6 +812,11 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
           legalEntityEmail: "legal@syntrix.com",
           legalEntityWebsite: "https://syntrix.com",
           dpoEmail: "privacy@syntrix.com",
+          // Policy/rollout flags that visitor actions could flip; reset them so
+          // nothing a visitor changed survives the reseed.
+          require2fa: false,
+          mailUnificationEnabled: false,
+          acquisitionSource: null,
         },
       });
 
@@ -863,6 +897,7 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
         linkedinUrl: null,
         githubUrl: null,
         websiteUrl: null,
+        onboardingRole: null,
       })
       .where(eq(schema.user.id, user.id));
     await db.delete(schema.usernameHistory).where(eq(schema.usernameHistory.userId, user.id));
@@ -1187,14 +1222,22 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
 
     // ── Tasks ──
     for (const task of TASKS) {
-      const ownerId = teammateId(task.owner) ?? user.id;
+      const ownerId = task.owner === "me" ? user.id : (teammateId(task.owner) ?? user.id);
+      const applicationId =
+        task.c !== undefined && task.j !== undefined
+          ? (appIds.get(`${task.c}-${task.j}`) ?? null)
+          : null;
       await db.insert(schema.tasks).values({
         workspaceId,
         title: task.title,
-        status: task.status as "pending" | "in_progress" | "completed" | "canceled",
-        priority: task.priority as "low" | "medium" | "high" | "urgent",
+        description: task.description ?? null,
+        status: task.status,
+        priority: task.priority,
         ownerId,
         createdById: user.id,
+        candidateId: task.c !== undefined ? candidateIds[task.c] : null,
+        jobId: task.j !== undefined ? jobIds[task.j] : null,
+        applicationId,
         dueDate: daysFromNowAt(task.dueDaysFromNow, 9),
         completedAt: task.status === "completed" ? daysAgo(1) : null,
       });

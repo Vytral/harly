@@ -255,13 +255,24 @@ export function isStrandedAssistantTurn(input: {
 /** Normalize `useChat`'s `error` (Error | string | unknown) to display text. */
 export function chatErrorMessage(error: unknown): string | null {
   if (error == null) return null;
-  if (typeof error === "string") return error.trim() || null;
-  if (error instanceof Error) return error.message.trim() || null;
+  if (typeof error === "string") return unwrapJsonError(error.trim()) || null;
+  if (error instanceof Error) return unwrapJsonError(error.message.trim()) || null;
   if (typeof error === "object" && "message" in error) {
     const message = (error as { message?: unknown }).message;
-    if (typeof message === "string" && message.trim()) return message.trim();
+    if (typeof message === "string" && message.trim()) return unwrapJsonError(message.trim());
   }
   return "Harly AI is temporarily unavailable. Please try again in a moment.";
+}
+
+/** The chat transport surfaces non-2xx bodies verbatim; show `{ error }` text, not raw JSON. */
+function unwrapJsonError(text: string): string {
+  if (!text.startsWith("{")) return text;
+  try {
+    const parsed = JSON.parse(text) as { error?: unknown };
+    return typeof parsed.error === "string" && parsed.error.trim() ? parsed.error.trim() : text;
+  } catch {
+    return text;
+  }
 }
 
 // Custom markdown renderers: internal links (candidate/job profiles) use the

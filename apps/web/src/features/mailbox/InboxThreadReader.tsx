@@ -145,6 +145,7 @@ export function InboxThreadReader({
   onSendReply,
   suggestedReply,
   actionsSlot,
+  hideSendingNotice = false,
 }: {
   thread: InboxThread;
   messages: InboxMessage[];
@@ -155,6 +156,8 @@ export function InboxThreadReader({
   onSendReply: (payload: ReplyPayload) => Promise<{ ok: boolean; error?: string; sentCopySaved?: boolean }>;
   suggestedReply?: string | null;
   actionsSlot?: React.ReactNode;
+  /** Suppress the "Email sending is not connected" nudge (public demo). */
+  hideSendingNotice?: boolean;
 }) {
   const canSendReply = canReply && Boolean(thread.participantEmail);
   const [composerOpen, setComposerOpen] = useState(canSendReply && Boolean(suggestedReply));
@@ -233,7 +236,7 @@ export function InboxThreadReader({
         )}
       </div>
 
-      {!canReply ? (
+      {!canReply && !hideSendingNotice ? (
         <div className="shrink-0 border-t border-border/70 bg-muted/20 px-5 py-3.5">
           <div className="flex items-start gap-3">
             <EnvelopeSimpleDuotoneIcon className="mt-0.5 size-5 shrink-0 text-muted-foreground" />

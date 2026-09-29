@@ -43,6 +43,7 @@ import {
   type HarlyRelease,
 } from "./release.js";
 import { pullWithProgress } from "./pull.js";
+import { isNpxInvocation, offerGlobalCliInstallation } from "./global-cli.js";
 import { atLeast, compose, parseVersion, run } from "./shell.js";
 import {
   accent,
@@ -169,7 +170,8 @@ const verbose = flags.has("--verbose");
 const interactive = Boolean(
   !json && !flags.has("--non-interactive") && process.stdin.isTTY && process.stdout.isTTY && !process.env.CI,
 );
-const cliVersion = "0.5.1";
+const cliVersion = "0.5.2";
+const cliCommand = isNpxInvocation() ? "npx @harly/cli" : "harly";
 let jsonResultWritten = false;
 
 function humanOut(message: string): void {
@@ -384,7 +386,8 @@ const commandHelp: Array<[string, string]> = [
   ["harly", "Guided menu — install, or manage a detected installation"],
   ["harly check [directory]", "Verify host requirements without installing"],
   ["harly init [directory] [--force] [--dry-run]", "Generate a new installation"],
-  ["harly launch [directory] [--yes]", "Pull images and start the services"],
+  ["harly launch [directory] [--yes] [--timeout seconds]", "Pull images and start the services"],
+  ["harly resume [directory] [--yes] [--timeout seconds]", "Retry startup using saved installation configuration"],
   ["harly doctor [directory] [--json] [--fix]", "Check services and public readiness"],
   ["harly setup-secret [directory]", "Print HARLY_SETUP_SECRET from .env"],
   ["harly backup [directory] [--encrypt]", "Write a private rollback archive"],
@@ -1424,6 +1427,26 @@ async function init() {
   }
   const directory = path.resolve(outputDirectory ?? positionalDirectory ?? "harly");
   const dryRun = flags.has("--dry-run");
+  if (!dryRun && !force && await exists(path.join(directory, "harly.config.json"))) {
+    if (flags.has("--launch")) return resumeInstallation(directory);
+    if (!interactive) {
+      throw new CliError(
+        `Configuration already exists at ${directory}. Resume with \`npx @harly/cli resume ${shellQuote(directory)} --yes\`. Use --force only to regenerate configuration.`,
+        2,
+        "INVALID_CONFIGURATION",
+      );
+    }
+    const config = await readConfig(directory);
+    p.note(`${directory}\n${config.publicUrl}\nYour saved answers and secrets will be reused.`, "Existing installation found");
+    if (flags.has("--no-launch")) {
+      p.outro("Saved configuration kept. Run harly resume when you are ready.");
+      return;
+    }
+    const resume = unwrapPrompt(await p.confirm({ message: "Resume this installation?", initialValue: true }));
+    if (resume) return resumeInstallation(directory, true);
+    p.outro("Saved configuration kept. Run harly resume when you are ready.");
+    return;
+  }
   const answers = interactive
     ? await collectInteractiveAnswers(directory)
     : await collectNonInteractiveAnswers(directory);
@@ -1591,6 +1614,7 @@ async function init() {
         envWritten,
         directory,
       });
+      await offerCliInstallation(directory);
     } else {
       p.outro(
         `Next: ${accent(`cd ${shellQuote(directory)} && npx @harly/cli`)}`,
@@ -1632,6 +1656,28 @@ async function init() {
   }
 }
 
+async function offerCliInstallation(directory: string) {
+  if (!interactive || !isNpxInvocation()) return;
+  const spin = p.spinner(spinnerStyle);
+  try {
+    await offerGlobalCliInstallation({
+      interactive, version: cliVersion, directory,
+      ui: {
+        // Optional installation requires its own answer, even with --yes.
+        // Escape declines it without cancelling the completed deployment.
+        confirm: async (message) => (await p.confirm({ message, initialValue: false })) === true,
+        start: (message) => spin.start(message),
+        stop: (message) => spin.stop(message),
+        info: (message) => p.log.info(message),
+        warn: (message) => p.log.warn(message),
+      },
+    });
+  } catch {
+    spin.stop("Optional CLI installation did not complete");
+    p.log.warn(`Harly is still running. You can continue using npx @harly/cli or install the CLI manually with npm install -g @harly/cli@${cliVersion}.`);
+  }
+}
+
 function printInstallOutro(args: {
   url: string;
   email: string;
@@ -1665,9 +1711,9 @@ function printInstallOutro(args: {
   lines.push("After setup:");
   lines.push(
     ...rows([
-      { label: accent("harly doctor"), detail: "verify the public route" },
-      { label: accent("harly backup"), detail: "write a private rollback point" },
-      { label: accent("harly update"), detail: "apply future upgrades safely" },
+      { label: accent(`${cliCommand} doctor`), detail: "verify the public route" },
+      { label: accent(`${cliCommand} backup`), detail: "write a private rollback point" },
+      { label: accent(`${cliCommand} update`), detail: "apply future upgrades safely" },
     ]).map((row) => `  ${row}`),
   );
   if (mode === "caddy") {
@@ -1850,6 +1896,39 @@ async function readConfig(directory: string): Promise<HarlyFileConfig> {
 
 type Installation = { directory: string; config: HarlyFileConfig };
 
+/** Only the installer's exact default destination is considered outside the
+ * current installation. Never scan sibling deployments or the home directory. */
+async function defaultInstallation(): Promise<Installation | null> {
+  const directory = path.resolve("harly");
+  if (!(await exists(path.join(directory, "harly.config.json")))) return null;
+  return { directory, config: await readConfig(directory) };
+}
+
+async function resumeInstallation(explicitDirectory?: string, confirmed = false) {
+  if (positionals.length > 1) throw usageError("resume accepts only one directory positional argument.");
+  const installation = explicitDirectory ?? positionals[0];
+  const directory = installation
+    ? path.resolve(installation)
+    : (await findInstallation() ?? await defaultInstallation())?.directory;
+  if (!directory) {
+    throw new CliError("No saved installation found. Pass its directory to harly resume, or run harly init first.", 2, "INVALID_CONFIGURATION");
+  }
+  for (const file of [".env", "compose.yaml"]) {
+    if (!(await exists(path.join(directory, file)))) {
+      throw new CliError(`Cannot resume: ${file} is missing from ${directory}. Restore the saved configuration before retrying.`, 2, "INVALID_CONFIGURATION");
+    }
+  }
+  if (flags.has("--dry-run")) {
+    const config = await readConfig(directory);
+    if (json) writeResult(resultOk("resume", "dry-run", { directory, url: config.publicUrl, sideEffects: false }));
+    else humanOut(`Would resume ${directory} at ${config.publicUrl}. No files or containers were changed.\n`);
+    return;
+  }
+  await launch(directory, confirmed);
+  if (!json) humanOut(`Setup secret: ${cliCommand} setup-secret ${shellQuote(directory)}\n`);
+  await offerCliInstallation(directory);
+}
+
 /** Finds only the installation that contains the caller. We intentionally never
  * scan siblings or the home directory: choosing the wrong deployment is worse
  * than asking the operator to cd into it. */
@@ -1876,17 +1955,33 @@ async function findInstallation(
 }
 
 type ServiceWaitResult = { ready: boolean; detail: string };
+const caddyReadinessTimeoutSeconds = 15 * 60;
+
+function publicReadinessDetail(error: unknown): string {
+  const cause = error instanceof Error ? error.cause : undefined;
+  const code = cause && typeof cause === "object" && "code" in cause ? String(cause.code) : "";
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "DNS lookup failed";
+  if (code === "ECONNREFUSED") return "connection refused";
+  if (code.includes("CERT") || code.includes("TLS") || code.includes("SSL")) return "TLS connection or certificate not ready";
+  if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) return "request timed out";
+  return "public endpoint not reachable";
+}
 
 /** Poll a service until it is ready. One-shot services (migrate) are ready
  * when they exit 0; long-running services are ready when their Docker
- * healthcheck reports healthy. */
+ * healthcheck reports healthy. Caddy also needs the public readiness endpoint
+ * to respond: its standard image does not expose a Docker healthcheck. */
 async function waitForService(
   cwd: string,
   service: string,
   timeoutMs: number,
+  publicUrl?: string,
+  onProgress?: (detail: string, elapsedSec: number) => void,
 ): Promise<ServiceWaitResult> {
   const isOneShot = service === "migrate";
-  const deadline = Date.now() + timeoutMs;
+  const started = Date.now();
+  const deadline = started + timeoutMs;
+  let lastDetail = "waiting for the container";
   while (Date.now() < deadline) {
     const result = run(
       "docker",
@@ -1900,6 +1995,11 @@ async function waitForService(
           const parsed = JSON.parse(stdout);
           const item = Array.isArray(parsed) ? parsed[0] : parsed;
           if (item) {
+            if (service === "caddy") {
+              lastDetail = item.State === "running"
+                ? (item.Health && item.Health !== "healthy" ? `container health: ${item.Health}` : "waiting for the public endpoint")
+                : `container state: ${item.State ?? "unknown"}`;
+            }
             if (isOneShot) {
               if (item.State === "exited" && item.ExitCode === 0) {
                 return { ready: true, detail: "applied" };
@@ -1908,7 +2008,23 @@ async function waitForService(
                 return { ready: false, detail: `exited ${item.ExitCode}` };
               }
             } else {
-              if (item.State === "running" && item.Health === "healthy") {
+              if (
+                service === "caddy" && item.State === "running" &&
+                (!item.Health || item.Health === "healthy") && publicUrl
+              ) {
+                try {
+                  const response = await fetch(`${publicUrl}/api/health/ready`, {
+                    signal: AbortSignal.timeout(Math.max(1, Math.min(5_000, deadline - Date.now()))),
+                  });
+                  await response.body?.cancel();
+                  if (response.ok) return { ready: true, detail: "HTTPS ready" };
+                  lastDetail = `public endpoint returned HTTP ${response.status}`;
+                } catch (error) {
+                  // DNS propagation and certificate issuance can take minutes.
+                  lastDetail = publicReadinessDetail(error);
+                }
+              }
+              if (service !== "caddy" && item.State === "running" && item.Health === "healthy") {
                 return { ready: true, detail: "healthy" };
               }
               if (item.State === "exited") {
@@ -1924,9 +2040,10 @@ async function waitForService(
         }
       }
     }
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    onProgress?.(lastDetail, Math.round((Date.now() - started) / 1_000));
+    await new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.min(1_000, deadline - Date.now()))));
   }
-  return { ready: false, detail: "timeout" };
+  return { ready: false, detail: service === "caddy" ? `public HTTPS timeout (${lastDetail})` : "timeout" };
 }
 
 function formatLaunchLine(
@@ -1945,6 +2062,12 @@ function formatLaunchLine(
 async function launch(explicitDirectory?: string, confirmed = false, emit = true) {
   const directory = path.resolve(explicitDirectory ?? positionals[0] ?? ".");
   const config = await readConfig(directory);
+  const timeoutOption = option(parsed, "--timeout");
+  const timeoutSeconds = timeoutOption === undefined ? undefined : Number(timeoutOption);
+  if (timeoutSeconds !== undefined && (!Number.isSafeInteger(timeoutSeconds) || timeoutSeconds <= 0 || timeoutSeconds > 86_400)) {
+    throw usageError("--timeout must be a whole number of seconds between 1 and 86400.");
+  }
+  const retryCommand = `npx @harly/cli resume ${shellQuote(directory)} --yes`;
   if (interactive && !confirmed) {
     showBrand("Launch");
     const identity = describeImage(
@@ -1968,32 +2091,47 @@ async function launch(explicitDirectory?: string, confirmed = false, emit = true
       throw new CliError("--yes is required in non-interactive mode.", 2);
     throw new CliError("Launch cancelled.", 2);
   }
-  progressStep(
-    "Validating configuration",
-    "Configuration validated",
-    () => compose(directory, ["config", "--quiet"]),
-  );
-  await pullWithProgress(directory, [], interactive);
+  try {
+    progressStep(
+      "Validating configuration",
+      "Configuration validated",
+      () => compose(directory, ["config", "--quiet"]),
+    );
+    await pullWithProgress(directory, [], interactive);
 
-  // Start the services. We poll each one ourselves instead of using
-  // `compose up --wait` so the operator can see per-service timing and which
-  // service stalled if something goes wrong.
-  compose(directory, ["up", "-d"], { allowFailure: false });
+    // Poll services ourselves to report which one stalled and its duration.
+    compose(directory, ["up", "-d"], { allowFailure: false });
+  } catch (error) {
+    throw new CliError(
+      `${error instanceof Error ? error.message : String(error)}\nConfiguration is saved at ${directory}. Retry with \`${retryCommand}\`.`,
+      1,
+      error instanceof CliError ? error.code : undefined,
+    );
+  }
 
-  const ordered = ["postgres"];
+  const ordered = ["postgres", "migrate", "app", "scheduler"];
   if (config.proxyMode === "caddy") ordered.push("caddy");
-  ordered.push("migrate", "app", "scheduler");
 
   const results: Array<{ service: string; ready: boolean; elapsedSec: number; detail: string }> = [];
   for (const service of ordered) {
     const step = interactive ? p.spinner(spinnerStyle) : null;
     const start = Date.now();
+    const serviceTimeoutSeconds = timeoutSeconds ?? (service === "caddy" ? caddyReadinessTimeoutSeconds : 90);
     if (interactive) {
-      step?.start(`Waiting for ${service}`);
+      step?.start(service === "caddy" ? `Waiting for public HTTPS (up to ${serviceTimeoutSeconds}s)` : `Waiting for ${service}`);
     } else {
       humanOut(`  … ${service}\n`);
     }
-    const result = await waitForService(directory, service, 90_000);
+    let lastProgressAt = 0;
+    const onProgress = service === "caddy" ? (detail: string, elapsedSec: number) => {
+      const message = `Caddy HTTPS: ${detail} · ${elapsedSec}s / ${serviceTimeoutSeconds}s`;
+      if (interactive) step?.message(message);
+      else if (Date.now() - lastProgressAt >= 10_000) {
+        humanOut(`  ${message}\n`);
+        lastProgressAt = Date.now();
+      }
+    } : undefined;
+    const result = await waitForService(directory, service, serviceTimeoutSeconds * 1_000, config.publicUrl, onProgress);
     const elapsedSec = (Date.now() - start) / 1000;
     if (interactive) {
       const line = formatLaunchLine(service, result.ready, result.detail, elapsedSec);
@@ -2006,15 +2144,19 @@ async function launch(explicitDirectory?: string, confirmed = false, emit = true
     results.push({ service, ready: result.ready, elapsedSec, detail: result.detail });
   }
 
-  // Public URL smoke test (best-effort; not fatal on transient TLS issues).
-  let publicOk = false;
-  try {
-    const response = await fetch(`${config.publicUrl}/api/health/ready`, {
-      signal: AbortSignal.timeout(5_000),
-    });
-    publicOk = response.ok;
-  } catch {
-    publicOk = false;
+  // Caddy already verified public readiness. Other proxy modes keep the
+  // existing best-effort public check after container readiness.
+  let publicOk = results.find((result) => result.service === "caddy")?.ready ?? false;
+  if (config.proxyMode !== "caddy") {
+    try {
+      const response = await fetch(`${config.publicUrl}/api/health/ready`, {
+        signal: AbortSignal.timeout(5_000),
+      });
+      publicOk = response.ok;
+      await response.body?.cancel();
+    } catch {
+      publicOk = false;
+    }
   }
   if (interactive) {
     p.log.message(
@@ -2040,22 +2182,26 @@ async function launch(explicitDirectory?: string, confirmed = false, emit = true
 
   const allReady = results.every((r) => r.ready);
   if (!allReady) {
+    const caddyHelp = results.some((result) => result.service === "caddy" && !result.ready)
+      ? `\nCaddy logs: cd ${shellQuote(directory)} && docker compose logs --tail=50 caddy\nCheck that DNS points to this server and TCP ports 80/443 are reachable.`
+      : "";
     throw new CliError(
       `One or more services did not become healthy:\n${results
         .filter((r) => !r.ready)
         .map((r) => `  - ${r.service}: ${r.detail}`)
-        .join("\n")}\nRun \`harly doctor ${directory}\` to inspect.`,
+        .join("\n")}\nRun \`harly doctor ${directory}\` to inspect.${caddyHelp}\nResume with \`${retryCommand}\`.`,
       1,
+      "READINESS_TIMEOUT",
     );
   }
   if (interactive && !confirmed) {
     p.log.message(
-      `${accent(config.publicUrl)}\n${soft(`Run ${accent("harly doctor")} to verify the installation.`)}`,
+      `${accent(config.publicUrl)}\n${soft(`Run ${accent(`${cliCommand} doctor`)} from ${directory} to verify the installation.`)}`,
     );
     p.outro("Harly is ready");
   } else if (!interactive) {
     if (json && emit) {
-      writeResult(resultOk("launch", "ready", {
+      writeResult(resultOk(command === "resume" || command === "init" ? command : "launch", "ready", {
         directory,
         url: config.publicUrl,
         image: config.image,
@@ -2066,9 +2212,10 @@ async function launch(explicitDirectory?: string, confirmed = false, emit = true
       }));
     }
     humanOut(
-      `Harly is ready at ${config.publicUrl}. Run \`harly doctor\` to verify.\n`,
+      `Harly is ready at ${config.publicUrl}. Run \`${cliCommand} doctor\` from ${directory} to verify.\n`,
     );
   }
+  if (command === "launch") await offerCliInstallation(directory);
 }
 
 async function runDoctorFix(directory: string, config: HarlyFileConfig) {
@@ -3227,7 +3374,7 @@ primary_region = "iad"
 }
 
 async function menu() {
-  const installation = await findInstallation();
+  const installation = await findInstallation() ?? (interactive ? await defaultInstallation() : null);
   if (!interactive) {
     if (installation) return doctor(installation.directory);
     usage();
@@ -3245,6 +3392,11 @@ async function menu() {
             hint: "Docker + automatic HTTPS",
           },
           {
+            value: "resume",
+            label: "Resume an existing installation",
+            hint: "Reuse saved configuration",
+          },
+          {
             value: "cloud",
             label: "Deploy to a managed cloud",
             hint: "Railway · Fly.io · DigitalOcean",
@@ -3254,6 +3406,14 @@ async function menu() {
       }),
     );
     if (choice === "install") return init();
+    if (choice === "resume") {
+      const directory = unwrapPrompt(await p.text({
+        message: "Installation directory",
+        initialValue: path.resolve("harly"),
+        validate: (value) => value?.trim() ? undefined : "Enter the installation directory.",
+      }));
+      return resumeInstallation(directory);
+    }
     if (choice === "cloud") return cloudSubmenu();
     usage();
     return;
@@ -3285,6 +3445,7 @@ async function menu() {
     await p.select({
       message: "Choose an action",
       options: [
+        { value: "resume", label: "Start or resume installation", hint: "Reuse saved configuration and retry startup" },
         { value: "status", label: "Status" },
         { value: "update", label: "Update Harly" },
         { value: "backup", label: "Create backup" },
@@ -3293,6 +3454,7 @@ async function menu() {
       ],
     }),
   );
+  if (choice === "resume") return resumeInstallation(installation.directory);
   if (choice === "status") return doctor(installation.directory);
   if (choice === "update") return upgrade(installation.directory);
   if (choice === "backup")
@@ -3365,6 +3527,8 @@ async function main() {
       return init();
     case "launch":
       return launch();
+    case "resume":
+      return resumeInstallation();
     case "doctor":
       return doctor();
     case "setup-secret":

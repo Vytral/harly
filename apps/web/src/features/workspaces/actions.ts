@@ -180,6 +180,8 @@ export async function updateWorkspaceBoardBrandingAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
+    // Public board branding + hero URLs render on the demo's own domain.
+    assertNotDemo();
     const context = await requirePermission("settings:edit");
     const rawBoardStyle = formData.get("boardStyle");
     const rawLogoStyle = formData.get("logoStyle");
@@ -254,6 +256,9 @@ export async function updateWorkspaceProfileAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
+    // Workspace name/logo are shared by every demo visitor; logo URLs are
+    // fetched server-side by convertAndStoreLogo.
+    assertNotDemo();
     const context = await requirePermission("settings:edit");
     const rawSidebarLogoStyle = formData.get("sidebarLogoStyle");
     const parsed = workspaceProfileSchema.safeParse({

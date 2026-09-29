@@ -45,12 +45,15 @@ describe("Automations page demo branch", () => {
     expect(listPendingWorkflowApprovals).not.toHaveBeenCalled();
 
     const markup = renderToStaticMarkup(page);
-    expect(markup).toContain("EXAMPLE 01");
-    expect(markup).toContain("EXAMPLE 02");
-    expect(markup).toContain("EXAMPLE 03");
-    expect(markup).toContain("Safe simulation, no workflow execution");
-    expect(markup).toContain("does not run either one");
+    expect(markup).toContain("Notify chat on new application");
+    expect(markup).toContain("Starter recipes");
+    expect(markup).toContain("View only");
+    expect(markup).toContain("nothing runs and editing is off");
     expect(markup).toContain("Self-host Harly");
+    // Display-only: no builder links, no toggles, no mutating controls.
+    expect(markup).not.toContain("/dashboard/automations/");
+    expect(markup).not.toContain("<button");
+    expect(markup).not.toContain('role="switch"');
     expect(markup).not.toContain("Start from scratch");
     expect(markup).not.toContain("Publish");
   });

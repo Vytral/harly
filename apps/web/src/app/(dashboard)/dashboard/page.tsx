@@ -1,3 +1,5 @@
+import { isDemoMode } from "@harly/config";
+
 import { CandidatesNeedingReview } from "@/components/dashboard/widgets/CandidatesNeedingReview";
 import { HiringPerformance } from "@/components/dashboard/widgets/HiringPerformance";
 import { InboxCard } from "@/components/dashboard/widgets/InboxCard";
@@ -49,6 +51,9 @@ export default async function DashboardPage({
   const { job } = await searchParams;
   const { user } = await getWorkspaceContext();
   const firstName = (user.name ?? "").trim().split(/\s+/)[0] || "there";
+  // The public demo is pre-configured and its settings are locked, so the
+  // setup checklist would only send visitors to screens they cannot change.
+  const demo = isDemoMode();
 
   const [inbox, interviews, pipeline, review, myTasks, performance, setup] =
     await Promise.all([
@@ -58,7 +63,7 @@ export default async function DashboardPage({
       getCandidatesNeedingReview(),
       getMyDashboardTasks(),
       getHiringPerformance(),
-      getSetupChecklist(),
+      demo ? null : getSetupChecklist(),
     ]);
 
   const overdue = inbox.filter((item) => item.dueState === "overdue").length;
@@ -81,7 +86,7 @@ export default async function DashboardPage({
       />
 
       {/* Collapsed by default, and gone entirely once setup is complete. */}
-      {setup.visible && !setup.allDone ? (
+      {setup && setup.visible && !setup.allDone ? (
         <div className="mt-5">
           <SetupChecklistCard checklist={setup} />
         </div>

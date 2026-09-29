@@ -1,7 +1,19 @@
 import type { NextConfig } from "next";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
+// The product version is the monorepo root package.json version (bumped on
+// every release), inlined at build time so client UI can show it.
+const harlyVersion = (
+  JSON.parse(
+    readFileSync(path.join(process.cwd(), "../../package.json"), "utf8"),
+  ) as { version?: string }
+).version;
+
 const nextConfig: NextConfig = {
+  env: {
+    NEXT_PUBLIC_HARLY_VERSION: harlyVersion ?? "",
+  },
   output: "standalone",
   outputFileTracingRoot: path.join(process.cwd(), "../.."),
   outputFileTracingExcludes: {

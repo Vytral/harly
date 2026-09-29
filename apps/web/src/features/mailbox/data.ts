@@ -275,7 +275,12 @@ export async function getInboxData(input: {
     searchText: row.searchText,
   }));
 
-  const selectedThread = input.threadId ? threads.find((thread) => thread.id === input.threadId) : undefined;
+  // With no explicit ?thread, preload the most recent conversation (threads are
+  // ordered by lastMessageAt desc) so the reader opens on it instead of an
+  // empty "pick a conversation" pane.
+  const selectedThread = input.threadId
+    ? threads.find((thread) => thread.id === input.threadId)
+    : threads[0];
   const selectedMessages = selectedThread
     ? await db
         .select()

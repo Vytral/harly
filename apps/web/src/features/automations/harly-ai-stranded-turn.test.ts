@@ -166,6 +166,13 @@ describe("chatErrorMessage", () => {
     expect(chatErrorMessage(" provider down ")).toBe("provider down");
   });
 
+  it("shows the { error } text from a JSON error body", () => {
+    expect(
+      chatErrorMessage(new Error('{"error":"Harly AI has reached today\'s demo limit.","reason":"demo_budget_exhausted"}')),
+    ).toBe("Harly AI has reached today's demo limit.");
+    expect(chatErrorMessage(new Error("{not json"))).toBe("{not json");
+  });
+
   it("falls back to a friendly default for unknown values", () => {
     expect(chatErrorMessage({})).toContain("temporarily unavailable");
     expect(chatErrorMessage(undefined)).toBeNull();

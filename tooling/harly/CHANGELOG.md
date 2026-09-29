@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.2 — 2026-09-27
+
+- Added `harly resume` and a guided menu action to retry startup with saved
+  configuration and secrets. The installer detects existing configuration
+  before asking for inputs again, and failures show the command to retry.
+- Caddy readiness uses the public endpoint after the app is healthy instead
+  of requiring a Docker healthcheck. Automatic HTTPS can take up to 15 minutes;
+  `launch` and `resume` accept `--timeout <seconds>` to override service waits.
+- HTTPS progress includes elapsed time and the latest connection or HTTP status.
+  A timeout includes the command to inspect Caddy logs and DNS/port guidance.
+- Successful interactive installs, launches, and resumes through npx offer to
+  install the CLI globally. This requires a separate confirmation; declining,
+  cancellation, or npm failures keep the Harly deployment successful.
+
 ## 0.5.1 — 2026-09-25
 
 ### First-install experience

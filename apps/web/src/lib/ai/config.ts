@@ -5,6 +5,8 @@ import { eq } from "drizzle-orm";
 import { db, workspaceSettings } from "@harly/db";
 
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { consumeDemoAiDailyBudget } from "./demo-budget";
+import { getDemoAiModelConfig } from "./demo";
 import { isAiProviderId, type AiModelConfig } from "./providers";
 
 export type WorkspaceAiStatus = {
@@ -44,13 +46,18 @@ export async function getWorkspaceAiStatus(
     .where(eq(workspaceSettings.organizationId, workspaceId))
     .limit(1);
 
+  const demoConfig = getDemoAiModelConfig(workspaceId);
+
   return {
-    enabled: Boolean(row?.aiEnabled),
-    provider: row?.aiProvider ?? null,
-    modelId: row?.aiModelId ?? null,
-    baseUrl: row?.aiBaseUrl ?? null,
-    hasApiKey: Boolean(row?.aiApiKeyCiphertext),
-    encryptionReady: isEncryptionConfigured(),
+    enabled: demoConfig ? true : Boolean(row?.aiEnabled),
+    provider: demoConfig ? demoConfig.provider : (row?.aiProvider ?? null),
+    modelId: demoConfig ? demoConfig.modelId : (row?.aiModelId ?? null),
+    baseUrl: demoConfig ? null : (row?.aiBaseUrl ?? null),
+    hasApiKey: demoConfig ? true : Boolean(row?.aiApiKeyCiphertext),
+    encryptionReady: demoConfig ? true : isEncryptionConfigured(),
+    // Background automations (auto-score on apply, duplicate checks) stay as
+    // the workspace has them; the demo seed keeps them off so public applies
+    // on the demo board can't spend the platform key.
     autoScore: Boolean(row?.aiAutoScore),
     duplicateCheck: Boolean(row?.aiDuplicateCheck),
     resumeAnonymization: Boolean(row?.aiResumeAnonymization),
@@ -63,7 +70,24 @@ export async function getWorkspaceAiStatus(
  */
 export async function getWorkspaceAiConfig(
   workspaceId: string,
+  options: {
+    /**
+     * Spend one slot of the demo's daily budget as part of resolving. Callers
+     * that validate the request first (the chat route) pass false and spend it
+     * themselves right before calling the provider.
+     */
+    consumeDemoBudget?: boolean;
+  } = {},
 ): Promise<AiModelConfig | null> {
+  // Public demo: the reseed wipes the stored key, so AI comes from env. Each
+  // AI operation spends one slot of the instance-wide daily budget; once it
+  // runs out every surface falls back to its non-AI path until the window resets.
+  const demoConfig = getDemoAiModelConfig(workspaceId);
+  if (demoConfig) {
+    if (options.consumeDemoBudget === false) return demoConfig;
+    return (await consumeDemoAiDailyBudget()) ? demoConfig : null;
+  }
+
   if (!isEncryptionConfigured()) {
     return null;
   }

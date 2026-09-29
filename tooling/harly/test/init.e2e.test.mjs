@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -305,6 +305,168 @@ function runCli(args, options) {
     child.on("close", (status) => resolve({ status, stdout, stderr }));
   });
 }
+
+async function resumeFixture(t, { failures = 0, caddyState = { State: "running", Health: "" } } = {}) {
+  const parent = await realpath(await mkdtemp(path.join(os.tmpdir(), "harly-resume-e2e-")));
+  const directory = path.join(parent, "harly");
+  const bin = path.join(parent, "bin");
+  const calls = path.join(parent, "docker.calls");
+  await mkdir(directory);
+  await mkdir(bin);
+  const requests = [];
+  const server = createHttpServer((request, response) => {
+    requests.push(request.url);
+    response.writeHead(requests.length <= failures ? 503 : 200);
+    response.end("ready");
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", resolve);
+  });
+  t.after(async () => {
+    await new Promise((resolve) => server.close(resolve));
+    await rm(parent, { recursive: true, force: true });
+  });
+  const url = `http://127.0.0.1:${server.address().port}`;
+  const files = {
+    "harly.config.json": JSON.stringify({
+      version: 1, proxyMode: "caddy", publicUrl: url,
+      image: "ghcr.io/vytral/harly:0.2.0", organizationName: "Saved organization",
+      initialAdminEmail: "saved@example.com", storage: "local", resourceProfile: "standard",
+    }),
+    ".env": 'HARLY_SETUP_SECRET="saved-secret"\nPOSTGRES_PASSWORD="saved-password"\n',
+    "compose.yaml": "# Saved operator configuration\nservices: {}\n",
+    "Caddyfile": "# Saved operator proxy configuration\n",
+  };
+  for (const [name, contents] of Object.entries(files)) {
+    await writeFile(path.join(directory, name), contents, { mode: 0o600 });
+  }
+  await writeFile(path.join(bin, "docker"), `#!/bin/sh
+printf '%s|%s\\n' "$PWD" "$*" >> "$HARLY_TEST_DOCKER_CALLS"
+if [ "$1 $2" = "compose up" ] && [ "$HARLY_TEST_UP_FAILURE" = "1" ]; then
+  echo 'simulated startup failure' >&2
+  exit 1
+fi
+if [ "$1 $2" = "compose ps" ]; then
+  case "$6" in
+    migrate) echo '{"State":"exited","ExitCode":0}' ;;
+    caddy) printf '%s\\n' "$HARLY_TEST_CADDY_STATE" ;;
+    *) echo '{"State":"running","Health":"healthy"}' ;;
+  esac
+fi
+exit 0
+`);
+  await chmod(path.join(bin, "docker"), 0o755);
+  async function run(args, extra = {}) {
+    return runCli(args, {
+      cwd: extra.cwd ?? parent, timeout: 8_000,
+      env: {
+        ...process.env, PATH: `${bin}:${process.env.PATH}`,
+        HARLY_TEST_DOCKER_CALLS: calls,
+        HARLY_TEST_CADDY_STATE: JSON.stringify(caddyState),
+        HARLY_TEST_UP_FAILURE: extra.failUp ? "1" : "0",
+      },
+    });
+  }
+  async function assertUnchanged() {
+    for (const [name, contents] of Object.entries(files)) {
+      assert.equal(await readFile(path.join(directory, name), "utf8"), contents);
+    }
+    assert.equal((await stat(path.join(directory, ".env"))).mode & 0o777, 0o600);
+  }
+  return { parent, directory, calls, requests, run, assertUnchanged };
+}
+
+test("resume finds the default installation, preserves files, and waits for Caddy public readiness without a healthcheck", async (t) => {
+  const fixture = await resumeFixture(t, { failures: 1 });
+  const result = await fixture.run(["resume", "--yes", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.command, "resume");
+  assert.equal(report.status, "ready");
+  assert.equal(report.directory, fixture.directory);
+  assert.equal(report.services.caddy, "ready");
+  assert.deepEqual(fixture.requests, ["/api/health/ready", "/api/health/ready"]);
+  assert.match(result.stderr, /Caddy HTTPS: public endpoint returned HTTP 503/);
+  const calls = await readFile(fixture.calls, "utf8");
+  assert.ok(calls.indexOf("json scheduler") < calls.indexOf("json caddy"));
+  assert.ok(calls.split("\n").filter(Boolean).every((line) => line.startsWith(`${fixture.directory}|`)));
+  await fixture.assertUnchanged();
+});
+
+test("init --launch reuses existing configuration without asking for inputs", async (t) => {
+  const fixture = await resumeFixture(t);
+  const result = await fixture.run(["init", fixture.directory, "--launch", "--yes", "--json"]);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.equal(JSON.parse(result.stdout).command, "init");
+  await fixture.assertUnchanged();
+});
+
+test("resume failure provides a recovery command and a retry preserves the installation", async (t) => {
+  const fixture = await resumeFixture(t);
+  const failed = await fixture.run(["resume", "--yes"], { failUp: true });
+  assert.equal(failed.status, 1, failed.stderr || failed.stdout);
+  assert.match(failed.stderr, /simulated startup failure/);
+  assert.match(failed.stderr, /npx @harly\/cli resume .* --yes/);
+  await fixture.assertUnchanged();
+  const retry = await fixture.run(["resume", "--yes"]);
+  assert.equal(retry.status, 0, retry.stderr || retry.stdout);
+  await fixture.assertUnchanged();
+});
+
+test("Caddy running alone does not mean readiness when the public endpoint remains unavailable", async (t) => {
+  const fixture = await resumeFixture(t, { failures: Infinity });
+  const result = await fixture.run(["resume", "--yes", "--json", "--timeout", "1"]);
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.error.code, "READINESS_TIMEOUT");
+  assert.match(report.error.message, /caddy: public HTTPS timeout/);
+  assert.match(report.error.message, /HTTP 503/);
+  assert.match(report.error.message, /docker compose logs --tail=50 caddy/);
+  assert.match(report.error.message, /resume .* --yes/);
+  assert.ok(fixture.requests.length > 0);
+  await fixture.assertUnchanged();
+});
+
+test("Caddy that exits fails even when the public URL responds", async (t) => {
+  const fixture = await resumeFixture(t, { caddyState: { State: "exited", ExitCode: 1 } });
+  const result = await fixture.run(["resume", "--yes", "--json", "--timeout", "1"]);
+  assert.equal(result.status, 1, result.stderr || result.stdout);
+  assert.match(JSON.parse(result.stdout).error.message, /caddy: exited 1/);
+  assert.equal(fixture.requests.length, 0);
+});
+
+test("resume dry-run resolves an enclosing installation without touching Docker", async (t) => {
+  const fixture = await resumeFixture(t);
+  const nested = path.join(fixture.directory, "nested");
+  await mkdir(nested);
+  const result = await fixture.run(["resume", "--dry-run", "--json"], { cwd: nested });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.directory, fixture.directory);
+  assert.equal(report.sideEffects, false);
+  await assert.rejects(stat(fixture.calls), { code: "ENOENT" });
+  await fixture.assertUnchanged();
+});
+
+test("resume rejects missing saved secrets before starting containers", async (t) => {
+  const fixture = await resumeFixture(t);
+  await rm(path.join(fixture.directory, ".env"));
+  const result = await fixture.run(["resume", "--yes", "--json"]);
+  assert.equal(result.status, 2, result.stderr || result.stdout);
+  assert.match(JSON.parse(result.stdout).error.message, /\.env is missing/);
+  await assert.rejects(stat(fixture.calls), { code: "ENOENT" });
+});
+
+test("resume rejects invalid timeouts before starting containers", async (t) => {
+  const fixture = await resumeFixture(t);
+  for (const timeout of ["0", "NaN", "1.5", "86401"]) {
+    const result = await fixture.run(["resume", "--yes", "--json", "--timeout", timeout]);
+    assert.equal(result.status, 2, result.stderr || result.stdout);
+    assert.equal(JSON.parse(result.stdout).error.code, "INVALID_ARGUMENT");
+  }
+  await assert.rejects(stat(fixture.calls), { code: "ENOENT" });
+});
 
 async function writeInstall(directory, image) {
   await writeFile(path.join(directory, "harly.config.json"), JSON.stringify({

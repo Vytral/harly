@@ -8,6 +8,7 @@ import { z } from "zod";
 import { db, organization, passkeys, user as userTable, workspaceSettings } from "@harly/db";
 
 import { auth } from "@/lib/auth";
+import { assertNotDemo } from "@/features/demo/assert-not-demo";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { mustSetUp2fa } from "@/lib/two-factor";
@@ -64,6 +65,7 @@ export async function saveOnboardingBrandingAction(input: {
   primaryColor?: string;
 }): Promise<OnboardingResult> {
   try {
+    assertNotDemo();
     const { organization: org } = await requirePermission("settings:edit");
     const parsed = brandingSchema.safeParse(input);
     if (!parsed.success) {
@@ -104,6 +106,7 @@ export async function saveUserRoleAction(
   jobTitle: string,
 ): Promise<OnboardingResult> {
   try {
+    assertNotDemo();
     const parsed = z.string().trim().min(1).max(80).safeParse(jobTitle);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
@@ -139,6 +142,7 @@ export async function saveOnboardingAvatarAction(
   imageUrl: string | null,
 ): Promise<OnboardingResult> {
   try {
+    assertNotDemo();
     const parsed = avatarSchema.safeParse(imageUrl ?? undefined);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
@@ -176,6 +180,7 @@ export async function saveOnboardingAboutAction(input: {
   source?: string;
 }): Promise<OnboardingResult> {
   try {
+    assertNotDemo();
     const parsed = aboutSchema.safeParse(input);
     if (!parsed.success) {
       return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid." };
@@ -207,6 +212,7 @@ export async function setRequire2faAction(
   require2fa: boolean,
 ): Promise<OnboardingResult> {
   try {
+    assertNotDemo();
     const { organization, user } = await requirePermission("security:manage");
     await patchWorkspaceSettings(organization.id, { require2fa });
     await logAuditEvent({

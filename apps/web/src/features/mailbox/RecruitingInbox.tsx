@@ -186,9 +186,9 @@ function InboxCommandBar({
   );
 }
 
-function InboxEmptyState({ status, filter }: { status: InboxMailboxStatus; filter: InboxFilter }) {
+function InboxEmptyState({ status, filter, demoMode = false }: { status: InboxMailboxStatus; filter: InboxFilter; demoMode?: boolean }) {
   const isFiltered = filter !== "all";
-  const isConnected = status.enabled && status.configured && status.route !== "conflict";
+  const isConnected = demoMode || (status.enabled && status.configured && status.route !== "conflict");
 
   if (isFiltered) {
     return (
@@ -266,6 +266,7 @@ export function RecruitingInbox({
   applications,
   mailboxStatus,
   currentUserId,
+  demoMode = false,
 }: {
   threads: InboxThread[];
   messages: Record<string, InboxMessage[]>;
@@ -278,6 +279,8 @@ export function RecruitingInbox({
   applications: InboxApplication[];
   mailboxStatus: InboxMailboxStatus;
   currentUserId: string;
+  /** Public demo: email is intentionally unwired, so hide "not connected" setup nudges. */
+  demoMode?: boolean;
 }) {
   const router = useRouter();
   const [filter, setFilter] = useState<InboxFilter>(initialFilter ?? "all");
@@ -318,7 +321,7 @@ export function RecruitingInbox({
   }
 
   const connectionActive = mailboxStatus.enabled && mailboxStatus.configured && mailboxStatus.route !== "conflict";
-  const showConnectionStrip = !connectionActive && threads.length > 0;
+  const showConnectionStrip = !demoMode && !connectionActive && threads.length > 0;
 
   const counts = useMemo(() => {
     const record = {} as Record<InboxFilter, number>;
@@ -390,6 +393,12 @@ export function RecruitingInbox({
   }
 
   function handleSelectPerson(person: InboxPerson) {
+    // Most people have a single conversation; skip the one-row list and open it.
+    const onlyThreads = searched.filter((item) => personKey(item) === person.key);
+    if (onlyThreads.length === 1) {
+      handleSelectThread(onlyThreads[0]);
+      return;
+    }
     setSelectedPersonKey(person.key);
     setActiveThreadId(undefined);
     setMobileView("conversations");
@@ -484,7 +493,7 @@ export function RecruitingInbox({
       {showConnectionStrip ? <ConnectionStrip status={mailboxStatus} /> : null}
 
       {!threads.length ? (
-        <InboxEmptyState status={mailboxStatus} filter={filter} />
+        <InboxEmptyState status={mailboxStatus} filter={filter} demoMode={demoMode} />
       ) : (
         <div className="relative flex min-h-0 flex-1 overflow-hidden">
           <div className={cn("min-h-0 shrink-0 border-r border-border/70 bg-card", mobileView === "people" ? "block w-full lg:w-[280px]" : "hidden lg:block lg:w-[280px]")}>
@@ -499,6 +508,7 @@ export function RecruitingInbox({
                 messages={threadMessages}
                 isPending={pending}
                 canReply={mailboxStatus.canReply}
+                hideSendingNotice={demoMode}
                 suggestedReply={suggestedReply?.threadId === thread.id ? suggestedReply.body : null}
                 onBack={handleBackToThreads}
                 onMarkRead={handleMarkRead}

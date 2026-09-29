@@ -1,3 +1,5 @@
+import { isDemoMode } from "@harly/config";
+
 import { RecruitingInbox } from "@/features/mailbox/RecruitingInbox";
 import { getInboxData, normalizeInboxFilter } from "@/features/mailbox/data";
 
@@ -30,6 +32,7 @@ export default async function InboxPage({ searchParams }: InboxPageProps) {
       applications={applications}
       mailboxStatus={mailboxStatus}
       currentUserId={currentUserId}
+      demoMode={isDemoMode()}
     />
   );
 }

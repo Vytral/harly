@@ -1,6 +1,6 @@
 ---
 title: "Deploy with the Harly CLI"
-description: "Install, deploy, upgrade, and automate a self-hosted Harly instance from the terminal using the @harly/cli v0.5.1 command reference."
+description: "Install, deploy, upgrade, and automate a self-hosted Harly instance from the terminal using the @harly/cli v0.5.2 command reference."
 ---
 
 The Harly CLI installs and operates a self-hosted Harly deployment. It
@@ -55,7 +55,7 @@ The installer then:
 4. Generates independent runtime secrets and protects `.env` with mode `0600`.
 5. Optionally pulls images and launches the services.
 6. Waits for PostgreSQL, migrations, the web app, the scheduler, and Caddy.
-7. Checks `/api/health/ready` and reports `Harly is ready` only after it succeeds.
+7. Checks `/api/health/ready`. Automatic HTTPS requires a successful public response before reporting `Harly is ready`.
 
 ### Generate configuration without launching
 
@@ -74,6 +74,42 @@ npx @harly/cli launch ./harly --yes
 ```
 
 To do both steps in one command, add `--launch` to `init`.
+
+### Resume an interrupted installation
+
+After configuration has been saved, use **Start or resume installation** in the
+guided menu or run:
+
+```bash
+npx @harly/cli resume ./harly --yes
+```
+
+This reuses the saved answers and secrets, validates configuration, pulls any
+missing images, and reconciles existing containers. Resolve the reported error
+before retrying. Without a directory, `resume` checks the current installation
+and then the exact `./harly` default. You can preview the target with `--dry-run`.
+
+Caddy is checked after the application is ready. It waits up to 15 minutes for
+the public readiness endpoint to succeed, allowing time for DNS and automatic
+HTTPS. Other services wait up to 90 seconds each. To change the per-service
+timeout for `launch` or `resume`, add `--timeout <seconds>`.
+The CLI reports elapsed time and the latest connection or HTTP status while
+waiting. On timeout, it shows how to inspect Caddy's logs and retry.
+
+### Install the CLI globally
+
+After a successful interactive install, launch, or resume using npx, the CLI
+offers to install its current version globally. If accepted, you can run
+`harly doctor`, `harly backup`, and other commands from the installation
+directory. Existing global installations are detected before prompting.
+
+This optional step requires its own confirmation, even with `--yes`. Declining,
+cancelling the prompt, or an npm permissions error keeps the deployment
+successful. If npm's global bin directory is outside your PATH, the CLI tells
+you which directory to add. You can always keep using `npx @harly/cli`.
+
+`harly update` upgrades the application. Upgrade the global CLI separately with
+`npm install -g @harly/cli@latest`.
 
 ## Configure installer inputs
 

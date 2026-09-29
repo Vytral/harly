@@ -1,12 +1,15 @@
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "@harly/api";
 
-const mocks = vi.hoisted(() => ({ transactionImpl: vi.fn() }));
+const mocks = vi.hoisted(() => ({ returning: vi.fn() }));
 
 vi.mock("@harly/db", () => ({
   db: {
-    transaction: (fn: (tx: unknown) => Promise<unknown>) =>
-      mocks.transactionImpl(fn),
+    insert: () => ({
+      values: () => ({
+        onConflictDoUpdate: () => ({ returning: mocks.returning }),
+      }),
+    }),
   },
   rateLimitBuckets: {},
 }));
@@ -58,35 +61,23 @@ describe("enforceRateLimit pluggable store", () => {
 });
 
 describe("DatabaseStore rate limiting (shared, multi-instance)", () => {
-  function makeTx(initialRow: unknown[] | null) {
-    return {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            for: () => ({ limit: async () => initialRow }),
-          }),
-        }),
-      }),
-      insert: () => ({
-        values: () => ({ onConflictDoUpdate: async () => ({}) }),
-      }),
-      update: () => ({ set: () => ({ where: async () => ({}) }) }),
-    };
-  }
-
-  it("creates a fresh bucket when none exists and allows the request", async () => {
-    mocks.transactionImpl.mockImplementation(
-      async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx([])),
-    );
+  // The atomic upsert itself is covered against Postgres in
+  // ratelimit.database.integration.test.ts; this checks the admit/reject logic.
+  it("admits a hit while the upserted count is within the limit", async () => {
+    mocks.returning.mockResolvedValue([{ count: 1, resetAt: new Date(Date.now() + 60_000) }]);
     const result = await new DatabaseStore().consume("db-key", 5, 60_000);
     expect(result.remaining).toBe(4);
   });
 
-  it("rejects when the shared bucket is already exhausted", async () => {
-    const row = { count: 5, resetAt: new Date(Date.now() + 60_000) };
-    mocks.transactionImpl.mockImplementation(
-      async (fn: (tx: unknown) => Promise<unknown>) => fn(makeTx([row])),
-    );
+  it("admits the last slot exactly at the limit", async () => {
+    mocks.returning.mockResolvedValue([{ count: 5, resetAt: new Date(Date.now() + 60_000) }]);
+    await expect(new DatabaseStore().consume("db-key", 5, 60_000)).resolves.toMatchObject({
+      remaining: 0,
+    });
+  });
+
+  it("rejects once the upserted count passes the limit", async () => {
+    mocks.returning.mockResolvedValue([{ count: 6, resetAt: new Date(Date.now() + 60_000) }]);
     await expect(
       new DatabaseStore().consume("db-key", 5, 60_000),
     ).rejects.toThrow(ApiError);

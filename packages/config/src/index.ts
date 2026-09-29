@@ -89,6 +89,17 @@ const envSchema = z
     // server-side. Independent of any per-workspace captcha config.
     NEXT_PUBLIC_TURNSTILE_SITE_KEY: optionalString,
     TURNSTILE_SECRET_KEY: optionalString,
+    // Optional platform OpenAI key for the public demo's Harly AI. Only read
+    // when DEMO_MODE=true; the reseed wipes any key stored on the workspace, so
+    // the demo resolves AI from env instead. Put a hard spend cap on the key's
+    // OpenAI project: the app-side limits below are a second line of defense.
+    DEMO_AI_API_KEY: optionalString,
+    DEMO_AI_MODEL: optionalString,
+    // Instance-wide daily ceiling on demo AI requests across every visitor.
+    DEMO_AI_DAILY_REQUEST_LIMIT: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      z.coerce.number().int().min(0).max(100_000).optional(),
+    ),
   })
   .superRefine((env, ctx) => {
     const url = env.HARLY_URL ?? env.NEXT_PUBLIC_APP_URL ?? env.BETTER_AUTH_URL;
@@ -302,6 +313,37 @@ export function demoWorkspaceId(
 ): string | null {
   const value = source.DEMO_WORKSPACE_ID?.trim();
   return value ? value : null;
+}
+
+export const DEMO_AI_DEFAULT_MODEL = "gpt-6-luna";
+export const DEMO_AI_DEFAULT_DAILY_REQUEST_LIMIT = 300;
+
+export type DemoAiSettings = {
+  apiKey: string;
+  modelId: string;
+  dailyRequestLimit: number;
+};
+
+/**
+ * Platform-funded Harly AI for the public demo. Returns null unless
+ * DEMO_MODE=true AND DEMO_AI_API_KEY is set, so a normal installation can
+ * never pick up this key by accident.
+ */
+export function demoAiSettings(
+  source: Record<string, string | undefined> = process.env,
+): DemoAiSettings | null {
+  if (!isDemoMode(source)) return null;
+  const apiKey = source.DEMO_AI_API_KEY?.trim();
+  if (!apiKey) return null;
+  const rawLimit = Number(source.DEMO_AI_DAILY_REQUEST_LIMIT?.trim() || NaN);
+  return {
+    apiKey,
+    modelId: source.DEMO_AI_MODEL?.trim() || DEMO_AI_DEFAULT_MODEL,
+    dailyRequestLimit:
+      Number.isInteger(rawLimit) && rawLimit >= 0
+        ? rawLimit
+        : DEMO_AI_DEFAULT_DAILY_REQUEST_LIMIT,
+  };
 }
 
 export async function validateRuntimeFilesystem(

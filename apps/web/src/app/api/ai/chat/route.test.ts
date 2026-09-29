@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getWorkspaceContextOrNull: vi.fn(),
@@ -43,7 +43,11 @@ vi.mock("@/lib/ai/agent/system-prompt", () => ({
 vi.mock("@/lib/ai/agent/workspace-knowledge", () => ({
   getWorkspaceKnowledge: mocks.getWorkspaceKnowledge,
 }));
-vi.mock("@/server/api/ratelimit", () => ({ enforceRateLimit: mocks.enforceRateLimit }));
+vi.mock("@/server/api/ratelimit", () => ({
+  enforceRateLimit: mocks.enforceRateLimit,
+  enforcePersistentRateLimit: mocks.enforceRateLimit,
+  clientIp: () => "203.0.113.7",
+}));
 vi.mock("@/lib/ai/usage", () => ({ recordAiUsage: mocks.recordAiUsage }));
 vi.mock("@/features/ai-chat/data", () => ({ persistConversation: mocks.persistConversation }));
 vi.mock("@/lib/ai/agent/tool-routing", () => ({
@@ -326,5 +330,109 @@ describe("POST /api/ai/chat", () => {
       ],
       tools: { lookup: { execute: expect.any(Function) } },
     });
+  });
+});
+
+
+describe("POST /api/ai/chat in the public demo", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    process.env.DEMO_MODE = "true";
+    process.env.DEMO_AI_API_KEY = "sk-test-demo";
+    mocks.getWorkspaceContextOrNull.mockResolvedValue(context);
+    mocks.requirePermission.mockResolvedValue(context);
+    mocks.getRolePolicy.mockResolvedValue({
+      scope: { jobAccess: "all", departments: [], regions: [] },
+    });
+    mocks.getWorkspaceAiConfig.mockResolvedValue(config);
+    mocks.getModel.mockReturnValue("model");
+    mocks.buildHarlyTools.mockReturnValue({
+      lookup: { execute: vi.fn() },
+      sendCandidateEmail: {},
+      applyAutomationProposal: {},
+    });
+    mocks.buildHarlySystemPrompt.mockReturnValue("system");
+    mocks.getWorkspaceKnowledge.mockResolvedValue(null);
+    mocks.validateUIMessages.mockResolvedValue([message]);
+    mocks.convertToModelMessages.mockResolvedValue([{ role: "user", content: "Hello" }]);
+    mocks.enforceRateLimit.mockResolvedValue({ remaining: 1, resetAt: Date.now() + 60_000 });
+    mocks.resolveActiveToolGroups.mockReturnValue(new Set(["general"]));
+    mocks.selectActiveToolNames.mockReturnValue(undefined);
+    mocks.shouldWidenForStep.mockReturnValue(false);
+    mocks.streamText.mockReturnValue({
+      totalUsage: Promise.resolve({ inputTokens: 1, outputTokens: 1 }),
+      toUIMessageStreamResponse: vi.fn(() => new Response("stream")),
+    });
+  });
+
+  afterEach(() => {
+    delete process.env.DEMO_MODE;
+    delete process.env.DEMO_AI_API_KEY;
+  });
+
+  it("enforces a per-IP budget before spending the daily AI budget", async () => {
+    mocks.enforceRateLimit.mockImplementation(async (key: string) => {
+      if (key.startsWith("demo-ai:chat:ip:")) throw new Error("limited");
+      return { remaining: 1 };
+    });
+
+    const response = await POST(request({ messages: [message] }));
+
+    expect(response.status).toBe(429);
+    expect(mocks.enforceRateLimit).toHaveBeenCalledWith(
+      "demo-ai:chat:ip:min:203.0.113.7",
+      expect.objectContaining({ limit: 6 }),
+    );
+    expect(mocks.getWorkspaceAiConfig).not.toHaveBeenCalled();
+  });
+
+  it("resolves demo config without spending the daily budget up front", async () => {
+    await POST(request({ messages: [message] }));
+
+    expect(mocks.getWorkspaceAiConfig).toHaveBeenCalledWith("workspace-1", {
+      consumeDemoBudget: false,
+    });
+  });
+
+  it("spends the daily budget only after validation and the per-user limits", async () => {
+    mocks.validateUIMessages.mockRejectedValue(new Error("bad"));
+
+    const invalid = await POST(request({ messages: [message] }));
+
+    expect(invalid.status).toBe(400);
+    expect(mocks.enforceRateLimit).not.toHaveBeenCalledWith("demo-ai:daily", expect.anything());
+  });
+
+  it("reports an exhausted demo budget instead of pointing visitors to Settings", async () => {
+    mocks.enforceRateLimit.mockImplementation(async (key: string) => {
+      if (key === "demo-ai:daily") throw new Error("limited");
+      return { remaining: 1 };
+    });
+
+    const response = await POST(request({ messages: [message] }));
+
+    expect(response.status).toBe(429);
+    await expect(response.json()).resolves.toMatchObject({ reason: "demo_budget_exhausted" });
+    expect(mocks.streamText).not.toHaveBeenCalled();
+  });
+
+  it("says demo AI is unavailable when no demo key is configured", async () => {
+    mocks.getWorkspaceAiConfig.mockResolvedValue(null);
+
+    const response = await POST(request({ messages: [message] }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ reason: "demo_ai_unavailable" });
+  });
+
+  it("strips blocked tools and tightens step/output budgets", async () => {
+    const response = await POST(request({ messages: [message] }));
+
+    expect(response.status).toBe(200);
+    const options = mocks.streamText.mock.calls[0][0];
+    expect(Object.keys(options.tools)).toEqual(["lookup"]);
+    expect(options.stopWhen).toEqual({ count: 6 });
+    expect(options.maxOutputTokens).toBe(1_536);
+    expect(options.system).toContain("## Public demo");
   });
 });
