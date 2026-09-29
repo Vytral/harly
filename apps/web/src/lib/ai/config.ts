@@ -70,12 +70,21 @@ export async function getWorkspaceAiStatus(
  */
 export async function getWorkspaceAiConfig(
   workspaceId: string,
+  options: {
+    /**
+     * Spend one slot of the demo's daily budget as part of resolving. Callers
+     * that validate the request first (the chat route) pass false and spend it
+     * themselves right before calling the provider.
+     */
+    consumeDemoBudget?: boolean;
+  } = {},
 ): Promise<AiModelConfig | null> {
   // Public demo: the reseed wipes the stored key, so AI comes from env. Each
-  // resolution spends one slot of the instance-wide daily budget; once it runs
-  // out every surface falls back to its non-AI path until the window resets.
+  // AI operation spends one slot of the instance-wide daily budget; once it
+  // runs out every surface falls back to its non-AI path until the window resets.
   const demoConfig = getDemoAiModelConfig(workspaceId);
   if (demoConfig) {
+    if (options.consumeDemoBudget === false) return demoConfig;
     return (await consumeDemoAiDailyBudget()) ? demoConfig : null;
   }
 

@@ -1,9 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { cookies } from "next/headers";
 import { z } from "zod";
 
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
-import { PORTAL_SESSION_COOKIE, resolvePortalSession } from "@/lib/portal-auth";
 import { UnsupportedImageError } from "@/lib/image-normalization";
 import {
   normalizeStoredWorkspaceImage,
@@ -18,6 +16,14 @@ const requestSchema = z.object({
   mode: z.enum(["logo", "image"]),
 });
 
+/**
+ * Normalize an image a workspace member just uploaded, replacing the original.
+ *
+ * Workspace sessions only. Candidate portal sessions are not accepted: their
+ * uploads share the workspace image area (so a portal caller could name a
+ * workspace logo), and candidate erasure tracks recorded avatar URLs, not the
+ * upload key, so a retained original would escape erasure.
+ */
 export async function POST(request: NextRequest) {
   await enforceRateLimit(`storage:image-normalize:${clientIp(request)}`, {
     limit: 20,
@@ -31,19 +37,8 @@ export async function POST(request: NextRequest) {
 
   const context = await getWorkspaceContextOrNull();
   const keyWorkspaceId = parsed.data.key.match(/^workspaces\/([^/]+)\/images\//)?.[1];
-  const appWorkspaceId = context?.organization.id;
-  let portalSession: Awaited<ReturnType<typeof resolvePortalSession>> = null;
-  if (!appWorkspaceId || keyWorkspaceId !== appWorkspaceId) {
-    const portalToken = (await cookies()).get(PORTAL_SESSION_COOKIE)?.value;
-    if (portalToken) portalSession = await resolvePortalSession(portalToken);
-  }
-  const workspaceId =
-    appWorkspaceId === keyWorkspaceId
-      ? appWorkspaceId
-      : portalSession?.workspaceId === keyWorkspaceId
-        ? (portalSession?.workspaceId ?? null)
-        : null;
-  if (!workspaceId) {
+  const workspaceId = context?.organization.id;
+  if (!workspaceId || keyWorkspaceId !== workspaceId) {
     return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   }
 
@@ -51,9 +46,7 @@ export async function POST(request: NextRequest) {
     const result = await normalizeStoredWorkspaceImage({
       workspaceId,
       ...parsed.data,
-      // A portal (candidate) session may normalize its own upload but must not
-      // be able to delete workspace assets it merely knows the key of.
-      deleteSource: workspaceId === appWorkspaceId,
+      deleteSource: true,
     });
     return NextResponse.json(result);
   } catch (error) {

@@ -36,7 +36,7 @@ import {
   withDemoSystemNote,
   withoutDemoBlockedTools,
 } from "@/lib/ai/demo";
-import { enforceDemoChatIpLimits } from "@/lib/ai/demo-budget";
+import { consumeDemoAiDailyBudget, enforceDemoChatIpLimits } from "@/lib/ai/demo-budget";
 import { clientIp, enforceRateLimit } from "@/server/api/ratelimit";
 import { isDemoMode } from "@harly/config";
 
@@ -304,16 +304,20 @@ export async function POST(req: Request) {
     }
   }
 
-  const config = await getWorkspaceAiConfig(context.organization.id);
+  const config = await getWorkspaceAiConfig(context.organization.id, {
+    // Demo: spend the daily budget only once the request is known to be valid
+    // and within the per-workspace/per-user limits (just before the provider).
+    consumeDemoBudget: false,
+  });
   if (!config && isDemoMode()) {
-    // Demo AI is env-backed; a null config here means the daily budget ran out
-    // (or no demo key is set), not that the visitor should open Settings.
+    // Demo AI is env-backed; a null config means no demo key is set, not that
+    // the visitor should open Settings.
     return Response.json(
       {
-        error: "Harly AI has reached today's demo limit. Try again tomorrow.",
-        reason: "demo_budget_exhausted",
+        error: "Harly AI isn't available in this demo right now.",
+        reason: "demo_ai_unavailable",
       },
-      { status: 429 },
+      { status: 503 },
     );
   }
   if (!config) {
@@ -409,6 +413,18 @@ export async function POST(req: Request) {
   } catch {
     return Response.json(
       { error: "Rate limit exceeded. Slow down and try again shortly." },
+      { status: 429 },
+    );
+  }
+
+  // Public demo: one slot of the instance-wide daily budget per chat turn,
+  // spent only now that the request has passed every other check.
+  if (demo && !(await consumeDemoAiDailyBudget())) {
+    return Response.json(
+      {
+        error: "Harly AI has reached today's demo limit. Try again tomorrow.",
+        reason: "demo_budget_exhausted",
+      },
       { status: 429 },
     );
   }

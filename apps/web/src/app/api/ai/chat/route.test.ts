@@ -338,6 +338,7 @@ describe("POST /api/ai/chat in the public demo", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.DEMO_MODE = "true";
+    process.env.DEMO_AI_API_KEY = "sk-test-demo";
     mocks.getWorkspaceContextOrNull.mockResolvedValue(context);
     mocks.requirePermission.mockResolvedValue(context);
     mocks.getRolePolicy.mockResolvedValue({
@@ -366,6 +367,7 @@ describe("POST /api/ai/chat in the public demo", () => {
 
   afterEach(() => {
     delete process.env.DEMO_MODE;
+    delete process.env.DEMO_AI_API_KEY;
   });
 
   it("enforces a per-IP budget before spending the daily AI budget", async () => {
@@ -384,13 +386,43 @@ describe("POST /api/ai/chat in the public demo", () => {
     expect(mocks.getWorkspaceAiConfig).not.toHaveBeenCalled();
   });
 
+  it("resolves demo config without spending the daily budget up front", async () => {
+    await POST(request({ messages: [message] }));
+
+    expect(mocks.getWorkspaceAiConfig).toHaveBeenCalledWith("workspace-1", {
+      consumeDemoBudget: false,
+    });
+  });
+
+  it("spends the daily budget only after validation and the per-user limits", async () => {
+    mocks.validateUIMessages.mockRejectedValue(new Error("bad"));
+
+    const invalid = await POST(request({ messages: [message] }));
+
+    expect(invalid.status).toBe(400);
+    expect(mocks.enforceRateLimit).not.toHaveBeenCalledWith("demo-ai:daily", expect.anything());
+  });
+
   it("reports an exhausted demo budget instead of pointing visitors to Settings", async () => {
-    mocks.getWorkspaceAiConfig.mockResolvedValue(null);
+    mocks.enforceRateLimit.mockImplementation(async (key: string) => {
+      if (key === "demo-ai:daily") throw new Error("limited");
+      return { remaining: 1 };
+    });
 
     const response = await POST(request({ messages: [message] }));
 
     expect(response.status).toBe(429);
     await expect(response.json()).resolves.toMatchObject({ reason: "demo_budget_exhausted" });
+    expect(mocks.streamText).not.toHaveBeenCalled();
+  });
+
+  it("says demo AI is unavailable when no demo key is configured", async () => {
+    mocks.getWorkspaceAiConfig.mockResolvedValue(null);
+
+    const response = await POST(request({ messages: [message] }));
+
+    expect(response.status).toBe(503);
+    await expect(response.json()).resolves.toMatchObject({ reason: "demo_ai_unavailable" });
   });
 
   it("strips blocked tools and tightens step/output budgets", async () => {

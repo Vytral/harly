@@ -33,6 +33,10 @@ export const POST = withApi(async (request) => {
       // Only images uploaded through the public apply presign; never logos,
       // banners or other assets already in use by the workspace.
       keyPrefix: `workspaces/${workspace.workspaceId}/images/public-applications/`,
+      // The temporary upload is consumed: the output lands outside the public
+      // prefix, so resubmitting the same key 404s instead of writing another
+      // copy, and no untracked original is left behind.
+      deleteSource: true,
     });
     return NextResponse.json(result);
   } catch (error) {

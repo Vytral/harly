@@ -49,8 +49,9 @@ Automations tour. No migrations.
 - Demo AI budgets on the existing `rate_limit_buckets` table, so restarts do
   not reset them: 6 chat requests per minute and 60 per day per IP, plus an
   instance-wide daily ceiling (`DEMO_AI_DAILY_REQUEST_LIMIT`, default 300).
-  Once exhausted, chat says so and every other AI surface falls back to its
-  non-AI path.
+  Chat spends a slot per turn only after the request passes validation and the
+  other limits. Once exhausted, chat says so and every other AI surface falls
+  back to its non-AI path.
 - The demo seed assigns tasks to the demo account and to every teammate, linked
   to real candidates, jobs, and applications, so Home's "My tasks" is populated.
 - Image normalization for uploaded logos and images (`/api/storage/image`,
@@ -99,8 +100,9 @@ Automations tour. No migrations.
   anonymous traffic cannot spend the demo key.
 - `fast-uri` is pinned to 3.1.7 (GHSA-qw65-cvwx-89v3, GHSA-58mr-gqgx-xq4g).
 - Image normalization never deletes the source when conversion fails. The public
-  normalize route only accepts keys from the public apply upload area, and only
-  workspace sessions (not candidate portal sessions) delete the original.
+  normalize route only accepts keys from the public apply upload area and
+  consumes that temporary upload, so a key cannot be resubmitted to pile up
+  copies. `/api/storage/image/normalize` accepts workspace sessions only.
 
 ### Upgrading
 

@@ -86,6 +86,21 @@ describe("storage image routes", () => {
     expect(response.headers.get("Cache-Control")).toContain("immutable");
   });
 
+  it("rejects callers without a workspace session, including portal sessions", async () => {
+    mocks.getWorkspaceContextOrNull.mockResolvedValue(null);
+    const request = new NextRequest("http://harly.test/api/storage/image/normalize", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ key: "workspaces/workspace-1/images/abc/logo.png", mode: "logo" }),
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(403);
+    expect(mocks.read).not.toHaveBeenCalled();
+    expect(mocks.delete).not.toHaveBeenCalled();
+  });
+
   it("does not serve non-image storage namespaces", async () => {
     const request = new NextRequest(
       "http://harly.test/api/storage/image?key=workspaces/workspace-1/resumes/cv.pdf",
