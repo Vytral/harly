@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { ApiError } from "@harly/api";
 import { db, rateLimitBuckets } from "@harly/db";
@@ -106,43 +106,41 @@ export class MemoryStore implements RateLimitStore {
 }
 
 export class DatabaseStore implements RateLimitStore {
+  /**
+   * One atomic upsert per hit: a fresh or expired bucket restarts at 1, a live
+   * one increments. A read-then-write transaction let concurrent first hits of
+   * a window each insert `count: 1` and be admitted while only one was counted.
+   * Rejected hits still increment, which only makes the window stricter.
+   */
   async consume(
     key: string,
     limit: number,
     windowMs: number,
   ): Promise<RateLimitResult> {
-    return db.transaction(async (tx) => {
-      const now = Date.now();
-      const [row] = await tx
-        .select()
-        .from(rateLimitBuckets)
-        .where(eq(rateLimitBuckets.key, key))
-        .for("update")
-        .limit(1);
+    const now = new Date();
+    const freshResetAt = new Date(now.getTime() + windowMs);
+    // Raw sql fragments bypass the column mapper, so pass timestamps as text.
+    const nowSql = sql`${now.toISOString()}::timestamptz`;
+    const freshResetAtSql = sql`${freshResetAt.toISOString()}::timestamptz`;
+    const expired = sql`${rateLimitBuckets.resetAt} <= ${nowSql}`;
+    const [row] = await db
+      .insert(rateLimitBuckets)
+      .values({ key, count: 1, resetAt: freshResetAt })
+      .onConflictDoUpdate({
+        target: rateLimitBuckets.key,
+        set: {
+          count: sql`CASE WHEN ${expired} THEN 1 ELSE ${rateLimitBuckets.count} + 1 END`,
+          resetAt: sql`CASE WHEN ${expired} THEN ${freshResetAtSql} ELSE ${rateLimitBuckets.resetAt} END`,
+          updatedAt: now,
+        },
+      })
+      .returning({ count: rateLimitBuckets.count, resetAt: rateLimitBuckets.resetAt });
 
-      if (!row || row.resetAt.getTime() <= now) {
-        const resetAt = new Date(now + windowMs);
-        await tx
-          .insert(rateLimitBuckets)
-          .values({ key, count: 1, resetAt })
-          .onConflictDoUpdate({
-            target: rateLimitBuckets.key,
-            set: { count: 1, resetAt, updatedAt: new Date() },
-          });
-        return { limit, remaining: limit - 1, resetAt: resetAt.getTime() };
-      }
-
-      if (row.count >= limit) {
-        throw rateLimitExceeded(limit, row.resetAt.getTime());
-      }
-
-      const next = row.count + 1;
-      await tx
-        .update(rateLimitBuckets)
-        .set({ count: next, updatedAt: new Date() })
-        .where(eq(rateLimitBuckets.key, key));
-      return { limit, remaining: limit - next, resetAt: row.resetAt.getTime() };
-    });
+    const resetAt = row.resetAt.getTime();
+    if (row.count > limit) {
+      throw rateLimitExceeded(limit, resetAt);
+    }
+    return { limit, remaining: limit - row.count, resetAt };
   }
 }
 

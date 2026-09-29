@@ -263,11 +263,13 @@ jobs:
           RUN_MAILBOX_INTEGRATION=1
           RUN_RBAC_INTEGRATION=1
           RUN_PIPELINE_LOAD_INTEGRATION=1
+          RUN_RATE_LIMIT_INTEGRATION=1
           pnpm --filter web exec vitest run
           src/features/candidates/candidate-deletion.integration.test.ts
           src/features/mailbox/mailbox-isolation.integration.test.ts
           src/features/workspaces/permissions-rbac.integration.test.ts
           src/features/pipeline/pipeline-large-load.integration.test.ts
+          src/server/api/ratelimit.database.integration.test.ts
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 4. Unit tests
