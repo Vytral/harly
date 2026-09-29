@@ -33,6 +33,84 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [0.2.1]
+
+A patch release focused on the public demo: a working entry redirect, a
+tidier first impression, a platform-funded Harly AI with spend limits, and a
+tighter lockdown. It also ships image normalization for uploads and a static
+Automations tour. No migrations.
+
+### Added
+
+- Harly AI in the public demo. When `DEMO_MODE=true` and `DEMO_AI_API_KEY` is
+  set, AI resolves from the environment (`DEMO_AI_MODEL`, default
+  `gpt-6-luna`) instead of the workspace key the reseed wipes. Nothing reads
+  these variables outside demo mode.
+- Demo AI budgets on the existing `rate_limit_buckets` table, so restarts do
+  not reset them: 6 chat requests per minute and 60 per day per IP, plus an
+  instance-wide daily ceiling (`DEMO_AI_DAILY_REQUEST_LIMIT`, default 300).
+  Once exhausted, chat says so and every other AI surface falls back to its
+  non-AI path.
+- The demo seed assigns tasks to the demo account and to every teammate, linked
+  to real candidates, jobs, and applications, so Home's "My tasks" is populated.
+- Image normalization for uploaded logos and images (`/api/storage/image`,
+  `/api/storage/image/normalize`, `/api/public/v1/image/normalize`): input is
+  converted to PNG/WebP with pixel and dimension limits, and logo padding is
+  trimmed.
+- A static Automations page for the demo that mirrors the real manager layout
+  with sample recipes and no workspace reads or builder links.
+
+### Changed
+
+- Inbox opens the most recent conversation by default, and selecting a person
+  with a single conversation opens it directly instead of a one-row list.
+- The jobs list shows "N candidates" inline and draws the active share inside
+  the volume bar, replacing the separate "Candidates · N active" line.
+- In demo mode, Home hides "Recommended next steps" and Inbox hides the "not
+  connected" email banners, since setup is locked there.
+- Demo chat runs with a smaller step and output budget and a system note, and
+  drops automation, outbound-email, and bulk-scoring tools.
+- Chat errors show the server's message instead of a raw JSON body.
+- `/enter` copy no longer uses em dashes.
+
+### Fixed
+
+- `/enter` redirected to `http://0.0.0.0:<port>/dashboard` behind a reverse
+  proxy after the Turnstile check. Both redirects now use the configured public
+  origin.
+
+### Security
+
+- Demo lockdown now also covers onboarding profile and branding writes, the
+  workspace 2FA policy, mail unification, workspace name, logo and board
+  branding, the public career page, legal and retention settings, and the
+  external ATS importers (Greenhouse, Workable, Ashby, Lever, Join).
+- The demo reseed resets `require2fa`, `mailUnificationEnabled`,
+  `acquisitionSource`, the owner's `onboardingRole`, and forces AI auto-score
+  and duplicate checks off.
+- Confirming a demo-blocked agent write tool is refused server-side, even if
+  the call is crafted by hand.
+- Public job applications on a demo instance parse resumes without AI, so
+  anonymous traffic cannot spend the demo key.
+
+### Upgrading
+
+No migrations. Demo instances only: to enable Harly AI, set `DEMO_AI_API_KEY`
+(a restricted OpenAI key with Responses and Embeddings write access, in a
+project with a hard monthly budget) and optionally `DEMO_AI_MODEL` and
+`DEMO_AI_DAILY_REQUEST_LIMIT`, then restart. Run `pnpm db:seed:demo`, or wait
+for the next scheduled reset, to load the new demo tasks.
+
+## @harly/cli 0.5.2
+
+- `harly resume` and a guided menu action retry startup with the saved
+  configuration and secrets.
+- Caddy readiness checks the public endpoint once the app is healthy, with
+  elapsed time and the last status shown. `launch` and `resume` accept
+  `--timeout <seconds>`.
+- Interactive installs through npx offer to install the CLI globally, behind a
+  separate confirmation.
+
 ## [0.2.0]
 
 The public demo, a deterministic candidate evaluator, a rebuilt automation
