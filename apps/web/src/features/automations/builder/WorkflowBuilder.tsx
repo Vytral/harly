@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState, useTransition } from "react";
+import type { Route } from "next";
+import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
 
 import { cn } from "@/lib/utils";
@@ -149,6 +151,7 @@ export function WorkflowBuilder({
   builderData: BuilderDataProps;
   isNew?: boolean;
 }) {
+  const router = useRouter();
   const [draft, setDraft] = useState<WorkflowDraft>(() =>
     initial
       ? toDraft(initial)
@@ -245,7 +248,7 @@ export function WorkflowBuilder({
 
   async function handleExit() {
     if (!(await confirmDiscard())) return;
-    window.location.href = "/dashboard/automations";
+    router.push("/dashboard/automations" as Route);
   }
 
   function recipePayload(
@@ -277,7 +280,7 @@ export function WorkflowBuilder({
       // canonical route is the only safe source of all server fields, so move
       // directly there rather than leaving the old blank canvas on screen.
       if (!currentId || currentId !== workflowId) {
-        window.location.assign(`/dashboard/automations/${workflowId}`);
+        router.push(`/dashboard/automations/${workflowId}` as Route);
         return;
       }
 
@@ -305,7 +308,7 @@ export function WorkflowBuilder({
       commitSave(initialSaveState(navigator.onLine, false));
       toast.success("Automation updated in the builder.");
     },
-    [commitSave],
+    [commitSave, router],
   );
 
   async function performSave(): Promise<boolean> {
@@ -998,8 +1001,8 @@ export function WorkflowBuilder({
             );
             if (result.ok && result.workflow) {
               toast.success("Copied your edits into a new recipe.");
-              window.location.assign(
-                `/dashboard/automations/${result.workflow.id}`,
+              router.push(
+                `/dashboard/automations/${result.workflow.id}` as Route,
               );
             } else {
               toast.error(result.error ?? "Could not copy this draft.");
@@ -1196,6 +1199,7 @@ function VersionHistory({
   currentVersion: number;
   draft: WorkflowDraft;
 }) {
+  const router = useRouter();
   const [versions, setVersions] = useState<WorkflowVersionRow[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   const [pending, startTransition] = useTransition();
@@ -1297,8 +1301,8 @@ function VersionHistory({
                         );
                         if (result.ok) {
                           toast.success(`Restored version ${version.version}.`);
-                          window.location.assign(
-                            `/dashboard/automations/${workflowId}`,
+                          router.push(
+                            `/dashboard/automations/${workflowId}` as Route,
                           );
                         } else
                           toast.error(result.error ?? "Could not roll back.");
