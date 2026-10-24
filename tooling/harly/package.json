@@ -46,6 +46,7 @@
     "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --target ES2022 --types node src/index.ts",
     "test": "pnpm build && node scripts/sync-release-assets.mjs --check && node --test test/*.test.mjs",
     "test:backup-restore": "pnpm build && ./test/backup-restore.destructive.sh",
+    "test:backup-restore:ci": "pnpm build && bash ./test/backup-restore.ci.sh",
     "pack:check": "pnpm build && npm pack --dry-run"
   },
   "devDependencies": {

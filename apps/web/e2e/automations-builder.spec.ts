@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test-fixtures";
 
 import {
   automationAiProposals,
@@ -97,6 +97,17 @@ test.describe("automations builder", () => {
       .locator(".react-flow__node")
       .filter({ hasText: "Dry-run E2E note" })
       .first();
+    // Adding a step animates fitView. Wait for the viewport to settle before
+    // using screen coordinates, otherwise the drag can start outside the node.
+    const viewport = page.locator(".react-flow__viewport");
+    let lastTransform: string | null = null;
+    let stableSamples = 0;
+    await expect.poll(async () => {
+      const transform = await viewport.getAttribute("style");
+      stableSamples = transform === lastTransform ? stableSamples + 1 : 0;
+      lastTransform = transform;
+      return stableSamples;
+    }, { intervals: [100] }).toBeGreaterThanOrEqual(2);
     const noteBefore = await noteNode.boundingBox();
     expect(noteBefore).not.toBeNull();
     await page.mouse.move(noteBefore!.x + 120, noteBefore!.y + 44);
@@ -106,14 +117,13 @@ test.describe("automations builder", () => {
     });
     await page.mouse.up();
     await expect(noteNode).toBeVisible();
-    const noteAfter = await noteNode.boundingBox();
-    expect(noteAfter).not.toBeNull();
-    expect(noteAfter!.x).toBeGreaterThan(noteBefore!.x + 36);
-    expect(noteAfter!.y).toBeGreaterThan(noteBefore!.y + 36);
+    await expect.poll(async () => (await noteNode.boundingBox())?.x ?? 0)
+      .toBeGreaterThan(noteBefore!.x + 36);
+    await expect.poll(async () => (await noteNode.boundingBox())?.y ?? 0)
+      .toBeGreaterThan(noteBefore!.y + 36);
 
     // Panning is deliberately explicit (button or Space) so canvas movement
     // never fights node placement. Verify the visible viewport actually moves.
-    const viewport = page.locator(".react-flow__viewport");
     const transformBefore = await viewport.getAttribute("style");
     await page.getByRole("button", { name: "Pan tool" }).click();
     const pane = page.locator(".react-flow__pane");

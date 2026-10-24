@@ -694,22 +694,15 @@ export function CandidatesTable({
               return (
                 <div
                   key={row.id}
-                  role="button"
-                  tabIndex={0}
                   data-state={isSelected ? "selected" : undefined}
-                  onClick={() => router.push(`/dashboard/candidates/${row.id}`)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter")
-                      router.push(`/dashboard/candidates/${row.id}`);
-                  }}
                   className={cn(
-                    "group grid cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 rounded-xl border-b border-border/40 px-4 py-4 transition-all sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_2.25rem]",
+                    "group grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2.5 rounded-xl border-b border-border/40 px-4 py-4 transition-all sm:grid-cols-[auto_minmax(0,1.4fr)_minmax(0,1fr)_7rem_2.25rem]",
                     isSelected
                       ? "border-transparent bg-card shadow-[0_1px_3px_rgba(28,25,23,0.08),0_0_0_1px_rgba(28,25,23,0.04)]"
                       : "hover:bg-muted/40",
                   )}
                 >
-                  <div onClick={(e) => e.stopPropagation()}>
+                  <div>
                     <Checkbox
                       checked={isSelected}
                       onCheckedChange={() => toggleOne(row.id)}
@@ -720,8 +713,7 @@ export function CandidatesTable({
                   {/* Identity */}
                   <Link
                     href={`/dashboard/candidates/${row.id}` as Route}
-                    onClick={(event) => event.stopPropagation()}
-                    className="flex min-w-0 items-center gap-3"
+                    className="flex min-w-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <UserAvatar
                       name={row.fullName}
@@ -820,7 +812,6 @@ export function CandidatesTable({
 
                   {/* Row actions */}
                   <div
-                    onClick={(e) => e.stopPropagation()}
                     className="col-start-3 row-start-1 sm:col-auto sm:row-auto"
                   >
                     <RowActions

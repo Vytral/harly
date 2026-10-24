@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test-fixtures";
 import { readFileSync, statSync } from "node:fs";
 import { simpleParser } from "mailparser";
 

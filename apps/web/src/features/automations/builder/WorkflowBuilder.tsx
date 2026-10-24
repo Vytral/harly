@@ -245,6 +245,7 @@ export function WorkflowBuilder({
 
   async function handleExit() {
     if (!(await confirmDiscard())) return;
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- A confirmed exit must release the guarded editor's in-memory buffers.
     window.location.href = "/dashboard/automations";
   }
 
@@ -277,6 +278,7 @@ export function WorkflowBuilder({
       // canonical route is the only safe source of all server fields, so move
       // directly there rather than leaving the old blank canvas on screen.
       if (!currentId || currentId !== workflowId) {
+        // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Load a new controlled editor from its canonical server draft.
         window.location.assign(`/dashboard/automations/${workflowId}`);
         return;
       }
@@ -998,6 +1000,7 @@ export function WorkflowBuilder({
             );
             if (result.ok && result.workflow) {
               toast.success("Copied your edits into a new recipe.");
+              // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- The copied draft must get fresh editor state, not the source draft's buffers.
               window.location.assign(
                 `/dashboard/automations/${result.workflow.id}`,
               );
@@ -1297,6 +1300,7 @@ function VersionHistory({
                         );
                         if (result.ok) {
                           toast.success(`Restored version ${version.version}.`);
+                          // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- Rollback must replace all local buffers with the restored server version.
                           window.location.assign(
                             `/dashboard/automations/${workflowId}`,
                           );

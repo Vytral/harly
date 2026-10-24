@@ -33,6 +33,39 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [0.2.2] — Unreleased
+
+A compatible release focused on verification, recovery, and daily recruiting
+workflows. No database migration or new runtime configuration is required.
+
+### Changed
+
+- Require the complete browser E2E suite, documentation validation, link and
+  accessibility checks, and a disposable CLI backup/restore drill in CI. Tagged
+  releases run these same checks before publishing.
+- Block HIGH and CRITICAL image vulnerabilities, including unfixed findings,
+  in CI and before publication. No severity exception is configured.
+
+### Fixed
+
+- Include the PDF.js browser module and worker in standalone images so the
+  native signature-field editor can load PDFs in production.
+- Selecting an empty calendar day now opens its agenda with scheduling guidance.
+- Candidate rows no longer add an interactive container around the profile
+  link, selection checkbox, and action menu. Profile links retain keyboard focus.
+- Pipeline bulk selection explicitly identifies the visible results it affects.
+- Empty reports link to the pipeline, candidates, or jobs when the user's
+  permissions allow it, and explain when time-to-hire data becomes available.
+
+### Security
+
+- Update Next.js, DOMPurify, Nodemailer, Sharp, validation and integration
+  dependencies to patched releases, with a regenerated lockfile and no audit
+  suppression. Keep Zod overrides within its existing major version.
+
+The release manifest and embedded CLI metadata continue to identify the last
+published image until the release workflow publishes and records the new digest.
+
 ## [0.2.1]
 
 A patch release focused on the public demo: a working entry redirect, a

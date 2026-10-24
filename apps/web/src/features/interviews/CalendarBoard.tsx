@@ -361,13 +361,12 @@ export function CalendarBoard({
                   }
                   aria-selected={selectedDay === key}
                   onClick={() =>
-                    dayInterviews.length > 0 &&
                     setSelectedDay(selectedDay === key ? null : key)
                   }
                   className={cn(
                     "flex min-h-24 flex-col items-stretch gap-1 border-b border-r border-border p-1.5 text-left transition-colors last:border-r-0",
                     !isCurrentMonth && "bg-muted/20 text-muted-foreground/50",
-                    dayInterviews.length > 0 && "hover:bg-accent/60",
+                    "hover:bg-accent/60",
                     selectedDay === key && "bg-accent",
                   )}
                 >
@@ -442,6 +441,11 @@ export function CalendarBoard({
                   </button>
                 </div>
                 <div className="space-y-1.5">
+                  {selectedDayInterviews.length === 0 ? (
+                    <p className="py-2 text-sm text-muted-foreground">
+                      No interviews on this day. Schedule an interview from a candidate&apos;s profile.
+                    </p>
+                  ) : null}
                   {selectedDayInterviews.map((iv) => {
                     const ModeIcon = MODE_ICON[iv.mode];
                     const isExpanded = expandedId === iv.id;

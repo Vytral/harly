@@ -84,21 +84,13 @@ jobs:
           tags: harly:candidate
           cache-from: type=gha
           cache-to: type=gha,mode=max
-      - name: Report HIGH and CRITICAL vulnerabilities
+      - name: Block HIGH and CRITICAL vulnerabilities before publishing
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: harly:candidate
           format: table
           severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "0"
-      - name: Block fixed CRITICAL vulnerabilities before publishing
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: harly:candidate
-          format: table
-          severity: CRITICAL
-          ignore-unfixed: true
+          ignore-unfixed: false
           exit-code: "1"
 
       - id: meta

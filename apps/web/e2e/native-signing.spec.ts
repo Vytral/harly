@@ -1,5 +1,5 @@
 import { PDFDocument } from "pdf-lib";
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./test-fixtures";
 import { readFileSync, statSync } from "node:fs";
 import { simpleParser } from "mailparser";
 
@@ -87,7 +87,7 @@ test.describe("native document signing", () => {
     await signerOne.goto(firstLink);
     await acceptCookieConsent(signerOne);
     await expect(signerOne.getByRole("heading", { name: "Review and sign" })).toBeVisible({ timeout: 30_000 });
-    await expect(signerOne.getByText(/signer 1 of 2 · for Ada Lovelace/)).toBeVisible();
+    await expect(signerOne.getByText("Signer 1 of 2", { exact: true })).toBeVisible();
     await expect(signerOne.locator('[data-page="1"]')).toBeVisible({ timeout: 30_000 });
     const firstFieldsResponse = await signerOne.request.get(`${E2E_BASE_URL}/api/native-sign/${firstToken}/fields`);
     expect(firstFieldsResponse.ok()).toBe(true);
@@ -114,7 +114,7 @@ test.describe("native document signing", () => {
     await signerTwo.goto(secondLink);
     await acceptCookieConsent(signerTwo);
     await expect(signerTwo.getByRole("heading", { name: "Review and sign" })).toBeVisible({ timeout: 30_000 });
-    await expect(signerTwo.getByText(/signer 2 of 2 · for Grace Hopper/)).toBeVisible();
+    await expect(signerTwo.getByText("Signer 2 of 2", { exact: true })).toBeVisible();
     await expect(signerTwo.locator('[data-page="1"]')).toBeVisible({ timeout: 30_000 });
     const secondFieldsResponse = await signerTwo.request.get(`${E2E_BASE_URL}/api/native-sign/${secondToken}/fields`);
     expect(secondFieldsResponse.ok()).toBe(true);

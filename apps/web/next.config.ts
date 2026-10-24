@@ -19,6 +19,12 @@ const nextConfig: NextConfig = {
   outputFileTracingExcludes: {
     "/*": ["src/lib/ai/surfaces/*.ts"],
   },
+  outputFileTracingIncludes: {
+    "/api/pdfjs/*": [
+      "./node_modules/pdfjs-dist/build/pdf.min.mjs",
+      "./node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
+    ],
+  },
   // These controls make the standalone production build deterministic and
   // memory-aware. Turbopack does not need them during `next dev`, and keeping
   // them out of development avoids reserving build workers on small machines.
