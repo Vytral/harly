@@ -45,6 +45,10 @@ workflows. No database migration or new runtime configuration is required.
   releases run these same checks before publishing.
 - Block HIGH and CRITICAL image vulnerabilities, including unfixed findings,
   in CI and before publication. No severity exception is configured.
+- Build and run the container image on `node:22-alpine` instead of
+  `node:22-bookworm-slim`. The runtime only needs Node, and the Debian base
+  carried 57 unfixed HIGH and CRITICAL OS findings. Native modules such as
+  Sharp are installed for musl in the build stage.
 
 ### Fixed
 
@@ -52,7 +56,14 @@ workflows. No database migration or new runtime configuration is required.
   native signature-field editor can load PDFs in production.
 - Selecting an empty calendar day now opens its agenda with scheduling guidance.
 - Candidate rows no longer add an interactive container around the profile
-  link, selection checkbox, and action menu. Profile links retain keyboard focus.
+  link, selection checkbox, and action menu. Pressing Enter on a row's checkbox
+  or action menu no longer opens the candidate profile. Open a profile from the
+  candidate name, which retains keyboard focus; clicking elsewhere in the row no
+  longer navigates.
+- The candidates All tab and result summary count every matching candidate,
+  not only the current page, and use the singular form for one result.
+- Candidate and job search fields have accessible names, and the public
+  application phone field supports browser autofill.
 - Pipeline bulk selection explicitly identifies the visible results it affects.
 - Empty reports link to the pipeline, candidates, or jobs when the user's
   permissions allow it, and explain when time-to-hire data becomes available.
@@ -62,6 +73,8 @@ workflows. No database migration or new runtime configuration is required.
 - Update Next.js, DOMPurify, Nodemailer, Sharp, validation and integration
   dependencies to patched releases, with a regenerated lockfile and no audit
   suppression. Keep Zod overrides within its existing major version.
+  Nodemailer moves from major 9 to 10, and an override applies 10.1.4 to the
+  mailbox dependencies (`imapflow`, `mailparser`) as well.
 
 The release manifest and embedded CLI metadata continue to identify the last
 published image until the release workflow publishes and records the new digest.

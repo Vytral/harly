@@ -465,7 +465,7 @@ export function CandidatesTable({
       {/* Search */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
+          <Search aria-hidden className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -473,6 +473,7 @@ export function CandidatesTable({
               if (e.key === "Enter") navigateWithFilter("q", query.trim());
             }}
             placeholder="Search candidates by name, email, role or location…"
+            aria-label="Search candidates"
             className="h-11 rounded-full pl-11"
           />
         </div>
@@ -580,7 +581,9 @@ export function CandidatesTable({
           <span className="font-semibold tabular-nums text-foreground">
             {pageInfo?.total ?? filtered.length}
           </span>{" "}
-          {filtered.length === 1 ? "candidate" : "candidates"}
+          {(pageInfo?.total ?? filtered.length) === 1
+            ? "candidate"
+            : "candidates"}
         </p>
       </div>
 

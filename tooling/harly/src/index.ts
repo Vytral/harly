@@ -1982,6 +1982,7 @@ async function waitForService(
   const started = Date.now();
   const deadline = started + timeoutMs;
   let lastDetail = "waiting for the container";
+  let lastHttpDetail: string | undefined;
   while (Date.now() < deadline) {
     const result = run(
       "docker",
@@ -2013,15 +2014,19 @@ async function waitForService(
                 (!item.Health || item.Health === "healthy") && publicUrl
               ) {
                 try {
+                  // Every probe gets at least one second, so a short overall
+                  // budget on a slow runner still records an HTTP response.
                   const response = await fetch(`${publicUrl}/api/health/ready`, {
-                    signal: AbortSignal.timeout(Math.max(1, Math.min(5_000, deadline - Date.now()))),
+                    signal: AbortSignal.timeout(Math.max(1_000, Math.min(5_000, deadline - Date.now()))),
                   });
                   await response.body?.cancel();
                   if (response.ok) return { ready: true, detail: "HTTPS ready" };
-                  lastDetail = `public endpoint returned HTTP ${response.status}`;
+                  lastHttpDetail = `public endpoint returned HTTP ${response.status}`;
+                  lastDetail = lastHttpDetail;
                 } catch (error) {
                   // DNS propagation and certificate issuance can take minutes.
-                  lastDetail = publicReadinessDetail(error);
+                  // A timeout after an HTTP response keeps the last observed status.
+                  lastDetail = lastHttpDetail ?? publicReadinessDetail(error);
                 }
               }
               if (service !== "caddy" && item.State === "running" && item.Health === "healthy") {
@@ -2043,7 +2048,7 @@ async function waitForService(
     onProgress?.(lastDetail, Math.round((Date.now() - started) / 1_000));
     await new Promise((resolve) => setTimeout(resolve, Math.max(0, Math.min(1_000, deadline - Date.now()))));
   }
-  return { ready: false, detail: service === "caddy" ? `public HTTPS timeout (${lastDetail})` : "timeout" };
+  return { ready: false, detail: service === "caddy" ? `public HTTPS timeout (${lastHttpDetail ?? lastDetail})` : "timeout" };
 }
 
 function formatLaunchLine(

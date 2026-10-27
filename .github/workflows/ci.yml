@@ -9,6 +9,9 @@ on:
   # built and tested before any image is published.
   workflow_call:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
