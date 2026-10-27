@@ -2093,6 +2093,7 @@ export function ApplyForm({
                 <FieldLabel ashby>Phone</FieldLabel>
                 <PhoneInput
                   name="phone"
+                  autoComplete="tel"
                   value={fields.phone}
                   onChange={(v) => updateField("phone", v)}
                   className="mt-1.5"
@@ -2801,6 +2802,7 @@ export function ApplyForm({
                 <FieldLabel>Phone</FieldLabel>
                 <PhoneInput
                   name="phone"
+                  autoComplete="tel"
                   value={fields.phone}
                   onChange={(v) => updateField("phone", v)}
                   className="mt-1.5"

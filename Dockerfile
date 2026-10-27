@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1.7
-FROM node:22-bookworm-slim AS build
+# Both stages use Alpine so native modules such as sharp are installed for the
+# musl libc the runtime uses. The runtime only needs node, and Debian's slim
+# image ships unfixed HIGH findings the release gate blocks.
+FROM node:22-alpine AS build
 WORKDIR /src
 RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
@@ -36,7 +39,7 @@ RUN --mount=type=cache,id=harly-next-cache-${TARGETPLATFORM},target=/src/apps/we
     pnpm --filter @harly/cli build && pnpm --filter web build
 RUN pnpm exec esbuild tooling/runtime/src/entrypoint.ts --bundle --platform=node --format=esm --target=node22 --outfile=/tmp/harly-runtime.mjs
 
-FROM node:22-bookworm-slim AS runtime
+FROM node:22-alpine AS runtime
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \

@@ -1,7 +1,7 @@
 import { getReportsData } from "@/features/reports/data";
 import { normalizeReportRange } from "@/features/reports/ranges";
 import { ReportsDashboard } from "@/features/reports/ReportsDashboard";
-import { requirePagePermission } from "@/features/workspaces/permissions-server";
+import { getRolePermissions, requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,12 +10,15 @@ type ReportsPageProps = {
 };
 
 export default async function ReportsPage({ searchParams }: ReportsPageProps) {
-  await requirePagePermission("reports:read");
+  const context = await requirePagePermission("reports:read");
   const { range: rangeRaw } = await searchParams;
   const parsed = Number(rangeRaw);
   const rangeDays = normalizeReportRange(parsed);
 
-  const data = await getReportsData(rangeDays);
+  const [data, permissions] = await Promise.all([
+    getReportsData(rangeDays),
+    getRolePermissions(context.organization.id, context.roleKey),
+  ]);
 
-  return <ReportsDashboard data={data} />;
+  return <ReportsDashboard data={data} canViewCandidates={permissions.includes("candidates:view")} canViewJobs={permissions.includes("jobs:view")} />;
 }

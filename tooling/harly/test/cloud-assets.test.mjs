@@ -130,7 +130,14 @@ test("version tags are the only published images", async () => {
   // The image is scanned before it is pushed, so a blocking finding keeps it
   // out of the registry instead of only skipping the release.
   assert.match(workflow, /image-ref: harly:candidate/);
-  assert.match(workflow, /Block fixed CRITICAL vulnerabilities before publishing/);
+  const scan = workflow
+    .split(/\n      - (?=name:|uses:|id:)/)
+    .find((block) => block.includes("image-ref: harly:candidate"));
+  assert.ok(scan, "candidate image scan not found");
+  assert.match(scan, /severity: HIGH,CRITICAL/);
+  assert.match(scan, /ignore-unfixed: false/);
+  assert.match(scan, /exit-code: "1"/);
+  assert.ok(workflow.indexOf(scan) < workflow.indexOf("Publish the multi-architecture image"));
   // gh has no checkout in the release job, so it needs GH_REPO to find the repo.
   assert.match(workflow, /GH_REPO: \$\{\{ github\.repository \}\}/);
   // The tagged commit is validated before anything is published.

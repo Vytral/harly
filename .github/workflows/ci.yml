@@ -9,6 +9,9 @@ on:
   # built and tested before any image is published.
   workflow_call:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -168,6 +171,34 @@ jobs:
       - name: Verify generated automation capability matrix
         run: pnpm --filter web check:automation-capabilities
 
+  docs:
+    name: Documentation validation
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+            tooling/*/node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Validate documentation
+        run: pnpm docs:validate
+      - name: Check documentation links
+        run: pnpm docs:broken-links
+      - name: Check documentation accessibility
+        run: pnpm docs:a11y
+
   build:
     name: Production web build
     runs-on: ubuntu-latest
@@ -270,6 +301,60 @@ jobs:
           src/features/workspaces/permissions-rbac.integration.test.ts
           src/features/pipeline/pipeline-large-load.integration.test.ts
           src/server/api/ratelimit.database.integration.test.ts
+
+  hiring-e2e:
+    name: Browser hiring and signing flows
+    runs-on: ubuntu-latest
+    needs: install
+    services:
+      postgres:
+        image: postgres:16-bookworm
+        env:
+          POSTGRES_USER: harly
+          POSTGRES_PASSWORD: harly
+          POSTGRES_DB: harly_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U harly -d harly_e2e"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      HARLY_E2E_DATABASE_URL: postgresql://harly:harly@localhost:5432/harly_e2e
+      NODE_ENV: production
+      NODE_OPTIONS: --max-old-space-size=6144
+      HARLY_DISABLE_WEBPACK_BUILD_WORKER: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            apps/*/node_modules
+            packages/*/node_modules
+            tooling/*/node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Install Chromium
+        run: pnpm --filter web exec playwright install --with-deps chromium
+      - name: Run browser end-to-end suite
+        run: pnpm --filter web e2e
+      - name: Upload browser failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hiring-e2e-failure-artifacts
+          path: |
+            apps/web/test-results/e2e
+            apps/web/playwright-report
+          if-no-files-found: ignore
 
   # ─────────────────────────────────────────────────────────────────────────────
   # 4. Unit tests
@@ -399,21 +484,15 @@ jobs:
           COMPOSE_PROFILES=proxy docker compose config --quiet
       - name: Build runtime image
         run: docker build -t harly:ci .
-      - name: Scan image for HIGH and CRITICAL vulnerabilities
+      - name: Verify CLI backup and restore on a disposable installation
+        run: pnpm --filter @harly/cli test:backup-restore:ci harly:ci
+      - name: Block HIGH and CRITICAL image vulnerabilities
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           image-ref: harly:ci
           format: table
           severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          exit-code: "0"
-      - name: Block fixed CRITICAL vulnerabilities
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: harly:ci
-          format: table
-          severity: CRITICAL
-          ignore-unfixed: true
+          ignore-unfixed: false
           exit-code: "1"
       - name: Reject runtime toolchain and TypeScript sources
         run: |

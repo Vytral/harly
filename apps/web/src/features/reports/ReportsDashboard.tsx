@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import Link from "next/link";
+import type { Route } from "next";
 import { useMemo } from "react";
 import {
   ArrowDownRight,
@@ -53,11 +55,18 @@ function formatSource(source: string) {
 
 type IconComponent = React.ComponentType<{ className?: string; strokeWidth?: number }>;
 
-function EmptyPanel({ icon: Icon, text }: { icon: IconComponent; text: string }) {
+type EmptyPanelAction = { href: Route; label: string };
+
+function EmptyPanel({ icon: Icon, text, action }: { icon: IconComponent; text: string; action?: EmptyPanelAction }) {
   return (
     <div className="m-3 flex flex-1 flex-col items-center justify-center gap-2 rounded-[var(--radius-md)] border border-dashed border-mist-border px-6 py-10 text-center">
       <Icon className="size-5 text-quiet-mist" strokeWidth={1.6} />
       <p className="text-sm text-soft-ink">{text}</p>
+      {action ? (
+        <Button asChild variant="outline" size="sm" className="mt-2">
+          <Link href={action.href}>{action.label}</Link>
+        </Button>
+      ) : null}
     </div>
   );
 }
@@ -140,7 +149,17 @@ function CardHead({
   );
 }
 
-export function ReportsDashboard({ data }: { data: ReportsData }) {
+export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs = false }: {
+  data: ReportsData;
+  canViewCandidates?: boolean;
+  canViewJobs?: boolean;
+}) {
+  const pipelineAction: EmptyPanelAction | undefined = canViewCandidates && canViewJobs
+    ? { href: "/dashboard/pipeline", label: "View pipeline" }
+    : canViewCandidates ? { href: "/dashboard/candidates", label: "View candidates" } : undefined;
+  const jobsAction: EmptyPanelAction | undefined = canViewJobs
+    ? { href: "/dashboard/jobs", label: "View jobs" }
+    : pipelineAction;
   const router = useRouter();
   const shouldReduceMotion = useReducedMotion();
   const totalApplications = data.applicationsByMonth.reduce((s, p) => s + p.count, 0);
@@ -303,13 +322,17 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
           {data.funnel.some((s) => s.count > 0) ? (
             <FunnelChart stages={data.funnel} />
           ) : (
-            <EmptyPanel icon={Funnel} text="Stage distribution appears once candidates move through your pipeline." />
+            <EmptyPanel icon={Funnel} text="Stage distribution appears once candidates move through your pipeline." action={pipelineAction} />
           )}
         </Tile>
 
         <Tile className="gap-5 p-5">
           <CardHead icon={Hourglass} title="Time to hire" subtitle="How long filled roles took, from apply to hire." />
-          <Histogram data={data.timeToHire} />
+          {data.timeToHire.some((bucket) => bucket.count > 0) ? (
+            <Histogram data={data.timeToHire} />
+          ) : (
+            <EmptyPanel icon={Hourglass} text="Time to hire appears after your first hire." action={pipelineAction} />
+          )}
         </Tile>
       </motion.section>
 
@@ -323,7 +346,7 @@ export function ReportsDashboard({ data }: { data: ReportsData }) {
           {sourceData.length ? (
             <SourceBars sources={sourceData} />
           ) : (
-            <EmptyPanel icon={Users} text="No applications yet. Sources appear once candidates apply." />
+            <EmptyPanel icon={Users} text="No applications yet. Sources appear once candidates apply." action={jobsAction} />
           )}
         </Tile>
       </motion.div>

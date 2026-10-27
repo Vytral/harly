@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 
 import { and, eq } from "drizzle-orm";
-import { expect, test } from "@playwright/test";
+import { expect, test } from "./test-fixtures";
 
 import {
   createDatabaseClient,

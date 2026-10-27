@@ -8,6 +8,16 @@ Record the release version, image digest, environment, operator, date, and links
 to test evidence in the release issue or pull request. Do not mark an item done
 without a command result, screenshot, log excerpt, or linked review.
 
+CI now runs the complete Playwright suite (including application-to-signature),
+the three documentation checks, and a destructive CLI backup/restore drill on
+an automatically created disposable installation. The release workflow calls
+the same CI workflow before publication. These checks do not replace the
+version-to-version upgrade and operator recovery checks below.
+
+Image scans fail for HIGH and CRITICAL findings, including unfixed findings.
+No automatic severity exception is configured. Any future exception must be
+explicitly reviewed, scoped, justified, and recorded with the release evidence.
+
 ## 1. Release identity
 
 - [ ] Choose the release version and tag; confirm the version follows the
@@ -33,6 +43,10 @@ not use local generated files, stale build output, or production candidate data.
 - [ ] `pnpm build`
 - [ ] `pnpm exec drizzle-kit check --config packages/db/drizzle.config.ts`
 - [ ] `pnpm --filter @harly/cli test`
+- [ ] `pnpm --filter web e2e` with a dedicated disposable PostgreSQL database
+- [ ] `pnpm --filter @harly/cli test:backup-restore:ci <candidate-image>`
+  (requires Docker; creates and removes its own installation, database, and
+  uploads; never pass a production installation to the destructive harness)
 - [ ] `pnpm docs:validate`
 - [ ] `pnpm docs:broken-links`
 - [ ] `pnpm docs:a11y`

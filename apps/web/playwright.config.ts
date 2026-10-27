@@ -41,7 +41,9 @@ export default defineConfig({
     command:
       'mkdir -p .next/standalone/apps/web/.next/static .next/standalone/apps/web/public || exit 1; cp -R .next/static/. .next/standalone/apps/web/.next/static/ || exit 1; cp -R public/. .next/standalone/apps/web/public/ || exit 1; upload_dir="$(mktemp -d "${TMPDIR:-/tmp}/harly-e2e-uploads.XXXXXX")" || exit 1; export UPLOADS_DIR="$upload_dir"; node e2e/smtp-server.mjs & smtp_pid=$!; HOSTNAME=127.0.0.1 PORT=3000 node .next/standalone/apps/web/server.js & web_pid=$!; cleanup(){ kill "$web_pid" "$smtp_pid" 2>/dev/null || true; rm -rf -- "$upload_dir"; }; trap \'cleanup; exit 143\' INT TERM; trap cleanup EXIT; wait "$web_pid"; status=$?; exit "$status"',
     cwd: webRoot,
-    url: E2E_BASE_URL,
+    // The server starts before globalSetup migrates the database, so readiness
+    // must be probed on a route that does not query it.
+    url: `${E2E_BASE_URL}/api/health/live`,
     timeout: 120_000,
     reuseExistingServer: false,
     env: {

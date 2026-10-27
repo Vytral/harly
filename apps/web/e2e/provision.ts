@@ -1,5 +1,4 @@
 import { and, eq } from "drizzle-orm";
-import { hashPassword } from "better-auth/crypto";
 
 import {
   account,
@@ -59,6 +58,9 @@ const applicationConfig = {
 } as const;
 
 export async function provisionE2EFixture() {
+  // Playwright compiles this file to CommonJS. On Node 22, require()-ing the
+  // ESM-only better-auth/crypto fails to link, so load it with a native import.
+  const { hashPassword } = await import("better-auth/crypto");
   const { db, sql } = createDatabaseClient(E2E_DATABASE_URL);
   const now = new Date();
 
