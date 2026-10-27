@@ -33,7 +33,7 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
-## [0.2.2] — Unreleased
+## [0.2.2]
 
 A compatible release focused on verification, recovery, and daily recruiting
 workflows. No database migration or new runtime configuration is required.
