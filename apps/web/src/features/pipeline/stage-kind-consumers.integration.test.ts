@@ -46,7 +46,7 @@ vi.mock("@/features/applications/notifications", () => ({
   notifyApplicationStatusChange: vi.fn(async () => undefined),
 }));
 vi.mock("@/features/pipeline/emails", () => ({
-  sendPipelineEmails: vi.fn(async () => undefined),
+  sendPipelineEmails: vi.fn(async () => ({ queued: 0, sent: 0, failed: 0 })),
 }));
 vi.mock("@/lib/email/outbox-processor", () => ({
   enqueueEmailOutbox: vi.fn(async () => undefined),
