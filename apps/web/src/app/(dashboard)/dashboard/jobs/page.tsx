@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Route } from "next";
 import { Briefcase, Plus, TrendingUp, Trash2, Users } from "lucide-react";
 
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyState } from "@/components/ui/empty-state";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {

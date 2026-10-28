@@ -843,7 +843,7 @@ export function CandidatesTable({
                   variant="filtered"
                   icon={Search}
                   title="Nobody matches these filters"
-                  hint="Widen the search, or clear the filters to see everyone again."
+                  description="Widen the search, or clear the filters to see everyone again."
                   action={
                     <Button variant="outline" size="sm" onClick={clearFilters}>
                       Clear filters
@@ -854,7 +854,7 @@ export function CandidatesTable({
                 <EmptyState
                   icon={Users}
                   title="No candidates yet"
-                  hint="They arrive when someone applies through your career page, or you add one by hand."
+                  description="They arrive when someone applies through your career page, or you add one by hand."
                 />
               )
             ) : null}

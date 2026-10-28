@@ -144,6 +144,18 @@
   --board-surface-muted: #fafafa;
 }
 
+/* ── Motion tokens (mirrors lib/motion.ts; DESIGN.md "Motion") ──
+   Durations and easing live here so CSS and framer/motion agree. The
+   reduced-motion guard further down collapses every duration to zero. */
+:root {
+  --motion-instant: 100ms;
+  --motion-fast: 150ms;
+  --motion-base: 220ms;
+  --motion-slow: 350ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -872,5 +884,56 @@ html[data-tab-switch="true"] .animate-in {
   .animate-tab-in {
     animation: none;
     opacity: 1;
+  }
+}
+
+/* ── Empty state enter (components/ui/empty-state.tsx) ──
+   Opacity plus a 4px settle. The global guard below shortens it to 1ms. */
+@keyframes empty-state-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-empty-state {
+  animation: empty-state-in var(--motion-base) var(--ease-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-empty-state {
+    animation: none;
+  }
+}
+
+/* ── Global reduced-motion guard ──
+   Per-component guards stay where they exist. This catches everything else:
+   transitions and one-shot keyframes finish instantly, and smooth scrolling is
+   off. Progress spinners are the exception: a spinner that stops reads as a
+   hang, so it keeps turning at its normal speed. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --motion-instant: 0ms;
+    --motion-fast: 0ms;
+    --motion-base: 0ms;
+    --motion-slow: 0ms;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  .animate-spin {
+    animation-duration: 1s !important;
+    animation-iteration-count: infinite !important;
   }
 }

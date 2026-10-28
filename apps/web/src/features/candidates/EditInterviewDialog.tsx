@@ -21,8 +21,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import type { CandidateInterviewItem } from "@/features/interviews/shared";
 import {
   getBrowserTimeZone,
@@ -38,9 +38,9 @@ const TYPES = [
 ] as const;
 
 const MODES = [
-  { key: "video", label: "Video", icon: () => <span className="inline-block size-4 rounded bg-current/20" /> },
-  { key: "phone", label: "Phone", icon: () => <span className="inline-block size-4 rounded bg-current/20" /> },
-  { key: "onsite", label: "Onsite", icon: () => <span className="inline-block size-4 rounded bg-current/20" /> },
+  { key: "video", label: "Video" },
+  { key: "phone", label: "Phone" },
+  { key: "onsite", label: "Onsite" },
 ] as const;
 
 type TypeKey = (typeof TYPES)[number]["key"];
@@ -179,31 +179,21 @@ export function EditInterviewDialog({
             {/* Left column */}
             <div className="space-y-5">
               <Field label="Type">
-                <div className="grid grid-cols-3 gap-2">
-                  {TYPES.map((t) => (
-                    <SegButton
-                      key={t.key}
-                      active={type === t.key}
-                      onClick={() => setType(t.key)}
-                    >
-                      {t.label}
-                    </SegButton>
-                  ))}
-                </div>
+                <SegmentedControl
+                  aria-label="Interview type"
+                  options={TYPES.map((t) => ({ value: t.key, label: t.label }))}
+                  value={type}
+                  onValueChange={setType}
+                />
               </Field>
 
               <Field label="Mode">
-                <div className="grid grid-cols-3 gap-2">
-                  {MODES.map((m) => (
-                    <SegButton
-                      key={m.key}
-                      active={mode === m.key}
-                      onClick={() => setMode(m.key)}
-                    >
-                      {m.label}
-                    </SegButton>
-                  ))}
-                </div>
+                <SegmentedControl
+                  aria-label="Interview mode"
+                  options={MODES.map((m) => ({ value: m.key, label: m.label }))}
+                  value={mode}
+                  onValueChange={setMode}
+                />
               </Field>
 
               <div className="grid grid-cols-2 gap-3">
@@ -327,27 +317,3 @@ function Field({
   );
 }
 
-function SegButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-[13px] font-medium transition-colors",
-        active
-          ? "border-primary/40 bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:bg-muted",
-      )}
-    >
-      {children}
-    </button>
-  );
-}

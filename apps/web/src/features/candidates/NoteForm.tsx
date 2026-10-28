@@ -302,7 +302,7 @@ export function NoteForm({
         <EmptyState
           icon={MessageSquare}
           title="No notes on this candidate"
-          hint="Write what you noticed above. Mention a teammate with @ and they get notified."
+          description="Write what you noticed above. Mention a teammate with @ and they get notified."
         />
       ) : (
         <div className="space-y-3">

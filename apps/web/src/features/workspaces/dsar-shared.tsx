@@ -1,7 +1,6 @@
 import { Download, Trash2 } from "lucide-react";
-import type { VariantProps } from "class-variance-authority";
 
-import { Badge, badgeVariants } from "@/components/ui/badge";
+import { StatusPill, type StatusPillTone } from "@/components/ui/status-pill";
 
 /**
  * Single source of truth for DSAR (Data Subject Access Request) status and
@@ -17,35 +16,33 @@ export type DsarStatus =
   | "denied";
 export type DsarType = "export" | "erasure";
 
-type BadgeVariant = NonNullable<VariantProps<typeof badgeVariants>["variant"]>;
-
 export const DSAR_STATUS_META: Record<
   DsarStatus,
-  { label: string; badgeVariant: BadgeVariant; accentClassName: string }
+  { label: string; tone: StatusPillTone; accentClassName: string }
 > = {
   pending: {
     label: "Pending",
-    badgeVariant: "warning",
+    tone: "warning",
     accentClassName: "bg-clay",
   },
   processing: {
     label: "In progress",
-    badgeVariant: "info",
+    tone: "info",
     accentClassName: "bg-slate-info",
   },
   blocked: {
     label: "Blocked by legal hold",
-    badgeVariant: "warning",
+    tone: "warning",
     accentClassName: "bg-clay",
   },
   completed: {
     label: "Completed",
-    badgeVariant: "success",
+    tone: "success",
     accentClassName: "bg-lime",
   },
   denied: {
     label: "Denied",
-    badgeVariant: "danger",
+    tone: "danger",
     accentClassName: "bg-destructive",
   },
 };
@@ -75,9 +72,9 @@ export function DsarStatusBadge({
 }) {
   const meta = DSAR_STATUS_META[status];
   return (
-    <Badge variant={meta.badgeVariant} className={className}>
+    <StatusPill tone={meta.tone} className={className}>
       {meta.label}
-    </Badge>
+    </StatusPill>
   );
 }
 

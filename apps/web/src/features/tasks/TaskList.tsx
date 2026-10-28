@@ -64,13 +64,13 @@ export function TaskList({
         variant="filtered"
         icon={SearchX}
         title="No tasks match these filters"
-        hint="Try a different assignee or due window, or reset the filters."
+        description="Try a different assignee or due window, or reset the filters."
       />
     ) : (
       <EmptyState
         icon={CheckCircle2}
         title="Nothing on your plate"
-        hint="Tasks you create , or that a stage move assigns you , collect here with the most urgent first."
+        description="Tasks you create , or that a stage move assigns you , collect here with the most urgent first."
       />
     );
   }

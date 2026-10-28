@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowUpRight, ShieldCheck } from "lucide-react";
 
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyState } from "@/components/ui/empty-state";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import type { DsarRequestListItem } from "@/features/workspaces/dsar-actions";
 import {

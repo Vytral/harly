@@ -20,9 +20,8 @@ import {
   UserPlusIcon,
 } from "@/components/ui/icons/phosphor";
 import { UserAvatar } from "@/components/ui/UserAvatar";
+import { duration, easing, resolveTransition } from "@/lib/motion";
 import { cn } from "@/lib/utils";
-
-const EASE_OUT = [0.16, 1, 0.3, 1] as const;
 
 function matchTone(pct: number) {
   if (pct >= 75) return "text-pine";
@@ -136,7 +135,10 @@ export function SemanticMatchPanel({
               key={m.candidateId}
               initial={shouldReduceMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, ease: EASE_OUT, delay: Math.min(i, 10) * 0.03 }}
+              transition={resolveTransition(
+                { duration: duration.base, ease: easing.easeOut, delay: Math.min(i, 10) * 0.03 },
+                Boolean(shouldReduceMotion),
+              )}
               className="flex items-center gap-3 rounded-lg border border-transparent px-2 py-2 transition-colors hover:border-border hover:bg-accent/60"
             >
               <span className="w-5 shrink-0 text-sm font-semibold tabular-nums text-muted-foreground">
@@ -178,7 +180,7 @@ export function SemanticMatchPanel({
           <EmptyState
             icon={TargetIcon}
             title="Nobody in the pool is indexed yet"
-            hint="Indexing runs after a candidate is saved to the pool. Add a few and check back."
+            description="Indexing runs after a candidate is saved to the pool. Add a few and check back."
           />
         </CardContent>
       ) : null}

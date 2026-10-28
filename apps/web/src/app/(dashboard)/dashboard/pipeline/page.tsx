@@ -1,5 +1,5 @@
 import { Suspense } from "react";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyState } from "@/components/ui/empty-state";
 import { PipelineBoard } from "@/features/pipeline/PipelineBoard";
 import { JobCandidateRanking } from "@/features/pipeline/JobCandidateRanking";
 import { PipelineJobSelect } from "@/features/pipeline/PipelineJobSelect";

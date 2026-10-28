@@ -14,7 +14,6 @@ import {
   HumanTableHead,
   PersonCell,
   RowCheckbox,
-  StatusPill,
   Td,
   Th,
   Tr,
@@ -25,7 +24,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatusPill } from "@/components/ui/status-pill";
 import type { ApplicationsBoard } from "@/features/dashboard/applications-board";
 
 /**

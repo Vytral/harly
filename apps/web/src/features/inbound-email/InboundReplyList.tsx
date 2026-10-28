@@ -96,7 +96,7 @@ export function InboundReplyList({ items }: { items: InboundReplyItem[] }) {
           variant="filtered"
           icon={CheckCheck}
           title="No unread replies"
-          hint="You're caught up. Switch off the unread filter to see the whole history."
+          description="You're caught up. Switch off the unread filter to see the whole history."
         />
       ) : (
         <div className="overflow-hidden rounded-xl border bg-card">

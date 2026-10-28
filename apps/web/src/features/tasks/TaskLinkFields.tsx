@@ -3,7 +3,13 @@
 import { Briefcase, Calendar, Link2, User } from "lucide-react";
 
 import { Label } from "@/components/ui/label";
-import { cn } from "@/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type {
   TaskApplicationOption,
   TaskCandidateOption,
@@ -25,19 +31,15 @@ export type TaskContextOptions = {
   jobs: TaskJobOption[];
 };
 
+/** Radix Select cannot use an empty string as an item value. */
+const NONE = "none";
+
 function FieldLabel({ icon: Icon, children, htmlFor }: { icon: typeof User; children: React.ReactNode; htmlFor: string }) {
   return (
-    <Label htmlFor={htmlFor} className="mb-1.5 block text-xs font-medium text-zinc-500">
-      <Icon className="mr-1 inline size-3" />
+    <Label htmlFor={htmlFor} className="mb-1.5 block text-xs font-medium text-muted-foreground">
+      <Icon className="mr-1 inline size-3" aria-hidden="true" />
       {children}
     </Label>
-  );
-}
-
-function selectClassName(disabled: boolean) {
-  return cn(
-    "h-9 w-full rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring",
-    disabled && "cursor-not-allowed opacity-60",
   );
 }
 
@@ -65,7 +67,7 @@ export function TaskLinkFields({
   return (
     <div className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-3">
       <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <Link2 className="size-3.5" />
+        <Link2 className="size-3.5" aria-hidden="true" />
         Recruiting context
       </div>
 
@@ -73,38 +75,40 @@ export function TaskLinkFields({
         <FieldLabel icon={User} htmlFor="task-candidate">
           Candidate
         </FieldLabel>
-        <select
-          id="task-candidate"
-          value={value.candidateId ?? ""}
-          onChange={(event) =>
+        <Select
+          value={value.candidateId ?? NONE}
+          onValueChange={(next) =>
             onChange({
-              candidateId: event.target.value || null,
+              candidateId: next === NONE ? null : next,
               applicationId: null,
               jobId: null,
               interviewId: null,
             })
           }
-          className={selectClassName(false)}
         >
-          <option value="">No candidate linked</option>
-          {options.candidates.map((candidate) => (
-            <option key={candidate.id} value={candidate.id}>
-              {candidate.firstName} {candidate.lastName}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="task-candidate" className="w-full">
+            <SelectValue placeholder="No candidate linked" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE}>No candidate linked</SelectItem>
+            {options.candidates.map((candidate) => (
+              <SelectItem key={candidate.id} value={candidate.id}>
+                {candidate.firstName} {candidate.lastName}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div>
         <FieldLabel icon={Link2} htmlFor="task-application">
           Application
         </FieldLabel>
-        <select
-          id="task-application"
-          value={value.applicationId ?? ""}
+        <Select
+          value={value.applicationId ?? NONE}
           disabled={!value.candidateId}
-          onChange={(event) => {
-            const application = applications.find((item) => item.id === event.target.value);
+          onValueChange={(next) => {
+            const application = applications.find((item) => item.id === next);
             onChange({
               ...value,
               applicationId: application?.id ?? null,
@@ -112,37 +116,46 @@ export function TaskLinkFields({
               interviewId: null,
             });
           }}
-          className={selectClassName(!value.candidateId)}
         >
-          <option value="">
-            {value.candidateId ? "No application linked" : "Select a candidate first"}
-          </option>
-          {applications.map((application) => (
-            <option key={application.id} value={application.id}>
-              {application.jobTitle}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="task-application" className="w-full">
+            <SelectValue
+              placeholder={value.candidateId ? "No application linked" : "Select a candidate first"}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE}>No application linked</SelectItem>
+            {applications.map((application) => (
+              <SelectItem key={application.id} value={application.id}>
+                {application.jobTitle}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div>
         <FieldLabel icon={Briefcase} htmlFor="task-job">
           Job
         </FieldLabel>
-        <select
-          id="task-job"
-          value={value.jobId ?? ""}
+        <Select
+          value={value.jobId ?? NONE}
           disabled={Boolean(selectedApplication)}
-          onChange={(event) => onChange({ ...value, jobId: event.target.value || null, interviewId: null })}
-          className={selectClassName(Boolean(selectedApplication))}
+          onValueChange={(next) =>
+            onChange({ ...value, jobId: next === NONE ? null : next, interviewId: null })
+          }
         >
-          <option value="">No job linked</option>
-          {options.jobs.map((job) => (
-            <option key={job.id} value={job.id}>
-              {job.title}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="task-job" className="w-full">
+            <SelectValue placeholder="No job linked" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE}>No job linked</SelectItem>
+            {options.jobs.map((job) => (
+              <SelectItem key={job.id} value={job.id}>
+                {job.title}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         {selectedApplication ? (
           <p className="mt-1 text-[11px] text-muted-foreground">
             Derived from the selected application.
@@ -154,22 +167,27 @@ export function TaskLinkFields({
         <FieldLabel icon={Calendar} htmlFor="task-interview">
           Interview
         </FieldLabel>
-        <select
-          id="task-interview"
-          value={value.interviewId ?? ""}
+        <Select
+          value={value.interviewId ?? NONE}
           disabled={!value.candidateId}
-          onChange={(event) => onChange({ ...value, interviewId: event.target.value || null })}
-          className={selectClassName(!value.candidateId)}
+          onValueChange={(next) =>
+            onChange({ ...value, interviewId: next === NONE ? null : next })
+          }
         >
-          <option value="">
-            {value.candidateId ? "No interview linked" : "Select a candidate first"}
-          </option>
-          {interviews.map((interview) => (
-            <option key={interview.id} value={interview.id}>
-              {interview.label}
-            </option>
-          ))}
-        </select>
+          <SelectTrigger id="task-interview" className="w-full">
+            <SelectValue
+              placeholder={value.candidateId ? "No interview linked" : "Select a candidate first"}
+            />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={NONE}>No interview linked</SelectItem>
+            {interviews.map((interview) => (
+              <SelectItem key={interview.id} value={interview.id}>
+                {interview.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
     </div>
   );

@@ -17,6 +17,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  StatusPill as BaseStatusPill,
+  type StatusPillTone,
+} from "@/components/ui/status-pill";
+import {
   createDocument,
   createDocumentCategory,
   createDocumentVersion,
@@ -107,19 +111,24 @@ export function formatActivityType(type: string) {
   return type.replace(/^document\./, "").replaceAll("_", " ");
 }
 
+/**
+ * Documents-local name kept for existing callers. Delegates to the shared
+ * primitive. `className` still wins over the tone for status colours that a
+ * caller computes from its own metadata.
+ */
 export function StatusPill({
   children,
   className,
+  tone = "neutral",
 }: {
   children: React.ReactNode;
-  className: string;
+  className?: string;
+  tone?: StatusPillTone;
 }) {
   return (
-    <span
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${className}`}
-    >
+    <BaseStatusPill tone={tone} size="sm" className={className}>
       {children}
-    </span>
+    </BaseStatusPill>
   );
 }
 
@@ -613,13 +622,7 @@ function CategoryRow({ category }: { category: DocumentCategoryItem }) {
       ) : (
         <span className="min-w-0 flex-1 truncate text-sm">{category.name}</span>
       )}
-      <StatusPill
-        className={
-          category.active
-            ? "bg-accent text-primary"
-            : "bg-muted text-muted-foreground"
-        }
-      >
+      <StatusPill tone={category.active ? "accent" : "neutral"}>
         {category.active ? "Active" : "Hidden"}
       </StatusPill>
       {editing ? (

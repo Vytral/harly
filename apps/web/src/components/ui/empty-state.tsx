@@ -1,54 +1,109 @@
+import Link from "next/link";
+import type { Route } from "next";
+import { Inbox } from "lucide-react";
+import { isValidElement, type ComponentType, type ReactNode } from "react";
+
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 /**
  * Structural, not family-specific: Lucide and Phosphor glyphs both satisfy it,
  * so a screen keeps whichever family it already speaks.
  */
-type EmptyStateIcon = React.ComponentType<{ className?: string }>;
+export type EmptyStateIcon = ComponentType<{ className?: string }>;
+
+/** A link-shaped primary action. Free-form nodes are rendered as given. */
+export type EmptyStateLinkAction = { href: Route; label: string };
+
+export type EmptyStateAction = ReactNode | EmptyStateLinkAction;
 
 /**
  * The one empty state.
  *
  * An empty state has exactly two jobs: name what would be here, and say what
- * puts it there. Most of ours only did the first , "No notes yet.", "No items
- * yet." , which reads as a dead end and taught the reader nothing. So `hint` is
- * required, not optional: if you cannot say what the next move is, the section
- * probably should not be rendered at all.
+ * puts it there. `description` is required for that reason: if you cannot say
+ * what the next move is, the section probably should not be rendered at all.
  *
- * Two shapes, deliberately: `variant="empty"` for "nothing exists yet" (an
- * invitation), and `variant="filtered"` for "your filters excluded everything"
- * (an escape hatch). Conflating them is why so many screens told a brand-new
- * user their filters were wrong on a database with no rows in it.
+ * Shapes:
+ * - `variant="empty"` (default): "nothing exists yet". An invitation, drawn as
+ *   a dashed panel with an icon tile.
+ * - `variant="filtered"`: "your filters excluded everything". An escape hatch,
+ *   drawn without the panel frame so it does not read as a dead end.
+ * - `compact`: for panels, tables and drawers where the surrounding frame
+ *   already exists. No panel border, no icon tile.
+ *
+ * `action` takes either a node (for example a `Button` that clears a filter)
+ * or `{ href, label }` for a navigation CTA. `secondaryAction` is a node.
  */
 export function EmptyState({
-  icon: Icon,
+  icon: Icon = Inbox,
   title,
-  hint,
+  description,
   action,
+  secondaryAction,
   variant = "empty",
+  compact = false,
   className,
 }: {
-  icon: EmptyStateIcon;
+  icon?: EmptyStateIcon;
   title: string;
-  hint: string;
-  action?: React.ReactNode;
+  description: ReactNode;
+  action?: EmptyStateAction;
+  secondaryAction?: ReactNode;
   variant?: "empty" | "filtered";
+  compact?: boolean;
   className?: string;
 }) {
+  const framed = variant === "empty" && !compact;
+
   return (
     <div
       className={cn(
-        "flex flex-col items-center gap-1.5 px-6 text-center",
-        variant === "filtered"
-          ? "py-12"
-          : "rounded-[var(--radius-lg)] border border-dashed border-mist-border py-10",
+        "animate-empty-state flex flex-col items-center text-center",
+        compact ? "px-4 py-6" : "px-6 py-12",
+        framed && "rounded-xl border border-dashed bg-card",
         className,
       )}
     >
-      <Icon className="size-5 text-quiet-mist" />
-      <p className="mt-1 text-[14px] font-medium text-near-ink">{title}</p>
-      <p className="max-w-sm text-[13px] leading-5 text-soft-ink">{hint}</p>
-      {action ? <div className="mt-3">{action}</div> : null}
+      {compact ? null : (
+        <span className="mb-4 flex size-12 items-center justify-center rounded-xl bg-accent text-accent-foreground">
+          <Icon className="size-5" />
+        </span>
+      )}
+      {compact ? (
+        <Icon className="mb-2 size-4 text-quiet-mist" />
+      ) : null}
+      <p className="text-[15px] font-medium text-foreground">{title}</p>
+      <div className="mt-1.5 max-w-md text-sm leading-6 text-muted-foreground">
+        {description}
+      </div>
+      {action || secondaryAction ? (
+        <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+          {action ? renderAction(action, compact) : null}
+          {secondaryAction ?? null}
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function renderAction(action: EmptyStateAction, compact: boolean) {
+  if (isLinkAction(action)) {
+    return (
+      <Button asChild size={compact ? "sm" : "default"}>
+        <Link href={action.href}>{action.label}</Link>
+      </Button>
+    );
+  }
+  return action;
+}
+
+function isLinkAction(action: EmptyStateAction): action is EmptyStateLinkAction {
+  return (
+    typeof action === "object" &&
+    action !== null &&
+    !isValidElement(action) &&
+    "href" in action &&
+    "label" in action
   );
 }

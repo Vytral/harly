@@ -394,7 +394,7 @@ export function TemplatesManager({
           variant="filtered"
           icon={FileTextIcon}
           title="No templates match these filters"
-          hint="Try another stage or category, or search by the template's name."
+          description="Try another stage or category, or search by the template's name."
         />
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">

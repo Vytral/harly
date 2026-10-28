@@ -17,9 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { SegmentedControl } from "@/components/ui/segmented-control";
 import { SidePanel } from "@/components/ui/side-panel";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import {
   getBrowserTimeZone,
   parseScheduledAt,
@@ -301,32 +301,21 @@ export function ScheduleDrawer({
             )}
 
             <Field label="Type">
-              <div className="grid grid-cols-3 gap-2">
-                {TYPES.map((t) => (
-                  <SegButton
-                    key={t.key}
-                    active={type === t.key}
-                    onClick={() => setType(t.key)}
-                  >
-                    {t.label}
-                  </SegButton>
-                ))}
-              </div>
+              <SegmentedControl
+                aria-label="Interview type"
+                options={TYPES.map((t) => ({ value: t.key, label: t.label }))}
+                value={type}
+                onValueChange={setType}
+              />
             </Field>
 
             <Field label="Mode">
-              <div className="grid grid-cols-3 gap-2">
-                {MODES.map((m) => (
-                  <SegButton
-                    key={m.key}
-                    active={mode === m.key}
-                    onClick={() => setMode(m.key)}
-                  >
-                    <m.icon className="size-4" strokeWidth={1.8} />
-                    {m.label}
-                  </SegButton>
-                ))}
-              </div>
+              <SegmentedControl
+                aria-label="Interview mode"
+                options={MODES.map((m) => ({ value: m.key, label: m.label, icon: m.icon }))}
+                value={mode}
+                onValueChange={setMode}
+              />
             </Field>
 
             <div className="grid grid-cols-2 gap-3">
@@ -461,27 +450,3 @@ function Field({
   );
 }
 
-function SegButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex items-center justify-center gap-1.5 rounded-xl border px-2 py-2.5 text-[13px] font-medium transition-colors",
-        active
-          ? "border-primary/40 bg-accent text-accent-foreground"
-          : "text-muted-foreground hover:bg-muted",
-      )}
-    >
-      {children}
-    </button>
-  );
-}

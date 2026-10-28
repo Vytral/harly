@@ -1,6 +1,6 @@
 import { UserRound } from "lucide-react";
 
-import { EmptyState } from "@/components/ui/EmptyState";
+import { EmptyState } from "@/components/ui/empty-state";
 import { listPeopleAction } from "@/features/people/actions";
 import { PeopleTable, type PersonListRow } from "@/features/people/PeopleTable";
 

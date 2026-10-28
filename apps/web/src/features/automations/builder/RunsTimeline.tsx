@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { RelativeTime } from "@/lib/date-hydration";
 import { toast } from "@/lib/notification-island/toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { StatusPill, type StatusPillTone } from "@/components/ui/status-pill";
 import { CheckCircleIcon, XCircleIcon, ClockIcon, ProhibitIcon, CaretDownIcon, WarningCircleIcon } from "@/components/ui/icons/phosphor";
 
 import { cancelRunAction, getRunAction, listRunsAction, reassignRunApprovalAction, replayRunFromStepAction, resolveRunApprovalAction, resolveRunUncertainAction, retryRunAction } from "../actions";
@@ -519,23 +520,21 @@ function UncertainResolution({ step }: { step: SerializedRunStep }) {
 
 function StatusBadge({ status }: { status: string }) {
   const reduceMotion = useReducedMotion();
-  const statusMap = {
-    running: { icon: ClockIcon, cls: "bg-status-quiet-ink/10 text-status-quiet-ink", label: "Running" },
-    succeeded: { icon: CheckCircleIcon, cls: "bg-success/10 text-success", label: "OK" },
-    failed: { icon: XCircleIcon, cls: "bg-danger-rust/10 text-danger-rust", label: "Failed" },
-    skipped: { icon: ProhibitIcon, cls: "bg-soft-kraft text-soft-ink", label: "Skipped" },
-    dead_letter: { icon: XCircleIcon, cls: "bg-danger-rust/20 text-danger-rust", label: "Failed permanently" },
-    cancelled: { icon: ProhibitIcon, cls: "bg-soft-kraft text-soft-ink", label: "Cancelled" },
-    waiting: { icon: ClockIcon, cls: "bg-soft-kraft text-soft-ink", label: "Waiting" },
-    retrying: { icon: ClockIcon, cls: "bg-status-quiet-ink/10 text-status-quiet-ink", label: "Retrying" },
-    completed_with_warnings: { icon: CheckCircleIcon, cls: "bg-warning/10 text-warning", label: "Warnings" },
-    stopped: { icon: ProhibitIcon, cls: "bg-soft-kraft text-soft-ink", label: "Stopped" },
-    uncertain: { icon: XCircleIcon, cls: "bg-danger-rust/20 text-danger-rust", label: "Needs review" },
-    queued: { icon: ClockIcon, cls: "bg-soft-kraft text-soft-ink", label: "Queued" },
+  const statusMap: Record<string, { icon: typeof ClockIcon; tone: StatusPillTone; label: string }> = {
+    running: { icon: ClockIcon, tone: "info", label: "Running" },
+    succeeded: { icon: CheckCircleIcon, tone: "success", label: "OK" },
+    failed: { icon: XCircleIcon, tone: "danger", label: "Failed" },
+    skipped: { icon: ProhibitIcon, tone: "neutral", label: "Skipped" },
+    dead_letter: { icon: XCircleIcon, tone: "danger", label: "Failed permanently" },
+    cancelled: { icon: ProhibitIcon, tone: "neutral", label: "Cancelled" },
+    waiting: { icon: ClockIcon, tone: "neutral", label: "Waiting" },
+    retrying: { icon: ClockIcon, tone: "info", label: "Retrying" },
+    completed_with_warnings: { icon: CheckCircleIcon, tone: "warning", label: "Warnings" },
+    stopped: { icon: ProhibitIcon, tone: "neutral", label: "Stopped" },
+    uncertain: { icon: XCircleIcon, tone: "danger", label: "Needs review" },
+    queued: { icon: ClockIcon, tone: "neutral", label: "Queued" },
   };
-  const map = statusMap[status as keyof typeof statusMap];
-  const fallback = { icon: ClockIcon, cls: "bg-soft-kraft text-soft-ink", label: status };
-  const selected = map ?? fallback;
+  const selected = statusMap[status] ?? { icon: ClockIcon, tone: "neutral" as const, label: status };
   const Icon = selected.icon;
   const contentTransition = reduceMotion
     ? { duration: 0.12, ease: "linear" as const }
@@ -548,10 +547,11 @@ function StatusBadge({ status }: { status: string }) {
         animate={{ opacity: 1, scale: 1 }}
         exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.95 }}
         transition={contentTransition}
-        className={cn("inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium", selected.cls)}
+        className="inline-flex shrink-0"
       >
-        <Icon className="size-3" />
-        {selected.label}
+        <StatusPill tone={selected.tone} size="sm" icon={Icon}>
+          {selected.label}
+        </StatusPill>
       </motion.span>
     </AnimatePresence>
   );
