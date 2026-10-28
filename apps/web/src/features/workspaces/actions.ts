@@ -42,6 +42,7 @@ import {
   requirePermission,
 } from "@/features/workspaces/permissions-server";
 import { assertNotDemo } from "@/features/demo/assert-not-demo";
+import { assertNotDemoOutsideSandbox } from "@/features/demo/sandbox-access";
 import {
   boardBrandingSchema,
   boardStyles,
@@ -181,7 +182,7 @@ export async function updateWorkspaceBoardBrandingAction(
 ): Promise<ActionResult> {
   try {
     // Public board branding + hero URLs render on the demo's own domain.
-    assertNotDemo();
+    await assertNotDemoOutsideSandbox();
     const context = await requirePermission("settings:edit");
     const rawBoardStyle = formData.get("boardStyle");
     const rawLogoStyle = formData.get("logoStyle");
@@ -663,7 +664,7 @@ export async function updateWorkspaceMemberRoleAction(
   formData: FormData,
 ): Promise<ActionResult> {
   try {
-    assertNotDemo();
+    await assertNotDemoOutsideSandbox();
     const context = await requirePermission("members:edit");
     const parsed = updateMemberRoleSchema.safeParse({
       memberId: formData.get("memberId"),
@@ -781,7 +782,7 @@ export async function updateMemberRolesAction(input: {
   changes: { memberId: string; role: string }[];
 }): Promise<ActionResult> {
   try {
-    assertNotDemo();
+    await assertNotDemoOutsideSandbox();
     const context = await requirePermission("members:edit");
     const parsed = bulkRolesSchema.safeParse(input);
     if (!parsed.success) {
@@ -872,7 +873,7 @@ export async function updateMemberAccessAction(input: {
   status: "active" | "inactive" | "suspended";
 }): Promise<ActionResult> {
   try {
-    assertNotDemo();
+    await assertNotDemoOutsideSandbox();
     const context = await requirePermission("members:edit");
     const parsed = updateMemberAccessSchema.safeParse(input);
     if (!parsed.success) return { success: false, error: "Invalid member access profile." };

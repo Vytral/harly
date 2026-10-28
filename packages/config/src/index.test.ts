@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { loadHarlyConfig } from "./index";
+import { demoSandboxSettings, loadHarlyConfig } from "./index";
 
 const production = {
   NODE_ENV: "production",
@@ -86,5 +86,20 @@ describe("loadHarlyConfig", () => {
     );
     expect(config.HARLY_URL).toBe("https://legacy.example.com");
     expect(warn).toHaveBeenCalledOnce();
+  });
+});
+
+describe("demoSandboxSettings", () => {
+  it("defaults to a four hour lifetime and forty sandboxes", () => {
+    expect(demoSandboxSettings({})).toEqual({ ttlMinutes: 240, maxActive: 40 });
+  });
+
+  it("reads valid overrides and ignores out-of-range values", () => {
+    expect(
+      demoSandboxSettings({ DEMO_SANDBOX_TTL_MINUTES: "60", DEMO_SANDBOX_MAX_ACTIVE: "10" }),
+    ).toEqual({ ttlMinutes: 60, maxActive: 10 });
+    expect(
+      demoSandboxSettings({ DEMO_SANDBOX_TTL_MINUTES: "1", DEMO_SANDBOX_MAX_ACTIVE: "abc" }),
+    ).toEqual({ ttlMinutes: 240, maxActive: 40 });
   });
 });

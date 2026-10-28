@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db, workspaceSettings } from "@harly/db";
 import { isDemoMode } from "@harly/config";
 
+import { isLiveSandboxWorkspace } from "@/features/demo/sandbox-access";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import {
   careerPageConfigSchema,
@@ -24,11 +25,6 @@ export type SaveCareerPageResult = { success: boolean; error?: string };
 export async function saveCareerPageConfigAction(
   rawConfig: unknown,
 ): Promise<SaveCareerPageResult> {
-  // The public board is served under the demo's own domain; don't let visitors
-  // publish arbitrary content (phishing/SEO spam) between resets.
-  if (isDemoMode()) {
-    return { success: false, error: "This action is disabled in the demo." };
-  }
   let context;
   try {
     context = await requirePermission("settings:edit");
@@ -36,12 +32,23 @@ export async function saveCareerPageConfigAction(
     return { success: false, error: "You do not have permission to edit settings." };
   }
 
+  // The public board is served under the demo's own domain. Only a visitor's
+  // private sandbox may publish to it (never the shared template), and a
+  // sandbox board is always kept out of search indexes.
+  const sandbox = isDemoMode() && (await isLiveSandboxWorkspace(context.organization.id));
+  if (isDemoMode() && !sandbox) {
+    return { success: false, error: "This action is disabled in the demo." };
+  }
+
   const parsed = careerPageConfigSchema.safeParse(rawConfig);
   if (!parsed.success) {
     return { success: false, error: "Some fields are invalid. Check and retry." };
   }
 
-  const config = normalizeCareerPageConfig(parsed.data);
+  const normalized = normalizeCareerPageConfig(parsed.data);
+  const config = sandbox
+    ? { ...normalized, seo: { ...normalized.seo, indexable: false } }
+    : normalized;
   const workspaceId = context.organization.id;
 
   try {

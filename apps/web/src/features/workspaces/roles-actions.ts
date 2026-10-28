@@ -5,7 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { logAuditEvent } from "@/lib/audit-log";
-import { assertNotDemo } from "@/features/demo/assert-not-demo";
+import { assertNotDemoOutsideSandbox } from "@/features/demo/sandbox-access";
 
 import { db } from "@harly/db";
 import { customRoles, member as authMembers } from "@harly/db";
@@ -48,7 +48,7 @@ export async function createCustomRole(input: {
   permissions: string[];
   scope?: RoleScope;
 }): Promise<RoleActionResult> {
-  assertNotDemo();
+  await assertNotDemoOutsideSandbox();
   const context = await requirePermission("roles:manage");
 
   const parsed = roleSchema.safeParse(input);
@@ -109,7 +109,7 @@ export async function updateCustomRole(input: {
   permissions: string[];
   scope?: RoleScope;
 }): Promise<RoleActionResult> {
-  assertNotDemo();
+  await assertNotDemoOutsideSandbox();
   const context = await requirePermission("roles:manage");
 
   // Owner is the locked keyholder , never editable.
@@ -180,7 +180,7 @@ export async function updateCustomRole(input: {
 export async function deleteCustomRole(input: {
   key: string;
 }): Promise<RoleActionResult> {
-  assertNotDemo();
+  await assertNotDemoOutsideSandbox();
   const context = await requirePermission("roles:manage");
 
   if (isBuiltinRole(input.key)) {

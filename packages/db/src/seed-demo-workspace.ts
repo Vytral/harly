@@ -583,6 +583,13 @@ export type SeedDemoOptions = {
    * never "oldest membership" (teammates are seeded with older createdAt).
    */
   ownerUserId?: string;
+  /**
+   * Seed a per-visitor sandbox rather than the canonical template workspace.
+   * Teammate `user` rows are global and shared, but `member` rows are
+   * per-workspace and keyed by primary key, so a sandbox namespaces its member
+   * ids by workspace id. The template workspace keeps its legacy ids.
+   */
+  sandbox?: boolean;
 };
 
 /**
@@ -614,6 +621,48 @@ async function wipeWorkspaceScopedData(input: {
     await tx`DELETE FROM session WHERE user_id LIKE 'seed-teammate-%'`;
   });
   return scopedTables.length;
+}
+
+/**
+ * Permanently delete a per-visitor sandbox: every workspace-scoped row, the
+ * organization-keyed identity/config rows, the organization itself and the
+ * sandbox's owner account (its sessions and credentials cascade). Never call
+ * this for the canonical template workspace — callers must only pass ids they
+ * minted themselves. Uploaded blobs live under `uploads/workspaces/<id>` and
+ * are removed too.
+ */
+export async function deleteDemoSandbox(options: {
+  sql: SeedClient["sql"];
+  workspaceId: string;
+  ownerUserId?: string | null;
+  uploadsRoot?: string;
+}): Promise<void> {
+  const { sql, workspaceId, ownerUserId } = options;
+  const scopedTables = await sql<{ table_name: string }[]>`
+    SELECT table_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND column_name = 'workspace_id'
+    ORDER BY table_name
+  `;
+  await sql.begin(async (tx) => {
+    await tx`SET LOCAL session_replication_role = 'replica'`;
+    for (const { table_name } of scopedTables) {
+      await tx`DELETE FROM ${tx(table_name)} WHERE workspace_id = ${workspaceId}`;
+    }
+    await tx`DELETE FROM invitation WHERE organization_id = ${workspaceId}`;
+    await tx`DELETE FROM member_sender_identity WHERE organization_id = ${workspaceId}`;
+    await tx`DELETE FROM sso_provider WHERE organization_id = ${workspaceId}`;
+    await tx`DELETE FROM workspace_settings WHERE organization_id = ${workspaceId}`;
+    await tx`DELETE FROM member WHERE organization_id = ${workspaceId}`;
+    await tx`DELETE FROM organization WHERE id = ${workspaceId}`;
+    if (ownerUserId) {
+      await tx`DELETE FROM "user" WHERE id = ${ownerUserId}`;
+    }
+  });
+  await rm(path.join(resolveUploadsRoot(options.uploadsRoot), "workspaces", workspaceId), {
+    recursive: true,
+    force: true,
+  });
 }
 
 export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedDemoResult> {
@@ -828,23 +877,26 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
 
     // ── Demo teammates (user + workspace membership; no auth) ──
     for (const t of TEAMMATES) {
-      await db
-        .insert(schema.user)
-        .values({
-          id: t.id,
-          name: t.name,
-          email: t.email,
-          emailVerified: true,
-          image: `${DEMO_CDN}/demo/team/${t.avatar}.jpg`,
-        })
-        .onConflictDoUpdate({
-          target: schema.user.id,
-          set: { name: t.name, email: t.email, image: `${DEMO_CDN}/demo/team/${t.avatar}.jpg` },
-        });
+      const teammateUser = db.insert(schema.user).values({
+        id: t.id,
+        name: t.name,
+        email: t.email,
+        emailVerified: true,
+        image: `${DEMO_CDN}/demo/team/${t.avatar}.jpg`,
+      });
+      // Teammate users are global rows shared by every workspace. Sandboxes seed
+      // concurrently, so they must tolerate losing the insert race (both id and
+      // email are unique) instead of upserting; the template reseed refreshes.
+      await (options.sandbox
+        ? teammateUser.onConflictDoNothing()
+        : teammateUser.onConflictDoUpdate({
+            target: schema.user.id,
+            set: { name: t.name, email: t.email, image: `${DEMO_CDN}/demo/team/${t.avatar}.jpg` },
+          }));
       await db
         .insert(schema.member)
         .values({
-          id: `seed-member-${t.key}`,
+          id: options.sandbox ? `seed-member-${workspaceId}-${t.key}` : `seed-member-${t.key}`,
           organizationId: workspaceId,
           userId: t.id,
           role: "member",

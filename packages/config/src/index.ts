@@ -95,6 +95,16 @@ const envSchema = z
     // OpenAI project: the app-side limits below are a second line of defense.
     DEMO_AI_API_KEY: optionalString,
     DEMO_AI_MODEL: optionalString,
+    // Per-visitor sandbox lifetime (minutes) and the instance-wide cap on live
+    // sandboxes. Both are optional; see demoSandboxSettings() for defaults.
+    DEMO_SANDBOX_TTL_MINUTES: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      z.coerce.number().int().min(15).max(1_440).optional(),
+    ),
+    DEMO_SANDBOX_MAX_ACTIVE: z.preprocess(
+      (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+      z.coerce.number().int().min(1).max(500).optional(),
+    ),
     // Instance-wide daily ceiling on demo AI requests across every visitor.
     DEMO_AI_DAILY_REQUEST_LIMIT: z.preprocess(
       (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
@@ -313,6 +323,32 @@ export function demoWorkspaceId(
 ): string | null {
   const value = source.DEMO_WORKSPACE_ID?.trim();
   return value ? value : null;
+}
+
+export const DEMO_SANDBOX_DEFAULT_TTL_MINUTES = 240;
+export const DEMO_SANDBOX_DEFAULT_MAX_ACTIVE = 40;
+
+export type DemoSandboxSettings = {
+  ttlMinutes: number;
+  maxActive: number;
+};
+
+/**
+ * Per-visitor sandbox limits for the public demo. Each visitor gets a private,
+ * disposable copy of the demo workspace; it expires after `ttlMinutes` and at
+ * most `maxActive` copies may exist at once.
+ */
+export function demoSandboxSettings(
+  source: Record<string, string | undefined> = process.env,
+): DemoSandboxSettings {
+  const read = (key: string, min: number, max: number, fallback: number) => {
+    const raw = Number(source[key]?.trim() || NaN);
+    return Number.isInteger(raw) && raw >= min && raw <= max ? raw : fallback;
+  };
+  return {
+    ttlMinutes: read("DEMO_SANDBOX_TTL_MINUTES", 15, 1_440, DEMO_SANDBOX_DEFAULT_TTL_MINUTES),
+    maxActive: read("DEMO_SANDBOX_MAX_ACTIVE", 1, 500, DEMO_SANDBOX_DEFAULT_MAX_ACTIVE),
+  };
 }
 
 export const DEMO_AI_DEFAULT_MODEL = "gpt-6-luna";

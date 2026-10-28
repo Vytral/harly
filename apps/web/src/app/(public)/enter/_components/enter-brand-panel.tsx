@@ -13,18 +13,18 @@ const REPO_URL = "https://github.com/Vytral/harly";
 const POINTS = [
   {
     icon: LayoutGridIcon,
-    title: "There's plenty to play with",
-    body: "Candidates, jobs, interviews, offers, automations, forms, analytics and more are already set up.",
-  },
-  {
-    icon: WorkflowIcon,
-    title: "Try the automations",
-    body: "Build one from scratch or edit an existing workflow to see what happens.",
+    title: "A private workspace, just for you",
+    body: "Candidates, jobs, interviews and offers are already set up. Move them around freely; nobody else sees your changes.",
   },
   {
     icon: BriefcaseIcon,
-    title: "Walk the careers page",
-    body: "Open the public job board as a candidate would, then apply to a role end to end.",
+    title: "Restyle your careers page",
+    body: "Edit the careers page in the builder and open your public board to see it change instantly. Then apply to a role as a candidate would.",
+  },
+  {
+    icon: WorkflowIcon,
+    title: "Tour the automations",
+    body: "Walk through guided automation scenarios with safe simulations. Nothing is sent outside the sandbox.",
   },
 ];
 
