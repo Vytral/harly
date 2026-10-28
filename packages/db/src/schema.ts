@@ -61,6 +61,24 @@ export const applicationStatusEnum = pgEnum("application_status", [
   "withdrawn",
 ]);
 
+/**
+ * Semantic meaning of a pipeline stage, independent of its display name.
+ * `custom` is an active, non-terminal stage with no special behavior.
+ * `hired`, `rejected` and `withdrawn` are terminal and drive application
+ * status. A NULL kind on a row means "written by a pre-0.3.0 build"; readers
+ * must fall back to inferring the kind from the stage name.
+ */
+export const jobStageKindEnum = pgEnum("job_stage_kind", [
+  "applied",
+  "screening",
+  "interview",
+  "offer",
+  "hired",
+  "rejected",
+  "withdrawn",
+  "custom",
+]);
+
 export const activityEntityTypeEnum = pgEnum("activity_entity_type", [
   "candidate",
   "application",
@@ -1388,14 +1406,24 @@ export const jobStages = pgTable(
     name: text("name").notNull(),
     color: text("color"),
     order: integer("order").notNull(),
+    kind: jobStageKindEnum("kind"),
+    /**
+     * Retired stages keep their history and past applications but are hidden
+     * from boards and pickers and free their name and position.
+     */
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     emailConfig: jsonb("email_config")
       .default(sql`'{"candidateUpdatesEnabled":true}'::jsonb`)
       .notNull(),
     ...timestamps(),
   },
   (table) => [
-    uniqueIndex("job_stages_job_order_idx").on(table.jobId, table.order),
-    uniqueIndex("job_stages_job_name_idx").on(table.jobId, table.name),
+    uniqueIndex("job_stages_job_order_idx")
+      .on(table.jobId, table.order)
+      .where(sql`${table.archivedAt} is null`),
+    uniqueIndex("job_stages_job_name_idx")
+      .on(table.jobId, table.name)
+      .where(sql`${table.archivedAt} is null`),
     index("job_stages_workspace_idx").on(table.workspaceId),
     index("job_stages_job_idx").on(table.jobId),
   ],
