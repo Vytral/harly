@@ -55,10 +55,11 @@ high-trust exception for private networks.
 
 Prometheus scrapes `GET /api/metrics` with `Authorization: Bearer $METRICS_TOKEN`.
 The endpoint returns `401` without that token. With `Accept: application/json`
-it also returns operational queue and cron summaries. Workspace operators can
-inspect secret-free connector status at `GET /api/health/integrations` with
-their Harly session; this reports configured state and check duration without
-returning credentials. Import `docs/observability/prometheus-alerts.yml` into
+it also returns operational queue and cron summaries. Workspace members can
+read coarse connector health states at `GET /api/health/integrations` with
+their Harly session; members who can manage integrations also receive the
+per-provider status detail and last sanitized error. The endpoint never returns
+credentials or webhook secrets. Import `docs/observability/prometheus-alerts.yml` into
 the monitoring stack to alert on failed cron runs, high SSE p95 latency, and
 elevated HTTP 5xx rates.
 
