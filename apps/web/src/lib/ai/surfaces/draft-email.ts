@@ -7,6 +7,11 @@ import { getModel } from "@/lib/ai/registry";
 import { recordAiUsage } from "@/lib/ai/usage";
 import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
 import type { AiModelConfig } from "@/lib/ai/providers";
+import {
+  ANONYMIZATION_BLOCKED_MESSAGES,
+  assertAnonymizationAllows,
+  type AnonymizationSettings,
+} from "@/lib/ai/candidate-context";
 
 export type EmailDraftType =
   | "screening"
@@ -71,9 +76,12 @@ const emailDraftSchema = z.object({
 });
 
 export async function draftEmailWithAI(
-  config: AiModelConfig,
+  config: AiModelConfig & AnonymizationSettings,
   input: EmailDraftInput,
 ): Promise<EmailDraft> {
+  // The draft is addressed to a named candidate and quotes the thread, so it
+  // needs identity. Refuse rather than send it.
+  assertAnonymizationAllows(config, ANONYMIZATION_BLOCKED_MESSAGES.emailDraft);
   const scoreContext =
     input.aiScore != null
       ? `\nAI fit score: ${input.aiScore}/100 (${input.aiRecommendation ?? "unknown recommendation"})`

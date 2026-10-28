@@ -10,11 +10,23 @@ import {
   type ScorecardRefinement,
 } from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
+import {
+  ANONYMIZATION_BLOCKED_MESSAGES,
+  AiAnonymizationBlockedError,
+  redactForAi,
+  type AnonymizationSettings,
+} from "@/lib/ai/candidate-context";
+import type { CandidateIdentity } from "@/features/candidates/anonymize";
 
 export type ScorecardRefinementInput = {
   /** The interviewer's raw scorecard comment. */
   comment: string;
   jobTitle?: string | null;
+  /**
+   * The candidate the comment is about. Required when anonymization is on, so
+   * that the candidate's name can be removed from the comment before it is sent.
+   */
+  candidate?: CandidateIdentity | null;
 };
 
 const SYSTEM_PROMPT =
@@ -28,15 +40,27 @@ const SYSTEM_PROMPT =
   UNTRUSTED_DATA_GUARDRAIL;
 
 export async function refineScorecardTextWithAI(
-  config: AiModelConfig,
+  config: AiModelConfig & AnonymizationSettings,
   input: ScorecardRefinementInput,
 ): Promise<ScorecardRefinement> {
+  const anonymize = config.resumeAnonymization === true;
+  const identity = input.candidate ?? null;
+  const hasIdentity = Boolean(
+    identity?.fullName?.trim() || identity?.firstName?.trim() || identity?.lastName?.trim(),
+  );
+  // Comments can name the candidate. Without the candidate's identity we cannot
+  // guarantee the name is removed, so refinement pauses instead.
+  if (anonymize && !hasIdentity) {
+    throw new AiAnonymizationBlockedError(ANONYMIZATION_BLOCKED_MESSAGES.scorecardRefinement);
+  }
+  const comment = redactForAi(input.comment, identity ?? {}, anonymize);
+
   const result = await generateText({
     model: getModel(config),
     system: SYSTEM_PROMPT,
     prompt:
       (input.jobTitle ? `Role: ${input.jobTitle}\n\n` : "") +
-      `Refine this interviewer comment:\n"""\n${input.comment.slice(0, 6000)}\n"""`,
+      `Refine this interviewer comment:\n"""\n${comment.slice(0, 6000)}\n"""`,
     output: Output.object({
       schema: scorecardRefinementSchema,
       name: "scorecard_refinement",

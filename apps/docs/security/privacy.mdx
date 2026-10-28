@@ -109,8 +109,10 @@ When a candidate is deleted or anonymized, evaluations, criterion evidence,
 embeddings, and queued evaluation jobs are removed with the candidate. Configure
 retention and legal holds before enabling automatic processing.
 
-When AI features are enabled, candidate data is sent to your configured
-provider. Before enabling:
+When AI features are enabled, some candidate data is sent to your configured
+provider. The [AI features page](/product/ai-features#what-leaves-your-server)
+lists what each feature sends and what the candidate anonymization setting
+changes. Before enabling:
 
 <Steps>
   <Step title="Choose a provider with a DPA">
@@ -121,12 +123,13 @@ provider. Before enabling:
     For each enabled AI feature, document: purpose, provider, model, what data
     is sent, who reviews the output, and what the human override path is.
 
-    | Feature | Data sent to provider |
+    | Feature | Sends candidate identity to the provider? |
     | --- | --- |
-    | Candidate matching | Job description + application answers |
-    | Assisted drafting | Job description + application context |
-    | Scorecard anonymization | Scorecard text (names stripped before send) |
-    | Chat | Current candidate or job context only |
+    | Candidate scoring and semantic matching | Yes, unless candidate anonymization is on. With it on, the name, location and contact details are removed |
+    | Email drafts, mailbox assistance, duplicate detection | Yes when anonymization is off. Paused when it is on |
+    | Scorecard comment refinement | The comment text, which can name the candidate. Paused when anonymization is on |
+    | Interview brief | Yes. Not yet covered by anonymization |
+    | Chat assistant | Yes, through the conversation and tool results. Not yet covered by anonymization |
   </Step>
   <Step title="Notify candidates">
     If your jurisdiction or sector requires it, disclose AI use in your candidate

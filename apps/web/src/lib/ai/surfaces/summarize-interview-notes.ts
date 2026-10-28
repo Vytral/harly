@@ -10,6 +10,11 @@ import {
   type InterviewNotesSummary,
 } from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
+import {
+  buildCandidateAiContext,
+  redactForAi,
+  type AnonymizationSettings,
+} from "@/lib/ai/candidate-context";
 
 export type InterviewNotesSummaryInput = {
   rawNotes: string;
@@ -27,18 +32,26 @@ const SYSTEM_PROMPT =
   "Do not invent information. If notes are sparse, say so in the summary." + "\n\n" + UNTRUSTED_DATA_GUARDRAIL;
 
 export async function summarizeInterviewNotesWithAI(
-  config: AiModelConfig,
+  config: AiModelConfig & AnonymizationSettings,
   input: InterviewNotesSummaryInput,
 ): Promise<InterviewNotesSummary> {
+  // Notes are free text and often name the candidate. When anonymization is on,
+  // the candidate's name in the notes is removed and the name line is an alias.
+  const anonymize = config.resumeAnonymization === true;
+  const candidate = buildCandidateAiContext(
+    { fullName: input.candidateName },
+    { anonymize },
+  );
+  const notes = redactForAi(input.rawNotes, candidate.identity, anonymize);
   const result = await generateText({
     model: getModel(config),
     system: SYSTEM_PROMPT,
     prompt:
       `Structure these interview notes.\n\n` +
-      `Candidate: ${input.candidateName}\n` +
+      `Candidate: ${candidate.label}\n` +
       `Role: ${input.jobTitle}\n` +
       `Interview type: ${input.interviewType}\n\n` +
-      `Notes:\n"""\n${input.rawNotes.slice(0, 8000)}\n"""`,
+      `Notes:\n"""\n${notes.slice(0, 8000)}\n"""`,
     output: Output.object({
       schema: interviewNotesSummarySchema,
       name: "interview_notes_summary",

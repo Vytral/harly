@@ -14,6 +14,7 @@ import {
 } from "@harly/db";
 
 import type { AiModelConfig } from "@/lib/ai/providers";
+import { buildCandidateAiContext, type AnonymizationSettings } from "@/lib/ai/candidate-context";
 import { cosineSimilarity, embedText, EMBEDDING_MODEL_ID } from "@/lib/ai/embeddings";
 import { loadResumeText } from "@/lib/resume/load-resume-text";
 import { enforceRateLimit } from "@/server/api/ratelimit";
@@ -82,6 +83,12 @@ function buildJobEmbeddingText(job: {
     .join("\n");
 }
 
+/**
+ * Text embedded for one candidate. With anonymization on the name line is
+ * dropped and the headline and résumé are redacted, through the same context the
+ * chat surfaces use. Anonymized vectors are hashed under a distinct prefix so the
+ * two modes never reuse each other's cache entry.
+ */
 function buildCandidateEmbeddingText(
   candidate: {
     firstName: string;
@@ -91,17 +98,34 @@ function buildCandidateEmbeddingText(
     skills: unknown;
   },
   resumeText: string | null,
+  anonymize: boolean,
 ): string {
   const skills = Array.isArray(candidate.skills) ? (candidate.skills as string[]) : [];
+  const context = buildCandidateAiContext(
+    {
+      firstName: candidate.firstName,
+      lastName: candidate.lastName,
+      fullName: `${candidate.firstName} ${candidate.lastName}`,
+      headline: candidate.headline,
+      skills,
+      experienceYears: candidate.experienceYears,
+      resumeText,
+    },
+    { anonymize },
+  );
   return [
-    `${candidate.firstName} ${candidate.lastName}`,
-    candidate.headline,
-    candidate.experienceYears != null ? `${candidate.experienceYears} years experience` : null,
-    skills.length > 0 ? `Skills: ${skills.join(", ")}` : null,
-    resumeText,
+    anonymize ? null : `${candidate.firstName} ${candidate.lastName}`,
+    context.headline,
+    context.experienceYears != null ? `${context.experienceYears} years experience` : null,
+    context.skills.length > 0 ? `Skills: ${context.skills.join(", ")}` : null,
+    context.resumeText,
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+function candidateEmbeddingHash(text: string, anonymize: boolean): string {
+  return hashText(anonymize ? `anonymized-v1\n${text}` : text);
 }
 
 /** Generate (or refresh, if stale) the embedding for one job. Skips the API call if unchanged. */
@@ -154,7 +178,7 @@ export async function ensureJobEmbedding(
 
 /** Generate (or refresh, if stale) the embedding for one candidate. */
 export async function ensureCandidateEmbedding(
-  config: AiModelConfig,
+  config: AiModelConfig & AnonymizationSettings,
   workspaceId: string,
   candidateId: string,
 ): Promise<{ skipped: boolean }> {
@@ -173,8 +197,9 @@ export async function ensureCandidateEmbedding(
   if (!candidate) throw new Error("Candidate not found.");
 
   const { text: resumeText } = await loadResumeText({ workspaceId, candidateId });
-  const text = buildCandidateEmbeddingText(candidate, resumeText);
-  const sourceHash = hashText(text);
+  const anonymize = config.resumeAnonymization === true;
+  const text = buildCandidateEmbeddingText(candidate, resumeText, anonymize);
+  const sourceHash = candidateEmbeddingHash(text, anonymize);
 
   const [existing] = await db
     .select({ sourceHash: candidateEmbeddings.sourceHash })
@@ -271,7 +296,7 @@ export type IndexBatchResult = { succeeded: number; failed: number; remaining: n
 
 /** Index up to `limit` stale/never-embedded candidates. Resumable , call again until `remaining` is 0. */
 export async function indexCandidateBatch(
-  config: AiModelConfig,
+  config: AiModelConfig & AnonymizationSettings,
   workspaceId: string,
   limit = 20,
 ): Promise<IndexBatchResult> {

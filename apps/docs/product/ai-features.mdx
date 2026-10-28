@@ -1,6 +1,6 @@
 ---
 title: "AI features"
-description: "Optional, provider-backed AI assistance in Harly for candidate matching, drafting messages, and anonymized review — always advisory, never a hiring decision."
+description: "Optional, provider-backed AI assistance in Harly for candidate scoring, matching, and drafting messages, with a candidate anonymization setting — always advisory, never a hiring decision."
 ---
 
 Harly's AI features are optional and off until you configure a provider. They
@@ -63,14 +63,28 @@ Common uses:
 - Rejection email with a reason
 - Interview invitation with agenda
 
-### Scorecard anonymization
+### Candidate anonymization
 
-Strip identifying details from interview feedback before reviewers compare
-scorecards. Reduces the effect of name-based or background-based bias when
-comparing candidates side by side.
+Resume anonymization is a workspace setting in **Settings → AI**. When it is on:
 
-Anonymization runs before the comparison view. The original, unredacted
-scorecard remains on the candidate record for audit.
+- Candidate profiles hide identifying details on screen (names, contact details,
+  and links are blurred until a reviewer reveals them for that candidate). This
+  is a screen mask. The stored records are not changed.
+- AI scoring, matching, and interview note summaries receive the candidate under
+  the alias "Candidate". Names, email addresses, phone numbers, links, social
+  handles, street addresses and location are removed from what is sent. Names
+  are also removed from the candidate's résumé, headline, application answers
+  and interview notes.
+- Features that cannot work without knowing who the candidate is are paused,
+  and the screen says so: duplicate detection, email drafting, mailbox
+  assistance, AI resume autofill on the apply form, AI resume summaries on
+  upload, and scorecard comment refinement. The standard parser or the manual
+  path is used instead.
+
+Anonymization removes what Harly knows about the candidate, including names that
+appear in the résumé text. It cannot remove a name that is not in the candidate
+record, such as a nickname that appears only in a résumé, and it does not
+change the job description or the rest of the workspace.
 
 ### Chat
 
@@ -107,15 +121,31 @@ published in the generated [automation capability matrix](/product/automation-ca
 CI verifies that matrix against the runtime manifests and legacy registry so
 the documentation cannot drift from what Harly can actually execute.
 
-## Data and privacy
+## What leaves your server
 
-| Data sent to provider | When it is sent |
-| --- | --- |
-| Job description text | Matching and draft features |
-| Application answers | Matching and chat features |
-| Resume, job criteria, and configured workflow context | An owner-authorized `ai_score` automation or matching request |
-| Scorecard text | Anonymization feature |
-| Candidate name/email and other profile fields | Only when the enabled feature or an owner-authorized chat/workflow request needs them |
+This table lists what each AI feature sends to your configured provider, and what
+changes when candidate anonymization is on. Harly sends nothing to a provider
+for a feature you have not enabled or used.
+
+| Feature | What is sent to the provider | With candidate anonymization on |
+| --- | --- | --- |
+| Candidate scoring (on apply, manually, in bulk, or by an `ai_score` automation) | Job title, description, requirements, sector, experience level, education and keywords. Candidate name, headline, location, skills, years of experience, résumé text (first 12,000 characters) and application answers (600 characters each) | Name becomes "Candidate". Location, email, phone, links and addresses are not sent. Headline, résumé and answers are redacted. Job text is unchanged. |
+| Semantic matching (OpenAI embeddings only) | Job text. Candidate name, headline, skills, years of experience and résumé text, to build each candidate's vector | Candidate name is not included, and the headline and résumé are redacted. Location is never included. A vector built before the setting was turned on stays as it was until the candidate's record is next edited. |
+| Duplicate detection | Name, email, headline and skills of the candidate and of up to 10 similar candidates | Paused. Nothing is sent. |
+| Interview note summary | Notes (first 8,000 characters), candidate name, job title, interview type | Candidate name is removed from the notes and replaced with "Candidate". |
+| Interview brief | Candidate name, headline, location, skills, résumé (first 8,000 characters), job text, interviewer notes and the existing score | Not yet covered. The name, location, résumé and notes are still sent. |
+| Résumé summary on upload | Résumé text (first 16,000 characters) | Paused until the upload knows the candidate's name. The standard parser is used. |
+| Résumé autofill on the public apply form | Applicant's résumé text (first 12,000 characters) and job keywords | Paused. The standard parser fills the form. |
+| Email drafts | Candidate name, job title, company, sender name, the email thread (addresses and up to 50 messages), and your internal AI score and summary, which the model is told never to repeat | Paused. Nothing is sent. |
+| Mailbox summary and reply | The email thread, including addresses | Paused. Nothing is sent. |
+| Scorecard comment refinement | The comment text and role title | Paused. |
+| Scorecard attribute suggestions, job description drafts, screening questions | Job details only | No change. No candidate data is sent. |
+| Pipeline headline | Aggregate counts only | No change. |
+| Chat assistant | The conversation, your workspace and role, the candidate or job you have open, and the results of the tools the assistant calls. Tool results can include candidate names and contact details. | Not covered. Tool results still reach the provider as they are. |
+
+Anonymization applies to the scoring, matching, and note-summary paths above.
+The interview brief and the chat assistant are not yet covered. Treat both as
+receiving identifying details until this page says otherwise.
 
 What is sent to a provider is limited to the feature you enabled. Candidate
 data is personal data, so:
@@ -144,7 +174,7 @@ interviews, and offers remain unchanged.
 
 <CardGroup cols={2}>
   <Card title="Tasks and scorecards" icon="list-checks" href="/product/tasks-and-scorecards">
-    Structured feedback AI can anonymize.
+    Structured feedback that AI can help refine.
   </Card>
   <Card title="Privacy" icon="shield" href="/security/privacy">
     Data obligations to understand before enabling AI.

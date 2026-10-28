@@ -22,6 +22,7 @@ import {
   requireJobPermission,
 } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
+import { ANONYMIZATION_BLOCKED_MESSAGES } from "@/lib/ai/candidate-context";
 import { logAiCandidateDecision } from "@/lib/ai/governance";
 import { scoreCandidateWithAI } from "@/lib/ai/surfaces/score-candidate";
 import {
@@ -487,6 +488,9 @@ export async function detectCandidateDuplicatesAction(input: {
   const aiConfig = await getWorkspaceAiConfig(workspaceId);
   if (!aiConfig) {
     return { ok: false, error: "AI is not configured for this workspace." };
+  }
+  if (aiConfig.resumeAnonymization) {
+    return { ok: false, error: ANONYMIZATION_BLOCKED_MESSAGES.duplicateDetection };
   }
 
   try {

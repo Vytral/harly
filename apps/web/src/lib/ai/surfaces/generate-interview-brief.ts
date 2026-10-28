@@ -6,6 +6,11 @@ import { getModel } from "@/lib/ai/registry";
 import { UNTRUSTED_DATA_GUARDRAIL } from "@/lib/ai/prompts/guardrails";
 import { interviewBriefSchema, type InterviewBrief } from "@/lib/ai/schemas";
 import type { AiModelConfig } from "@/lib/ai/providers";
+import {
+  buildCandidateAiContext,
+  redactForAi,
+  type AnonymizationSettings,
+} from "@/lib/ai/candidate-context";
 
 export type InterviewBriefInput = {
   candidate: {
@@ -44,13 +49,17 @@ const SYSTEM_PROMPT =
   "Be direct and specific. Avoid filler." + "\n\n" + UNTRUSTED_DATA_GUARDRAIL;
 
 export async function generateInterviewBriefWithAI(
-  config: AiModelConfig,
+  config: AiModelConfig & AnonymizationSettings,
   input: InterviewBriefInput,
 ): Promise<InterviewBrief> {
-  const { candidate, job, interview, existingScore } = input;
+  const { job, interview, existingScore } = input;
+  const anonymize = config.resumeAnonymization === true;
+  const candidate = buildCandidateAiContext(input.candidate, { anonymize });
+  const redactNote = (text: string) =>
+    redactForAi(text, candidate.identity, anonymize);
 
   const candidateBlock = [
-    `Name: ${candidate.fullName}`,
+    `Name: ${candidate.label}`,
     candidate.headline ? `Headline: ${candidate.headline}` : null,
     candidate.location ? `Location: ${candidate.location}` : null,
     candidate.experienceYears != null
@@ -97,13 +106,13 @@ export async function generateInterviewBriefWithAI(
   const scoreBlock = existingScore
     ? `AI fit score: ${existingScore.score}/100\n` +
       (existingScore.gaps.length > 0
-        ? `Known gaps: ${existingScore.gaps.join("; ")}\n`
+        ? `Known gaps: ${existingScore.gaps.map(redactNote).join("; ")}\n`
         : "") +
       (existingScore.criteria.length > 0
         ? `Criteria: ${existingScore.criteria
             .map(
               (c) =>
-                `${c.label}: ${c.score}${c.evidence ? ` (${c.evidence})` : ""}`,
+                `${c.label}: ${c.score}${c.evidence ? ` (${redactNote(c.evidence)})` : ""}`,
             )
             .join("; ")}`
         : "")
