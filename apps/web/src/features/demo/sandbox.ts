@@ -55,15 +55,15 @@ async function listSandboxOrganizations(): Promise<SandboxRow[]> {
     .where(like(organization.metadata, SANDBOX_MARKER));
 }
 
-/** Remove a sandbox's uploaded files from the configured storage provider. */
+/**
+ * Remove a sandbox's uploaded files from the configured storage provider.
+ * Throws on failure on purpose: the caller keeps the organization row, which is
+ * how a later sweep finds the sandbox again and retries the leftovers.
+ */
 async function deleteSandboxFiles(workspaceId: string): Promise<void> {
   for (const prefix of [`workspaces/${workspaceId}/`, `mailboxes/${workspaceId}/`]) {
-    try {
-      for (const key of await storage.list(prefix)) {
-        await storage.delete(key);
-      }
-    } catch (error) {
-      log.error({ error, workspaceId, prefix }, "failed to delete sandbox files");
+    for (const key of await storage.list(prefix)) {
+      await storage.delete(key);
     }
   }
 }
