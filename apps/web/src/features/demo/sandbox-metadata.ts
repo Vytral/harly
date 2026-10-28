@@ -6,6 +6,8 @@
 export type DemoSandboxMetadata = {
   expiresAt: string;
   style: string;
+  /** The account minted for this sandbox. Cleanup deletes exactly this user. */
+  ownerUserId: string | null;
 };
 
 const KEY = "harlyDemoSandbox";
@@ -21,11 +23,15 @@ export function parseSandboxMetadata(
   try {
     const value = (JSON.parse(raw) as Record<string, unknown> | null)?.[KEY];
     if (!value || typeof value !== "object") return null;
-    const { expiresAt, style } = value as Record<string, unknown>;
+    const { expiresAt, style, ownerUserId } = value as Record<string, unknown>;
     if (typeof expiresAt !== "string" || Number.isNaN(Date.parse(expiresAt))) {
       return null;
     }
-    return { expiresAt, style: typeof style === "string" ? style : "" };
+    return {
+      expiresAt,
+      style: typeof style === "string" ? style : "",
+      ownerUserId: typeof ownerUserId === "string" && ownerUserId ? ownerUserId : null,
+    };
   } catch {
     return null;
   }

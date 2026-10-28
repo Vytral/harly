@@ -655,10 +655,18 @@ export async function deleteDemoSandbox(options: {
     await tx`DELETE FROM workspace_settings WHERE organization_id = ${workspaceId}`;
     await tx`DELETE FROM member WHERE organization_id = ${workspaceId}`;
     await tx`DELETE FROM organization WHERE id = ${workspaceId}`;
-    if (ownerUserId) {
-      await tx`DELETE FROM "user" WHERE id = ${ownerUserId}`;
-    }
   });
+  if (ownerUserId) {
+    // Outside the replica-mode transaction on purpose: foreign-key triggers
+    // are disabled inside it, so only a normal delete cascades to the account's
+    // sessions, credentials and other dependent rows. The email guard makes it
+    // impossible to delete anything but an account minted for a sandbox (never
+    // a seeded teammate, which every workspace shares).
+    await sql`
+      DELETE FROM "user"
+      WHERE id = ${ownerUserId} AND email LIKE 'sandbox-%@sandbox.harly.dev'
+    `;
+  }
   await rm(path.join(resolveUploadsRoot(options.uploadsRoot), "workspaces", workspaceId), {
     recursive: true,
     force: true,

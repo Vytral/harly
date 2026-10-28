@@ -5,6 +5,9 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { and, eq } from "drizzle-orm";
 
+import { isDemoMode } from "@harly/config";
+import { isLiveSandboxWorkspace } from "@/features/demo/sandbox-state";
+
 import { auth } from "@/lib/auth";
 import { db } from "@harly/db";
 import {
@@ -142,6 +145,14 @@ async function resolveWorkspaceContext(
     return null;
   }
 
+  // Public demo: a session only counts while it points at a live per-visitor
+  // sandbox. This is the one resolver every page, action and API route goes
+  // through, so an expired sandbox or an old shared-account cookie stops
+  // working everywhere at once, not just behind a layout redirect.
+  if (isDemoMode() && !(await isLiveSandboxWorkspace(resolved.organization.id))) {
+    return null;
+  }
+
   const role = normalizeWorkspaceRole(resolved.membership.role);
 
   return {
@@ -170,7 +181,7 @@ export async function getWorkspaceContext() {
   const context = await resolveWorkspaceContext();
 
   if (!context) {
-    redirect("/onboarding" as Route);
+    redirect((isDemoMode() ? "/enter" : "/onboarding") as Route);
   }
 
   return context;

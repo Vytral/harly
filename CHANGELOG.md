@@ -63,8 +63,18 @@ are unaffected. See [the release notes](docs/release-0.2.3-demo-sandbox.md).
   assuming the oldest workspace is the public one.
 - `demo-reset` also deletes expired sandboxes.
 
+### Fixed
+
+- Demo sandbox cleanup deletes exactly the account minted for the sandbox and
+  its sessions, never a shared seeded teammate, and removes uploaded files from
+  S3-compatible storage as well as local disk.
+- Concurrent demo entries can no longer exceed `DEMO_SANDBOX_MAX_ACTIVE`.
+
 ### Security
 
+- Demo sessions are only valid while they point at a live sandbox, enforced in
+  the shared workspace resolver used by every page, action and API route, so an
+  expired sandbox or an old shared-account cookie cannot keep writing.
 - Update `better-auth` and `@better-auth/sso` to 1.7.7, which fixes advisories
   covering OAuth state reuse as a magic link, OAuth proxy account takeover, and
   device login approval.

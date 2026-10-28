@@ -11,10 +11,12 @@ describe("sandbox metadata", () => {
     const raw = serializeSandboxMetadata({
       expiresAt: "2030-01-01T00:00:00.000Z",
       style: "join",
+      ownerUserId: "user-1",
     });
     expect(parseSandboxMetadata(raw)).toEqual({
       expiresAt: "2030-01-01T00:00:00.000Z",
       style: "join",
+      ownerUserId: "user-1",
     });
   });
 
@@ -28,8 +30,15 @@ describe("sandbox metadata", () => {
     ).toBeNull();
   });
 
+  it("reads sandboxes minted before the owner id was recorded", () => {
+    const raw = JSON.stringify({
+      harlyDemoSandbox: { expiresAt: "2030-01-01T00:00:00.000Z", style: "minimal" },
+    });
+    expect(parseSandboxMetadata(raw)?.ownerUserId).toBeNull();
+  });
+
   it("expires at the boundary", () => {
-    const meta = { expiresAt: "2030-01-01T00:00:00.000Z", style: "" };
+    const meta = { expiresAt: "2030-01-01T00:00:00.000Z", style: "", ownerUserId: null };
     expect(isSandboxExpired(meta, new Date("2029-12-31T23:59:59.000Z"))).toBe(false);
     expect(isSandboxExpired(meta, new Date("2030-01-01T00:00:00.000Z"))).toBe(true);
   });

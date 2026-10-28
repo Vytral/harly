@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomBytes, randomUUID } from "node:crypto";
 
-import { eq, like } from "drizzle-orm";
+import { and, eq, like, sql as dsql } from "drizzle-orm";
 
 import { demoSandboxSettings } from "@harly/config";
 import {
@@ -18,6 +18,7 @@ import {
 
 import { normalizeCareerPageConfig } from "@/features/career-page/config";
 import { createLogger } from "@/lib/logger";
+import { storage } from "@/lib/storage";
 
 import { applyDemoStyle, type DemoStyle } from "./sandbox-styles";
 import {
@@ -54,6 +55,38 @@ async function listSandboxOrganizations(): Promise<SandboxRow[]> {
     .where(like(organization.metadata, SANDBOX_MARKER));
 }
 
+/** Remove a sandbox's uploaded files from the configured storage provider. */
+async function deleteSandboxFiles(workspaceId: string): Promise<void> {
+  for (const prefix of [`workspaces/${workspaceId}/`, `mailboxes/${workspaceId}/`]) {
+    try {
+      for (const key of await storage.list(prefix)) {
+        await storage.delete(key);
+      }
+    } catch (error) {
+      log.error({ error, workspaceId, prefix }, "failed to delete sandbox files");
+    }
+  }
+}
+
+/**
+ * Sandboxes minted before the owner id was recorded: the owner is the member
+ * whose email is a sandbox address (deleteDemoSandbox re-checks this).
+ */
+async function findLegacySandboxOwner(workspaceId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ id: userTable.id })
+    .from(member)
+    .innerJoin(userTable, eq(userTable.id, member.userId))
+    .where(
+      and(
+        eq(member.organizationId, workspaceId),
+        like(userTable.email, "sandbox-%@sandbox.harly.dev"),
+      ),
+    )
+    .limit(1);
+  return row?.id ?? null;
+}
+
 /** Delete every sandbox whose lifetime has ended. Returns how many went. */
 export async function purgeExpiredSandboxes(now: Date = new Date()): Promise<number> {
   const rows = await listSandboxOrganizations();
@@ -62,12 +95,15 @@ export async function purgeExpiredSandboxes(now: Date = new Date()): Promise<num
     const meta = parseSandboxMetadata(row.metadata);
     if (!meta || !isSandboxExpired(meta, now)) continue;
     try {
-      const [owner] = await db
-        .select({ userId: member.userId })
-        .from(member)
-        .where(eq(member.organizationId, row.id))
-        .limit(1);
-      await deleteDemoSandbox({ sql, workspaceId: row.id, ownerUserId: owner?.userId ?? null });
+      // The account to delete is the one recorded when the sandbox was minted.
+      // Never infer it from membership: seeded teammates are members too, and
+      // their accounts are shared by every workspace.
+      await deleteSandboxFiles(row.id);
+      await deleteDemoSandbox({
+        sql,
+        workspaceId: row.id,
+        ownerUserId: meta.ownerUserId ?? (await findLegacySandboxOwner(row.id)),
+      });
       purged++;
     } catch (error) {
       log.error({ error, workspaceId: row.id }, "failed to purge expired sandbox");
@@ -86,9 +122,6 @@ export async function createDemoSandbox(input: { style: DemoStyle }): Promise<De
   await purgeExpiredSandboxes();
 
   const settings = demoSandboxSettings();
-  const live = await listSandboxOrganizations();
-  if (live.length >= settings.maxActive) throw new SandboxCapacityError();
-
   const suffix = randomBytes(5).toString("hex");
   const workspaceId = randomUUID();
   const userId = randomUUID();
@@ -97,30 +130,43 @@ export async function createDemoSandbox(input: { style: DemoStyle }): Promise<De
   const expiresAt = new Date(now.getTime() + settings.ttlMinutes * 60_000);
 
   try {
-    await db.insert(userTable).values({
-      id: userId,
-      name: "Alex Morgan",
-      email: `sandbox-${suffix}@sandbox.harly.dev`,
-      emailVerified: true,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await db.insert(organization).values({
-      id: workspaceId,
-      name: "Syntrix",
-      slug,
-      createdAt: now,
-      metadata: serializeSandboxMetadata({
-        expiresAt: expiresAt.toISOString(),
-        style: input.style,
-      }),
-    });
-    await db.insert(member).values({
-      id: randomUUID(),
-      organizationId: workspaceId,
-      userId,
-      role: "owner",
-      createdAt: now,
+    // Counting and reserving a slot is one locked step: concurrent entries
+    // queue on the advisory lock, so the cap cannot be overshot. Seeding, the
+    // slow part, happens after the lock is released.
+    await db.transaction(async (tx) => {
+      await tx.execute(dsql`SELECT pg_advisory_xact_lock(hashtext('harly-demo-sandbox-slots'))`);
+      const live = await tx
+        .select({ id: organization.id })
+        .from(organization)
+        .where(like(organization.metadata, SANDBOX_MARKER));
+      if (live.length >= settings.maxActive) throw new SandboxCapacityError();
+
+      await tx.insert(userTable).values({
+        id: userId,
+        name: "Alex Morgan",
+        email: `sandbox-${suffix}@sandbox.harly.dev`,
+        emailVerified: true,
+        createdAt: now,
+        updatedAt: now,
+      });
+      await tx.insert(organization).values({
+        id: workspaceId,
+        name: "Syntrix",
+        slug,
+        createdAt: now,
+        metadata: serializeSandboxMetadata({
+          expiresAt: expiresAt.toISOString(),
+          style: input.style,
+          ownerUserId: userId,
+        }),
+      });
+      await tx.insert(member).values({
+        id: randomUUID(),
+        organizationId: workspaceId,
+        userId,
+        role: "owner",
+        createdAt: now,
+      });
     });
 
     await seedDemoWorkspace({ db, sql, workspaceId, ownerUserId: userId, sandbox: true });
@@ -138,6 +184,7 @@ export async function createDemoSandbox(input: { style: DemoStyle }): Promise<De
       .set({ careerPageConfig: { ...styled, seo: { ...styled.seo, indexable: false } } })
       .where(eq(workspaceSettings.organizationId, workspaceId));
   } catch (error) {
+    if (error instanceof SandboxCapacityError) throw error;
     log.error({ error, workspaceId }, "sandbox creation failed; cleaning up");
     await deleteDemoSandbox({ sql, workspaceId, ownerUserId: userId }).catch((cleanupError) =>
       log.error({ error: cleanupError, workspaceId }, "sandbox cleanup failed"),
