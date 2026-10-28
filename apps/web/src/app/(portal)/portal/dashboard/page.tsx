@@ -131,7 +131,9 @@ export default async function PortalDashboardPage() {
     stages = await db
       .select({ id: jobStages.id, name: jobStages.name, order: jobStages.order })
       .from(jobStages)
-      .where(eq(jobStages.jobId, primaryApp.jobId))
+      .where(
+        and(eq(jobStages.jobId, primaryApp.jobId), isNull(jobStages.archivedAt)),
+      )
       .orderBy(asc(jobStages.order));
   }
 
