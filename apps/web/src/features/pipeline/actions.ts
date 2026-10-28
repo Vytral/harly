@@ -33,9 +33,9 @@ import {
   type PipelineApplicationStatus,
 } from "@/features/pipeline/state";
 import {
-  enqueueEmailOutbox,
-  processEmailOutbox,
-} from "@/lib/email/outbox-processor";
+  sendPipelineEmails,
+  type PipelineEmail,
+} from "@/features/pipeline/emails";
 
 type ApplicationStatus = PipelineApplicationStatus;
 
@@ -88,25 +88,6 @@ type StatusTransitionEvent = {
   event: "application.hired" | "application.rejected";
 };
 
-type PipelineEmail =
-  | {
-      type: "stage";
-      applicationId: string;
-      candidateEmail: string;
-      candidateName: string;
-      jobTitle: string;
-      stageName: string;
-      workspaceName: string;
-    }
-  | {
-      type: "rejected";
-      applicationId: string;
-      candidateEmail: string;
-      candidateName: string;
-      jobTitle: string;
-      workspaceName: string;
-    };
-
 import { createLogger } from "@/lib/logger";
 import {
   ConcurrencyConflictError,
@@ -115,37 +96,6 @@ import {
 } from "@/lib/concurrent";
 
 const log = createLogger("pipeline");
-
-async function sendPipelineEmails(
-  workspaceId: string,
-  emails: PipelineEmail[],
-  actorId?: string,
-) {
-  if (emails.length === 0) return;
-
-  const ids: string[] = [];
-  for (const email of emails) {
-    ids.push(
-      await enqueueEmailOutbox(
-        workspaceId,
-        email.type === "stage" ? "pipeline.stage" : "pipeline.rejected",
-        {
-          candidateEmail: email.candidateEmail,
-          candidateName: email.candidateName,
-          applicationId: email.applicationId,
-          jobTitle: email.jobTitle,
-          stageName: email.type === "stage" ? email.stageName : undefined,
-          workspaceName: email.workspaceName,
-          type: email.type,
-        },
-        undefined,
-        actorId,
-      ),
-    );
-  }
-
-  await processEmailOutbox({ ids, workspaceId });
-}
 
 async function getApplicationsForAction(
   applicationIds: string[],
