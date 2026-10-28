@@ -2,34 +2,58 @@
 
 import { z } from "zod";
 
-import { emptySearchResults, searchWorkspace, type SearchResults } from "./data";
+import { createLogger } from "@/lib/logger";
+
+import { normalizeSearchQuery } from "./query";
 import {
-  getRolePolicy,
-  requirePermission,
-} from "@/features/workspaces/permissions-server";
+  emptyWorkspaceSearchResults,
+  type WorkspaceSearchResults,
+} from "./results";
+import { resolveSearchActor, searchWorkspaceForActor } from "./workspace-search";
 
-const querySchema = z.string().trim().min(1).max(100);
+export type WorkspaceSearchActionResult =
+  | { ok: true; results: WorkspaceSearchResults }
+  | { ok: false; error: string };
 
-/** Workspace-scoped quick search over jobs and candidates for the ⌘K palette. */
+const querySchema = z.string().max(500);
+
+const log = createLogger("workspace-search");
+
+/**
+ * Grouped workspace search for the ⌘K palette. Groups the caller may not see
+ * are omitted rather than failing. Never throws to the client: failures come
+ * back as `{ ok: false }`, and the auth redirect still applies to signed-out users.
+ */
 export async function searchWorkspaceAction(
   rawQuery: string,
-): Promise<SearchResults> {
+): Promise<WorkspaceSearchActionResult> {
   const parsed = querySchema.safeParse(rawQuery);
   if (!parsed.success) {
-    return emptySearchResults;
+    return { ok: false, error: "That search is too long. Shorten it and try again." };
+  }
+  const query = normalizeSearchQuery(parsed.data);
+  if (!query) {
+    return { ok: true, results: emptyWorkspaceSearchResults("") };
   }
 
-  // Candidate results include email, phone, headline, and avatar. Requiring
-  // candidate visibility for the whole palette prevents a caller with only
-  // workspace membership from using the job search as a PII oracle.
-  const context = await requirePermission("candidates:view");
-  const scope = (await getRolePolicy(context.organization.id, context.roleKey)).scope;
-  if (
-    scope.jobAccess !== "all" ||
-    scope.departments.length > 0 ||
-    scope.regions.length > 0
-  ) {
-    throw new Error("Workspace search is unavailable for scoped roles.");
+  try {
+    const actor = await resolveSearchActor();
+    const results = await searchWorkspaceForActor(actor, query.text);
+    return { ok: true, results };
+  } catch (error) {
+    if (isRedirectSignal(error)) throw error;
+    log.error({ err: error }, "workspace search failed");
+    return { ok: false, error: "Search didn't load. Try again." };
   }
-  return searchWorkspace(parsed.data);
+}
+
+/** Next.js signals redirects by throwing; those must reach the framework. */
+function isRedirectSignal(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "digest" in error &&
+    typeof (error as { digest?: unknown }).digest === "string" &&
+    (error as { digest: string }).digest.startsWith("NEXT_REDIRECT")
+  );
 }

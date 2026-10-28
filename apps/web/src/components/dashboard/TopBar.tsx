@@ -7,7 +7,10 @@ import { useTheme } from "@/components/ThemeProvider";
 
 import Image from "next/image";
 
-import { CommandMenu } from "@/components/dashboard/CommandMenu";
+import {
+  COMMAND_MENU_TRIGGER_ID,
+  CommandMenu,
+} from "@/components/dashboard/CommandMenu";
 import { MobileNav } from "@/components/dashboard/IconRail";
 import { allNavItems, isNavActive } from "@/components/dashboard/nav-items";
 import { NotificationsBell } from "@/components/dashboard/NotificationsBell";
@@ -135,6 +138,7 @@ export function TopBar({
             workspaceOptions={workspaceOptions}
           />
           <IconButton
+            id={COMMAND_MENU_TRIGGER_ID}
             label="Search"
             onClick={() => setCommandOpen(true)}
             hint="⌘K"
@@ -152,6 +156,7 @@ export function TopBar({
           open={commandOpen}
           onOpenChange={setCommandOpen}
           userPermissions={userPermissions}
+          workspaceId={workspace.id}
         />
       </header>
 
@@ -168,11 +173,13 @@ export function TopBar({
 }
 
 function IconButton({
+  id,
   label,
   hint,
   onClick,
   children,
 }: {
+  id?: string;
   label: string;
   hint?: string;
   onClick: () => void;
@@ -182,6 +189,7 @@ function IconButton({
     <Tooltip>
       <TooltipTrigger asChild>
         <button
+          id={id}
           type="button"
           onClick={onClick}
           aria-label={label}
