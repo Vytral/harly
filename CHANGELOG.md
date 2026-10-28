@@ -65,6 +65,9 @@ are unaffected. See [the release notes](docs/release-0.2.3-demo-sandbox.md).
 
 ### Security
 
+- Update `better-auth` and `@better-auth/sso` to 1.7.7, which fixes advisories
+  covering OAuth state reuse as a magic link, OAuth proxy account takeover, and
+  device login approval.
 - Identity, credential, integration, API-key and outbound-delivery actions stay
   disabled in the demo. Dashboard sessions that do not point at a live sandbox,
   such as cookies from the old shared account, are redirected to the entry page.
