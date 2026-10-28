@@ -36,9 +36,13 @@ import {
 } from "@harly/emails";
 
 import { renderActiveEmailTemplate } from "@/features/email-templates/data";
-import { sendWorkspaceEmail } from "@/lib/email";
+import { sendWorkspaceEmail, type SendEmailOptions } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { getWorkspaceEmailConfig } from "@/lib/email/config";
+import {
+  formatInterviewWhen,
+  resolveInterviewTimeZone,
+} from "@/lib/email/interview-time";
 import { decryptSecret } from "@/lib/crypto";
 import { insertCanonicalMessage } from "@/lib/mail/canonical";
 import { createLogger } from "@/lib/logger";
@@ -53,17 +57,20 @@ import {
 
 const log = createLogger("email-outbox");
 
+/**
+ * Total claims a row may receive. Every claim increments `attempts`, so a
+ * payload that crashes the worker (or a worker that stalls mid-send) cannot
+ * loop forever: once the cap is reached the row ends `failed` with `lastError`.
+ */
 const MAX_ATTEMPTS = 5;
+/** A `processing` lock older than this belongs to a stalled worker. */
+const STALE_LOCK_SQL = sql.raw("interval '5 minutes'");
+const RECORD_ACCEPTANCE_ATTEMPTS = 5;
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   year: "numeric",
   month: "long",
   day: "numeric",
-});
-
-const interviewWhenFormatter = new Intl.DateTimeFormat("en", {
-  dateStyle: "long",
-  timeStyle: "short",
 });
 
 function formatOfferDate(value: Date | null): string | undefined {
@@ -97,10 +104,15 @@ export type ProcessResult = {
   failed: number;
 };
 
+/** Deterministic Message-ID for a row; the same id is used for SMTP headers. */
+export function outboxMessageId(outboxId: string): string {
+  return `<${outboxId}@harly.local>`;
+}
+
 /**
- * Process pending/failed email_outbox rows. Delivery is idempotent: an offer
- * that is already `sent` marks its outbox row `sent` without re-sending, so a
- * crash between send and bookkeeping can never deliver the same email twice.
+ * Process pending/failed email_outbox rows. Delivery is at-most-once per row
+ * in the common path: a row whose provider already accepted the email (has a
+ * `providerMessageId` or `sentAt`) is never sent again, only finalized.
  */
 export async function processEmailOutbox(opts?: {
   workspaceId?: string;
@@ -121,13 +133,33 @@ export async function processEmailOutbox(opts?: {
   const workspaceFilter = opts?.workspaceId
     ? sql`and "workspace_id" = ${opts.workspaceId}`
     : sql``;
+
+  // A stalled claim that already used every attempt can never be retried
+  // safely; end it as failed so the operator sees it in the delivery log.
+  await database.execute(sql`
+    update "email_outbox"
+    set "status" = 'failed',
+        "last_error" = 'Delivery did not finish after ' || "attempts" || ' attempts; the email worker stopped before recording the result.',
+        "next_retry_at" = null,
+        "locked_at" = null,
+        "locked_by" = null,
+        "updated_at" = now()
+    where "status" = 'processing'
+      and "locked_at" < now() - ${STALE_LOCK_SQL}
+      and "attempts" >= ${MAX_ATTEMPTS}
+      ${idsFilter}
+      ${workspaceFilter}
+  `);
+
   const claimed = (await database.execute(sql`
     with candidates as (
       select "id"
       from "email_outbox"
       where (
         ("status" = 'pending' and ("next_retry_at" is null or "next_retry_at" <= now()))
-        or ("status" = 'processing' and "locked_at" < now() - interval '5 minutes')
+        or ("status" = 'processing'
+          and "locked_at" < now() - ${STALE_LOCK_SQL}
+          and "attempts" < ${MAX_ATTEMPTS})
       )
       ${idsFilter}
       ${workspaceFilter}
@@ -136,7 +168,11 @@ export async function processEmailOutbox(opts?: {
       limit ${opts?.limit ?? 50}
     )
     update "email_outbox" as queue
-    set "status" = 'processing', "locked_at" = now(), "locked_by" = ${workerId}, "updated_at" = now()
+    set "status" = 'processing',
+        "locked_at" = now(),
+        "locked_by" = ${workerId},
+        "attempts" = queue."attempts" + 1,
+        "updated_at" = now()
     from candidates
     where queue."id" = candidates."id"
     returning queue."id"
@@ -161,39 +197,146 @@ export async function processEmailOutbox(opts?: {
   let sent = 0;
   let failed = 0;
   for (const row of rows) {
-    const ok = await deliverRow(row, database);
+    const ok = await deliverRow(row, database, workerId);
     if (ok) sent += 1;
     else failed += 1;
   }
   return { processed: rows.length, sent, failed };
 }
 
-async function deliverRow(row: OutboxRow, database: typeof db = db): Promise<boolean> {
+type OutboxState = {
+  status: string;
+  lockedBy: string | null;
+  sentAt: Date | null;
+  providerMessageId: string | null;
+};
+
+async function readOutboxState(
+  id: string,
+  database: typeof db,
+): Promise<OutboxState | null> {
+  const [state] = await database
+    .select({
+      status: emailOutbox.status,
+      lockedBy: emailOutbox.lockedBy,
+      sentAt: emailOutbox.sentAt,
+      providerMessageId: emailOutbox.providerMessageId,
+    })
+    .from(emailOutbox)
+    .where(eq(emailOutbox.id, id))
+    .limit(1);
+  return state ?? null;
+}
+
+/** Terminal success. Safe to call repeatedly. */
+async function finalizeAccepted(id: string, database: typeof db) {
+  await database
+    .update(emailOutbox)
+    .set({
+      status: "sent",
+      sentAt: sql`coalesce(${emailOutbox.sentAt}, now())`,
+      nextRetryAt: null,
+      lockedAt: null,
+      lockedBy: null,
+      lastError: null,
+    })
+    .where(eq(emailOutbox.id, id));
+}
+
+/**
+ * Persist the provider's acceptance in its own statement, before any other
+ * bookkeeping, so a later failure can never turn an accepted email back into
+ * a retryable one.
+ */
+async function recordAcceptance(
+  id: string,
+  providerMessageId: string | undefined,
+  database: typeof db,
+) {
+  const value = providerMessageId ?? outboxMessageId(id);
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= RECORD_ACCEPTANCE_ATTEMPTS; attempt += 1) {
+    try {
+      await database
+        .update(emailOutbox)
+        .set({ providerMessageId: value })
+        .where(eq(emailOutbox.id, id));
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 100 * 2 ** attempt));
+    }
+  }
+  throw lastError;
+}
+
+/**
+ * The only way outbox code sends. Records the provider acceptance immediately.
+ * If that write keeps failing the error is logged and the caller continues:
+ * `markSent` writes the same id again, and the next claim finds it either way.
+ */
+async function sendRecorded(
+  row: OutboxRow,
+  database: typeof db,
+  options: SendEmailOptions,
+  actorUserId?: string | null,
+) {
+  const delivered = await sendWorkspaceEmail(row.workspaceId, options, actorUserId);
+  if (delivered) {
+    try {
+      await recordAcceptance(row.id, delivered.messageId, database);
+    } catch (error) {
+      log.error(
+        { error, outboxRowId: row.id },
+        "provider accepted email but its message id could not be recorded",
+      );
+    }
+  }
+  return delivered;
+}
+
+async function deliverRow(
+  row: OutboxRow,
+  database: typeof db = db,
+  workerId?: string,
+): Promise<boolean> {
   try {
+    const current = await readOutboxState(row.id, database);
+    if (!current) return false;
+    if (current.providerMessageId || current.sentAt) {
+      // An earlier attempt already got the provider to accept this email.
+      // Only the bookkeeping may run; the send must never repeat.
+      await finalizeAccepted(row.id, database);
+      return true;
+    }
+    if (current.status !== "processing" || (workerId && current.lockedBy !== workerId)) {
+      // Cancelled by an operator, or re-claimed by another worker.
+      return false;
+    }
     switch (row.kind) {
       case "offer.extended":
-        return await deliverOffer(row);
+        return await deliverOffer(row, database);
       case "application.received.candidate":
-        return await deliverApplicationReceived(row, "candidate");
+        return await deliverApplicationReceived(row, "candidate", database);
       case "application.received.recruiter":
-        return await deliverApplicationReceived(row, "recruiter");
+        return await deliverApplicationReceived(row, "recruiter", database);
       case "pipeline.stage":
       case "pipeline.rejected":
-        return await deliverPipelineEmail(row);
+        return await deliverPipelineEmail(row, database);
       case "interview.scheduled":
       case "interview.rescheduled":
       case "interview.canceled":
-        return await deliverInterviewEmail(row);
+        return await deliverInterviewEmail(row, database);
       case "offer.withdrawn":
-        return await deliverOfferWithdrawn(row);
+        return await deliverOfferWithdrawn(row, database);
       case "native.signature.invitation":
         return await deliverNativeSignatureInvitation(row, database);
       case "native.signature.otp":
         return await deliverNativeSignatureOtp(row, database);
       case "report.scheduled":
-        return await deliverScheduledReport(row);
+        return await deliverScheduledReport(row, database);
       case "automation.email":
-        return await deliverAutomationEmail(row);
+        return await deliverAutomationEmail(row, database);
       default:
         log.warn({ kind: row.kind }, "unknown email_outbox kind");
         await database
@@ -210,6 +353,7 @@ async function deliverRow(row: OutboxRow, database: typeof db = db): Promise<boo
     }
   } catch (error) {
     log.error(error, "email_outbox delivery threw");
+    if (await finalizeIfAccepted(row.id, database)) return true;
     await markFailed(
       row.id,
       error instanceof Error ? error.message : "delivery error",
@@ -219,7 +363,14 @@ async function deliverRow(row: OutboxRow, database: typeof db = db): Promise<boo
   }
 }
 
-async function deliverAutomationEmail(row: OutboxRow): Promise<boolean> {
+async function finalizeIfAccepted(id: string, database: typeof db): Promise<boolean> {
+  const state = await readOutboxState(id, database);
+  if (!state || (!state.providerMessageId && !state.sentAt)) return false;
+  await finalizeAccepted(id, database);
+  return true;
+}
+
+async function deliverAutomationEmail(row: OutboxRow, database: typeof db = db): Promise<boolean> {
   const payload = row.payload as {
     to?: string;
     subject?: string;
@@ -228,11 +379,11 @@ async function deliverAutomationEmail(row: OutboxRow): Promise<boolean> {
     companyName?: string;
   };
   if (!payload.to || !payload.subject || !payload.bodyHtml) {
-    await markFailed(row.id, "Automation email payload is incomplete.");
+    await markFailed(row.id, "Automation email payload is incomplete.", database);
     return false;
   }
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
-  const delivered = await sendWorkspaceEmail(row.workspaceId, {
+  const delivered = await sendRecorded(row, database, {
     to: payload.to,
     subject: payload.subject,
     react: createElement(CustomTemplateEmail, {
@@ -246,10 +397,10 @@ async function deliverAutomationEmail(row: OutboxRow): Promise<boolean> {
     ...deliveryOptions(row),
   }, row.actorId ?? undefined);
   if (!delivered) {
-    await markFailed(row.id, "No configured workspace email sender.");
+    await markFailed(row.id, "No configured workspace email sender.", database);
     return false;
   }
-  await markSent(row.id, delivered);
+  await markSent(row.id, delivered, database);
   await recordOutboundConversation({
     workspaceId: row.workspaceId,
     toEmail: payload.to,
@@ -261,7 +412,7 @@ async function deliverAutomationEmail(row: OutboxRow): Promise<boolean> {
   return true;
 }
 
-async function deliverScheduledReport(row: OutboxRow): Promise<boolean> {
+async function deliverScheduledReport(row: OutboxRow, database: typeof db = db): Promise<boolean> {
   const payload = row.payload as {
     to?: string;
     subject?: string;
@@ -269,23 +420,23 @@ async function deliverScheduledReport(row: OutboxRow): Promise<boolean> {
     companyName?: string;
   };
   if (!payload.to || !payload.subject || !payload.bodyHtml) {
-    await markFailed(row.id, "Scheduled report payload is incomplete.");
+    await markFailed(row.id, "Scheduled report payload is incomplete.", database);
     return false;
   }
-  const delivered = await sendWorkspaceEmail(row.workspaceId, {
+  const delivered = await sendRecorded(row, database, {
     to: payload.to,
     subject: payload.subject,
     react: createElement(CustomTemplateEmail, {
       bodyHtml: payload.bodyHtml,
       companyName: payload.companyName ?? "Harly",
     }),
-    idempotencyKey: row.id,
+    ...deliveryOptions(row),
   });
   if (!delivered) {
-    await markFailed(row.id, "No configured workspace email sender.");
+    await markFailed(row.id, "No configured workspace email sender.", database);
     return false;
   }
-  await markSent(row.id, delivered);
+  await markSent(row.id, delivered, database);
   return true;
 }
 
@@ -297,8 +448,9 @@ async function deliverNativeSignatureInvitation(row: OutboxRow, database: typeof
   }
   const token = decryptSecret(payload.token);
   const link = `${appBaseUrl()}/sign/${token}`;
-  const delivered = await sendWorkspaceEmail(
-    row.workspaceId,
+  const delivered = await sendRecorded(
+    row,
+    database,
     {
       to: payload.recipientEmail,
       subject: payload.subject ?? `Please sign: ${payload.documentName}`,
@@ -321,7 +473,7 @@ async function deliverNativeSignatureOtp(row: OutboxRow, database: typeof db = d
   const payload = row.payload as { code?: { ciphertext: string; iv: string; tag: string }; recipientEmail?: string; recipientName?: string } | null;
   if (!payload?.code || !payload.recipientEmail) { await markFailed(row.id, "Invalid native signature OTP payload.", database); return false; }
   const code = decryptSecret(payload.code);
-  const delivered = await sendWorkspaceEmail(row.workspaceId, {
+  const delivered = await sendRecorded(row, database, {
     to: payload.recipientEmail,
     subject: "Your Harly Signature verification code",
     react: createElement("div", null,
@@ -383,8 +535,9 @@ export async function enqueueEmailOutbox(
 
 function deliveryOptions(row: OutboxRow) {
   return {
-    messageId: `<${row.id}@harly.local>`,
+    messageId: outboxMessageId(row.id),
     idempotencyKey: row.id,
+    headers: { "X-Harly-Outbox-Id": row.id },
   };
 }
 
@@ -436,7 +589,7 @@ async function recordOutboundConversation(input: {
       fromEmail,
       toEmails: [input.toEmail],
       textBody: input.textBody,
-      messageId: `<${input.outboxRowId}@harly.local>`,
+      messageId: outboxMessageId(input.outboxRowId),
       receivedAt: new Date(),
       readAt: new Date(),
     });
@@ -466,14 +619,14 @@ async function hasActiveCandidateRecipient(
   return Boolean(candidate);
 }
 
-async function deliverOffer(row: OutboxRow): Promise<boolean> {
+async function deliverOffer(row: OutboxRow, database: typeof db = db): Promise<boolean> {
   const payload = row.payload as {
     offerId?: string;
     terms?: unknown;
   } | null;
   const offerId = payload?.offerId;
   if (!offerId) {
-    await markFailed(row.id, "Missing offerId in payload.");
+    await markFailed(row.id, "Missing offerId in payload.", database);
     return false;
   }
 
@@ -502,6 +655,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
     await markFailed(
       row.id,
       `Offer is not deliverable (status: ${offer?.status ?? "missing"}).`,
+      database,
     );
     return false;
   }
@@ -513,6 +667,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
     await markStale(
       row.id,
       "Offer terms changed after the send request; no email was delivered.",
+      database,
     );
     return false;
   }
@@ -537,7 +692,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
     application.candidateId !== offer.candidateId ||
     application.jobId !== offer.jobId
   ) {
-    await markFailed(row.id, "The application is no longer active.");
+    await markFailed(row.id, "The application is no longer active.", database);
     return false;
   }
 
@@ -560,7 +715,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
     .limit(1);
 
   if (!recipient?.email) {
-    await markFailed(row.id, "The candidate does not have an email address.");
+    await markFailed(row.id, "The candidate does not have an email address.", database);
     return false;
   }
 
@@ -629,8 +784,9 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
         });
     offerSubject = offerSubjectValue;
 
-    delivered = await sendWorkspaceEmail(
-      row.workspaceId,
+    delivered = await sendRecorded(
+      row,
+      database,
       custom
         ? {
             to: recipient.email,
@@ -673,7 +829,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
   }
 
   if (!delivered) {
-    await markFailed(row.id, "Email provider did not accept the offer.");
+    await markFailed(row.id, "Email provider did not accept the offer.", database);
     return false;
   }
 
@@ -736,7 +892,7 @@ async function deliverOffer(row: OutboxRow): Promise<boolean> {
         nextRetryAt: null,
         lockedAt: null,
         lockedBy: null,
-        providerMessageId: delivered.messageId ?? null,
+        providerMessageId: delivered.messageId ?? outboxMessageId(row.id),
       })
       .where(eq(emailOutbox.id, row.id));
   });
@@ -787,6 +943,7 @@ function splitName(full: string): { first: string; last: string } {
 async function deliverApplicationReceived(
   row: OutboxRow,
   variant: "candidate" | "recruiter",
+  database: typeof db = db,
 ): Promise<boolean> {
   const p = row.payload as {
     candidateEmail?: string;
@@ -806,11 +963,11 @@ async function deliverApplicationReceived(
 
   if (variant === "candidate") {
     if (!p?.candidateEmail) {
-      await markFailed(row.id, "Missing candidateEmail in payload.");
+      await markFailed(row.id, "Missing candidateEmail in payload.", database);
       return false;
     }
     if (!(await hasActiveCandidateRecipient(row.workspaceId, p.candidateEmail))) {
-      await markFailed(row.id, "The candidate is no longer active.");
+      await markFailed(row.id, "The candidate is no longer active.", database);
       return false;
     }
     const jobBoardUrl = `${appBaseUrl()}/board/${p.workspaceSlug ?? ""}`;
@@ -822,7 +979,7 @@ async function deliverApplicationReceived(
       jobTitle: p.jobTitle ?? "",
       companyName: p.workspaceName ?? "",
     });
-    delivered = await sendWorkspaceEmail(row.workspaceId, {
+    delivered = await sendRecorded(row, database, {
       to: p.candidateEmail,
       subject: candidateSubject,
       react: createElement(ApplicationReceivedCandidate, {
@@ -843,20 +1000,21 @@ async function deliverApplicationReceived(
       await markFailed(
         row.id,
         "Email provider did not accept the application confirmation.",
+        database,
       );
       return false;
     }
   } else {
     if (!p?.ownerEmail) {
-      await markFailed(row.id, "Missing ownerEmail in payload.");
+      await markFailed(row.id, "Missing ownerEmail in payload.", database);
       return false;
     }
     if (p.candidateEmail && !(await hasActiveCandidateRecipient(row.workspaceId, p.candidateEmail))) {
-      await markFailed(row.id, "The candidate is no longer active.");
+      await markFailed(row.id, "The candidate is no longer active.", database);
       return false;
     }
     const dashboardUrl = `${appBaseUrl()}/dashboard/candidates`;
-    delivered = await sendWorkspaceEmail(row.workspaceId, {
+    delivered = await sendRecorded(row, database, {
       to: p.ownerEmail,
       subject: applicationReceivedRecruiterSubject({
         candidateName: p.candidateName ?? "",
@@ -875,12 +1033,13 @@ async function deliverApplicationReceived(
       await markFailed(
         row.id,
         "Email provider did not accept the recruiter notification.",
+        database,
       );
       return false;
     }
   }
 
-  await markSent(row.id, delivered);
+  await markSent(row.id, delivered, database);
   if (variant === "candidate" && candidateSubject && p?.candidateEmail) {
     await recordOutboundConversation({
       workspaceId: row.workspaceId,
@@ -893,7 +1052,7 @@ async function deliverApplicationReceived(
   return true;
 }
 
-async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
+async function deliverPipelineEmail(row: OutboxRow, database: typeof db = db): Promise<boolean> {
   const p = row.payload as {
     candidateEmail?: string;
     candidateName?: string;
@@ -905,11 +1064,11 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
   } | null;
 
   if (!p?.candidateEmail) {
-    await markFailed(row.id, "Missing candidateEmail in payload.");
+    await markFailed(row.id, "Missing candidateEmail in payload.", database);
     return false;
   }
   if (!(await hasActiveCandidateRecipient(row.workspaceId, p.candidateEmail))) {
-    await markFailed(row.id, "The candidate is no longer active.");
+    await markFailed(row.id, "The candidate is no longer active.", database);
     return false;
   }
 
@@ -946,8 +1105,9 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;
   try {
     if (custom) {
-      delivered = await sendWorkspaceEmail(
-        row.workspaceId,
+      delivered = await sendRecorded(
+        row,
+        database,
         {
           to: p.candidateEmail,
           subject: pipelineSubject,
@@ -964,8 +1124,9 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
         row.actorId,
       );
     } else if (isStage) {
-      delivered = await sendWorkspaceEmail(
-        row.workspaceId,
+      delivered = await sendRecorded(
+        row,
+        database,
         {
           to: p.candidateEmail,
           subject: pipelineSubject,
@@ -987,8 +1148,9 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
         row.actorId,
       );
     } else {
-      delivered = await sendWorkspaceEmail(
-        row.workspaceId,
+      delivered = await sendRecorded(
+        row,
+        database,
         {
           to: p.candidateEmail,
           subject: pipelineSubject,
@@ -1017,11 +1179,12 @@ async function deliverPipelineEmail(row: OutboxRow): Promise<boolean> {
     await markFailed(
       row.id,
       "Email provider did not accept the pipeline email.",
+      database,
     );
     return false;
   }
 
-  await markSent(row.id, delivered);
+  await markSent(row.id, delivered, database);
   await recordOutboundConversation({
     workspaceId: row.workspaceId,
     toEmail: p.candidateEmail,
@@ -1041,6 +1204,8 @@ type InterviewEmailPayload = {
   jobTitle?: string;
   interviewType?: string;
   scheduledAt?: string;
+  /** IANA zone the interview was scheduled in. Missing on older payloads. */
+  timeZone?: string | null;
   mode?: string;
   location?: string;
   durationMins?: number;
@@ -1049,23 +1214,25 @@ type InterviewEmailPayload = {
   interviewerName?: string;
 };
 
-async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
+async function deliverInterviewEmail(row: OutboxRow, database: typeof db = db): Promise<boolean> {
   const payload = row.payload as InterviewEmailPayload | null;
   if (!payload?.candidateEmail || !payload.companyName || !payload.jobTitle) {
-    await markFailed(row.id, "Missing interview email recipient or context.");
+    await markFailed(row.id, "Missing interview email recipient or context.", database);
     return false;
   }
   if (!(await hasActiveCandidateRecipient(row.workspaceId, payload.candidateEmail))) {
-    await markFailed(row.id, "The candidate is no longer active.");
+    await markFailed(row.id, "The candidate is no longer active.", database);
     return false;
   }
 
   const when = payload.scheduledAt ? new Date(payload.scheduledAt) : null;
   if (!when || Number.isNaN(when.getTime())) {
-    await markFailed(row.id, "Missing or invalid interview schedule.");
+    await markFailed(row.id, "Missing or invalid interview schedule.", database);
     return false;
   }
 
+  const timeZone = resolveInterviewTimeZone(payload.timeZone);
+  const whenLabel = formatInterviewWhen(when, timeZone);
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
   const [firstName, ...lastName] = (payload.candidateName ?? "")
     .trim()
@@ -1096,8 +1263,8 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
           candidate_full_name: payload.candidateName ?? "",
           company_name: payload.companyName,
           job_title: payload.jobTitle,
-          interview_date: interviewWhenFormatter.format(when),
-          interview_time: interviewWhenFormatter.format(when),
+          interview_date: whenLabel,
+          interview_time: whenLabel,
           interview_location: payload.location,
           interview_duration: duration,
           interviewer_name: payload.interviewerName,
@@ -1109,8 +1276,9 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
             companyName: payload.companyName,
             jobTitle: payload.jobTitle,
           });
-      delivered = await sendWorkspaceEmail(
-        row.workspaceId,
+      delivered = await sendRecorded(
+        row,
+        database,
         custom
           ? {
               to: payload.candidateEmail,
@@ -1133,7 +1301,7 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
               react: createElement(InterviewScheduled, {
                 ...common,
                 interviewType: payload.interviewType ?? "Interview",
-                when: interviewWhenFormatter.format(when),
+                when: whenLabel,
                 mode: payload.mode ?? "Video call",
                 location: payload.location,
                 duration,
@@ -1150,8 +1318,9 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
         companyName: payload.companyName,
         jobTitle: payload.jobTitle,
       });
-      delivered = await sendWorkspaceEmail(
-        row.workspaceId,
+      delivered = await sendRecorded(
+        row,
+        database,
         {
           to: payload.candidateEmail,
           subject: interviewSubject,
@@ -1159,7 +1328,7 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
           react: createElement(InterviewRescheduled, {
             ...common,
             interviewType: payload.interviewType ?? "Interview",
-            when: interviewWhenFormatter.format(when),
+            when: whenLabel,
             mode: payload.mode ?? "Video call",
             location: payload.location,
             duration,
@@ -1175,8 +1344,9 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
         companyName: payload.companyName,
         jobTitle: payload.jobTitle,
       });
-      delivered = await sendWorkspaceEmail(
-        row.workspaceId,
+      delivered = await sendRecorded(
+        row,
+        database,
         {
           to: payload.candidateEmail,
           subject: interviewSubject,
@@ -1184,7 +1354,7 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
           react: createElement(InterviewCanceled, {
             ...common,
             interviewType: payload.interviewType ?? "Interview",
-            when: interviewWhenFormatter.format(when),
+            when: whenLabel,
           }),
           ...deliveryOptions(row),
         },
@@ -1199,11 +1369,11 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
     await markFailed(
       row.id,
       "Email provider did not accept the interview email.",
+      database,
     );
     return false;
   }
-  await markSent(row.id, delivered);
-  const whenLabel = interviewWhenFormatter.format(when);
+  await markSent(row.id, delivered, database);
   const summary =
     row.kind === "interview.scheduled"
       ? `Interview scheduled — ${whenLabel}.\nType: ${payload.interviewType ?? "Interview"}\nMode: ${payload.mode ?? "Video call"}${payload.location ? `\nLocation: ${payload.location}` : ""}`
@@ -1220,7 +1390,7 @@ async function deliverInterviewEmail(row: OutboxRow): Promise<boolean> {
   return true;
 }
 
-async function deliverOfferWithdrawn(row: OutboxRow): Promise<boolean> {
+async function deliverOfferWithdrawn(row: OutboxRow, database: typeof db = db): Promise<boolean> {
   const payload = row.payload as {
     candidateEmail?: string;
     candidateName?: string;
@@ -1231,11 +1401,12 @@ async function deliverOfferWithdrawn(row: OutboxRow): Promise<boolean> {
     await markFailed(
       row.id,
       "Missing withdrawn-offer email recipient or context.",
+      database,
     );
     return false;
   }
   if (!(await hasActiveCandidateRecipient(row.workspaceId, payload.candidateEmail))) {
-    await markFailed(row.id, "The candidate is no longer active.");
+    await markFailed(row.id, "The candidate is no longer active.", database);
     return false;
   }
   const branding = await getWorkspaceEmailBranding(row.workspaceId);
@@ -1243,8 +1414,9 @@ async function deliverOfferWithdrawn(row: OutboxRow): Promise<boolean> {
     companyName: payload.companyName,
     jobTitle: payload.jobTitle,
   });
-  const delivered = await sendWorkspaceEmail(
-    row.workspaceId,
+  const delivered = await sendRecorded(
+    row,
+    database,
     {
       to: payload.candidateEmail,
       subject: withdrawnSubject,
@@ -1265,10 +1437,11 @@ async function deliverOfferWithdrawn(row: OutboxRow): Promise<boolean> {
     await markFailed(
       row.id,
       "Email provider did not accept the withdrawn-offer email.",
+      database,
     );
     return false;
   }
-  await markSent(row.id, delivered);
+  await markSent(row.id, delivered, database);
   await recordOutboundConversation({
     workspaceId: row.workspaceId,
     toEmail: payload.candidateEmail,
@@ -1292,23 +1465,27 @@ async function markSent(
       nextRetryAt: null,
       lockedAt: null,
       lockedBy: null,
-      providerMessageId: result.messageId ?? null,
+      lastError: null,
+      providerMessageId: result.messageId ?? outboxMessageId(id),
     })
     .where(eq(emailOutbox.id, id));
 }
 
+/**
+ * Record a failed attempt. `attempts` was already incremented when the row was
+ * claimed, so this only decides between backoff and a terminal failure.
+ */
 async function markFailed(id: string, message: string, database: typeof db = db) {
   await database
     .update(emailOutbox)
     .set({
-      attempts: sql`${emailOutbox.attempts} + 1`,
       lastError: message,
       nextRetryAt: sql`CASE
-        WHEN ${emailOutbox.attempts} + 1 >= ${MAX_ATTEMPTS} THEN NULL
-        ELSE now() + ((${emailOutbox.attempts} + 1) * interval '1 minute')
+        WHEN ${emailOutbox.attempts} >= ${MAX_ATTEMPTS} THEN NULL
+        ELSE now() + (${emailOutbox.attempts} * interval '1 minute')
       END`,
       status: sql`CASE
-        WHEN ${emailOutbox.attempts} + 1 >= ${MAX_ATTEMPTS} THEN 'failed'::text
+        WHEN ${emailOutbox.attempts} >= ${MAX_ATTEMPTS} THEN 'failed'::text
         ELSE 'pending'::text
       END`,
       lockedAt: null,

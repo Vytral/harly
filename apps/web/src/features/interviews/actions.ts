@@ -20,6 +20,13 @@ import {
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
 import {
+  formatInterviewWhen as formatInterviewWhenText,
+} from "@/lib/email/interview-time";
+import {
+  queueInterviewEmail,
+  type InterviewEmailQueueResult,
+} from "@/features/interviews/email-queue";
+import {
   syncInterviewToGCal,
   cancelInterviewGCalEvent,
   updateInterviewGCalEvent,
@@ -67,10 +74,6 @@ import { extractResumeText } from "@/lib/resume/extract-text";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { storage } from "@/lib/storage";
 import { maxResumeFileSize } from "@/lib/storage-validation";
-import {
-  enqueueEmailOutbox,
-  processEmailOutbox,
-} from "@/lib/email/outbox-processor";
 import { findWorkspaceMember } from "./core";
 import { lockInterviewerSchedule } from "./booking-lock";
 import { serializeInterview } from "./service";
@@ -90,28 +93,6 @@ const INTERVIEW_MODE_LABEL: Record<string, string> = {
   phone: "Phone call",
   onsite: "On-site",
 };
-
-async function queueInterviewEmail(
-  workspaceId: string,
-  kind: "interview.scheduled" | "interview.rescheduled" | "interview.canceled",
-  payload: Record<string, unknown>,
-  actorId?: string,
-): Promise<"sent" | "failed"> {
-  try {
-    const id = await enqueueEmailOutbox(
-      workspaceId,
-      kind,
-      payload,
-      undefined,
-      actorId,
-    );
-    const result = await processEmailOutbox({ ids: [id], workspaceId });
-    return result.sent > 0 && result.failed === 0 ? "sent" : "failed";
-  } catch (error) {
-    log.error(error, "Interview email could not be delivered");
-    return "failed";
-  }
-}
 
 async function isWorkspaceMember(workspaceId: string, userId: string) {
   const membership = await findWorkspaceMember(workspaceId, userId);
@@ -161,12 +142,7 @@ async function hasInterviewerConflict(
 }
 
 function formatInterviewWhen(when: Date, timeZone?: string | null): string {
-  return new Intl.DateTimeFormat("en", {
-    dateStyle: "long",
-    timeStyle: "short",
-    // Never let the app server's process TZ decide what the candidate sees.
-    timeZone: timeZone ?? "UTC",
-  }).format(when);
+  return formatInterviewWhenText(when, timeZone);
 }
 
 const interviewTypes = [
@@ -277,6 +253,8 @@ export async function scheduleInterview(
   error?: string;
   warning?: string;
   emailStatus?: InterviewEmailStatus;
+  /** Accurate, non-blocking email copy; `warning` also carries it for older callers. */
+  emailWarning?: string;
   interviewId?: string;
 }> {
   try {
@@ -445,6 +423,7 @@ export async function scheduleInterview(
 
     let warning: string | undefined;
     let emailStatus: InterviewEmailStatus | undefined;
+    let emailWarning: string | undefined;
     if (result.success) {
       if (scheduledEvent.current) {
         await publishPersistedDomainEvents([scheduledEvent.current]);
@@ -748,7 +727,7 @@ export async function scheduleInterview(
           workspace.id,
           data.applicationId,
         );
-        emailStatus = await queueInterviewEmail(
+        const queuedEmail: InterviewEmailQueueResult = await queueInterviewEmail(
           workspace.id,
           "interview.scheduled",
           {
@@ -758,6 +737,7 @@ export async function scheduleInterview(
             jobTitle: recipient.jobTitle,
             interviewType: INTERVIEW_TYPE_LABEL[data.type] ?? "Interview",
             scheduledAt: when.toISOString(),
+            timeZone: data.timeZone ?? null,
             mode: INTERVIEW_MODE_LABEL[data.mode] ?? data.mode,
             location: deliveryLocation,
             durationMins: data.durationMins,
@@ -767,10 +747,10 @@ export async function scheduleInterview(
           },
           user.id,
         );
-        if (emailStatus === "failed") {
-          warnings.push(
-            "The interview was scheduled, but the invitation email could not be sent.",
-          );
+        emailStatus = queuedEmail.status;
+        emailWarning = queuedEmail.warning;
+        if (queuedEmail.warning) {
+          warnings.push(`The interview was scheduled. ${queuedEmail.warning}`);
         }
       } else if (data.sendEmail) {
         emailStatus = "failed";
@@ -805,6 +785,7 @@ export async function scheduleInterview(
     return {
       ...result,
       ...(emailStatus ? { emailStatus } : {}),
+      ...(emailWarning ? { emailWarning } : {}),
       ...(warning ? { warning } : {}),
     };
   } catch (error) {
@@ -829,8 +810,9 @@ export async function setInterviewStatus(input: {
   interviewId: string;
   candidateId?: string;
   status: "completed" | "canceled";
-}): Promise<{ success: boolean; error?: string; warning?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string; emailWarning?: string }> {
   try {
+    let emailWarning: string | undefined;
     const parsed = statusSchema.safeParse(input);
     if (!parsed.success) {
       return { success: false, error: "Invalid request." };
@@ -1029,7 +1011,7 @@ export async function setInterviewStatus(input: {
           workspace.id,
           info.applicationId,
         );
-        await queueInterviewEmail(
+        emailWarning = (await queueInterviewEmail(
           workspace.id,
           "interview.canceled",
           {
@@ -1042,7 +1024,7 @@ export async function setInterviewStatus(input: {
             replyTo,
           },
           user.id,
-        );
+        )).warning;
       }
     }
 
@@ -1061,6 +1043,7 @@ export async function setInterviewStatus(input: {
 
     return {
       success: true,
+      ...(emailWarning ? { emailWarning } : {}),
       ...(providerWarnings.length > 0
         ? {
             warning: `Interview canceled, but ${providerWarnings.join(", ")} could not be synchronized. The provider meeting may still exist and needs manual cleanup.`,
@@ -1117,8 +1100,9 @@ export async function rescheduleInterview(input: {
   timeZone?: string | null;
   durationMins: number;
   location?: string | null;
-}): Promise<{ success: boolean; error?: string; warning?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string; emailWarning?: string }> {
   try {
+    let emailWarning: string | undefined;
     const parsed = rescheduleSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -1507,7 +1491,7 @@ export async function rescheduleInterview(input: {
 
     if (info?.email) {
       const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
-      await queueInterviewEmail(
+      emailWarning = (await queueInterviewEmail(
         workspace.id,
         "interview.rescheduled",
         {
@@ -1520,10 +1504,11 @@ export async function rescheduleInterview(input: {
           mode: INTERVIEW_MODE_LABEL[info.mode] ?? info.mode,
           location: deliveryLocation,
           durationMins: data.durationMins,
+          timeZone: data.timeZone ?? null,
           replyTo,
         },
         user.id,
-      );
+      )).warning;
     }
 
     revalidatePath(`/dashboard/candidates/${row.candidateId}`);
@@ -1542,7 +1527,7 @@ export async function rescheduleInterview(input: {
       eventId: persistedEvent?.eventId,
     }, { actorId: user.id, skipDomainEvent: true, eventId: persistedEvent?.eventId });
 
-    return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}) };
+    return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}), ...(emailWarning ? { emailWarning } : {}) };
   } catch (error) {
     log.error(error, "rescheduleInterview failed");
     return {
@@ -1626,8 +1611,9 @@ export async function updateInterview(input: {
   title?: string | null;
   location?: string | null;
   notes?: string | null;
-}): Promise<{ success: boolean; error?: string; warning?: string }> {
+}): Promise<{ success: boolean; error?: string; warning?: string; emailWarning?: string }> {
   try {
+    let emailWarning: string | undefined;
     const parsed = updateSchema.safeParse(input);
     if (!parsed.success) {
       return {
@@ -2151,7 +2137,7 @@ export async function updateInterview(input: {
     // Send rescheduled email if date/time changed.
     if (data.scheduledAt && data.scheduledAt !== "" && info?.email) {
           const replyTo = await getInboundReplyTo(workspace.id, info.applicationId);
-      await queueInterviewEmail(
+      emailWarning = (await queueInterviewEmail(
         workspace.id,
         "interview.rescheduled",
         {
@@ -2165,10 +2151,11 @@ export async function updateInterview(input: {
           mode: INTERVIEW_MODE_LABEL[effectiveMode] ?? effectiveMode,
           location: data.location ?? undefined,
           durationMins: effectiveDurationMins,
+          timeZone: data.timeZone ?? null,
           replyTo,
         },
         user.id,
-      );
+      )).warning;
     }
 
     revalidatePath(`/dashboard/candidates/${row.candidateId}`);
@@ -2186,7 +2173,7 @@ export async function updateInterview(input: {
       eventId: persistedEvent?.eventId,
     }, { actorId: user.id, skipDomainEvent: true, eventId: persistedEvent?.eventId });
 
-    return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}) };
+    return { success: true, ...(calendarWarning ? { warning: calendarWarning } : {}), ...(emailWarning ? { emailWarning } : {}) };
   } catch (error) {
     log.error(error, "updateInterview failed");
     return {

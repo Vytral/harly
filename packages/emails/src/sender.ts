@@ -7,6 +7,8 @@ export type SendEmailOptions = {
   replyTo?: string;
   messageId?: string;
   idempotencyKey?: string;
+  /** Extra headers, e.g. `X-Harly-Outbox-Id` for SMTP traceability. */
+  headers?: Record<string, string>;
   attachments?: EmailAttachment[];
 };
 
@@ -48,7 +50,7 @@ export type EmailProviderConfig = ResendProviderConfig | SmtpProviderConfig;
 
 function createResendSender(config: ResendProviderConfig): EmailSender {
   return {
-    async send({ to, subject, react, replyTo, messageId, idempotencyKey, attachments }) {
+    async send({ to, subject, react, replyTo, messageId, idempotencyKey, headers, attachments }) {
       const [{ render }, { Resend }] = await Promise.all([
         import("@react-email/render"),
         import("resend"),
@@ -63,7 +65,7 @@ function createResendSender(config: ResendProviderConfig): EmailSender {
           subject,
           html,
           replyTo,
-          headers: messageId ? { "Message-ID": messageId } : undefined,
+          headers: messageId || headers ? { ...headers, ...(messageId ? { "Message-ID": messageId } : {}) } : undefined,
           attachments: attachments?.map((attachment) => ({
             filename: attachment.filename,
             content: attachment.content,
@@ -98,7 +100,7 @@ function createSmtpSender(config: SmtpProviderConfig): EmailSender {
   }
 
   return {
-    async send({ to, subject, react, replyTo, messageId, attachments }) {
+    async send({ to, subject, react, replyTo, messageId, headers, attachments }) {
       const [{ render }, transport] = await Promise.all([
         import("@react-email/render"),
         transporter(),
@@ -112,6 +114,7 @@ function createSmtpSender(config: SmtpProviderConfig): EmailSender {
         html,
         replyTo,
         messageId,
+        headers,
         attachments: attachments?.map((attachment) => ({
           filename: attachment.filename,
           content: attachment.content,

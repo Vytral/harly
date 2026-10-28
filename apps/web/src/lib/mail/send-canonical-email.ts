@@ -18,9 +18,15 @@ import {
   type MailSource,
 } from "./canonical";
 import { isMailUnificationEnabled } from "./feature-flag";
+import {
+  MailDeliveryConflictError,
+  type MailDeliveryConflictCode,
+} from "./delivery-state";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("canonical-mail-send");
+
+const ACCEPTANCE_WRITE_ATTEMPTS = 3;
 
 export type SendCanonicalEmailInput = {
   workspaceId: string;
@@ -41,14 +47,25 @@ export type SendCanonicalEmailInput = {
 };
 
 export type SendCanonicalEmailResult = {
+  /** True once the provider accepted the message (even if local persistence failed). */
   delivered: boolean;
+  /** Empty when the conversation record is not saved yet. */
   threadId: string;
   messageId: string;
   mailMessageId?: string;
   providerMessageId?: string | null;
   idempotentReplay?: boolean;
+  /** False when the provider accepted the message but the local record is still missing. */
+  persisted?: boolean;
   legacyWriteWarning?: string;
 };
+
+type IdempotencyRow = typeof mailIdempotencyKeys.$inferSelect;
+
+type Reservation =
+  | { kind: "reserved"; row: IdempotencyRow }
+  | { kind: "accepted"; row: IdempotencyRow }
+  | { kind: "conflict"; code: MailDeliveryConflictCode; row: IdempotencyRow };
 
 function payloadHash(input: SendCanonicalEmailInput) {
   return createHash("sha256")
@@ -69,7 +86,12 @@ function payloadHash(input: SendCanonicalEmailInput) {
     .digest("hex");
 }
 
-async function reserve(input: SendCanonicalEmailInput, hash: string) {
+/**
+ * Reserve the idempotency key. Conflicts are returned, never thrown:
+ * `unknown` means an earlier attempt may have reached the provider, so the key
+ * is never re-sent automatically; `sending` means another request owns it.
+ */
+async function reserve(input: SendCanonicalEmailInput, hash: string): Promise<Reservation> {
   const generatedMessageId = `<${randomUUID()}@harly.local>`;
   const [created] = await db
     .insert(mailIdempotencyKeys)
@@ -89,7 +111,10 @@ async function reserve(input: SendCanonicalEmailInput, hash: string) {
       ],
     })
     .returning();
-  if (created) return { row: created, replay: false };
+  if (created) {
+    const claimed = await claimForSending(created);
+    return claimed ?? { kind: "conflict", code: "delivery_in_progress", row: created };
+  }
   const [existing] = await db
     .select()
     .from(mailIdempotencyKeys)
@@ -103,24 +128,27 @@ async function reserve(input: SendCanonicalEmailInput, hash: string) {
   if (!existing) throw new Error("Unable to reserve mail idempotency key.");
   if (existing.payloadHash !== hash)
     throw new Error("Idempotency key was reused with a different payload.");
-  if (existing.status === "sent") return { row: existing, replay: true };
-  if (existing.status === "sending" || existing.status === "unknown") {
-    throw new Error(
-      `Mail delivery is already ${existing.status}; reconcile before retrying.`,
-    );
-  }
+  if (existing.status === "sent") return { kind: "accepted", row: existing };
+  if (existing.status === "unknown")
+    return { kind: "conflict", code: "delivery_unknown", row: existing };
+  if (existing.status === "sending")
+    return { kind: "conflict", code: "delivery_in_progress", row: existing };
+  const claimed = await claimForSending(existing);
+  return claimed ?? { kind: "conflict", code: "delivery_in_progress", row: existing };
+}
+
+async function claimForSending(row: IdempotencyRow): Promise<Reservation | null> {
   const [claimed] = await db
     .update(mailIdempotencyKeys)
     .set({ status: "sending", updatedAt: new Date() })
     .where(
       and(
-        eq(mailIdempotencyKeys.id, existing.id),
-        eq(mailIdempotencyKeys.status, existing.status),
+        eq(mailIdempotencyKeys.id, row.id),
+        eq(mailIdempotencyKeys.status, row.status),
       ),
     )
     .returning();
-  if (!claimed) throw new Error("Mail delivery is already being processed.");
-  return { row: claimed, replay: false };
+  return claimed ? { kind: "reserved", row: claimed } : null;
 }
 
 async function writeLegacy(
@@ -180,14 +208,108 @@ async function writeLegacy(
   }
 }
 
-export async function sendCanonicalEmail(
+/**
+ * Record the provider's acceptance on the key before anything else. A key in
+ * `sent` is never sent again, so this is the point of no return.
+ */
+async function markAccepted(
+  rowId: string,
+  providerMessageId: string,
+): Promise<boolean> {
+  for (let attempt = 1; attempt <= ACCEPTANCE_WRITE_ATTEMPTS; attempt += 1) {
+    try {
+      await db
+        .update(mailIdempotencyKeys)
+        .set({
+          status: "sent",
+          providerMessageId,
+          error: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(mailIdempotencyKeys.id, rowId));
+      return true;
+    } catch (error) {
+      log.error(
+        { error, rowId, attempt },
+        "could not record accepted canonical mail; retrying the bookkeeping only",
+      );
+      await new Promise((resolve) => setTimeout(resolve, 100 * 2 ** attempt));
+    }
+  }
+  return false;
+}
+
+/**
+ * Save the conversation record for a message the provider already accepted.
+ * Safe to repeat: `insertCanonicalMessage` dedupes on the Message-ID. It never
+ * sends anything, so a failure here cannot cause a duplicate email.
+ */
+async function persistAccepted(
   input: SendCanonicalEmailInput,
+  row: IdempotencyRow,
+  providerMessageId: string | null,
 ): Promise<SendCanonicalEmailResult> {
-  const enabled = await isMailUnificationEnabled(input.workspaceId);
-  if (!enabled)
-    throw new Error(
-      "Canonical mail sending is not enabled for this workspace.",
+  let canonical: Awaited<ReturnType<typeof insertCanonicalMessage>>;
+  try {
+    canonical = await insertCanonicalMessage({
+      ...input,
+      source: input.sourceHint ?? ("provider" as MailSource),
+      mailboxId: null,
+      messageId: row.messageId,
+      fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
+      toEmails: [input.toEmail],
+      direction: "outbound",
+      receivedAt: new Date(),
+      readAt: new Date(),
+    });
+  } catch (error) {
+    log.error(
+      { error, idempotencyRowId: row.id },
+      "accepted canonical mail could not be saved to the conversation",
     );
+    return {
+      delivered: true,
+      threadId: "",
+      messageId: row.messageId,
+      providerMessageId,
+      persisted: false,
+      legacyWriteWarning:
+        "Sent, but the conversation record could not be saved. It will be completed when this message is retried.",
+    };
+  }
+  const legacyWriteWarning = await writeLegacy(
+    input,
+    row.messageId,
+    canonical.messageId,
+  );
+  try {
+    await db
+      .update(mailIdempotencyKeys)
+      .set({
+        status: "sent",
+        threadId: canonical.threadId,
+        mailMessageId: canonical.messageId,
+        providerMessageId,
+        error: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(mailIdempotencyKeys.id, row.id));
+  } catch (error) {
+    // The message is saved (dedupes on Message-ID); a replay links the key.
+    log.error({ error, idempotencyRowId: row.id }, "could not link saved canonical mail to its key");
+  }
+  return {
+    delivered: true,
+    threadId: canonical.threadId,
+    messageId: row.messageId,
+    mailMessageId: canonical.messageId,
+    providerMessageId,
+    persisted: true,
+    legacyWriteWarning,
+  };
+}
+
+async function assertCandidateAndApplication(input: SendCanonicalEmailInput) {
   if (input.candidateId) {
     const [candidate] = await db
       .select({ id: candidates.id })
@@ -238,38 +360,58 @@ export async function sendCanonicalEmail(
         "Application does not belong to this workspace or candidate.",
       );
   }
+}
+
+/**
+ * Send a canonical email at most once per idempotency key.
+ *
+ * - Provider rejection or a missing sender marks the key `failed`; the same key
+ *   may be retried.
+ * - Once the provider accepts, the key is `sent` before any local step runs.
+ *   A later persistence failure returns `delivered: true, persisted: false`
+ *   instead of throwing, and never re-sends.
+ * - Reservation conflicts throw `MailDeliveryConflictError` (code
+ *   `delivery_unknown` or `delivery_in_progress`); mailbox actions turn them
+ *   into typed results.
+ */
+export async function sendCanonicalEmail(
+  input: SendCanonicalEmailInput,
+): Promise<SendCanonicalEmailResult> {
+  const enabled = await isMailUnificationEnabled(input.workspaceId);
+  if (!enabled)
+    throw new Error(
+      "Canonical mail sending is not enabled for this workspace.",
+    );
+  await assertCandidateAndApplication(input);
   const hash = payloadHash(input);
   const reservation = await reserve(input, hash);
+  if (reservation.kind === "conflict")
+    throw new MailDeliveryConflictError(reservation.code);
   const row = reservation.row;
-  if (reservation.replay)
+
+  if (reservation.kind === "accepted") {
+    if (row.mailMessageId) {
+      return {
+        delivered: true,
+        threadId: row.threadId ?? "",
+        messageId: row.messageId,
+        mailMessageId: row.mailMessageId,
+        providerMessageId: row.providerMessageId,
+        idempotentReplay: true,
+        persisted: true,
+      };
+    }
+    // Accepted earlier, but the conversation record was never saved. Finish
+    // that step only.
     return {
-      delivered: true,
-      threadId: row.threadId ?? "",
-      messageId: row.messageId,
-      mailMessageId: row.mailMessageId ?? undefined,
-      providerMessageId: row.providerMessageId,
+      ...(await persistAccepted(input, row, row.providerMessageId)),
       idempotentReplay: true,
     };
+  }
 
+  const sender = await getWorkspaceEmailSender(input.workspaceId, input.authorId);
+  let providerMessageId: string | null;
   try {
-    if (row.status === "pending") {
-      const [sending] = await db
-        .update(mailIdempotencyKeys)
-        .set({ status: "sending", updatedAt: new Date() })
-        .where(
-          and(
-            eq(mailIdempotencyKeys.id, row.id),
-            eq(mailIdempotencyKeys.status, "pending"),
-          ),
-        )
-        .returning();
-      if (!sending)
-        throw new Error("Mail delivery is already being processed.");
-    }
-    const sender = await getWorkspaceEmailSender(
-      input.workspaceId,
-      input.authorId,
-    );
     if (!sender) throw new Error("Email sending is not configured.");
     const provider = await sender.send({
       to: input.toEmail,
@@ -288,41 +430,9 @@ export async function sendCanonicalEmail(
       idempotencyKey: input.idempotencyKey,
       attachments: input.attachments,
     });
-    const canonical = await insertCanonicalMessage({
-      ...input,
-      source: input.sourceHint ?? ("provider" as MailSource),
-      mailboxId: null,
-      messageId: row.messageId,
-      fromEmail: process.env.EMAIL_FROM ?? "noreply@harly.local",
-      toEmails: [input.toEmail],
-      direction: "outbound",
-      receivedAt: new Date(),
-      readAt: new Date(),
-    });
-    const legacyWriteWarning = await writeLegacy(
-      input,
-      row.messageId,
-      canonical.messageId,
-    );
-    await db
-      .update(mailIdempotencyKeys)
-      .set({
-        status: "sent",
-        threadId: canonical.threadId,
-        mailMessageId: canonical.messageId,
-        providerMessageId: provider.messageId ?? row.messageId,
-        updatedAt: new Date(),
-      })
-      .where(eq(mailIdempotencyKeys.id, row.id));
-    return {
-      delivered: true,
-      threadId: canonical.threadId,
-      messageId: row.messageId,
-      mailMessageId: canonical.messageId,
-      providerMessageId: provider.messageId ?? null,
-      legacyWriteWarning,
-    };
+    providerMessageId = provider.messageId ?? row.messageId;
   } catch (error) {
+    // The provider did not accept it, so the same key stays retryable.
     await db
       .update(mailIdempotencyKeys)
       .set({
@@ -336,4 +446,15 @@ export async function sendCanonicalEmail(
       .where(eq(mailIdempotencyKeys.id, row.id));
     throw error;
   }
+
+  // Point of no return: the provider accepted the message.
+  const recorded = await markAccepted(row.id, providerMessageId);
+  const result = await persistAccepted(input, row, providerMessageId);
+  if (!recorded) {
+    log.error(
+      { idempotencyRowId: row.id },
+      "accepted canonical mail left its key in sending; reconciliation will mark it unknown",
+    );
+  }
+  return result;
 }

@@ -99,7 +99,8 @@ vi.mock("@harly/db", () => ({
   interviews: {},
   jobs: {},
   organization: {},
-  user: {},
+  user: { id: {}, timezone: {} },
+  emailOutbox: { id: {}, status: {} },
   workspaceSettings: {},
 }));
 
@@ -467,6 +468,9 @@ describe("interview invitation delivery", () => {
         },
       ],
       [{ meetLink: null }],
+      // Scheduler profile zone lookup, then the outbox row's final state.
+      [{ timezone: null }],
+      [{ status: "failed" }],
     );
 
     const result = await scheduleInterview({
@@ -481,7 +485,7 @@ describe("interview invitation delivery", () => {
 
     expect(result.success).toBe(true);
     expect(result.emailStatus).toBe("failed");
-    expect(result.warning).toMatch(/invitation email could not be sent/i);
+    expect(result.warning).toMatch(/interview email could not be sent and will not be retried automatically/i);
   });
 
   it("does not enqueue an invitation when email notification is disabled", async () => {

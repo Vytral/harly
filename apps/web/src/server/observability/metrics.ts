@@ -1,5 +1,7 @@
 import "server-only";
 
+import { normalizeCronRunCounts, type CronRunCountRow } from "@/server/cron-status";
+
 import { and, count, eq, inArray, isNull, lte, lt, or } from "drizzle-orm";
 import {
   candidateDeletionJobs,
@@ -403,7 +405,7 @@ export async function renderOperationalMetrics() {
       .groupBy(workflowRuns.status),
   ]);
   return {
-    cronRuns,
+    cronRuns: normalizeCronRunCounts(cronRuns as unknown as CronRunCountRow[]),
     emailOutbox,
     webhookDeliveries,
     slackDeliveries,

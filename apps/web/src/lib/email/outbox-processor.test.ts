@@ -73,6 +73,8 @@ vi.mock("@/lib/logger", () => ({
   getServerLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) }),
 }));
 
+import { db } from "@harly/db";
+
 import { processEmailOutbox } from "./outbox-processor";
 
 const PENDING = {
@@ -100,6 +102,9 @@ const APPLICATION_ACTIVE = {
   candidateId: "cand-1",
   jobId: "job-1",
 };
+// Claimed row as the pre-send re-read sees it: still ours, nothing accepted yet.
+const WORKER = "worker-1";
+const LOCKED = { status: "processing", lockedBy: WORKER, sentAt: null, providerMessageId: null };
 const RECIPIENT = { email: "c@example.com", firstName: "C", lastName: "D", companyName: "Acme" };
 
 function reset() {
@@ -140,10 +145,10 @@ describe("email_outbox worker", () => {
   beforeEach(reset);
 
   it("sends the email and flips the offer + outbox to sent on success", async () => {
-    mocks.selectQueue.push([PENDING], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
+    mocks.selectQueue.push([PENDING], [LOCKED], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
     mocks.sendWorkspaceEmail.mockResolvedValue(true);
 
-    const result = await processEmailOutbox();
+    const result = await processEmailOutbox({ workerId: WORKER });
 
     expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
     expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
@@ -152,33 +157,34 @@ describe("email_outbox worker", () => {
   });
 
   it("does not resend when the offer is already sent (idempotent)", async () => {
-    mocks.selectQueue.push([PENDING], [OFFER_SENT]);
+    mocks.selectQueue.push([PENDING], [LOCKED], [OFFER_SENT]);
 
-    const result = await processEmailOutbox();
+    const result = await processEmailOutbox({ workerId: WORKER });
 
     expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
     expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
   });
 
   it("queues a retry (keeps pending + bumps attempts) when delivery fails", async () => {
-    mocks.selectQueue.push([PENDING], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
+    mocks.selectQueue.push([PENDING], [LOCKED], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
     mocks.sendWorkspaceEmail.mockResolvedValue(false);
 
-    const result = await processEmailOutbox();
+    const result = await processEmailOutbox({ workerId: WORKER });
 
     expect(result).toEqual({ processed: 1, sent: 0, failed: 1 });
     expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
     // No success path; the failing row must carry a retry error + attempt bump.
     const failedUpdate = mocks.updateCalls.find((c) => c.set.lastError !== undefined);
     expect(failedUpdate?.set.lastError).toMatch(/did not accept/i);
-    expect(failedUpdate?.set).toHaveProperty("attempts");
+    // Attempts are counted at claim time; a failure only schedules the retry.
+    expect(failedUpdate?.set).toHaveProperty("nextRetryAt");
   });
 
   it("records the sent offer in the canonical conversation model", async () => {
-    mocks.selectQueue.push([PENDING], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
+    mocks.selectQueue.push([PENDING], [LOCKED], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
     mocks.sendWorkspaceEmail.mockResolvedValue(true);
 
-    const result = await processEmailOutbox();
+    const result = await processEmailOutbox({ workerId: WORKER });
 
     expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
     expect(mocks.insertCanonicalMessage).toHaveBeenCalledTimes(1);
@@ -195,23 +201,113 @@ describe("email_outbox worker", () => {
   it("does not send an offer after its application becomes terminal", async () => {
     mocks.selectQueue.push([
       PENDING,
-    ], [OFFER_DRAFT], [{ ...APPLICATION_ACTIVE, status: "rejected" }]);
+    ], [LOCKED], [OFFER_DRAFT], [{ ...APPLICATION_ACTIVE, status: "rejected" }]);
 
-    const result = await processEmailOutbox();
+    const result = await processEmailOutbox({ workerId: WORKER });
 
     expect(result).toEqual({ processed: 1, sent: 0, failed: 1 });
     expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
   });
 
   it("does not revive a withdrawn offer when delivery races its final transition", async () => {
-    mocks.selectQueue.push([PENDING], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
+    mocks.selectQueue.push([PENDING], [LOCKED], [OFFER_DRAFT], [APPLICATION_ACTIVE], [RECIPIENT]);
     mocks.transactionReturningQueue.push([], []);
     mocks.sendWorkspaceEmail.mockResolvedValue(true);
 
-    const result = await processEmailOutbox();
+    const result = await processEmailOutbox({ workerId: WORKER });
 
     expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
     expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
     expect(mocks.insertCanonicalMessage).not.toHaveBeenCalled();
+  });
+});
+
+// Duplicate-send scenarios. A scheduled report keeps the path short: one send,
+// no offer/application lookups, so each scenario controls every state read.
+describe("email_outbox duplicate-send protection", () => {
+  const REPORT_ROW = {
+    id: "outbox-1",
+    workspaceId: "ws-1",
+    kind: "report.scheduled",
+    payload: { to: "c@example.com", subject: "Weekly", bodyHtml: "<p>x</p>", companyName: "Acme" },
+    status: "processing",
+    attempts: 2,
+    nextRetryAt: null,
+    actorId: null,
+  };
+
+  beforeEach(reset);
+
+  it("never resends a row a previous worker already got accepted (stall + reclaim)", async () => {
+    mocks.selectQueue.push([REPORT_ROW], [{ status: "processing", lockedBy: WORKER, sentAt: null, providerMessageId: "prov-1" }]);
+
+    const result = await processEmailOutbox({ workerId: WORKER });
+
+    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+    expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
+    expect(mocks.updateCalls.some((c) => c.set.status === "sent")).toBe(true);
+  });
+
+  it("does not send a row that was cancelled while queued", async () => {
+    mocks.selectQueue.push([REPORT_ROW], [{ status: "cancelled", lockedBy: WORKER, sentAt: null, providerMessageId: null }]);
+
+    const result = await processEmailOutbox({ workerId: WORKER });
+
+    expect(result).toEqual({ processed: 1, sent: 0, failed: 1 });
+    expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
+  });
+
+  it("does not send a row another worker re-claimed after this worker's lock went stale", async () => {
+    mocks.selectQueue.push([REPORT_ROW], [{ status: "processing", lockedBy: "other-worker", sentAt: null, providerMessageId: null }]);
+
+    const result = await processEmailOutbox({ workerId: WORKER });
+
+    expect(result).toEqual({ processed: 1, sent: 0, failed: 1 });
+    expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
+  });
+
+  it("records the provider message id before any other bookkeeping", async () => {
+    mocks.selectQueue.push([REPORT_ROW], [{ status: "processing", lockedBy: WORKER, sentAt: null, providerMessageId: null }]);
+    mocks.sendWorkspaceEmail.mockResolvedValue({ messageId: "prov-1" });
+
+    await processEmailOutbox({ workerId: WORKER });
+
+    const providerIndex = mocks.updateCalls.findIndex((c) => c.set.providerMessageId === "prov-1");
+    const sentIndex = mocks.updateCalls.findIndex((c) => c.set.status === "sent");
+    expect(providerIndex).toBeGreaterThanOrEqual(0);
+    expect(providerIndex).toBeLessThan(sentIndex);
+  });
+
+  it("retries only the bookkeeping when marking a row sent fails after the provider accepted it", async () => {
+    // Finalizing the accepted row reads the state again and must not send.
+    mocks.selectQueue.push(
+      [REPORT_ROW],
+      [{ status: "processing", lockedBy: WORKER, sentAt: null, providerMessageId: null }],
+      [{ status: "processing", lockedBy: WORKER, sentAt: null, providerMessageId: "prov-9" }],
+    );
+    mocks.sendWorkspaceEmail.mockResolvedValue({ messageId: "prov-9" });
+
+    const originalUpdate = db.update;
+    let failedOnce = false;
+    (db as unknown as { update: unknown }).update = (table: unknown) => {
+      const chain = (originalUpdate as unknown as (t: unknown) => { set: (v: Record<string, unknown>) => unknown })(table);
+      return {
+        set: (values: Record<string, unknown>) => {
+          if (!failedOnce && values.sentAt instanceof Date) {
+            failedOnce = true;
+            throw new Error("connection reset after accept");
+          }
+          return chain.set(values);
+        },
+      };
+    };
+    try {
+      const result = await processEmailOutbox({ workerId: WORKER });
+      expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+      expect(failedOnce).toBe(true);
+      expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
+    } finally {
+      (db as unknown as { update: unknown }).update = originalUpdate;
+    }
   });
 });

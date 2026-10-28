@@ -8,6 +8,7 @@ import postgres from "postgres";
 
 import { pruneCache } from "./cache";
 import { describeSchedulerRuns as describeSchedulerRunsForJobs } from "./scheduler-health";
+import { evaluateEmailOutboxHealth } from "./outbox-health";
 
 import {
   formatConfigError,
@@ -145,7 +146,15 @@ type Job = {
   path: string;
   intervalMs: number;
   body?: Record<string, unknown>;
+  /** Fetch timeout. Must cover the job's largest batch. Defaults to 30 s. */
+  timeoutMs?: number;
 };
+
+/** The scheduler's only cron_runs vocabulary; the app writes the same words. */
+type CronStatus = "succeeded" | "failed" | "skipped";
+const DEFAULT_JOB_TIMEOUT_MS = 30_000;
+const CRON_RUN_PRUNE_INTERVAL_MS = 6 * 60 * 60_000;
+const CRON_RUN_RETENTION = "30 days";
 const jobs: Job[] = [
   {
     name: "domain-events",
@@ -159,7 +168,13 @@ const jobs: Job[] = [
     path: "/api/cron/automations",
     intervalMs: 10_000,
   },
-  { name: "email-outbox", path: "/api/cron/email-outbox", intervalMs: 60_000 },
+  // The route processes up to 100 rows, each a provider call; 30 s was too short.
+  {
+    name: "email-outbox",
+    path: "/api/cron/email-outbox",
+    intervalMs: 60_000,
+    timeoutMs: 150_000,
+  },
   {
     name: "webhooks-dispatch",
     path: "/api/cron/webhooks/dispatch",
@@ -270,8 +285,9 @@ async function scheduler() {
   const execute = async (job: Job) => {
     const runId = randomUUID();
     const started = Date.now();
-    let status = "success";
+    let status: CronStatus = "succeeded";
     let counters: Record<string, unknown> = {};
+    let errorText: string | null = null;
     try {
       const response = await fetch(`${appOrigin}${job.path}`, {
         method: "POST",
@@ -280,7 +296,7 @@ async function scheduler() {
           ...(job.body ? { "Content-Type": "application/json" } : {}),
         },
         body: job.body ? JSON.stringify(job.body) : undefined,
-        signal: AbortSignal.timeout(30_000),
+        signal: AbortSignal.timeout(job.timeoutMs ?? DEFAULT_JOB_TIMEOUT_MS),
       });
       const body = (await response.json().catch(() => ({}))) as Record<
         string,
@@ -302,20 +318,38 @@ async function scheduler() {
         durationMs: Date.now() - started,
         counters,
       });
-    } catch {
+    } catch (error) {
       status = "failed";
+      errorText = (error instanceof Error ? error.message : "unknown error")
+        .replace(/\s+/g, " ")
+        .slice(0, 500);
       jsonLog("error", "scheduler.run", {
         job: job.name,
         runId,
         status,
         durationMs: Date.now() - started,
+        error: errorText,
       });
     }
+    // The app records the runs it executes itself (with its own error text).
+    // This fallback row is written only when the app recorded nothing since
+    // this run started: skipped (409), unreachable, timed out, or rejected
+    // before the route reached its own bookkeeping.
     await database`
-      insert into cron_runs (job, run_id, status, duration_ms, counters)
-      values (${job.name}, ${runId}, ${status}, ${Date.now() - started}, ${database.json(counters)})
+      insert into cron_runs (job, run_id, status, duration_ms, counters, error)
+      select ${job.name}, ${runId}::uuid, ${status}::text, ${Date.now() - started}::int,
+             ${database.json(counters)}, ${errorText}::text
+      where not exists (
+        select 1 from cron_runs
+        where job = ${job.name} and created_at >= ${new Date(started)}
+      )
     `.catch(() => undefined);
   };
+
+  const pruneCronRuns = () =>
+    database`delete from cron_runs where created_at < now() - ${CRON_RUN_RETENTION}::interval`.catch(
+      () => undefined,
+    );
 
   while (!stopping) {
     try {
@@ -327,9 +361,10 @@ async function scheduler() {
     await new Promise((resolve) => setTimeout(resolve, 3_000));
   }
 
-  await database`delete from cron_runs where created_at < now() - interval '30 days'`.catch(
-    () => undefined,
-  );
+  await pruneCronRuns();
+  // The scheduler is the only pruner, and it prunes for the lifetime of the
+  // process, not just at startup.
+  const pruneTimer = setInterval(pruneCronRuns, CRON_RUN_PRUNE_INTERVAL_MS);
   const scheduled = activeJobs();
   scheduled.forEach((job, index) => schedule(job, index * 1_000));
   const heartbeat = setInterval(
@@ -341,6 +376,7 @@ async function scheduler() {
     const stop = () => {
       stopping = true;
       clearInterval(heartbeat);
+      clearInterval(pruneTimer);
       timers.forEach(clearTimeout);
       resolve();
     };
@@ -358,7 +394,7 @@ async function doctor() {
   const database = postgres(config.DATABASE_URL!, { max: 1, prepare: false });
   const expectedJobs = activeJobs();
   const expectedJobNames = expectedJobs.map((job) => job.name);
-  const checks: Array<{ name: string; ok: boolean; detail?: string }> = [];
+  const checks: Array<{ name: string; ok: boolean; warn?: boolean; detail?: string }> = [];
   try {
     const health = await fetch(`${appOrigin}/api/health/ready`, {
       signal: AbortSignal.timeout(3_000),
@@ -410,13 +446,18 @@ async function doctor() {
         (
           select coalesce(json_object_agg(job, last_run), '{}'::json)
           from (
-            select job, max(created_at) filter (where status in ('success', 'skipped')) as last_run
+            select job, max(created_at) filter (where status in ('succeeded', 'success', 'skipped')) as last_run
             from cron_runs
             where job = any(${expectedJobNames})
             group by job
           ) scheduler_runs
         ) as scheduler_runs,
         (select count(*)::int from email_outbox where status in ('pending', 'processing')) as email_pending,
+        (select count(*)::int from email_outbox where status = 'failed') as email_failed,
+        (select count(*)::int from email_outbox
+          where status = 'pending' and coalesce(next_retry_at, created_at) < now() - interval '15 minutes') as email_overdue,
+        (select count(*)::int from email_outbox
+          where status = 'processing' and locked_at < now() - interval '5 minutes') as email_stuck,
         (select count(*)::int from webhook_deliveries where status in ('pending', 'failed', 'processing')) as webhook_pending,
         (select count(*)::int from evaluation_jobs where status in ('pending', 'failed', 'running')) as evaluation_pending,
         (select count(*)::int from evaluation_jobs where status = 'dead_letter') as evaluation_dead_letter,
@@ -436,6 +477,13 @@ async function doctor() {
       ok: evaluationDeadLetter === 0 && evaluationStale === 0,
       detail: `email=${row?.email_pending ?? 0} webhooks=${row?.webhook_pending ?? 0} evaluation=${row?.evaluation_pending ?? 0} evaluation_dead_letter=${evaluationDeadLetter} evaluation_stale=${evaluationStale}`,
     });
+    // Email trouble is reported as a warning and never changes the exit code.
+    const emailHealth = evaluateEmailOutboxHealth({
+      failed: Number(row?.email_failed ?? 0),
+      overduePending: Number(row?.email_overdue ?? 0),
+      stuckProcessing: Number(row?.email_stuck ?? 0),
+    });
+    checks.push({ name: "email", ok: true, warn: emailHealth.warn, detail: emailHealth.detail });
   } catch {
     checks.push({ name: "database", ok: false, detail: "query failed" });
   } finally {

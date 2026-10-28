@@ -162,7 +162,7 @@ async function requireAllApplicationPermissions(
 
 export async function moveApplicationInPipeline(
   input: MoveApplicationInPipelineInput,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   await requireApplicationPermission("candidates:move", input.applicationId);
   const { organization: workspace, user } = await getWorkspaceContext();
 
@@ -484,7 +484,7 @@ export async function moveApplicationInPipeline(
     );
 
     revalidatePath("/dashboard/pipeline");
-    void sendPipelineEmails(input.workspaceId, emails, user.id);
+    const pipelineEmails = await sendPipelineEmails(input.workspaceId, emails, user.id);
     await publishPersistedDomainEvents(domainEvents);
 
     for (const event of stageEvents) {
@@ -537,7 +537,7 @@ export async function moveApplicationInPipeline(
       }
     }
 
-    return { success: true };
+    return { success: true, emailWarning: pipelineEmails.emailWarning };
   } catch (error) {
     log.error(error, "moveApplicationInPipeline failed");
     if (isConcurrencyConflict(error) && error instanceof Error) {
@@ -549,7 +549,7 @@ export async function moveApplicationInPipeline(
 
 export async function moveApplicationStage(
   input: MoveApplicationStageInput,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   return moveApplicationInPipeline({
     ...input,
     orderedApplicationIds: [input.applicationId],
@@ -558,7 +558,7 @@ export async function moveApplicationStage(
 
 export async function bulkMoveApplications(
   input: BulkMoveApplicationsInput,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   try {
     if (
       !Array.isArray(input.applicationIds) ||
@@ -950,7 +950,7 @@ export async function bulkMoveApplications(
     );
 
     revalidatePath("/dashboard/pipeline");
-    void sendPipelineEmails(input.workspaceId, emails, user.id);
+    const pipelineEmails = await sendPipelineEmails(input.workspaceId, emails, user.id);
     await publishPersistedDomainEvents(domainEvents);
 
     for (const evt of stageEvents) {
@@ -1003,7 +1003,7 @@ export async function bulkMoveApplications(
       }
     }
 
-    return { success: true };
+    return { success: true, emailWarning: pipelineEmails.emailWarning };
   } catch (error) {
     log.error(error, "bulkMoveApplications failed");
     if (isConcurrencyConflict(error) && error instanceof Error) {
@@ -1015,7 +1015,7 @@ export async function bulkMoveApplications(
 
 export async function updateApplicationStatus(
   input: UpdateApplicationStatusInput,
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   try {
     if (
       !input ||
@@ -1333,9 +1333,9 @@ export async function updateApplicationStatus(
         },
       );
     }
-    void sendPipelineEmails(input.workspaceId, emails, user.id);
+    const pipelineEmails = await sendPipelineEmails(input.workspaceId, emails, user.id);
 
-    return { success: true };
+    return { success: true, emailWarning: pipelineEmails.emailWarning };
   } catch (error) {
     log.error(error, "updateApplicationStatus failed");
     if (isConcurrencyConflict(error) && error instanceof Error) {

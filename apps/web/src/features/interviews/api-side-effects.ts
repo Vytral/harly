@@ -42,6 +42,7 @@ import {
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
+import { resolveInterviewEmailTimeZone } from "@/features/interviews/email-queue";
 import { createLogger } from "@/lib/logger";
 
 import type { Interview } from "@harly/db";
@@ -147,6 +148,8 @@ async function sendInterviewEmail(
 ) {
   if (!context.email) return;
   const replyTo = await getInboundReplyTo(workspaceId, context.applicationId);
+  // The API has no request zone; use the acting user's profile zone, then UTC.
+  const timeZone = await resolveInterviewEmailTimeZone(null, actorUserId);
   const outboxId = await enqueueEmailOutbox(
     workspaceId,
     `interview.${action}`,
@@ -157,6 +160,7 @@ async function sendInterviewEmail(
       jobTitle: context.jobTitle,
       interviewType: TYPE_LABEL[interview.type] ?? "Interview",
       scheduledAt: interview.scheduledAt.toISOString(),
+      timeZone,
       mode: MODE_LABEL[interview.mode] ?? interview.mode,
       location: interview.meetLink ?? interview.location ?? undefined,
       durationMins: interview.durationMins,

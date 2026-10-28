@@ -101,7 +101,11 @@ in the settings screen.
 
 | Symptom | Likely cause | Fix |
 | --- | --- | --- |
-| No outbound delivery | Invalid sender domain or credentials | Check email outbox status in operations |
+| No outbound delivery | Invalid sender domain or credentials | Open **Settings → Email → Delivery log**. Failed rows show the provider's reason in *Last error*; fix the sender, then *Retry* the row |
+| Email shows "Queued" for a long time | The worker is not running or the provider is slow | Check the scheduler with the doctor (see [operations](/self-hosting/operations#candidate-email-retries-and-attempts)); queued emails are retried automatically |
+| Email shows "Failed" in the Delivery log | Five attempts did not succeed | Fix the cause in *Last error*, then *Retry* it, or *Cancel* it if it is no longer wanted. Cancelled and failed emails are never sent automatically |
+| Stage change saved but email warning appeared | The candidate email was not sent right now | The warning says whether a retry is scheduled. If it says it will not be retried, review it in the Delivery log |
+| Interview time looks wrong to the candidate | The interview zone was not recorded | Emails show the zone in brackets, for example `(Europe/Madrid)`. Older queued emails without a zone show `(UTC)` |
 | Reply not threaded | Receiving domain set as URL instead of hostname | Set only `replies.example.com`, not `https://…` |
 | Webhook returns 404 | Wrong workspace ID in query param | Copy exact workspace ID from Settings → Email → Inbound |
 | Webhook returns 401 | Secret mismatch | Verify the provider has the current secret from Harly settings |

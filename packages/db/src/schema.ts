@@ -2929,7 +2929,9 @@ export const emailOutbox = pgTable(
   ],
 );
 
-/** Operational history only: no job payloads and no raw errors. */
+/** Operational history only: no job payloads. `status` is one of
+ * `succeeded | failed | skipped`; `error` holds a short, sanitized message for
+ * failed runs (legacy rows may carry `success` and a null error). */
 export const cronRuns = pgTable(
   "cron_runs",
   {
@@ -2941,6 +2943,7 @@ export const cronRuns = pgTable(
     counters: jsonb("counters")
       .default(sql`'{}'::jsonb`)
       .notNull(),
+    error: text("error"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
