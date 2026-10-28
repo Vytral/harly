@@ -1,26 +1,31 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  statusForStageName,
-  terminalStageNameForStatus,
-} from "./state";
+import { applicationStatusForStage } from "@harly/db";
 
-describe("pipeline state mapping", () => {
+describe("application status from stage kind", () => {
   it.each([
-    ["Hired", "hired"],
-    [" rejected ", "rejected"],
-    ["Withdrawn", "withdrawn"],
-    ["WITHDRAWN", "withdrawn"],
-    ["Interview", "active"],
-    ["Offer", "active"],
-  ] as const)("maps %s to %s", (stageName, status) => {
-    expect(statusForStageName(stageName)).toBe(status);
+    [{ kind: "hired", name: "Hired" }, "hired"],
+    [{ kind: "rejected", name: "Rejected" }, "rejected"],
+    [{ kind: "withdrawn", name: "Withdrawn" }, "withdrawn"],
+    [{ kind: "interview", name: "Interview" }, "active"],
+    [{ kind: "offer", name: "Offer" }, "active"],
+    [{ kind: "custom", name: "Hired" }, "active"],
+  ] as const)("maps stage %o to status %s", (stage, status) => {
+    expect(applicationStatusForStage(stage)).toBe(status);
   });
 
-  it("only maps terminal statuses to terminal stage names", () => {
-    expect(terminalStageNameForStatus("hired")).toBe("Hired");
-    expect(terminalStageNameForStatus("rejected")).toBe("Rejected");
-    expect(terminalStageNameForStatus("active")).toBeNull();
-    expect(terminalStageNameForStatus("withdrawn")).toBe("Withdrawn");
+  it("uses the stored kind even after an admin renames the stage", () => {
+    expect(applicationStatusForStage({ kind: "hired", name: "Joined" })).toBe(
+      "hired",
+    );
+  });
+
+  it("falls back to the legacy name for rows with a NULL kind", () => {
+    expect(applicationStatusForStage({ kind: null, name: " hired " })).toBe(
+      "hired",
+    );
+    expect(applicationStatusForStage({ kind: null, name: "Interview" })).toBe(
+      "active",
+    );
   });
 });

@@ -447,6 +447,7 @@ async function resolveAgentWritePreview(
         and(
           eq(jobStages.id, toStageId),
           eq(jobStages.workspaceId, workspaceId),
+          isNull(jobStages.archivedAt),
         ),
       )
       .limit(1);

@@ -3,7 +3,15 @@ import "server-only";
 import { and, desc, eq, isNull, lt, or } from "drizzle-orm";
 
 import { ApiError, type Cursor } from "@harly/api";
-import { db, jobApprovalRequests, jobHiringTeam, jobs, jobStages, type Job } from "@harly/db";
+import {
+  db,
+  defaultStageRows,
+  jobApprovalRequests,
+  jobHiringTeam,
+  jobs,
+  jobStages,
+  type Job,
+} from "@harly/db";
 
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
@@ -20,15 +28,6 @@ import type { JobStatus } from "./validation";
  * function takes an explicit `workspaceId` (resolved from the API key) so the
  * same logic is reusable outside a user session.
  */
-
-const DEFAULT_API_STAGES = [
-  { name: "Applied", color: "#E0F2FE" },
-  { name: "Screening", color: "#F5F3FF" },
-  { name: "Interview", color: "#FEF3C7" },
-  { name: "Offer", color: "#DCFCE7" },
-  { name: "Hired", color: "#CCFBF1" },
-  { name: "Rejected", color: "#FEE2E2" },
-];
 
 export type JobApiInput = {
   title: string;
@@ -193,15 +192,9 @@ export async function createJobForApi(input: {
       })
       .returning();
 
-    await tx.insert(jobStages).values(
-      DEFAULT_API_STAGES.map((stage, index) => ({
-        workspaceId,
-        jobId: created.id,
-        name: stage.name,
-        color: stage.color,
-        order: index + 1,
-      })),
-    );
+    await tx
+      .insert(jobStages)
+      .values(defaultStageRows({ workspaceId, jobId: created.id }));
 
     // API-created jobs should behave exactly like dashboard-created jobs:
     // the caller is the initial, accountable recruiter for the role.

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@harly/db";
 import {
@@ -9,10 +9,10 @@ import {
   applicationStageHistory,
   candidates,
   jobs,
-  jobStages,
   poolEntries,
 } from "@harly/db";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { resolveEntryStage } from "@/features/pipeline/stage-resolver";
 import {
   ACTIVE_POOL_ENTRY_CONFLICT_MESSAGE,
   isActivePoolEntryUniqueViolation,
@@ -237,20 +237,16 @@ export async function assignFromPoolToJobAction(input: {
   }
 
   // Get first stage of the job
-  const [firstStage] = await db
-    .select({ id: jobStages.id })
-    .from(jobStages)
-    .where(
-      and(
-        eq(jobStages.workspaceId, workspace.id),
-        eq(jobStages.jobId, parsed.data.jobId),
-      ),
-    )
-    .orderBy(asc(jobStages.order))
-    .limit(1);
+  const firstStage = await resolveEntryStage(db, {
+    workspaceId: workspace.id,
+    jobId: parsed.data.jobId,
+  });
 
   if (!firstStage) {
-    return { success: false, error: "Job has no pipeline stages." };
+    return {
+      success: false,
+      error: "This job has no open pipeline stage to receive applications.",
+    };
   }
 
   // Get next pipeline order

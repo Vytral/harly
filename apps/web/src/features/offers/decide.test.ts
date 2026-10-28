@@ -42,7 +42,9 @@ vi.mock("drizzle-orm", () => ({
   or: (...args: unknown[]) => ({ __or: args }),
   ne: (a: unknown, b: unknown) => ({ __ne: [a, b] }),
   inArray: (a: unknown, b: unknown) => ({ __inArray: [a, b] }),
+  asc: (a: unknown) => ({ __asc: a }),
   desc: (a: unknown) => ({ __desc: a }),
+  max: (a: unknown) => ({ __max: a }),
   lt: (a: unknown, b: unknown) => ({ __lt: [a, b] }),
   isNull: (a: unknown) => ({ __isNull: a }),
   exists: (value: unknown) => ({ __exists: value }),
@@ -52,7 +54,7 @@ vi.mock("drizzle-orm", () => ({
   }),
 }));
 
-vi.mock("@harly/db", () => {
+vi.mock("@harly/db", async () => {
   // Query builder used outside the tx (db.select) and inside (tx.select) —
   // both drain the same selectQueue so test setup is linear. The builder is
   // also thenable: `await db.select().from().where()` (no .limit, as in
@@ -88,11 +90,19 @@ vi.mock("@harly/db", () => {
     insert: vi.fn(() => ({
       values: (values: Record<string, unknown>) => {
         mocks.txInserts.push({ values });
-        return { returning: async () => [{ id: "x" }] };
+        const insertResult = {
+          returning: async () => [{ id: "x", ...values }],
+          onConflictDoNothing: () => insertResult,
+        };
+        return insertResult;
       },
     })),
   });
   return {
+    // Pure stage-kind helpers are real: they decide status from stage kind.
+    ...(await vi.importActual<typeof import("@harly/db/stage-kind")>(
+      "@harly/db/stage-kind",
+    )),
     db: {
       select: vi.fn(makeQuery),
       insert: vi.fn(() => ({
@@ -113,7 +123,15 @@ vi.mock("@harly/db", () => {
     jobs: {},
     organization: {},
     applications: {},
-    jobStages: {},
+    jobStages: {
+      id: "jobStages.id",
+      name: "jobStages.name",
+      kind: "jobStages.kind",
+      archivedAt: "jobStages.archivedAt",
+      workspaceId: "jobStages.workspaceId",
+      jobId: "jobStages.jobId",
+      order: "jobStages.order",
+    },
     applicationStageHistory: {},
     jobHiringTeam: {},
     notifications: {},
@@ -206,7 +224,10 @@ describe("decideOffer guards", () => {
       mocks.selectQueue.push([
         { id: "app-1", status: "active", currentStageId: "stage-old" },
       ]);
-      mocks.selectQueue.push([{ id: "stage-hired" }]);
+      // Active stages of the job, resolved by kind (the stage is named "Hired").
+      mocks.selectQueue.push([
+        { id: "stage-hired", name: "Hired", kind: "hired", order: 4, archivedAt: null },
+      ]);
       await fn(tx);
       mocks.selectQueue.push([null]); // getOfferRecipient
       mocks.selectQueue.push([]); // jobHiringTeam (none)
@@ -218,11 +239,20 @@ describe("decideOffer guards", () => {
     });
 
     expect(result.success).toBe(true);
-    // Application was moved to hired.
+    // Application was moved to hired, into the hired stage.
     const appUpdate = mocks.txUpdates.find(
       (u) => u.set.status === "hired",
     );
     expect(appUpdate).toBeDefined();
+    expect(appUpdate?.set.currentStageId).toBe("stage-hired");
+    // The move is recorded in stage history, so the hire is never invisible.
+    const historyRow = mocks.txInserts.find(
+      (i) => i.values.toStageId === "stage-hired",
+    );
+    expect(historyRow?.values).toMatchObject({
+      applicationId: "app-1",
+      fromStageId: "stage-old",
+    });
     // Activity log written inside the tx (offer.accepted).
     const acceptedLog = mocks.txInserts.find(
       (i) => i.values.type === "offer.accepted",
@@ -240,6 +270,54 @@ describe("decideOffer guards", () => {
       expect.objectContaining({ application: { id: "app-1", jobId: "job-1" } }),
       expect.objectContaining({ actorId: "user-1", skipDomainEvent: true }),
     );
+  });
+
+  it("creates a Hired stage and records the hire when the job has none", async () => {
+    // Regression: accepting used to set status=hired while leaving the
+    // application where it was, with no history row, when no stage was named
+    // "Hired". The hired stage must now be created and the move recorded.
+    mocks.selectQueue.push([OFFER]);
+    mocks.selectQueue.push([
+      { id: "app-1", status: "active", currentStageId: "stage-old" },
+    ]);
+    mocks.transactionImpl.mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => {
+      const tx = __makeTx();
+      mocks.selectQueue.push([
+        { id: "app-1", status: "active", currentStageId: "stage-old" },
+      ]);
+      // No active stage of kind hired: ensureStageOfKind lists the stages,
+      // then reads the current maximum order before inserting.
+      mocks.selectQueue.push([
+        { id: "stage-old", name: "Interview", kind: "interview", order: 2, archivedAt: null },
+      ]);
+      mocks.selectQueue.push([{ lastOrder: 2 }]);
+      await fn(tx);
+      mocks.selectQueue.push([null]); // getOfferRecipient
+      mocks.selectQueue.push([]); // jobHiringTeam (none)
+    });
+
+    const result = await decideOffer({
+      offerId: OFFER.id,
+      decision: "accepted",
+    });
+
+    expect(result.success).toBe(true);
+    const createdStage = mocks.txInserts.find(
+      (i) => i.values.kind === "hired",
+    );
+    expect(createdStage?.values).toMatchObject({
+      name: "Hired",
+      order: 3,
+      jobId: "job-1",
+    });
+    const appUpdate = mocks.txUpdates.find((u) => u.set.status === "hired");
+    expect(appUpdate?.set.currentStageId).toBe("x");
+    const historyRow = mocks.txInserts.find(
+      (i) => i.values.applicationId === "app-1" && i.values.toStageId === "x",
+    );
+    expect(historyRow?.values).toMatchObject({
+      fromStageId: "stage-old",
+    });
   });
 
   it("refuses to accept an offer whose application was already rejected", async () => {

@@ -10,7 +10,6 @@ import {
   candidates,
   db,
   emailOutbox,
-  jobStages,
   jobs,
   offers,
   signatureEnvelopes,
@@ -23,6 +22,7 @@ import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
+import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
   persistDomainEvent,
@@ -558,23 +558,20 @@ export async function decideOfferForApi(input: {
         );
       }
 
-      const [hiredStage] = await tx
-        .select({ id: jobStages.id })
-        .from(jobStages)
-        .where(
-          and(
-            eq(jobStages.workspaceId, input.workspaceId),
-            eq(jobStages.jobId, offer.jobId),
-            sql`lower(${jobStages.name}) = 'hired'`,
-          ),
-        )
-        .limit(1);
+      // A hire is always recorded as a stage move. The hired stage is found by
+      // kind (not by name) and created when the job has none, so the
+      // application never ends up `hired` without a history row.
+      const hiredStage = await ensureStageOfKind(tx, {
+        workspaceId: input.workspaceId,
+        jobId: offer.jobId,
+        kind: "hired",
+      });
 
       const [hired] = await tx
         .update(applications)
         .set({
           status: "hired",
-          ...(hiredStage ? { currentStageId: hiredStage.id } : {}),
+          currentStageId: hiredStage.id,
           updatedAt: new Date(),
         })
         .where(
@@ -591,7 +588,7 @@ export async function decideOfferForApi(input: {
         );
       }
 
-      if (hiredStage && hiredStage.id !== application.currentStageId) {
+      if (hiredStage.id !== application.currentStageId) {
         await tx.insert(applicationStageHistory).values({
           workspaceId: input.workspaceId,
           applicationId: application.id,

@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, desc, eq, inArray, isNull, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
   activityEvents,
   applications,
   applicationStageHistory,
+  applicationStatusForStage,
   candidatePortalNotifications,
   candidates,
   jobs,
@@ -27,11 +28,8 @@ import {
   type PersistedDomainEvent,
 } from "@/server/events/emit";
 import { normalizeStageEmailConfig } from "@/features/pipeline/data";
-import {
-  statusForStageName,
-  terminalStageNameForStatus,
-  type PipelineApplicationStatus,
-} from "@/features/pipeline/state";
+import { type PipelineApplicationStatus } from "@/features/pipeline/state";
+import { stageForApplicationStatus } from "@/features/applications/service";
 import {
   sendPipelineEmails,
   type PipelineEmail,
@@ -205,6 +203,7 @@ export async function moveApplicationInPipeline(
               jobTitle: jobs.title,
               workspaceName: organization.name,
               toStageName: jobStages.name,
+              toStageKind: jobStages.kind,
               toStageEmailConfig: jobStages.emailConfig,
             })
             .from(applications)
@@ -234,6 +233,7 @@ export async function moveApplicationInPipeline(
                 eq(jobStages.workspaceId, input.workspaceId),
                 eq(jobStages.jobId, applications.jobId),
                 eq(jobStages.id, input.toStageId),
+                isNull(jobStages.archivedAt),
               ),
             )
             .where(
@@ -245,14 +245,18 @@ export async function moveApplicationInPipeline(
             .limit(1);
 
           // The join above also requires the target stage to belong to the
-          // application's own job, so a stage from another job fails here.
+          // application's own job (and to be active), so a stage from another
+          // job or an archived stage fails here.
           if (!application) {
             throw new Error("Application or target stage not found.");
           }
 
           const now = new Date();
           const changedStage = application.currentStageId !== input.toStageId;
-          const nextStatus = statusForStageName(application.toStageName);
+          const nextStatus = applicationStatusForStage({
+            kind: application.toStageKind,
+            name: application.toStageName,
+          });
           const changedStatus = application.status !== nextStatus;
 
           const [updatedApplication] = await tx
@@ -600,6 +604,7 @@ export async function bulkMoveApplications(
             .select({
               id: jobStages.id,
               name: jobStages.name,
+              kind: jobStages.kind,
               emailConfig: jobStages.emailConfig,
             })
             .from(jobStages)
@@ -615,6 +620,7 @@ export async function bulkMoveApplications(
               and(
                 eq(jobStages.workspaceId, input.workspaceId),
                 eq(jobStages.id, input.toStageId),
+                isNull(jobStages.archivedAt),
               ),
             )
             .limit(1);
@@ -624,6 +630,7 @@ export async function bulkMoveApplications(
           }
 
           const toStageName = targetStage.name;
+          const nextStatus = applicationStatusForStage(targetStage);
           const stageEmailConfig = normalizeStageEmailConfig(
             targetStage.emailConfig,
           );
@@ -738,8 +745,6 @@ export async function bulkMoveApplications(
 
           for (const [fromStageId, appIds] of applicationsByStage) {
             if (appIds.length === 0) continue;
-
-            const nextStatus = statusForStageName(toStageName);
 
             for (const applicationId of appIds) {
               const appData = appDataById.get(applicationId);
@@ -1084,108 +1089,18 @@ export async function updateApplicationStatus(
               emailConfig: unknown;
             } | null = null;
 
-            const terminalStageName = terminalStageNameForStatus(input.status);
-            if (terminalStageName) {
-              const [terminalStage] = await tx
-                .select({
-                  id: jobStages.id,
-                  name: jobStages.name,
-                  emailConfig: jobStages.emailConfig,
-                })
-                .from(jobStages)
-                .where(
-                  and(
-                    eq(jobStages.workspaceId, input.workspaceId),
-                    eq(jobStages.jobId, application.jobId),
-                    sql`lower(${jobStages.name}) = ${terminalStageName.toLowerCase()}`,
-                  ),
-                )
-                .limit(1);
-              targetStage = terminalStage ?? null;
-              if (targetStage) targetStageId = targetStage.id;
-            } else if (input.status === "active") {
-              const [currentStage] = await tx
-                .select({
-                  id: jobStages.id,
-                  name: jobStages.name,
-                  emailConfig: jobStages.emailConfig,
-                })
-                .from(jobStages)
-                .where(
-                  and(
-                    eq(jobStages.workspaceId, input.workspaceId),
-                    eq(jobStages.jobId, application.jobId),
-                    eq(jobStages.id, application.currentStageId),
-                  ),
-                )
-                .limit(1);
-
-              if (
-                currentStage &&
-                statusForStageName(currentStage.name) !== "active"
-              ) {
-                const [previousStage] = await tx
-                  .select({ fromStageId: applicationStageHistory.fromStageId })
-                  .from(applicationStageHistory)
-                  .where(
-                    and(
-                      eq(
-                        applicationStageHistory.workspaceId,
-                        input.workspaceId,
-                      ),
-                      eq(applicationStageHistory.applicationId, application.id),
-                      eq(
-                        applicationStageHistory.toStageId,
-                        application.currentStageId,
-                      ),
-                      isNotNull(applicationStageHistory.fromStageId),
-                    ),
-                  )
-                  .orderBy(
-                    desc(applicationStageHistory.createdAt),
-                    desc(applicationStageHistory.id),
-                  )
-                  .limit(1);
-
-                targetStageId =
-                  previousStage?.fromStageId ?? application.currentStageId;
-                if (targetStageId === application.currentStageId) {
-                  const [firstStage] = await tx
-                    .select({
-                      id: jobStages.id,
-                      name: jobStages.name,
-                      emailConfig: jobStages.emailConfig,
-                    })
-                    .from(jobStages)
-                    .where(
-                      and(
-                        eq(jobStages.workspaceId, input.workspaceId),
-                        eq(jobStages.jobId, application.jobId),
-                      ),
-                    )
-                    .orderBy(asc(jobStages.order))
-                    .limit(1);
-                  targetStageId = firstStage?.id ?? targetStageId;
-                  targetStage = firstStage ?? null;
-                } else {
-                  const [previousStageDetails] = await tx
-                    .select({
-                      id: jobStages.id,
-                      name: jobStages.name,
-                      emailConfig: jobStages.emailConfig,
-                    })
-                    .from(jobStages)
-                    .where(
-                      and(
-                        eq(jobStages.workspaceId, input.workspaceId),
-                        eq(jobStages.jobId, application.jobId),
-                        eq(jobStages.id, targetStageId),
-                      ),
-                    )
-                    .limit(1);
-                  targetStage = previousStageDetails ?? null;
-                }
-              }
+            // Placement follows the status: terminal statuses go to the job's
+            // stage of that kind, reactivation returns to an open stage.
+            const placed = await stageForApplicationStatus(tx, {
+              workspaceId: input.workspaceId,
+              jobId: application.jobId,
+              applicationId: application.id,
+              currentStageId: application.currentStageId,
+              status: input.status,
+            });
+            if (placed) {
+              targetStage = placed;
+              targetStageId = placed.id;
             }
 
             const stageChanged = targetStageId !== application.currentStageId;

@@ -12,7 +12,6 @@ import {
   documentVersions,
   documents,
   emailOutbox,
-  jobStages,
   offers,
   signatureArtifacts,
   workflowActionEffects,
@@ -32,6 +31,7 @@ import { createLogger } from "@/lib/logger";
 import { persistDomainEvent, type PersistedDomainEvent } from "@/server/events/emit";
 import { finalizeNativeSignatureEffects } from "./finalize-effects";
 import { isNativeOfferAcceptanceAvailable } from "./fields";
+import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
 import { documentAutomationContext } from "@/lib/esign/document-automation-context";
 import {
   purgeExpiredSignatureData,
@@ -292,7 +292,6 @@ export async function finalizeNativeSignature(input: {
           currentStageId: string | null;
         }
       | undefined;
-    let hiredStage: { id: string } | undefined;
     let applicationHiredEvent: PersistedDomainEvent | null = null;
 
     // Lock both business rows before any signed state is persisted. This is
@@ -348,17 +347,6 @@ export async function finalizeNativeSignature(input: {
         throw new Error("This offer or application is no longer available for signing.");
       }
 
-      [hiredStage] = await tx
-        .select({ id: jobStages.id })
-        .from(jobStages)
-        .where(
-          and(
-            eq(jobStages.workspaceId, input.workspaceId),
-            eq(jobStages.jobId, offer.jobId),
-            eq(jobStages.name, "Hired"),
-          ),
-        )
-        .limit(1);
       nativeOffer = offer;
       nativeApplication = application;
     }
@@ -471,11 +459,18 @@ export async function finalizeNativeSignature(input: {
       automationParentRunId: parentRunId ?? undefined,
     });
     if (nativeOffer && nativeApplication && complete) {
+      // The hire is recorded as a stage move. The hired stage is found by kind
+      // and created when missing, so the history row below is always written.
+      const hiredStage = await ensureStageOfKind(tx, {
+        workspaceId: input.workspaceId,
+        jobId: nativeOffer.jobId,
+        kind: "hired",
+      });
       const [hired] = await tx
         .update(applications)
         .set({
           status: "hired",
-          ...(hiredStage ? { currentStageId: hiredStage.id } : {}),
+          currentStageId: hiredStage.id,
           updatedAt: new Date(),
         })
         .where(
@@ -505,7 +500,7 @@ export async function finalizeNativeSignature(input: {
         throw new Error("The offer changed while the offer was being signed.");
       }
 
-      if (hiredStage && hiredStage.id !== nativeApplication.currentStageId) {
+      if (hiredStage.id !== nativeApplication.currentStageId) {
         await tx.insert(applicationStageHistory).values({
           workspaceId: input.workspaceId,
           applicationId: nativeApplication.id,

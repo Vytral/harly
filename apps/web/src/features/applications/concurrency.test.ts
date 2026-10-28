@@ -47,7 +47,7 @@ vi.mock("@harly/api", () => {
   return { ApiError };
 });
 
-vi.mock("@harly/db", () => {
+vi.mock("@harly/db", async () => {
   const applications = {
     id: "applications.id",
     jobId: "applications.jobId",
@@ -56,6 +56,10 @@ vi.mock("@harly/db", () => {
     updatedAt: "applications.updatedAt",
   };
   return {
+    // Pure stage-kind helpers are real: they decide status from stage kind.
+    ...(await vi.importActual<typeof import("@harly/db/stage-kind")>(
+      "@harly/db/stage-kind",
+    )),
     db: {
       transaction: (fn: (tx: unknown) => Promise<unknown>) =>
         mocks.transactionImpl(fn),
@@ -90,7 +94,15 @@ vi.mock("@harly/db", () => {
       workspaceId: "jobs.workspaceId",
       deletedAt: "jobs.deletedAt",
     },
-    jobStages: { id: "jobStages.id", name: "jobStages.name" },
+    jobStages: {
+      id: "jobStages.id",
+      name: "jobStages.name",
+      kind: "jobStages.kind",
+      archivedAt: "jobStages.archivedAt",
+      workspaceId: "jobStages.workspaceId",
+      jobId: "jobStages.jobId",
+      order: "jobStages.order",
+    },
     applicationStageHistory: { id: "applicationStageHistory.id" },
   };
 });

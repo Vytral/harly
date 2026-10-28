@@ -5,6 +5,7 @@ import { eq } from "drizzle-orm";
 
 import { createDatabaseClient, schema } from "./index";
 import { buildResumeLines, linesToPdf } from "./fake-resumes";
+import { DEFAULT_PIPELINE_STAGES, defaultStageRows } from "./stage-kind";
 
 type SeedClient = ReturnType<typeof createDatabaseClient>;
 
@@ -202,16 +203,7 @@ function resolveUploadsRoot(explicit?: string): string {
     : path.resolve(process.cwd(), "uploads");
 }
 
-const DEFAULT_STAGES = [
-  { name: "Applied", color: "#E0F2FE" },
-  { name: "Screening", color: "#F5F3FF" },
-  { name: "Interview", color: "#FEF3C7" },
-  { name: "Offer", color: "#DCFCE7" },
-  { name: "Hired", color: "#CCFBF1" },
-  { name: "Rejected", color: "#FEE2E2" },
-];
-
-type StageName = (typeof DEFAULT_STAGES)[number]["name"];
+type StageName = (typeof DEFAULT_PIPELINE_STAGES)[number]["name"];
 
 // Demo teammates — real `user` + `member` rows (no auth) so the dashboard can
 // show ownership, interviewers and a live team-activity feed.
@@ -1010,15 +1002,7 @@ export async function seedDemoWorkspace(options: SeedDemoOptions): Promise<SeedD
 
       const stageRows = await db
         .insert(schema.jobStages)
-        .values(
-          DEFAULT_STAGES.map((stage, index) => ({
-            workspaceId,
-            jobId: created.id,
-            name: stage.name,
-            color: stage.color,
-            order: index + 1,
-          })),
-        )
+        .values(defaultStageRows({ workspaceId, jobId: created.id }))
         .returning({ id: schema.jobStages.id, name: schema.jobStages.name });
 
       const map = new Map<StageName, string>();

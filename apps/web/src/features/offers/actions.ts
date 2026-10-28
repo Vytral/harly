@@ -15,7 +15,6 @@ import {
   emailOutbox,
   jobs,
   jobHiringTeam,
-  jobStages,
   notifications,
   offers,
   signatureFields,
@@ -47,6 +46,7 @@ import {
 } from "@/lib/esign/native/offer-signing";
 import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
+import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
 import { withdrawSiblingApplicationsForHire } from "./withdraw-siblings";
 import {
   assertOfferTerms,
@@ -896,23 +896,20 @@ export async function decideOffer(input: {
             "Application changed by another recruiter. Refresh and try again.",
           );
         }
-        const [hiredStage] = await tx
-          .select({ id: jobStages.id })
-          .from(jobStages)
-          .where(
-            and(
-              eq(jobStages.workspaceId, workspaceId),
-              eq(jobStages.jobId, offer.jobId),
-              sql`lower(${jobStages.name}) = 'hired'`,
-            ),
-          )
-          .limit(1);
+        // A hire is always recorded as a stage move. The hired stage is found
+        // by kind (not by name) and created when the job has none, so the
+        // application never ends up `hired` without a history row.
+        const hiredStage = await ensureStageOfKind(tx, {
+          workspaceId,
+          jobId: offer.jobId,
+          kind: "hired",
+        });
 
         const [hired] = await tx
           .update(applications)
           .set({
             status: "hired",
-            ...(hiredStage ? { currentStageId: hiredStage.id } : {}),
+            currentStageId: hiredStage.id,
             updatedAt: new Date(),
           })
           .where(
@@ -929,7 +926,7 @@ export async function decideOffer(input: {
           );
         }
 
-        if (hiredStage && hiredStage.id !== application.currentStageId) {
+        if (hiredStage.id !== application.currentStageId) {
           await tx.insert(applicationStageHistory).values({
             workspaceId,
             applicationId: application.id,

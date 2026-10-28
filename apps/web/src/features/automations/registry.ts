@@ -691,11 +691,19 @@ async function resolveStageId(
           eq(applications.jobId, jobStages.jobId),
         ),
       )
-      .where(and(eq(jobStages.workspaceId, workspaceId), eq(jobStages.id, config.toStageId)))
+      .where(
+        and(
+          eq(jobStages.workspaceId, workspaceId),
+          eq(jobStages.id, config.toStageId),
+          isNull(jobStages.archivedAt),
+        ),
+      )
       .limit(1);
     if (stage?.id) return stage.id;
   }
   if (config.toStageName) {
+    // The name is the user's own input, so it is matched against active stages
+    // only. Terminal behaviour then follows the matched stage's kind.
     const [stage] = await database
       .select({ id: jobStages.id })
       .from(jobStages)
@@ -710,6 +718,7 @@ async function resolveStageId(
       .where(
         and(
           eq(jobStages.workspaceId, workspaceId),
+          isNull(jobStages.archivedAt),
           sql`lower(trim(${jobStages.name})) = lower(trim(${config.toStageName}))`,
         ),
       )

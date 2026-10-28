@@ -16,7 +16,11 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock("@harly/db", () => ({
+vi.mock("@harly/db", async () => ({
+  // Pure stage-kind helpers are real: they decide status from stage kind.
+  ...(await vi.importActual<typeof import("@harly/db/stage-kind")>(
+    "@harly/db/stage-kind",
+  )),
   db: {
     transaction: (fn: (tx: unknown) => Promise<unknown>) =>
       mocks.transactionImpl(fn),
@@ -41,7 +45,13 @@ vi.mock("@harly/db", () => ({
   candidates: {},
   jobs: {},
   organization: {},
-  jobStages: { name: "jobStages.name", emailConfig: "jobStages.emailConfig" },
+  jobStages: {
+    id: "jobStages.id",
+    name: "jobStages.name",
+    kind: "jobStages.kind",
+    archivedAt: "jobStages.archivedAt",
+    emailConfig: "jobStages.emailConfig",
+  },
   applicationStageHistory: {},
   activityEvents: {},
   emailTemplates: { id: "emailTemplates.id" },

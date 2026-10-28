@@ -21,6 +21,7 @@ import {
   applicationQuestions,
   applications,
   candidateReferrals,
+  defaultStageRows,
   jobHiringTeam,
   jobStages,
   jobs,
@@ -124,15 +125,6 @@ export {
   formatWorkplaceType,
   formatJobStatus,
 } from "@/lib/format";
-
-const defaultStages = [
-  { name: "Applied", color: "#E0F2FE" },
-  { name: "Screening", color: "#F5F3FF" },
-  { name: "Interview", color: "#FEF3C7" },
-  { name: "Offer", color: "#DCFCE7" },
-  { name: "Hired", color: "#CCFBF1" },
-  { name: "Rejected", color: "#FEE2E2" },
-];
 
 async function syncJobApplicationQuestions(
   tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
@@ -359,7 +351,11 @@ export async function getDashboardJob(jobId: string) {
     .select()
     .from(jobStages)
     .where(
-      and(eq(jobStages.jobId, job.id), eq(jobStages.workspaceId, workspace.id)),
+      and(
+        eq(jobStages.jobId, job.id),
+        eq(jobStages.workspaceId, workspace.id),
+        isNull(jobStages.archivedAt),
+      ),
     )
     .orderBy(asc(jobStages.order));
 
@@ -488,15 +484,9 @@ export async function createJob(values: JobFormValues) {
       })
       .returning();
 
-    await tx.insert(jobStages).values(
-      defaultStages.map((stage, index) => ({
-        workspaceId: workspace.id,
-        jobId: createdJob.id,
-        name: stage.name,
-        color: stage.color,
-        order: index + 1,
-      })),
-    );
+    await tx
+      .insert(jobStages)
+      .values(defaultStageRows({ workspaceId: workspace.id, jobId: createdJob.id }));
 
     // Every job starts with an accountable collaborator. This also means that
     // job-scoped candidate notifications have a useful recipient from day one.

@@ -128,7 +128,11 @@ export async function resolveAutomationResources(
 
   switch (input.resourceType) {
     case "stage": {
-      const conditions = [eq(jobStages.workspaceId, input.workspaceId)];
+      // Archived stages are no longer part of a job's pipeline.
+      const conditions = [
+        eq(jobStages.workspaceId, input.workspaceId),
+        isNull(jobStages.archivedAt),
+      ];
       if (input.jobId) {
         conditions.push(eq(jobStages.jobId, input.jobId));
       }
