@@ -5,10 +5,13 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import {
+  BookOpen,
   Building2,
   Check,
   ExternalLink,
+  ListChecks,
   LogOut,
+  MessageSquare,
   UserRound,
 } from "lucide-react";
 import Link from "next/link";
@@ -20,18 +23,23 @@ import { WorkspaceMark } from "@/components/dashboard/WorkspaceSwitcher";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { WorkspaceOption } from "@/features/workspaces/data";
+import { restoreSetupChecklistAction } from "@/features/onboarding/checklist-actions";
 
 // Root package.json version, inlined by next.config.ts at build time.
 const VERSION = process.env.NEXT_PUBLIC_HARLY_VERSION
   ? `v${process.env.NEXT_PUBLIC_HARLY_VERSION}`
   : null;
 const REPO_URL = "https://github.com/Vytral/harly";
+const ISSUES_URL = `${REPO_URL}/issues`;
+const DOCS_URL = "https://docs.harly.dev";
 
 type UserMenuProps = {
   user: { name: string; email: string; image: string | null; username: string | null };
   role: string;
   workspace: { id: string; name: string; logoUrl: string | null };
   workspaceOptions: WorkspaceOption[];
+  /** The public demo hides the beta chip and the checklist restore entry. */
+  demoMode?: boolean;
 };
 
 function formatRole(role: string) {
@@ -43,6 +51,7 @@ export function UserMenu({
   role,
   workspace,
   workspaceOptions,
+  demoMode = false,
 }: UserMenuProps) {
   const router = useRouter();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -76,6 +85,20 @@ export function UserMenu({
       router.refresh();
     });
   }
+
+  function showSetupChecklist() {
+    startTransition(async () => {
+      const result = await restoreSetupChecklistAction();
+      setOpen(false);
+      if (result.ok) {
+        router.replace("/dashboard");
+        router.refresh();
+      }
+    });
+  }
+
+  const canRestoreChecklist =
+    !demoMode && (role === "owner" || role === "admin");
 
   function switchTo(organizationId: string) {
     if (organizationId === workspace.id) return;
@@ -221,6 +244,20 @@ export function UserMenu({
                   />
                   Organization settings
                 </Link>
+                {canRestoreChecklist ? (
+                  <button
+                    type="button"
+                    disabled={isPending}
+                    onClick={showSetupChecklist}
+                    className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                  >
+                    <ListChecks
+                      className="size-4 text-muted-foreground"
+                      strokeWidth={1.5}
+                    />
+                    Show setup checklist
+                  </button>
+                ) : null}
               </div>
 
               <div className="h-px bg-border" />
@@ -236,17 +273,50 @@ export function UserMenu({
                 >
                   <GithubIcon className="size-4 text-muted-foreground" />
                   <span className="flex-1">Star on GitHub</span>
-                  {VERSION ? (
-                    <Badge
-                      variant="secondary"
-                      className="font-mono text-[0.65rem] font-normal"
-                    >
-                      {VERSION}
-                    </Badge>
-                  ) : null}
                   <ExternalLink className="size-3 text-muted-foreground/60" />
                 </a>
               </div>
+
+              {/* ── Public beta: quiet status, plus where to get help ── */}
+              {!demoMode ? (
+                <>
+                  <div className="h-px bg-border" />
+                  <div className="px-3 py-2">
+                    <div className="flex items-center justify-between px-2 py-1.5">
+                      <Badge variant="outline" className="text-[11px] font-normal">
+                        Public beta
+                      </Badge>
+                      {VERSION ? (
+                        <span className="font-mono text-[0.65rem] text-muted-foreground">
+                          {VERSION}
+                        </span>
+                      ) : null}
+                    </div>
+                    <a
+                      href={DOCS_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setOpen(false)}
+                      className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <BookOpen className="size-4 text-muted-foreground" strokeWidth={1.5} />
+                      <span className="flex-1">Documentation</span>
+                      <ExternalLink className="size-3 text-muted-foreground/60" />
+                    </a>
+                    <a
+                      href={ISSUES_URL}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={() => setOpen(false)}
+                      className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
+                    >
+                      <MessageSquare className="size-4 text-muted-foreground" strokeWidth={1.5} />
+                      <span className="flex-1">Report an issue</span>
+                      <ExternalLink className="size-3 text-muted-foreground/60" />
+                    </a>
+                  </div>
+                </>
+              ) : null}
 
               <div className="h-px bg-border" />
 

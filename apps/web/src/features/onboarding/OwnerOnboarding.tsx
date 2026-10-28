@@ -4,7 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Route } from "next";
 import Link from "next/link";
-import { motion } from "motion/react";
+import { motion, useReducedMotion } from "motion/react";
 
 import { authClient } from "@harly/auth/client";
 import { InviteTeammatesSheet } from "@/features/workspaces/InviteTeammatesSheet";
@@ -507,11 +507,15 @@ function StepInvite({ assignableRoles }: { assignableRoles: AssignableRole[] }) 
 // ─── Launchpad (all set) ──────────────────────────────────────────────────────
 
 function Launchpad({ workspaceName, require2fa, onEnter }: { workspaceName: string; require2fa: boolean; onEnter: () => void }) {
+  const reduceMotion = useReducedMotion();
+  // The first hour starts with a job: everything else (candidates, email,
+  // automations) is pointless until a role exists to apply to.
   const nextSteps = useMemo(
     () => [
-      { icon: RobotDuotoneIcon, label: "Connect an AI provider", hint: "Auto-screen & draft outreach", href: "/settings/ai" as Route },
-      { icon: PlugsConnectedIcon, label: "Connect integrations", hint: "Cal.com, Slack, Discord", href: "/settings/integrations" as Route },
-      { icon: DownloadDuotoneIcon, label: "Import candidates", hint: "From CSV or Greenhouse", href: "/dashboard/candidates" as Route },
+      { icon: MegaphoneDuotoneIcon, label: "Create your first job", hint: "Describe the role, then publish it", href: "/dashboard/jobs/new" as Route, primary: true },
+      { icon: RobotDuotoneIcon, label: "Connect an AI provider", hint: "Auto-screen & draft outreach", href: "/settings/ai" as Route, primary: false },
+      { icon: PlugsConnectedIcon, label: "Connect integrations", hint: "Cal.com, Slack, Discord", href: "/settings/integrations" as Route, primary: false },
+      { icon: DownloadDuotoneIcon, label: "Import candidates", hint: "From CSV or Greenhouse", href: "/dashboard/candidates" as Route, primary: false },
     ],
     [],
   );
@@ -524,9 +528,9 @@ function Launchpad({ workspaceName, require2fa, onEnter }: { workspaceName: stri
   return (
     <div className="w-full max-w-lg overflow-hidden rounded-3xl border border-border/70 bg-card p-8 text-center shadow-[0_12px_32px_-12px_rgba(31,41,38,0.12)] lg:p-10">
       <motion.span
-        initial={{ scale: 0.6, opacity: 0 }}
+        initial={reduceMotion ? false : { scale: 0.6, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        transition={{ type: "spring", stiffness: 320, damping: 18 }}
+        transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 320, damping: 18 }}
         className="mx-auto flex size-14 items-center justify-center rounded-2xl bg-sage text-pine ring-1 ring-pine/10"
       >
         <SealCheckDuotoneIcon className="size-8" />
@@ -548,8 +552,8 @@ function Launchpad({ workspaceName, require2fa, onEnter }: { workspaceName: stri
         {nextSteps.map((s) => {
           const Icon = s.icon;
           return (
-            <Link key={s.label} href={s.href} className="group flex items-center gap-3 rounded-xl border bg-card px-4 py-2.5 transition-colors hover:border-pine/30 hover:bg-muted/40">
-              <Icon className="size-5 text-muted-foreground" />
+            <Link key={s.label} href={s.href} className={cn("group flex items-center gap-3 rounded-xl border px-4 py-2.5 transition-colors hover:border-pine/30 hover:bg-muted/40", s.primary ? "border-pine/30 bg-sage/40" : "bg-card")}>
+              <Icon className={cn("size-5", s.primary ? "text-pine" : "text-muted-foreground")} />
               <span className="flex-1">
                 <span className="block text-sm font-medium text-foreground">{s.label}</span>
                 <span className="block text-xs text-muted-foreground">{s.hint}</span>

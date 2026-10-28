@@ -10,6 +10,7 @@ import {
   jsonb,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -5832,6 +5833,62 @@ export const workflowActionEffects = pgTable(
       table.status,
     ),
   ],
+);
+
+/**
+ * Rows created by "Load sample data", one row per tracked entity. Removal
+ * deletes exactly these rows, in foreign-key order, and nothing else. There is
+ * no foreign key on entity_id because it points at several tables.
+ */
+export const sampleDataItems = pgTable(
+  "sample_data_items",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    entityType: text("entity_type").notNull(),
+    entityId: uuid("entity_id").notNull(),
+    batchId: uuid("batch_id").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("sample_data_items_entity_uidx").on(
+      table.workspaceId,
+      table.entityType,
+      table.entityId,
+    ),
+    index("sample_data_items_workspace_batch_idx").on(
+      table.workspaceId,
+      table.batchId,
+    ),
+  ],
+);
+
+/**
+ * A member's getting-started checklist state in one workspace. A missing row
+ * means the defaults (not dismissed, nothing skipped). Completion is never
+ * stored here; it is derived from real workspace data.
+ */
+export const setupChecklistStates = pgTable(
+  "setup_checklist_states",
+  {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    dismissedAt: timestamp("dismissed_at", { withTimezone: true }),
+    skippedKeys: jsonb("skipped_keys")
+      .$type<string[]>()
+      .default(sql`'[]'::jsonb`)
+      .notNull(),
+    ...timestamps(),
+  },
+  (table) => [primaryKey({ columns: [table.workspaceId, table.userId] })],
 );
 
 /**

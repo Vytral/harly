@@ -6,6 +6,7 @@ import { InboxCard } from "@/components/dashboard/widgets/InboxCard";
 import { MyTasksCard } from "@/components/dashboard/widgets/MyTasksCard";
 import { PipelineOverviewCard } from "@/components/dashboard/widgets/PipelineOverviewCard";
 import { SetupChecklistCard } from "@/components/dashboard/widgets/SetupChecklistCard";
+import { SampleDataBanner } from "@/features/sample-data/SampleDataBanner";
 import { TodayInterviews } from "@/components/dashboard/widgets/TodayInterviews";
 import {
   buildSubline,
@@ -85,8 +86,15 @@ export default async function DashboardPage({
         })}
       />
 
-      {/* Collapsed by default, and gone entirely once setup is complete. */}
-      {setup && setup.visible && !setup.allDone ? (
+      {/* Quiet notice while sample records exist; anyone on the team may see it. */}
+      {setup?.sampleDataActive ? (
+        <div className="mt-5">
+          <SampleDataBanner canManage={setup.visible} />
+        </div>
+      ) : null}
+
+      {/* Collapsed by default; hidden when dismissed or nothing is left to do. */}
+      {setup && setup.showCard ? (
         <div className="mt-5">
           <SetupChecklistCard checklist={setup} />
         </div>

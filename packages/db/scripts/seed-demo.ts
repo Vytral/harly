@@ -5,16 +5,37 @@ import path from "node:path";
 import { eq, sql as dsql } from "drizzle-orm";
 
 import { createDatabaseClient, schema, seedDemoWorkspace } from "../src";
+import {
+  countWorkspaceScopedRows,
+  evaluateSeedWipeGuard,
+  WIPE_GUARD_RECORD_TABLES,
+} from "../src/seed-demo-workspace";
 
 /**
  * CLI wrapper for the demo seed. Resolves the target workspace from SEED_EMAIL
  * (the owner's first membership) and delegates to seedDemoWorkspace(). The
  * workspace + owner must already exist (created via /setup).
  *
+ * The reseed DELETES every workspace-scoped row of the target workspace, so the
+ * CLI refuses unless the operator names the workspace it is about to wipe:
+ *
+ *   SEED_CONFIRM_WIPE=<workspace-slug> pnpm db:seed:demo
+ *   pnpm db:seed:demo --confirm-wipe=<workspace-slug>
+ *
+ * A workspace with more real-looking records than the guard allows must also be
+ * pinned with DEMO_WORKSPACE_ID. The programmatic demo sandbox and cron reset
+ * call seedDemoWorkspace() directly and are not affected by this guard.
+ *
  * Run: pnpm db:seed:demo   (or SEED_EMAIL=you@x.com pnpm db:seed:demo)
  */
 
 const SEED_EMAIL = (process.env.SEED_EMAIL ?? "demo@harly.dev").toLowerCase();
+
+function readConfirmation(argv: string[], env: NodeJS.ProcessEnv): string | null {
+  const flag = argv.find((arg) => arg.startsWith("--confirm-wipe="));
+  if (flag) return flag.slice("--confirm-wipe=".length);
+  return env.SEED_CONFIRM_WIPE ?? null;
+}
 
 async function main() {
   const { db, sql } = createDatabaseClient();
@@ -45,6 +66,44 @@ async function main() {
       throw new Error(
         `SEED_EMAIL workspace ${membership.organizationId} does not match DEMO_WORKSPACE_ID=${pinned}`,
       );
+    }
+
+    const [workspace] = await db
+      .select({ name: schema.organization.name, slug: schema.organization.slug })
+      .from(schema.organization)
+      .where(eq(schema.organization.id, membership.organizationId))
+      .limit(1);
+    if (!workspace) {
+      throw new Error(`Workspace ${membership.organizationId} no longer exists.`);
+    }
+
+    const rowCounts = await countWorkspaceScopedRows(sql, membership.organizationId);
+    const realRecordCount = rowCounts
+      .filter((entry) =>
+        (WIPE_GUARD_RECORD_TABLES as readonly string[]).includes(entry.table),
+      )
+      .reduce((total, entry) => total + entry.rows, 0);
+
+    const decision = evaluateSeedWipeGuard({
+      workspaceId: membership.organizationId,
+      workspaceSlug: workspace.slug,
+      workspaceName: workspace.name,
+      confirmation: readConfirmation(process.argv, process.env),
+      pinnedWorkspaceId: pinned,
+      realRecordCount,
+    });
+
+    console.log(`Target workspace: ${workspace.name} (slug ${workspace.slug}, id ${membership.organizationId})`);
+    if (!decision.allowed) {
+      console.error(decision.message);
+      process.exitCode = 1;
+      return;
+    }
+
+    const totalRows = rowCounts.reduce((total, entry) => total + entry.rows, 0);
+    console.log(`The reseed will delete ${totalRows} rows across ${rowCounts.length} tables:`);
+    for (const entry of rowCounts) {
+      console.log(`  ${entry.table}: ${entry.rows}`);
     }
 
     await seedDemoWorkspace({

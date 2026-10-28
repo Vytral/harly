@@ -590,6 +590,108 @@ export type SeedDemoOptions = {
  * open or close the DB connection; the caller owns its lifecycle.
  */
 
+/**
+ * Above this many candidates + jobs + applications, a workspace is treated as
+ * real data unless it is pinned as the demo template with DEMO_WORKSPACE_ID.
+ */
+export const UNPINNED_WIPE_RECORD_LIMIT = 25;
+
+/** Tables whose rows count as "real-looking" records for the wipe guard. */
+export const WIPE_GUARD_RECORD_TABLES = ["candidates", "jobs", "applications"] as const;
+
+export type SeedWipeGuardInput = {
+  workspaceId: string;
+  workspaceSlug: string;
+  workspaceName: string;
+  /** Value of SEED_CONFIRM_WIPE or --confirm-wipe, if the operator gave one. */
+  confirmation: string | null | undefined;
+  /** DEMO_WORKSPACE_ID, when the operator pinned the demo template. */
+  pinnedWorkspaceId: string | null;
+  /** Candidates + jobs + applications already in the workspace. */
+  realRecordCount: number;
+};
+
+export type SeedWipeGuardDecision =
+  | { allowed: true }
+  | {
+      allowed: false;
+      reason:
+        | "missing_confirmation"
+        | "confirmation_mismatch"
+        | "pin_mismatch"
+        | "unpinned_workspace_has_records";
+      message: string;
+    };
+
+/**
+ * Decide whether the CLI may wipe a workspace. Pure so the rules are testable:
+ * the operator must type the workspace slug (a typo or a copied command for
+ * another install must not wipe the wrong data), and a workspace with real
+ * records needs an explicit pin to the demo template.
+ */
+export function evaluateSeedWipeGuard(input: SeedWipeGuardInput): SeedWipeGuardDecision {
+  const confirmation = input.confirmation?.trim() ?? "";
+  const target = `"${input.workspaceName}" (slug ${input.workspaceSlug}, id ${input.workspaceId})`;
+
+  if (confirmation === "") {
+    return {
+      allowed: false,
+      reason: "missing_confirmation",
+      message: `Refusing to wipe ${target}. Re-run with SEED_CONFIRM_WIPE=${input.workspaceSlug} (or --confirm-wipe=${input.workspaceSlug}) to confirm.`,
+    };
+  }
+
+  if (confirmation !== input.workspaceSlug) {
+    return {
+      allowed: false,
+      reason: "confirmation_mismatch",
+      message: `Refusing to wipe ${target}: the confirmation "${confirmation}" does not match the workspace slug "${input.workspaceSlug}".`,
+    };
+  }
+
+  if (input.pinnedWorkspaceId !== null && input.pinnedWorkspaceId !== input.workspaceId) {
+    return {
+      allowed: false,
+      reason: "pin_mismatch",
+      message: `Refusing to wipe ${target}: DEMO_WORKSPACE_ID pins ${input.pinnedWorkspaceId}, a different workspace.`,
+    };
+  }
+
+  if (input.pinnedWorkspaceId === null && input.realRecordCount > UNPINNED_WIPE_RECORD_LIMIT) {
+    return {
+      allowed: false,
+      reason: "unpinned_workspace_has_records",
+      message: `Refusing to wipe ${target}: it holds ${input.realRecordCount} candidates, jobs and applications (limit ${UNPINNED_WIPE_RECORD_LIMIT} without a pin). If this is the demo template, set DEMO_WORKSPACE_ID=${input.workspaceId} and run again.`,
+    };
+  }
+
+  return { allowed: true };
+}
+
+/**
+ * Row counts per workspace-scoped table, for showing the operator exactly what
+ * a wipe would delete. Only non-empty tables are returned.
+ */
+export async function countWorkspaceScopedRows(
+  sql: SeedClient["sql"],
+  workspaceId: string,
+): Promise<Array<{ table: string; rows: number }>> {
+  const scopedTables = await sql<{ table_name: string }[]>`
+    SELECT table_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public' AND column_name = 'workspace_id'
+    ORDER BY table_name
+  `;
+  const counts: Array<{ table: string; rows: number }> = [];
+  for (const { table_name } of scopedTables) {
+    const [row] = await sql<{ n: number }[]>`
+      SELECT count(*)::int AS n FROM ${sql(table_name)} WHERE workspace_id = ${workspaceId}
+    `;
+    if (row && row.n > 0) counts.push({ table: table_name, rows: row.n });
+  }
+  return counts;
+}
+
 async function wipeWorkspaceScopedData(input: {
   sql: SeedClient["sql"];
   workspaceId: string;
