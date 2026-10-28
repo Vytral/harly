@@ -33,6 +33,42 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
+## [0.2.3]
+
+A compatible release focused on the public demo. No database migration is
+required. Operators of the public demo may set two optional variables,
+`DEMO_SANDBOX_TTL_MINUTES` and `DEMO_SANDBOX_MAX_ACTIVE`; normal installations
+are unaffected. See [the release notes](docs/release-0.2.3-demo-sandbox.md).
+
+### Added
+
+- Per-visitor demo sandboxes. Entering the demo now provisions a private
+  account and a private copy of the sample workspace that expires after a few
+  hours (default 4, at most 40 alive at once), so visitors can change anything
+  they are allowed to without affecting anyone else.
+- A style picker on the demo landing page. Visitors preview the four
+  career-page templates in place and open their sandbox with the one they chose.
+- Inside a sandbox, visitors can edit and publish the careers page, edit board
+  branding, manage custom roles, and change seeded teammates' roles and access.
+  The public sandbox board shows a "demo sandbox preview" label and is never
+  indexed by search engines.
+
+### Changed
+
+- The demo entry page and its brand panel describe the sandbox, and no longer
+  suggest that automations can be built and executed in the demo.
+- `/api/demo/enter` is rate limited more tightly (3 per minute and 12 per hour
+  per IP) because each entry seeds a workspace.
+- The root site of a demo instance uses `DEMO_WORKSPACE_ID` when set instead of
+  assuming the oldest workspace is the public one.
+- `demo-reset` also deletes expired sandboxes.
+
+### Security
+
+- Identity, credential, integration, API-key and outbound-delivery actions stay
+  disabled in the demo. Dashboard sessions that do not point at a live sandbox,
+  such as cookies from the old shared account, are redirected to the entry page.
+
 ## [0.2.2]
 
 A compatible release focused on verification, recovery, and daily recruiting

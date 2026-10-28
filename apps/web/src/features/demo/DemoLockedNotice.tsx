@@ -3,7 +3,7 @@
  * mutate identity or open real egress. Server actions still enforce the guard.
  */
 export function DemoLockedNotice({
-  children = "Disabled in the live demo — this action would persist past the periodic reset or send data outside the sandbox.",
+  children = "Disabled in the demo — this action would change account security or send data outside your sandbox.",
 }: {
   children?: string;
 }) {

@@ -1,4 +1,6 @@
+import type { Route } from "next";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { HarlyAIProvider } from "@/components/dashboard/HarlyAIWidget";
 import { IconRail } from "@/components/dashboard/IconRail";
@@ -11,6 +13,8 @@ import {
 } from "@/features/notifications/data";
 import { getUnreadInboxThreadCount } from "@/features/mailbox/data";
 import { isDemoMode } from "@harly/config";
+
+import { isLiveSandboxWorkspace } from "@/features/demo/sandbox-access";
 
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
@@ -41,6 +45,12 @@ export default async function DashboardLayout({
 }) {
   const { organization, user, role } = await getWorkspaceContext();
   const demo = isDemoMode();
+  if (demo && !(await isLiveSandboxWorkspace(organization.id))) {
+    // Demo visitors only ever work inside their own sandbox. A session pointing
+    // at the shared template (an old shared-account cookie) or at an expired
+    // sandbox is sent back to mint a fresh one.
+    redirect("/enter" as Route);
+  }
   const [
     workspaceOptions,
     notifications,

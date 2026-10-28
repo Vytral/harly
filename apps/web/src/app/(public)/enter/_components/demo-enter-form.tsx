@@ -9,12 +9,19 @@ import { Turnstile } from "@marsidev/react-turnstile";
  * so the token rides along on submit. Until the challenge produces a token the
  * button shows a quiet "Verifying…" state and stays disabled.
  */
-export function DemoEnterForm({ siteKey }: { siteKey: string }) {
+export function DemoEnterForm({ siteKey, style }: { siteKey: string; style: string }) {
   const [token, setToken] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const verified = Boolean(token);
 
   return (
-    <form method="POST" action="/api/demo/enter" className="space-y-6">
+    <form
+      method="POST"
+      action="/api/demo/enter"
+      className="space-y-6"
+      onSubmit={() => setSubmitting(true)}
+    >
+      <input type="hidden" name="style" value={style} />
       {siteKey ? (
         <div className="flex justify-center">
           <Turnstile
@@ -32,7 +39,7 @@ export function DemoEnterForm({ siteKey }: { siteKey: string }) {
 
       <button
         type="submit"
-        disabled={!verified}
+        disabled={!verified || submitting}
         // The Turnstile script (and some browser extensions) mutate this
         // button's attributes before React hydrates. The disabled state is
         // deterministic (`verified` starts false on both server and client),
@@ -40,8 +47,13 @@ export function DemoEnterForm({ siteKey }: { siteKey: string }) {
         suppressHydrationWarning
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-primary py-3.5 text-sm font-semibold text-primary-foreground transition hover:bg-pine-strong disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
       >
-        {verified ? (
-          "Enter the demo"
+        {submitting ? (
+          <>
+            <Spinner />
+            Preparing your sandbox…
+          </>
+        ) : verified ? (
+          "Create my sandbox"
         ) : (
           <>
             <Spinner />
