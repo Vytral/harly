@@ -23,9 +23,9 @@ import { serializeSandboxMetadata } from "./sandbox-metadata";
 import { assertNotDemoOutsideSandbox, isLiveSandboxWorkspace } from "./sandbox-access";
 
 const live = () =>
-  serializeSandboxMetadata({ expiresAt: new Date(Date.now() + 3_600_000).toISOString(), style: "" });
+  serializeSandboxMetadata({ expiresAt: new Date(Date.now() + 3_600_000).toISOString(), style: "", ownerUserId: null });
 const expired = () =>
-  serializeSandboxMetadata({ expiresAt: new Date(Date.now() - 1_000).toISOString(), style: "" });
+  serializeSandboxMetadata({ expiresAt: new Date(Date.now() - 1_000).toISOString(), style: "", ownerUserId: null });
 
 describe("sandbox access", () => {
   afterEach(() => {
