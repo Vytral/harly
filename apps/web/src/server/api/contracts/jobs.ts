@@ -1,6 +1,10 @@
 import { z } from "zod";
 import {
   jobCreateSchema,
+  jobStageArchiveSchema,
+  jobStageCreateSchema,
+  jobStageKindSchema,
+  jobStageReorderSchema,
   jobStageUpdateSchema,
   jobUpdateSchema,
 } from "@harly/validators";
@@ -36,9 +40,19 @@ const jobStageSchema = z.object({
   name: z.string(),
   color: z.string().nullable(),
   order: z.number(),
+  /** Effective kind: legacy rows without a stored kind are classified by name. */
+  kind: jobStageKindSchema,
+  archivedAt: z.string().nullable(),
   emailConfig: z.object({ candidateUpdatesEnabled: z.boolean() }),
   createdAt: z.string(),
   updatedAt: z.string(),
+});
+const stageListQuery = z.object({
+  includeArchived: z.enum(["true", "false"]).optional(),
+});
+const jobStageArchiveResultSchema = z.object({
+  stage: jobStageSchema,
+  movedApplications: z.number().int().nonnegative(),
 });
 
 const idPath = z.object({ id: z.string().uuid() });
@@ -184,15 +198,40 @@ export const listJobStagesContract = defineContract({
   path: "/api/v1/jobs/{id}/stages",
   operationId: "listJobStages",
   summary: "List job stages",
-  description: "List the ordered pipeline stages for a job.",
+  description:
+    "List the ordered pipeline stages for a job. Archived stages are omitted unless `includeArchived=true`.",
   tags: ["Jobs", "Pipeline"],
   auth: { scopes: ["stages:read"] },
-  parameters: { path: idPath },
+  parameters: { path: idPath, query: stageListQuery },
   responses: {
     200: successEnvelopeSchema(z.array(jobStageSchema)),
     401: errorEnvelopeSchema,
     403: errorEnvelopeSchema,
     404: errorEnvelopeSchema,
+    429: errorEnvelopeSchema,
+  },
+});
+export const createJobStageContract = defineContract({
+  method: "POST",
+  path: "/api/v1/jobs/{id}/stages",
+  operationId: "createJobStage",
+  summary: "Create job stage",
+  description:
+    "Add a stage to a job. Without `position` the stage is inserted before the first hired, rejected or withdrawn stage. Multiple stages may share a kind.",
+  tags: ["Jobs", "Pipeline"],
+  auth: { scopes: ["stages:write"] },
+  idempotent: true,
+  parameters: { path: idPath },
+  requestBody: jobStageCreateSchema,
+  responses: {
+    201: successEnvelopeSchema(jobStageSchema),
+    400: errorEnvelopeSchema,
+    401: errorEnvelopeSchema,
+    403: errorEnvelopeSchema,
+    404: errorEnvelopeSchema,
+    409: errorEnvelopeSchema,
+    422: errorEnvelopeSchema,
+    429: errorEnvelopeSchema,
   },
 });
 export const updateJobStageContract = defineContract({
@@ -200,9 +239,11 @@ export const updateJobStageContract = defineContract({
   path: "/api/v1/jobs/{id}/stages/{stageId}",
   operationId: "updateJobStage",
   summary: "Update job stage",
-  description: "Edit a single pipeline stage in a job.",
+  description:
+    "Rename, recolor, change email settings, or change the kind of an active stage. A kind change that would move applications between outcomes is refused; merge them with archive instead.",
   tags: ["Jobs", "Pipeline"],
   auth: { scopes: ["stages:write"] },
+  idempotent: true,
   parameters: { path: stagePath },
   requestBody: jobStageUpdateSchema,
   responses: {
@@ -211,7 +252,75 @@ export const updateJobStageContract = defineContract({
     401: errorEnvelopeSchema,
     403: errorEnvelopeSchema,
     404: errorEnvelopeSchema,
+    409: errorEnvelopeSchema,
     422: errorEnvelopeSchema,
+    429: errorEnvelopeSchema,
+  },
+});
+export const reorderJobStagesContract = defineContract({
+  method: "POST",
+  path: "/api/v1/jobs/{id}/stages/reorder",
+  operationId: "reorderJobStages",
+  summary: "Reorder job stages",
+  description:
+    "Set the order of a job's active stages. `stageIds` must list every active stage exactly once.",
+  tags: ["Jobs", "Pipeline"],
+  auth: { scopes: ["stages:write"] },
+  idempotent: true,
+  parameters: { path: idPath },
+  requestBody: jobStageReorderSchema,
+  responses: {
+    200: successEnvelopeSchema(z.array(jobStageSchema)),
+    400: errorEnvelopeSchema,
+    401: errorEnvelopeSchema,
+    403: errorEnvelopeSchema,
+    404: errorEnvelopeSchema,
+    409: errorEnvelopeSchema,
+    422: errorEnvelopeSchema,
+    429: errorEnvelopeSchema,
+  },
+});
+export const archiveJobStageContract = defineContract({
+  method: "POST",
+  path: "/api/v1/jobs/{id}/stages/{stageId}/archive",
+  operationId: "archiveJobStage",
+  summary: "Archive job stage",
+  description:
+    "Retire a stage and keep its history. Applications in it are moved to `mergeIntoStageId`, which must be an active stage with the same outcome (active stages merge into active stages; hired, rejected or withdrawn stages only into a stage of the same kind).",
+  tags: ["Jobs", "Pipeline"],
+  auth: { scopes: ["stages:write"] },
+  idempotent: true,
+  parameters: { path: stagePath },
+  // The body is optional: a stage with no applications can be archived without one.
+  requestBody: jobStageArchiveSchema.nullish(),
+  responses: {
+    200: successEnvelopeSchema(jobStageArchiveResultSchema),
+    400: errorEnvelopeSchema,
+    401: errorEnvelopeSchema,
+    403: errorEnvelopeSchema,
+    404: errorEnvelopeSchema,
+    409: errorEnvelopeSchema,
+    422: errorEnvelopeSchema,
+    429: errorEnvelopeSchema,
+  },
+});
+export const deleteJobStageContract = defineContract({
+  method: "DELETE",
+  path: "/api/v1/jobs/{id}/stages/{stageId}",
+  operationId: "deleteJobStage",
+  summary: "Delete job stage",
+  description:
+    "Permanently delete a stage that has never held an application, appears in no history, scorecard, document requirement or automation. Otherwise archive it instead.",
+  tags: ["Jobs", "Pipeline"],
+  auth: { scopes: ["stages:write"] },
+  parameters: { path: stagePath },
+  responses: {
+    200: successEnvelopeSchema(z.object({ success: z.boolean() })),
+    401: errorEnvelopeSchema,
+    403: errorEnvelopeSchema,
+    404: errorEnvelopeSchema,
+    409: errorEnvelopeSchema,
+    429: errorEnvelopeSchema,
   },
 });
 
@@ -224,5 +333,9 @@ export const jobsContracts = [
   publishJobContract,
   closeJobContract,
   listJobStagesContract,
+  createJobStageContract,
   updateJobStageContract,
+  reorderJobStagesContract,
+  archiveJobStageContract,
+  deleteJobStageContract,
 ] as const;

@@ -24,6 +24,11 @@ pipeline, application questions, and public posting. You manage jobs from
     Assign the stages the applications will move through. A practical default is
     `Applied`, `Screen`, `Interview`, `Offer`, and `Hired`, with a separate
     rejected or withdrawn outcome. Configure stages in **Settings → Pipelines**.
+    A stage's outcome comes from its kind (hired, rejected, withdrawn, or
+    custom), not its name, so renaming a stage never changes what happens to
+    applications in it. A stage that already holds applications is archived
+    rather than deleted: its applications move to another stage with the same
+    outcome, and its history is kept.
   </Step>
   <Step title="Build the application form">
     Decide which fields and screening questions candidates answer. Ask only for
