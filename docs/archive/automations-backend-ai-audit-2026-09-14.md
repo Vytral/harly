@@ -38,7 +38,7 @@ pnpm exec vitest run src/features/automations/runtime/audit-probes.test.ts src/l
 
 Resultado: **14 archivos y 50 pruebas pasaron**: 46 existentes de Harly AI y 4 probes que documentan limitaciones actuales. Que estos probes pasen significa que reprodujeron el comportamiento problemático, no que lo corrigieron.
 
-Los probes estuvieron temporalmente en la carpeta del runtime para resolver sus imports y se retiraron al terminar. Se conservan en [evidencia reproducible](audit-evidence/automations-backend-2026-09-14/audit-probes.test.ts), junto al [log de la segunda ejecución](audit-evidence/automations-backend-2026-09-14/test-output.log). Para repetirlos, copiar el archivo al path del comando y retirarlo después; no ejecutar esa copia junto con un archivo homónimo ya existente.
+Los probes estuvieron temporalmente en la carpeta del runtime para resolver sus imports y se retiraron al terminar. Se conservan en evidencia reproducible `audit-evidence/automations-backend-2026-09-14/audit-probes.test.ts` (no conservada en el repositorio), junto al log de la segunda ejecución `audit-evidence/automations-backend-2026-09-14/test-output.log` (no conservado en el repositorio). Para repetirlos, copiar el archivo al path del comando y retirarlo después; no ejecutar esa copia junto con un archivo homónimo ya existente.
 
 No se ejecutaron build, lint, typecheck, E2E, llamadas reales a proveedores, una carrera de workers con Postgres ni una sesión real de IA contra un modelo. Los tests unitarios no sustituyen estas verificaciones.
 
@@ -48,22 +48,22 @@ Las líneas son orientativas del estado auditado y pueden cambiar al implementar
 
 | Fuente | Responsabilidad |
 |---|---|
-| [schema.ts](../apps/web/src/features/automations/schema.ts), línea 25 | Eventos y tipos de acción |
-| [registry.ts](../apps/web/src/features/automations/registry.ts), líneas 100–1816 | Contexto, esquemas y ejecución de las 21 acciones |
-| [schema-v2.ts](../apps/web/src/features/automations/definition/schema-v2.ts), línea 60 | Bindings y nodos |
-| [validate.ts](../apps/web/src/features/automations/definition/validate.ts), [compile.ts](../apps/web/src/features/automations/definition/compile.ts), [limits.ts](../apps/web/src/features/automations/definition/limits.ts) | Validez estructural y compilación |
-| [service.ts](../apps/web/src/features/automations/definition/service.ts), líneas 279 y 624 | Borradores, revisión y publicación |
-| [publish-validation.ts](../apps/web/src/features/automations/publish-validation.ts), líneas 29–195 | Compatibilidad y preflight de acciones |
-| [dispatch.ts](../apps/web/src/features/automations/dispatch.ts), líneas 224, 358 y 390 | Disparo, límites y relaciones padre/hijo |
-| [worker.ts](../apps/web/src/features/automations/runtime/worker.ts), líneas 134, 249 y 350 | Adaptador, condiciones y reloj real |
-| [advance.ts](../apps/web/src/features/automations/runtime/advance.ts), [run-store.ts](../apps/web/src/features/automations/runtime/run-store.ts), [leases.ts](../apps/web/src/features/automations/runtime/leases.ts) | Transiciones y persistencia durable |
-| [simulate.ts](../apps/web/src/features/automations/runtime/simulate.ts), línea 180; [simulation-fixtures.ts](../apps/web/src/features/automations/runtime/simulation-fixtures.ts) | Simulación y respuestas sintéticas |
-| [builder-data.ts](../apps/web/src/features/automations/builder-data.ts), líneas 921–1150 | Preparación de muestra y tester |
-| [actions.ts](../apps/web/src/features/automations/actions.ts), líneas 148–1040 | Operaciones de dashboard y controles de permisos |
-| [webhook-ingress.ts](../apps/web/src/features/automations/webhook-ingress.ts), línea 199; [ssrf.ts](../apps/web/src/lib/ssrf.ts), línea 245 | Entrada firmada y HTTP saliente |
-| [agent/index.ts](../apps/web/src/lib/ai/agent/index.ts), [write-tools.ts](../apps/web/src/lib/ai/agent/write-tools.ts), [write-actions.ts](../apps/web/src/lib/ai/agent/write-actions.ts), líneas 394 y 1263 | Herramientas, preview y confirmación de IA |
-| [chat/route.ts](../apps/web/src/app/api/ai/chat/route.ts), línea 40 | Contexto de conversación y límites |
-| [propuesta anterior de IA](automations-ai-builder-proposal.md) | Diseño previo; no evidencia de implementación |
+| [schema.ts](../../apps/web/src/features/automations/schema.ts), línea 25 | Eventos y tipos de acción |
+| [registry.ts](../../apps/web/src/features/automations/registry.ts), líneas 100–1816 | Contexto, esquemas y ejecución de las 21 acciones |
+| [schema-v2.ts](../../apps/web/src/features/automations/definition/schema-v2.ts), línea 60 | Bindings y nodos |
+| [validate.ts](../../apps/web/src/features/automations/definition/validate.ts), [compile.ts](../../apps/web/src/features/automations/definition/compile.ts), [limits.ts](../../apps/web/src/features/automations/definition/limits.ts) | Validez estructural y compilación |
+| [service.ts](../../apps/web/src/features/automations/definition/service.ts), líneas 279 y 624 | Borradores, revisión y publicación |
+| [publish-validation.ts](../../apps/web/src/features/automations/publish-validation.ts), líneas 29–195 | Compatibilidad y preflight de acciones |
+| [dispatch.ts](../../apps/web/src/features/automations/dispatch.ts), líneas 224, 358 y 390 | Disparo, límites y relaciones padre/hijo |
+| [worker.ts](../../apps/web/src/features/automations/runtime/worker.ts), líneas 134, 249 y 350 | Adaptador, condiciones y reloj real |
+| [advance.ts](../../apps/web/src/features/automations/runtime/advance.ts), [run-store.ts](../../apps/web/src/features/automations/runtime/run-store.ts), [leases.ts](../../apps/web/src/features/automations/runtime/leases.ts) | Transiciones y persistencia durable |
+| [simulate.ts](../../apps/web/src/features/automations/runtime/simulate.ts), línea 180; [simulation-fixtures.ts](../../apps/web/src/features/automations/runtime/simulation-fixtures.ts) | Simulación y respuestas sintéticas |
+| [builder-data.ts](../../apps/web/src/features/automations/builder-data.ts), líneas 921–1150 | Preparación de muestra y tester |
+| [actions.ts](../../apps/web/src/features/automations/actions.ts), líneas 148–1040 | Operaciones de dashboard y controles de permisos |
+| [webhook-ingress.ts](../../apps/web/src/features/automations/webhook-ingress.ts), línea 199; [ssrf.ts](../../apps/web/src/lib/ssrf.ts), línea 245 | Entrada firmada y HTTP saliente |
+| [agent/index.ts](../../apps/web/src/lib/ai/agent/index.ts), [write-tools.ts](../../apps/web/src/lib/ai/agent/write-tools.ts), [write-actions.ts](../../apps/web/src/lib/ai/agent/write-actions.ts), líneas 394 y 1263 | Herramientas, preview y confirmación de IA |
+| [chat/route.ts](../../apps/web/src/app/api/ai/chat/route.ts), línea 40 | Contexto de conversación y límites |
+| [propuesta anterior de IA](../automations-ai-builder-proposal.md) | Diseño previo; no evidencia de implementación |
 
 ## 3. Inventario funcional completo del catálogo
 

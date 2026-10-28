@@ -8,7 +8,7 @@ This decision is the architectural baseline for
 `docs/automations-product-plan.md`. The durable graph runtime, builder contract,
 waits, approvals, document/signature continuation, real action adapters and
 scheduler wiring are implemented in this worktree. Remaining release gates are
-tracked in `docs/automations-production-rollout.md`; production schema
+tracked in `docs/archive/automations-production-rollout.md`; production schema
 migration and canary execution require an explicitly authorized production
 environment and are not performed from a developer shell.
 

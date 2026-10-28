@@ -767,7 +767,7 @@ Pendientes que bloquean el siguiente paquete:
 ## 24. Registro de paquetes
 
 - **P01** — verificado (inventario, sin cambio de producto). Ver
-  `docs/automations-p01-baseline.md` y
+  `docs/archive/automations-p01-baseline.md` y
   `docs/decisions/ADR-006-automations-v2-durable-graph.md`.
 - **P02** — verificado. Filtros atómicos, draft incompleto, validar al publicar,
   restore de delete, Runs en el editor, API 410 explicada.
@@ -930,7 +930,7 @@ pnpm build`) compila Webpack, TypeScript, páginas estáticas y las rutas de
 
 ### Avance 2026-09-09 — worker v2 conectado y efectos protegidos (P06/P07/P08 en curso)
 
-> Esta sección conserva el registro histórico de decisiones y evidencias de la iteración. El estado canónico de cada paquete está en la lista inmediatamente anterior y en `docs/automations-production-rollout.md`.
+> Esta sección conserva el registro histórico de decisiones y evidencias de la iteración. El estado canónico de cada paquete está en la lista inmediatamente anterior y en `docs/archive/automations-production-rollout.md`.
 
 - `runtime/worker.ts` consume `advance`, `graphRunLeases`, `graphRunStore` y `graphNodeStore` en producción. `dispatchWorkflowEvent` y `dispatchDueWorkflowRuns` enrutan por `engineVersion`; publicaciones nuevas usan la versión de grafo inmutable y el cursor `entryNodeId`. Runs legacy siguen en `engine.ts`.
 - El adaptador productivo resuelve `getActionHandler` del registry real, valida input, comprueba el permiso del actor versionado y ejecuta fuera de la transacción. El `effectKey` estable y `inputSnapshot` congelado acompañan cada llamada.

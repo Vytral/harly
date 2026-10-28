@@ -12,8 +12,8 @@
 
 - [Auditoría de frontend del 14 de septiembre](automations-frontend-audit-2026-09-14.md)
 - [Auditoría de backend del 14 de septiembre](automations-backend-ai-audit-2026-09-14.md)
-- [Propuesta inicial de AI Builder](automations-ai-builder-proposal.md)
-- [Roadmap general de Harly AI](ai-copilot-roadmap.md)
+- [Propuesta inicial de AI Builder](../automations-ai-builder-proposal.md)
+- [Roadmap general de Harly AI](../ai-copilot-roadmap.md)
 
 Los tres documentos de Automations del 14 de septiembre son antecedentes. Sus fechas y contenido no fueron actualizados después de las implementaciones del 15 de septiembre. Varios hallazgos de backend ya fueron corregidos en código y la afirmación de que las tools de Automations para Harly AI no estaban implementadas dejó de ser cierta.
 

@@ -11,7 +11,15 @@ What user or operator outcome does this change provide?
 - [ ] `pnpm build` passes
 - [ ] `pnpm audit --prod --audit-level=high` passes, or the exception is explained
 - [ ] `pnpm exec drizzle-kit check --config packages/db/drizzle.config.ts` passes (when applicable)
+- [ ] `pnpm db:verify-migrations` passes (when schema or migrations change)
+- [ ] Database-backed pipeline tests ran with `RUN_PIPELINE_STAGE_INTEGRATION=1` (when pipeline behavior changes)
+- [ ] `pnpm docs:validate`, `pnpm docs:broken-links`, and `pnpm docs:a11y` pass (when documentation changes)
 - [ ] `pnpm --filter @harly/cli test` passes (when CLI/distribution changes)
+
+## Data and pipeline rules
+
+- [ ] Stage meaning comes from the stored stage kind, never from a stage name; archived stages are excluded from current pipelines (when stages change)
+- [ ] Schema changes are additive; any data backfill is a documented custom migration that is idempotent (when migrations change)
 
 ## Release notes
 

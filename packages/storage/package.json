@@ -14,6 +14,6 @@
     "@aws-sdk/s3-request-presigner": "^3.1053.0"
   },
   "devDependencies": {
-    "@types/node": "^20"
+    "@types/node": "^22"
   }
 }
