@@ -1,5 +1,7 @@
 "use client";
 
+import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
+import type { IntegrationHealthView } from "@/features/integrations/health/model";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -41,7 +43,9 @@ export function MicrosoftTeamsConnectPanel({
   workspaceId,
   tileClassName,
   description,
+  health,
 }: {
+  health?: IntegrationHealthView;
   status: WorkspaceOutlookStatus;
   canEdit: boolean;
   workspaceId: string;
@@ -122,6 +126,7 @@ export function MicrosoftTeamsConnectPanel({
           ) : null
         }
       />
+      {health ? <IntegrationHealthNotice health={health} reconnectHref={installUrl} /> : null}
 
       {!status.hasCredentials && !isConnected ? (
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">

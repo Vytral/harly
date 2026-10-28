@@ -1,5 +1,9 @@
 import "server-only";
 
+import {
+  recordIntegrationFailure,
+  recordIntegrationSuccess,
+} from "@/features/integrations/health/repository";
 import { getWorkspaceEsignConfig, type EsignConfig } from "@/lib/esign/config";
 import { trustedDocusealArtifactUrl } from "@/lib/esign/url-security";
 import { safeFetchHttp } from "@/lib/ssrf";
@@ -23,19 +27,28 @@ async function docusealFetch<T>(
   path: string,
   init?: RequestInit,
 ): Promise<T> {
-  const res = await safeFetchHttp(`${ctx.apiUrl}${path}`, {
-    ...init,
-    headers: {
-      [AUTH_HEADER]: ctx.apiToken,
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...init?.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await safeFetchHttp(`${ctx.apiUrl}${path}`, {
+      ...init,
+      headers: {
+        [AUTH_HEADER]: ctx.apiToken,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+        ...init?.headers,
+      },
+    });
+  } catch (error) {
+    await recordIntegrationFailure(ctx.workspaceId, "docuseal", error);
+    throw error;
+  }
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`DocuSeal API ${res.status}: ${body.slice(0, 500)}`);
+    const error = new Error(`DocuSeal API ${res.status}: ${body.slice(0, 500)}`);
+    await recordIntegrationFailure(ctx.workspaceId, "docuseal", error);
+    throw error;
   }
+  await recordIntegrationSuccess(ctx.workspaceId, "docuseal");
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }

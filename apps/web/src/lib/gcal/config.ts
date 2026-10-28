@@ -5,8 +5,13 @@ import { OAuth2Client } from "google-auth-library";
 
 import { db, workspaceSettings } from "@harly/db";
 
+import { classifyIntegrationError } from "@/features/integrations/health/model";
+import { recordIntegrationFailure } from "@/features/integrations/health/repository";
 import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
+import { createLogger } from "@/lib/logger";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
+
+const log = createLogger("gcal-config");
 
 export type WorkspaceGCalStatus = {
   enabled: boolean;
@@ -22,20 +27,46 @@ export type GCalConfig = {
   calendarId: string;
 };
 
-/** Mark a revoked OAuth connection unusable without touching the account label. */
+/**
+ * Google rejected the stored refresh token. Clear the dead token, keep the
+ * enabled intent and account details, and record why. The health row is what
+ * lets the UI offer "Reconnect Google Calendar" with the reason.
+ */
 export async function invalidateWorkspaceGCalConnection(
   workspaceId: string,
+  error: unknown,
 ): Promise<void> {
-  await db
-    .update(workspaceSettings)
-    .set({
-      gcalEnabled: false,
-      gcalRefreshTokenCiphertext: null,
-      gcalRefreshTokenIv: null,
-      gcalRefreshTokenTag: null,
-      updatedAt: new Date(),
-    })
-    .where(eq(workspaceSettings.organizationId, workspaceId));
+  try {
+    await db
+      .update(workspaceSettings)
+      .set({
+        gcalRefreshTokenCiphertext: null,
+        gcalRefreshTokenIv: null,
+        gcalRefreshTokenTag: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(workspaceSettings.organizationId, workspaceId));
+  } catch (clearError) {
+    log.error({ err: clearError }, "Failed to clear revoked Google Calendar token");
+  }
+  await recordIntegrationFailure(workspaceId, "gcal", error, { kind: "auth" });
+}
+
+/**
+ * Record a failed Google Calendar call. A revoked grant clears the dead token
+ * and records `needs_reconnect`; anything else is classified and counted.
+ * Returns true when the failure was an auth failure.
+ */
+export async function recordGCalCallFailure(
+  workspaceId: string,
+  error: unknown,
+): Promise<boolean> {
+  if (classifyIntegrationError("gcal", error).kind === "auth") {
+    await invalidateWorkspaceGCalConnection(workspaceId, error);
+    return true;
+  }
+  await recordIntegrationFailure(workspaceId, "gcal", error);
+  return false;
 }
 
 function getGoogleCredentials(): {

@@ -1,5 +1,7 @@
 "use client";
 
+import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
+import type { IntegrationHealthView } from "@/features/integrations/health/model";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -38,7 +40,9 @@ export function GoogleMeetConnectPanel({
   workspaceId,
   tileClassName,
   description,
+  health,
 }: {
+  health?: IntegrationHealthView;
   status: WorkspaceGCalStatus;
   canEdit: boolean;
   workspaceId: string;
@@ -122,6 +126,7 @@ export function GoogleMeetConnectPanel({
           ) : null
         }
       />
+      {health ? <IntegrationHealthNotice health={health} reconnectHref={installUrl} /> : null}
 
       {!status.hasCredentials && !isConnected ? (
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">

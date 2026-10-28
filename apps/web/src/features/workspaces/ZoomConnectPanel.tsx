@@ -1,11 +1,14 @@
 "use client";
 
+import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
+import type { IntegrationHealthView } from "@/features/integrations/health/model";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
 
 import {
   saveZoomCredentialsAction,
+  testZoomConnectionAction,
   uninstallZoom,
 } from "@/features/workspaces/zoom-settings-actions";
 import type { ZoomConfig } from "@/lib/zoom/config";
@@ -32,7 +35,9 @@ export function ZoomConnectPanel({
   workspaceId,
   tileClassName,
   description,
+  health,
 }: {
+  health?: IntegrationHealthView;
   config: ZoomConfig;
   canEdit: boolean;
   workspaceId: string;
@@ -40,7 +45,10 @@ export function ZoomConnectPanel({
   description: string;
 }) {
   const router = useRouter();
-  const isConnected = config.installationState === "installed";
+  const isConnected = health
+    ? health.connected
+    : config.installationState === "installed";
+  const [testing, setTesting] = useState(false);
   // Show the credentials form up-front only when nothing is configured yet.
   const [open, setOpen] = useState(!config.configured && !isConnected);
   const [disconnecting, startDisconnect] = useTransition();
@@ -60,6 +68,18 @@ export function ZoomConnectPanel({
       toast.success("Zoom disconnected");
       router.refresh();
     });
+  }
+
+  async function testConnection() {
+    setTesting(true);
+    const result = await testZoomConnectionAction();
+    setTesting(false);
+    if (result.success) {
+      toast.success("Zoom connection is working");
+    } else {
+      toast.error(result.error ?? "Zoom connection test failed.");
+    }
+    router.refresh();
   }
 
   return (
@@ -94,6 +114,7 @@ export function ZoomConnectPanel({
           ) : null
         }
       />
+      {health ? <IntegrationHealthNotice health={health} reconnectHref={installUrl} /> : null}
 
       {!config.encryptionReady && !isConnected ? (
         <div className="flex items-start gap-2 rounded-xl border border-clay/30 bg-clay/5 px-3 py-2 text-sm text-clay">
@@ -128,7 +149,15 @@ export function ZoomConnectPanel({
       ) : null}
 
       {isConnected && canEdit ? (
-        <div>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={testConnection}
+            disabled={testing}
+          >
+            {testing ? "Testing…" : "Test connection"}
+          </Button>
           <Button
             variant="ghost"
             size="sm"

@@ -1,5 +1,7 @@
 "use client";
 
+import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
+import type { IntegrationHealthView } from "@/features/integrations/health/model";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
@@ -44,7 +46,9 @@ export function JitsiConnectPanel({
   canEdit,
   tileClassName,
   description,
+  health,
 }: {
+  health?: IntegrationHealthView;
   status: WorkspaceJitsiStatus;
   canEdit: boolean;
   tileClassName: string;
@@ -127,6 +131,7 @@ export function JitsiConnectPanel({
           ) : null
         }
       />
+      {health ? <IntegrationHealthNotice health={health} onReconnect={() => setOpen(true)} /> : null}
 
       {isConfigured ? (
         <Card className="overflow-hidden p-0">

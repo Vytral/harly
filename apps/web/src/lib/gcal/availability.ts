@@ -3,7 +3,8 @@
 import { and, eq, gt, lt, ne } from "drizzle-orm";
 
 import { db, interviews } from "@harly/db";
-import { getWorkspaceGCalConfig } from "@/lib/gcal/config";
+import { recordIntegrationSuccess } from "@/features/integrations/health/repository";
+import { getWorkspaceGCalConfig, recordGCalCallFailure } from "@/lib/gcal/config";
 import { getFreeBusy } from "@/lib/gcal/client";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
@@ -45,8 +46,10 @@ export async function checkAvailability(opts: {
           opts.timeMin,
           opts.timeMax,
         );
-      } catch {
-        // GCal check failing shouldn't block scheduling.
+        await recordIntegrationSuccess(workspace.id, "gcal");
+      } catch (error) {
+        // GCal check failing shouldn't block scheduling; the failure is still recorded.
+        await recordGCalCallFailure(workspace.id, error);
       }
     }
 

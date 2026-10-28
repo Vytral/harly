@@ -29,6 +29,7 @@ import {
   isConnected,
   type IntegrationSlug,
 } from "@/features/workspaces/integrations-registry";
+import { integrationHealthKeyForSlug } from "@/features/integrations/health/registry-mapping";
 import { requirePagePermission } from "@/features/workspaces/permissions-server";
 import {
   SectionHeader,
@@ -123,7 +124,7 @@ const IMPORTERS: Importer[] = [
     logo: AshbyLogo,
     logoClassName: "size-6",
     tileClassName:
-      "bg-gradient-to-br from-violet-100 via-indigo-200 to-fuchsia-200",
+      "bg-muted text-foreground ring-1 ring-border",
     href: "/dashboard/candidates?import=ashby",
   },
   {
@@ -176,6 +177,8 @@ export default async function IntegrationsSettingsPage() {
         (i) => i.category === category,
       ).map<MarketplaceIntegration>((i) => {
         const connected = isConnected(i.slug, statuses);
+        const healthKey = integrationHealthKeyForSlug(i.slug);
+        const health = healthKey ? statuses.health[healthKey] : null;
         return {
           id: i.slug,
           name: i.name,
@@ -186,9 +189,13 @@ export default async function IntegrationsSettingsPage() {
           href: i.externalHref ?? `/settings/integrations/${i.slug}`,
           status: i.comingSoon
             ? "coming-soon"
-            : connected
-              ? "connected"
-              : "available",
+            : health?.reconnectRequired
+              ? "reconnect"
+              : health?.state === "degraded" || health?.state === "error"
+                ? "attention"
+                : connected
+                  ? "connected"
+                  : "available",
         };
       }),
     }),

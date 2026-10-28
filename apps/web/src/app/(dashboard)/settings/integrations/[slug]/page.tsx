@@ -13,6 +13,8 @@ import {
 import { CaretLeftIcon, SealCheckDuotoneIcon } from "@/components/ui/icons/phosphor";
 import { cn } from "@/lib/utils";
 import { DemoLockedNotice } from "@/features/demo/DemoLockedNotice";
+import type { IntegrationHealthView } from "@/features/integrations/health/model";
+import { integrationHealthKeyForSlug } from "@/features/integrations/health/registry-mapping";
 import { CalConnectPanel } from "@/features/workspaces/CalConnectPanel";
 import { DiscordConnectPanel } from "@/features/workspaces/DiscordConnectPanel";
 import { EsignConnectPanel } from "@/features/workspaces/EsignConnectPanel";
@@ -28,6 +30,7 @@ import { CaptchaConnectPanel } from "@/features/workspaces/CaptchaConnectPanel";
 import { ZoomConnectPanel } from "@/features/workspaces/ZoomConnectPanel";
 import {
   getIntegration,
+  getIntegrationStatuses,
   getWorkspaceContext,
   type IntegrationDefinition,
   type IntegrationSlug,
@@ -128,11 +131,15 @@ export default async function IntegrationDetailPage({
     ? `${appUrl}/api/webhooks/cal?ws=${organization.id}`
     : null;
 
+  const statuses = await getIntegrationStatuses(organization.id);
+  const healthKey = integrationHealthKeyForSlug(integration.slug);
+
   const panel = await renderPanel(integration, {
     organizationId: organization.id,
     canEdit,
     eventOptions,
     webhookUrl,
+    health: healthKey ? statuses.health[healthKey] : undefined,
   });
 
   return (
@@ -195,6 +202,7 @@ async function renderPanel(
     canEdit: boolean;
     eventOptions: { value: string; label: string }[];
     webhookUrl: string | null;
+    health?: IntegrationHealthView;
   },
 ): Promise<ReactNode | null> {
   switch (integration.slug) {
@@ -214,6 +222,7 @@ async function renderPanel(
       const status = await getWorkspaceGCalStatus(ctx.organizationId);
       return (
         <GCalConnectPanel
+          health={ctx.health}
           status={status}
           canEdit={ctx.canEdit}
           workspaceId={ctx.organizationId}
@@ -226,6 +235,7 @@ async function renderPanel(
       const status = await getWorkspaceGCalStatus(ctx.organizationId);
       return (
         <GoogleMeetConnectPanel
+          health={ctx.health}
           status={status}
           canEdit={ctx.canEdit}
           workspaceId={ctx.organizationId}
@@ -238,6 +248,7 @@ async function renderPanel(
       const status = await getWorkspaceJitsiStatus(ctx.organizationId);
       return (
         <JitsiConnectPanel
+          health={ctx.health}
           status={status}
           canEdit={ctx.canEdit}
           tileClassName={integration.tileClassName}
@@ -249,6 +260,7 @@ async function renderPanel(
       const status = await getWorkspaceSlackStatus(ctx.organizationId);
       return (
         <SlackConnectPanel
+          health={ctx.health}
           status={status}
           events={ctx.eventOptions}
           canEdit={ctx.canEdit}
@@ -274,6 +286,7 @@ async function renderPanel(
       const status = await getWorkspaceTelegramStatus(ctx.organizationId);
       return (
         <TelegramConnectPanel
+          health={ctx.health}
           status={status}
           events={ctx.eventOptions}
           canEdit={ctx.canEdit}
@@ -287,6 +300,7 @@ async function renderPanel(
       const status = await getWorkspaceOutlookStatus(ctx.organizationId);
       return (
         <OutlookConnectPanel
+          health={ctx.health}
           status={status}
           events={ctx.eventOptions}
           canEdit={ctx.canEdit}
@@ -301,6 +315,7 @@ async function renderPanel(
       const status = await getWorkspaceOutlookStatus(ctx.organizationId);
       return (
         <MicrosoftTeamsConnectPanel
+          health={ctx.health}
           status={status}
           canEdit={ctx.canEdit}
           workspaceId={ctx.organizationId}
@@ -313,6 +328,7 @@ async function renderPanel(
       const config = await getZoomConfig(ctx.organizationId);
       return (
         <ZoomConnectPanel
+          health={ctx.health}
           config={config}
           canEdit={ctx.canEdit}
           workspaceId={ctx.organizationId}
@@ -340,6 +356,7 @@ async function renderPanel(
         : null;
       return (
         <EsignConnectPanel
+          health={ctx.health}
           status={status}
           canEdit={ctx.canEdit}
           webhookUrl={webhookUrl}

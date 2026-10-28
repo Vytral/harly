@@ -54,13 +54,16 @@ export async function outlookFetch<T>(
   return res.json() as Promise<T>;
 }
 
-/** Refresh an expired OAuth2 access token using the refresh token. */
+/**
+ * Exchange the refresh token for a new access token. Microsoft may rotate the
+ * refresh token, so the new pair is persisted encrypted and returned.
+ */
 export async function refreshOutlookToken(opts: {
   workspaceId: string;
   clientId: string;
   clientSecret: string;
   refreshToken: string;
-}): Promise<string> {
+}): Promise<{ accessToken: string; refreshToken: string }> {
   const res = await fetch(
     "https://login.microsoftonline.com/common/oauth2/v2.0/token",
     {
@@ -107,7 +110,7 @@ export async function refreshOutlookToken(opts: {
     })
     .where(eq(workspaceSettings.organizationId, opts.workspaceId));
 
-  return data.access_token;
+  return { accessToken: data.access_token, refreshToken: newRefreshToken };
 }
 
 /** Get the authenticated user's profile. */

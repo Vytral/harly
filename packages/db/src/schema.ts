@@ -1043,6 +1043,44 @@ export const slackDeliveries = pgTable(
   ],
 );
 
+/**
+ * Per-workspace health of each external integration, written from real call
+ * sites (token refresh, sync API calls, deliveries, explicit connection tests).
+ * One row per (workspace, integration). `last_error` is sanitized before it is
+ * stored and never contains tokens, secrets or URL query strings.
+ */
+export const integrationHealth = pgTable(
+  "integration_health",
+  {
+    workspaceId: text("workspace_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    integration: text("integration").notNull(),
+    // connected | degraded | needs_reconnect | error | not_connected
+    state: text("state").default("connected").notNull(),
+    lastOkAt: timestamp("last_ok_at", { withTimezone: true }),
+    lastErrorAt: timestamp("last_error_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    consecutiveFailures: integer("consecutive_failures").default(0).notNull(),
+    ...timestamps(),
+  },
+  (table) => [
+    primaryKey({
+      name: "integration_health_pk",
+      columns: [table.workspaceId, table.integration],
+    }),
+    check(
+      "integration_health_state_check",
+      sql`${table.state} in ('connected', 'degraded', 'needs_reconnect', 'error', 'not_connected')`,
+    ),
+    check(
+      "integration_health_last_error_length_check",
+      sql`char_length(${table.lastError}) <= 300`,
+    ),
+    index("integration_health_attention_idx").on(table.workspaceId, table.state),
+  ],
+);
+
 export const slackDeliveryAttempts = pgTable(
   "slack_delivery_attempts",
   {

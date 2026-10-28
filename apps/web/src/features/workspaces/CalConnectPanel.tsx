@@ -383,6 +383,7 @@ function CalConnectForm({
                 type="button"
                 variant="outline"
                 size="icon"
+                aria-label="Copy webhook URL"
                 onClick={copyWebhook}
               >
                 <CopyIcon className="size-4" />

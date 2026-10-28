@@ -3,10 +3,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   getZoomToken: vi.fn(),
   fetch: vi.fn(),
+  refreshZoomAccessToken: vi.fn(),
+  recordSuccess: vi.fn(),
+  recordFailure: vi.fn(),
 }));
 
 vi.mock("./config", () => ({
   getZoomToken: mocks.getZoomToken,
+}));
+
+vi.mock("./oauth", () => ({
+  refreshZoomAccessToken: mocks.refreshZoomAccessToken,
+}));
+
+vi.mock("@/features/integrations/health/repository", () => ({
+  recordIntegrationSuccess: mocks.recordSuccess,
+  recordIntegrationFailure: mocks.recordFailure,
 }));
 
 vi.stubGlobal("fetch", mocks.fetch);
@@ -17,6 +29,9 @@ describe("Zoom meeting client reconciliation", () => {
   beforeEach(() => {
     mocks.getZoomToken.mockReset();
     mocks.fetch.mockReset();
+    mocks.refreshZoomAccessToken.mockReset();
+    mocks.recordSuccess.mockReset();
+    mocks.recordFailure.mockReset();
     mocks.getZoomToken.mockResolvedValue("zoom-token");
   });
 

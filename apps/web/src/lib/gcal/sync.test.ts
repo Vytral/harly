@@ -5,6 +5,8 @@ const mocks = vi.hoisted(() => ({
   getEvent: vi.fn(),
   getWorkspaceGCalConfig: vi.fn(),
   invalidateWorkspaceGCalConnection: vi.fn(),
+  recordGCalCallFailure: vi.fn(async () => false),
+  recordIntegrationSuccess: vi.fn(),
   update: vi.fn(),
   updateEvent: vi.fn(),
   deleteEvent: vi.fn(),
@@ -22,6 +24,11 @@ vi.mock("drizzle-orm", () => ({
 vi.mock("@/lib/gcal/config", () => ({
   getWorkspaceGCalConfig: mocks.getWorkspaceGCalConfig,
   invalidateWorkspaceGCalConnection: mocks.invalidateWorkspaceGCalConnection,
+  recordGCalCallFailure: mocks.recordGCalCallFailure,
+}));
+vi.mock("@/features/integrations/health/repository", () => ({
+  recordIntegrationSuccess: mocks.recordIntegrationSuccess,
+  recordIntegrationFailure: vi.fn(),
 }));
 vi.mock("@/lib/gcal/client", () => ({
   createEvent: mocks.createEvent,

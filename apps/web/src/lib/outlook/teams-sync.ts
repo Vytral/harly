@@ -4,7 +4,13 @@ import { and, eq } from "drizzle-orm";
 
 import { db, interviews } from "@harly/db";
 
-import { getWorkspaceOutlookConfig } from "@/lib/outlook/config";
+import {
+  recordIntegrationSuccess,
+} from "@/features/integrations/health/repository";
+import {
+  getWorkspaceOutlookConfig,
+  recordOutlookCallFailure,
+} from "@/lib/outlook/config";
 import { createTeamsMeeting, deleteTeamsMeeting } from "@/lib/outlook/client";
 import { createLogger } from "@/lib/logger";
 
@@ -50,9 +56,11 @@ export async function syncInterviewToTeams(opts: {
         ),
       );
 
+    await recordIntegrationSuccess(opts.workspaceId, "outlook");
     return { joinUrl: meeting.joinUrl, meetingId: meeting.id };
   } catch (err) {
     log.error(err, "[teams-sync] Failed to create meeting");
+    await recordOutlookCallFailure(opts.workspaceId, err);
     return null;
   }
 }
@@ -80,9 +88,11 @@ export async function cancelInterviewTeamsMeeting(opts: {
           eq(interviews.workspaceId, opts.workspaceId),
         ),
       );
+    await recordIntegrationSuccess(opts.workspaceId, "outlook");
     return true;
   } catch (err) {
     log.error(err, "[teams-sync] Failed to cancel meeting");
+    await recordOutlookCallFailure(opts.workspaceId, err);
     return false;
   }
 }
@@ -114,6 +124,7 @@ export async function replaceInterviewToTeams(opts: {
     });
   } catch (error) {
     log.error(error, "[teams-sync] Failed to create replacement meeting");
+    await recordOutlookCallFailure(opts.workspaceId, error);
     return { ok: false, reason: "create_failed" };
   }
 
