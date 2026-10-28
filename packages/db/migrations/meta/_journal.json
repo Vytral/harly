@@ -1100,6 +1100,13 @@
       "when": 1793230248319,
       "tag": "0156_workspace_search_trgm_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 157,
+      "version": "7",
+      "when": 1793231111766,
+      "tag": "0157_application_stage_active_guard",
+      "breakpoints": true
     }
   ]
 }

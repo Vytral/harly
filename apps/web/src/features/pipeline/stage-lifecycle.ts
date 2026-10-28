@@ -122,6 +122,31 @@ async function countApplicationsInStage(
  * Serialize concurrent lifecycle operations on one job. Also verifies the job
  * belongs to the workspace and has not been soft-deleted.
  */
+/**
+ * Lock the given stage rows (always in id order, so concurrent lifecycle
+ * operations cannot deadlock). The row lock waits for every in-flight
+ * transaction that is placing an application into one of these stages, so the
+ * application count and move that follow see a committed, stable set. The
+ * `enforce_application_stage_active` trigger covers the other direction: a
+ * placement that starts after the archive commits is refused.
+ */
+async function lockStageRows(
+  tx: Tx,
+  scope: JobScope,
+  stageIds: ReadonlyArray<string | null | undefined>,
+): Promise<void> {
+  const ids = [...new Set(stageIds.filter((id): id is string => Boolean(id)))].sort();
+  if (ids.length === 0) return;
+  await tx.execute(sql`
+    select id from job_stages
+    where workspace_id = ${scope.workspaceId}
+      and job_id = ${scope.jobId}
+      and id in (${sql.join(ids.map((id) => sql`${id}::uuid`), sql`, `)})
+    order by id
+    for update
+  `);
+}
+
 async function lockJob(tx: Tx, scope: JobScope): Promise<void> {
   const [job] = await tx
     .select({ id: jobs.id })
@@ -515,6 +540,7 @@ export async function archiveStage(
 ): Promise<ArchiveStageResult> {
   return db.transaction(async (tx) => {
     await lockJob(tx, input);
+    await lockStageRows(tx, input, [input.stageId, input.mergeIntoStageId]);
     const stages = await loadStages(tx, input);
     const stage = findStage(stages, input.stageId);
     if (stage.archivedAt) {
