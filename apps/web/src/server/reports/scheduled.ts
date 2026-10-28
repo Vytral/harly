@@ -1,18 +1,21 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { and, asc, eq, gte, isNull, lte, or } from "drizzle-orm";
+import { and, asc, eq, isNull, lte, or } from "drizzle-orm";
 
 import {
-  applications,
   db,
-  jobs,
   scheduledReportRuns,
   scheduledReports,
 } from "@harly/db";
 import { enqueueEmailOutbox } from "@/lib/email/outbox-processor";
-import { getHiringEvents } from "@/features/reports/data";
-import { getAdvancedHiringAnalytics } from "@/features/reports/advanced";
+import { getAdvancedHiringAnalytics, type AdvancedHiringAnalytics } from "@/features/reports/advanced";
+import { getWorkspaceTimeZone } from "@/features/reports/canonical";
+import { loadReportsData, type ReportsData } from "@/features/reports/data";
+import { resolveWindow, type ReportWindow } from "@/features/reports/window";
+
+/** Scheduled reports always cover the last 30 days, the Reports page default. */
+export const SCHEDULED_REPORT_DAYS = 30;
 
 function escapeHtml(value: unknown): string {
   return String(value ?? "")
@@ -65,27 +68,32 @@ export async function runDueScheduledReports(limit = 25) {
     const workerId = randomUUID();
     const [claimed] = await db.update(scheduledReports).set({ lockedAt: now, lockedBy: workerId, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), or(isNull(scheduledReports.lockedAt), lte(scheduledReports.lockedAt, new Date(now.getTime() - 10 * 60_000))))).returning();
     if (!claimed) continue;
-    const periodEnd = now;
-    const periodStart = new Date(now.getTime() - 30 * 86_400_000);
     const [run] = await db.insert(scheduledReportRuns).values({
       workspaceId: report.workspaceId,
       scheduledReportId: report.id,
-      periodStart,
-      periodEnd,
+      periodStart: now,
+      periodEnd: now,
       status: "running",
       recipientCount: Array.isArray(report.recipients) ? report.recipients.length : 0,
     }).returning();
     try {
-      const overview = await getReportsDataForWorkspace(report.workspaceId, 30);
-      const advanced = report.reportType === "advanced_hiring" ? await getAdvancedHiringAnalytics(report.workspaceId, { since: periodStart }) : null;
-      const bodyHtml = renderReportHtml(report.name, overview, advanced);
+      const built = await buildScheduledReport({
+        workspaceId: report.workspaceId,
+        name: report.name,
+        reportType: report.reportType === "advanced_hiring" ? "advanced_hiring" : "hiring_overview",
+        now,
+      });
+      await db.update(scheduledReportRuns).set({
+        periodStart: built.window.from,
+        periodEnd: built.window.to,
+      }).where(eq(scheduledReportRuns.id, run.id));
       for (const to of (Array.isArray(report.recipients) ? report.recipients : [])) {
         await enqueueEmailOutbox(report.workspaceId, "report.scheduled", {
           to,
           subject: `${report.name} · Harly hiring report`,
-          bodyHtml,
+          bodyHtml: built.html,
           companyName: "Harly",
-        }, `scheduled-report:${report.id}:${periodEnd.toISOString()}:${to}`);
+        }, `scheduled-report:${report.id}:${now.toISOString()}:${to}`);
       }
       await db.update(scheduledReportRuns).set({ status: "queued", sentAt: new Date() }).where(eq(scheduledReportRuns.id, run.id));
       await db.update(scheduledReports).set({ lastRunAt: now, nextRunAt: nextRun(report.frequency, now), lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));
@@ -99,38 +107,59 @@ export async function runDueScheduledReports(limit = 25) {
   return { processed, failed };
 }
 
-async function getReportsDataForWorkspace(workspaceId: string, rangeDays: number) {
-  // The existing page loader is session-gated. Scheduled workers use this
-  // narrow, workspace-scoped aggregate instead of impersonating a user.
-  const periodStart = new Date(Date.now() - rangeDays * 86_400_000);
-  const [applicationRows, hireRows] = await Promise.all([
-    db
-      .select({ appliedAt: applications.appliedAt })
-      .from(applications)
-      .innerJoin(
-        jobs,
-        and(
-          eq(jobs.id, applications.jobId),
-          eq(jobs.workspaceId, workspaceId),
-          isNull(jobs.deletedAt),
-        ),
-      )
-      .where(
-        and(
-          eq(applications.workspaceId, workspaceId),
-          gte(applications.appliedAt, periodStart),
-        ),
-    ),
-    getHiringEvents(workspaceId, { since: periodStart }),
-  ]);
-
-  return {
-    applications: applicationRows.length,
-    hires: hireRows.length,
-  };
+/**
+ * Builds the scheduled email for a workspace. It uses the same assembly as the
+ * Reports page, so the totals in the email match the page for the same range.
+ */
+export async function buildScheduledReport({
+  workspaceId,
+  name,
+  reportType,
+  now = new Date(),
+}: {
+  workspaceId: string;
+  name: string;
+  reportType: "hiring_overview" | "advanced_hiring";
+  now?: Date;
+}): Promise<{
+  data: ReportsData;
+  advanced: AdvancedHiringAnalytics | null;
+  window: ReportWindow;
+  html: string;
+}> {
+  const timeZone = await getWorkspaceTimeZone(workspaceId);
+  const window = resolveWindow(SCHEDULED_REPORT_DAYS, timeZone, now);
+  const data = await loadReportsData({ workspaceId, days: SCHEDULED_REPORT_DAYS, now });
+  const advanced =
+    reportType === "advanced_hiring"
+      ? await getAdvancedHiringAnalytics({ workspaceId, window })
+      : null;
+  return { data, advanced, window, html: renderReportHtml(name, data, advanced) };
 }
 
-function renderReportHtml(name: string, overview: { applications: number; hires: number }, advanced: Awaited<ReturnType<typeof getAdvancedHiringAnalytics>> | null) {
-  const rows = advanced?.stageSla.map((row) => `<tr><td>${escapeHtml(row.stage)}</td><td>${row.transitions}</td><td>${row.averageDays ?? "—"}d</td><td>${row.breached}</td></tr>`).join("") ?? "";
-  return `<h1>${escapeHtml(name)}</h1><p>Applications: <strong>${overview.applications}</strong></p><p>Hires: <strong>${overview.hires}</strong></p>${advanced ? `<h2>Stage SLA</h2><table><tr><th>Stage</th><th>Transitions</th><th>Average</th><th>Breached</th></tr>${rows}</table>` : ""}`;
+function formatDays(value: number | null): string {
+  return value == null ? "No data" : `${Math.round(value)}d`;
+}
+
+function formatPct(value: number | null): string {
+  return value == null ? "—" : `${value}%`;
+}
+
+function renderReportHtml(name: string, data: ReportsData, advanced: AdvancedHiringAnalytics | null) {
+  const { summary, range } = data;
+  const scope = `${range.label} · as of ${data.generatedAt.slice(0, 16).replace("T", " ")} UTC`;
+  const funnelRows = data.funnel
+    .map((stage) => `<tr><td>${escapeHtml(stage.name)}</td><td>${stage.count}</td><td>${formatPct(stage.pct)}</td></tr>`)
+    .join("");
+  const slaRows = advanced?.stageSla
+    .map((row) => `<tr><td>${escapeHtml(row.stage)}</td><td>${row.transitions}</td><td>${row.averageDays == null ? "—" : `${row.averageDays}d`}</td><td>${row.breached}</td></tr>`)
+    .join("") ?? "";
+  return `<h1>${escapeHtml(name)}</h1>`
+    + `<p>${escapeHtml(scope)}</p>`
+    + `<p>Applications received: <strong>${summary.applications}</strong></p>`
+    + `<p>Hires: <strong>${summary.hires}</strong></p>`
+    + `<p>Average time to hire: <strong>${formatDays(summary.avgTimeToHireDays)}</strong></p>`
+    + `<p>Offer acceptance: <strong>${formatPct(summary.offerAcceptRate)}</strong></p>`
+    + `<h2>Funnel (applications received in range)</h2><table><tr><th>Stage</th><th>Reached</th><th>Share</th></tr>${funnelRows}</table>`
+    + (advanced ? `<h2>Stage SLA</h2><table><tr><th>Stage</th><th>Transitions</th><th>Average</th><th>Breached</th></tr>${slaRows}</table>` : "");
 }

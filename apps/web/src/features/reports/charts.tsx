@@ -278,20 +278,19 @@ export function TrendChart({ series }: { series: TrendSeries[] }) {
   );
 }
 
-// ── Pipeline by stage , where active candidates sit right now ────────────────
+// ── Funnel , applications that ever reached each stage kind ──────────────────
 //
-// `count` is a live snapshot (candidates currently sitting in that stage),
-// not a cumulative "reached at least this far" total — a later stage can
-// hold more people than an earlier one just because candidates linger there.
-// Showing an adjacent-stage "% conversion" on top of that would claim a
-// funnel that isn't there (it can read over 100%). So this shows the one
-// thing the data actually supports: how the active pipeline is distributed.
+// `count` is the number of applications received in the range that reached
+// this stage kind at least once (history or current stage). Each share is
+// measured against applications received, so it is a true cumulative share
+// and never a "% of the previous stage". `activeNow` shows where those
+// applications sit today.
 
-export type FunnelDatum = { name: string; count: number; pct: number };
+export type FunnelDatum = { name: string; count: number; pct: number | null; activeNow: number };
 
 export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
   const shouldReduceMotion = useReducedMotion();
-  const total = stages.reduce((s, st) => s + st.count, 0);
+  const total = stages.reduce((s, st) => s + st.activeNow, 0);
   const max = Math.max(1, ...stages.map((s) => s.count));
 
   return (
@@ -313,13 +312,13 @@ export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
           </span>
           <span className="w-20 shrink-0 text-right text-sm tabular-nums">
             <span className="font-semibold text-near-ink">{fmt.format(stage.count)}</span>
-            <span className="text-soft-ink"> · {stage.pct}%</span>
+            <span className="text-soft-ink"> · {stage.pct == null ? "—" : `${stage.pct}%`}</span>
           </span>
         </motion.li>
       ))}
       <li className="flex items-center justify-between border-t border-hairline pt-2 text-xs text-soft-ink">
-        <span>Share of applied currently in each stage</span>
-        <span className="tabular-nums">{fmt.format(total)} active</span>
+        <span>Share of applications received that reached each stage</span>
+        <span className="tabular-nums">{fmt.format(total)} active now</span>
       </li>
     </ul>
   );
@@ -330,16 +329,27 @@ export function FunnelChart({ stages }: { stages: FunnelDatum[] }) {
 export type SourceDatum = {
   source: string;
   label: string;
+  /** Applications received in the range from this source. */
   candidates: number;
   hires: number;
-  conversion: number;
+  /** Null when there were no applications, shown as a dash. */
+  conversion: number | null;
 };
+
+const SORT_LABELS = {
+  candidates: "applications",
+  hires: "hires",
+  conversion: "conversion",
+} as const;
 
 export function SourceBars({ sources }: { sources: SourceDatum[] }) {
   const shouldReduceMotion = useReducedMotion();
   const [sort, setSort] = useState<"candidates" | "hires" | "conversion">("candidates");
   const sorted = useMemo(
-    () => [...sources].sort((a, b) => b[sort] - a[sort]),
+    () =>
+      [...sources].sort(
+        (a, b) => (b[sort] ?? -1) - (a[sort] ?? -1),
+      ),
     [sort, sources],
   );
   const maxC = Math.max(1, ...sources.map((s) => s.candidates));
@@ -366,7 +376,7 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
                   transition={{ type: "spring", stiffness: 500, damping: 35 }}
                 />
               ) : null}
-              {key}
+              {SORT_LABELS[key]}
             </button>
           ))}
         </div>
@@ -390,7 +400,7 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
             </span>
             <span className="flex min-w-0 flex-col gap-1">
               <span className="flex items-baseline justify-between text-[11px] tabular-nums text-soft-ink">
-                <span>{fmt.format(row.candidates)} candidates</span>
+                <span>{fmt.format(row.candidates)} applications</span>
                 <span>{fmt.format(row.hires)} hired</span>
               </span>
               <span className="relative h-5 overflow-hidden rounded-lg bg-warm-paper">
@@ -404,7 +414,9 @@ export function SourceBars({ sources }: { sources: SourceDatum[] }) {
                 />
               </span>
             </span>
-            <span className="w-12 text-right text-sm font-semibold tabular-nums text-near-ink">{row.conversion}%</span>
+            <span className="w-12 text-right text-sm font-semibold tabular-nums text-near-ink">
+              {row.conversion == null ? "—" : `${row.conversion}%`}
+            </span>
           </motion.li>
         ))}
       </ul>

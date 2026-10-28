@@ -36,7 +36,7 @@ export function HiringPerformance({
     { label: "Applications", ...data.metrics.applications },
     { label: "Interviews", ...data.metrics.interviews },
     { label: "Hires", ...data.metrics.hires },
-    { label: "Offer acceptance rate", ...data.metrics.offerAcceptance },
+    { label: "Offer acceptance", ...data.metrics.offerAcceptance },
   ];
 
   return (
@@ -65,7 +65,11 @@ export function HiringPerformance({
       <div className="grid gap-5 px-5 pb-5 pt-4 lg:grid-cols-[minmax(260px,0.9fr)_1.3fr]">
         <div className="grid grid-cols-2 gap-3">
           {kpis.map((kpi) => {
-            const up = kpi.deltaPct >= 0;
+            // A null value or delta means "no data" (for example, no offers were
+            // decided), so it renders as a dash rather than a misleading zero.
+            const delta = kpi.deltaPct;
+            const hasDelta = delta != null;
+            const up = delta != null && delta >= 0;
             return (
               <div
                 key={kpi.label}
@@ -73,22 +77,34 @@ export function HiringPerformance({
               >
                 <p className="truncate text-xs text-muted-foreground">{kpi.label}</p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums">
-                  {kpi.isRate ? `${kpi.value}%` : kpi.value}
+                  {kpi.value == null ? "—" : kpi.isRate ? `${kpi.value}%` : kpi.value}
                 </p>
                 <p
                   className={cn(
                     "mt-1 flex items-center gap-1 text-xs font-medium",
-                    up ? "text-primary" : "text-destructive",
+                    !hasDelta
+                      ? "text-muted-foreground"
+                      : up
+                        ? "text-primary"
+                        : "text-destructive",
                   )}
                 >
-                  {up ? (
-                    <TrendingUp className="size-3.5" strokeWidth={1.8} />
+                  {hasDelta ? (
+                    up ? (
+                      <TrendingUp className="size-3.5" strokeWidth={1.8} />
+                    ) : (
+                      <TrendingDown className="size-3.5" strokeWidth={1.8} />
+                    )
+                  ) : null}
+                  {hasDelta ? (
+                    <>
+                      {up ? "+" : ""}
+                      {kpi.deltaPct}
+                      {kpi.isRate ? "pp" : "%"}
+                    </>
                   ) : (
-                    <TrendingDown className="size-3.5" strokeWidth={1.8} />
+                    "—"
                   )}
-                  {up ? "+" : ""}
-                  {kpi.deltaPct}
-                  {kpi.isRate ? "pp" : "%"}
                   <span className="font-normal text-muted-foreground">
                     vs previous 14 days
                   </span>

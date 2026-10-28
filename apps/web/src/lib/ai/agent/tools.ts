@@ -2314,15 +2314,19 @@ function buildReadTools(ctx: HarlyToolContext) {
     reportsOverview: tool({
       strict: true,
       description:
-        "Get the full recruiting analytics report: headline summary (open roles, total candidates, 90-day applications, hires, avg time-to-hire, offer acceptance), the hiring funnel with conversion %, candidate sources with conversion, and time-to-hire distribution. Use for deep analytics, 'show me the funnel', 'where do candidates drop off', 'time to hire', 'best sources'.",
+        "Get the recruiting analytics report for the last 30 days, the same numbers as the Reports page: applications received, hires, avg time-to-hire, offer acceptance, the funnel by stage (share of applications received), sources with conversion, and the time-to-hire distribution. Open roles is current, and candidates tracked is all time. Use for deep analytics, 'show me the funnel', 'where do candidates drop off', 'time to hire', 'best sources'.",
       inputSchema: z.object({}),
       execute: async () => {
-        const data = await getReportsData();
+        const data = await getReportsData(30);
         return {
+          range: data.range,
+          timeZone: data.timeZone,
+          generatedAt: data.generatedAt,
           summary: data.summary,
           funnel: data.funnel,
           sources: data.sources,
           timeToHire: data.timeToHire,
+          timeToHireStats: data.timeToHireStats,
         };
       },
     }),
