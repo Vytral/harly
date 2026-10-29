@@ -17,10 +17,12 @@ import { JobForm } from "@/features/jobs/JobForm";
 import { JobActionsMenu } from "@/features/jobs/JobActionsMenu";
 import { JobShareButton } from "@/features/jobs/JobShareButton";
 import { JobStatusActions } from "@/features/jobs/JobStatusActions";
+import { StageEditorTrigger } from "@/features/pipeline/stage-editor/StageEditorTrigger";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { countCandidatePool } from "@/features/matching/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { can } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +37,7 @@ export default async function DashboardJobPage({
 }: DashboardJobPageProps) {
   const { jobId } = await params;
   const { organization: workspace } = await getWorkspaceContext();
-  const [result, departments, hiringTeam, workspaceMembers, aiStatus, candidatePoolCount, careerPageData] =
+  const [result, departments, hiringTeam, workspaceMembers, aiStatus, candidatePoolCount, careerPageData, canEditJobs] =
     await Promise.all([
       getDashboardJob(jobId),
       listWorkspaceDepartments(),
@@ -44,6 +46,7 @@ export default async function DashboardJobPage({
       getWorkspaceAiStatus(workspace.id),
       countCandidatePool(workspace.id),
       getCareerPageData(workspace.slug),
+      can("jobs:edit"),
     ]);
 
   if (!result) {
@@ -87,6 +90,13 @@ export default async function DashboardJobPage({
             slug={job.slug}
           />
           <JobStatusActions job={job} />
+          {canEditJobs ? (
+            <StageEditorTrigger
+              jobId={job.id}
+              jobTitle={job.title}
+              className="w-full justify-start"
+            />
+          ) : null}
         </>
       }
     />

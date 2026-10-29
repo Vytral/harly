@@ -6,10 +6,11 @@ import { PipelineJobSelect } from "@/features/pipeline/PipelineJobSelect";
 import { PipelineList } from "@/features/pipeline/PipelineList";
 import { PipelineSummaryCard } from "@/features/pipeline/PipelineSummaryCard";
 import { PipelineViewToggle } from "@/features/pipeline/PipelineViewToggle";
+import { StageEditorTrigger } from "@/features/pipeline/stage-editor/StageEditorTrigger";
 import { getPipelineData, type PipelineData } from "@/features/pipeline/data";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { requirePagePermission } from "@/features/workspaces/permissions-server";
+import { can, requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
@@ -28,9 +29,10 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
   const { job, jobId, view: rawView } = await searchParams;
   const view = rawView === "board" ? "board" : "list";
   const { organization: workspace } = await getWorkspaceContext();
-  const [data, aiStatus] = await Promise.all([
+  const [data, aiStatus, canEditJobs] = await Promise.all([
     getPipelineData(jobId ?? job),
     getWorkspaceAiStatus(workspace.id),
+    can("jobs:edit"),
   ]);
 
   if (data.kind === "empty") {
@@ -50,9 +52,18 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
       <Suspense>
         <PipelineJobSelect jobs={data.jobs} selectedJobId={data.selectedJob.id} />
       </Suspense>
-      {data.stages.length > 0 ? (
-        <PipelineViewToggle jobId={data.selectedJob.id} view={view} />
-      ) : null}
+      <div className="flex items-center gap-2">
+        {canEditJobs ? (
+          <StageEditorTrigger
+            key={data.selectedJob.id}
+            jobId={data.selectedJob.id}
+            jobTitle={data.selectedJob.title}
+          />
+        ) : null}
+        {data.stages.length > 0 ? (
+          <PipelineViewToggle jobId={data.selectedJob.id} view={view} />
+        ) : null}
+      </div>
     </div>
   );
 

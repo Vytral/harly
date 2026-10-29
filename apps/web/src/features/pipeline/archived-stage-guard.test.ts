@@ -20,9 +20,6 @@ const SRC_ROOT = path.resolve(__dirname, "../..");
 const ALLOWLIST: Record<string, string> = {
   "features/pipeline/stage-lifecycle.ts":
     "The lifecycle service must see archived stages to validate merges and show history.",
-  // Temporary: these files are owned by in-flight work and are fixed when it merges.
-  "features/dashboard/applications-board.ts": "TODO(0.3.0): filter options list; fixed at wave-2 merge",
-  "features/dashboard/widgets.ts": "TODO(0.3.0): pipeline overview; fixed at wave-2 merge",
 };
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
