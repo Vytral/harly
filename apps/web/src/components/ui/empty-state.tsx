@@ -99,11 +99,6 @@ function renderAction(action: EmptyStateAction, compact: boolean) {
 }
 
 function isLinkAction(action: EmptyStateAction): action is EmptyStateLinkAction {
-  return (
-    typeof action === "object" &&
-    action !== null &&
-    !isValidElement(action) &&
-    "href" in action &&
-    "label" in action
-  );
+  if (!action || typeof action !== "object") return false;
+  return !isValidElement(action) && "href" in action && "label" in action;
 }

@@ -21,6 +21,8 @@ const userId = "30000000-0000-4000-8000-000000000011";
 vi.mock("@/features/workspaces/context", () => ({
   getWorkspaceContext: vi.fn(async () => ({
     organization: { id: workspaceId },
+    user: { id: userId },
+    roleKey: "owner",
   })),
 }));
 
