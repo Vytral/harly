@@ -28,6 +28,7 @@ vi.mock("@/features/candidates/data", () => ({
 vi.mock("@/features/email-templates/data", () => ({ listEmailTemplates: mocks.listEmailTemplates }));
 vi.mock("@/features/jobs/data", () => ({ listJobOptions: mocks.listJobOptions }));
 vi.mock("@/features/jobs/hiring-team-data", () => ({ listWorkspaceMembers: mocks.listWorkspaceMembers }));
+vi.mock("@/lib/gravatar", () => ({ getWorkspaceGravatarEnabled: vi.fn(async () => false) }));
 vi.mock("@/features/candidates/CandidatesTable", () => ({ CandidatesTable: () => null }));
 vi.mock("@/features/candidates/import/ImportCandidatesDrawer", () => ({ ImportCandidatesDrawer: () => null }));
 vi.mock("@/features/candidates/TrashCandidateActions", () => ({ TrashCandidateActions: () => null }));
