@@ -25,7 +25,7 @@ import {
   requireApplicationPermission,
   requireOfferPermission,
 } from "@/features/workspaces/permissions-server";
-import { getDocumentAccessForUser } from "@/features/documents/access";
+import { resolveDocumentAccessInScope } from "@/features/documents/scope-access";
 import { createLogger } from "@/lib/logger";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
@@ -275,7 +275,7 @@ export async function createOffer(input: {
   if (parsed.data.documentIds.length > 0) {
     const accessible = await Promise.all(
       parsed.data.documentIds.map((documentId) =>
-        getDocumentAccessForUser({
+        resolveDocumentAccessInScope({
           documentId,
           workspaceId,
           userId: context.user.id,

@@ -10,6 +10,7 @@ import {
   db,
   interviews,
   jobs,
+  offers,
   tasks,
 } from "@harly/db";
 
@@ -284,7 +285,13 @@ export async function reapStaleProcessingAgentReceipts(
   });
 }
 
-type ReceiptTargetKey = "applicationId" | "candidateId" | "jobId" | "taskId" | "interviewId";
+type ReceiptTargetKey =
+  | "applicationId"
+  | "candidateId"
+  | "jobId"
+  | "taskId"
+  | "interviewId"
+  | "offerId";
 
 type ReceiptTargets = Partial<Record<ReceiptTargetKey, string>>;
 
@@ -294,6 +301,7 @@ const RECEIPT_TARGET_KEYS: readonly ReceiptTargetKey[] = [
   "jobId",
   "taskId",
   "interviewId",
+  "offerId",
 ];
 
 /**
@@ -333,6 +341,7 @@ async function visibleReceiptRecords(
     jobId: new Set(),
     taskId: new Set(),
     interviewId: new Set(),
+    offerId: new Set(),
   };
   const ws = actor.workspaceId;
   if (wanted.applicationId.length > 0) {
@@ -391,6 +400,22 @@ async function visibleReceiptRecords(
         ),
       );
     for (const row of rows) visible.interviewId.add(row.id);
+  }
+  if (wanted.offerId.length > 0) {
+    // An offer is judged by its job, the same way the offer lists judge it.
+    const rows = await db
+      .select({ id: offers.id })
+      .from(offers)
+      .innerJoin(jobs, eq(jobs.id, offers.jobId))
+      .where(
+        and(
+          eq(offers.workspaceId, ws),
+          eq(jobs.workspaceId, ws),
+          inArray(offers.id, wanted.offerId),
+          jobScopeSql(actor),
+        ),
+      );
+    for (const row of rows) visible.offerId.add(row.id);
   }
   return visible;
 }
@@ -481,6 +506,7 @@ export async function listAgentActionReceipts(input: {
     jobId: [],
     taskId: [],
     interviewId: [],
+    offerId: [],
   };
   if (restricted) {
     for (const targets of targetsByRow) {

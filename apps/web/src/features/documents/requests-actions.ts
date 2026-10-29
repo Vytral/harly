@@ -15,6 +15,7 @@ import {
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { createLogger } from "@/lib/logger";
 import { canReviewRequest } from "./requests-shared";
+import { associationTargetsInScope } from "./scope-access";
 import { reconcileDocumentRequestPackage } from "./requests-service";
 import { resumeWorkflowDocumentWaits } from "@/features/automations/runtime/worker";
 
@@ -30,6 +31,20 @@ async function manageContext(): Promise<
   } catch {
     return { ok: false, error: "You do not have permission to manage documents." };
   }
+}
+
+/**
+ * A document request belongs to its application, so it is in scope exactly when
+ * that application is. Out-of-scope requests read as not found.
+ */
+async function applicationInCallerScope(
+  context: Awaited<ReturnType<typeof requirePermission>>,
+  applicationId: string,
+): Promise<boolean> {
+  return associationTargetsInScope(
+    { workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey },
+    [{ targetType: "application", targetId: applicationId }],
+  );
 }
 
 const requestSchema = z.object({
@@ -76,6 +91,7 @@ export async function requestDocuments(input: {
     )
     .limit(1);
   if (!application) return { ok: false, error: "Application not found." };
+  if (!(await applicationInCallerScope(context, application.id))) return { ok: false, error: "Application not found." };
 
   const dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : null;
 
@@ -166,6 +182,9 @@ export async function reviewDocumentRequest(input: {
     )
     .limit(1);
   if (!request) return { ok: false, error: "Document request not found." };
+  if (!(await applicationInCallerScope(context, request.applicationId))) {
+    return { ok: false, error: "Document request not found." };
+  }
   if (!canReviewRequest(request.status)) {
     return { ok: false, error: "Only a submitted document can be reviewed." };
   }
@@ -225,6 +244,19 @@ export async function waiveDocumentRequest(input: {
 
   const parsed = waiveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid request." };
+  const [target] = await db
+    .select({ applicationId: documentRequests.applicationId })
+    .from(documentRequests)
+    .where(
+      and(
+        eq(documentRequests.workspaceId, context.organization.id),
+        eq(documentRequests.id, parsed.data.requestId),
+      ),
+    )
+    .limit(1);
+  if (!target || !(await applicationInCallerScope(context, target.applicationId))) {
+    return { ok: false, error: "Document request not found." };
+  }
 
   const updated = await db.transaction(async (tx) => {
     const [row] = await tx
@@ -288,6 +320,9 @@ export async function cancelDocumentRequest(input: {
     )
     .limit(1);
   if (!request) return { ok: false, error: "Document request not found." };
+  if (!(await applicationInCallerScope(context, request.applicationId))) {
+    return { ok: false, error: "Document request not found." };
+  }
   if (request.status === "submitted") {
     return { ok: false, error: "This document was already submitted. Decline or accept it instead." };
   }

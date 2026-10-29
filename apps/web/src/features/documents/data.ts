@@ -29,7 +29,8 @@ import {
   getRolePolicy,
 } from "@/features/workspaces/permissions-server";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
-import { getDocumentAccessForUser, type DocumentAccess } from "./access";
+import type { DocumentAccess } from "./access";
+import { resolveDocumentAccessInScope } from "./scope-access";
 import {
   documentAccessIsExplicit,
   resolveDocumentAccessLevel,
@@ -58,9 +59,9 @@ async function callerActor(
 }
 
 /**
- * ACL resolution plus the association rule: access that comes only from the
- * workspace-wide default is withdrawn when every association of the document
- * is outside the caller's scope. Explicit access stays authoritative.
+ * ACL resolution plus the association rule, shared with every document write
+ * through `resolveDocumentAccessInScope`. Access that comes only from the
+ * workspace-wide default is withdrawn when every association is out of scope.
  */
 export async function getDocumentAccess(
   documentId: string,
@@ -70,37 +71,13 @@ export async function getDocumentAccess(
   level: DocumentAccess;
 } | null> {
   const context = input?.workspaceId ? null : await getWorkspaceContext();
-  const workspaceId = input?.workspaceId ?? context!.organization.id;
-  const userId = input?.userId ?? context!.user.id;
-  const roleKey = input?.roleKey ?? context!.roleKey;
-  const access = await getDocumentAccessForUser({ documentId, workspaceId, userId, roleKey });
-  if (!access) return null;
-  if (!access.aclGranted) {
-    const associations = await db
-      .select({
-        targetType: documentAssociations.targetType,
-        targetId: documentAssociations.targetId,
-      })
-      .from(documentAssociations)
-      .where(
-        and(
-          eq(documentAssociations.workspaceId, workspaceId),
-          eq(documentAssociations.documentId, documentId),
-        ),
-      );
-    const actor = await callerActor(workspaceId, userId, roleKey);
-    const visibleTargets = await visibleAssociationTargets(actor, associations);
-    if (
-      documentHiddenByAssociationScope({
-        associations,
-        visibleTargets,
-        aclGranted: false,
-      })
-    ) {
-      return null;
-    }
-  }
-  return { document: access.document, level: access.level };
+  const access = await resolveDocumentAccessInScope({
+    documentId,
+    workspaceId: input?.workspaceId ?? context!.organization.id,
+    userId: input?.userId ?? context!.user.id,
+    roleKey: input?.roleKey ?? context!.roleKey,
+  });
+  return access ? { document: access.document, level: access.level } : null;
 }
 
 export async function listDocumentCategories(): Promise<

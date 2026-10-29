@@ -48,6 +48,7 @@ vi.mock("@/features/workspaces/context", () => ({
   })),
 }));
 
+import { listAgentActionReceipts } from "./action-receipts";
 import { confirmAgentWriteAction, prepareAgentWriteAction, undoAgentWriteAction } from "./write-actions";
 
 describe.skipIf(!runPipelineIntegration)("AI write tools respect job, candidate and task scope (database)", () => {
@@ -218,6 +219,24 @@ describe.skipIf(!runPipelineIntegration)("AI write tools respect job, candidate 
     });
     expect(result.success).toBe(true);
     expect(await noteCount(fx.candidateA)).toBe(before + 1);
+  });
+
+  it("keeps the specific receipt message for a write on an in-scope candidate", async () => {
+    actAs("writer");
+    const actionId = `scope-receipt-${tag}`;
+    const result = await confirmAgentWriteAction(
+      "addCandidateNote",
+      { candidateId: fx.candidateA, body: "Receipt message check" },
+      actionId,
+    );
+    expect(result.success).toBe(true);
+    const receipts = await listAgentActionReceipts({
+      workspaceId: fx.workspaceId,
+      actorId: fx.users.scoped,
+      limit: 20,
+    });
+    const note = receipts.find((row) => row.toolName === "addCandidateNote");
+    expect(note?.message).toBe("Note added.");
   });
 
   it("does not create a task linked to a job outside the caller's scope", async () => {

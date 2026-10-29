@@ -1,5 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { semanticGraphHash } from "@/features/automations/definition/hash";
+import { addCandidateTag, createCandidateNote, createScorecard } from "@/features/candidates/actions";
+import { bulkGenerateAiEvaluationsForJobAction } from "@/features/candidates/ai-actions";
+import { createOffer, decideOffer, sendOffer } from "@/features/offers/actions";
+import { updateApplicationStatus } from "@/features/pipeline/actions";
+import { addToPoolAction, assignFromPoolToJobAction } from "@/features/pool/actions";
+import { createJobForApi } from "@/features/jobs/service";
+import { requirePermission } from "@/features/workspaces/permissions-server";
 
 const mocks = vi.hoisted(() => ({
   getWorkspaceContextOrNull: vi.fn(),
@@ -73,6 +80,11 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
   requireOfferPermission: vi.fn(async () => ({})),
 }));
 vi.mock("@/lib/audit-log", () => ({ logAuditEvent: vi.fn() }));
+vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("@/features/candidates/ai-actions", () => ({
+  bulkGenerateAiEvaluationsForJobAction: vi.fn(),
+  generateAiEvaluationAction: vi.fn(),
+}));
 vi.mock("./action-receipts", () => ({
   reserveAgentAction: mocks.reserveAgentAction,
   getAgentActionReceipt: mocks.getAgentActionReceipt,
@@ -515,6 +527,7 @@ describe("Harly AI task updates", () => {
       success: true,
       error: undefined,
       message: "Action undone.",
+      targets: { applicationId: "11111111-1111-4111-8111-111111111111" },
     });
   });
 
@@ -679,6 +692,169 @@ describe("Harly AI task updates", () => {
     ).resolves.toEqual({
       success: false,
       error: "You do not have permission to perform this action.",
+    });
+  });
+});
+
+const APP_ID = "11111111-1111-4111-8111-111111111111";
+const STAGE_ID = "22222222-2222-4222-8222-222222222222";
+const CANDIDATE_ID = "33333333-3333-4333-8333-333333333333";
+const JOB_ID = "44444444-4444-4444-8444-444444444444";
+const TASK_ID = "55555555-5555-4555-8555-555555555555";
+const OFFER_ID = "66666666-6666-4666-8666-666666666666";
+const INTERVIEW_ID = "77777777-7777-4777-8777-777777777777";
+
+describe("AI write results name the records they changed", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getWorkspaceContextOrNull.mockResolvedValue({
+      organization: { id: "workspace-1" },
+      user: { id: "user-1" },
+      roleKey: "owner",
+    });
+    mocks.getActorPermissions.mockResolvedValue([
+      "jobs:create", "jobs:view", "candidates:view", "candidates:edit", "candidates:move",
+      "candidates:delete", "collab:write", "interviews:manage", "interviews:feedback", "tasks:read",
+      "tasks:write", "offers:manage", "offers:approve", "automations:manage", "reports:read",
+    ]);
+    mocks.getApplicationForApi.mockResolvedValue({ currentStageId: STAGE_ID });
+    mocks.moveApplicationStage.mockResolvedValue({ success: true });
+    mocks.createTask.mockResolvedValue({ success: true, taskId: TASK_ID, updatedAt: "2026-07-20T03:00:00.000Z" });
+    mocks.updateTask.mockResolvedValue({ success: true });
+    mocks.scheduleInterview.mockResolvedValue({ success: true, interviewId: INTERVIEW_ID });
+    mocks.verifyInterviewOutcome.mockResolvedValue({ persisted: true, outcomeStatus: "complete", syncs: [], warnings: [] });
+    mocks.setInterviewStatus.mockResolvedValue({ success: true });
+    mocks.addToPoolAction.mockResolvedValue({ success: true });
+    mocks.createScorecard.mockResolvedValue({ success: true });
+    mocks.getAgentActionReceipt.mockResolvedValue(null);
+    vi.mocked(updateApplicationStatus).mockResolvedValue({ success: true });
+    vi.mocked(createJobForApi).mockResolvedValue({ id: JOB_ID, title: "Platform engineer", slug: "platform-engineer" } as never);
+    vi.mocked(requirePermission).mockResolvedValue({
+      organization: { id: "workspace-1" },
+      user: { id: "user-1", email: "owner@example.test" },
+    } as never);
+    vi.mocked(createCandidateNote).mockResolvedValue({ success: true });
+    vi.mocked(addCandidateTag).mockResolvedValue({ success: true });
+    vi.mocked(createScorecard).mockResolvedValue({ success: true });
+    vi.mocked(createOffer).mockResolvedValue({ success: true });
+    vi.mocked(sendOffer).mockResolvedValue({ success: true });
+    vi.mocked(decideOffer).mockResolvedValue({ success: true });
+    vi.mocked(addToPoolAction).mockResolvedValue({ success: true });
+    vi.mocked(assignFromPoolToJobAction).mockResolvedValue({ success: true });
+    vi.mocked(bulkGenerateAiEvaluationsForJobAction).mockResolvedValue({
+      success: true,
+      succeeded: 2,
+      failed: 0,
+      remaining: 0,
+    } as never);
+  });
+
+  it.each([
+    [
+      "moveCandidateStage",
+      { applicationId: APP_ID, toStageId: STAGE_ID },
+      { applicationId: APP_ID },
+    ],
+    ["rejectCandidate", { applicationId: APP_ID }, { applicationId: APP_ID }],
+    [
+      "createTask",
+      { title: "Follow up", priority: "medium", jobId: JOB_ID, candidateId: null, applicationId: null },
+      { taskId: TASK_ID, jobId: JOB_ID },
+    ],
+    ["updateTask", { taskId: TASK_ID, status: "completed" }, { taskId: TASK_ID }],
+    [
+      "createJob",
+      {
+        title: "Platform engineer",
+        jobSummary: "Build and run the hiring platform services.",
+        sections: [
+          { title: "Responsibilities", bullets: ["Ship features"] },
+          { title: "Requirements", bullets: ["Relevant experience"] },
+        ],
+        department: "Engineering",
+        location: null,
+        employmentType: "full_time",
+        workplaceType: "remote",
+        experienceLevel: null,
+        keywords: [],
+      },
+      { jobId: JOB_ID },
+    ],
+    ["addCandidateNote", { candidateId: CANDIDATE_ID, body: "Strong phone screen" }, { candidateId: CANDIDATE_ID }],
+    ["addCandidateTag", { candidateId: CANDIDATE_ID, label: "referral" }, { candidateId: CANDIDATE_ID }],
+    [
+      "createOffer",
+      {
+        applicationId: APP_ID,
+        title: "Staff engineer",
+        salaryAmount: null,
+        currency: null,
+        salaryPeriod: null,
+        equity: null,
+        startDate: null,
+        expiresAt: null,
+        notes: null,
+      },
+      { applicationId: APP_ID },
+    ],
+    ["sendOffer", { offerId: OFFER_ID }, { offerId: OFFER_ID }],
+    ["decideOffer", { offerId: OFFER_ID, decision: "accepted" }, { offerId: OFFER_ID }],
+    [
+      "scheduleInterview",
+      {
+        candidateId: CANDIDATE_ID,
+        applicationId: APP_ID,
+        type: "screening",
+        mode: "video",
+        scheduledAt: "2026-07-21T13:00:00.000Z",
+        interviewerId: null,
+        durationMins: 45,
+        meetingProvider: "auto",
+        sendEmail: true,
+      },
+      { interviewId: INTERVIEW_ID, candidateId: CANDIDATE_ID, applicationId: APP_ID },
+    ],
+    ["addToTalentPool", { candidateId: CANDIDATE_ID }, { candidateId: CANDIDATE_ID }],
+    [
+      "assignFromPoolToJob",
+      { candidateId: CANDIDATE_ID, jobId: JOB_ID },
+      { candidateId: CANDIDATE_ID, jobId: JOB_ID },
+    ],
+    [
+      "createScorecard",
+      { candidateId: CANDIDATE_ID, applicationId: APP_ID, rating: "strong" },
+      { candidateId: CANDIDATE_ID, applicationId: APP_ID },
+    ],
+    ["bulkScoreJob", { jobId: JOB_ID, jobTitle: "Platform engineer" }, { jobId: JOB_ID }],
+  ])("%s returns the record ids its result changed", async (tool, input, targets) => {
+    await expect(confirmAgentWriteAction(tool, input)).resolves.toMatchObject({
+      targets,
+    });
+  });
+
+  it("names the record a stage-move undo reverses", async () => {
+    mocks.getAgentActionReceipt.mockResolvedValue({
+      toolName: "moveCandidateStage",
+      result: {
+        success: true,
+        undo: {
+          kind: "moveCandidateStage",
+          applicationId: APP_ID,
+          expectedCurrentStageId: STAGE_ID,
+          previousStageId: "99999999-9999-4999-8999-999999999999",
+        },
+      },
+    });
+    mocks.reserveAgentAction.mockResolvedValue({
+      kind: "reserved",
+      receiptId: "undo-receipt-2",
+      complete: vi.fn().mockResolvedValue(undefined),
+    });
+    mocks.moveApplicationStage.mockResolvedValue({ success: true });
+
+    await expect(undoAgentWriteAction("receipt-2")).resolves.toMatchObject({
+      success: true,
+      targets: { applicationId: APP_ID },
     });
   });
 });

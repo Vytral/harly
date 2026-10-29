@@ -96,6 +96,21 @@ import { getAutomationToolManifestV2 } from "@/features/automations/registry";
 
 type WriteResult = ActionReceiptResult;
 
+/**
+ * The record ids a write result names, for the receipt feed. A restricted caller
+ * sees a receipt's message only when every id it names is inside their scope, so
+ * each write declares the records it changed. Empty ids are dropped.
+ */
+function recordTargets(
+  targets: Record<string, string | null | undefined>,
+): Record<string, string> {
+  const named: Record<string, string> = {};
+  for (const [key, value] of Object.entries(targets)) {
+    if (typeof value === "string" && value.length > 0) named[key] = value;
+  }
+  return named;
+}
+
 export type AgentWritePreview = {
   ok: boolean;
   canonical?: boolean;
@@ -1104,6 +1119,7 @@ const HANDLERS = {
         success: res.success,
         error: res.error,
         message: "Stage updated.",
+        targets: recordTargets({ applicationId: input.applicationId }),
         ...(res.success && before.currentStageId
           ? {
               undo: {
@@ -1133,6 +1149,7 @@ const HANDLERS = {
         success: res.success,
         error: res.error,
         message: "Candidate rejected.",
+        targets: recordTargets({ applicationId: input.applicationId }),
       };
     },
   },
@@ -1159,6 +1176,12 @@ const HANDLERS = {
         success: res.success,
         error: res.error,
         message: "Task created.",
+        targets: recordTargets({
+          taskId: res.success ? res.taskId : undefined,
+          candidateId: input.candidateId,
+          applicationId: input.applicationId,
+          jobId: input.jobId,
+        }),
         ...(res.success && res.taskId ? { taskId: res.taskId } : {}),
         ...(res.success && res.taskId && res.updatedAt
           ? {
@@ -1206,6 +1229,7 @@ const HANDLERS = {
         success: res.success,
         error: res.error,
         message: "Task updated.",
+        targets: recordTargets({ taskId: input.taskId }),
       };
     },
   },
@@ -1269,7 +1293,11 @@ const HANDLERS = {
         metadata: { title: job.title, slug: job.slug, source: "harly_ai" },
       });
       revalidatePath("/dashboard/jobs");
-      return { success: true, message: `Draft job created: ${job.title}.` };
+      return {
+        success: true,
+        message: `Draft job created: ${job.title}.`,
+        targets: recordTargets({ jobId: job.id }),
+      };
     },
   },
 
@@ -1284,7 +1312,12 @@ const HANDLERS = {
         workspaceId: ctx.workspaceId,
         body: input.body,
       });
-      return { success: res.success, error: res.error, message: "Note added." };
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Note added.",
+        targets: recordTargets({ candidateId: input.candidateId }),
+      };
     },
   },
 
@@ -1299,7 +1332,12 @@ const HANDLERS = {
         workspaceId: ctx.workspaceId,
         label: input.label,
       });
-      return { success: res.success, error: res.error, message: "Tag added." };
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Tag added.",
+        targets: recordTargets({ candidateId: input.candidateId }),
+      };
     },
   },
 
@@ -1323,6 +1361,7 @@ const HANDLERS = {
         success: res.success,
         error: res.error,
         message: "Offer drafted.",
+        targets: recordTargets({ applicationId: input.applicationId }),
       };
     },
   },
@@ -1331,7 +1370,12 @@ const HANDLERS = {
     schema: offerIdSchema,
     run: async (input: z.infer<typeof offerIdSchema>): Promise<WriteResult> => {
       const res = await sendOffer({ offerId: input.offerId });
-      return { success: res.success, error: res.error, message: "Offer sent." };
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Offer sent.",
+        targets: recordTargets({ offerId: input.offerId }),
+      };
     },
   },
 
@@ -1348,6 +1392,7 @@ const HANDLERS = {
         success: res.success,
         error: res.error,
         message: `Offer marked ${input.decision}.`,
+        targets: recordTargets({ offerId: input.offerId }),
       };
     },
   },
@@ -1400,6 +1445,11 @@ const HANDLERS = {
         success: res.success,
         error: res.error,
         message: res.warning ? `${message} ${res.warning}` : message,
+        targets: recordTargets({
+          interviewId: res.success ? res.interviewId : undefined,
+          candidateId: input.candidateId,
+          applicationId: input.applicationId,
+        }),
         ...(res.success
           ? {
               interviewId: res.interviewId,
@@ -1438,6 +1488,7 @@ const HANDLERS = {
         success: res.success,
         error: res.success ? undefined : res.error,
         message: "Added to talent pool.",
+        targets: recordTargets({ candidateId: input.candidateId }),
       };
     },
   },
@@ -1455,6 +1506,7 @@ const HANDLERS = {
         success: res.success,
         error: res.success ? undefined : res.error,
         message: "Assigned to job.",
+        targets: recordTargets({ candidateId: input.candidateId, jobId: input.jobId }),
       };
     },
   },
@@ -1477,6 +1529,7 @@ const HANDLERS = {
         success: res.success,
         error: res.error,
         message: "Scorecard added.",
+        targets: recordTargets({ candidateId: input.candidateId, applicationId: input.applicationId }),
       };
     },
   },
@@ -1516,7 +1569,12 @@ const HANDLERS = {
         subject: input.subject,
         body: input.body,
       });
-      return { success: res.success, error: res.error, message: "Email sent." };
+      return {
+        success: res.success,
+        error: res.error,
+        message: "Email sent.",
+        targets: recordTargets({ candidateId: input.candidateId }),
+      };
     },
   },
 
@@ -1565,6 +1623,7 @@ const HANDLERS = {
       return {
         success: true,
         message: `AI evaluation generated for ${input.candidateName}.`,
+        targets: recordTargets({ applicationId: input.applicationId }),
         evaluation: {
           candidateName: input.candidateName,
           jobTitle: input.jobTitle,
@@ -1596,6 +1655,7 @@ const HANDLERS = {
       return {
         success: true,
         message: `Scored ${result.succeeded} applicants for ${input.jobTitle}.`,
+        targets: recordTargets({ jobId: input.jobId }),
         succeeded: result.succeeded,
         failed: result.failed,
         remaining: result.remaining,
@@ -1958,6 +2018,12 @@ export async function undoAgentWriteAction(
       success: result.success,
       error: result.error,
       message: result.success ? "Action undone." : result.error,
+      targets:
+        undo.kind === "moveCandidateStage"
+          ? recordTargets({ applicationId: undo.applicationId })
+          : undo.kind === "deleteTask"
+            ? recordTargets({ taskId: undo.taskId })
+            : recordTargets({ interviewId: undo.interviewId, candidateId: undo.candidateId }),
     };
     await reservation.complete(normalized);
     await logAuditEvent({

@@ -11,7 +11,7 @@ import {
   workspaceSettings,
 } from "@harly/db";
 
-import { getDocumentAccessForUser } from "./access";
+import { resolveDocumentAccessInScope } from "./scope-access";
 import { requirePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import type { SignaturePlacement } from "@/lib/esign/native/bake";
@@ -111,7 +111,7 @@ export async function signDocumentNatively(input: unknown): Promise<NativeSignRe
   }
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid signature details." };
-  const access = await getDocumentAccessForUser({
+  const access = await resolveDocumentAccessInScope({
     documentId: parsed.data.documentId,
     workspaceId: context.organization.id,
     userId: context.user.id,
@@ -172,7 +172,7 @@ export async function sendDocumentForNativeSignature(input: unknown) {
   try { context = await requirePermission("documents:manage"); } catch { return { ok: false, error: "You do not have permission to send documents for signing." }; }
   const parsed = z.object({ documentId: z.uuid(), recipientEmail: z.email().optional(), recipientName: z.string().trim().min(1).max(200).optional(), recipients: z.array(recipientSchema).min(1).max(10).optional(), subject: z.string().trim().max(255).optional(), message: z.string().trim().max(4000).nullable().optional() }).safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid recipient details." };
-  const access = await getDocumentAccessForUser({ documentId: parsed.data.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  const access = await resolveDocumentAccessInScope({ documentId: parsed.data.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot send this document for signing." };
   if (access.document.status !== "active") return { ok: false, error: "Archived documents cannot be sent for signing." };
   if (access.document.signatureStatus !== "unsigned") return { ok: false, error: "This document already has a signature workflow." };
@@ -242,7 +242,7 @@ export async function saveDocumentSignatureFieldsAndSend(input: unknown) {
   }
   if ([...recipientIndexes].some((index) => index >= recipients.length)) return { ok: false, error: "Every field must be assigned to an existing recipient." };
 
-  const access = await getDocumentAccessForUser({ documentId: parsed.data.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
+  const access = await resolveDocumentAccessInScope({ documentId: parsed.data.documentId, workspaceId: context.organization.id, userId: context.user.id, roleKey: context.roleKey });
   if (!access || access.level !== "manage") return { ok: false, error: "You cannot send this document for signing." };
   if (access.document.status !== "active") return { ok: false, error: "Archived documents cannot be sent for signing." };
   if (access.document.signatureStatus !== "unsigned") return { ok: false, error: "This document already has a signature workflow." };
