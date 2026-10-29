@@ -1030,7 +1030,13 @@ export async function getCandidateProfile(candidateId: string) {
     .orderBy(desc(applications.appliedAt));
 
   if (restricted && candidateApplications.length === 0) {
-    return null;
+    // No in-scope application: only a candidate this user created stays visible.
+    const [visible] = await db
+      .select({ id: candidates.id })
+      .from(candidates)
+      .where(and(eq(candidates.id, candidate.id), candidateScopeSql(actor, candidates.id)))
+      .limit(1);
+    if (!visible) return null;
   }
   const scopedApplicationIds = new Set(candidateApplications.map((application) => application.id));
   // Rows tied to an application are kept only when that application is in the

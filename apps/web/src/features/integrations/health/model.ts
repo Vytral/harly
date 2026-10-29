@@ -132,7 +132,9 @@ const QUOTA_REASONS = new Set([
  * matches. Any 403 without one of these reasons is `other`.
  */
 const CREDENTIAL_403_BY_KEY: Partial<Record<IntegrationHealthKey, readonly string[]>> = {
-  gcal: ["insufficientPermissions", "authError", "forbidden"],
+  // "forbidden" is deliberately absent: it also means the account lost access to
+  // one shared calendar while its token is still valid.
+  gcal: ["insufficientPermissions", "authError"],
   outlook: ["InvalidAuthenticationToken", "Authorization_RequestDenied", "AccessDenied"],
   telegram: ["Unauthorized", "Forbidden: bot was kicked"],
 };

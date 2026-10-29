@@ -606,6 +606,12 @@ async function computeDailyCounts(
         on j.id = i.job_id and j.workspace_id = i.workspace_id and j.deleted_at is null
       where i.workspace_id = ${workspaceId}
         and i.status <> 'canceled'
+        and not exists (
+          select 1 from sample_data_items s
+          where s.workspace_id = i.workspace_id
+            and s.entity_type = 'interview'
+            and s.entity_id = i.id
+        )
         and i.scheduled_at >= ${at(window.from)} and i.scheduled_at < ${at(window.to)}
       group by 1
     `);

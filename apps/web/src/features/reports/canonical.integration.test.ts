@@ -214,6 +214,25 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
     expect((await getHireStats({ workspaceId: fx.workspaceId, window: WINDOW })).hires).toBe(1);
   });
 
+  it("keeps tracked sample interviews out of the interview series", async () => {
+    await loadSampleData({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.userId,
+      now: new Date(Date.UTC(2026, 0, 20, 12)),
+    });
+    const tracked = await db
+      .select({ id: sampleDataItems.entityId })
+      .from(sampleDataItems)
+      .where(and(eq(sampleDataItems.workspaceId, fx.workspaceId), eq(sampleDataItems.entityType, "interview")));
+    expect(tracked.length).toBeGreaterThan(0);
+    for (const row of tracked) {
+      await db.update(interviews).set({ scheduledAt: day(10), status: "scheduled" }).where(eq(interviews.id, row.id));
+    }
+
+    const series = await getDailySeries({ workspaceId: fx.workspaceId, window: { ...WINDOW, days: 31 } }, "interviews");
+    expect(series.reduce((sum, point) => sum + point.count, 0)).toBe(0);
+  });
+
   it("counts a hire once, dated by the latest transition into a hired-kind stage", async () => {
     const app = await application({ stageId: stages.applied!.id, appliedAt: day(5), status: "hired" });
     await move(app.applicationId, stages.hired!.id, day(15));

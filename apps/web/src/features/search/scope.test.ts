@@ -111,9 +111,18 @@ describe("SQL scope predicates", () => {
     const { sql: text } = compile(
       candidateScopeSql(actor({ ...ALL, departments: ["Eng"] }), candidates.id)!,
     );
-    expect(text.startsWith("exists (select 1 from")).toBe(true);
+    expect(text.startsWith("(exists (select 1 from")).toBe(true);
     expect(text).toContain('"applications"."candidate_id" = "candidates"."id"');
     expect(text).toContain('"jobs"."deleted_at" is null');
+  });
+
+  it("keeps a candidate visible to the restricted user who created it", () => {
+    const { sql: text } = compile(
+      candidateScopeSql(actor({ ...ALL, departments: ["Eng"] }), candidates.id)!,
+    );
+    expect(text).toContain("'candidate.created'");
+    expect(text).toContain('"audit_logs"."resource_id" = "candidates"."id"::text');
+    expect(text).toContain('"audit_logs"."actor_id" =');
   });
 
   it("keeps owned and created tasks visible alongside the linked-job paths", () => {

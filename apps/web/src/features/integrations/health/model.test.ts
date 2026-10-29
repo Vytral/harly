@@ -262,6 +262,7 @@ describe("403 classification reads the structured reason", () => {
     ["Google rate limit", "gcal", googleError(403, "rateLimitExceeded", "PERMISSION_DENIED"), "transient"],
     ["Google scope problem", "gcal", googleError(403, "insufficientPermissions", "PERMISSION_DENIED"), "auth"],
     ["Google authError reason", "gcal", googleError(403, "authError", "PERMISSION_DENIED"), "auth"],
+    ["Google calendar access lost for one shared calendar", "gcal", googleError(403, "forbidden", "PERMISSION_DENIED", "Forbidden"), "other"],
     ["Google 403 without a credential reason", "gcal", googleError(403, "notFound", "PERMISSION_DENIED", "Not Found"), "other"],
     ["Graph expired token", "outlook", graphError(403, "InvalidAuthenticationToken", "Access token has expired."), "auth"],
     ["Graph request denied", "outlook", graphError(403, "Authorization_RequestDenied", "Insufficient privileges."), "auth"],

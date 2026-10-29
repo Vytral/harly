@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { activityEvents, candidateReferrals, db, scorecards } from "@harly/db";
+import { activityEvents, auditLogs, candidateReferrals, candidates, db, scorecards } from "@harly/db";
 
 import {
   createAuthorizationFixture,
@@ -165,5 +165,34 @@ describe.skipIf(!runPipelineIntegration)("candidate profile: role scope (databas
     expect(ids).toEqual(
       expect.arrayContaining([linked.referralToA, linked.referralToB, linked.activityOnA, linked.activityOnB, linked.activityUnlinked]),
     );
+  });
+
+  it("keeps a candidate without applications visible only to the restricted user who created it", async () => {
+    const mine = await db
+      .insert(candidates)
+      .values({ workspaceId: fx.workspaceId, firstName: "Mine", lastName: "Fresh", email: `mine-${fx.workspaceId}@example.test` })
+      .returning({ id: candidates.id });
+    const theirs = await db
+      .insert(candidates)
+      .values({ workspaceId: fx.workspaceId, firstName: "Theirs", lastName: "Fresh", email: `theirs-${fx.workspaceId}@example.test` })
+      .returning({ id: candidates.id });
+    await db.insert(auditLogs).values({
+      workspaceId: fx.workspaceId,
+      actorId: fx.users.scoped,
+      action: "candidate.created",
+      resourceType: "candidate",
+      resourceId: mine[0].id,
+    });
+    await db.insert(auditLogs).values({
+      workspaceId: fx.workspaceId,
+      actorId: fx.users.full,
+      action: "candidate.created",
+      resourceType: "candidate",
+      resourceId: theirs[0].id,
+    });
+
+    actAs("scoped");
+    expect(await getCandidateProfile(mine[0].id)).not.toBeNull();
+    expect(await getCandidateProfile(theirs[0].id)).toBeNull();
   });
 });

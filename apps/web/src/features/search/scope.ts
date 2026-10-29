@@ -4,6 +4,7 @@ import { and, eq, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import {
   applications,
+  auditLogs,
   jobHiringTeam,
   jobs,
   tasks,
@@ -111,7 +112,13 @@ export function candidateScopeSql(
   candidateId: AnyColumn,
 ): SQL | undefined {
   if (isUnrestrictedScope(actor.scope)) return undefined;
-  return sql`exists (select 1 from ${applications} inner join ${jobs} on ${jobs.id} = ${applications.jobId} where ${applications.candidateId} = ${candidateId} and ${applications.workspaceId} = ${actor.workspaceId} and ${jobs.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${sql.join(restrictedJobClauses(actor), sql` and `)})`;
+  // A restricted user also keeps the candidates they created themselves, so a
+  // new candidate does not vanish before its first application. This mirrors
+  // `requireCandidatePermission` (there is no creator column; the audit record
+  // of the creation is the source).
+  const createdByActor = sql`exists (select 1 from ${auditLogs} where ${auditLogs.workspaceId} = ${actor.workspaceId} and ${auditLogs.action} = 'candidate.created' and ${auditLogs.resourceType} = 'candidate' and ${auditLogs.resourceId} = ${candidateId}::text and ${auditLogs.actorId} = ${actor.userId})`;
+  const throughApplication = sql`exists (select 1 from ${applications} inner join ${jobs} on ${jobs.id} = ${applications.jobId} where ${applications.candidateId} = ${candidateId} and ${applications.workspaceId} = ${actor.workspaceId} and ${jobs.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${sql.join(restrictedJobClauses(actor), sql` and `)})`;
+  return sql`(${throughApplication} or ${createdByActor})`;
 }
 
 /**

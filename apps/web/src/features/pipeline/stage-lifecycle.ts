@@ -100,6 +100,31 @@ async function countsByStage(
   return new Map(rows.map((row) => [row.stageId, Number(row.total)]));
 }
 
+/**
+ * Transitions already recorded into or out of a stage. Reports date hires from
+ * these rows using the stage's kind, so a terminal kind cannot be rewritten
+ * once history refers to the stage.
+ */
+async function countHistoryReferences(
+  executor: Executor,
+  scope: JobScope,
+  stageId: string,
+): Promise<number> {
+  const [row] = await executor
+    .select({ total: count() })
+    .from(applicationStageHistory)
+    .where(
+      and(
+        eq(applicationStageHistory.workspaceId, scope.workspaceId),
+        or(
+          eq(applicationStageHistory.toStageId, stageId),
+          eq(applicationStageHistory.fromStageId, stageId),
+        ),
+      ),
+    );
+  return Number(row?.total ?? 0);
+}
+
 async function countApplicationsInStage(
   executor: Executor,
   scope: JobScope,
@@ -516,6 +541,14 @@ export async function updateStage(
         throw ApiError.conflict(
           `This stage holds ${applicationCount} application(s). Changing its kind would move them to or from an outcome, which needs a merge. Archive the stage with mergeIntoStageId pointing at a stage of the matching kind instead.`,
         );
+      }
+      if (isTerminalStageKind(currentKind) || isTerminalStageKind(nextKind)) {
+        const historyRows = await countHistoryReferences(tx, input, stage.id);
+        if (historyRows > 0) {
+          throw ApiError.conflict(
+            "Applications have already moved through this stage, and reports date hires and rejections from that history. Changing its kind to or from an outcome would rewrite it. Create a new stage of the kind you want and archive this one instead.",
+          );
+        }
       }
     }
 
