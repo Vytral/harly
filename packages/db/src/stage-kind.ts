@@ -67,9 +67,25 @@ export function isStageKind(value: unknown): value is StageKind {
   );
 }
 
+/**
+ * Characters ignored at either end of a stage name when classifying it. An
+ * explicit set (rather than JavaScript's `trim()` vs Postgres `btrim()`, which
+ * disagree about tabs, newlines and no-break spaces) keeps TypeScript, the SQL
+ * helpers and the 0154 backfill migration in exact agreement.
+ */
+export const STAGE_NAME_TRIM_CHARS = " \t\n\r\f\v\u00a0";
+
+function trimStageName(name: string): string {
+  let start = 0;
+  let end = name.length;
+  while (start < end && STAGE_NAME_TRIM_CHARS.includes(name[start])) start += 1;
+  while (end > start && STAGE_NAME_TRIM_CHARS.includes(name[end - 1])) end -= 1;
+  return name.slice(start, end);
+}
+
 /** Classify a stage by its legacy display name. Unknown names are `custom`. */
 export function inferStageKindFromName(name: string): StageKind {
-  return LEGACY_STAGE_NAME_KINDS[name.trim().toLowerCase()] ?? "custom";
+  return LEGACY_STAGE_NAME_KINDS[trimStageName(name).toLowerCase()] ?? "custom";
 }
 
 export type StageKindSource = {
@@ -228,7 +244,7 @@ export function effectiveStageKindSql(stage: {
   const branches = Object.entries(LEGACY_STAGE_NAME_KINDS).map(
     ([name, kind]) => sql`when ${name} then ${kind}`,
   );
-  return sql<StageKind>`coalesce(${stage.kind}::text, case lower(btrim(${stage.name})) ${sql.join(branches, sql` `)} else 'custom' end)`;
+  return sql<StageKind>`coalesce(${stage.kind}::text, case lower(btrim(${stage.name}, ${STAGE_NAME_TRIM_CHARS})) ${sql.join(branches, sql` `)} else 'custom' end)`;
 }
 
 /** SQL predicate: the stage is of the given kind (NULL-kind rows included). */

@@ -16,6 +16,7 @@ import {
   loadHarlyConfig,
   validateRuntimeFilesystem,
 } from "../../../packages/config/src/index";
+import { migrationLockTimeoutMs } from "./migration-settings";
 
 const command = process.argv[2] ?? "serve";
 
@@ -129,9 +130,24 @@ async function runMigrations() {
       await new Promise((resolve) => setTimeout(resolve, 2_000));
     }
     try {
-      await migrate(drizzle(client), {
-        migrationsFolder: process.env.HARLY_MIGRATIONS_DIR ?? "/app/migrations",
-      });
+      // The pool holds one connection, so this session setting applies to every
+      // statement the migrator runs.
+      const lockTimeoutMs = migrationLockTimeoutMs();
+      await client.unsafe(`set lock_timeout = ${lockTimeoutMs}`);
+      try {
+        await migrate(drizzle(client), {
+          migrationsFolder: process.env.HARLY_MIGRATIONS_DIR ?? "/app/migrations",
+        });
+      } catch (error) {
+        if ((error as { code?: string } | null)?.code === "55P03") {
+          throw new Error(
+            `A migration could not get a table lock within ${lockTimeoutMs} ms because other queries were holding it. ` +
+              "Nothing was changed (migrations run in a single transaction). Retry during a quieter period, or raise HARLY_MIGRATION_LOCK_TIMEOUT_MS.",
+            { cause: error },
+          );
+        }
+        throw error;
+      }
       jsonLog("info", "migrations.complete", { version: config.HARLY_VERSION });
     } finally {
       await client`select pg_advisory_unlock(${MIGRATION_LOCK_KEY})`;

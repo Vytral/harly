@@ -28,13 +28,9 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 --> statement-breakpoint
-DROP TRIGGER IF EXISTS applications_stage_active_guard_insert ON applications;
---> statement-breakpoint
 CREATE TRIGGER applications_stage_active_guard_insert
   BEFORE INSERT ON applications
   FOR EACH ROW EXECUTE FUNCTION enforce_application_stage_active();
---> statement-breakpoint
-DROP TRIGGER IF EXISTS applications_stage_active_guard_update ON applications;
 --> statement-breakpoint
 CREATE TRIGGER applications_stage_active_guard_update
   BEFORE UPDATE OF current_stage_id ON applications

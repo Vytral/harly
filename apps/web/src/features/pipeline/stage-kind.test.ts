@@ -39,6 +39,15 @@ describe("stage kind inference", () => {
     expect(inferStageKindFromName("Offer")).toBe("offer");
   });
 
+  it("ignores tabs, newlines and no-break spaces around a name, like the SQL helper does", () => {
+    for (const padded of ["Hired\t", "\tHired\n", "\u00a0Hired\u00a0", " \r\f\vHired "]) {
+      expect(inferStageKindFromName(padded)).toBe("hired");
+    }
+    // Only the ends are trimmed, and only the documented characters.
+    expect(inferStageKindFromName("Hi\tred")).toBe("custom");
+    expect(inferStageKindFromName("Hired\u200b")).toBe("custom");
+  });
+
   it("treats unknown names as custom", () => {
     expect(inferStageKindFromName("Phone screen")).toBe("custom");
     expect(inferStageKindFromName("Hired (pending)")).toBe("custom");
