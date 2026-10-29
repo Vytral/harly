@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 
-import { applications, db, jobStages } from "@harly/db";
+import { applications, db, jobStages, member } from "@harly/db";
 
 import {
   createPipelineFixture,
@@ -16,6 +16,17 @@ describe.skipIf(!runPipelineIntegration)("automation move_stage by stage name", 
 
   beforeAll(async () => {
     fx = await createPipelineFixture();
+    // Automations act as their creator, and the handler resolves that creator's
+    // role. The fixture owner is an owner (all-powerful) member.
+    const now = new Date();
+    await db.insert(member).values({
+      id: `move-stage-owner-${fx.workspaceId}`,
+      organizationId: fx.workspaceId,
+      userId: fx.userId,
+      role: "owner",
+      createdAt: now,
+      updatedAt: now,
+    });
   });
   afterAll(async () => {
     await fx?.cleanup();

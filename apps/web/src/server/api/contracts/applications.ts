@@ -112,7 +112,7 @@ export const moveApplicationContract = defineContract({
   operationId: "moveApplication",
   summary: "Move application",
   tags: ["Applications"],
-  auth: { scopes: ["applications:write"] },
+  auth: { scopes: ["applications:write"], keyTypes: ["secret"] },
   idempotent: true,
   parameters: { path: applicationPath },
   requestBody: applicationMoveSchema,
@@ -131,7 +131,7 @@ export const rejectApplicationContract = defineContract({
   operationId: "rejectApplication",
   summary: "Reject application",
   tags: ["Applications"],
-  auth: { scopes: ["applications:write"] },
+  auth: { scopes: ["applications:write"], keyTypes: ["secret"] },
   idempotent: true,
   parameters: { path: applicationPath },
   responses: {
@@ -148,7 +148,7 @@ export const hireApplicationContract = defineContract({
   operationId: "hireApplication",
   summary: "Hire application",
   tags: ["Applications"],
-  auth: { scopes: ["applications:write"] },
+  auth: { scopes: ["applications:write"], keyTypes: ["secret"] },
   idempotent: true,
   parameters: { path: applicationPath },
   responses: {
@@ -165,7 +165,7 @@ export const bulkApplicationsContract = defineContract({
   operationId: "bulkCreateApplications",
   summary: "Bulk create applications",
   tags: ["Applications"],
-  auth: { scopes: ["applications:write"] },
+  auth: { scopes: ["applications:write"], keyTypes: ["secret"] },
   idempotent: true,
   requestBody: applicationBulkCreateSchema,
   responses: {

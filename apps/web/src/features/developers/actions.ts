@@ -4,7 +4,11 @@ import { revalidatePath } from "next/cache";
 
 import { db, webhookDeliveries } from "@harly/db";
 
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import {
+  getRolePermissions,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
+import { missingScopePermissions } from "@/features/developers/api-key-permissions";
 import { createLogger } from "@/lib/logger";
 import { dispatchDueWebhooks } from "@/server/webhooks/dispatch";
 
@@ -40,9 +44,19 @@ export async function createApiKeyAction(input: {
 }): Promise<DevActionResult & { raw?: string }> {
   assertNotDemo();
   try {
-    const { organization, user } = await requirePermission(
+    const { organization, user, roleKey } = await requirePermission(
       "integrations:manage",
     );
+    // A key can only carry scopes the creator could exercise in the app.
+    const held = await getRolePermissions(organization.id, roleKey);
+    const missing = missingScopePermissions(input.scopes, held);
+    if (missing.length > 0) {
+      const names = missing.map((item) => item.scope).join(", ");
+      return {
+        ok: false,
+        error: `Your role cannot grant these scopes: ${names}.`,
+      };
+    }
     const expiresAt =
       input.expiresInDays && input.expiresInDays > 0
         ? new Date(Date.now() + input.expiresInDays * 86_400_000)

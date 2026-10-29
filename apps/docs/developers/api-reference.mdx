@@ -27,7 +27,9 @@ API keys have the format `harly_{type}_{env}_{secret}`:
 Example secret key: `harly_sk_live_AbCdEf123...`
 
 Publishable keys (`pk`) are limited to `jobs:read` and `applications:write` —
-the subset safe to expose in a browser. Use secret keys for all server-side
+the subset safe to expose in a browser. Even with `applications:write`, a
+publishable key can only create applications; moving, rejecting, hiring, and
+bulk-creating require a secret key. Use secret keys for all server-side
 integrations.
 
 ## Resources

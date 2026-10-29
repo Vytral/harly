@@ -1,7 +1,9 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 
-import { db, tasks } from "@harly/db";
+import { and, eq } from "drizzle-orm";
+
+import { db, jobStages, tasks } from "@harly/db";
 
 import {
   createAuthorizationFixture,
@@ -145,6 +147,32 @@ describe.skipIf(!runPipelineIntegration)("dashboard widgets: permission and scop
     actAs("full");
     const overview = await getPipelineOverview(fx.jobA);
     expect(overview.stages.map((stage) => stage.name)).not.toContain(fx.archivedStageName);
+  });
+
+  it("funnel hides the rejected lane by stage kind, not by its name", async () => {
+    // Job with no applications, so the lane changes are isolated to this test.
+    const [rejectedLane] = await db
+      .select({ id: jobStages.id })
+      .from(jobStages)
+      .where(
+        and(
+          eq(jobStages.jobId, fx.jobUnassignedEmpty),
+          eq(jobStages.kind, "rejected"),
+        ),
+      );
+    await db.update(jobStages).set({ name: "Not a fit" }).where(eq(jobStages.id, rejectedLane!.id));
+    await db.insert(jobStages).values({
+      workspaceId: fx.workspaceId,
+      jobId: fx.jobUnassignedEmpty,
+      name: "Rejected",
+      kind: "custom",
+      order: 90,
+    });
+
+    actAs("full");
+    const names = (await getPipelineOverview(fx.jobUnassignedEmpty)).stages.map((stage) => stage.name);
+    expect(names).not.toContain("Not a fit");
+    expect(names).toContain("Rejected");
   });
 
   it("inbox: unauthorized gets nothing, scoped sees in-scope items, draft approvals need the job in scope", async () => {

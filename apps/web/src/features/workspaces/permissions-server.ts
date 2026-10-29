@@ -6,6 +6,7 @@ import { and, eq, isNull } from "drizzle-orm";
 
 import { db } from "@harly/db";
 import {
+  auditLogs,
   customRoles,
   jobs,
   applications,
@@ -23,6 +24,7 @@ import {
   getWorkspaceContextOrNull,
   type WorkspaceContext,
 } from "@/features/workspaces/context";
+import { isUnrestrictedScope } from "@/features/search/scope";
 import {
   BUILTIN_ROLES,
   BUILTIN_ROLE_PERMISSIONS,
@@ -314,6 +316,33 @@ export async function requireOfferPermission(
   return requireApplicationPermission(permission, offer.applicationId);
 }
 
+/**
+ * True when this user created the candidate through the dashboard or the API.
+ * Read from the audit record written at creation; candidates have no creator
+ * column. Mailbox-linked candidates are not counted: that action also runs
+ * when an existing candidate is linked.
+ */
+async function actorCreatedCandidate(
+  workspaceId: string,
+  userId: string,
+  candidateId: string,
+): Promise<boolean> {
+  const [row] = await db
+    .select({ id: auditLogs.id })
+    .from(auditLogs)
+    .where(
+      and(
+        eq(auditLogs.workspaceId, workspaceId),
+        eq(auditLogs.action, "candidate.created"),
+        eq(auditLogs.resourceType, "candidate"),
+        eq(auditLogs.resourceId, candidateId),
+        eq(auditLogs.actorId, userId),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 /** Resolve a candidate to one of its applications/jobs, then enforce access. */
 export async function requireCandidatePermission(
   permission: Permission,
@@ -340,7 +369,20 @@ export async function requireCandidatePermission(
     .limit(100);
   if (applicationsForCandidate.length === 0) {
     const policy = await getRolePolicy(context.organization.id, context.roleKey);
-    if (policy.scope.jobAccess === "all") return context;
+    // Unrestricted roles see unapplied candidates. A restricted role sees one
+    // only when it created the candidate, matching candidateScopeSql in the
+    // directory, so a department-limited recruiter cannot reach other
+    // candidates through the detail/edit paths.
+    if (isUnrestrictedScope(policy.scope)) return context;
+    if (
+      await actorCreatedCandidate(
+        context.organization.id,
+        context.user.id,
+        candidateId,
+      )
+    ) {
+      return context;
+    }
     throw new Error("Candidate is not assigned to a job.");
   }
   // Candidates can have multiple applications. Access is granted when one

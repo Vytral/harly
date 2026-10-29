@@ -52,6 +52,7 @@ import {
   publishPersistedDomainEvents,
 } from "@/server/events/emit";
 import { serializeCandidate } from "./service";
+import { findActiveJobStage } from "@/features/scorecards/stage";
 import {
   createReferralRecord,
   serializeReferral as serializeCandidateReferral,
@@ -1180,21 +1181,15 @@ export async function createScorecard(input: {
     }
     let stageName: string | null = null;
     if (parsed.data.stageId) {
-      const [stage] = await db
-        .select({ id: jobStages.id, name: jobStages.name })
-        .from(jobStages)
-        .where(
-          and(
-            eq(jobStages.id, parsed.data.stageId),
-            eq(jobStages.workspaceId, input.workspaceId),
-            eq(jobStages.jobId, application.jobId),
-          ),
-        )
-        .limit(1);
+      const stage = await findActiveJobStage(db, {
+        workspaceId: input.workspaceId,
+        jobId: application.jobId,
+        stageId: parsed.data.stageId,
+      });
       if (!stage) {
         return {
           success: false,
-          error: "Stage does not belong to this application.",
+          error: "Stage is archived or does not belong to this application.",
         };
       }
       stageName = stage.name;

@@ -8,6 +8,7 @@ import {
   applicationStageHistory,
   candidates,
   db,
+  effectiveStageKind,
   effectiveStageKindSql,
   interviews,
   jobs,
@@ -162,6 +163,7 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
   const stageRows = await db
     .select({
       name: jobStages.name,
+      kind: jobStages.kind,
       color: jobStages.color,
       order: jobStages.order,
       value: count(applications.id),
@@ -197,9 +199,13 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
     .groupBy(jobStages.id)
     .orderBy(asc(jobStages.order));
 
-  // The funnel view omits the terminal "Rejected" lane.
+  // The funnel view omits the terminal rejected lane. Decided by stage kind,
+  // so a renamed rejected stage is hidden and a custom stage named "Rejected"
+  // stays visible.
   const stages = stageRows
-    .filter((s) => s.name.toLowerCase() !== "rejected")
+    .filter(
+      (s) => effectiveStageKind({ kind: s.kind, name: s.name }) !== "rejected",
+    )
     .map((s) => ({
       name: s.name,
       color: s.color,

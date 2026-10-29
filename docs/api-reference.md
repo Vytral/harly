@@ -147,7 +147,9 @@ covers all webhook operations.
 | POST | `/api-keys/{id}/rotate` | `api_keys:write` |
 | GET | `/me` | none (introspects the presented key) |
 
-Publishable (`pk_`) keys are limited to `jobs:read` and `applications:write`.
+Publishable (`pk_`) keys are limited to `jobs:read` and `applications:write`, and
+only `POST /applications` (create) accepts them. Move, reject, hire and bulk-create
+require a secret key and return `403` for a publishable key.
 
 ## Automations (withdrawn)
 

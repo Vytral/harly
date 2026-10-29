@@ -8,6 +8,7 @@ import {
   applications,
   db,
   jobStages,
+  member,
   offers,
   type JobStage,
 } from "@harly/db";
@@ -153,6 +154,17 @@ describe.skipIf(!runPipelineIntegration)("stage kind consumers", () => {
     fx = await createPipelineFixture();
     session.workspaceId = fx.workspaceId;
     session.userId = fx.userId;
+    // Automations act as their creator and resolve the creator's role, so the
+    // fixture user needs a membership. The fixture user is an owner.
+    const now = new Date();
+    await db.insert(member).values({
+      id: `stage-kind-owner-${fx.workspaceId}`,
+      organizationId: fx.workspaceId,
+      userId: fx.userId,
+      role: "owner",
+      createdAt: now,
+      updatedAt: now,
+    });
   });
 
   afterAll(async () => {

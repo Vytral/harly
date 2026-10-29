@@ -15,6 +15,7 @@ vi.mock("drizzle-orm", () => ({
 vi.mock("@harly/db", () => ({
   db: { select: mocks.select },
   applications: {},
+  auditLogs: {},
   candidates: {},
   customRoles: {},
   jobs: {},
@@ -107,10 +108,37 @@ describe("candidate permission scope without applications", () => {
             scope: { jobAccess: "assigned" },
           },
         ]),
-      );
+      )
+      .mockReturnValueOnce(makeSelectReturning([]));
 
     await expect(
       requireCandidatePermission("candidates:view", "candidate-1"),
     ).rejects.toThrow(/not assigned to a job|access/i);
+  });
+
+  it("lets a restricted caller reach a candidate it created before any application exists", async () => {
+    mocks.getWorkspaceContext.mockResolvedValue({
+      organization: { id: WORKSPACE_ID },
+      user: { id: "recruiter-1" },
+      roleKey: "legal-recruiter",
+    });
+    mocks.select
+      .mockReturnValueOnce(
+        makeSelectReturning([{ permissions: ["candidates:view"] }]),
+      )
+      .mockReturnValueOnce(makeSelectReturning([]))
+      .mockReturnValueOnce(
+        makeSelectReturning([
+          {
+            permissions: ["candidates:view"],
+            scope: { jobAccess: "all", departments: ["Legal"], regions: [] },
+          },
+        ]),
+      )
+      .mockReturnValueOnce(makeSelectReturning([{ id: "audit-1" }]));
+
+    await expect(
+      requireCandidatePermission("candidates:view", "candidate-1"),
+    ).resolves.toMatchObject({ organization: { id: WORKSPACE_ID } });
   });
 });

@@ -26,6 +26,7 @@ import {
   workspaceSettings,
   normalizeStageName,
 } from "@harly/db";
+import { actorCanActOnApplication } from "./runtime/workflow-permissions";
 
 import { decryptSecret } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
@@ -753,6 +754,13 @@ const moveStageHandler: ActionHandler<z.infer<typeof moveStageSchema>> = {
   async run(input, ctx) {
     const { applicationId } = effectiveTarget(ctx);
     if (!applicationId) return { success: false, error: "No application in trigger payload." };
+    const scope = await actorCanActOnApplication(
+      ctx.database ?? db,
+      ctx.workspaceId,
+      ctx.actorUserId,
+      applicationId,
+    );
+    if (!scope.ok) return { success: false, error: scope.reason };
 
     const resolved = await resolveStageId(ctx.workspaceId, applicationId, input, ctx.database);
     if (!resolved) return { success: false, error: "Target stage not found for this job." };
@@ -795,6 +803,13 @@ const setStatusHandler: ActionHandler<z.infer<typeof setStatusSchema>> = {
     const database = ctx.database ?? db;
     const { applicationId } = effectiveTarget(ctx);
     if (!applicationId) return { success: false, error: "No application in trigger payload." };
+    const scope = await actorCanActOnApplication(
+      database,
+      ctx.workspaceId,
+      ctx.actorUserId,
+      applicationId,
+    );
+    if (!scope.ok) return { success: false, error: scope.reason };
 
     if (input.status === "hired" || input.status === "rejected") {
       const updated = await (input.status === "hired"
