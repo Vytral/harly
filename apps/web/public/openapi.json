@@ -9872,6 +9872,9 @@
         ],
         "x-harly-required-scopes": [
           "applications:write"
+        ],
+        "x-harly-key-types": [
+          "secret"
         ]
       }
     },
@@ -10128,6 +10131,9 @@
         ],
         "x-harly-required-scopes": [
           "applications:write"
+        ],
+        "x-harly-key-types": [
+          "secret"
         ]
       }
     },
@@ -10384,6 +10390,9 @@
         ],
         "x-harly-required-scopes": [
           "applications:write"
+        ],
+        "x-harly-key-types": [
+          "secret"
         ]
       }
     },
@@ -11027,6 +11036,9 @@
         ],
         "x-harly-required-scopes": [
           "applications:write"
+        ],
+        "x-harly-key-types": [
+          "secret"
         ]
       }
     },
