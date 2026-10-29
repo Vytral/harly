@@ -41,10 +41,13 @@ SEED_CONFIRM_WIPE=<workspace-slug> pnpm db:seed:demo
 pnpm db:seed:demo --confirm-wipe=<workspace-slug>
 ```
 
-The slug must match exactly. A workspace with more real-looking records than the
-guard allows must also be pinned with `DEMO_WORKSPACE_ID`. The programmatic demo
-sandbox and the cron reset call `seedDemoWorkspace()` directly and are not
-affected by this confirmation.
+The slug must match exactly. The guard counts the rows of every workspace-scoped
+table except the structural ones (`WIPE_GUARD_STRUCTURAL_TABLES`: settings, custom
+roles, document access roles, pipeline stage definitions and sample-data
+bookkeeping). A workspace with more than 25 such rows must also be pinned with
+`DEMO_WORKSPACE_ID`. The programmatic demo sandbox and the cron reset call
+`seedDemoWorkspace()` directly and are not affected by this confirmation. The cron
+reset requires `DEMO_WORKSPACE_ID` when `DEMO_MODE=true`.
 
 ## Migration rules
 

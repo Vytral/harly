@@ -110,6 +110,8 @@ const at = (value: Date) => sql`${value.toISOString()}::timestamptz`;
  * and may append further CTEs after a comma.
  */
 export function activeAppsSql(workspaceId: string): SQL {
+  // Tracked sample applications stay visible in lists, search and the pipeline,
+  // but are not hiring activity, so they never count here.
   return sql`
     active_apps as (
       select a.id, a.candidate_id, a.job_id, a.source, a.status, a.applied_at, a.updated_at, a.current_stage_id
@@ -119,6 +121,12 @@ export function activeAppsSql(workspaceId: string): SQL {
       inner join candidates c
         on c.id = a.candidate_id and c.workspace_id = a.workspace_id and c.deleted_at is null
       where a.workspace_id = ${workspaceId}
+        and not exists (
+          select 1 from sample_data_items s
+          where s.workspace_id = a.workspace_id
+            and s.entity_type = 'application'
+            and s.entity_id = a.id
+        )
     )`;
 }
 

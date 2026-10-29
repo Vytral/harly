@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import {
   activityEvents,
@@ -13,11 +13,13 @@ import {
   jobs,
   jobStages,
   offers,
+  sampleDataItems,
   workspaceSettings,
   type JobStage,
   type StageKind,
 } from "@harly/db";
 import { archiveStage, createStage } from "@/features/pipeline/stage-lifecycle";
+import { loadSampleData } from "@/features/sample-data/service";
 import {
   createPipelineFixture,
   runPipelineIntegration,
@@ -177,6 +179,38 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
   }
 
   // ── hires ──────────────────────────────────────────────────────────────────
+
+  it("keeps tracked sample applications out of hires and applications received", async () => {
+    await hire({ appliedAt: day(3), hiredAt: day(10) });
+    await loadSampleData({
+      workspaceId: fx.workspaceId,
+      actorUserId: fx.userId,
+      now: new Date(Date.UTC(2026, 0, 20, 12)),
+    });
+
+    expect(await getApplicationsReceived({ workspaceId: fx.workspaceId, window: WINDOW })).toBe(1);
+
+    const [tracked] = await db
+      .select({ id: sampleDataItems.entityId })
+      .from(sampleDataItems)
+      .where(and(eq(sampleDataItems.workspaceId, fx.workspaceId), eq(sampleDataItems.entityType, "application")))
+      .limit(1);
+    const [sampleApplication] = await db
+      .select({ jobId: applications.jobId })
+      .from(applications)
+      .where(eq(applications.id, tracked.id));
+    const [hiredStage] = await db
+      .select({ id: jobStages.id })
+      .from(jobStages)
+      .where(and(eq(jobStages.jobId, sampleApplication.jobId), eq(jobStages.kind, "hired")));
+    await db
+      .update(applications)
+      .set({ status: "hired", currentStageId: hiredStage.id })
+      .where(eq(applications.id, tracked.id));
+    await move(tracked.id, hiredStage.id, day(15));
+
+    expect((await getHireStats({ workspaceId: fx.workspaceId, window: WINDOW })).hires).toBe(1);
+  });
 
   it("counts a hire once, dated by the latest transition into a hired-kind stage", async () => {
     const app = await application({ stageId: stages.applied!.id, appliedAt: day(5), status: "hired" });

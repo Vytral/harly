@@ -5,7 +5,9 @@
  */
 export const SAMPLE_EMAIL_DOMAIN = "sample.invalid";
 
-export const SAMPLE_JOB_TITLE = "Sample · Senior Product Engineer";
+/** Prefix every sample job title carries, checked again before removal. */
+export const SAMPLE_TITLE_PREFIX = "Sample ·";
+export const SAMPLE_JOB_TITLE = `${SAMPLE_TITLE_PREFIX} Senior Product Engineer`;
 export const SAMPLE_JOB_SLUG_BASE = "sample-senior-product-engineer";
 export const SAMPLE_SOURCE = "Sample data";
 

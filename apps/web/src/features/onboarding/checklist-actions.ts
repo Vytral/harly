@@ -8,9 +8,11 @@ import { createLogger } from "@/lib/logger";
 
 import {
   applyChecklistAction,
+  NO_CHECKLIST_PREFERENCES,
   type ChecklistAction,
 } from "./checklist-model";
 import {
+  addSkippedChecklistKey,
   readChecklistPreferences,
   writeChecklistPreferences,
 } from "./checklist-state";
@@ -25,18 +27,23 @@ async function runChecklistAction(
   try {
     assertNotDemo();
     const { organization, user } = await requireWorkspaceRole(["owner", "admin"]);
-    const current = await readChecklistPreferences({
-      workspaceId: organization.id,
-      userId: user.id,
-    });
-    const transition = applyChecklistAction(current, action);
-    if (!transition.ok) return { ok: false, error: transition.error };
+    const scope = { workspaceId: organization.id, userId: user.id };
 
-    await writeChecklistPreferences({
-      workspaceId: organization.id,
-      userId: user.id,
-      preferences: transition.preferences,
-    });
+    if (action.type === "skip") {
+      // A skip merges into the stored list in one statement, so concurrent skips
+      // cannot overwrite each other. The model still rejects required steps.
+      const check = applyChecklistAction(NO_CHECKLIST_PREFERENCES, action);
+      if (!check.ok) return { ok: false, error: check.error };
+      await addSkippedChecklistKey({ ...scope, key: action.key });
+    } else {
+      const current = await readChecklistPreferences(scope);
+      const transition = applyChecklistAction(current, action);
+      if (!transition.ok) return { ok: false, error: transition.error };
+      await writeChecklistPreferences({
+        ...scope,
+        preferences: transition.preferences,
+      });
+    }
     revalidatePath("/dashboard");
     return { ok: true };
   } catch (error) {

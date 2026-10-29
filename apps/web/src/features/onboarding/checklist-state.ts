@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { db, setupChecklistStates } from "@harly/db";
 
@@ -57,6 +57,33 @@ export async function writeChecklistPreferences(input: {
         dismissedAt,
         skippedKeys: input.preferences.skipped,
         updatedAt: now,
+      },
+    });
+}
+
+/**
+ * Add one skipped step in a single statement. The stored list is merged inside
+ * the upsert, against the row as it is committed, so two skips racing on the
+ * same member both survive. A read-modify-write would let the later write drop
+ * the earlier key.
+ */
+export async function addSkippedChecklistKey(input: {
+  workspaceId: string;
+  userId: string;
+  key: string;
+}): Promise<void> {
+  await db
+    .insert(setupChecklistStates)
+    .values({
+      workspaceId: input.workspaceId,
+      userId: input.userId,
+      skippedKeys: [input.key],
+    })
+    .onConflictDoUpdate({
+      target: [setupChecklistStates.workspaceId, setupChecklistStates.userId],
+      set: {
+        skippedKeys: sql`(select coalesce(jsonb_agg(distinct merged.key order by merged.key), '[]'::jsonb) from jsonb_array_elements_text(${setupChecklistStates.skippedKeys} || excluded.skipped_keys) as merged(key))`,
+        updatedAt: new Date(),
       },
     });
 }

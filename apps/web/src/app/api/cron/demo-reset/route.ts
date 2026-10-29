@@ -1,13 +1,14 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { eq, sql as dsql } from "drizzle-orm";
+import { asc, eq, sql as dsql } from "drizzle-orm";
 
 import { demoLoginEmail, demoWorkspaceId, isDemoMode } from "@harly/config";
-import { db, sql, member, user as userTable, seedDemoWorkspace } from "@harly/db";
+import { db, sql, member, organization, user as userTable, seedDemoWorkspace } from "@harly/db";
 
 import { authorizeCron } from "@/server/cron-auth";
 import { startCronRun } from "@/server/cron-runs";
 import { createLogger } from "@/lib/logger";
 import { purgeExpiredSandboxes } from "@/features/demo/sandbox";
+import { resolveDemoResetTarget } from "@/features/demo/reset-target";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,8 +23,10 @@ const log = createLogger("demo-reset");
  * timestamps relative to now(), a full reseed IS the freshness pass — no
  * separate date-compression step is needed.
  *
- * Gated by DEMO_MODE (404 otherwise) and CRON_SECRET. Guarded by the shared
- * advisory lock so overlapping ticks can't run two resets at once.
+ * Gated by DEMO_MODE (404 otherwise) and CRON_SECRET. Requires DEMO_WORKSPACE_ID
+ * when DEMO_MODE is on: the reset wipes only that pinned workspace, and refuses
+ * a per-visitor sandbox. Guarded by the shared advisory lock so overlapping
+ * ticks can't run two resets at once.
  */
 export async function POST(request: NextRequest) {
   if (!isDemoMode()) {
@@ -49,10 +52,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Demo owner not found." }, { status: 503 });
     }
 
+    // Ordered so the chosen membership is the same on every tick.
     const [membership] = await db
       .select({ organizationId: member.organizationId })
       .from(member)
       .where(eq(member.userId, owner.id))
+      .orderBy(asc(member.createdAt), asc(member.id))
       .limit(1);
     if (!membership) {
       log.error({ email }, "demo-reset: demo workspace not found");
@@ -60,20 +65,29 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Demo workspace not found." }, { status: 503 });
     }
 
-    const pinned = demoWorkspaceId();
-    if (pinned && pinned !== membership.organizationId) {
+    const [workspace] = await db
+      .select({ metadata: organization.metadata })
+      .from(organization)
+      .where(eq(organization.id, membership.organizationId))
+      .limit(1);
+    const target = resolveDemoResetTarget({
+      pinnedWorkspaceId: demoWorkspaceId(),
+      memberOrganizationId: membership.organizationId,
+      organizationMetadata: workspace?.metadata ?? null,
+    });
+    if (!target.ok) {
       log.error(
-        { email, pinned, actual: membership.organizationId },
-        "demo-reset: workspace id does not match DEMO_WORKSPACE_ID",
+        { email, reason: target.reason, workspaceId: membership.organizationId },
+        "demo-reset: refused to reset the workspace",
       );
-      await run.finish("failed", { reason: "workspace_pin_mismatch" }, "Demo workspace does not match DEMO_WORKSPACE_ID.");
-      return NextResponse.json({ error: "Demo workspace pin mismatch." }, { status: 503 });
+      await run.finish("failed", { reason: target.reason }, target.message);
+      return NextResponse.json({ error: target.message }, { status: 503 });
     }
 
     const result = await seedDemoWorkspace({
       db,
       sql,
-      workspaceId: membership.organizationId,
+      workspaceId: target.workspaceId,
       ownerUserId: owner.id,
     });
 

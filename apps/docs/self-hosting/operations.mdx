@@ -185,10 +185,16 @@ in the confirmation, so an accidental run cannot wipe real hiring data:
 SEED_CONFIRM_WIPE=<workspace-slug> pnpm db:seed:demo
 ```
 
-`--confirm-wipe=<workspace-slug>` works too. The slug must match exactly. A
-workspace with more real-looking records than the guard allows must also be
-pinned with `DEMO_WORKSPACE_ID`. Never run this against a production database
-that holds real candidates.
+`--confirm-wipe=<workspace-slug>` works too. The slug must match exactly. The guard
+counts every row in a workspace-scoped table except configuration (settings,
+custom roles, document access roles and pipeline stage definitions) and the
+checklist and sample-data bookkeeping rows. A workspace with more than 25 such
+records must also be pinned with `DEMO_WORKSPACE_ID`. Never run this
+against a production database that holds real candidates.
+
+With `DEMO_MODE=true`, the scheduled demo reset also requires `DEMO_WORKSPACE_ID`.
+Without it the reset refuses to run and deletes nothing. The reset never wipes a
+per-visitor sandbox; those expire on their own.
 
 ## Database extensions
 

@@ -7,13 +7,21 @@ import { requireWorkspaceRole } from "@/features/workspaces/context";
 import { logAuditEvent } from "@/lib/audit-log";
 import { createLogger } from "@/lib/logger";
 
-import { loadSampleData, removeSampleData } from "./service";
+import { loadSampleData, removeSampleData, SampleDataError } from "./service";
 
 const log = createLogger("sample-data");
 
 export type SampleDataActionResult =
   | { ok: true; status: "loaded" | "already_loaded" | "removed" | "none" }
   | { ok: false; error: string };
+
+/** Only operator-facing messages reach the page; database text is logged, not shown. */
+function failureResult(error: unknown, fallback: string): SampleDataActionResult {
+  return {
+    ok: false,
+    error: error instanceof SampleDataError ? error.message : fallback,
+  };
+}
 
 function revalidateWorkspacePages() {
   revalidatePath("/dashboard");
@@ -49,7 +57,7 @@ export async function loadSampleDataAction(): Promise<SampleDataActionResult> {
     return { ok: true, status: result.status };
   } catch (error) {
     log.error(error, "failed to load sample data");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return failureResult(error, "Sample data could not be loaded. Try again.");
   }
 }
 
@@ -76,6 +84,7 @@ export async function removeSampleDataAction(): Promise<SampleDataActionResult> 
         batchId: result.batchId,
         deleted: result.deleted,
         kept: result.kept,
+        keptRecords: result.keptRecords,
       },
     });
 
@@ -83,6 +92,6 @@ export async function removeSampleDataAction(): Promise<SampleDataActionResult> 
     return { ok: true, status: "removed" };
   } catch (error) {
     log.error(error, "failed to remove sample data");
-    return { ok: false, error: error instanceof Error ? error.message : "Failed." };
+    return failureResult(error, "Sample data could not be removed. Try again.");
   }
 }

@@ -24,6 +24,8 @@ import {
   getTodayInterviews,
 } from "@/features/dashboard/widgets";
 import { getSetupChecklist } from "@/features/dashboard/setup-checklist";
+import { setupReadsFor } from "@/features/onboarding/checklist-model";
+import { getSampleDataStatus } from "@/features/sample-data/service";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
 export const dynamic = "force-dynamic";
@@ -52,17 +54,19 @@ export default async function DashboardPage({
   searchParams: Promise<{ job?: string }>;
 }) {
   const { job } = await searchParams;
-  const { user } = await getWorkspaceContext();
+  const { user, organization, role } = await getWorkspaceContext();
+  const canManageSetup = role === "owner" || role === "admin";
   const firstName = (user.name ?? "").trim().split(/\s+/)[0] || "there";
   // The public demo is pre-configured and its settings are locked, so the
   // setup checklist would only send visitors to screens they cannot change.
   const demo = isDemoMode();
+  const setupReads = setupReadsFor({ demo, canManage: canManageSetup });
 
   // A widget is rendered only when the caller holds its permission. Each data
   // function also gates itself and returns nothing for a caller without access;
   // hiring performance is not requested at all, since it has no empty form.
   const access = await getDashboardWidgetAccess();
-  const [inbox, interviews, pipeline, review, myTasks, performance, setup] =
+  const [inbox, interviews, pipeline, review, myTasks, performance, setup, sampleStatus] =
     await Promise.all([
       getInbox(),
       getTodayInterviews(),
@@ -70,8 +74,10 @@ export default async function DashboardPage({
       getCandidatesNeedingReview(),
       getMyDashboardTasks(),
       access.performance ? getHiringPerformance() : null,
-      demo ? null : getSetupChecklist(),
+      setupReads.checklist ? getSetupChecklist() : null,
+      setupReads.sampleStatus ? getSampleDataStatus(organization.id) : null,
     ]);
+  const sampleDataActive = setup?.sampleDataActive ?? sampleStatus?.active ?? false;
 
   const overdue = inbox.filter((item) => item.dueState === "overdue").length;
   const activeCandidates = pipeline.stages.reduce(
@@ -126,9 +132,9 @@ export default async function DashboardPage({
       />
 
       {/* Quiet notice while sample records exist; anyone on the team may see it. */}
-      {setup?.sampleDataActive ? (
+      {sampleDataActive ? (
         <div className="mt-5">
-          <SampleDataBanner canManage={setup.visible} />
+          <SampleDataBanner canManage={canManageSetup} />
         </div>
       ) : null}
 

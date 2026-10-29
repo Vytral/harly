@@ -192,6 +192,22 @@ export function applyChecklistAction(
   }
 }
 
+/**
+ * Which setup reads a dashboard render needs for this viewer. The checklist card
+ * is for owners and admins, so other roles skip its queries. The sample banner
+ * is shown to the whole team and needs only the sample status. Demo mode shows
+ * neither.
+ */
+export function setupReadsFor(input: { demo: boolean; canManage: boolean }): {
+  checklist: boolean;
+  sampleStatus: boolean;
+} {
+  if (input.demo) return { checklist: false, sampleStatus: false };
+  return input.canManage
+    ? { checklist: true, sampleStatus: false }
+    : { checklist: false, sampleStatus: true };
+}
+
 /** Derive every row, the next step and the card visibility from facts. */
 export function buildSetupChecklist(input: {
   facts: ChecklistFacts;

@@ -6,9 +6,9 @@ import { eq, sql as dsql } from "drizzle-orm";
 
 import { createDatabaseClient, schema, seedDemoWorkspace } from "../src";
 import {
+  countWipeGuardRecords,
   countWorkspaceScopedRows,
   evaluateSeedWipeGuard,
-  WIPE_GUARD_RECORD_TABLES,
 } from "../src/seed-demo-workspace";
 
 /**
@@ -78,11 +78,7 @@ async function main() {
     }
 
     const rowCounts = await countWorkspaceScopedRows(sql, membership.organizationId);
-    const realRecordCount = rowCounts
-      .filter((entry) =>
-        (WIPE_GUARD_RECORD_TABLES as readonly string[]).includes(entry.table),
-      )
-      .reduce((total, entry) => total + entry.rows, 0);
+    const realRecordCount = countWipeGuardRecords(rowCounts);
 
     const decision = evaluateSeedWipeGuard({
       workspaceId: membership.organizationId,

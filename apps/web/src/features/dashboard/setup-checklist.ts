@@ -113,10 +113,18 @@ export async function getSetupChecklist(): Promise<SetupChecklist> {
       .select({ value: count() })
       .from(authMembers)
       .where(eq(authMembers.organizationId, workspaceId)),
+    // Only an invitation someone can still accept counts: a canceled, accepted or
+    // expired one means no teammate is coming.
     db
       .select({ value: count() })
       .from(invitation)
-      .where(eq(invitation.organizationId, workspaceId)),
+      .where(
+        and(
+          eq(invitation.organizationId, workspaceId),
+          eq(invitation.status, "pending"),
+          sql`${invitation.expiresAt} > now()`,
+        ),
+      ),
     db
       .select({ value: count() })
       .from(workflowDefinitions)

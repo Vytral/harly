@@ -8,6 +8,7 @@ import {
   type ChecklistFacts,
   type ChecklistPreferences,
   normalizeSkippedKeys,
+  setupReadsFor,
 } from "./checklist-model";
 
 const EMPTY_FACTS: ChecklistFacts = {
@@ -213,5 +214,32 @@ describe("automation checklist step", () => {
   it("links to the recipes picker so the step lands on the recipes, not the empty list", () => {
     const step = CHECKLIST_DEFINITIONS.find((item) => item.key === "automate_workflow");
     expect(step?.href).toBe("/dashboard/automations?recipes=1");
+  });
+});
+
+describe("setupReadsFor", () => {
+  it("reads the checklist only for owners and admins", () => {
+    expect(setupReadsFor({ demo: false, canManage: true })).toEqual({
+      checklist: true,
+      sampleStatus: false,
+    });
+  });
+
+  it("reads only the sample status for the rest of the team", () => {
+    expect(setupReadsFor({ demo: false, canManage: false })).toEqual({
+      checklist: false,
+      sampleStatus: true,
+    });
+  });
+
+  it("reads nothing in demo mode", () => {
+    expect(setupReadsFor({ demo: true, canManage: true })).toEqual({
+      checklist: false,
+      sampleStatus: false,
+    });
+    expect(setupReadsFor({ demo: true, canManage: false })).toEqual({
+      checklist: false,
+      sampleStatus: false,
+    });
   });
 });

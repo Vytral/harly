@@ -2,6 +2,7 @@ import { mkdir, writeFile, rm } from "node:fs/promises";
 import path from "node:path";
 
 import { eq } from "drizzle-orm";
+import type postgres from "postgres";
 
 import { createDatabaseClient, schema } from "./index";
 import { buildResumeLines, linesToPdf } from "./fake-resumes";
@@ -596,8 +597,36 @@ export type SeedDemoOptions = {
  */
 export const UNPINNED_WIPE_RECORD_LIMIT = 25;
 
-/** Tables whose rows count as "real-looking" records for the wipe guard. */
-export const WIPE_GUARD_RECORD_TABLES = ["candidates", "jobs", "applications"] as const;
+/**
+ * Workspace-scoped tables whose rows are configuration or bookkeeping rather
+ * than records: workspace settings, custom roles and document access roles,
+ * pipeline stage definitions, per-member checklist state and sample-data
+ * tracking. The wipe guard does not count them, so a workspace that only holds
+ * configuration can be reseeded, while every other table counts as a record.
+ * Members, invitations and sessions are not workspace_id tables and never count.
+ */
+export const WIPE_GUARD_STRUCTURAL_TABLES = [
+  "workspace_settings",
+  "workspace_automation_policies",
+  "custom_roles",
+  "document_access_roles",
+  "job_stages",
+  "setup_checklist_states",
+  "sample_data_items",
+] as const;
+
+/**
+ * Records a workspace holds, for the wipe guard: the rows of every
+ * workspace-scoped table except the structural ones.
+ */
+export function countWipeGuardRecords(
+  rowCounts: ReadonlyArray<{ table: string; rows: number }>,
+): number {
+  const structural = new Set<string>(WIPE_GUARD_STRUCTURAL_TABLES);
+  return rowCounts
+    .filter((entry) => !structural.has(entry.table))
+    .reduce((total, entry) => total + entry.rows, 0);
+}
 
 export type SeedWipeGuardInput = {
   workspaceId: string;
@@ -607,7 +636,7 @@ export type SeedWipeGuardInput = {
   confirmation: string | null | undefined;
   /** DEMO_WORKSPACE_ID, when the operator pinned the demo template. */
   pinnedWorkspaceId: string | null;
-  /** Candidates + jobs + applications already in the workspace. */
+  /** Records in the workspace, as counted by countWipeGuardRecords. */
   realRecordCount: number;
 };
 
@@ -661,7 +690,7 @@ export function evaluateSeedWipeGuard(input: SeedWipeGuardInput): SeedWipeGuardD
     return {
       allowed: false,
       reason: "unpinned_workspace_has_records",
-      message: `Refusing to wipe ${target}: it holds ${input.realRecordCount} candidates, jobs and applications (limit ${UNPINNED_WIPE_RECORD_LIMIT} without a pin). If this is the demo template, set DEMO_WORKSPACE_ID=${input.workspaceId} and run again.`,
+      message: `Refusing to wipe ${target}: it holds ${input.realRecordCount} records outside its settings and stage definitions (limit ${UNPINNED_WIPE_RECORD_LIMIT} without a pin). If this is the demo template, set DEMO_WORKSPACE_ID=${input.workspaceId} and run again.`,
     };
   }
 
@@ -692,6 +721,36 @@ export async function countWorkspaceScopedRows(
   return counts;
 }
 
+/**
+ * Rows that reference a workspace table but carry no workspace_id of their own.
+ * A replica-mode wipe turns foreign-key cascades off, so these would survive the
+ * wipe and point at deleted rows. They are deleted through their parent before
+ * the parent goes. Keep this list in step with the schema.
+ */
+async function deleteWorkspaceOrphanRows(
+  tx: postgres.TransactionSql<{}>,
+  workspaceId: string,
+): Promise<void> {
+  await tx`
+    DELETE FROM ai_conversation_candidates
+    WHERE conversation_id IN (
+      SELECT id FROM ai_conversations WHERE workspace_id = ${workspaceId}
+    )
+  `;
+  await tx`
+    DELETE FROM evaluation_criterion_results
+    WHERE evaluation_id IN (
+      SELECT id FROM ai_evaluations WHERE workspace_id = ${workspaceId}
+    )
+  `;
+  await tx`
+    DELETE FROM evaluation_criteria
+    WHERE rubric_id IN (
+      SELECT id FROM evaluation_rubrics WHERE workspace_id = ${workspaceId}
+    )
+  `;
+}
+
 async function wipeWorkspaceScopedData(input: {
   sql: SeedClient["sql"];
   workspaceId: string;
@@ -706,6 +765,7 @@ async function wipeWorkspaceScopedData(input: {
   `;
   await sql.begin(async (tx) => {
     await tx`SET LOCAL session_replication_role = 'replica'`;
+    await deleteWorkspaceOrphanRows(tx, workspaceId);
     for (const { table_name } of scopedTables) {
       await tx`DELETE FROM ${tx(table_name)} WHERE workspace_id = ${workspaceId}`;
     }
@@ -740,6 +800,7 @@ export async function deleteDemoSandbox(options: {
   `;
   await sql.begin(async (tx) => {
     await tx`SET LOCAL session_replication_role = 'replica'`;
+    await deleteWorkspaceOrphanRows(tx, workspaceId);
     for (const { table_name } of scopedTables) {
       await tx`DELETE FROM ${tx(table_name)} WHERE workspace_id = ${workspaceId}`;
     }
