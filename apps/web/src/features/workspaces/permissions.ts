@@ -64,22 +64,62 @@ export const unrestrictedRoleScope = (): RoleScope => ({
   regions: [],
 });
 
+/**
+ * The most restrictive scope that exists: assigned jobs only, no department or
+ * region. A present scope that cannot be read maps here, so a malformed stored
+ * scope never widens access.
+ */
+const FAIL_CLOSED_ROLE_SCOPE = (): RoleScope => ({
+  jobAccess: "assigned",
+  departments: [],
+  regions: [],
+});
+
+/**
+ * Parse one allow-list. A missing value is an empty list. Anything else must be
+ * an array of strings: non-string entries, or a non-empty list with no usable
+ * entry, is malformed and yields undefined. Blanks and duplicates are dropped.
+ */
+function normalizeScopeList(input: unknown): string[] | undefined {
+  if (input === undefined) return [];
+  if (!Array.isArray(input)) return undefined;
+  if (!input.every((item): item is string => typeof item === "string")) {
+    return undefined;
+  }
+  const cleaned = [
+    ...new Set(input.map((item) => item.trim()).filter(Boolean)),
+  ];
+  return cleaned.length === 0 && input.length > 0 ? undefined : cleaned;
+}
+
+/**
+ * Read a stored role scope. A missing scope (null, undefined, or an empty
+ * object) is unrestricted, which is how built-in roles are stored. A present
+ * scope that does not match the write-side schema fails closed to
+ * {@link FAIL_CLOSED_ROLE_SCOPE}, so a malformed value cannot grant more access.
+ */
 export function normalizeRoleScope(raw: unknown): RoleScope {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    return unrestrictedRoleScope();
+  if (raw === null || raw === undefined) return unrestrictedRoleScope();
+  if (typeof raw !== "object" || Array.isArray(raw)) {
+    return FAIL_CLOSED_ROLE_SCOPE();
   }
 
   const value = raw as Record<string, unknown>;
-  const normalizeList = (input: unknown) =>
-    Array.isArray(input)
-      ? [...new Set(input.filter((item): item is string => typeof item === "string").map((item) => item.trim()).filter(Boolean))]
-      : [];
+  if (Object.keys(value).length === 0) return unrestrictedRoleScope();
 
-  return {
-    jobAccess: value.jobAccess === "assigned" ? "assigned" : "all",
-    departments: normalizeList(value.departments),
-    regions: normalizeList(value.regions),
-  };
+  const jobAccess =
+    value.jobAccess === undefined
+      ? "all"
+      : value.jobAccess === "all" || value.jobAccess === "assigned"
+        ? value.jobAccess
+        : undefined;
+  const departments = normalizeScopeList(value.departments);
+  const regions = normalizeScopeList(value.regions);
+  if (jobAccess === undefined || departments === undefined || regions === undefined) {
+    return FAIL_CLOSED_ROLE_SCOPE();
+  }
+
+  return { jobAccess, departments, regions };
 }
 
 /** True when the target role would expose more tenant resources than the actor. */

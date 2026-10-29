@@ -5,6 +5,8 @@ import {
   SEARCH_FAILED_MESSAGE,
   SEARCH_TIMEOUT_MESSAGE,
   WorkspaceSearchController,
+  presentResults,
+  type WorkspaceSearchState,
 } from "./search-controller";
 import { emptyWorkspaceSearchResults } from "./results";
 
@@ -244,5 +246,43 @@ describe("WorkspaceSearchController", () => {
 
     expect(search).not.toHaveBeenCalled();
     expect(controller.getState()).toMatchObject({ query: "ada", status: "loading" });
+  });
+});
+
+describe("presentResults", () => {
+  const previous = emptyWorkspaceSearchResults("ada");
+  const state = (overrides: Partial<WorkspaceSearchState>): WorkspaceSearchState => ({
+    query: "ada lovelace",
+    status: "idle",
+    results: null,
+    error: null,
+    ...overrides,
+  });
+
+  it("shows nothing while idle or after an error", () => {
+    expect(presentResults(state({}))).toEqual({ results: null, stale: false, busy: false });
+    expect(
+      presentResults(state({ status: "error", results: null, error: "x" })),
+    ).toEqual({ results: null, stale: false, busy: false });
+  });
+
+  it("keeps the previous results visible but stale while a new query loads", () => {
+    expect(
+      presentResults(state({ status: "loading", results: previous })),
+    ).toEqual({ results: previous, stale: true, busy: true });
+  });
+
+  it("is not stale when there is nothing older to show", () => {
+    expect(presentResults(state({ status: "loading", results: null }))).toEqual({
+      results: null,
+      stale: false,
+      busy: true,
+    });
+  });
+
+  it("is fresh once the answer for the current query arrives", () => {
+    expect(
+      presentResults(state({ status: "ready", results: previous })),
+    ).toEqual({ results: previous, stale: false, busy: false });
   });
 });

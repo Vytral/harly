@@ -31,18 +31,24 @@ import {
 } from "@/components/ui/icons/command";
 import { allNavItems, hasNavPermission } from "@/components/dashboard/nav-items";
 import { useWorkspaceSearch } from "@/features/search/use-workspace-search";
+import { presentResults } from "@/features/search/search-controller";
+import {
+  recentsViewerAction,
+  visibleRecentsAction,
+} from "@/features/search/actions";
 import {
   browserRecentsStorage,
+  filterRecentsByPermission,
+  purgeLegacyRecents,
   readRecents,
+  recentFromHit,
   recordRecent,
   removeRecent,
+  sameRecent,
   type RecentSearchItem,
+  type RecentsScope,
 } from "@/features/search/recents";
-import type {
-  SearchGroupKey,
-  WorkspaceSearchHit,
-  WorkspaceSearchResults,
-} from "@/features/search/results";
+import type { SearchGroupKey } from "@/features/search/results";
 import type { SearchRange } from "@/features/search/query";
 import type { Permission } from "@/features/workspaces/permissions";
 
@@ -91,6 +97,13 @@ export function CommandMenu({
   const { state, controller } = useWorkspaceSearch();
   const [input, setInput] = useState("");
   const [recents, setRecents] = useState<RecentSearchItem[]>([]);
+  // Recents are stored per user, and the page does not pass the user id down,
+  // so the palette asks the server. Until it answers, no recents show.
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  const permissionKey = userPermissions.join(",");
+  const recentsScope: RecentsScope | null = viewerId
+    ? { userId: viewerId, workspaceId }
+    : null;
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -111,13 +124,60 @@ export function CommandMenu({
     controller.reset();
   }, [open, controller]);
 
-  // Load this workspace's recents each time the palette opens.
+  // Asked on first open, so pages that never open the palette pay nothing.
   useEffect(() => {
-    if (!open) return;
+    if (!open || viewerId) return;
+    let cancelled = false;
+    recentsViewerAction()
+      .then((result) => {
+        if (!cancelled && result.ok) setViewerId(result.userId);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [open, viewerId]);
+
+  // Each time the palette opens, show this user's recents only when the viewer
+  // still has the group's permission and the server confirms each record is
+  // still visible. Anything else is removed from storage.
+  useEffect(() => {
+    if (!open || !viewerId) return;
+    const storage = browserRecentsStorage();
+    const scope: RecentsScope = { userId: viewerId, workspaceId };
+    purgeLegacyRecents(storage, workspaceId);
+    const stored = readRecents(storage, scope);
+    const permitted = filterRecentsByPermission(
+      stored,
+      permissionKey.split(","),
+    );
+    for (const item of stored) {
+      if (!permitted.some((kept) => sameRecent(kept, item))) {
+        removeRecent(storage, scope, item);
+      }
+    }
+
+    let cancelled = false;
     queueMicrotask(() => {
-      setRecents(readRecents(browserRecentsStorage(), workspaceId));
+      if (!cancelled) setRecents([]);
     });
-  }, [open, workspaceId]);
+    if (permitted.length > 0) {
+      visibleRecentsAction(
+        permitted.map(({ group, id }) => ({ group, id })),
+      ).then((result) => {
+        if (cancelled || !result.ok) return;
+        const isVisible = (item: RecentSearchItem) =>
+          result.visible.some((ref) => sameRecent(ref, item));
+        for (const item of permitted) {
+          if (!isVisible(item)) removeRecent(storage, scope, item);
+        }
+        setRecents(permitted.filter(isVisible));
+      });
+    }
+    return () => {
+      cancelled = true;
+    };
+  }, [open, viewerId, workspaceId, permissionKey]);
 
   function handleInputChange(value: string) {
     setInput(value);
@@ -130,12 +190,16 @@ export function CommandMenu({
   }
 
   function openResult(item: RecentSearchItem) {
-    setRecents(recordRecent(browserRecentsStorage(), workspaceId, item));
+    if (recentsScope) {
+      setRecents(recordRecent(browserRecentsStorage(), recentsScope, item));
+    }
     go(item.href);
   }
 
   function dropRecent(item: RecentSearchItem) {
-    setRecents(removeRecent(browserRecentsStorage(), workspaceId, item));
+    if (recentsScope) {
+      setRecents(removeRecent(browserRecentsStorage(), recentsScope, item));
+    }
   }
 
   function restoreTriggerFocus(event: Event) {
@@ -146,9 +210,7 @@ export function CommandMenu({
   }
 
   const hasQuery = state.query.length > 0;
-  const isLoading = state.status === "loading";
-  const results: WorkspaceSearchResults | null =
-    state.status === "error" ? null : state.results;
+  const { results, stale: isStale, busy: isLoading } = presentResults(state);
   const totalHits = results
     ? GROUP_ORDER.reduce(
         (sum, group) => sum + (results.groups[group]?.hits.length ?? 0),
@@ -253,7 +315,7 @@ export function CommandMenu({
                       <ResultIcon group={item.group} name={item.primary} />
                       <ResultText
                         primary={item.primary}
-                        secondary={item.secondary}
+                        secondary={null}
                         highlight={[]}
                       />
                     </CommandItem>
@@ -270,35 +332,59 @@ export function CommandMenu({
               </CommandGroup>
             ) : null}
 
-            {!showSkeleton && results
-              ? GROUP_ORDER.map((group) => {
+            {!showSkeleton && results ? (
+              <div
+                className={
+                  isStale
+                    ? "opacity-60 transition-opacity duration-150 motion-reduce:transition-none"
+                    : undefined
+                }
+              >
+                {GROUP_ORDER.map((group) => {
                   const section = results.groups[group];
                   if (!section || section.hits.length === 0) return null;
                   return (
                     <CommandGroup key={group} heading={GROUP_HEADINGS[group]}>
-                      {section.hits.map((hit) => (
-                        <CommandItem
-                          key={`${hit.group}:${hit.id}`}
-                          value={`${hit.group}-${hit.id}`}
-                          onSelect={() => openResult(toRecent(hit))}
-                          className="gap-3 rounded-2xl"
-                        >
-                          <ResultIcon
-                            group={hit.group}
-                            name={hit.primary}
-                            avatarUrl={hit.avatarUrl}
-                          />
-                          <ResultText
-                            primary={hit.primary}
-                            secondary={hit.secondary}
-                            highlight={hit.highlight}
-                          />
-                        </CommandItem>
-                      ))}
+                      {section.hits.map((hit) => {
+                        const content = (
+                          <>
+                            <ResultIcon
+                              group={hit.group}
+                              name={hit.primary}
+                              avatarUrl={hit.avatarUrl}
+                            />
+                            <ResultText
+                              primary={hit.primary}
+                              secondary={hit.secondary}
+                              highlight={hit.highlight}
+                            />
+                          </>
+                        );
+                        // Stale rows are plain elements: cmdk never registers them,
+                        // so Enter cannot choose a row from an earlier query.
+                        return isStale ? (
+                          <div
+                            key={`${hit.group}:${hit.id}`}
+                            className="flex items-center gap-3 rounded-2xl px-2 py-2.5"
+                          >
+                            {content}
+                          </div>
+                        ) : (
+                          <CommandItem
+                            key={`${hit.group}:${hit.id}`}
+                            value={`${hit.group}-${hit.id}`}
+                            onSelect={() => openResult(recentFromHit(hit))}
+                            className="gap-3 rounded-2xl"
+                          >
+                            {content}
+                          </CommandItem>
+                        );
+                      })}
                     </CommandGroup>
                   );
-                })
-              : null}
+                })}
+              </div>
+            ) : null}
 
             {showEmpty ? (
               <div className="spotlight-item-enter px-2 pt-3 pb-2 text-sm">
@@ -313,7 +399,7 @@ export function CommandMenu({
               </div>
             ) : null}
 
-            {hasQuery && hasResults && seeAllHref ? (
+            {hasQuery && hasResults && seeAllHref && !isStale ? (
               <CommandGroup>
                 <CommandItem
                   value="see-all-results"
@@ -387,16 +473,6 @@ export function CommandMenu({
       </DialogContent>
     </Dialog>
   );
-}
-
-function toRecent(hit: WorkspaceSearchHit): RecentSearchItem {
-  return {
-    group: hit.group,
-    id: hit.id,
-    primary: hit.primary,
-    secondary: hit.secondary,
-    href: hit.href,
-  };
 }
 
 function ResultIcon({

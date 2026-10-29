@@ -1,6 +1,6 @@
 import "server-only";
 
-import { eq, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { and, eq, or, sql, type AnyColumn, type SQL } from "drizzle-orm";
 
 import {
   applications,
@@ -116,18 +116,26 @@ export function candidateScopeSql(
 
 /**
  * Tasks are visible to a restricted actor when they are theirs (owned or
- * created by them), or linked to a job, an application or a candidate that the
- * actor's scope covers. Unlinked tasks owned by someone else stay hidden.
+ * created by them), or when every link the task carries is inside the actor's
+ * scope. A task with a job or application link is judged by those links only,
+ * so a link to an out-of-scope application or job hides the task even when its
+ * candidate has an in-scope application. The candidate is consulted only for an
+ * unlinked task. Unlinked tasks owned by someone else stay hidden when the
+ * candidate has no in-scope application.
  */
 export function taskScopeSql(actor: WorkspaceSearchActor): SQL | undefined {
   if (isUnrestrictedScope(actor.scope)) return undefined;
-  const clauses = restrictedJobClauses(actor);
-  const scopedJob = sql.join(clauses, sql` and `);
+  const scopedJob = sql.join(restrictedJobClauses(actor), sql` and `);
+  const jobInScope = sql`exists (select 1 from ${jobs} where ${jobs.id} = ${tasks.jobId} and ${jobs.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${scopedJob})`;
+  const applicationInScope = sql`exists (select 1 from ${applications} inner join ${jobs} on ${jobs.id} = ${applications.jobId} where ${applications.id} = ${tasks.applicationId} and ${applications.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${scopedJob})`;
+  const candidateInScope = sql`exists (select 1 from ${applications} inner join ${jobs} on ${jobs.id} = ${applications.jobId} where ${applications.candidateId} = ${tasks.candidateId} and ${applications.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${scopedJob})`;
+  const hasLink = sql`(${tasks.applicationId} is not null or ${tasks.jobId} is not null)`;
+  const linksInScope = sql`(${tasks.applicationId} is null or ${applicationInScope}) and (${tasks.jobId} is null or ${jobInScope})`;
+  const unlinked = sql`(${tasks.applicationId} is null and ${tasks.jobId} is null)`;
   return or(
     eq(tasks.ownerId, actor.userId),
     eq(tasks.createdById, actor.userId),
-    sql`exists (select 1 from ${jobs} where ${jobs.id} = ${tasks.jobId} and ${jobs.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${scopedJob})`,
-    sql`exists (select 1 from ${applications} inner join ${jobs} on ${jobs.id} = ${applications.jobId} where ${applications.id} = ${tasks.applicationId} and ${applications.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${scopedJob})`,
-    sql`exists (select 1 from ${applications} inner join ${jobs} on ${jobs.id} = ${applications.jobId} where ${applications.candidateId} = ${tasks.candidateId} and ${applications.workspaceId} = ${actor.workspaceId} and ${jobs.deletedAt} is null and ${scopedJob})`,
+    and(hasLink, sql`(${linksInScope})`),
+    and(unlinked, candidateInScope),
   );
 }

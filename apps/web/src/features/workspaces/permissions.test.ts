@@ -153,6 +153,64 @@ describe("workspace roles", () => {
       departments: [],
       regions: [],
     });
+    expect(normalizeRoleScope(undefined)).toEqual({
+      jobAccess: "all",
+      departments: [],
+      regions: [],
+    });
+    expect(normalizeRoleScope({})).toEqual({
+      jobAccess: "all",
+      departments: [],
+      regions: [],
+    });
+  });
+
+  it("round-trips every valid saved scope unchanged", () => {
+    const saved = [
+      { jobAccess: "all", departments: [], regions: [] },
+      { jobAccess: "assigned", departments: [], regions: [] },
+      { jobAccess: "all", departments: ["Engineering", "Sales"], regions: [] },
+      { jobAccess: "all", departments: [], regions: ["EMEA"] },
+      { jobAccess: "assigned", departments: ["Engineering"], regions: ["EMEA", "APAC"] },
+    ];
+    for (const scope of saved) {
+      const stored = JSON.parse(JSON.stringify(scope)) as unknown;
+      expect(normalizeRoleScope(stored)).toEqual(scope);
+    }
+  });
+
+  it("fails closed when a present scope has a malformed shape", () => {
+    // Most restrictive existing scope: assigned jobs only, no department or region.
+    const closed = { jobAccess: "assigned", departments: [], regions: [] };
+    const malformed: unknown[] = [
+      { departments: "Engineering" },
+      { departments: [null] },
+      { departments: ["Engineering", 42] },
+      { departments: [" "] },
+      { jobAccess: "ASSIGNED" },
+      { jobAccess: null },
+      { jobAccess: "all", regions: "EMEA" },
+      { regions: { 0: "EMEA" } },
+      "Engineering",
+      42,
+      true,
+      [],
+      ["assigned"],
+    ];
+    for (const raw of malformed) {
+      expect(normalizeRoleScope(raw), JSON.stringify(raw)).toEqual(closed);
+    }
+  });
+
+  it("keeps unknown extra keys from widening or narrowing a valid scope", () => {
+    expect(
+      normalizeRoleScope({
+        jobAccess: "assigned",
+        departments: ["Engineering"],
+        regions: [],
+        futureField: true,
+      }),
+    ).toEqual({ jobAccess: "assigned", departments: ["Engineering"], regions: [] });
   });
 
   it("prevents a scoped actor from granting all jobs or broader filters", () => {

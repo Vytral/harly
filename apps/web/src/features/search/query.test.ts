@@ -20,6 +20,23 @@ describe("normalizeSearchQuery", () => {
     expect(query!.tokens).toEqual(["ada", "lovelace"]);
   });
 
+  it("removes control characters, including NUL that Postgres rejects", () => {
+    expect(normalizeSearchQuery("ada\u0000lovelace")!.text).toBe("adalovelace");
+    expect(normalizeSearchQuery("\u0007ada\u001f\u007f")!.text).toBe("ada");
+    expect(normalizeSearchQuery("\u0000\u0000")).toBeNull();
+  });
+
+  it("treats tabs and newlines as separators, not as text", () => {
+    expect(normalizeSearchQuery("ada\tlovelace\nbyron")!.text).toBe("ada lovelace byron");
+  });
+
+  it("needs at least two characters before anything is searched", () => {
+    expect(normalizeSearchQuery("a")).toBeNull();
+    expect(normalizeSearchQuery("  a  ")).toBeNull();
+    expect(normalizeSearchQuery("🙂")).toBeNull();
+    expect(normalizeSearchQuery("ab")!.text).toBe("ab");
+  });
+
   it("returns null for empty, whitespace-only and non-string input", () => {
     expect(normalizeSearchQuery("")).toBeNull();
     expect(normalizeSearchQuery("   \n\t ")).toBeNull();

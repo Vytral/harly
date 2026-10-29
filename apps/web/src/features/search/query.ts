@@ -6,6 +6,8 @@ import { escapeLikePattern } from "./patterns";
  */
 
 export const SEARCH_MAX_QUERY_LENGTH = 100;
+/** Shorter queries match nearly everything and are never sent to the database. */
+export const SEARCH_MIN_QUERY_LENGTH = 2;
 export const SEARCH_MAX_TOKENS = 6;
 export const SEARCH_DEFAULT_LIMIT_PER_GROUP = 6;
 export const SEARCH_MAX_LIMIT_PER_GROUP = 12;
@@ -25,16 +27,33 @@ export type NormalizedSearchQuery = {
   tokenContainsPatterns: string[];
 };
 
+const WHITESPACE_CONTROLS = new Set([0x09, 0x0a, 0x0b, 0x0c, 0x0d]);
+
 /**
- * Normalize raw user input. Returns null when nothing searchable remains, so the
- * caller can answer without touching the database.
+ * C0 and C1 control characters other than the whitespace ones. NUL is among
+ * them: Postgres rejects it inside a text parameter, and it has no place in a
+ * name or an email.
+ */
+function isStrippedControl(codePoint: number): boolean {
+  if (WHITESPACE_CONTROLS.has(codePoint)) return false;
+  return codePoint < 0x20 || (codePoint >= 0x7f && codePoint <= 0x9f);
+}
+
+/**
+ * Normalize raw user input. Returns null when nothing searchable remains (empty,
+ * only whitespace or control characters, or shorter than
+ * {@link SEARCH_MIN_QUERY_LENGTH}), so the caller can answer without touching
+ * the database.
  */
 export function normalizeSearchQuery(raw: unknown): NormalizedSearchQuery | null {
   if (typeof raw !== "string") return null;
-  const collapsed = raw.replace(/\s+/g, " ").trim();
+  const printable = Array.from(raw)
+    .filter((char) => !isStrippedControl(char.codePointAt(0) ?? 0))
+    .join("");
+  const collapsed = printable.replace(/\s+/g, " ").trim();
   if (!collapsed) return null;
   const text = Array.from(collapsed).slice(0, SEARCH_MAX_QUERY_LENGTH).join("").trim();
-  if (!text) return null;
+  if (!text || Array.from(text).length < SEARCH_MIN_QUERY_LENGTH) return null;
 
   const lower = text.toLowerCase();
   const tokens = lower.split(" ").filter(Boolean).slice(0, SEARCH_MAX_TOKENS);

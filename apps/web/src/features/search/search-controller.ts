@@ -22,11 +22,34 @@ export type WorkspaceSearchState = {
   status: WorkspaceSearchStatus;
   /**
    * Last results received. While a newer query is loading these remain on screen
-   * (marked stale by the UI); they are cleared on error and when the query empties.
+   * and are presented as stale by {@link presentResults}; they are cleared on
+   * error and when the query empties.
    */
   results: WorkspaceSearchResults | null;
   error: string | null;
 };
+
+/**
+ * What the palette may show for a state. Results left over from an earlier query
+ * are shown dimmed and cannot be chosen until the answer for the current query
+ * arrives, so Enter never opens a record that no longer matches the input.
+ */
+export type PresentedResults = {
+  results: WorkspaceSearchResults | null;
+  /** The results belong to an earlier query. */
+  stale: boolean;
+  /** A request is in flight. */
+  busy: boolean;
+};
+
+export function presentResults(state: WorkspaceSearchState): PresentedResults {
+  if (state.status === "error") {
+    return { results: null, stale: false, busy: false };
+  }
+  const busy = state.status === "loading";
+  const results = state.results;
+  return { results, stale: busy && results !== null, busy };
+}
 
 export type WorkspaceSearchFn = (
   rawQuery: string,

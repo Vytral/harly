@@ -1,3 +1,5 @@
+import type { Permission } from "@/features/workspaces/permissions";
+
 import type { SearchRange } from "./query";
 
 /**
@@ -14,6 +16,18 @@ export const SEARCH_GROUPS = [
 ] as const;
 
 export type SearchGroupKey = (typeof SEARCH_GROUPS)[number];
+
+/**
+ * The permission each group needs. A group the caller lacks is omitted, so no
+ * candidate name, email or application leaves the server without candidate access.
+ */
+export const SEARCH_GROUP_PERMISSION: Record<SearchGroupKey, Permission> = {
+  jobs: "jobs:view",
+  candidates: "candidates:view",
+  applications: "candidates:view",
+  tasks: "tasks:read",
+  people: "members:read",
+};
 
 export type WorkspaceSearchHit = {
   group: SearchGroupKey;

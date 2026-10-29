@@ -5,6 +5,7 @@ import {
   asc,
   desc,
   eq,
+  inArray,
   isNull,
   or,
   sql,
@@ -24,7 +25,6 @@ import {
 } from "@harly/db";
 
 import { TASK_STATUS_LABELS } from "@/features/tasks/shared";
-import type { Permission } from "@/features/workspaces/permissions";
 import { getRolePolicy } from "@/features/workspaces/permissions-server";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
@@ -42,24 +42,13 @@ import {
   type NormalizedSearchQuery,
 } from "./query";
 import {
+  SEARCH_GROUP_PERMISSION,
   emptyWorkspaceSearchResults,
   type SearchGroupKey,
   type WorkspaceSearchGroup,
   type WorkspaceSearchHit,
   type WorkspaceSearchResults,
 } from "./results";
-
-/**
- * The permission each group needs. A group the caller lacks is omitted, so no
- * candidate name, email or application leaves the server without candidate access.
- */
-export const SEARCH_GROUP_PERMISSION: Record<SearchGroupKey, Permission> = {
-  jobs: "jobs:view",
-  candidates: "candidates:view",
-  applications: "candidates:view",
-  tasks: "tasks:read",
-  people: "members:read",
-};
 
 /** Resolve who is searching. Redirects for unauthenticated users, as other pages do. */
 export async function resolveSearchActor(): Promise<WorkspaceSearchActor> {
@@ -433,4 +422,140 @@ export async function searchWorkspaceForActor(
     groups,
     allResultsHref: want("candidates") ? seeAllCandidates(query) : null,
   };
+}
+
+/** A saved palette result, identified the way the search identifies it. */
+export type RecentRef = { group: SearchGroupKey; id: string };
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Of the saved recents, the ones the actor may still open right now. Each group
+ * uses the predicates of its search query, so a recent disappears as soon as the
+ * viewer loses the permission, the scope, or the record itself. Ids that cannot
+ * exist (malformed uuids for uuid groups) are dropped rather than sent to Postgres.
+ */
+export async function visibleRecentRefsForActor(
+  actor: WorkspaceSearchActor,
+  refs: readonly RecentRef[],
+): Promise<RecentRef[]> {
+  const idsByGroup = new Map<SearchGroupKey, string[]>();
+  for (const ref of refs) {
+    if (!actorHasPermission(actor, SEARCH_GROUP_PERMISSION[ref.group])) continue;
+    if (ref.group !== "people" && !UUID_PATTERN.test(ref.id)) continue;
+    idsByGroup.set(ref.group, [...(idsByGroup.get(ref.group) ?? []), ref.id]);
+  }
+
+  const visible = new Set<string>();
+  await Promise.all(
+    [...idsByGroup].map(async ([group, ids]) => {
+      for (const id of await visibleIdsInGroup(actor, group, ids)) {
+        visible.add(recentKey(group, id));
+      }
+    }),
+  );
+  return refs.filter((ref) => visible.has(recentKey(ref.group, ref.id)));
+}
+
+/** Group names contain no colon, so `group:id` is unambiguous. */
+function recentKey(group: SearchGroupKey, id: string): string {
+  return `${group}:${id}`;
+}
+
+async function visibleIdsInGroup(
+  actor: WorkspaceSearchActor,
+  group: SearchGroupKey,
+  ids: readonly string[],
+): Promise<string[]> {
+  const workspaceId = actor.workspaceId;
+  switch (group) {
+    case "jobs":
+      return (
+        await db
+          .select({ id: jobs.id })
+          .from(jobs)
+          .where(
+            and(
+              eq(jobs.workspaceId, workspaceId),
+              isNull(jobs.deletedAt),
+              jobScopeSql(actor),
+              inArray(jobs.id, [...ids]),
+            ),
+          )
+      ).map((row) => row.id);
+    case "candidates":
+      return (
+        await db
+          .select({ id: candidates.id })
+          .from(candidates)
+          .where(
+            and(
+              eq(candidates.workspaceId, workspaceId),
+              isNull(candidates.deletedAt),
+              isNull(candidates.anonymizedAt),
+              candidateScopeSql(actor, candidates.id),
+              inArray(candidates.id, [...ids]),
+            ),
+          )
+      ).map((row) => row.id);
+    case "applications":
+      return (
+        await db
+          .select({ id: applications.id })
+          .from(applications)
+          .innerJoin(
+            candidates,
+            and(
+              eq(candidates.id, applications.candidateId),
+              eq(candidates.workspaceId, workspaceId),
+              isNull(candidates.deletedAt),
+              isNull(candidates.anonymizedAt),
+            ),
+          )
+          .innerJoin(
+            jobs,
+            and(
+              eq(jobs.id, applications.jobId),
+              eq(jobs.workspaceId, workspaceId),
+              isNull(jobs.deletedAt),
+            ),
+          )
+          .where(
+            and(
+              eq(applications.workspaceId, workspaceId),
+              jobScopeSql(actor),
+              inArray(applications.id, [...ids]),
+            ),
+          )
+      ).map((row) => row.id);
+    case "tasks":
+      return (
+        await db
+          .select({ id: tasks.id })
+          .from(tasks)
+          .where(
+            and(
+              eq(tasks.workspaceId, workspaceId),
+              isNull(tasks.deletedAt),
+              taskScopeSql(actor),
+              inArray(tasks.id, [...ids]),
+            ),
+          )
+      ).map((row) => row.id);
+    case "people":
+      return (
+        await db
+          .select({ id: authUsers.id })
+          .from(authMembers)
+          .innerJoin(authUsers, eq(authUsers.id, authMembers.userId))
+          .where(
+            and(
+              eq(authMembers.organizationId, workspaceId),
+              eq(authMembers.status, "active"),
+              inArray(authUsers.id, [...ids]),
+            ),
+          )
+      ).map((row) => row.id);
+  }
 }

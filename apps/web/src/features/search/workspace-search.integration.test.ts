@@ -23,7 +23,7 @@ import type { Permission, RoleScope } from "@/features/workspaces/permissions";
 
 import type { WorkspaceSearchActor } from "./scope";
 import type { WorkspaceSearchResults } from "./results";
-import { searchWorkspaceForActor } from "./workspace-search";
+import { searchWorkspaceForActor, visibleRecentRefsForActor } from "./workspace-search";
 import { matchRank, normalizeSearchQuery } from "./query";
 
 const EVERYTHING: Permission[] = [
@@ -317,6 +317,128 @@ describe.skipIf(!runPipelineIntegration)("workspace search (database)", () => {
     expect(hitIds(unrestricted, "tasks")).toHaveLength(1);
   });
 
+  it("hides a task linked to an out-of-scope application even when its candidate has an in-scope application", async () => {
+    // Jane applies to two jobs: an Engineering role (in scope) and a Sales role
+    // in Berlin (out of scope). Tasks are created for each combination of links.
+    const token = `xs${tag}`;
+    const berlin = await fx.addJob();
+    await db
+      .update(jobs)
+      .set({ title: `Berlin Sales ${token}`, department: "Sales", jobLocationRegion: "EMEA" })
+      .where(eq(jobs.id, berlin.jobId));
+    const jane = await insertCandidate({
+      firstName: "Jane",
+      lastName: `Scope${tag}`,
+      email: `jane-${tag}@example.test`,
+    });
+    const [inScopeApp] = await db
+      .insert(applications)
+      .values({ workspaceId: fx.workspaceId, candidateId: jane, jobId: fx.jobId, currentStageId: fx.stages.applied!.id })
+      .returning({ id: applications.id });
+    const [outOfScopeApp] = await db
+      .insert(applications)
+      .values({ workspaceId: fx.workspaceId, candidateId: jane, jobId: berlin.jobId, currentStageId: berlin.stages.applied!.id })
+      .returning({ id: applications.id });
+
+    const [linkedOutOfScope, candidateOnly, jobOutOfScope, mixed, linkedInScope] = await db
+      .insert(tasks)
+      .values([
+        // Linked to the out-of-scope application: hidden.
+        { workspaceId: fx.workspaceId, title: `Send offer ${token}`, ownerId: fx.userId, createdById: fx.userId, candidateId: jane, applicationId: outOfScopeApp.id, status: "pending" },
+        // Candidate only, no application or job link: visible through the in-scope application.
+        { workspaceId: fx.workspaceId, title: `Jane intro ${token}`, ownerId: fx.userId, createdById: fx.userId, candidateId: jane, status: "pending" },
+        // Linked to the out-of-scope job: hidden even though the candidate has an in-scope application.
+        { workspaceId: fx.workspaceId, title: `Berlin job task ${token}`, ownerId: fx.userId, createdById: fx.userId, candidateId: jane, jobId: berlin.jobId, status: "pending" },
+        // In-scope job but out-of-scope application: hidden, the application link must be in scope.
+        { workspaceId: fx.workspaceId, title: `Mixed links ${token}`, ownerId: fx.userId, createdById: fx.userId, candidateId: jane, jobId: fx.jobId, applicationId: outOfScopeApp.id, status: "pending" },
+        // Linked to the in-scope application: visible.
+        { workspaceId: fx.workspaceId, title: `In scope app ${token}`, ownerId: fx.userId, createdById: fx.userId, candidateId: jane, applicationId: inScopeApp.id, status: "pending" },
+      ])
+      .returning({ id: tasks.id });
+
+    const scoped = actor({
+      userId: scopedUserId,
+      scope: { ...OPEN_SCOPE, departments: ["Engineering"] },
+    });
+    const visible = await searchWorkspaceForActor(scoped, token, { limitPerGroup: 12 });
+    expect(hitIds(visible, "tasks").sort()).toEqual(
+      [candidateOnly.id, linkedInScope.id].sort(),
+    );
+    expect(JSON.stringify(visible)).not.toContain(linkedOutOfScope.id);
+    expect(JSON.stringify(visible)).not.toContain(jobOutOfScope.id);
+    expect(JSON.stringify(visible)).not.toContain(mixed.id);
+
+    const everything = await searchWorkspaceForActor(actor(), token, { limitPerGroup: 12 });
+    expect(hitIds(everything, "tasks")).toHaveLength(5);
+  });
+
+  it("re-checks saved recents against the viewer's current access", async () => {
+    const [ownTask] = await db
+      .insert(tasks)
+      .values({
+        workspaceId: fx.workspaceId,
+        title: "Recent check task",
+        ownerId: scopedUserId,
+        createdById: scopedUserId,
+        status: "pending",
+      })
+      .returning({ id: tasks.id });
+    const [adaApplication] = await db
+      .select({ id: applications.id })
+      .from(applications)
+      .where(eq(applications.candidateId, ids.ada));
+    const [graceApplication] = await db
+      .select({ id: applications.id })
+      .from(applications)
+      .where(eq(applications.candidateId, ids.grace));
+    const refs = [
+      { group: "jobs" as const, id: ids.jobA },
+      { group: "jobs" as const, id: ids.jobB },
+      { group: "jobs" as const, id: ids.jobTrashed },
+      { group: "candidates" as const, id: ids.ada },
+      { group: "candidates" as const, id: ids.grace },
+      { group: "applications" as const, id: adaApplication.id },
+      { group: "applications" as const, id: graceApplication.id },
+      { group: "tasks" as const, id: ownTask.id },
+      { group: "people" as const, id: patUserId },
+      { group: "candidates" as const, id: "not-a-uuid" },
+    ];
+    const key = (ref: { group: string; id: string }) => `${ref.group}:${ref.id}`;
+
+    const engineering = actor({
+      userId: scopedUserId,
+      scope: { ...OPEN_SCOPE, departments: ["Engineering"] },
+    });
+    const visibleToEngineering = await visibleRecentRefsForActor(engineering, refs);
+    expect(visibleToEngineering.map(key).sort()).toEqual(
+      [
+        `jobs:${ids.jobA}`,
+        `candidates:${ids.ada}`,
+        `applications:${adaApplication.id}`,
+        `tasks:${ownTask.id}`,
+        `people:${patUserId}`,
+      ].sort(),
+    );
+
+    const unrestricted = await visibleRecentRefsForActor(actor(), refs);
+    expect(unrestricted.map(key)).toEqual(
+      expect.arrayContaining([
+        `jobs:${ids.jobB}`,
+        `candidates:${ids.grace}`,
+        `applications:${graceApplication.id}`,
+      ]),
+    );
+    expect(unrestricted.map(key)).not.toContain(`jobs:${ids.jobTrashed}`);
+    expect(unrestricted.map(key)).not.toContain("candidates:not-a-uuid");
+
+    const withoutCandidates = await visibleRecentRefsForActor(
+      actor({ permissions: ["jobs:view", "tasks:read", "members:read"] }),
+      refs,
+    );
+    expect(withoutCandidates.map((ref) => ref.group)).not.toContain("candidates");
+    expect(withoutCandidates.map((ref) => ref.group)).not.toContain("applications");
+  });
+
   it("never returns anonymized, deleted or trashed rows", async () => {
     const results = await searchWorkspaceForActor(actor(), "ada");
     const all = JSON.stringify(results);
@@ -409,15 +531,24 @@ describe.skipIf(!runPipelineIntegration)("workspace search (database)", () => {
   it("treats LIKE metacharacters in the query as literal text", async () => {
     const percentJob = await insertJob({ title: `Remote 100% ${tag}` });
     const plainJob = await insertJob({ title: `Plain ${tag}` });
+    const underscoreJob = await insertJob({ title: `Under_score ${tag}` });
+    const wordJob = await insertJob({ title: `Underscore ${tag}` });
 
-    // A bare "%" must match only titles that contain a literal percent sign.
+    // "0%" must match only a literal percent sign, not any run of characters.
+    const percent = await searchWorkspaceForActor(actor(), "0%", { limitPerGroup: 12 });
+    expect(hitIds(percent, "jobs")).toContain(percentJob);
+    expect(hitIds(percent, "jobs")).not.toContain(plainJob);
+
+    // "r_" must match a literal underscore; the wildcard reading would also match "rs".
+    const underscore = await searchWorkspaceForActor(actor(), "r_", { limitPerGroup: 12 });
+    expect(hitIds(underscore, "jobs")).toContain(underscoreJob);
+    expect(hitIds(underscore, "jobs")).not.toContain(wordJob);
+  });
+
+  it("answers a one-character query with no results", async () => {
     const results = await searchWorkspaceForActor(actor(), "%");
-    const jobIds = hitIds(results, "jobs");
-    expect(jobIds).toContain(percentJob);
-    expect(jobIds).not.toContain(plainJob);
-
-    const underscore = await searchWorkspaceForActor(actor(), "_");
-    expect(hitIds(underscore, "jobs")).not.toContain(plainJob);
+    expect(results.groups).toEqual({});
+    expect(results.allResultsHref).toBeNull();
   });
 
   it("returns a result set without throwing for a restricted actor", async () => {

@@ -1,14 +1,27 @@
-import type { SearchGroupKey } from "./results";
+import {
+  SEARCH_GROUP_PERMISSION,
+  type SearchGroupKey,
+  type WorkspaceSearchHit,
+} from "./results";
 
 /**
- * Recently opened palette results, kept per browser and per workspace. This is
- * a per-viewer convenience, so every storage call is guarded: private windows,
- * blocked site data and throwing accessors all degrade to "no recents".
+ * Recently opened palette results, kept per browser, per user and per
+ * workspace. This is a per-viewer convenience: every storage call is guarded, so
+ * private windows, blocked site data and throwing accessors all degrade to "no
+ * recents".
+ *
+ * Only what is needed to reopen a result is stored: the group, the id, the
+ * display name and the same-origin href. Contact details, headlines and stage
+ * names are never written, so a recent cannot leak data the viewer has since
+ * lost access to. The key includes the user, so a shared browser cannot show one
+ * person's recents to the next.
  */
 
 export const RECENTS_LIMIT = 8;
 
-const KEY_PREFIX = "harly.search.recents.v1:";
+const KEY_PREFIX = "harly.search.recents.v2:";
+/** Pre-user-keyed storage. It held contact details, so it is purged, never read. */
+const LEGACY_KEY_PREFIX = "harly.search.recents.v1:";
 const MAX_TEXT_LENGTH = 300;
 const GROUPS: readonly SearchGroupKey[] = [
   "jobs",
@@ -22,14 +35,18 @@ export type RecentSearchItem = {
   group: SearchGroupKey;
   id: string;
   primary: string;
-  secondary: string | null;
   href: string;
 };
 
-export type RecentsStorage = Pick<Storage, "getItem" | "setItem">;
+export type RecentsScope = {
+  userId: string;
+  workspaceId: string;
+};
 
-export function recentsStorageKey(workspaceId: string): string {
-  return `${KEY_PREFIX}${workspaceId}`;
+export type RecentsStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+export function recentsStorageKey(scope: RecentsScope): string {
+  return `${KEY_PREFIX}${encodeURIComponent(scope.userId)}/${encodeURIComponent(scope.workspaceId)}`;
 }
 
 /** The browser's localStorage, or null when the accessor itself throws. */
@@ -46,6 +63,21 @@ export function sameRecent(
   b: Pick<RecentSearchItem, "group" | "id">,
 ): boolean {
   return a.group === b.group && a.id === b.id;
+}
+
+/** The only shape that may be stored: copies the four stored fields and nothing else. */
+function storedRecent(source: RecentSearchItem): RecentSearchItem {
+  return {
+    group: source.group,
+    id: source.id,
+    primary: source.primary,
+    href: source.href,
+  };
+}
+
+/** The recent to store for a palette hit, without contact details or stage text. */
+export function recentFromHit(hit: WorkspaceSearchHit): RecentSearchItem {
+  return storedRecent(hit);
 }
 
 /** Only same-origin paths are accepted, so a stored value can never point off-site. */
@@ -68,30 +100,23 @@ function parseItem(value: unknown): RecentSearchItem | null {
   if (typeof item.primary !== "string" || item.primary.length > MAX_TEXT_LENGTH) {
     return null;
   }
-  if (
-    item.secondary !== null &&
-    (typeof item.secondary !== "string" || item.secondary.length > MAX_TEXT_LENGTH)
-  ) {
-    return null;
-  }
   if (!isSafeHref(item.href)) return null;
   return {
     group: item.group as SearchGroupKey,
     id: item.id,
     primary: item.primary,
-    secondary: item.secondary as string | null,
     href: item.href,
   };
 }
 
-/** Recents for a workspace, newest first. Corrupt or unreadable storage yields []. */
+/** Recents for a user in a workspace, newest first. Corrupt or unreadable storage yields []. */
 export function readRecents(
   storage: RecentsStorage | null,
-  workspaceId: string,
+  scope: RecentsScope,
 ): RecentSearchItem[] {
   if (!storage) return [];
   try {
-    const raw = storage.getItem(recentsStorageKey(workspaceId));
+    const raw = storage.getItem(recentsStorageKey(scope));
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -109,14 +134,37 @@ export function readRecents(
   }
 }
 
-function persist(
+/** Drop the pre-user-keyed recents for a workspace, which may hold contact details. */
+export function purgeLegacyRecents(
   storage: RecentsStorage | null,
   workspaceId: string,
+): void {
+  if (!storage) return;
+  try {
+    storage.removeItem(`${LEGACY_KEY_PREFIX}${workspaceId}`);
+  } catch {
+    // Storage blocked: nothing was readable to begin with.
+  }
+}
+
+/** Keep only recents whose group the viewer's permissions still allow. */
+export function filterRecentsByPermission(
+  items: readonly RecentSearchItem[],
+  permissions: readonly string[],
+): RecentSearchItem[] {
+  return items.filter((item) =>
+    permissions.includes(SEARCH_GROUP_PERMISSION[item.group]),
+  );
+}
+
+function persist(
+  storage: RecentsStorage | null,
+  scope: RecentsScope,
   items: RecentSearchItem[],
 ): void {
   if (!storage) return;
   try {
-    storage.setItem(recentsStorageKey(workspaceId), JSON.stringify(items));
+    storage.setItem(recentsStorageKey(scope), JSON.stringify(items));
   } catch {
     // Quota exceeded or storage blocked: the palette keeps the in-memory list.
   }
@@ -128,26 +176,26 @@ function persist(
  */
 export function recordRecent(
   storage: RecentsStorage | null,
-  workspaceId: string,
+  scope: RecentsScope,
   item: RecentSearchItem,
 ): RecentSearchItem[] {
-  const current = readRecents(storage, workspaceId);
+  const current = readRecents(storage, scope);
   const next = [
-    item,
+    storedRecent(item),
     ...current.filter((existing) => !sameRecent(existing, item)),
   ].slice(0, RECENTS_LIMIT);
-  persist(storage, workspaceId, next);
+  persist(storage, scope, next);
   return next;
 }
 
 export function removeRecent(
   storage: RecentsStorage | null,
-  workspaceId: string,
+  scope: RecentsScope,
   target: Pick<RecentSearchItem, "group" | "id">,
 ): RecentSearchItem[] {
-  const next = readRecents(storage, workspaceId).filter(
+  const next = readRecents(storage, scope).filter(
     (existing) => !sameRecent(existing, target),
   );
-  persist(storage, workspaceId, next);
+  persist(storage, scope, next);
   return next;
 }
