@@ -33,8 +33,9 @@ Before tagging, write the version section below. Use these headings when they
 apply: `Added`, `Changed`, `Fixed`, `Removed`, `Security`. Note migrations and
 anything an operator must do before upgrading.
 
-## [0.3.0]
+## [0.3.0-beta.1]
 
+The first beta of 0.3.0; the stable release will carry these notes under `[0.3.0]`.
 A feature release that makes the hiring pipeline, reports, search, email and
 role-based access trustworthy. **It contains database migrations
 (`0153`–`0158`) and a few deliberate behavior changes.** Read
@@ -119,7 +120,8 @@ existing installation.
 ### Security
 
 - Closed several cases where role-scoped users could read or modify data
-  outside their scope, and the publishable-key hire/reject/move path above.
+  outside their scope (including documents and their attachments, notes, tags,
+  bulk email, tasks, offers, trash and automation steps), and the publishable-key hire/reject/move path above.
 - Search no longer logs query text, and AI tool results are redacted when
   anonymization is on.
 
