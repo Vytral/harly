@@ -525,7 +525,9 @@ function ResultIcon({
       name={name}
       src={avatarUrl}
       size="md"
-      className="shrink-0"
+      // The palette item's `[&_svg]:size-4` rule would otherwise shrink the
+      // generated avatar to 16px in the corner of its circle.
+      className="shrink-0 [&_svg]:size-full!"
     />
   );
 }
