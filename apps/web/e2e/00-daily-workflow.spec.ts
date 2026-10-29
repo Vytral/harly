@@ -40,11 +40,11 @@ test("calendar, candidate navigation, empty reports and filtered selection stay 
   // No applications exist immediately after global provisioning. Exercise the
   // empty state before inserting the two records used for selection below.
   await page.goto("/dashboard/reports");
-  const emptyPipeline = page.getByText("Stage distribution appears once candidates move through your pipeline.").locator("..");
+  const emptyPipeline = page.getByText("The funnel fills in once candidates move through a pipeline.").locator("..");
   await expect(emptyPipeline.getByRole("link", { name: "View pipeline" })).toHaveAttribute("href", "/dashboard/pipeline");
-  const emptyTime = page.getByText("Time to hire appears after your first hire.").locator("..");
+  const emptyTime = page.getByText(/Time to hire appears after the first hire in range\./).locator("..");
   await expect(emptyTime.getByRole("link", { name: "View pipeline" })).toHaveAttribute("href", "/dashboard/pipeline");
-  const emptySources = page.getByText("No applications yet. Sources appear once candidates apply.").locator("..");
+  const emptySources = page.getByText(/Sources appear once candidates apply\./).locator("..");
   await emptySources.getByRole("link", { name: "View jobs" }).click();
   await expect(page).toHaveURL(/\/dashboard\/jobs$/);
 
