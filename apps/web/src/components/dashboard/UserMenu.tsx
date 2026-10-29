@@ -24,10 +24,6 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { WorkspaceOption } from "@/features/workspaces/data";
 import { restoreSetupChecklistAction } from "@/features/onboarding/checklist-actions";
-import {
-  browserLocalStorage,
-  clearAllSearchRecents,
-} from "@/features/search/recents";
 
 // Root package.json version, inlined by next.config.ts at build time.
 const VERSION = process.env.NEXT_PUBLIC_HARLY_VERSION
@@ -84,8 +80,6 @@ export function UserMenu({
 
   function handleSignOut() {
     startTransition(async () => {
-      // Recents are a per-browser convenience; the next person here must not see them.
-      clearAllSearchRecents(browserLocalStorage());
       await signOut();
       router.replace("/login");
       router.refresh();
