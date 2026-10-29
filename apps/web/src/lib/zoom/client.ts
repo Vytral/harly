@@ -1,11 +1,12 @@
 import "server-only";
 
+import { CREDENTIALS_UNREADABLE_MESSAGE } from "@/features/integrations/health/model";
 import {
   recordIntegrationFailure,
   recordIntegrationSuccess,
 } from "@/features/integrations/health/repository";
 
-import { getZoomToken } from "./config";
+import { getZoomTokenState } from "./config";
 import { refreshZoomAccessToken } from "./oauth";
 
 type ZoomMeeting = {
@@ -50,12 +51,16 @@ export async function zoomFetch<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
-  const token = await getZoomToken(workspaceId);
-  if (!token) {
+  const state = await getZoomTokenState(workspaceId);
+  if (state.status === "not_connected") {
     throw new ZoomAPIError("Zoom is not installed.", 401, 0);
   }
+  if (state.status === "unreadable") {
+    // No HTTP status: this is a local configuration problem, not a provider answer.
+    throw new ZoomAPIError(CREDENTIALS_UNREADABLE_MESSAGE, 0, 0);
+  }
 
-  let response = await sendZoomRequest(token, path, options);
+  let response = await sendZoomRequest(state.token, path, options);
 
   if (response.status === 401) {
     const refreshed = await refreshZoomAccessToken(workspaceId);

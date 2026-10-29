@@ -16,6 +16,7 @@ import {
 
 import { isDemoMode } from "@harly/config";
 
+import { sanitizeIntegrationError } from "@/features/integrations/health/model";
 import { recordIntegrationFailure, recordIntegrationSuccess } from "@/features/integrations/health/repository";
 import { getWorkspaceSlackConfig } from "@/lib/slack/config";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
@@ -148,7 +149,7 @@ function nextRetryAt(attempt: number, error: unknown): Date | null {
 function errorMessage(error: unknown): string {
   const code = slackErrorCode(error);
   if (code) return code;
-  return (error instanceof Error ? error.message : "Slack request failed").slice(0, 500);
+  return error instanceof Error ? sanitizeIntegrationError(error) : "Slack request failed";
 }
 
 /** Persist the notification before any best-effort send is attempted. */
@@ -290,7 +291,7 @@ export async function deliverSlack(
 
   if (status === "failed" && attempt >= MAX_ATTEMPTS) status = "dead_letter";
   if (status === "success" && providerCalled) {
-    await recordIntegrationSuccess(delivery.workspaceId, "slack");
+    await recordIntegrationSuccess(delivery.workspaceId, "slack", { startedAt });
   }
   await database.insert(slackDeliveryAttempts).values({
     workspaceId: delivery.workspaceId,

@@ -111,12 +111,15 @@ export async function requestOutlookRefresh(opts: {
   };
 }
 
-/** Store a token pair encrypted. Pass a transaction to write under a held lock. */
+/**
+ * Store a token pair encrypted. Pass a transaction to write under a held lock.
+ * Returns the stored refresh-token ciphertext, which later writes compare against.
+ */
 export async function persistOutlookTokens(
   workspaceId: string,
   tokens: OutlookTokenPair,
   executor: Pick<typeof db, "update"> = db,
-): Promise<void> {
+): Promise<string> {
   const encryptedAccess = encryptSecret(sealOutlookAccessToken(tokens.accessToken, tokens.expiresAt));
   const encryptedRefresh = encryptSecret(tokens.refreshToken);
 
@@ -132,6 +135,7 @@ export async function persistOutlookTokens(
       updatedAt: new Date(),
     })
     .where(eq(workspaceSettings.organizationId, workspaceId));
+  return encryptedRefresh.ciphertext;
 }
 
 /** Get the authenticated user's profile. */

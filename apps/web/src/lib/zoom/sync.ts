@@ -3,6 +3,7 @@ import { and, eq, exists, isNull } from "drizzle-orm";
 import { candidates, db, interviews } from "@harly/db";
 
 import { createMeeting, deleteMeeting, findMeetingByTrackingField } from "./client";
+import { safeErrorFields } from "@/features/integrations/health/model";
 
 function formatZoomDateTime(date: Date): string {
   return date.toISOString().replace(/\.\d{3}Z$/, "");
@@ -71,7 +72,7 @@ export async function syncInterviewToZoom(params: SyncInterviewToZoomParams) {
         HARLY_TRACKING_FIELD,
         marker,
       ).catch((lookupError) => {
-        console.error("[zoom] Failed to reconcile ambiguous meeting create", lookupError);
+        console.error("[zoom] Failed to reconcile ambiguous meeting create", safeErrorFields(lookupError));
         return null;
       });
       if (!recovered) throw error;
@@ -82,7 +83,7 @@ export async function syncInterviewToZoom(params: SyncInterviewToZoomParams) {
 
     return { joinUrl: result.join_url, meetingId: String(result.id) };
   } catch (error) {
-    console.error("[zoom] Failed to create meeting", error);
+    console.error("[zoom] Failed to create meeting", safeErrorFields(error));
     return null;
   }
 }
@@ -147,7 +148,7 @@ export async function cancelInterviewZoomMeeting(params: CancelInterviewZoomPara
       );
     return true;
   } catch (error) {
-    console.error("[zoom] Failed to cancel meeting", error);
+    console.error("[zoom] Failed to cancel meeting", safeErrorFields(error));
     return false;
   }
 }
@@ -190,7 +191,7 @@ export async function replaceInterviewToZoom(params: {
       duration: params.durationMins,
     });
   } catch (error) {
-    console.error("[zoom] Failed to create replacement meeting", error);
+    console.error("[zoom] Failed to create replacement meeting", safeErrorFields(error));
     return { ok: false, reason: "create_failed" };
   }
 
@@ -214,12 +215,12 @@ export async function replaceInterviewToZoom(params: {
       .returning({ id: interviews.id });
     persisted = rows.length > 0;
   } catch (error) {
-    console.error("[zoom] Failed to persist replacement meeting", error);
+    console.error("[zoom] Failed to persist replacement meeting", safeErrorFields(error));
   }
 
   if (!persisted) {
     await deleteMeeting(params.workspaceId, replacementId).catch((error) =>
-      console.error("[zoom] Failed to clean up unpersisted replacement", error),
+      console.error("[zoom] Failed to clean up unpersisted replacement", safeErrorFields(error)),
     );
     return { ok: false, reason: "persist_failed" };
   }
@@ -232,7 +233,7 @@ export async function replaceInterviewToZoom(params: {
       meetingId: replacementId,
     };
   } catch (error) {
-    console.error("[zoom] Failed to delete previous meeting", error);
+    console.error("[zoom] Failed to delete previous meeting", safeErrorFields(error));
     try {
       const restored = await db
         .update(interviews)
@@ -250,12 +251,12 @@ export async function replaceInterviewToZoom(params: {
         .returning({ id: interviews.id });
       if (restored.length > 0) {
         await deleteMeeting(params.workspaceId, replacementId).catch((cleanupError) =>
-          console.error("[zoom] Failed to clean up replacement meeting", cleanupError),
+          console.error("[zoom] Failed to clean up replacement meeting", safeErrorFields(cleanupError)),
         );
       }
     } catch (restoreError) {
       // Keep the valid replacement referenced if restoration itself fails.
-      console.error("[zoom] Failed to restore previous meeting", restoreError);
+      console.error("[zoom] Failed to restore previous meeting", safeErrorFields(restoreError));
     }
     return { ok: false, reason: "old_meeting_not_deleted" };
   }

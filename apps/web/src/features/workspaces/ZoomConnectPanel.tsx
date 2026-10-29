@@ -2,6 +2,7 @@
 
 import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
 import type { IntegrationHealthView } from "@/features/integrations/health/model";
+import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
@@ -55,8 +56,8 @@ export function ZoomConnectPanel({
 
   const installUrl = `/api/integrations/zoom/install?ws=${workspaceId}`;
 
-  const statusTone = isConnected ? "on" : "neutral";
-  const statusLabel = isConnected ? "Connected" : "Not connected";
+  const statusTone = providerStatusTone(health, isConnected ? "on" : "neutral");
+  const statusLabel = providerStatusLabel(health, isConnected ? "Connected" : "Not connected");
 
   function disconnect() {
     startDisconnect(async () => {

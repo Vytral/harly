@@ -1,48 +1,17 @@
 import "server-only";
 
 import { checkAvailability } from "@/lib/gcal/availability";
-import {
-  getIntegrationStatuses,
-  type IntegrationStatuses,
-} from "@/features/workspaces/integrations-registry";
+import { getIntegrationStatuses } from "@/features/workspaces/integrations-registry";
 import { parseScheduledAt } from "@/features/interviews/shared";
 import { resolveCandidateApplication } from "./application-resolution";
 import type { ApplicationSearchItem } from "./application-resolution-matching";
+import {
+  chooseMeetingProvider,
+  providerIsReady,
+  type MeetingProviderChoice,
+} from "./meeting-provider";
 
-export type MeetingProviderChoice =
-  | "auto"
-  | "google_meet"
-  | "zoom"
-  | "teams"
-  | "jitsi"
-  | "external";
-
-export function chooseMeetingProvider(
-  requested: MeetingProviderChoice,
-  statuses: IntegrationStatuses,
-  hasExplicitLocation: boolean,
-): MeetingProviderChoice | "none" {
-  if (requested === "external") return hasExplicitLocation ? "external" : "none";
-  if (requested !== "auto") return requested;
-  if (statuses.zoom.installationState === "installed" && statuses.zoom.configured) return "zoom";
-  if (statuses.outlook.enabled && statuses.outlook.hasToken && statuses.outlook.encryptionReady) return "teams";
-  if (statuses.gcal.enabled && statuses.gcal.hasRefreshToken && statuses.gcal.hasCredentials && statuses.gcal.encryptionReady) return "google_meet";
-  if (statuses.jitsi.enabled && Boolean(statuses.jitsi.baseUrl)) return "jitsi";
-  return "none";
-}
-
-function providerReady(
-  provider: MeetingProviderChoice | "none",
-  statuses: IntegrationStatuses,
-  hasExplicitLocation: boolean,
-): boolean {
-  if (provider === "external") return hasExplicitLocation;
-  if (provider === "zoom") return statuses.zoom.installationState === "installed" && statuses.zoom.configured;
-  if (provider === "teams") return statuses.outlook.enabled && statuses.outlook.hasToken && statuses.outlook.encryptionReady;
-  if (provider === "google_meet") return statuses.gcal.enabled && statuses.gcal.hasRefreshToken && statuses.gcal.hasCredentials && statuses.gcal.encryptionReady;
-  if (provider === "jitsi") return statuses.jitsi.enabled && Boolean(statuses.jitsi.baseUrl);
-  return false;
-}
+export type { MeetingProviderChoice } from "./meeting-provider";
 
 type Availability = Awaited<ReturnType<typeof checkAvailability>>;
 
@@ -109,9 +78,12 @@ export async function prepareInterviewScheduling(input: {
   const warnings: string[] = [];
   if (availability.internalConflicts.length > 0) warnings.push("The interviewer has an internal scheduling conflict.");
   if (availability.error) warnings.push(availability.error);
+  if (availability.gcalAvailability === "unknown") {
+    warnings.push("Google Calendar could not be checked, so conflicts on that calendar are unknown.");
+  }
   if (provider === "none") {
     warnings.push(input.meetingProvider === "external" ? "An explicit external meeting link is required." : "No requested video provider is connected; the interview can still be saved without a video link.");
-  } else if (!providerReady(provider, statuses, hasExplicitLocation)) {
+  } else if (!providerIsReady(provider, statuses, hasExplicitLocation)) {
     warnings.push(`${provider} needs to be connected or repaired before it can create a meeting.`);
   }
 
@@ -124,7 +96,7 @@ export async function prepareInterviewScheduling(input: {
     timeZone: input.timeZone ?? null,
     durationMins: input.durationMins,
     provider,
-    providerReady: providerReady(provider, statuses, hasExplicitLocation),
+    providerReady: providerIsReady(provider, statuses, hasExplicitLocation),
     availability,
     warnings,
   };

@@ -2,6 +2,7 @@
 
 import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
 import type { IntegrationHealthView } from "@/features/integrations/health/model";
+import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
@@ -59,16 +60,16 @@ export function JitsiConnectPanel({
   const [open, setOpen] = useState(isConfigured);
   const [togglePending, startToggle] = useTransition();
 
-  const statusTone = isConfigured
+  const statusTone = providerStatusTone(health, isConfigured
     ? status.enabled
       ? "on"
       : "off"
-    : "neutral";
-  const statusLabel = isConfigured
+    : "neutral");
+  const statusLabel = providerStatusLabel(health, isConfigured
     ? status.enabled
       ? "Connected"
       : "Disabled"
-    : "Not connected";
+    : "Not connected");
 
   function toggleEnabled(next: boolean) {
     if (!status.baseUrl) {

@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { db, interviews } from "@harly/db";
 
 import { getWorkspaceJitsiConfig } from "./config";
+import { safeErrorFields } from "@/features/integrations/health/model";
 
 /**
  * Jitsi has no meetings API , the URL is the meeting. We mint a random,
@@ -72,7 +73,7 @@ export async function syncInterviewToJitsi(params: SyncInterviewToJitsiParams) {
 
     return { joinUrl, room };
   } catch (error) {
-    console.error("[jitsi] Failed to compose meeting link", error);
+    console.error("[jitsi] Failed to compose meeting link", safeErrorFields(error));
     return null;
   }
 }
@@ -98,7 +99,7 @@ export async function cancelInterviewJitsiMeeting(
       );
     return true;
   } catch (error) {
-    console.error("[jitsi] Failed to clear meeting", error);
+    console.error("[jitsi] Failed to clear meeting", safeErrorFields(error));
     return false;
   }
 }

@@ -2,6 +2,7 @@ import "server-only";
 
 import { isDemoMode } from "@harly/config";
 
+import { IntegrationHttpError } from "@/features/integrations/health/model";
 import {
   recordIntegrationFailure,
   recordIntegrationSuccess,
@@ -44,7 +45,14 @@ async function telegramFetch<T>(
       | TelegramResponse<T>
       | null;
     if (!json?.ok) {
-      throw new Error(json?.description ?? `Telegram API error (${res.status}).`);
+      // Keep the HTTP status and Telegram's description: a 401 or a kicked-bot 403
+      // is a credential failure, and the classifier needs both to say so.
+      const description = json?.description;
+      throw new IntegrationHttpError(
+        description ?? `Telegram API error (${res.status}).`,
+        res.status,
+        description ? [description] : [],
+      );
     }
     return json.result as T;
   } finally {
@@ -73,6 +81,7 @@ export async function sendTelegramMessage(opts: {
   signal?: AbortSignal;
   workspaceId?: string;
 }): Promise<void> {
+  const startedAt = new Date();
   try {
     await telegramFetch(opts.botToken, "sendMessage", {
       chat_id: opts.chatId,
@@ -87,6 +96,6 @@ export async function sendTelegramMessage(opts: {
     throw error;
   }
   if (opts.workspaceId) {
-    await recordIntegrationSuccess(opts.workspaceId, "telegram");
+    await recordIntegrationSuccess(opts.workspaceId, "telegram", { startedAt });
   }
 }

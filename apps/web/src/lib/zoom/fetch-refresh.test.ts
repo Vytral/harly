@@ -10,6 +10,10 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("./config", () => ({
   getZoomToken: mocks.getZoomToken,
+  getZoomTokenState: async (workspaceId: string) => {
+    const token = await mocks.getZoomToken(workspaceId);
+    return token ? { status: "ready", token } : { status: "not_connected" };
+  },
 }));
 
 vi.mock("./oauth", () => ({

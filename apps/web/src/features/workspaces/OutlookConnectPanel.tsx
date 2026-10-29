@@ -2,6 +2,7 @@
 
 import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
 import type { IntegrationHealthView } from "@/features/integrations/health/model";
+import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "@/lib/notification-island/toast";
@@ -62,12 +63,12 @@ export function OutlookConnectPanel({
   const [togglePending, startToggle] = useTransition();
   const [disconnecting, startDisconnect] = useTransition();
 
-  const statusTone = isConnected ? (status.enabled ? "on" : "off") : "neutral";
-  const statusLabel = isConnected
+  const statusTone = providerStatusTone(health, isConnected ? (status.enabled ? "on" : "off") : "neutral");
+  const statusLabel = providerStatusLabel(health, isConnected
     ? status.enabled
       ? "Connected"
       : "Disabled"
-    : "Not connected";
+    : "Not connected");
 
   const installUrl = `/api/integrations/outlook/install?ws=${workspaceId}`;
 

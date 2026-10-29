@@ -3,7 +3,8 @@
  * and the state machine. No database or server-only imports, so it is shared
  * by the repository, the registry and client components, and unit-tested
  * directly. The SQL upsert in `repository.ts` mirrors `nextHealthAfterFailure`
- * and is verified against it by the gated integration test.
+ * and `nextHealthAfterSuccess` and is verified against them by the gated
+ * integration test.
  */
 
 export const INTEGRATION_HEALTH_KEYS = [
@@ -30,9 +31,10 @@ export type IntegrationHealthState =
 export type StoredHealthState = Exclude<IntegrationHealthState, "not_connected">;
 
 /**
- * - `auth`: the provider rejected the credentials (revoked, expired, 401/403).
- * - `transient`: timeouts, 5xx, 408, 429 and network failures.
- * - `other`: any other failure, e.g. a provider validation error.
+ * - `auth`: the provider rejected the credentials (revoked, expired, 401, or a
+ *   403 that carries a credential reason).
+ * - `transient`: timeouts, 5xx, 408, 429, quota reasons and network failures.
+ * - `other`: any other failure, e.g. a validation error or an unexplained 403.
  */
 export type IntegrationFailureKind = "auth" | "transient" | "other";
 
@@ -43,6 +45,13 @@ export const DEGRADED_FAILURE_THRESHOLD = 3;
 export const FAILURE_WINDOW_MS = 15 * 60_000;
 
 export const MAX_LAST_ERROR_LENGTH = 300;
+
+/**
+ * Recorded when stored credentials exist but cannot be read (missing or rotated
+ * `AI_ENCRYPTION_KEY`). Reconnecting does not help, so it is not a reconnect.
+ */
+export const CREDENTIALS_UNREADABLE_MESSAGE =
+  "Stored credentials cannot be decrypted — check the encryption key";
 
 export type HealthSnapshot = {
   state: StoredHealthState;
@@ -101,6 +110,31 @@ const TRANSIENT_CODES = [
   "UND_ERR_SOCKET",
 ];
 
+/**
+ * Structured reasons that mean a 403 is a quota or rate problem, not a broken
+ * credential. Google answers these with HTTP 403.
+ */
+const QUOTA_REASONS = new Set([
+  "dailyLimitExceeded",
+  "quotaExceeded",
+  "rateLimitExceeded",
+  "userRateLimitExceeded",
+  "TooManyRequests",
+  "ErrorTooManyRequests",
+  "ActivityLimitReached",
+]);
+
+/**
+ * Per-provider reasons that make a 403 an auth failure. Matched by prefix so a
+ * Telegram description such as "Forbidden: bot was kicked from the group chat"
+ * matches. Any 403 without one of these reasons is `other`.
+ */
+const CREDENTIAL_403_BY_KEY: Partial<Record<IntegrationHealthKey, readonly string[]>> = {
+  gcal: ["insufficientPermissions", "authError", "forbidden"],
+  outlook: ["InvalidAuthenticationToken", "Authorization_RequestDenied", "AccessDenied"],
+  telegram: ["Unauthorized", "Forbidden: bot was kicked"],
+};
+
 const RATE_LIMIT_PATTERN = /rate.?limit|too many requests|quotaExceeded/i;
 const TRANSIENT_PATTERN =
   /\b(ETIMEDOUT|ESOCKETTIMEDOUT|ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|EPIPE|UND_ERR_[A-Z_]+|AbortError|TimeoutError)\b|timed? ?out|socket hang up|network|fetch failed|aborted/i;
@@ -116,7 +150,36 @@ type ErrorFacts = {
   name: string;
   status: number | null;
   codes: string[];
+  /** Structured provider reasons: Google `errors[].reason`, Graph `error.code`, Telegram `description`. */
+  reasons: string[];
 };
+
+/**
+ * Error thrown for a non-2xx provider response. Keeps the HTTP status and the
+ * structured reasons so classification never has to parse free text.
+ */
+export class IntegrationHttpError extends Error {
+  readonly status: number;
+  readonly reasons: readonly string[];
+
+  constructor(message: string, status: number, reasons: readonly string[] = []) {
+    super(message);
+    this.name = "IntegrationHttpError";
+    this.status = status;
+    this.reasons = reasons;
+  }
+}
+
+/** Build the thrown error for a failed provider response, keeping its status and reasons. */
+export function providerHttpError(prefix: string, status: number, body: string): IntegrationHttpError {
+  let reasons: string[] = [];
+  try {
+    reasons = reasonsFromPayload(JSON.parse(body));
+  } catch {
+    reasons = [];
+  }
+  return new IntegrationHttpError(`${prefix} ${status}: ${body}`, status, reasons);
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
@@ -141,6 +204,31 @@ function codesFromMessage(message: string): string[] {
   );
 }
 
+/** Reasons carried by a provider JSON payload (Google and Graph `error` objects, Telegram `description`). */
+function reasonsFromPayload(payload: unknown): string[] {
+  const reasons: string[] = [];
+  const record = asRecord(payload);
+  if (!record) return reasons;
+  const error = asRecord(record.error);
+  if (error) {
+    if (typeof error.code === "string") reasons.push(error.code);
+    if (typeof error.status === "string") reasons.push(error.status);
+    if (Array.isArray(error.errors)) {
+      for (const item of error.errors) {
+        const reason = asRecord(item)?.reason;
+        if (typeof reason === "string") reasons.push(reason);
+      }
+    }
+  }
+  if (typeof record.description === "string") reasons.push(record.description);
+  return reasons;
+}
+
+/** Reasons that appear as JSON fields inside a provider message text. */
+function reasonsFromMessage(message: string): string[] {
+  return [...message.matchAll(/"(?:reason|code|status)"\s*:\s*"([^"]+)"/g)].map((match) => match[1]!);
+}
+
 /** Pull the message, HTTP status and provider codes out of any thrown value. */
 function errorFacts(error: unknown): ErrorFacts {
   if (typeof error === "string") {
@@ -149,6 +237,7 @@ function errorFacts(error: unknown): ErrorFacts {
       name: "",
       status: statusFromMessage(error),
       codes: codesFromMessage(error),
+      reasons: reasonsFromMessage(error),
     };
   }
   const record = asRecord(error);
@@ -175,12 +264,41 @@ function errorFacts(error: unknown): ErrorFacts {
     if (typeof candidate === "string") codes.push(candidate);
   }
   codes.push(...codesFromMessage(message));
-  return { message, name, status, codes };
+
+  const reasons: string[] = [];
+  if (record && Array.isArray(record.reasons)) {
+    for (const reason of record.reasons) {
+      if (typeof reason === "string") reasons.push(reason);
+    }
+  }
+  for (const payload of [record, responseData, data]) {
+    reasons.push(...reasonsFromPayload(payload));
+  }
+  reasons.push(...reasonsFromMessage(message));
+
+  return { message, name, status, codes, reasons };
+}
+
+/** Classify a 403 from its structured reason. Quota is transient, credential reasons are auth, anything else is other. */
+function classifyForbidden(
+  key: IntegrationHealthKey,
+  facts: ErrorFacts,
+  authCodes: readonly string[],
+): IntegrationFailureKind {
+  if (facts.reasons.some((reason) => QUOTA_REASONS.has(reason))) return "transient";
+  const credentialReasons = CREDENTIAL_403_BY_KEY[key] ?? [];
+  const candidates = [...facts.reasons, facts.message];
+  const credentialReason = credentialReasons.some((prefix) =>
+    candidates.some((candidate) => candidate.startsWith(prefix)),
+  );
+  if (credentialReason) return "auth";
+  if (facts.codes.some((code) => authCodes.includes(code))) return "auth";
+  return "other";
 }
 
 /**
- * Classify a provider failure. Rate limits win over auth statuses because
- * Google answers some quota errors with HTTP 403.
+ * Classify a provider failure. Rate limits win over auth statuses. A 403 is an
+ * auth failure only when its structured reason says the credential is at fault.
  */
 export function classifyIntegrationError(
   key: IntegrationHealthKey,
@@ -192,7 +310,10 @@ export function classifyIntegrationError(
   if (facts.status === 429 || RATE_LIMIT_PATTERN.test(facts.message)) {
     return { kind: "transient", status: facts.status };
   }
-  if (facts.status === 401 || facts.status === 403) {
+  if (facts.status === 403) {
+    return { kind: classifyForbidden(key, facts, authCodes), status: 403 };
+  }
+  if (facts.status === 401) {
     return { kind: "auth", status: facts.status };
   }
   if (facts.codes.some((code) => authCodes.includes(code))) {
@@ -212,10 +333,27 @@ export function classifyIntegrationError(
 
 // ---- Secret-safe error text ------------------------------------------------
 
-const SECRET_ASSIGNMENT =
-  /\b(access_token|refresh_token|id_token|client_secret|api[_-]?key|x-auth-token|token|secret|password|authorization|code)(["']?\s*[:=]\s*["']?)([^\s"',;&}]+)/gi;
+/**
+ * A credential-bearing key, camelCase or snake_case: `access_token`,
+ * `accessToken`, `X-Auth-Token`, `client_secret`, `api_key`, and so on.
+ */
+const SECRET_KEY =
+  "(?:[A-Za-z][A-Za-z0-9_-]*?)?(?:token|secret|password|passwd|api[_-]?key|credential)s?";
+const SECRET_ASSIGNMENT = new RegExp(
+  `\\b(${SECRET_KEY}|code)(["']?\\s*[:=]\\s*["']?)([^\\s"',;&}]+)`,
+  "gi",
+);
+/** `Authorization: <scheme> <value>` for any scheme, or `Authorization: <value>`. */
+const AUTHORIZATION_HEADER = /\b(authorization["']?\s*[:=]\s*["']?)(?:([A-Za-z][\w.-]*)\s+)?[^\s"',;&}]+/gi;
 const BEARER_OR_BASIC = /\b(Bearer|Basic)\s+[A-Za-z0-9._~+/=-]+/gi;
 const URL_PATTERN = /\bhttps?:\/\/[^\s"'<>)\]]+/gi;
+const EMAIL_ADDRESS = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+/g;
+/** Telegram puts the bot token in the URL path: `/bot<id>:<secret>/method`. */
+const TELEGRAM_BOT_PATH = /\/bot\d+:[A-Za-z0-9_-]+/gi;
+/** A bare Telegram bot token, anywhere in text. */
+const TELEGRAM_BOT_TOKEN = /\b\d{6,}:[A-Za-z0-9_-]{30,}\b/g;
+/** Slack bot, user and app tokens have a fixed prefix. */
+const SLACK_TOKEN = /\bxox[abposr]-[A-Za-z0-9-]+/g;
 const OPAQUE_TOKEN = /\b[A-Za-z0-9_-]{32,}\b/g;
 
 function stripUrl(raw: string): string {
@@ -228,20 +366,28 @@ function stripUrl(raw: string): string {
 }
 
 /**
- * Turn any thrown value into short, storable text. Query strings, bearer and
- * basic credentials, key=value secrets and long opaque tokens are removed.
- * The result is never empty and is at most MAX_LAST_ERROR_LENGTH characters.
+ * Turn any thrown value into short, storable text. Query strings, credentials
+ * in headers and key=value pairs (camelCase included), email addresses, bot
+ * tokens and long opaque identifiers are removed. The result is never empty
+ * and is at most MAX_LAST_ERROR_LENGTH characters.
  */
 export function sanitizeIntegrationError(error: unknown): string {
   const raw = errorFacts(error).message;
   const cleaned = raw
     .replace(/[\u0000-\u001f\u007f]+/g, " ")
     .replace(URL_PATTERN, (match) => stripUrl(match))
+    .replace(TELEGRAM_BOT_PATH, "/bot[redacted]")
+    .replace(AUTHORIZATION_HEADER, (_match, head: string, scheme: string | undefined) =>
+      scheme ? `${head}${scheme} [redacted]` : `${head}[redacted]`,
+    )
     .replace(BEARER_OR_BASIC, (_match, scheme: string) => `${scheme} [redacted]`)
     .replace(
       SECRET_ASSIGNMENT,
       (_match, name: string, separator: string) => `${name}${separator}[redacted]`,
     )
+    .replace(EMAIL_ADDRESS, "[email]")
+    .replace(TELEGRAM_BOT_TOKEN, "[redacted]")
+    .replace(SLACK_TOKEN, "[redacted]")
     .replace(OPAQUE_TOKEN, "[redacted]")
     .replace(/\s+/g, " ")
     .trim();
@@ -252,17 +398,47 @@ export function sanitizeIntegrationError(error: unknown): string {
     : cleaned;
 }
 
+/** Sanitized fields for a log line. Never includes the raw error object, whose request config can carry headers. */
+export type SafeErrorFields = {
+  message: string;
+  status: number | null;
+  code: string | null;
+};
+
+export function safeErrorFields(error: unknown): SafeErrorFields {
+  const facts = errorFacts(error);
+  return {
+    message: sanitizeIntegrationError(error),
+    status: facts.status,
+    code: facts.reasons[0] ?? facts.codes[0] ?? null,
+  };
+}
+
 // ---- State machine ---------------------------------------------------------
 
-/** A success always means connected. The last error is kept as history. */
+function laterOf(a: Date | null, b: Date): Date {
+  return a && a.getTime() > b.getTime() ? a : b;
+}
+
+/**
+ * A success clears the failure state, unless a failure was recorded after this
+ * call started. `startedAt` defaults to `now`, which keeps the plain behaviour
+ * for callers that have no start time. Timestamps never move backwards.
+ */
 export function nextHealthAfterSuccess(
   previous: HealthSnapshot | null,
   now: Date,
+  startedAt: Date = now,
 ): HealthSnapshot {
+  const failedAfterStart =
+    previous?.lastErrorAt != null && previous.lastErrorAt.getTime() >= startedAt.getTime();
+  if (previous && failedAfterStart) {
+    return { ...previous, lastOkAt: laterOf(previous.lastOkAt, now) };
+  }
   return {
     state: "connected",
     consecutiveFailures: 0,
-    lastOkAt: now,
+    lastOkAt: laterOf(previous?.lastOkAt ?? null, now),
     lastErrorAt: previous?.lastErrorAt ?? null,
     lastError: previous?.lastError ?? null,
   };
@@ -282,32 +458,52 @@ export type HealthFailure = {
   /** Already sanitized, see `sanitizeIntegrationError`. */
   message: string;
   now: Date;
+  /**
+   * Sets the state for this failure immediately instead of after the streak
+   * threshold, for failures where the stored state itself is at risk (e.g.
+   * credentials that cannot be decrypted). Never overwrites `needs_reconnect`.
+   */
+  forceState?: "degraded" | "error";
 };
 
+/**
+ * Failure transition. A failure that starts a new streak (the previous one fell
+ * out of the window) begins from `connected`, not from the old degraded state.
+ * `needs_reconnect` is kept until a successful call clears it.
+ */
 export function nextHealthAfterFailure(
   previous: HealthSnapshot | null,
   failure: HealthFailure,
 ): HealthSnapshot {
-  const consecutiveFailures = continuesFailureStreak(previous, failure.now)
-    ? (previous?.consecutiveFailures ?? 0) + 1
-    : 1;
-  const base: StoredHealthState = previous?.state ?? "connected";
+  const continues = continuesFailureStreak(previous, failure.now);
+  const consecutiveFailures = continues ? (previous?.consecutiveFailures ?? 0) + 1 : 1;
+  const carried: StoredHealthState =
+    previous?.state === "needs_reconnect"
+      ? "needs_reconnect"
+      : continues && previous
+        ? previous.state
+        : "connected";
 
   let state: StoredHealthState;
   if (failure.kind === "auth") {
     state = "needs_reconnect";
-  } else if (consecutiveFailures >= DEGRADED_FAILURE_THRESHOLD && base !== "needs_reconnect") {
+  } else if (carried === "needs_reconnect") {
+    state = carried;
+  } else if (failure.forceState) {
+    state = failure.forceState;
+  } else if (consecutiveFailures >= DEGRADED_FAILURE_THRESHOLD) {
     state = failure.kind === "transient" ? "degraded" : "error";
   } else {
-    state = base;
+    state = carried;
   }
 
+  const newest = !previous?.lastErrorAt || failure.now.getTime() >= previous.lastErrorAt.getTime();
   return {
     state,
     consecutiveFailures,
     lastOkAt: previous?.lastOkAt ?? null,
-    lastErrorAt: failure.now,
-    lastError: failure.message,
+    lastErrorAt: newest ? failure.now : previous?.lastErrorAt ?? failure.now,
+    lastError: newest ? failure.message : previous?.lastError ?? failure.message,
   };
 }
 
@@ -326,7 +522,10 @@ export type IntegrationHealthView = {
   state: IntegrationHealthState;
   /** Credentials/settings are present (independent of health). */
   configured: boolean;
-  /** Configured and not in a reconnect-required state. */
+  /**
+   * Configured and usable: not in a reconnect-required state, and not in an
+   * error state where the stored credentials cannot be decrypted.
+   */
   connected: boolean;
   /** True when the user must reconnect the integration (auth failure). */
   reconnectRequired: boolean;
@@ -363,7 +562,7 @@ export function buildIntegrationHealthView(
     integration,
     state,
     configured,
-    connected: configured && state !== "needs_reconnect",
+    connected: configured && state !== "needs_reconnect" && state !== "error",
     reconnectRequired: state === "needs_reconnect",
     needsAttention: state === "needs_reconnect" || state === "degraded" || state === "error",
     lastOkAt: stored?.lastOkAt?.toISOString() ?? null,

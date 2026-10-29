@@ -10,6 +10,8 @@ import {
   healthRowFromDeliveryFailure,
   nextHealthAfterFailure,
   nextHealthAfterSuccess,
+  providerHttpError,
+  safeErrorFields,
   sanitizeIntegrationError,
   type HealthSnapshot,
   type StoredHealthRow,
@@ -19,13 +21,31 @@ function apiError(message: string, extra: Record<string, unknown> = {}) {
   return Object.assign(new Error(message), extra);
 }
 
+/** Google Calendar error body, shaped like the real REST response. */
+function googleError(status: number, reason: string, statusText: string, message = "Request had insufficient authentication scopes.") {
+  const body = {
+    error: {
+      code: status,
+      message,
+      errors: [{ message, domain: "global", reason }],
+      status: statusText,
+    },
+  };
+  return `Google Calendar API ${status}: ${JSON.stringify(body, null, 2)}`;
+}
+
+/** Microsoft Graph error body, shaped like the real REST response. */
+function graphError(status: number, code: string, message: string) {
+  return `Microsoft Graph API ${status}: ${JSON.stringify({ error: { code, message } })}`;
+}
+
 describe("classifyIntegrationError", () => {
   it.each([
     ["invalid_grant from Google token refresh", "gcal", new Error("invalid_grant: Token has been expired or revoked."), "auth"],
     ["Microsoft refresh rejection", "outlook", new Error("Token refresh failed: invalid_grant , AADSTS70008"), "auth"],
     ["provider 401 status", "zoom", apiError("Zoom API error: 401", { status: 401 }), "auth"],
     ["401 in a Graph error message", "outlook", new Error("Microsoft Graph API 401: unauthorized"), "auth"],
-    ["403 permission failure", "gcal", new Error("Google Calendar API 403: insufficientPermissions"), "auth"],
+    ["403 permission failure", "gcal", new Error(googleError(403, "insufficientPermissions", "PERMISSION_DENIED")), "auth"],
     ["Slack revoked token code", "slack", apiError("An API error occurred: token_revoked", { data: { error: "token_revoked" } }), "auth"],
     ["Slack invalid_auth code", "slack", apiError("An API error occurred: invalid_auth", { data: { error: "invalid_auth" } }), "auth"],
     ["Google gaxios error response code", "gcal", apiError("request failed", { response: { status: 400, data: { error: "invalid_grant" } } }), "auth"],
@@ -214,6 +234,17 @@ describe("registry view derivation", () => {
     });
   });
 
+  it("treats an error state (undecryptable credentials) as not connected", () => {
+    const view = buildIntegrationHealthView("zoom", true, {
+      state: "error",
+      lastOkAt: null,
+      lastErrorAt: new Date("2030-01-02T00:00:00.000Z"),
+      lastError: "Stored credentials cannot be decrypted — check the encryption key",
+      consecutiveFailures: 1,
+    });
+    expect(view).toMatchObject({ state: "error", connected: false, reconnectRequired: false, needsAttention: true });
+  });
+
   it("maps only dead-credential delivery failures to needs_reconnect", () => {
     const at = new Date("2030-01-01T00:00:00.000Z");
     expect(
@@ -221,5 +252,230 @@ describe("registry view derivation", () => {
     ).toMatchObject({ state: "needs_reconnect", lastErrorAt: at });
     expect(healthRowFromDeliveryFailure("slack", { error: "timeout ETIMEDOUT", at })).toBeNull();
     expect(healthRowFromDeliveryFailure("slack", { error: null, at })).toBeNull();
+  });
+});
+
+describe("403 classification reads the structured reason", () => {
+  it.each([
+    ["Google daily quota", "gcal", googleError(403, "dailyLimitExceeded", "PERMISSION_DENIED", "Daily Limit Exceeded"), "transient"],
+    ["Google per-user rate limit", "gcal", googleError(403, "userRateLimitExceeded", "PERMISSION_DENIED", "User Rate Limit Exceeded"), "transient"],
+    ["Google rate limit", "gcal", googleError(403, "rateLimitExceeded", "PERMISSION_DENIED"), "transient"],
+    ["Google scope problem", "gcal", googleError(403, "insufficientPermissions", "PERMISSION_DENIED"), "auth"],
+    ["Google authError reason", "gcal", googleError(403, "authError", "PERMISSION_DENIED"), "auth"],
+    ["Google 403 without a credential reason", "gcal", googleError(403, "notFound", "PERMISSION_DENIED", "Not Found"), "other"],
+    ["Graph expired token", "outlook", graphError(403, "InvalidAuthenticationToken", "Access token has expired."), "auth"],
+    ["Graph request denied", "outlook", graphError(403, "Authorization_RequestDenied", "Insufficient privileges."), "auth"],
+    ["Graph access denied", "outlook", graphError(403, "AccessDenied", "Access is denied."), "auth"],
+    ["Graph mailbox forbidden for another reason", "outlook", graphError(403, "ErrorAccessDenied", "Access to the mailbox is not allowed."), "other"],
+    ["bare 403 with no body", "zoom", apiError("Zoom API error: 403", { status: 403 }), "other"],
+    ["403 with an auth code in a structured body", "zoom", apiError("Zoom API error: 403", { status: 403, data: { error: "invalid_grant" } }), "auth"],
+    ["401 stays auth regardless of body", "gcal", apiError(googleError(401, "authError", "UNAUTHENTICATED"), { status: 401 }), "auth"],
+  ])("%s", (_label, key, error, kind) => {
+    expect(classifyIntegrationError(key as never, error).kind).toBe(kind);
+  });
+
+  it("reads reasons from a gaxios-shaped response body when the message is generic", () => {
+    const error = apiError("Request failed with status code 403", {
+      status: 403,
+      response: { status: 403, data: { error: { errors: [{ reason: "dailyLimitExceeded" }], status: "PERMISSION_DENIED" } } },
+    });
+    expect(classifyIntegrationError("gcal", error)).toEqual({ kind: "transient", status: 403 });
+  });
+
+  it("treats a bare 403 from Outlook as other, not auth", () => {
+    expect(classifyIntegrationError("outlook", new Error("Microsoft Graph API 403: Forbidden")).kind).toBe("other");
+  });
+});
+
+describe("Telegram credential failures", () => {
+  it("maps a 401 Unauthorized from the Bot API to auth", () => {
+    const error = Object.assign(new Error("Unauthorized"), { status: 401, reasons: ["Unauthorized"] });
+    expect(classifyIntegrationError("telegram", error).kind).toBe("auth");
+  });
+
+  it("maps a kicked-bot 403 to auth, as the spec requires", () => {
+    const error = Object.assign(new Error("Forbidden: bot was kicked from the group chat"), {
+      status: 403,
+      reasons: ["Forbidden: bot was kicked from the group chat"],
+    });
+    expect(classifyIntegrationError("telegram", error)).toEqual({ kind: "auth", status: 403 });
+  });
+
+  it("keeps a chat-not-found validation error as other", () => {
+    const error = Object.assign(new Error("Bad request: chat not found"), { status: 400 });
+    expect(classifyIntegrationError("telegram", error).kind).toBe("other");
+  });
+});
+
+describe("sanitizeIntegrationError gaps", () => {
+  it("redacts camelCase credential keys of any length", () => {
+    const text = sanitizeIntegrationError(
+      new Error('state {"accessToken":"at-short","refreshToken": "rt-short", clientSecret=cs-short}'),
+    );
+    expect(text).not.toContain("at-short");
+    expect(text).not.toContain("rt-short");
+    expect(text).not.toContain("cs-short");
+    expect(text).toContain("accessToken");
+  });
+
+  it("redacts a short value after an Authorization scheme other than Bearer or Basic", () => {
+    const text = sanitizeIntegrationError(new Error("upstream rejected Authorization: Token abc123 for this call"));
+    expect(text).not.toContain("abc123");
+    expect(text).toContain("Authorization: Token [redacted]");
+  });
+
+  it("redacts short credentials that follow an Authorization header without a scheme", () => {
+    expect(sanitizeIntegrationError(new Error("Authorization: s3cr3t"))).not.toContain("s3cr3t");
+  });
+
+  it("redacts email addresses echoed by a provider", () => {
+    const text = sanitizeIntegrationError(
+      new Error('DocuSeal API 422: {"error":"jane.doe@example.com has already signed","email":"jane.doe@example.com"}'),
+    );
+    expect(text).not.toContain("jane.doe");
+    expect(text).not.toContain("example.com");
+    expect(text).toContain("[email]");
+  });
+
+  it("removes a Telegram bot token from a URL path", () => {
+    const text = sanitizeIntegrationError(
+      new Error("request to https://api.telegram.org/bot123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw/getMe failed"),
+    );
+    expect(text).not.toContain("AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw");
+    expect(text).toContain("https://api.telegram.org/bot[redacted]");
+  });
+
+  it("removes Slack bot token shapes regardless of length", () => {
+    const text = sanitizeIntegrationError(new Error("slack said xoxb-1234-5678-abcdef is revoked"));
+    expect(text).not.toContain("xoxb-1234");
+  });
+});
+
+describe("state machine: success ordering", () => {
+  const t0 = new Date("2030-01-01T00:00:00.000Z");
+  const at = (ms: number) => new Date(t0.getTime() + ms);
+
+  it("does not clear reconnect state for a success that started before the auth failure", () => {
+    const dead = nextHealthAfterFailure(null, { kind: "auth", message: "invalid_grant", now: at(5000) });
+    const late = nextHealthAfterSuccess(dead, at(6000), at(1000));
+    expect(late.state).toBe("needs_reconnect");
+    expect(late.consecutiveFailures).toBe(1);
+    expect(late.lastOkAt).toEqual(at(6000));
+  });
+
+  it("clears reconnect state for a success that started after the auth failure", () => {
+    const dead = nextHealthAfterFailure(null, { kind: "auth", message: "invalid_grant", now: at(5000) });
+    expect(nextHealthAfterSuccess(dead, at(7000), at(6000)).state).toBe("connected");
+  });
+
+  it("defaults startedAt to now, so callers that pass nothing keep the old behaviour", () => {
+    const dead = nextHealthAfterFailure(null, { kind: "auth", message: "invalid_grant", now: at(5000) });
+    expect(nextHealthAfterSuccess(dead, at(6000)).state).toBe("connected");
+  });
+
+  it("never moves lastOkAt or lastErrorAt backwards", () => {
+    const failed = nextHealthAfterFailure(null, { kind: "transient", message: "ETIMEDOUT", now: at(9000) });
+    const late = nextHealthAfterFailure(failed, { kind: "transient", message: "older", now: at(1000) });
+    expect(late.lastErrorAt).toEqual(at(9000));
+    expect(late.lastError).toBe("ETIMEDOUT");
+    expect(nextHealthAfterSuccess(late, at(8000), at(8000)).lastOkAt).toEqual(at(8000));
+    const ok = nextHealthAfterSuccess(null, at(8000));
+    expect(nextHealthAfterSuccess(ok, at(2000)).lastOkAt).toEqual(at(8000));
+  });
+});
+
+describe("state machine: expired streak and forced states", () => {
+  const t0 = new Date("2030-01-01T00:00:00.000Z");
+  const at = (ms: number) => new Date(t0.getTime() + ms);
+
+  it("returns a degraded integration to connected when the streak window has expired", () => {
+    let snapshot: HealthSnapshot | null = null;
+    for (let i = 0; i < DEGRADED_FAILURE_THRESHOLD; i += 1) {
+      snapshot = nextHealthAfterFailure(snapshot, { kind: "transient", message: "ETIMEDOUT", now: at(i * 1000) });
+    }
+    expect(snapshot?.state).toBe("degraded");
+
+    const later = nextHealthAfterFailure(snapshot, {
+      kind: "transient",
+      message: "ETIMEDOUT",
+      now: at(FAILURE_WINDOW_MS * 3),
+    });
+    expect(later.state).toBe("connected");
+    expect(later.consecutiveFailures).toBe(1);
+  });
+
+  it("keeps needs_reconnect when a new streak starts after an auth failure", () => {
+    const dead = nextHealthAfterFailure(null, { kind: "auth", message: "invalid_grant", now: at(0) });
+    const later = nextHealthAfterFailure(dead, { kind: "transient", message: "ETIMEDOUT", now: at(FAILURE_WINDOW_MS * 3) });
+    expect(later.state).toBe("needs_reconnect");
+  });
+
+  it("forces degraded immediately without needs_reconnect", () => {
+    const snapshot = nextHealthAfterFailure(null, {
+      kind: "transient",
+      message: "Could not persist rotated tokens",
+      now: at(0),
+      forceState: "degraded",
+    });
+    expect(snapshot.state).toBe("degraded");
+    expect(snapshot.consecutiveFailures).toBe(1);
+  });
+
+  it("forces error immediately for stored credentials that cannot be decrypted", () => {
+    const snapshot = nextHealthAfterFailure(null, {
+      kind: "other",
+      message: "Stored credentials cannot be decrypted — check the encryption key",
+      now: at(0),
+      forceState: "error",
+    });
+    expect(snapshot.state).toBe("error");
+  });
+
+  it("never lets a forced state overwrite needs_reconnect", () => {
+    const dead = nextHealthAfterFailure(null, { kind: "auth", message: "invalid_grant", now: at(0) });
+    const forced = nextHealthAfterFailure(dead, { kind: "other", message: "decrypt", now: at(1000), forceState: "error" });
+    expect(forced.state).toBe("needs_reconnect");
+  });
+});
+
+describe("providerHttpError", () => {
+  it("keeps the status and the structured reason from a Google body", () => {
+    const body = JSON.stringify({
+      error: { code: 403, message: "Daily limit", errors: [{ reason: "dailyLimitExceeded" }], status: "PERMISSION_DENIED" },
+    });
+    const error = providerHttpError("Google Calendar API", 403, body);
+    expect(error.message).toBe(`Google Calendar API 403: ${body}`);
+    expect(error.status).toBe(403);
+    expect(error.reasons).toEqual(["PERMISSION_DENIED", "dailyLimitExceeded"]);
+    expect(classifyIntegrationError("gcal", error)).toEqual({ kind: "transient", status: 403 });
+  });
+
+  it("keeps a non-JSON body as text with no reasons", () => {
+    const error = providerHttpError("Microsoft Graph API", 503, "<html>unavailable</html>");
+    expect(error.reasons).toEqual([]);
+    expect(classifyIntegrationError("outlook", error).kind).toBe("transient");
+  });
+});
+
+describe("safeErrorFields for logs", () => {
+  it("returns only the sanitized message, status and provider code of a gaxios-shaped error", () => {
+    const error = Object.assign(new Error("Request failed with status code 403"), {
+      code: 403,
+      status: 403,
+      config: {
+        url: "https://www.googleapis.com/calendar/v3/calendars/primary/events?access_token=ya29.secret-token-value",
+        headers: { Authorization: "Bearer ya29.secret-token-value-that-is-long-enough" },
+      },
+      response: { status: 403, data: { error: { errors: [{ reason: "insufficientPermissions" }] } } },
+    });
+    const fields = safeErrorFields(error);
+    const serialised = JSON.stringify(fields);
+    expect(serialised).not.toContain("Authorization");
+    expect(serialised).not.toContain("ya29");
+    expect(fields).toMatchObject({ status: 403, code: "insufficientPermissions" });
+  });
+
+  it("is safe for non-error values", () => {
+    expect(safeErrorFields(undefined)).toMatchObject({ message: "Unknown error", status: null, code: null });
   });
 });

@@ -8,8 +8,16 @@ import { getWorkspaceGCalConfig, recordGCalCallFailure } from "@/lib/gcal/config
 import { getFreeBusy } from "@/lib/gcal/client";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 
+/**
+ * `checked`: Google answered. `unknown`: Google is connected but could not
+ * answer for this calendar, so the caller must not treat the time as free.
+ * `not_connected`: no Google Calendar to check.
+ */
+type GCalAvailability = "checked" | "unknown" | "not_connected";
+
 type AvailabilityResult = {
   gcalBusy: Array<{ start: string; end: string }>;
+  gcalAvailability: GCalAvailability;
   internalConflicts: Array<{
     interviewId: string;
     title: string | null;
@@ -37,8 +45,10 @@ export async function checkAvailability(opts: {
 
     // 1. GCal free/busy
     let gcalBusy: Array<{ start: string; end: string }> = [];
+    let gcalAvailability: GCalAvailability = "not_connected";
     const config = await getWorkspaceGCalConfig(workspace.id);
     if (config) {
+      const startedAt = new Date();
       try {
         gcalBusy = await getFreeBusy(
           config.oauth2Client,
@@ -46,9 +56,12 @@ export async function checkAvailability(opts: {
           opts.timeMin,
           opts.timeMax,
         );
-        await recordIntegrationSuccess(workspace.id, "gcal");
+        gcalAvailability = "checked";
+        await recordIntegrationSuccess(workspace.id, "gcal", { startedAt });
       } catch (error) {
-        // GCal check failing shouldn't block scheduling; the failure is still recorded.
+        // A failing calendar check does not block scheduling, but the caller must
+        // know the time was not checked. The failure is still recorded.
+        gcalAvailability = "unknown";
         await recordGCalCallFailure(workspace.id, error);
       }
     }
@@ -99,8 +112,13 @@ export async function checkAvailability(opts: {
       }));
     }
 
-    return { gcalBusy, internalConflicts };
+    return { gcalBusy, gcalAvailability, internalConflicts };
   } catch {
-    return { gcalBusy: [], internalConflicts: [], error: "Could not check availability." };
+    return {
+      gcalBusy: [],
+      gcalAvailability: "unknown",
+      internalConflicts: [],
+      error: "Could not check availability.",
+    };
   }
 }

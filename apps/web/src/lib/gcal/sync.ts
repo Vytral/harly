@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 
 import { db, interviews } from "@harly/db";
 
+import { safeErrorFields } from "@/features/integrations/health/model";
 import { recordIntegrationSuccess } from "@/features/integrations/health/repository";
 import {
   getWorkspaceGCalConfig,
@@ -52,6 +53,7 @@ export async function syncInterviewToGCal(opts: {
   timeZone?: string;
 }): Promise<GCalSyncResult> {
   try {
+    const startedAt = new Date();
     const config = await getWorkspaceGCalConfig(opts.workspaceId);
     if (!config) return { ok: false, reason: "not_connected" };
 
@@ -92,14 +94,14 @@ export async function syncInterviewToGCal(opts: {
           eq(interviews.workspaceId, opts.workspaceId),
         ),
       );
-    await recordIntegrationSuccess(opts.workspaceId, "gcal");
+    await recordIntegrationSuccess(opts.workspaceId, "gcal", { startedAt });
     return {
       ok: true,
       eventId: event.id,
       meetLink: event.hangoutLink,
     };
   } catch (err) {
-    log.error(err, "[gcal-sync] Failed to create event");
+    log.error({ err: safeErrorFields(err) }, "[gcal-sync] Failed to create event");
     if (await recordGCalCallFailure(opts.workspaceId, err)) {
       return { ok: false, reason: "invalid_grant" };
     }
@@ -116,6 +118,7 @@ export async function cancelInterviewGCalEvent(opts: {
   gcalEventId: string;
 }): Promise<boolean> {
   try {
+    const startedAt = new Date();
     const config = await getWorkspaceGCalConfig(opts.workspaceId);
     if (!config) return false;
 
@@ -130,10 +133,10 @@ export async function cancelInterviewGCalEvent(opts: {
           eq(interviews.workspaceId, opts.workspaceId),
         ),
       );
-    await recordIntegrationSuccess(opts.workspaceId, "gcal");
+    await recordIntegrationSuccess(opts.workspaceId, "gcal", { startedAt });
     return true;
   } catch (err) {
-    log.error(err, "[gcal-sync] Failed to cancel event");
+    log.error({ err: safeErrorFields(err) }, "[gcal-sync] Failed to cancel event");
     await recordGCalCallFailure(opts.workspaceId, err);
     return false;
   }
@@ -154,6 +157,7 @@ export async function updateInterviewGCalEvent(opts: {
   timeZone?: string;
 }): Promise<boolean> {
   try {
+    const startedAt = new Date();
     const config = await getWorkspaceGCalConfig(opts.workspaceId);
     if (!config) return false;
 
@@ -171,10 +175,10 @@ export async function updateInterviewGCalEvent(opts: {
         timeZone: opts.timeZone ?? "UTC",
       },
     );
-    await recordIntegrationSuccess(opts.workspaceId, "gcal");
+    await recordIntegrationSuccess(opts.workspaceId, "gcal", { startedAt });
     return true;
   } catch (err) {
-    log.error(err, "[gcal-sync] Failed to update event");
+    log.error({ err: safeErrorFields(err) }, "[gcal-sync] Failed to update event");
     await recordGCalCallFailure(opts.workspaceId, err);
     return false;
   }

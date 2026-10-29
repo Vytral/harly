@@ -179,4 +179,25 @@ describe("Zoom interview sync isolation", () => {
     expect(mocks.deleteMeeting).toHaveBeenNthCalledWith(2, "ws-1", "2");
     expect(mocks.update).toHaveBeenCalledTimes(2);
   });
+
+  it("logs a sanitized Zoom failure, never the raw error that carries request headers", async () => {
+    mocks.selectQueue.push([{ id: "interview-1" }]);
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    mocks.deleteMeeting.mockRejectedValueOnce(
+      Object.assign(new Error("Zoom API error: 500"), {
+        config: { headers: { Authorization: "Bearer zoom-access-token-value-0123456789abcdef" } },
+      }),
+    );
+
+    try {
+      await expect(cancelInterviewZoomMeeting({ workspaceId: "ws-1", interviewId: "interview-1", zoomMeetingId: "123" })).resolves.toBe(false);
+      const logged = JSON.stringify(errorSpy.mock.calls);
+      expect(logged).toContain("Failed to cancel meeting");
+      expect(logged).toContain("Zoom API error: 500");
+      expect(logged).not.toContain("Authorization");
+      expect(logged).not.toContain("zoom-access-token-value");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
 });

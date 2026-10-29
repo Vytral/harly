@@ -2,6 +2,8 @@ import "server-only";
 
 import type { OAuth2Client } from "google-auth-library";
 
+import { providerHttpError } from "@/features/integrations/health/model";
+
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
 
 type CalendarListEntry = {
@@ -28,6 +30,21 @@ type CalendarEvent = {
   };
 };
 
+/**
+ * Google answered 200 but could not read the calendar (a per-calendar error such
+ * as notFound or forbidden), or left the calendar out of the response. The
+ * caller must treat availability as unknown, not as free.
+ */
+export class GoogleCalendarFreeBusyError extends Error {
+  readonly reasons: readonly string[];
+
+  constructor(reason: string) {
+    super(`Google Calendar free/busy could not be read: ${reason}`);
+    this.name = "GoogleCalendarFreeBusyError";
+    this.reasons = [reason];
+  }
+}
+
 async function gcalFetch<T>(
   client: OAuth2Client,
   path: string,
@@ -46,8 +63,7 @@ async function gcalFetch<T>(
   });
 
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Google Calendar API ${res.status}: ${body}`);
+    throw providerHttpError("Google Calendar API", res.status, await res.text());
   }
 
   return res.json() as Promise<T>;
@@ -194,11 +210,15 @@ export async function deleteEvent(
   );
 
   if (!res.ok && res.status !== 410) {
-    const body = await res.text();
-    throw new Error(`Google Calendar API ${res.status}: ${body}`);
+    throw providerHttpError("Google Calendar API", res.status, await res.text());
   }
 }
 
+/**
+ * Busy intervals for one calendar. Throws `GoogleCalendarFreeBusyError` when
+ * Google reports a per-calendar error or omits the calendar, so an unreadable
+ * calendar is never mistaken for a free one.
+ */
 export async function getFreeBusy(
   client: OAuth2Client,
   calendarId: string,
@@ -208,7 +228,10 @@ export async function getFreeBusy(
   const data = await gcalFetch<{
     calendars?: Record<
       string,
-      { busy?: Array<{ start: string; end: string }> }
+      {
+        busy?: Array<{ start: string; end: string }>;
+        errors?: Array<{ domain?: string; reason?: string }>;
+      }
     >;
   }>(client, "/freeBusy", {
     method: "POST",
@@ -219,5 +242,9 @@ export async function getFreeBusy(
     }),
   });
 
-  return data.calendars?.[calendarId]?.busy ?? [];
+  const calendar = data.calendars?.[calendarId];
+  if (!calendar) throw new GoogleCalendarFreeBusyError("calendar not returned");
+  const firstError = calendar.errors?.[0];
+  if (firstError) throw new GoogleCalendarFreeBusyError(firstError.reason ?? "unknown");
+  return calendar.busy ?? [];
 }

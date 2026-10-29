@@ -11,7 +11,6 @@ import {
   FAILURE_WINDOW_MS,
   classifyIntegrationError,
   nextHealthAfterFailure,
-  nextHealthAfterSuccess,
   sanitizeIntegrationError,
   type IntegrationFailureKind,
   type IntegrationHealthKey,
@@ -35,6 +34,17 @@ type FailureOptions = {
   /** Overrides classification, e.g. when the credential is known to be missing. */
   kind?: IntegrationFailureKind;
   now?: Date;
+  /** Sets the state immediately, see `HealthFailure.forceState`. */
+  forceState?: "degraded" | "error";
+};
+
+type SuccessOptions = {
+  now?: Date;
+  /**
+   * When the successful call began. A failure recorded after this instant is
+   * newer than the success, so it keeps the failure state. Defaults to `now`.
+   */
+  startedAt?: Date;
 };
 
 /**
@@ -44,16 +54,25 @@ type FailureOptions = {
 export async function recordIntegrationSuccess(
   workspaceId: string,
   integration: IntegrationHealthKey,
-  now: Date = new Date(),
+  options: SuccessOptions = {},
 ): Promise<void> {
   try {
-    const next = nextHealthAfterSuccess(null, now);
+    const now = options.now ?? new Date();
+    const startedAt = options.startedAt ?? now;
+    // Passed as ISO strings: a raw Date would be stringified as Date.toString().
+    const nowIso = now.toISOString();
+    const startedIso = startedAt.toISOString();
+
+    const t = integrationHealth;
+    // Mirrors the `failedAfterStart` branch of `nextHealthAfterSuccess`.
+    const failedAfterStart = sql`(${t.lastErrorAt} IS NOT NULL AND ${t.lastErrorAt} >= ${startedIso}::timestamptz)`;
+
     await db
       .insert(integrationHealth)
       .values({
         workspaceId,
         integration,
-        state: next.state,
+        state: "connected",
         lastOkAt: now,
         consecutiveFailures: 0,
         updatedAt: now,
@@ -61,9 +80,9 @@ export async function recordIntegrationSuccess(
       .onConflictDoUpdate({
         target: [integrationHealth.workspaceId, integrationHealth.integration],
         set: {
-          state: "connected",
-          lastOkAt: now,
-          consecutiveFailures: 0,
+          state: sql`(CASE WHEN ${failedAfterStart} THEN ${t.state} ELSE 'connected' END)`,
+          consecutiveFailures: sql`(CASE WHEN ${failedAfterStart} THEN ${t.consecutiveFailures} ELSE 0 END)`,
+          lastOkAt: sql`GREATEST(${t.lastOkAt}, ${nowIso}::timestamptz)`,
           updatedAt: now,
         },
       });
@@ -87,17 +106,33 @@ export async function recordIntegrationFailure(
     const now = options.now ?? new Date();
     const kind = options.kind ?? classifyIntegrationError(integration, error).kind;
     const message = sanitizeIntegrationError(error);
-    const insertState = nextHealthAfterFailure(null, { kind, message, now }).state;
-    // Passed as an ISO string: a raw Date would be stringified as Date.toString().
+    const insertState = nextHealthAfterFailure(null, {
+      kind,
+      message,
+      now,
+      forceState: options.forceState,
+    }).state;
+    // Passed as ISO strings: a raw Date would be stringified as Date.toString().
+    const nowIso = now.toISOString();
     const windowStart = new Date(now.getTime() - FAILURE_WINDOW_MS).toISOString();
 
     const t = integrationHealth;
-    const streak = sql`(CASE WHEN ${t.consecutiveFailures} > 0 AND ${t.lastErrorAt} >= ${windowStart}::timestamptz THEN ${t.consecutiveFailures} + 1 ELSE 1 END)`;
-    const thresholdState = kind === "transient" ? "degraded" : "error";
-    const nextState =
-      kind === "auth"
-        ? sql`'needs_reconnect'`
-        : sql`(CASE WHEN ${streak} >= ${DEGRADED_FAILURE_THRESHOLD} AND ${t.state} <> 'needs_reconnect' THEN ${thresholdState} ELSE ${t.state} END)`;
+    // Mirrors `continuesFailureStreak`: the previous failure is inside the window.
+    const continues = sql`(${t.consecutiveFailures} > 0 AND ${t.lastErrorAt} >= ${windowStart}::timestamptz)`;
+    const streak = sql`(CASE WHEN ${continues} THEN ${t.consecutiveFailures} + 1 ELSE 1 END)`;
+    // A new streak starts from connected; reconnect state is kept.
+    const carried = sql`(CASE WHEN ${t.state} = 'needs_reconnect' THEN 'needs_reconnect' WHEN ${continues} THEN ${t.state} ELSE 'connected' END)`;
+    const thresholdState = kind === "transient" ? sql`'degraded'` : sql`'error'`;
+    const forced = options.forceState ? sql`${options.forceState}` : null;
+
+    let nextState;
+    if (kind === "auth") {
+      nextState = sql`'needs_reconnect'`;
+    } else if (forced) {
+      nextState = sql`(CASE WHEN ${carried} = 'needs_reconnect' THEN ${carried} ELSE ${forced} END)`;
+    } else {
+      nextState = sql`(CASE WHEN ${carried} = 'needs_reconnect' THEN ${carried} WHEN ${streak} >= ${DEGRADED_FAILURE_THRESHOLD} THEN ${thresholdState} ELSE ${carried} END)`;
+    }
 
     await db
       .insert(integrationHealth)
@@ -115,8 +150,9 @@ export async function recordIntegrationFailure(
         set: {
           state: nextState,
           consecutiveFailures: streak,
-          lastErrorAt: now,
-          lastError: message,
+          // Mirrors `newest` in `nextHealthAfterFailure`: timestamps never go back.
+          lastErrorAt: sql`GREATEST(${t.lastErrorAt}, ${nowIso}::timestamptz)`,
+          lastError: sql`(CASE WHEN ${t.lastErrorAt} IS NULL OR ${nowIso}::timestamptz >= ${t.lastErrorAt} THEN ${message} ELSE ${t.lastError} END)`,
           updatedAt: now,
         },
       });
@@ -144,33 +180,48 @@ export async function clearIntegrationHealth(
   }
 }
 
-/** Stored health for every integration of a workspace, keyed by integration. */
+let warnedHealthReadFailure = false;
+
+/**
+ * Stored health for every integration of a workspace, keyed by integration.
+ * Fail-soft: a read error, or code deployed before the health table exists,
+ * yields no stored rows (every integration then reads from its configuration)
+ * instead of breaking the settings page, interview preparation and AI tools.
+ */
 export async function getIntegrationHealth(
   workspaceId: string,
 ): Promise<Partial<Record<IntegrationHealthKey, StoredHealthRow>>> {
-  const rows = await db
-    .select({
-      integration: integrationHealth.integration,
-      state: integrationHealth.state,
-      lastOkAt: integrationHealth.lastOkAt,
-      lastErrorAt: integrationHealth.lastErrorAt,
-      lastError: integrationHealth.lastError,
-      consecutiveFailures: integrationHealth.consecutiveFailures,
-    })
-    .from(integrationHealth)
-    .where(eq(integrationHealth.workspaceId, workspaceId));
+  try {
+    const rows = await db
+      .select({
+        integration: integrationHealth.integration,
+        state: integrationHealth.state,
+        lastOkAt: integrationHealth.lastOkAt,
+        lastErrorAt: integrationHealth.lastErrorAt,
+        lastError: integrationHealth.lastError,
+        consecutiveFailures: integrationHealth.consecutiveFailures,
+      })
+      .from(integrationHealth)
+      .where(eq(integrationHealth.workspaceId, workspaceId));
 
-  const result: Partial<Record<IntegrationHealthKey, StoredHealthRow>> = {};
-  for (const row of rows) {
-    result[row.integration as IntegrationHealthKey] = {
-      state: row.state as StoredHealthState,
-      lastOkAt: row.lastOkAt,
-      lastErrorAt: row.lastErrorAt,
-      lastError: row.lastError,
-      consecutiveFailures: row.consecutiveFailures,
-    };
+    const result: Partial<Record<IntegrationHealthKey, StoredHealthRow>> = {};
+    for (const row of rows) {
+      result[row.integration as IntegrationHealthKey] = {
+        state: row.state as StoredHealthState,
+        lastOkAt: row.lastOkAt,
+        lastErrorAt: row.lastErrorAt,
+        lastError: row.lastError,
+        consecutiveFailures: row.consecutiveFailures,
+      };
+    }
+    return result;
+  } catch (error) {
+    if (!warnedHealthReadFailure) {
+      warnedHealthReadFailure = true;
+      log.warn({ err: error }, "Integration health could not be read; using configuration only");
+    }
+    return {};
   }
-  return result;
 }
 
 /** Integrations that need the user's attention, most severe first. */

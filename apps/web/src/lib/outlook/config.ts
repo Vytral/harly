@@ -1,11 +1,13 @@
 import "server-only";
 
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import { db, workspaceSettings } from "@harly/db";
 
 import {
+  CREDENTIALS_UNREADABLE_MESSAGE,
   classifyIntegrationError,
+  safeErrorFields,
 } from "@/features/integrations/health/model";
 import {
   recordIntegrationFailure,
@@ -42,6 +44,11 @@ export type WorkspaceOutlookStatus = {
 export type OutlookConfig = {
   accessToken: string;
   refreshToken: string;
+  /**
+   * The stored refresh-token ciphertext these tokens belong to. A failure from
+   * a call made with them only disconnects while this is still the stored one.
+   */
+  refreshTokenCiphertext: string;
   calendarId: string | null;
   events: WebhookEvent[];
 };
@@ -145,13 +152,20 @@ export async function getWorkspaceOutlookCredentials(
 /**
  * Clear a dead Outlook connection exactly like the manual settings actions do
  * (disable, drop both tokens) and record the reason for the UI.
+ *
+ * Compare-and-set: the clear only applies while the stored refresh token is
+ * still the one that failed. A call that read an older pair can fail after
+ * another process rotated it; that failure must not disable the newer pair.
+ * Returns false when the stored pair had already changed.
  */
 export async function invalidateWorkspaceOutlookConnection(
   workspaceId: string,
   error: unknown,
-): Promise<void> {
+  failedRefreshCiphertext: string | null,
+): Promise<boolean> {
+  if (!failedRefreshCiphertext) return false;
   try {
-    await db
+    const cleared = await db
       .update(workspaceSettings)
       .set({
         outlookEnabled: false,
@@ -163,40 +177,76 @@ export async function invalidateWorkspaceOutlookConnection(
         outlookRefreshTokenTag: null,
         updatedAt: new Date(),
       })
-      .where(eq(workspaceSettings.organizationId, workspaceId));
+      .where(
+        and(
+          eq(workspaceSettings.organizationId, workspaceId),
+          eq(workspaceSettings.outlookRefreshTokenCiphertext, failedRefreshCiphertext),
+        ),
+      )
+      .returning({ id: workspaceSettings.organizationId });
+    if (cleared.length === 0) return false;
   } catch (clearError) {
-    log.error({ err: clearError }, "Failed to clear revoked Outlook tokens");
+    log.error({ err: safeErrorFields(clearError) }, "Failed to clear revoked Outlook tokens");
   }
   await recordIntegrationFailure(workspaceId, "outlook", error, { kind: "auth" });
+  return true;
 }
 
 /**
  * Record a failed Microsoft Graph call from a background path. Auth failures
- * clear the dead connection; other failures are classified and counted.
+ * clear the dead connection, but only if it is still the pair the call used.
+ * Pass `OutlookConfig.refreshTokenCiphertext`. Without it, the failure applies
+ * to the pair stored at that moment, so the call cannot tell a stale pair apart.
  * Returns true when the failure was an auth failure.
  */
 export async function recordOutlookCallFailure(
   workspaceId: string,
   error: unknown,
+  refreshTokenCiphertext?: string | null,
 ): Promise<boolean> {
   if (classifyIntegrationError("outlook", error).kind === "auth") {
-    await invalidateWorkspaceOutlookConnection(workspaceId, error);
+    const expected = refreshTokenCiphertext ?? (await currentRefreshCiphertext(workspaceId));
+    await invalidateWorkspaceOutlookConnection(workspaceId, error, expected);
     return true;
   }
   await recordIntegrationFailure(workspaceId, "outlook", error);
   return false;
 }
 
+async function currentRefreshCiphertext(workspaceId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ ciphertext: workspaceSettings.outlookRefreshTokenCiphertext })
+    .from(workspaceSettings)
+    .where(eq(workspaceSettings.organizationId, workspaceId))
+    .limit(1);
+  return row?.ciphertext ?? null;
+}
+
+type StoredOutlookTokens = {
+  accessToken: string;
+  accessExpiresAt: Date | null;
+  refreshToken: string;
+  refreshCiphertext: string;
+  calendarId: string | null;
+  events: WebhookEvent[];
+};
+
+type FreshOutlookTokens = {
+  pair: OutlookTokenPair;
+  /** Stored refresh-token ciphertext that `pair.refreshToken` came from. */
+  refreshCiphertext: string;
+};
+
 /**
  * Concurrent callers in this process share one refresh per workspace. Other
  * processes are covered by the advisory lock in `refreshUnderLock`.
  */
-const inflightOutlookRefreshes = new Map<string, Promise<OutlookTokenPair | null>>();
+const inflightOutlookRefreshes = new Map<string, Promise<FreshOutlookTokens | null>>();
 
 async function freshOutlookTokens(
   workspaceId: string,
   stored: StoredOutlookTokens,
-): Promise<OutlookTokenPair | null> {
+): Promise<FreshOutlookTokens | null> {
   const inflight = inflightOutlookRefreshes.get(workspaceId);
   if (inflight) return inflight;
   const refresh = refreshStoredOutlookTokens(workspaceId, stored).finally(() => {
@@ -206,13 +256,11 @@ async function freshOutlookTokens(
   return refresh;
 }
 
-type StoredOutlookTokens = {
-  accessToken: string;
-  accessExpiresAt: Date | null;
-  refreshToken: string;
-  calendarId: string | null;
-  events: WebhookEvent[];
-};
+type RefreshOutcome =
+  | { kind: "disconnected" }
+  | { kind: "current"; tokens: FreshOutlookTokens }
+  | { kind: "refreshed"; tokens: FreshOutlookTokens }
+  | { kind: "refresh_failed"; error: unknown; refreshCiphertext: string };
 
 /**
  * Refresh under the cross-process lock. Microsoft rotates the refresh token on
@@ -223,20 +271,31 @@ type StoredOutlookTokens = {
 async function refreshUnderLock(
   workspaceId: string,
   credentials: OutlookCredentials,
-): Promise<{ kind: "disconnected" } | { kind: "current"; tokens: OutlookTokenPair } | { kind: "refreshed"; tokens: OutlookTokenPair }> {
+): Promise<RefreshOutcome> {
   return withProviderRefreshLock(workspaceId, "outlook", async (tx) => {
     const current = await readStoredOutlookTokens(workspaceId, tx);
     if (!current) return { kind: "disconnected" as const };
     if (!outlookTokenNeedsRefresh(current.accessExpiresAt)) {
-      return { kind: "current" as const, tokens: toPair(current) };
+      return {
+        kind: "current" as const,
+        tokens: { pair: toPair(current), refreshCiphertext: current.refreshCiphertext },
+      };
     }
-    const tokens = await requestOutlookRefresh({
-      clientId: credentials.clientId,
-      clientSecret: credentials.clientSecret,
-      refreshToken: current.refreshToken,
-    });
-    await persistOutlookTokens(workspaceId, tokens, tx);
-    return { kind: "refreshed" as const, tokens };
+    try {
+      const pair = await requestOutlookRefresh({
+        clientId: credentials.clientId,
+        clientSecret: credentials.clientSecret,
+        refreshToken: current.refreshToken,
+      });
+      const refreshCiphertext = await persistOutlookTokens(workspaceId, pair, tx);
+      return { kind: "refreshed" as const, tokens: { pair, refreshCiphertext } };
+    } catch (error) {
+      return {
+        kind: "refresh_failed" as const,
+        error,
+        refreshCiphertext: current.refreshCiphertext,
+      };
+    }
   });
 }
 
@@ -251,23 +310,41 @@ function toPair(tokens: StoredOutlookTokens): OutlookTokenPair {
 async function refreshStoredOutlookTokens(
   workspaceId: string,
   stored: StoredOutlookTokens,
-): Promise<OutlookTokenPair | null> {
+): Promise<FreshOutlookTokens | null> {
   const credentials = await getWorkspaceOutlookCredentials(workspaceId);
-  if (!credentials) return toPair(stored);
+  if (!credentials) return { pair: toPair(stored), refreshCiphertext: stored.refreshCiphertext };
 
-  try {
-    const outcome = await refreshUnderLock(workspaceId, credentials);
-    if (outcome.kind === "disconnected") return null;
-    await recordIntegrationSuccess(workspaceId, "outlook");
-    return outcome.tokens;
-  } catch (error) {
-    log.error({ err: error }, "Outlook token refresh failed");
-    const revoked = await recordOutlookCallFailure(workspaceId, error);
-    return revoked ? null : toPair(stored);
+  const startedAt = new Date();
+  const outcome = await refreshUnderLock(workspaceId, credentials).catch(
+    (error: unknown): RefreshOutcome => ({
+      kind: "refresh_failed",
+      error,
+      refreshCiphertext: stored.refreshCiphertext,
+    }),
+  );
+  if (outcome.kind === "disconnected") return null;
+  if (outcome.kind === "refresh_failed") {
+    log.error({ err: safeErrorFields(outcome.error) }, "Outlook token refresh failed");
+    const revoked = await recordOutlookCallFailure(
+      workspaceId,
+      outcome.error,
+      outcome.refreshCiphertext,
+    );
+    if (!revoked) return { pair: toPair(stored), refreshCiphertext: stored.refreshCiphertext };
+    // Revoked, unless another writer already stored a newer pair meanwhile.
+    const latest = await readStoredOutlookTokens(workspaceId, db);
+    return latest ? { pair: toPair(latest), refreshCiphertext: latest.refreshCiphertext } : null;
   }
+  await recordIntegrationSuccess(workspaceId, "outlook", { startedAt });
+  return outcome.tokens;
 }
 
-/** Read and decrypt the stored Outlook pair. Null when disabled, incomplete or unreadable. */
+/**
+ * Read and decrypt the stored Outlook pair. Null when disabled or incomplete.
+ * Stored credentials that cannot be decrypted (or cannot be read at all while
+ * the encryption key is missing) are recorded as an error with the encryption
+ * reason. They are not a dead login, so the connection is left in place.
+ */
 async function readStoredOutlookTokens(
   workspaceId: string,
   executor: Pick<typeof db, "select">,
@@ -301,6 +378,11 @@ async function readStoredOutlookTokens(
     return null;
   }
 
+  if (!isEncryptionConfigured()) {
+    await recordUnreadableCredentials(workspaceId);
+    return null;
+  }
+
   try {
     const access = openOutlookAccessToken(
       decryptSecret({
@@ -317,36 +399,44 @@ async function readStoredOutlookTokens(
         iv: row.outlookRefreshTokenIv,
         tag: row.outlookRefreshTokenTag,
       }),
+      refreshCiphertext: row.outlookRefreshTokenCiphertext,
       calendarId: row.outlookCalendarId,
       events: toEvents(row.outlookEvents),
     };
   } catch {
+    await recordUnreadableCredentials(workspaceId);
     return null;
   }
 }
 
+async function recordUnreadableCredentials(workspaceId: string): Promise<void> {
+  await recordIntegrationFailure(workspaceId, "outlook", CREDENTIALS_UNREADABLE_MESSAGE, {
+    kind: "other",
+    forceState: "error",
+  });
+}
+
 /**
  * Resolve a usable Outlook config (fresh access token + decrypted refresh
- * token) for a workspace, or null when disabled, unconfigured or revoked.
- * Refreshes only when the stored access token is near expiry or its expiry is
- * unknown; a valid token is used as stored, with no network call.
+ * token) for a workspace, or null when disabled, unconfigured, revoked or
+ * unreadable. Refreshes only when the stored access token is near expiry or its
+ * expiry is unknown; a valid token is used as stored, with no network call.
  */
 export async function getWorkspaceOutlookConfig(
   workspaceId: string,
 ): Promise<OutlookConfig | null> {
-  if (!isEncryptionConfigured()) return null;
-
   const stored = await readStoredOutlookTokens(workspaceId, db);
   if (!stored) return null;
 
   const fresh = outlookTokenNeedsRefresh(stored.accessExpiresAt)
     ? await freshOutlookTokens(workspaceId, stored)
-    : toPair(stored);
+    : { pair: toPair(stored), refreshCiphertext: stored.refreshCiphertext };
   if (!fresh) return null;
 
   return {
-    accessToken: fresh.accessToken,
-    refreshToken: fresh.refreshToken,
+    accessToken: fresh.pair.accessToken,
+    refreshToken: fresh.pair.refreshToken,
+    refreshTokenCiphertext: fresh.refreshCiphertext,
     calendarId: stored.calendarId,
     events: stored.events,
   };

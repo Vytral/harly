@@ -2,6 +2,7 @@
 
 import { IntegrationHealthNotice } from "@/features/integrations/health/ui/IntegrationHealthNotice";
 import type { IntegrationHealthView } from "@/features/integrations/health/model";
+import { providerStatusLabel, providerStatusTone } from "@/features/integrations/health/connection-label";
 import Link from "next/link";
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -58,12 +59,12 @@ export function MicrosoftTeamsConnectPanel({
   const [disconnecting, startDisconnect] = useTransition();
   const [testing, startTest] = useTransition();
 
-  const statusTone = isConnected ? (status.enabled ? "on" : "off") : "neutral";
-  const statusLabel = isConnected
+  const statusTone = providerStatusTone(health, isConnected ? (status.enabled ? "on" : "off") : "neutral");
+  const statusLabel = providerStatusLabel(health, isConnected
     ? status.enabled
       ? "Connected"
       : "Disabled"
-    : "Not connected";
+    : "Not connected");
 
   const installUrl = `/api/integrations/outlook/install?ws=${workspaceId}`;
 
