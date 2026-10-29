@@ -34,6 +34,10 @@ vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: vi.fn(async () => undefined),
   requireApplicationPermission: vi.fn(async () => undefined),
   requireOfferPermission: vi.fn(async () => undefined),
+  getRolePolicy: vi.fn(async () => ({
+    permissions: [],
+    scope: { jobAccess: "all", departments: [], regions: [] },
+  })),
 }));
 vi.mock("@/server/events/emit", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/server/events/emit")>()),

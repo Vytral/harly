@@ -2,9 +2,9 @@ import "server-only";
 
 import { tool } from "ai";
 import { z } from "zod";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 
-import { aiEvaluations, db } from "@harly/db";
+import { aiEvaluations, applications, db, jobs, tasks } from "@harly/db";
 
 import {
   getPipelineOverview,
@@ -26,6 +26,13 @@ import {
 } from "@/features/jobs/data";
 import { listUpcomingInterviews } from "@/features/interviews/data";
 import { listTasks, getTaskCounts } from "@/features/tasks/data";
+import {
+  isUnrestrictedScope,
+  jobScopeSql,
+  taskScopeSql,
+  type WorkspaceSearchActor,
+} from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { listOffersForCandidate } from "@/features/offers/data";
 import { listPoolCandidates, getPoolStats } from "@/features/pool/data";
 import {
@@ -168,6 +175,109 @@ async function assertToolPermission(
     return;
   }
   await requireActorPermission(ctx.workspaceId, ctx.userId, permission);
+}
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const REPORTS_SCOPE_REFUSAL =
+  "Reports are not available for roles limited to specific jobs yet.";
+const HIRING_SCOPE_REFUSAL =
+  "Hiring performance is not available for roles limited to specific jobs.";
+
+/**
+ * The actor behind this tool run. Null when the session is not this run's
+ * workspace and user, so callers treat the run as restricted and fail closed.
+ */
+async function toolRunActor(
+  ctx: HarlyToolContext,
+): Promise<WorkspaceSearchActor | null> {
+  const actor = await resolveSearchActor();
+  if (actor.workspaceId !== ctx.workspaceId || actor.userId !== ctx.userId) {
+    return null;
+  }
+  return actor;
+}
+
+/** True when the run is limited to specific jobs (or cannot be attributed). */
+async function toolRunRestricted(ctx: HarlyToolContext): Promise<boolean> {
+  const actor = await toolRunActor(ctx);
+  return !actor || !isUnrestrictedScope(actor.scope);
+}
+
+/**
+ * Tasks the run may see, as id and status rows. Null for an unrestricted run,
+ * which keeps using the unscoped reads unchanged.
+ */
+async function scopedTaskRows(
+  ctx: HarlyToolContext,
+): Promise<{ id: string; status: string }[] | null> {
+  const actor = await toolRunActor(ctx);
+  if (!actor) return [];
+  if (isUnrestrictedScope(actor.scope)) return null;
+  return db
+    .select({ id: tasks.id, status: tasks.status })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.workspaceId, actor.workspaceId),
+        isNull(tasks.deletedAt),
+        taskScopeSql(actor),
+      ),
+    );
+}
+
+async function taskCountsForRun(ctx: HarlyToolContext) {
+  const scoped = await scopedTaskRows(ctx);
+  if (scoped === null) return await getTaskCounts();
+  const counts: Record<string, number> = {
+    pending: 0,
+    in_progress: 0,
+    completed: 0,
+    canceled: 0,
+  };
+  for (const row of scoped) counts[row.status] = (counts[row.status] ?? 0) + 1;
+  return counts;
+}
+
+/**
+ * Application ids the run may see, optionally limited to some ids or to one
+ * candidate. Null for an unrestricted run. Malformed ids are never visible.
+ */
+async function scopedApplicationIds(
+  ctx: HarlyToolContext,
+  filter: { applicationIds?: string[]; candidateId?: string },
+): Promise<Set<string> | null> {
+  const actor = await toolRunActor(ctx);
+  if (!actor) return new Set();
+  if (isUnrestrictedScope(actor.scope)) return null;
+  const ids = filter.applicationIds?.filter((id) => UUID_PATTERN.test(id));
+  if (filter.applicationIds && (!ids || ids.length === 0)) return new Set();
+  if (filter.candidateId !== undefined && !UUID_PATTERN.test(filter.candidateId)) {
+    return new Set();
+  }
+  const rows = await db
+    .select({ id: applications.id })
+    .from(applications)
+    .innerJoin(
+      jobs,
+      and(
+        eq(jobs.id, applications.jobId),
+        eq(jobs.workspaceId, actor.workspaceId),
+        isNull(jobs.deletedAt),
+        jobScopeSql(actor),
+      ),
+    )
+    .where(
+      and(
+        eq(applications.workspaceId, actor.workspaceId),
+        ids ? inArray(applications.id, ids) : undefined,
+        filter.candidateId !== undefined
+          ? eq(applications.candidateId, filter.candidateId)
+          : undefined,
+      ),
+    );
+  return new Set(rows.map((row) => row.id));
 }
 
 /** Cap a string field so large blobs don't blow up the model context. */
@@ -1111,7 +1221,7 @@ function buildReadTools(ctx: HarlyToolContext) {
             getCandidatesNeedingReview(),
             getJobsAtRisk(),
             getTodayInterviews(),
-            getTaskCounts(),
+            taskCountsForRun(ctx),
           ]);
 
         return {
@@ -1159,7 +1269,17 @@ function buildReadTools(ctx: HarlyToolContext) {
         "Get hiring KPIs over the recent period: applications, interviews, hires, offer acceptance, each with % change vs the prior period. Use for 'how are we doing', metrics, trends.",
       inputSchema: z.object({}),
       execute: async () => {
-        const perf = await getHiringPerformance();
+        let perf: Awaited<ReturnType<typeof getHiringPerformance>>;
+        try {
+          perf = await getHiringPerformance();
+        } catch (error) {
+          // Hiring performance is workspace-wide, so it refuses restricted
+          // roles. Report that as an explicit result, not a failed tool call.
+          if (await toolRunRestricted(ctx)) {
+            return { permitted: false as const, message: HIRING_SCOPE_REFUSAL };
+          }
+          throw error;
+        }
         return {
           ...evidence("live workspace hiring metrics"),
           range: perf.rangeLabel,
@@ -2005,7 +2125,12 @@ function buildReadTools(ctx: HarlyToolContext) {
           .describe("Maximum tasks to return."),
       }),
       execute: async ({ status, offset, limit }) => {
-        const rows = await listTasks(status ? { status } : undefined);
+        const visible = await scopedTaskRows(ctx);
+        const visibleIds = visible ? new Set(visible.map((row) => row.id)) : null;
+        const all = await listTasks(status ? { status } : undefined);
+        const rows = visibleIds
+          ? all.filter((task) => visibleIds.has(task.id))
+          : all;
         const page = rows.slice(offset, offset + limit);
         return {
           total: rows.length,
@@ -2045,10 +2170,15 @@ function buildReadTools(ctx: HarlyToolContext) {
           .describe("Maximum tasks to return."),
       }),
       execute: async ({ status, offset, limit }) => {
-        const rows = await listTasks({
+        const visible = await scopedTaskRows(ctx);
+        const visibleIds = visible ? new Set(visible.map((row) => row.id)) : null;
+        const all = await listTasks({
           ownerId: ctx.userId,
           ...(status ? { status } : {}),
         });
+        const rows = visibleIds
+          ? all.filter((task) => visibleIds.has(task.id))
+          : all;
         const page = rows.slice(offset, offset + limit);
         return {
           total: rows.length,
@@ -2075,7 +2205,7 @@ function buildReadTools(ctx: HarlyToolContext) {
         "Get task counts by status (pending, in progress, completed, canceled). Use for 'how many tasks', task summaries.",
       inputSchema: z.object({}),
       execute: async () => {
-        return await getTaskCounts();
+        return await taskCountsForRun(ctx);
       },
     }),
 
@@ -2174,6 +2304,12 @@ function buildReadTools(ctx: HarlyToolContext) {
         applicationId: z.string().describe("The application id."),
       }),
       execute: async ({ applicationId }) => {
+        const visible = await scopedApplicationIds(ctx, {
+          applicationIds: [applicationId],
+        });
+        if (visible && !visible.has(applicationId)) {
+          return { scored: false as const };
+        }
         const [row] = await db
           .select({
             score: aiEvaluations.score,
@@ -2236,7 +2372,11 @@ function buildReadTools(ctx: HarlyToolContext) {
         candidateId: z.string().describe("The candidate id."),
       }),
       execute: async ({ candidateId }) => {
-        const offers = await listOffersForCandidate(candidateId);
+        const visible = await scopedApplicationIds(ctx, { candidateId });
+        const allOffers = await listOffersForCandidate(candidateId);
+        const offers = visible
+          ? allOffers.filter((offer) => visible.has(offer.applicationId))
+          : allOffers;
         return {
           count: offers.length,
           offers: offers.map((o) => ({
@@ -2330,6 +2470,9 @@ function buildReadTools(ctx: HarlyToolContext) {
         "Get the recruiting analytics report for the last 30 days, the same numbers as the Reports page: applications received, hires, avg time-to-hire, offer acceptance, the funnel by stage (share of applications received), sources with conversion, and the time-to-hire distribution. Open roles is current, and candidates tracked is all time. Use for deep analytics, 'show me the funnel', 'where do candidates drop off', 'time to hire', 'best sources'.",
       inputSchema: z.object({}),
       execute: async () => {
+        if (await toolRunRestricted(ctx)) {
+          return { permitted: false as const, message: REPORTS_SCOPE_REFUSAL };
+        }
         const data = await getReportsData(30);
         return {
           range: data.range,
@@ -2494,7 +2637,14 @@ function buildReadTools(ctx: HarlyToolContext) {
           .max(5)
           .describe("2–5 application ids to compare."),
       }),
-      execute: async ({ applicationIds }) => {
+      execute: async ({ applicationIds: requestedApplicationIds }) => {
+        // Applications outside the caller's scope are left out entirely.
+        const visible = await scopedApplicationIds(ctx, {
+          applicationIds: requestedApplicationIds,
+        });
+        const applicationIds = visible
+          ? requestedApplicationIds.filter((id) => visible.has(id))
+          : requestedApplicationIds;
         const rows = await db
           .select({
             applicationId: aiEvaluations.applicationId,

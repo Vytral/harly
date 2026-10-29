@@ -66,6 +66,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
   actorHasPermission,
   candidateScopeSql,
+  isUnrestrictedScope,
   jobScopeSql,
   type WorkspaceSearchActor,
 } from "@/features/search/scope";
@@ -943,6 +944,11 @@ export async function listCandidateDirectoryFacets(): Promise<CandidateDirectory
 
 export async function getCandidateProfile(candidateId: string) {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  // A restricted actor sees a candidate only through applications on in-scope
+  // jobs, the same rule as the directory. Their profile carries only those
+  // applications and the rows tied to them.
+  const restricted = !isUnrestrictedScope(actor.scope);
 
   const [candidate] = await db
     .select()
@@ -981,7 +987,11 @@ export async function getCandidateProfile(candidateId: string) {
     .from(applications)
     .innerJoin(
       jobs,
-      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, applications.jobId),
+        jobScopeSql(actor),
+      ),
     )
     .leftJoin(
       jobStages,
@@ -997,6 +1007,15 @@ export async function getCandidateProfile(candidateId: string) {
       ),
     )
     .orderBy(desc(applications.appliedAt));
+
+  if (restricted && candidateApplications.length === 0) {
+    return null;
+  }
+  const scopedApplicationIds = new Set(candidateApplications.map((application) => application.id));
+  // Rows tied to an application are kept only when that application is in the
+  // profile; candidate-level rows (no application) are kept as before.
+  const inProfileScope = (applicationId: string | null) =>
+    !restricted || applicationId === null || scopedApplicationIds.has(applicationId);
 
   const applicationIdsForAnswers = candidateApplications.map(
     (application) => application.id,
@@ -1654,7 +1673,7 @@ export async function getCandidateProfile(candidateId: string) {
     })),
     files,
     activity,
-    scorecards: scorecardRows.map((row) => ({
+    scorecards: scorecardRows.filter((row) => inProfileScope(row.applicationId)).map((row) => ({
       id: row.id,
       applicationId: row.applicationId,
       rating: row.rating,
@@ -1663,7 +1682,7 @@ export async function getCandidateProfile(candidateId: string) {
       authorName: row.authorName,
       createdAt: row.createdAt.toISOString(),
     })),
-    aiEvaluations: aiEvaluationRows.map((row) => {
+    aiEvaluations: aiEvaluationRows.filter((row) => inProfileScope(row.applicationId)).map((row) => {
       const details = criterionDetailsByLabel(row.criterionDetailsSnapshot);
       return {
       id: row.id,
@@ -1711,7 +1730,7 @@ export async function getCandidateProfile(candidateId: string) {
     }),
     tags: tagRows,
     privacyRequests,
-    messages: messageRows.map((row) => ({
+    messages: messageRows.filter((row) => inProfileScope(row.applicationId)).map((row) => ({
       id: row.id,
       threadId: row.threadId,
       applicationId: row.applicationId,

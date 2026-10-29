@@ -52,10 +52,31 @@ export type NavItem = {
  */
 export const primaryNav: NavItem[] = [
   { label: "Home", href: "/dashboard", icon: Home, exact: true },
-  { label: "Inbox", href: "/dashboard/inbox", icon: Inbox, badge: "inbox" },
-  { label: "Pipeline", href: "/dashboard/pipeline", icon: KanbanSquare },
-  { label: "Candidates", href: "/dashboard/candidates", icon: Users },
-  { label: "Jobs", href: "/dashboard/jobs", icon: Briefcase },
+  {
+    label: "Inbox",
+    href: "/dashboard/inbox",
+    icon: Inbox,
+    badge: "inbox",
+    requiredPermission: "candidates:view",
+  },
+  {
+    label: "Pipeline",
+    href: "/dashboard/pipeline",
+    icon: KanbanSquare,
+    requiredPermission: "candidates:view",
+  },
+  {
+    label: "Candidates",
+    href: "/dashboard/candidates",
+    icon: Users,
+    requiredPermission: "candidates:view",
+  },
+  {
+    label: "Jobs",
+    href: "/dashboard/jobs",
+    icon: Briefcase,
+    requiredPermission: "jobs:view",
+  },
 ];
 
 export type MoreGroup = { label: string; items: NavItem[] };
@@ -74,12 +95,14 @@ export const moreNav: MoreGroup[] = [
         label: "Talent Pool",
         href: "/dashboard/talent-pool",
         icon: Bookmark,
+        requiredPermission: "candidates:view",
         hint: "Saved for later",
       },
       {
         label: "Team",
         href: "/people" as Route,
         icon: UserRound,
+        requiredPermission: "members:read",
         hint: "Your colleagues",
       },
     ],
@@ -92,18 +115,21 @@ export const moreNav: MoreGroup[] = [
         href: "/dashboard/tasks",
         icon: ListTodo,
         badge: "tasks",
+        requiredPermission: "tasks:read",
         hint: "Assigned to you",
       },
       {
         label: "Calendar",
         href: "/dashboard/calendars",
         icon: CalendarDays,
+        requiredPermission: ["interviews:manage", "interviews:feedback"],
         hint: "Interviews and availability",
       },
       {
         label: "Reports",
         href: "/dashboard/reports",
         icon: BarChart3,
+        requiredPermission: "reports:read",
         hint: "Funnel, sources, time to hire",
       },
     ],

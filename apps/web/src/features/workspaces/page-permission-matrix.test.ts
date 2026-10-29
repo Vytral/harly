@@ -167,6 +167,21 @@ describe("dashboard page permission matrix", () => {
     expect(mismatches).toEqual([]);
   });
 
+  it("declares a nav requirement for every nav entry whose page is permission-guarded", () => {
+    // A nav link without a requirement is shown to every member, even when the
+    // page it leads to refuses them. Declare it, so the rail hides it too.
+    const undeclared: string[] = [];
+    for (const item of allNavItems()) {
+      if (item.requiredPermission) continue;
+      if (NAV_GUARD_EXCEPTIONS[item.href]) continue;
+      const source = pageSourceForRoute(item.href);
+      if (!source) continue;
+      const guarded = pageGuardPermissions(source);
+      if (guarded.length > 0) undeclared.push(`${item.href}: page guards ${guarded.join("|")}`);
+    }
+    expect(undeclared).toEqual([]);
+  });
+
   it("agrees with SETTINGS_SECTION_PERMISSION for every settings section", () => {
     const mismatches: string[] = [];
     for (const [href, required] of Object.entries(SETTINGS_SECTION_PERMISSION)) {

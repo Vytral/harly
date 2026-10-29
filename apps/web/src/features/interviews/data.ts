@@ -10,7 +10,8 @@ import {
   jobs,
   user as authUsers,
 } from "@harly/db";
-import { getWorkspaceContext } from "@/features/workspaces/context";
+import { jobScopeSql } from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import type {
   CandidateInterviewItem,
   UpcomingInterviewItem,
@@ -20,7 +21,8 @@ import type {
 export async function listCandidateInterviews(
   candidateId: string,
 ): Promise<CandidateInterviewItem[]> {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  const workspace = { id: actor.workspaceId };
 
   const rows = await db
     .select({
@@ -59,6 +61,7 @@ export async function listCandidateInterviews(
         eq(jobs.workspaceId, workspace.id),
         eq(jobs.id, interviews.jobId),
         isNull(jobs.deletedAt),
+        jobScopeSql(actor),
       ),
     )
     .leftJoin(authUsers, eq(authUsers.id, interviews.interviewerId))
@@ -138,7 +141,8 @@ export async function listCandidateInterviews(
 export async function listUpcomingInterviews(): Promise<
   UpcomingInterviewItem[]
 > {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  const workspace = { id: actor.workspaceId };
   const now = new Date();
 
   const rows = await db
@@ -181,6 +185,7 @@ export async function listUpcomingInterviews(): Promise<
         eq(jobs.workspaceId, workspace.id),
         eq(jobs.id, interviews.jobId),
         isNull(jobs.deletedAt),
+        jobScopeSql(actor),
       ),
     )
     .leftJoin(authUsers, eq(authUsers.id, interviews.interviewerId))
@@ -223,7 +228,8 @@ export async function listInterviewsForRange(
   start: Date,
   end: Date,
 ): Promise<UpcomingInterviewItem[]> {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  const workspace = { id: actor.workspaceId };
 
   const rows = await db
     .select({
@@ -265,6 +271,7 @@ export async function listInterviewsForRange(
         eq(jobs.workspaceId, workspace.id),
         eq(jobs.id, interviews.jobId),
         isNull(jobs.deletedAt),
+        jobScopeSql(actor),
       ),
     )
     .leftJoin(authUsers, eq(authUsers.id, interviews.interviewerId))

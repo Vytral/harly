@@ -27,6 +27,8 @@ import {
   type StageKind,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { jobScopeSql, type WorkspaceSearchActor } from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 
 export type PipelineJobOption = {
@@ -88,22 +90,46 @@ export type PipelineData =
       applications: PipelineApplication[];
     };
 
-async function getDefaultPipelineJobId(workspaceId: string) {
+/**
+ * Whether a job is inside the actor's role scope. Unrestricted actors always
+ * pass without a query; a restricted actor passes only for an in-scope, live job.
+ */
+async function jobInActorScope(actor: WorkspaceSearchActor, jobId: string) {
+  const scope = jobScopeSql(actor);
+  if (!scope) return true;
+  const [row] = await db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.workspaceId, actor.workspaceId),
+        eq(jobs.id, jobId),
+        isNull(jobs.deletedAt),
+        scope,
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
+async function getDefaultPipelineJobId(actor: WorkspaceSearchActor) {
+  const scope = jobScopeSql(actor);
   const [openJobWithApplications] = await db
     .select({ id: jobs.id })
     .from(jobs)
     .innerJoin(
       applications,
       and(
-        eq(applications.workspaceId, workspaceId),
+        eq(applications.workspaceId, actor.workspaceId),
         eq(applications.jobId, jobs.id),
       ),
     )
     .where(
       and(
-        eq(jobs.workspaceId, workspaceId),
+        eq(jobs.workspaceId, actor.workspaceId),
         eq(jobs.status, "open"),
         isNull(jobs.deletedAt),
+        scope,
       ),
     )
     .orderBy(desc(jobs.createdAt))
@@ -117,7 +143,11 @@ async function getDefaultPipelineJobId(workspaceId: string) {
     .select({ id: jobs.id })
     .from(jobs)
     .where(
-      and(eq(jobs.workspaceId, workspaceId), isNull(jobs.deletedAt)),
+      and(
+        eq(jobs.workspaceId, actor.workspaceId),
+        isNull(jobs.deletedAt),
+        scope,
+      ),
     )
     .orderBy(desc(jobs.createdAt))
     .limit(1);
@@ -157,6 +187,8 @@ export async function getNextStage(
   currentStageId: string | null,
 ): Promise<NextStage | null> {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  if (!(await jobInActorScope(actor, jobId))) return null;
 
   const rows = await db
     .select({
@@ -201,6 +233,10 @@ export async function getPipelineData(
   requestedJobId: string | undefined,
 ): Promise<PipelineData> {
   const { organization: workspace } = await getWorkspaceContext();
+  // Restricted roles only see the jobs inside their scope, so the picker, the
+  // default job and the applications below all stay inside it.
+  const actor = await resolveSearchActor();
+  const jobScope = jobScopeSql(actor);
   const latestStageMove = db
     .select({
       applicationId: applicationStageHistory.applicationId,
@@ -221,7 +257,7 @@ export async function getPipelineData(
     })
     .from(jobs)
     .where(
-      and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)),
+      and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt), jobScope),
     )
     .orderBy(desc(jobs.createdAt));
 
@@ -233,7 +269,7 @@ export async function getPipelineData(
     ? jobOptions.find((job) => job.id === requestedJobId)
     : undefined;
   const defaultJobId =
-    requestedJob?.id ?? (await getDefaultPipelineJobId(workspace.id));
+    requestedJob?.id ?? (await getDefaultPipelineJobId(actor));
   const selectedJob =
     jobOptions.find((job) => job.id === defaultJobId) ?? jobOptions[0];
 
@@ -387,6 +423,8 @@ export type PipelineSummary = {
  */
 export async function getPipelineSummary(jobId: string): Promise<PipelineSummary | null> {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
+  if (!(await jobInActorScope(actor, jobId))) return null;
 
   const STALLED_DAYS = 14;
 

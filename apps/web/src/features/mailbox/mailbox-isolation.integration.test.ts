@@ -12,6 +12,10 @@ vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: vi.fn().mockResolvedValue(undefined),
+  getRolePolicy: vi.fn(async () => ({
+    permissions: [],
+    scope: { jobAccess: "all", departments: [], regions: [] },
+  })),
 }));
 vi.mock("@/features/workspaces/context", () => ({
   getWorkspaceContext: vi.fn(async () => ({
