@@ -235,9 +235,9 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
               onClick={pick}
               disabled={isPending}
               className={cn(
-                "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-pine px-4 py-2.5",
-                "text-sm font-semibold text-white shadow-sm transition-all",
-                "hover:bg-pine-strong active:scale-[0.98]",
+                "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5",
+                "text-sm font-semibold text-primary-foreground shadow-sm transition-all",
+                "hover:bg-primary/90 active:scale-[0.98]",
                 "disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100",
               )}
             >
@@ -251,8 +251,8 @@ function RequestRow({ request }: { request: DocumentRequestItem }) {
             onClick={openSigning}
             disabled={isSigning}
             className={cn(
-              "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-pine px-4 py-2.5",
-              "text-sm font-semibold text-white shadow-sm transition-all hover:bg-pine-strong",
+              "inline-flex shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 py-2.5",
+              "text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90",
               "disabled:cursor-not-allowed disabled:opacity-50",
             )}
           >

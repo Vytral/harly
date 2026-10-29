@@ -152,6 +152,8 @@ function RequestRow({ request, canManage }: { request: DocumentRequestItem; canM
                 size="sm"
                 variant="ghost"
                 className="text-destructive hover:text-destructive"
+                aria-label="Cancel request"
+                title="Cancel request"
                 disabled={isPending}
                 onClick={() => run(() => cancelDocumentRequest({ requestId: request.id }), "Request removed")}
               >

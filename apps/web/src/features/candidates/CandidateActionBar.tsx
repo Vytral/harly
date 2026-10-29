@@ -135,7 +135,7 @@ function DecisionApplicationSelector({
   const selected = decisionApplication(applications, selectedApplicationId);
 
   return (
-    <label className="flex min-w-0 items-center gap-2 rounded-xl border border-border/70 bg-background px-2.5 py-1.5">
+    <label className="flex min-w-0 items-center gap-2 rounded-xl border border-border/70 bg-background px-2.5 py-1.5 focus-within:ring-2 focus-within:ring-ring">
       <span className="shrink-0 text-xs font-medium text-muted-foreground">
         Decide for
       </span>

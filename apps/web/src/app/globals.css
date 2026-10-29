@@ -932,7 +932,8 @@ html[data-tab-switch="true"] .animate-in {
     scroll-behavior: auto !important;
   }
 
-  .animate-spin {
+  .animate-spin,
+  .auth-spinner {
     animation-duration: 1s !important;
     animation-iteration-count: infinite !important;
   }

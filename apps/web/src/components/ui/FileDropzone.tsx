@@ -175,12 +175,12 @@ export function FileDropzone({
             )}
           />
           {!disabled && (
-            <div className="absolute right-2.5 top-2.5 flex items-center gap-1.5 rounded-xl bg-white/85 p-1 shadow-sm backdrop-blur-sm transition-all duration-200 ease-out group-hover:bg-white motion-reduce:transition-none">
+            <div className="absolute right-2.5 top-2.5 flex items-center gap-1.5 rounded-xl bg-card/85 p-1 shadow-sm backdrop-blur-sm transition-all duration-200 ease-out group-hover:bg-card motion-reduce:transition-none">
               <button
                 type="button"
                 onClick={() => inputRef.current?.click()}
                 disabled={uploading}
-                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-100 active:scale-[0.97] motion-reduce:transition-none"
+                className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-muted active:scale-[0.97] motion-reduce:transition-none"
               >
                 {uploading ? (
                   <Loader2 className="size-3.5 animate-spin" />
@@ -196,7 +196,7 @@ export function FileDropzone({
                   onChange(null);
                 }}
                 aria-label="Remove image"
-                className="inline-flex size-7 items-center justify-center rounded-lg text-zinc-500 transition-colors hover:bg-rust/10 hover:text-rust active:scale-[0.97] motion-reduce:transition-none"
+                className="inline-flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-rust/10 hover:text-rust active:scale-[0.97] motion-reduce:transition-none"
               >
                 <X className="size-4" />
               </button>
@@ -240,7 +240,7 @@ export function FileDropzone({
           ratio,
           dragOver
             ? "scale-[1.01] border-pine bg-sage/50"
-            : "border-zinc-200 bg-muted/30 hover:border-zinc-300 hover:bg-muted/50",
+            : "border-input bg-muted/30 hover:border-ring hover:bg-muted/50",
           (disabled || uploading) && "pointer-events-none opacity-70",
         )}
       >
@@ -252,7 +252,7 @@ export function FileDropzone({
         <span
           className={cn(
             "flex size-11 items-center justify-center rounded-full transition-colors duration-200 motion-reduce:transition-none",
-            dragOver ? "bg-pine text-white" : "bg-sage text-sage-ink",
+            dragOver ? "bg-primary text-primary-foreground" : "bg-sage text-sage-ink",
           )}
         >
           {uploading ? (

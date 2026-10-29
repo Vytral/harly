@@ -52,7 +52,7 @@ export function CandidatePoolButton({
       onClick={toggle}
       disabled={isPending}
       className={cn(
-        inPool && "border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800",
+        inPool && "border-warning-clay/40 bg-warning-clay/10 text-warning-clay hover:bg-warning-clay/20 hover:text-warning-clay",
         className,
       )}
       title={inPool ? "Remove from pool" : "Add to pool"}

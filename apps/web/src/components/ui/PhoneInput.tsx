@@ -171,7 +171,7 @@ export function PhoneInput({
     <div ref={rootRef} className={cn("relative", className)}>
       <div
         className={cn(
-          "flex h-10 items-stretch overflow-hidden rounded-md border border-zinc-200 bg-white text-sm transition focus-within:border-zinc-900 focus-within:ring-2 focus-within:ring-zinc-900/10",
+          "flex h-10 items-stretch overflow-hidden rounded-md border border-input bg-card text-sm transition focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20",
           disabled && "opacity-60",
           inputClassName,
         )}
@@ -180,14 +180,14 @@ export function PhoneInput({
           type="button"
           disabled={disabled}
           onClick={() => setOpen((o) => !o)}
-          className="flex shrink-0 items-center gap-1.5 border-r border-inherit pl-3 pr-2 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed"
+          className="flex shrink-0 items-center gap-1.5 border-r border-inherit pl-3 pr-2 transition-colors hover:bg-muted disabled:cursor-not-allowed"
           aria-label="Select country"
         >
           <span className="text-base leading-none">{flagOf(activeCountry.code)}</span>
-          <span className="tabular-nums text-zinc-500">+{activeCountry.dial}</span>
+          <span className="tabular-nums text-muted-foreground">+{activeCountry.dial}</span>
           <ChevronDown
             className={cn(
-              "size-3.5 text-zinc-400 transition-transform duration-200 motion-reduce:transition-none",
+              "size-3.5 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
               open && "rotate-180",
             )}
           />
@@ -200,7 +200,7 @@ export function PhoneInput({
           disabled={disabled}
           onChange={(e) => onNationalChange(e.target.value)}
           placeholder="9 1234 5678"
-          className="min-w-0 flex-1 bg-transparent px-3 text-zinc-900 outline-none placeholder:text-zinc-400"
+          className="min-w-0 flex-1 bg-transparent px-3 text-foreground outline-none placeholder:text-muted-foreground"
         />
       </div>
       {name ? <input type="hidden" name={name} value={value} /> : null}

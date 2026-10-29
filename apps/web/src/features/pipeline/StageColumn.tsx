@@ -110,7 +110,7 @@ export function StageColumn({
           <div className="flex min-w-0 items-center gap-2">
             <span
               className={cn(
-                "size-2 shrink-0 rounded-full",
+                "size-2 shrink-0 rounded-full ring-1 ring-border",
                 terminal && terminalDotClass(kind),
               )}
               style={terminal ? undefined : { backgroundColor: stageDotColor(index, total) }}
@@ -137,7 +137,7 @@ export function StageColumn({
           <DropdownMenu>
             <DropdownMenuTrigger
               aria-label={`${displayName} settings`}
-              className="flex size-6 shrink-0 items-center justify-center rounded-md text-quiet-mist opacity-0 transition-opacity hover:text-near-ink focus-visible:opacity-100 focus-visible:outline-none group-hover/board:opacity-100 data-[state=open]:opacity-100"
+              className="flex size-6 shrink-0 items-center justify-center rounded-md text-quiet-mist opacity-0 transition-opacity hover:text-near-ink focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover/board:opacity-100 data-[state=open]:opacity-100"
             >
               <svg
                 width="14"

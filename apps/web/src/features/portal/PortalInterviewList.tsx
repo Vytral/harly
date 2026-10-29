@@ -54,7 +54,7 @@ function InterviewAction({ interview }: { interview: PortalInterview }) {
         href={meetingUrl}
         target="_blank"
         rel="noopener noreferrer"
-        className="flex shrink-0 items-center gap-2 rounded-lg bg-pine px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:bg-pine-strong active:scale-[0.98]"
+        className="flex shrink-0 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-sm transition-all hover:bg-primary/90 active:scale-[0.98]"
       >
         <VideoCameraIcon className="size-4" />
         Join

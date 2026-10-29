@@ -420,9 +420,9 @@ export function LoginForm({
             </div>
           </div>
 
-          {error ? <p className="text-center text-sm text-danger-rust">{error}</p> : null}
+          {error ? <p role="alert" className="text-center text-sm text-danger-rust">{error}</p> : null}
           {sent ? (
-            <p className="text-center text-sm text-success-olive">
+            <p role="status" className="text-center text-sm text-success-olive">
               Check your email for a sign-in link.
             </p>
           ) : null}
@@ -454,7 +454,7 @@ export function LoginForm({
               Sign in with your organization&apos;s single sign-on.
             </p>
           </div>
-          {error ? <p className="text-center text-sm text-danger-rust">{error}</p> : null}
+          {error ? <p role="alert" className="text-center text-sm text-danger-rust">{error}</p> : null}
           <ContinueButton
             label="Continue with SSO"
             pending={pending === "sso"}
@@ -470,10 +470,10 @@ export function LoginForm({
       {hasAlternatives && !ssoOnly ? (
         <div className="space-y-4">
           {!showPasswordForm && error ? (
-            <p className="text-center text-sm text-danger-rust">{error}</p>
+            <p role="alert" className="text-center text-sm text-danger-rust">{error}</p>
           ) : null}
           {!showPasswordForm && sent ? (
-            <p className="text-center text-sm text-success-olive">
+            <p role="status" className="text-center text-sm text-success-olive">
               Check your email for a sign-in link.
             </p>
           ) : null}

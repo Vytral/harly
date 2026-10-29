@@ -61,7 +61,7 @@ export function PublicJobPreview({ slug }: PublicJobPreviewProps) {
           src={src}
           title="Public job preview"
           className={cn(
-            "h-[640px] rounded-lg border bg-white shadow-sm transition-all",
+            "h-[640px] rounded-lg border bg-card shadow-sm transition-all",
             device === "mobile" ? "w-[390px]" : "w-full",
           )}
         />

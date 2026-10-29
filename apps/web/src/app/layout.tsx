@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { CookiePanel } from "@/components/CookieConsentBanner";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
+import { themeBootstrapScript } from "@/lib/theme-bootstrap";
 
 import "./globals.css";
 
@@ -61,6 +62,8 @@ export default function RootLayout({
       data-scroll-behavior="smooth"
     >
       <head>
+        {/* Applies the stored theme before first paint; see lib/theme-bootstrap.ts. */}
+        <script dangerouslySetInnerHTML={{ __html: themeBootstrapScript() }} />
         <link rel="preconnect" href="https://lh3.googleusercontent.com" />
         <link rel="dns-prefetch" href="https://lh3.googleusercontent.com" />
       </head>

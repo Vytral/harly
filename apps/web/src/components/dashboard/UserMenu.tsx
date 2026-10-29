@@ -2,8 +2,7 @@
 
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState, useTransition } from "react";
-import { createPortal } from "react-dom";
+import { useState, useTransition } from "react";
 import {
   BookOpen,
   Building2,
@@ -21,6 +20,13 @@ import { UserAvatar } from "@/components/ui/UserAvatar";
 import { GithubIcon } from "@/components/ui/icons/GithubIcon";
 import { WorkspaceMark } from "@/components/dashboard/WorkspaceSwitcher";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import type { WorkspaceOption } from "@/features/workspaces/data";
 import { restoreSetupChecklistAction } from "@/features/onboarding/checklist-actions";
@@ -42,6 +48,10 @@ type UserMenuProps = {
   demoMode?: boolean;
 };
 
+/** Shared row styling for the menu's action items (overrides the Radix item defaults). */
+const itemClass =
+  "gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 hover:text-foreground";
+
 function formatRole(role: string) {
   return role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -54,29 +64,8 @@ export function UserMenu({
   demoMode = false,
 }: UserMenuProps) {
   const router = useRouter();
-  const triggerRef = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const [coords, setCoords] = useState<{ top: number; right: number } | null>(
-    null,
-  );
-
-  useEffect(() => {
-    if (!open) return;
-
-    function updateCoords() {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      setCoords({
-        top: rect.bottom + 8,
-        right: window.innerWidth - rect.right,
-      });
-    }
-
-    updateCoords();
-    window.addEventListener("resize", updateCoords);
-    return () => window.removeEventListener("resize", updateCoords);
-  }, [open]);
 
   function handleSignOut() {
     startTransition(async () => {
@@ -114,229 +103,197 @@ export function UserMenu({
   }
 
   return (
-    <>
-      {/* Trigger */}
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex items-center rounded-full ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-        aria-label="Account menu"
-        aria-expanded={open}
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className="flex items-center rounded-full ring-offset-background transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          aria-label="Account menu"
+        >
+          <UserAvatar name={user.name} src={user.image} size="md" priority />
+        </button>
+      </DropdownMenuTrigger>
+
+      {/* Radix portals the content and provides the menu semantics, roving
+          focus, Escape-to-close and focus return to the trigger. */}
+      <DropdownMenuContent
+        align="end"
+        sideOffset={8}
+        className="w-80 overflow-hidden rounded-xl border bg-popover p-0 shadow-xl shadow-black/5"
       >
-        <UserAvatar name={user.name} src={user.image} size="md" priority />
-      </button>
+        {/* ── User info ── */}
+        <div className="flex items-center gap-3 px-4 py-4">
+          <UserAvatar name={user.name} src={user.image} size="lg" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-semibold">{user.name}</p>
+            <p className="truncate text-xs text-muted-foreground">
+              {user.email}
+            </p>
+          </div>
+          <Badge
+            variant="secondary"
+            className="shrink-0 text-[11px] font-normal"
+          >
+            {formatRole(role)}
+          </Badge>
+        </div>
 
-      {/* Backdrop + panel are portaled to <body> , the trigger lives inside
-          TopBar's header, which needs overflow-hidden for its sticky-hide
-          collapse animation. A same-tree absolute panel gets clipped by
-          that overflow; portaling escapes it, like the Radix-based menus
-          elsewhere in the app already do. */}
-      {open &&
-        coords &&
-        createPortal(
+        {/* Workspace switcher — hidden when there are no options
+            (e.g. demo mode passes an empty list on purpose). */}
+        {workspaceOptions.length > 0 ? (
           <>
-            <div
-              className="fixed inset-0 z-40"
-              onClick={() => setOpen(false)}
-              aria-hidden="true"
-            />
-            <div
-              className="fixed z-50 w-80 overflow-hidden rounded-xl border bg-popover shadow-xl shadow-black/5"
-              style={{ top: coords.top, right: coords.right }}
-              role="menu"
-            >
-              {/* ── User info ── */}
-              <div className="flex items-center gap-3 px-4 py-4">
-                <UserAvatar name={user.name} src={user.image} size="lg" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{user.name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    {user.email}
-                  </p>
-                </div>
-                <Badge
-                  variant="secondary"
-                  className="shrink-0 text-[11px] font-normal"
-                >
-                  {formatRole(role)}
-                </Badge>
-              </div>
+            <DropdownMenuSeparator className="m-0" />
 
-              {/* Workspace switcher — hidden when there are no options
-                  (e.g. demo mode passes an empty list on purpose). */}
-              {workspaceOptions.length > 0 ? (
-                <>
-                  <div className="h-px bg-border" />
-
-                  <div className="px-3 py-3">
-                    <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-                      Workspace
-                    </p>
-                    <div className="space-y-0.5">
-                      {workspaceOptions.map((ws) => (
-                    <button
-                      key={ws.authOrganizationId}
-                      onClick={() => {
-                        switchTo(ws.authOrganizationId);
-                        setOpen(false);
-                      }}
-                      disabled={isPending}
-                      className={cn(
-                        "flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-accent",
-                        ws.isActive && "bg-accent/50",
-                      )}
-                    >
-                      <WorkspaceMark
-                        name={ws.name}
-                        logoUrl={ws.logoUrl}
-                        className="size-7 shrink-0"
-                      />
-                      <span className="flex-1 truncate text-left">
-                        {ws.name}
-                      </span>
-                      {ws.isActive && (
-                        <Check className="size-3.5 shrink-0 text-primary" />
-                      )}
-                    </button>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              ) : null}
-
-              <div className="h-px bg-border" />
-
-              {/* ── Nav actions ── */}
-              <div className="px-3 py-2">
-                {user.username && (
-                  <Link
-                    href={`/people/${user.username}` as Route}
-                    onClick={() => setOpen(false)}
-                    className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                  >
-                    <ExternalLink
-                      className="size-4 text-muted-foreground"
-                      strokeWidth={1.5}
-                    />
-                    View profile
-                  </Link>
-                )}
-                <Link
-                  href={"/account" as Route}
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <UserRound
-                    className="size-4 text-muted-foreground"
-                    strokeWidth={1.5}
-                  />
-                  Account settings
-                </Link>
-                <Link
-                  href="/settings"
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <Building2
-                    className="size-4 text-muted-foreground"
-                    strokeWidth={1.5}
-                  />
-                  Organization settings
-                </Link>
-                {canRestoreChecklist ? (
-                  <button
-                    type="button"
+            <div className="px-3 py-3">
+              <p className="mb-2 px-1 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
+                Workspace
+              </p>
+              <div className="space-y-0.5">
+                {workspaceOptions.map((ws) => (
+                  <DropdownMenuItem
+                    key={ws.authOrganizationId}
                     disabled={isPending}
-                    onClick={showSetupChecklist}
-                    className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground disabled:opacity-50"
+                    onSelect={() => switchTo(ws.authOrganizationId)}
+                    className={cn(
+                      "gap-2.5 rounded-lg px-2 py-2 text-sm hover:bg-accent",
+                      ws.isActive && "bg-accent/50",
+                    )}
                   >
-                    <ListChecks
-                      className="size-4 text-muted-foreground"
-                      strokeWidth={1.5}
+                    <WorkspaceMark
+                      name={ws.name}
+                      logoUrl={ws.logoUrl}
+                      className="size-7 shrink-0"
                     />
-                    Show setup checklist
-                  </button>
-                ) : null}
-              </div>
-
-              <div className="h-px bg-border" />
-
-              {/* ── GitHub ── */}
-              <div className="px-3 py-2">
-                <a
-                  href={REPO_URL}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={() => setOpen(false)}
-                  className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                >
-                  <GithubIcon className="size-4 text-muted-foreground" />
-                  <span className="flex-1">Star on GitHub</span>
-                  <ExternalLink className="size-3 text-muted-foreground/60" />
-                </a>
-              </div>
-
-              {/* ── Public beta: quiet status, plus where to get help ── */}
-              {!demoMode ? (
-                <>
-                  <div className="h-px bg-border" />
-                  <div className="px-3 py-2">
-                    <div className="flex items-center justify-between px-2 py-1.5">
-                      <Badge variant="outline" className="text-[11px] font-normal">
-                        Public beta
-                      </Badge>
-                      {VERSION ? (
-                        <span className="font-mono text-[0.65rem] text-muted-foreground">
-                          {VERSION}
-                        </span>
-                      ) : null}
-                    </div>
-                    <a
-                      href={DOCS_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() => setOpen(false)}
-                      className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      <BookOpen className="size-4 text-muted-foreground" strokeWidth={1.5} />
-                      <span className="flex-1">Documentation</span>
-                      <ExternalLink className="size-3 text-muted-foreground/60" />
-                    </a>
-                    <a
-                      href={ISSUES_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                      onClick={() => setOpen(false)}
-                      className="flex items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-                    >
-                      <MessageSquare className="size-4 text-muted-foreground" strokeWidth={1.5} />
-                      <span className="flex-1">Report an issue</span>
-                      <ExternalLink className="size-3 text-muted-foreground/60" />
-                    </a>
-                  </div>
-                </>
-              ) : null}
-
-              <div className="h-px bg-border" />
-
-              {/* ── Sign out ── */}
-              <div className="px-3 py-2">
-                <button
-                  type="button"
-                  disabled={isPending}
-                  onClick={handleSignOut}
-                  className="flex w-full items-center gap-2.5 rounded-lg px-2 py-2 text-sm text-destructive transition-colors hover:bg-destructive/10 disabled:opacity-50"
-                >
-                  <LogOut className="size-4" strokeWidth={1.5} />
-                  {isPending ? "Signing out…" : "Sign out"}
-                </button>
+                    <span className="flex-1 truncate text-left">
+                      {ws.name}
+                    </span>
+                    {ws.isActive && (
+                      <Check className="size-3.5 shrink-0 text-primary" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
               </div>
             </div>
-          </>,
-          document.body,
-        )}
+          </>
+        ) : null}
 
-    </>
+        <DropdownMenuSeparator className="m-0" />
+
+        {/* ── Nav actions ── */}
+        <div className="px-3 py-2">
+          {user.username && (
+            <DropdownMenuItem asChild className={itemClass}>
+              <Link href={`/people/${user.username}` as Route}>
+                <ExternalLink
+                  className="size-4 text-muted-foreground"
+                  strokeWidth={1.5}
+                />
+                View profile
+              </Link>
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem asChild className={itemClass}>
+            <Link href={"/account" as Route}>
+              <UserRound
+                className="size-4 text-muted-foreground"
+                strokeWidth={1.5}
+              />
+              Account settings
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild className={itemClass}>
+            <Link href="/settings">
+              <Building2
+                className="size-4 text-muted-foreground"
+                strokeWidth={1.5}
+              />
+              Organization settings
+            </Link>
+          </DropdownMenuItem>
+          {canRestoreChecklist ? (
+            <DropdownMenuItem
+              disabled={isPending}
+              // Stay open until the restore finishes; showSetupChecklist closes it.
+              onSelect={(event) => {
+                event.preventDefault();
+                showSetupChecklist();
+              }}
+              className={itemClass}
+            >
+              <ListChecks
+                className="size-4 text-muted-foreground"
+                strokeWidth={1.5}
+              />
+              Show setup checklist
+            </DropdownMenuItem>
+          ) : null}
+        </div>
+
+        <DropdownMenuSeparator className="m-0" />
+
+        {/* ── GitHub ── */}
+        <div className="px-3 py-2">
+          <DropdownMenuItem asChild className={itemClass}>
+            <a href={REPO_URL} target="_blank" rel="noreferrer">
+              <GithubIcon className="size-4 text-muted-foreground" />
+              <span className="flex-1">Star on GitHub</span>
+              <ExternalLink className="size-3 text-muted-foreground/60" />
+            </a>
+          </DropdownMenuItem>
+        </div>
+
+        {/* ── Public beta: quiet status, plus where to get help ── */}
+        {!demoMode ? (
+          <>
+            <DropdownMenuSeparator className="m-0" />
+            <div className="px-3 py-2">
+              <div className="flex items-center justify-between px-2 py-1.5">
+                <Badge variant="outline" className="text-[11px] font-normal">
+                  Public beta
+                </Badge>
+                {VERSION ? (
+                  <span className="font-mono text-[0.65rem] text-muted-foreground">
+                    {VERSION}
+                  </span>
+                ) : null}
+              </div>
+              <DropdownMenuItem asChild className={itemClass}>
+                <a href={DOCS_URL} target="_blank" rel="noreferrer">
+                  <BookOpen className="size-4 text-muted-foreground" strokeWidth={1.5} />
+                  <span className="flex-1">Documentation</span>
+                  <ExternalLink className="size-3 text-muted-foreground/60" />
+                </a>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className={itemClass}>
+                <a href={ISSUES_URL} target="_blank" rel="noreferrer">
+                  <MessageSquare className="size-4 text-muted-foreground" strokeWidth={1.5} />
+                  <span className="flex-1">Report an issue</span>
+                  <ExternalLink className="size-3 text-muted-foreground/60" />
+                </a>
+              </DropdownMenuItem>
+            </div>
+          </>
+        ) : null}
+
+        <DropdownMenuSeparator className="m-0" />
+
+        {/* ── Sign out ── */}
+        <div className="px-3 py-2">
+          <DropdownMenuItem
+            variant="destructive"
+            disabled={isPending}
+            // Stay open while signing out; the redirect replaces the page.
+            onSelect={(event) => {
+              event.preventDefault();
+              handleSignOut();
+            }}
+            className="gap-2.5 rounded-lg px-2 py-2 text-sm"
+          >
+            <LogOut className="size-4" strokeWidth={1.5} />
+            {isPending ? "Signing out…" : "Sign out"}
+          </DropdownMenuItem>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

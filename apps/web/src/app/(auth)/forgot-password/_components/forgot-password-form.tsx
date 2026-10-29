@@ -39,7 +39,7 @@ export function ForgotPasswordForm() {
   if (sent) {
     return (
       <div className="auth-stagger space-y-4">
-        <p className="text-sm leading-6 text-foreground">
+        <p role="status" className="text-sm leading-6 text-foreground">
           If an account exists for{" "}
           <span className="font-medium">{email.trim()}</span>, we&apos;ve sent
           a password reset link. Check your inbox.
@@ -83,7 +83,7 @@ export function ForgotPasswordForm() {
         />
       </div>
 
-      {error ? <p className="text-center text-sm text-danger-rust">{error}</p> : null}
+      {error ? <p role="alert" className="text-center text-sm text-danger-rust">{error}</p> : null}
 
       <button
         type="submit"
