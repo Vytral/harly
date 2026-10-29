@@ -37,6 +37,7 @@ import {
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
 import { offerSendOutcomeMessage } from "@/lib/email/delivery-warning";
+import { offerEmailDedupeKey, offerExtendedEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import {
   archiveDocusealOffer,
   createOfferEnvelope,
@@ -598,18 +599,19 @@ export async function sendOffer(input: {
   // A durable outbox row is the single source of truth: the worker sends the
   // email and only then flips the offer to `sent`, so a crash mid-flight can
   // never leave the offer as `sent` without a delivered email (or resend it).
-  // enqueueEmailOutbox dedupes by a hash of (kind, payload), so a double send
-  // (double-click, retry, AI agent) reuses the same row instead of creating
-  // duplicates and double-counting deliveries / offer.sent events. An explicit
-  // send after a terminal failure starts a fresh attempt on that same row.
+  // The key is the offer and its terms, so a double send (double-click, retry,
+  // AI agent) reuses the same row instead of creating duplicates and
+  // double-counting deliveries / offer.sent events. An explicit send after a
+  // terminal failure starts a fresh attempt on that same row.
+  const terms = serializeOfferTermsSnapshot(snapshotOfferTerms(offer));
   const outboxId = await enqueueEmailOutbox(
     workspaceId,
     "offer.extended",
     {
       offerId: offer.id,
-      terms: serializeOfferTermsSnapshot(snapshotOfferTerms(offer)),
+      terms,
     },
-    undefined,
+    offerExtendedEmailDedupeKey({ offerId: offer.id, terms }),
     context.user.id,
     db,
     { resetTerminal: true },
@@ -1139,7 +1141,7 @@ export async function withdrawOffer(input: {
           companyName: recipient.companyName,
           jobTitle: offer.title,
         },
-        undefined,
+        offerEmailDedupeKey({ offerId: offer.id, kind: "withdrawn" }),
         context.user.id,
       );
       await processEmailOutbox({ ids: [outboxId], workspaceId });

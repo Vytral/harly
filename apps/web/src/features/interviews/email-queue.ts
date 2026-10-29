@@ -2,7 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 
 import { db, emailOutbox, user as authUsers } from "@harly/db";
 
@@ -95,6 +95,9 @@ export async function resolveOriginalInviteTimeZone(
   database: typeof db = db,
 ): Promise<string | null> {
   try {
+    // Bounded by the (workspace_id, dedupe_key) unique index instead of a scan
+    // of the whole outbox. Every invite's dedupe key begins with its interview id.
+    const range = interviewInviteKeyRange(interviewId);
     const [invite] = await database
       .select({ payload: emailOutbox.payload })
       .from(emailOutbox)
@@ -102,6 +105,8 @@ export async function resolveOriginalInviteTimeZone(
         and(
           eq(emailOutbox.workspaceId, workspaceId),
           eq(emailOutbox.kind, "interview.scheduled"),
+          gte(emailOutbox.dedupeKey, range.lower),
+          lt(emailOutbox.dedupeKey, range.upper),
           sql`${emailOutbox.payload}->>'interviewId' = ${interviewId}`,
         ),
       )
@@ -127,6 +132,21 @@ export function interviewEmailDedupeKey(input: {
   revision: number;
 }): string {
   return `interview:${input.interviewId}:${input.kind}:${input.scheduledAt}:${input.revision}`;
+}
+
+/**
+ * Index range that holds every `interview.scheduled` dedupe key of one
+ * interview (see interviewEmailDedupeKey). It only narrows the index scan; the
+ * payload check stays exact. The upper bound ends in a letter that sorts after
+ * the key's `scheduled` on purpose: a ':' or ';' bound would be compared with
+ * the key's punctuation, which some collations (en_US) ignore, and that could
+ * exclude real invites.
+ */
+export function interviewInviteKeyRange(interviewId: string): { lower: string; upper: string } {
+  return {
+    lower: `interview:${interviewId}:interview.scheduled:`,
+    upper: `interview:${interviewId}:interview.schedulee`,
+  };
 }
 
 /**

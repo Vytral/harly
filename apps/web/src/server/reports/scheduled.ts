@@ -9,6 +9,7 @@ import {
   scheduledReports,
 } from "@harly/db";
 import { enqueueEmailOutbox } from "@/lib/email/outbox-processor";
+import { scheduledReportEmailDedupeKey } from "@/lib/email/dedupe-keys";
 
 import { nextRun } from "./cadence";
 import { getAdvancedHiringAnalytics, type AdvancedHiringAnalytics } from "@/features/reports/advanced";
@@ -81,13 +82,16 @@ export async function runDueScheduledReports(limit = 25) {
         periodStart: built.window.from,
         periodEnd: built.window.to,
       }).where(eq(scheduledReportRuns.id, run.id));
+      // Key on the due slot, not the tick time, so a retried tick for the same
+      // slot does not send the period's report again.
+      const periodStart = report.nextRunAt ?? now;
       for (const to of (Array.isArray(report.recipients) ? report.recipients : [])) {
         await enqueueEmailOutbox(report.workspaceId, "report.scheduled", {
           to,
           subject: `${report.name} · Harly hiring report`,
           bodyHtml: built.html,
           companyName: "Harly",
-        }, `scheduled-report:${report.id}:${now.toISOString()}:${to}`);
+        }, scheduledReportEmailDedupeKey({ scheduledReportId: report.id, periodStart, recipient: to }));
       }
       await db.update(scheduledReportRuns).set({ status: "queued", sentAt: new Date() }).where(eq(scheduledReportRuns.id, run.id));
       await db.update(scheduledReports).set({ lastRunAt: now, nextRunAt: nextRun(report.frequency, now), lockedAt: null, lockedBy: null, updatedAt: now }).where(and(eq(scheduledReports.id, report.id), eq(scheduledReports.lockedBy, workerId)));

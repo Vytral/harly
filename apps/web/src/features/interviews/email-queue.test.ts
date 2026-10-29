@@ -12,6 +12,8 @@ vi.mock("drizzle-orm", () => ({
   and: (...values: unknown[]) => values,
   desc: (value: unknown) => value,
   eq: (...values: unknown[]) => values,
+  gte: (...values: unknown[]) => values,
+  lt: (...values: unknown[]) => values,
   sql: (...values: unknown[]) => values,
 }));
 vi.mock("@harly/db", () => {
@@ -23,7 +25,7 @@ vi.mock("@harly/db", () => {
   chain.limit = next;
   return {
     db: { select: () => chain },
-    emailOutbox: { id: "id", status: "status", payload: "payload", kind: "kind", workspaceId: "ws", createdAt: "createdAt" },
+    emailOutbox: { id: "id", status: "status", payload: "payload", kind: "kind", workspaceId: "ws", createdAt: "createdAt", dedupeKey: "dedupeKey" },
     interviews: { id: "id", workspaceId: "ws", updatedAt: "updatedAt" },
     user: { id: "userId", timezone: "timezone" },
   };

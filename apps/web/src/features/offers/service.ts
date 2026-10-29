@@ -23,6 +23,7 @@ import {
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
 import { offerSendOutcomeMessage } from "@/lib/email/delivery-warning";
+import { offerEmailDedupeKey, offerExtendedEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
@@ -472,9 +473,10 @@ export async function sendOfferForApi(input: {
     });
   }
 
-  // enqueueEmailOutbox dedupes by a hash of (kind, payload), so a double send
-  // (double-click, retry, AI agent) reuses the same outbox row instead of
-  // creating duplicates and double-counting deliveries / offer.sent events.
+  // Keyed by the workflow effect when there is one, otherwise by the offer and
+  // its terms, so a double send (double-click, retry, AI agent) reuses the same
+  // outbox row instead of creating duplicates and double-counting deliveries /
+  // offer.sent events.
   const outboxId = await enqueueEmailOutbox(
     input.workspaceId,
     "offer.extended",
@@ -483,7 +485,11 @@ export async function sendOfferForApi(input: {
       actorId: input.actorUserId,
       terms: serializeOfferTermsSnapshot(snapshotOfferTerms(offer)),
     },
-    input.workflowEffectId,
+    input.workflowEffectId ??
+      offerExtendedEmailDedupeKey({
+        offerId: offer.id,
+        terms: serializeOfferTermsSnapshot(snapshotOfferTerms(offer)),
+      }),
     input.actorUserId,
     database,
     { resetTerminal: true },
@@ -769,6 +775,7 @@ export async function withdrawOfferForApi(input: {
           companyName: recipient.companyName,
           jobTitle: offer.title,
         },
+        offerEmailDedupeKey({ offerId: offer.id, kind: "withdrawn" }),
       );
       await processEmailOutbox({ ids: [id], workspaceId: input.workspaceId });
     }

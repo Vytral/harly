@@ -40,6 +40,7 @@ import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
+import { applicationStatusEmailDedupeKey } from "@/lib/email/dedupe-keys";
 
 /** Workspace-scoped application service for the REST API. */
 const log = createLogger("applications");
@@ -63,6 +64,8 @@ async function notifyApplicationStatusChange(input: {
   workspaceId: string;
   application: Application;
   status: "hired" | "rejected";
+  /** The domain event that recorded this transition; keys the email to it. */
+  eventId: string;
   database?: typeof db;
 }) {
   const database = input.database ?? db;
@@ -131,7 +134,11 @@ async function notifyApplicationStatusChange(input: {
         workspaceName: details.workspaceName,
         type: "rejected",
       },
-      undefined,
+      applicationStatusEmailDedupeKey({
+        applicationId: input.application.id,
+        status: input.status,
+        eventId: input.eventId,
+      }),
       undefined,
       input.database,
     );
@@ -718,6 +725,7 @@ async function setApplicationStatus(
         workspaceId: input.workspaceId,
         application: updated,
         status,
+        eventId: persistedEvent.eventId,
         database,
       });
     }

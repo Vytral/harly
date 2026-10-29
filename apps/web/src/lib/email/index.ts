@@ -18,6 +18,17 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("email");
 
+/*
+ * Outbox dedupe contract. Every caller that queues an email in the outbox (the
+ * enqueue function in ./outbox-processor) MUST pass a durable dedupe key that
+ * names the real-world event: a retry of the same event reuses the key, and a
+ * legitimate repeat of an identical payload gets a new key. Without a key the
+ * outbox dedupes on a hash of the payload, which silently drops a second event
+ * whose payload is identical, such as a re-move to the same stage or a
+ * scheduled report with the same body. Key builders live in ./dedupe-keys.
+ * enqueue-call-sites.test.ts fails on any call site that passes no key.
+ */
+
 export const emailSender = createEmailSender();
 
 export type SendEmailOptions = {

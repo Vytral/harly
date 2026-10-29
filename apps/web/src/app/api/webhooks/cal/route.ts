@@ -20,6 +20,7 @@ import {
   updateInterviewGCalEvent,
 } from "@/lib/gcal/sync";
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
+import { calBookingEmailDedupeKey } from "@/lib/email/dedupe-keys";
 import {
   enqueueEmailOutbox,
   processEmailOutbox,
@@ -244,6 +245,8 @@ async function sendCalInterviewEmail(input: {
   action: CalAction;
   interview: typeof interviews.$inferSelect;
   context: Awaited<ReturnType<typeof resolveApplication>>;
+  /** The webhook's booking identity: a redelivery of it must not send twice. */
+  booking: { uid: string; triggerEvent: string; startTime?: string };
 }) {
   if (!input.context?.email) return;
   try {
@@ -266,7 +269,11 @@ async function sendCalInterviewEmail(input: {
         durationMins: input.interview.durationMins,
         replyTo,
       },
-      undefined,
+      calBookingEmailDedupeKey({
+        bookingUid: input.booking.uid,
+        triggerEvent: input.booking.triggerEvent,
+        startTime: input.booking.startTime,
+      }),
       input.actorUserId,
     );
     await processEmailOutbox({ ids: [outboxId], workspaceId: input.workspaceId });
@@ -386,6 +393,11 @@ export async function POST(request: NextRequest) {
   if (!action) {
     return NextResponse.json({ ok: true, skipped: body.triggerEvent ?? "unknown" });
   }
+  const calBooking = {
+    uid,
+    triggerEvent: body.triggerEvent ?? "",
+    startTime: payload.startTime,
+  };
 
   const currentWhere = and(
     eq(interviews.workspaceId, workspaceId),
@@ -447,7 +459,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       metadata: { applicationId: latest.applicationId },
     });
-    await sendCalInterviewEmail({ workspaceId, action, interview: latest, context });
+    await sendCalInterviewEmail({ workspaceId, action, interview: latest, context, booking: calBooking });
     await emitWebhookEvent(workspaceId, "interview.canceled", {
       interview: serializeCalInterview(latest),
       eventId: transition.event.eventId,
@@ -549,7 +561,7 @@ export async function POST(request: NextRequest) {
       workspaceId,
       metadata: { applicationId: latest.applicationId },
     });
-    await sendCalInterviewEmail({ workspaceId, action, interview: latest, context });
+    await sendCalInterviewEmail({ workspaceId, action, interview: latest, context, booking: calBooking });
     await emitWebhookEvent(workspaceId, "interview.rescheduled", {
       interview: serializeCalInterview(latest),
       eventId: transition.event.eventId,
@@ -639,6 +651,7 @@ export async function POST(request: NextRequest) {
     action,
     interview: latest,
     context: application,
+    booking: calBooking,
   });
   await emitWebhookEvent(workspaceId, "interview.scheduled", {
     interview: serializeCalInterview(latest),
