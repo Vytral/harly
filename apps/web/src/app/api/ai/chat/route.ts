@@ -17,6 +17,12 @@ import { getWorkspaceAiConfig } from "@/lib/ai/config";
 import { getModel } from "@/lib/ai/registry";
 import { toolsForProvider } from "@/lib/ai/provider-tools";
 import { buildHarlyTools } from "@/lib/ai/agent";
+import {
+  loadCandidateIdentities,
+  toolsForModelHistory,
+  withToolResultRedaction,
+  type ToolResultRedactionContext,
+} from "@/lib/ai/agent/tool-result-redaction";
 import { buildHarlySystemPrompt } from "@/lib/ai/agent/system-prompt";
 import { getWorkspaceKnowledge } from "@/lib/ai/agent/workspace-knowledge";
 import { getHarlyCoreProductContext } from "@/lib/ai/knowledge/harly-product-knowledge";
@@ -342,6 +348,14 @@ export async function POST(req: Request) {
     workspaceId,
     context.organization.name,
   );
+  // Identity redaction for what the model sees (tool results and earlier turns'
+  // results). The raw results still stream to the UI and persist.
+  const redaction: ToolResultRedactionContext = {
+    anonymize: config.resumeAnonymization,
+    conversationKey: conversationId ?? `unsaved:${crypto.randomUUID()}`,
+    resolveCandidateIdentities: (candidateIds) =>
+      loadCandidateIdentities(workspaceId, candidateIds),
+  };
   const tools = toolsForProvider(
     // Public demo: strip automation, outbound-email and fan-out scoring tools
     // (no-op on normal installs).
@@ -358,6 +372,8 @@ export async function POST(req: Request) {
     ),
     config.provider,
   );
+
+  const modelTools = withToolResultRedaction(tools, redaction);
 
   if (process.env.NODE_ENV !== "production") {
     // Fails loudly in dev/CI, never in prod, if a newly added tool forgot to
@@ -450,8 +466,10 @@ export async function POST(req: Request) {
       timeZone,
       activeAutomation: automationContext,
     }), demo),
-    messages: await convertToModelMessages(messages),
-    tools,
+    messages: await convertToModelMessages(messages, {
+      tools: toolsForModelHistory(modelTools, redaction),
+    }),
+    tools: modelTools,
     activeTools: initialActiveTools,
     prepareStep: ({ stepNumber }) => {
       if (shouldWidenForStep(stepNumber)) {

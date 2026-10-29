@@ -75,6 +75,16 @@ Resume anonymization is a workspace setting in **Settings → AI**. When it is o
   handles, street addresses and location are removed from what is sent. Names
   are also removed from the candidate's résumé, headline, application answers
   and interview notes.
+- The chat assistant's tool results get the same treatment. Each candidate is
+  shown as "Candidate" with a short code that stays the same for that candidate
+  within one conversation, and ids are kept so the assistant can still act on
+  the right record. Names, email addresses, phone numbers, links, avatars,
+  addresses, locations and mail-header addresses are removed from what the model
+  receives. Names in free text are masked wherever a known candidate's name
+  appears. Only the candidates whose identity the result carries (or that it
+  names by id) are recognized, so a name that appears in a result with no
+  candidate record is not masked. If redaction fails, the assistant receives a
+  withheld notice instead of the result. The screen still shows the results.
 - Features that cannot work without knowing who the candidate is are paused,
   and the screen says so: duplicate detection, email drafting, mailbox
   assistance, AI resume autofill on the apply form, AI resume summaries on
@@ -141,11 +151,12 @@ for a feature you have not enabled or used.
 | Scorecard comment refinement | The comment text and role title | Paused. |
 | Scorecard attribute suggestions, job description drafts, screening questions | Job details only | No change. No candidate data is sent. |
 | Pipeline headline | Aggregate counts only | No change. |
-| Chat assistant | The conversation, your workspace and role, the candidate or job you have open, and the results of the tools the assistant calls. Tool results can include candidate names and contact details. | Not covered. Tool results still reach the provider as they are. |
+| Chat assistant | The conversation, your workspace and role, the candidate or job you have open, and the results of the tools the assistant calls. Tool results can include candidate names and contact details. | Tool results are redacted before the model sees them: candidate names become "Candidate" with a short code, and contact details, links, locations and names in free text are removed. Names you type into the conversation are still sent. |
 
-Anonymization applies to the scoring, matching, and note-summary paths above.
-The interview brief and the chat assistant are not yet covered. Treat both as
-receiving identifying details until this page says otherwise.
+Anonymization applies to the scoring, matching, note-summary and chat-tool-result
+paths above. The chat assistant's conversation itself is not redacted: a name or
+contact detail you type is sent as typed. The interview brief is not yet covered.
+Treat it as receiving identifying details until this page says otherwise.
 
 What is sent to a provider is limited to the feature you enabled. Candidate
 data is personal data, so:
