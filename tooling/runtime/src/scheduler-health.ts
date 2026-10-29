@@ -31,3 +31,42 @@ export function describeSchedulerRuns(
   });
   return { ok, detail: details.join(" ") };
 }
+
+/**
+ * Run statuses that count as a fresh success for doctor and readiness. A
+ * `skipped` (409) tick means another run still holds the lock, not that the
+ * job did its work, so it never refreshes the job's last-success time.
+ * Mirrors `CRON_RUN_STATUSES` in apps/web/src/server/cron-status.ts.
+ */
+export const FRESH_RUN_STATUSES = ["succeeded", "success"] as const;
+
+/**
+ * The scheduler writes a fallback `cron_runs` row only when the app did not
+ * record the run and the request did not time out. On timeout the app may still
+ * finish and record its own result; a fallback `failed` row would then count one
+ * batch twice.
+ */
+export function shouldRecordSchedulerFallback(input: {
+  timedOut: boolean;
+  appRecorded: boolean;
+}): boolean {
+  return !input.timedOut && !input.appRecorded;
+}
+
+const RUN_ERROR_MAX_LENGTH = 500;
+const RUN_ERROR_EMAIL = /[^\s@<>"',;()]+@[^\s@<>"',;()]+/g;
+
+/**
+ * Single-line, bounded error text for a fallback row. Mirrors
+ * `sanitizeCronErrorText` in apps/web: no driver parameters, no addresses.
+ */
+export function sanitizeRunError(message: string): string {
+  const cleaned = message
+    .replace(/\bparams:[\s\S]*$/i, "")
+    .replace(RUN_ERROR_EMAIL, "[email]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, RUN_ERROR_MAX_LENGTH);
+  return cleaned || "unknown error";
+}
+

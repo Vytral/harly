@@ -22,6 +22,7 @@ import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
+import { offerSendOutcomeMessage } from "@/lib/email/delivery-warning";
 import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
 import {
@@ -485,6 +486,7 @@ export async function sendOfferForApi(input: {
     input.workflowEffectId,
     input.actorUserId,
     database,
+    { resetTerminal: true },
   );
 
   await processEmailOutbox({ ids: [outboxId], database });
@@ -494,9 +496,7 @@ export async function sendOfferForApi(input: {
     .where(eq(emailOutbox.id, outboxId))
     .limit(1);
   if (delivery?.status !== "sent") {
-    throw ApiError.internal(
-      "Offer delivery failed. It has been queued for retry.",
-    );
+    throw ApiError.internal(offerSendOutcomeMessage(delivery?.status ?? "missing"));
   }
   return getOfferForApi({ ...input, database });
 }

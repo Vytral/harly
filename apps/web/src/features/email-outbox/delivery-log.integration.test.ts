@@ -157,3 +157,43 @@ describe.skipIf(!runPipelineIntegration)("delivery log", () => {
     if (result.ok) expect(Array.isArray(result.data.rows)).toBe(true);
   });
 });
+
+describe.skipIf(!runPipelineIntegration)("delivery log accepted-row and audit safety", () => {
+  let fx: PipelineFixture;
+
+  beforeAll(async () => {
+    fx = await createPipelineFixture();
+    mocks.workspaceId = fx.workspaceId;
+    mocks.userId = fx.userId;
+  });
+  afterAll(async () => {
+    await fx?.cleanup();
+  });
+
+  it("explains that a provider-accepted row cannot be cancelled, instead of a generic refusal", async () => {
+    const id = await insertRow(fx.workspaceId, "failed", { providerMessageId: "prov-accepted-4" });
+
+    const result = await cancelDelivery({ workspaceId: fx.workspaceId, id });
+
+    expect(result).toEqual({
+      ok: false,
+      error: "The email provider already accepted this email, so it cannot be cancelled.",
+    });
+    const [row] = await db.select().from(emailOutbox).where(eq(emailOutbox.id, id));
+    expect(row?.status).toBe("failed");
+  });
+
+  it("records the previous attempt count in the row before an operator retry resets it", async () => {
+    const id = await insertRow(fx.workspaceId, "failed", {
+      attempts: 5,
+      lastError: "Email provider did not accept the pipeline email.",
+    });
+
+    await retryDelivery({ workspaceId: fx.workspaceId, id });
+
+    const [row] = await db.select().from(emailOutbox).where(eq(emailOutbox.id, id));
+    expect(row?.payload).toMatchObject({
+      operatorRetries: [{ previousAttempts: 5, previousError: "Email provider did not accept the pipeline email." }],
+    });
+  });
+});

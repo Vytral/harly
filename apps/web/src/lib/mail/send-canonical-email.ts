@@ -12,6 +12,7 @@ import {
   mailUnificationMigrations,
 } from "@harly/db";
 import { getWorkspaceEmailSender } from "@/lib/email";
+import { DeliveryOutcomeUnknownError } from "@harly/emails";
 import { isSampleEmailAddress } from "@/features/sample-data/constants";
 import {
   insertCanonicalMessage,
@@ -21,10 +22,10 @@ import {
 import { isMailUnificationEnabled } from "./feature-flag";
 import {
   MailDeliveryConflictError,
+  SampleRecipientError,
   type MailDeliveryConflictCode,
 } from "./delivery-state";
 import { createLogger } from "@/lib/logger";
-
 const log = createLogger("canonical-mail-send");
 
 const ACCEPTANCE_WRITE_ATTEMPTS = 3;
@@ -47,13 +48,7 @@ export type SendCanonicalEmailInput = {
   replyTo?: string | null;
 };
 
-/** Thrown before any reservation or provider call: sample recipients never receive mail. */
-export class SampleRecipientError extends Error {
-  constructor() {
-    super("This recipient is sample data. Sample candidates cannot receive email.");
-    this.name = "SampleRecipientError";
-  }
-}
+export { SampleRecipientError };
 
 export type SendCanonicalEmailResult = {
   /** True once the provider accepted the message (even if local persistence failed). */
@@ -257,6 +252,7 @@ async function persistAccepted(
   input: SendCanonicalEmailInput,
   row: IdempotencyRow,
   providerMessageId: string | null,
+  acceptanceRecorded: boolean,
 ): Promise<SendCanonicalEmailResult> {
   let canonical: Awaited<ReturnType<typeof insertCanonicalMessage>>;
   try {
@@ -282,8 +278,9 @@ async function persistAccepted(
       messageId: row.messageId,
       providerMessageId,
       persisted: false,
-      legacyWriteWarning:
-        "Sent, but the conversation record could not be saved. It will be completed when this message is retried.",
+      legacyWriteWarning: acceptanceRecorded
+        ? "Sent, but the conversation record could not be saved. Retrying this send will not send it again and will finish saving the record."
+        : "Sent, but the delivery could not be recorded. It will not be sent again; check the sent folder before sending a new copy.",
     };
   }
   const legacyWriteWarning = await writeLegacy(
@@ -414,14 +411,14 @@ export async function sendCanonicalEmail(
     // Accepted earlier, but the conversation record was never saved. Finish
     // that step only.
     return {
-      ...(await persistAccepted(input, row, row.providerMessageId)),
+      ...(await persistAccepted(input, row, row.providerMessageId, true)),
       idempotentReplay: true,
     };
   }
 
-  const sender = await getWorkspaceEmailSender(input.workspaceId, input.authorId);
   let providerMessageId: string | null;
   try {
+    const sender = await getWorkspaceEmailSender(input.workspaceId, input.authorId);
     if (!sender) throw new Error("Email sending is not configured.");
     const provider = await sender.send({
       to: input.toEmail,
@@ -442,6 +439,19 @@ export async function sendCanonicalEmail(
     });
     providerMessageId = provider.messageId ?? row.messageId;
   } catch (error) {
+    if (error instanceof DeliveryOutcomeUnknownError) {
+      // The message may have reached the server. Mark the key unknown so the
+      // same key is never sent again without an explicit choice.
+      await db
+        .update(mailIdempotencyKeys)
+        .set({
+          status: "unknown",
+          error: error.message.slice(0, 1000),
+          updatedAt: new Date(),
+        })
+        .where(eq(mailIdempotencyKeys.id, row.id));
+      throw new MailDeliveryConflictError("delivery_unknown");
+    }
     // The provider did not accept it, so the same key stays retryable.
     await db
       .update(mailIdempotencyKeys)
@@ -459,7 +469,7 @@ export async function sendCanonicalEmail(
 
   // Point of no return: the provider accepted the message.
   const recorded = await markAccepted(row.id, providerMessageId);
-  const result = await persistAccepted(input, row, providerMessageId);
+  const result = await persistAccepted(input, row, providerMessageId, recorded);
   if (!recorded) {
     log.error(
       { idempotencyRowId: row.id },

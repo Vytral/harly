@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   enqueue: vi.fn(),
@@ -30,6 +30,7 @@ import { sendPipelineEmails, type PipelineEmail } from "./emails";
 
 const STAGE_EMAIL: PipelineEmail = {
   type: "stage",
+  eventId: "hist-stage-1",
   applicationId: "app-1",
   candidateEmail: "c@example.com",
   candidateName: "Casey",
@@ -40,6 +41,7 @@ const STAGE_EMAIL: PipelineEmail = {
 
 const REJECTED_EMAIL: PipelineEmail = {
   type: "rejected",
+  eventId: "hist-rejected-1",
   applicationId: "app-2",
   candidateEmail: "d@example.com",
   candidateName: "Dana",
@@ -102,5 +104,81 @@ describe("sendPipelineEmails", () => {
   it("does nothing for an empty batch", async () => {
     await expect(sendPipelineEmails("ws-1", [])).resolves.toEqual({ queued: 0, sent: 0, failed: 0 });
     expect(mocks.enqueue).not.toHaveBeenCalled();
+  });
+});
+
+describe("sendPipelineEmails durable event keys", () => {
+  beforeEach(() => {
+    mocks.states = [{ status: "sent" }];
+    mocks.process.mockResolvedValue({ processed: 1, sent: 1, failed: 0 });
+  });
+
+  it("keys each email on its own stage move, so an identical repeat move is a new email", async () => {
+    await sendPipelineEmails("ws-1", [{ ...STAGE_EMAIL, eventId: "hist-move-1" }]);
+    await sendPipelineEmails("ws-1", [{ ...STAGE_EMAIL, eventId: "hist-move-2" }]);
+
+    expect(mocks.enqueue.mock.calls[0][3]).toBe("pipeline:hist-move-1");
+    expect(mocks.enqueue.mock.calls[1][3]).toBe("pipeline:hist-move-2");
+    expect(mocks.enqueue.mock.calls[0][3]).not.toBe(mocks.enqueue.mock.calls[1][3]);
+  });
+
+  it("reuses the same key when the same move is retried", async () => {
+    await sendPipelineEmails("ws-1", [STAGE_EMAIL]);
+    await sendPipelineEmails("ws-1", [STAGE_EMAIL]);
+
+    expect(mocks.enqueue.mock.calls[0][3]).toBe("pipeline:hist-stage-1");
+    expect(mocks.enqueue.mock.calls[1][3]).toBe("pipeline:hist-stage-1");
+  });
+});
+
+describe("sendPipelineEmails truthful outcomes", () => {
+  beforeEach(() => {
+    mocks.states = [];
+    mocks.process.mockReset();
+  });
+
+  it("does not claim the email could not be queued when processing failed after the row was saved", async () => {
+    mocks.process.mockRejectedValueOnce(new Error("socket hang up"));
+
+    const summary = await sendPipelineEmails("ws-1", [STAGE_EMAIL]);
+
+    expect(summary.queued).toBe(1);
+    expect(summary.emailWarning).not.toContain("could not be queued");
+    expect(summary.emailWarning).toContain("queued");
+    expect(summary.emailWarning).toContain("retried automatically");
+    // The outcome is unknown, so no sent count is reported.
+    expect(summary.sent).toBeNull();
+  });
+
+  it("keeps the 'could not be queued' wording when the row itself was never saved", async () => {
+    mocks.enqueue.mockRejectedValueOnce(new Error("database unavailable"));
+
+    const summary = await sendPipelineEmails("ws-1", [STAGE_EMAIL]);
+
+    expect(summary.emailWarning).toContain("could not be queued");
+  });
+});
+
+describe("sendPipelineEmails latency budget", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mocks.states = [];
+    mocks.process.mockReset();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns after the budget with an accurate warning while delivery continues in the background", async () => {
+    mocks.process.mockReturnValue(new Promise(() => {}));
+
+    const pending = sendPipelineEmails("ws-1", [STAGE_EMAIL], "user-1");
+    await vi.advanceTimersByTimeAsync(8_000);
+    const summary = await pending;
+
+    expect(summary.queued).toBe(1);
+    expect(summary.emailWarning).toContain("taking longer than usual");
+    expect(summary.emailWarning).toContain("will continue in the background");
+    expect(summary.emailWarning).not.toContain("could not be queued");
   });
 });

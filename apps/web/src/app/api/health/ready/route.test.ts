@@ -76,4 +76,30 @@ describe("GET /api/health/ready", () => {
     expect(response.status).toBe(503);
     expect((await response.json()).status).toBe("unavailable");
   });
+
+  it("gives the email detail at most two seconds, then reports it as unavailable", async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.isReady.mockResolvedValue(true);
+      mocks.getEmailOutboxHealth.mockReturnValue(new Promise(() => {}));
+
+      const pending = GET();
+      await vi.advanceTimersByTimeAsync(2_000);
+      const response = await pending;
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toMatchObject({ status: "ok", email: { status: "unavailable" } });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("exposes only counts and a status in the email detail, never recipients or error text", async () => {
+    mocks.isReady.mockResolvedValue(true);
+    mocks.getEmailOutboxHealth.mockResolvedValue(WARNING_EMAIL);
+
+    const body = await (await GET()).json();
+
+    expect(Object.keys(body.email).sort()).toEqual(["failed", "overduePending", "status", "stuckProcessing"]);
+  });
 });

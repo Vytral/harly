@@ -42,3 +42,39 @@ export function unshownEmailWarning(result: {
   if (result.warning?.includes(result.emailWarning)) return undefined;
   return result.emailWarning;
 }
+
+const MAX_STORED_ERROR_LENGTH = 500;
+const EMAIL_ADDRESS = /[^\s@<>"',;()]+@[^\s@<>"',;()]+/g;
+
+/**
+ * Error text that may be stored on an outbox row or shown in the delivery log.
+ * Driver messages carry the query's bound parameters, which include recipient
+ * addresses, so the parameter list and every address are removed.
+ */
+export function sanitizeDeliveryError(message: string): string {
+  const cleaned = message
+    .replace(/\bparams:[\s\S]*$/i, "")
+    .replace(EMAIL_ADDRESS, "[email]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, MAX_STORED_ERROR_LENGTH);
+  return cleaned || "delivery failed";
+}
+
+/**
+ * Recruiter copy for an offer send, from the outbox row's state after the
+ * send attempt. Only a `pending`/`processing` row is promised a retry.
+ */
+export function offerSendOutcomeMessage(status: string): string {
+  switch (status) {
+    case "sent":
+      return "This offer was already sent to the candidate.";
+    case "pending":
+    case "processing":
+      return "Offer delivery failed. It has been queued for retry.";
+    case "failed":
+      return "The offer email could not be confirmed as sent. Review the Delivery log before sending again.";
+    default:
+      return "The offer email was not queued. Try sending again.";
+  }
+}

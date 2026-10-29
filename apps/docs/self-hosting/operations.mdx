@@ -71,20 +71,35 @@ that end in a crash or a stall:
   attempt also stalls, the row ends `failed` with an explanatory error instead
   of looping.
 - Once the provider has accepted an email, the row is recorded as accepted and
-  is never sent again, even if the local bookkeeping that follows fails. Retries
-  and the Delivery log never re-send an accepted message.
+  is never sent again, even if the local bookkeeping that follows fails. If the
+  success record keeps failing, the row is held as `failed` with its provider
+  message ID, so no automatic path or Delivery log action sends it again.
+- SMTP can accept a message and then stop responding. When that happens the
+  outcome is unknown. The row ends `failed` with a *Delivery outcome unknown*
+  note and is not retried automatically. Check the sent folder before retrying
+  it from the Delivery log.
+- SMTP waits are bounded: 10 seconds to connect, 10 seconds for the greeting,
+  and 20 seconds of socket inactivity.
+- *Retry* records the previous attempt count and error in the row's payload
+  (`operatorRetries`) before it starts a fresh attempt.
 
-The `email-outbox` job has a 150-second scheduler timeout, enough for a full
-100-row batch. Failed runs record a short error message.
+The `email-outbox` job runs for at most 120 seconds: it starts no new row after
+that and hands unstarted rows back to the queue. The scheduler's timeout for the
+job is 150 seconds, so a normal run always finishes first. Failed runs record a
+short error message with no addresses or query parameters.
 
 ### Cron run records
 
 `cron_runs` uses one vocabulary: `succeeded`, `failed`, or `skipped`. The app
 records the runs it executes, including the error text of failed runs. The
 scheduler records a fallback row only when the app recorded nothing for that
-run (for example a `409` skip, an unreachable app, or a timeout). Rows older
-than 30 days are pruned by the scheduler every six hours. Metrics count each
-run once, and older `success` rows are reported as `succeeded`.
+run (for example a `409` skip or an unreachable app). A request that timed out
+is not recorded by the scheduler, because the app may still finish and record
+its own result. Rows older than 30 days are pruned by the scheduler every six
+hours. Metrics count each run once, and older `success` rows are reported as
+`succeeded`. Only `succeeded` runs count as a fresh success: a `skipped` tick
+means another run still holds the lock, so it does not refresh a job's
+last-success time in the doctor.
 
 ### Email warnings in doctor output
 

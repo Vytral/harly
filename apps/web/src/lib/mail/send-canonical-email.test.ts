@@ -9,6 +9,8 @@ const state = vi.hoisted(() => ({
   send: vi.fn(),
   insertCanonical: vi.fn(),
   flagEnabled: true,
+  senderError: null as unknown,
+  failAcceptanceWrites: false,
 }));
 
 vi.mock("drizzle-orm", () => ({
@@ -47,6 +49,9 @@ vi.mock("@harly/db", () => {
     }),
     update: () => ({
       set: (values: Record<string, unknown>) => {
+        if (state.failAcceptanceWrites && values.status === "sent") {
+          throw new Error("connection reset after accept");
+        }
         const apply = () => {
           if (state.idem) Object.assign(state.idem, values);
           return state.idem ? [state.idem] : [];
@@ -79,7 +84,10 @@ vi.mock("@harly/db", () => {
 });
 
 vi.mock("@/lib/email", () => ({
-  getWorkspaceEmailSender: async () => ({ send: state.send }),
+  getWorkspaceEmailSender: async () => {
+    if (state.senderError) throw state.senderError;
+    return { send: state.send };
+  },
 }));
 vi.mock("./canonical", () => ({
   insertCanonicalMessage: (...args: unknown[]) => state.insertCanonical(...args),
@@ -90,6 +98,8 @@ vi.mock("./feature-flag", () => ({
 vi.mock("@/lib/logger", () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
 }));
+
+import { DeliveryOutcomeUnknownError } from "@harly/emails";
 
 import { MailDeliveryConflictError } from "./delivery-state";
 import { sendCanonicalEmail, type SendCanonicalEmailInput } from "./send-canonical-email";
@@ -111,6 +121,8 @@ beforeEach(() => {
   state.send.mockReset();
   state.insertCanonical.mockReset();
   state.flagEnabled = true;
+  state.senderError = null;
+  state.failAcceptanceWrites = false;
 });
 
 describe("sendCanonicalEmail", () => {
@@ -187,5 +199,59 @@ describe("sendCanonicalEmail", () => {
 
     await expect(sendCanonicalEmail(INPUT)).rejects.toMatchObject({ code: "delivery_in_progress" });
     expect(state.send).not.toHaveBeenCalled();
+  });
+
+  it("marks the key failed when the sender cannot even be constructed, so it is never stuck in sending", async () => {
+    state.senderError = new Error("Workspace email config is corrupt");
+
+    await expect(sendCanonicalEmail(INPUT)).rejects.toThrow("Workspace email config is corrupt");
+
+    expect(state.send).not.toHaveBeenCalled();
+    expect(state.idem?.status).toBe("failed");
+  });
+
+  it("treats an SMTP outcome that is unknown after the message was handed over as unknown, not failed", async () => {
+    state.send.mockRejectedValueOnce(new DeliveryOutcomeUnknownError("SMTP socket closed after DATA"));
+
+    await expect(sendCanonicalEmail(INPUT)).rejects.toMatchObject({
+      code: "delivery_unknown",
+    });
+    expect(state.idem?.status).toBe("unknown");
+
+    // A same-key retry needs an explicit choice: it must not send again.
+    state.send.mockClear();
+    await expect(sendCanonicalEmail(INPUT)).rejects.toMatchObject({ code: "delivery_unknown" });
+    expect(state.send).not.toHaveBeenCalled();
+  });
+
+  it("keeps a definitive SMTP rejection retryable under the same key", async () => {
+    state.send.mockRejectedValueOnce(Object.assign(new Error("550 mailbox unavailable"), { responseCode: 550 }));
+    await expect(sendCanonicalEmail(INPUT)).rejects.toThrow("550 mailbox unavailable");
+    expect(state.idem?.status).toBe("failed");
+  });
+
+  it("says a same-key retry finishes saving the record when the acceptance was recorded", async () => {
+    state.send.mockResolvedValue({ messageId: "prov-1" });
+    state.insertCanonical.mockRejectedValue(new Error("write failed"));
+
+    const result = await sendCanonicalEmail(INPUT);
+
+    expect(result.persisted).toBe(false);
+    expect(result.legacyWriteWarning).toBe(
+      "Sent, but the conversation record could not be saved. Retrying this send will not send it again and will finish saving the record.",
+    );
+  });
+
+  it("describes the saved-record failure truthfully when the acceptance itself could not be recorded", async () => {
+    state.send.mockResolvedValue({ messageId: "prov-1" });
+    state.insertCanonical.mockRejectedValue(new Error("write failed"));
+    state.failAcceptanceWrites = true;
+
+    const result = await sendCanonicalEmail(INPUT);
+
+    expect(result.persisted).toBe(false);
+    expect(result.legacyWriteWarning).toBe(
+      "Sent, but the delivery could not be recorded. It will not be sent again; check the sent folder before sending a new copy.",
+    );
   });
 });

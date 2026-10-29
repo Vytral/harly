@@ -36,6 +36,7 @@ import {
   enqueueEmailOutbox,
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
+import { offerSendOutcomeMessage } from "@/lib/email/delivery-warning";
 import {
   archiveDocusealOffer,
   createOfferEnvelope,
@@ -599,7 +600,8 @@ export async function sendOffer(input: {
   // never leave the offer as `sent` without a delivered email (or resend it).
   // enqueueEmailOutbox dedupes by a hash of (kind, payload), so a double send
   // (double-click, retry, AI agent) reuses the same row instead of creating
-  // duplicates and double-counting deliveries / offer.sent events.
+  // duplicates and double-counting deliveries / offer.sent events. An explicit
+  // send after a terminal failure starts a fresh attempt on that same row.
   const outboxId = await enqueueEmailOutbox(
     workspaceId,
     "offer.extended",
@@ -609,6 +611,8 @@ export async function sendOffer(input: {
     },
     undefined,
     context.user.id,
+    db,
+    { resetTerminal: true },
   );
 
   await processEmailOutbox({ ids: [outboxId] });
@@ -622,7 +626,7 @@ export async function sendOffer(input: {
   if (updated?.status !== "sent") {
     return {
       success: false,
-      error: "Offer delivery failed. It has been queued for retry.",
+      error: offerSendOutcomeMessage(updated?.status ?? "missing"),
     };
   }
 

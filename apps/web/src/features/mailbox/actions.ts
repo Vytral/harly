@@ -30,6 +30,7 @@ import {
   resolveUnknownMailDelivery,
 } from "@/lib/mail/legacy-delivery";
 import {
+  canonicalSendFailureMessage,
   conflictResult,
   isMailDeliveryConflictError,
   type MailDeliveryConflictCode,
@@ -52,7 +53,7 @@ async function sendCanonicalForMailbox(input: SendCanonicalEmailInput): Promise<
   } catch (error) {
     if (isMailDeliveryConflictError(error)) return conflictResult(error.code);
     log.error(error, "canonical mailbox send failed");
-    return { ok: false, error: "Unable to send. Please try again." };
+    return { ok: false, error: canonicalSendFailureMessage(error) };
   }
 }
 

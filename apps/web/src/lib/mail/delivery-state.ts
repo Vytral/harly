@@ -56,3 +56,21 @@ export function conflictResult(
 ): MailActionConflictResult {
   return { ok: false, code, error: deliveryConflictMessage(code) };
 }
+
+/** Thrown before any reservation or provider call: sample recipients never receive mail. */
+export class SampleRecipientError extends Error {
+  constructor() {
+    super("This recipient is sample data. Sample candidates cannot receive email.");
+    this.name = "SampleRecipientError";
+  }
+}
+
+export const SAMPLE_RECIPIENT_SEND_MESSAGE =
+  "This is a sample-data address and can't receive email.";
+export const GENERIC_SEND_FAILURE_MESSAGE = "Unable to send. Please try again.";
+
+/** Recruiter-facing copy for a failed canonical send that is not a reservation conflict. */
+export function canonicalSendFailureMessage(error: unknown): string {
+  if (error instanceof SampleRecipientError) return SAMPLE_RECIPIENT_SEND_MESSAGE;
+  return GENERIC_SEND_FAILURE_MESSAGE;
+}

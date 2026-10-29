@@ -116,7 +116,11 @@ function makeTx(firstUpdateRows: unknown[]) {
   };
 
   const insertBuilder = {
-    values: () => ({ then: (_resolve: (v: unknown) => void) => _resolve([]) }),
+    values: () => ({
+      then: (_resolve: (v: unknown) => void) => _resolve([]),
+      // History rows return their id so the move can key its outbox email on it.
+      returning: async () => [{ id: "history-1", applicationId: "app-1" }],
+    }),
   };
 
   const tx = {
@@ -161,7 +165,11 @@ function makeTxWithFailures(failures: number) {
   };
 
   const insertBuilder = {
-    values: () => ({ then: (_resolve: (v: unknown) => void) => _resolve([]) }),
+    values: () => ({
+      then: (_resolve: (v: unknown) => void) => _resolve([]),
+      // History rows return their id so the move can key its outbox email on it.
+      returning: async () => [{ id: "history-1", applicationId: "app-1" }],
+    }),
   };
 
   const tx = {

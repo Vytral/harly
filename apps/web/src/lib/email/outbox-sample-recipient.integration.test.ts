@@ -45,6 +45,7 @@ describe.skipIf(!runPipelineIntegration)("sample recipients never reach the prov
     const summary = await sendPipelineEmails(fx.workspaceId, [
       {
         type: "stage",
+        eventId: "sample-move-1",
         applicationId: "00000000-0000-4000-8000-000000000001",
         candidateEmail: "ada.lovelace@sample.invalid",
         candidateName: "Ada Lovelace",

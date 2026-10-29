@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { normalizeCronRunCounts, normalizeCronRunStatus } from "./cron-status";
+import { normalizeCronRunCounts, normalizeCronRunStatus, sanitizeCronErrorText } from "./cron-status";
 
 describe("cron run status vocabulary", () => {
   it("maps legacy scheduler and app words onto one vocabulary", () => {
@@ -31,5 +31,19 @@ describe("cron run status vocabulary", () => {
       { job: "email-outbox", status: "succeeded", count: 5 },
       { job: "scheduled-reports", status: "skipped", count: 4 },
     ]);
+  });
+});
+
+describe("sanitizeCronErrorText", () => {
+  it("strips the parameter list drizzle appends and any email addresses from stored errors", () => {
+    const text = sanitizeCronErrorText(
+      'Failed query: select * from "candidates" where "email" = $1\nparams: casey@example.test',
+    );
+    expect(text).toBe('Failed query: select * from "candidates" where "email" = $1');
+  });
+
+  it("collapses whitespace and bounds the length", () => {
+    expect(sanitizeCronErrorText("boom\n\nbad   thing")).toBe("boom bad thing");
+    expect(sanitizeCronErrorText("x".repeat(900)).length).toBeLessThanOrEqual(500);
   });
 });

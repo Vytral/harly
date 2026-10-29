@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  SampleRecipientError,
+  canonicalSendFailureMessage,
   DELIVERY_IN_PROGRESS_MESSAGE,
   DELIVERY_UNKNOWN_MESSAGE,
   MailDeliveryConflictError,
@@ -29,5 +31,18 @@ describe("mail delivery conflict states", () => {
     expect(error.code).toBe("delivery_unknown");
     expect(isMailDeliveryConflictError(error)).toBe(true);
     expect(isMailDeliveryConflictError(new Error("other"))).toBe(false);
+  });
+});
+
+describe("canonical send failure messages", () => {
+  it("tells the sender why a sample-data recipient was refused instead of a generic failure", () => {
+    expect(canonicalSendFailureMessage(new SampleRecipientError())).toBe(
+      "This is a sample-data address and can't receive email.",
+    );
+  });
+
+  it("keeps the generic copy for any other failure", () => {
+    expect(canonicalSendFailureMessage(new Error("socket hang up"))).toBe("Unable to send. Please try again.");
+    expect(canonicalSendFailureMessage("boom")).toBe("Unable to send. Please try again.");
   });
 });

@@ -1,5 +1,7 @@
 "use server";
 
+import { randomUUID } from "node:crypto";
+
 import { revalidatePath } from "next/cache";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
@@ -191,6 +193,7 @@ export async function moveApplicationInPipeline(
       async () => {
         stageEvents.length = 0;
         domainEvents.length = 0;
+        const historyIdByApplication = new Map<string, string>();
         return db.transaction<PipelineEmail[]>(async (tx) => {
           // Lock the target stage before anything else. The outcome below is
           // derived from this locked row, so a concurrent kind change either
@@ -324,13 +327,17 @@ export async function moveApplicationInPipeline(
           }
 
           if (changedStage) {
-            await tx.insert(applicationStageHistory).values({
-              workspaceId: input.workspaceId,
-              applicationId: input.applicationId,
-              fromStageId: application.currentStageId,
-              toStageId: input.toStageId,
-              movedById: user.id,
-            });
+            const [historyRow] = await tx
+              .insert(applicationStageHistory)
+              .values({
+                workspaceId: input.workspaceId,
+                applicationId: input.applicationId,
+                fromStageId: application.currentStageId,
+                toStageId: input.toStageId,
+                movedById: user.id,
+              })
+              .returning({ id: applicationStageHistory.id });
+            historyIdByApplication.set(input.applicationId, historyRow.id);
 
             await tx.insert(activityEvents).values({
               workspaceId: input.workspaceId,
@@ -455,6 +462,7 @@ export async function moveApplicationInPipeline(
               {
                 type: "rejected",
                 applicationId: application.id,
+                eventId: historyIdByApplication.get(application.id) ?? randomUUID(),
                 candidateEmail: application.candidateEmail,
                 candidateName,
                 jobTitle: application.jobTitle,
@@ -471,6 +479,7 @@ export async function moveApplicationInPipeline(
               {
                 type: "stage",
                 applicationId: application.id,
+                eventId: historyIdByApplication.get(application.id) ?? randomUUID(),
                 candidateEmail: application.candidateEmail,
                 candidateName,
                 jobTitle: application.jobTitle,
@@ -608,6 +617,7 @@ export async function bulkMoveApplications(
       async () => {
         stageEvents.length = 0;
         domainEvents.length = 0;
+        const historyIdByApplication = new Map<string, string>();
         return db.transaction<PipelineEmail[]>(async (tx) => {
           // Lock the target FOR SHARE first; the outcome is derived from the
           // locked row so a concurrent kind change cannot make it stale.
@@ -791,15 +801,24 @@ export async function bulkMoveApplications(
               versionById.set(applicationId, now.toISOString());
             }
 
-            await tx.insert(applicationStageHistory).values(
-              appIds.map((applicationId) => ({
-                workspaceId: input.workspaceId,
-                applicationId,
-                fromStageId,
-                toStageId: input.toStageId,
-                movedById: user.id,
-              })),
-            );
+            const historyRows = await tx
+              .insert(applicationStageHistory)
+              .values(
+                appIds.map((applicationId) => ({
+                  workspaceId: input.workspaceId,
+                  applicationId,
+                  fromStageId,
+                  toStageId: input.toStageId,
+                  movedById: user.id,
+                })),
+              )
+              .returning({
+                id: applicationStageHistory.id,
+                applicationId: applicationStageHistory.applicationId,
+              });
+            for (const historyRow of historyRows) {
+              historyIdByApplication.set(historyRow.applicationId, historyRow.id);
+            }
 
             await tx.insert(activityEvents).values(
               appIds.map((applicationId) => ({
@@ -907,6 +926,7 @@ export async function bulkMoveApplications(
                 collectedEmails.push({
                   type: "rejected",
                   applicationId: appData.id,
+                  eventId: historyIdByApplication.get(appData.id) ?? randomUUID(),
                   candidateEmail: appData.candidateEmail,
                   candidateName,
                   jobTitle: appData.jobTitle,
@@ -919,6 +939,7 @@ export async function bulkMoveApplications(
                 collectedEmails.push({
                   type: "stage",
                   applicationId: appData.id,
+                  eventId: historyIdByApplication.get(appData.id) ?? randomUUID(),
                   candidateEmail: appData.candidateEmail,
                   candidateName,
                   jobTitle: appData.jobTitle,
@@ -1096,6 +1117,7 @@ export async function updateApplicationStatus(
         stageEvents.length = 0;
         statusEvents.length = 0;
         domainEvents.length = 0;
+        const historyIdByApplication = new Map<string, string>();
         return db.transaction<PipelineEmail[]>(async (tx) => {
           const now = new Date();
           const collectedEmails: PipelineEmail[] = [];
@@ -1147,13 +1169,17 @@ export async function updateApplicationStatus(
             }
 
             if (stageChanged) {
-              await tx.insert(applicationStageHistory).values({
-                workspaceId: input.workspaceId,
-                applicationId: application.id,
-                fromStageId: application.currentStageId,
-                toStageId: targetStageId,
-                movedById: user.id,
-              });
+              const [historyRow] = await tx
+                .insert(applicationStageHistory)
+                .values({
+                  workspaceId: input.workspaceId,
+                  applicationId: application.id,
+                  fromStageId: application.currentStageId,
+                  toStageId: targetStageId,
+                  movedById: user.id,
+                })
+                .returning({ id: applicationStageHistory.id });
+              historyIdByApplication.set(application.id, historyRow.id);
               await tx.insert(activityEvents).values({
                 workspaceId: input.workspaceId,
                 actorId: user.id,
@@ -1263,6 +1289,7 @@ export async function updateApplicationStatus(
               collectedEmails.push({
                 type: "rejected",
                 applicationId: application.id,
+                eventId: historyIdByApplication.get(application.id) ?? randomUUID(),
                 candidateEmail: application.candidateEmail,
                 candidateName: `${application.candidateFirstName} ${application.candidateLastName}`,
                 jobTitle: application.jobTitle,
@@ -1278,6 +1305,7 @@ export async function updateApplicationStatus(
               collectedEmails.push({
                 type: "stage",
                 applicationId: application.id,
+                eventId: historyIdByApplication.get(application.id) ?? randomUUID(),
                 candidateEmail: application.candidateEmail,
                 candidateName: `${application.candidateFirstName} ${application.candidateLastName}`,
                 jobTitle: application.jobTitle,

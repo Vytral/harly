@@ -62,10 +62,71 @@ export type UpcomingInterviewItem = CandidateInterviewItem & {
 };
 
 /**
+ * A wall-clock time that the zone never shows, because the clocks skipped it
+ * (for example 02:30 on the spring-forward day). Refused rather than moved:
+ * a silent shift would send the candidate to the wrong time.
+ */
+export class NonexistentLocalTimeError extends RangeError {
+  constructor(timeZone: string) {
+    super(`That time does not exist in ${timeZone} (clocks change). Pick another time.`);
+    this.name = "NonexistentLocalTimeError";
+  }
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** The zone's offset from UTC, in ms, at the given instant (whole seconds). */
+function zoneOffsetMs(instant: number, timeZone: string): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(instant));
+  const values = Object.fromEntries(
+    parts
+      .filter((part) => part.type !== "literal")
+      .map((part) => [part.type, Number(part.value)]),
+  );
+  const represented = Date.UTC(
+    values.year,
+    values.month - 1,
+    values.day,
+    values.hour,
+    values.minute,
+    values.second,
+  );
+  return represented - Math.floor(instant / 1000) * 1000;
+}
+
+/**
+ * Convert a wall-clock time (expressed as if it were UTC) into the instant it
+ * means in `timeZone`. A time that occurs twice (clocks fall back) resolves to
+ * its first occurrence. A time that never occurs throws.
+ */
+function wallClockToInstant(wallMs: number, timeZone: string): Date {
+  const candidates = new Set<number>();
+  for (const offset of [
+    zoneOffsetMs(wallMs - DAY_MS, timeZone),
+    zoneOffsetMs(wallMs + DAY_MS, timeZone),
+  ]) {
+    const instant = wallMs - offset;
+    if (zoneOffsetMs(instant, timeZone) === offset) candidates.add(instant);
+  }
+  if (candidates.size === 0) throw new NonexistentLocalTimeError(timeZone);
+  return new Date(Math.min(...candidates));
+}
+
+/**
  * Parse an ISO timestamp or a wall-clock value in an IANA timezone. This is
  * intentionally client-safe so server actions and AI preparation can share
  * the same scheduling semantics without exporting a synchronous helper from
- * a `"use server"` module.
+ * a `"use server"` module. Throws `NonexistentLocalTimeError` for a wall-clock
+ * time the timezone skips.
  */
 export function parseScheduledAt(value: string, timeZone?: string | null): Date {
   const hasExplicitOffset = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value);
@@ -87,31 +148,7 @@ export function parseScheduledAt(value: string, timeZone?: string | null): Date 
   const wallTime = new Date(`${wallValue}Z`);
   if (Number.isNaN(wallTime.getTime())) return new Date(value);
 
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hourCycle: "h23",
-  }).formatToParts(wallTime);
-  const values = Object.fromEntries(
-    parts
-      .filter((part) => part.type !== "literal")
-      .map((part) => [part.type, Number(part.value)]),
-  );
-  const represented = Date.UTC(
-    values.year,
-    values.month - 1,
-    values.day,
-    values.hour,
-    values.minute,
-    values.second,
-  );
-  const offset = represented - wallTime.getTime();
-  return new Date(wallTime.getTime() - offset);
+  return wallClockToInstant(wallTime.getTime(), timeZone);
 }
 
 /** Resolve the browser's IANA timezone for client forms. */

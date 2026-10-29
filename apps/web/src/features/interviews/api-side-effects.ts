@@ -42,7 +42,11 @@ import {
   processEmailOutbox,
 } from "@/lib/email/outbox-processor";
 import { getInboundReplyTo } from "@/lib/email/inbound-token";
-import { resolveInterviewEmailTimeZone } from "@/features/interviews/email-queue";
+import {
+  interviewEmailDedupeKey,
+  resolveInterviewEmailZoneFor,
+  type InterviewEmailKind,
+} from "@/features/interviews/email-queue";
 import { createLogger } from "@/lib/logger";
 
 import type { Interview } from "@harly/db";
@@ -148,18 +152,31 @@ async function sendInterviewEmail(
 ) {
   if (!context.email) return;
   const replyTo = await getInboundReplyTo(workspaceId, context.applicationId);
-  // The API has no request zone; use the acting user's profile zone, then UTC.
-  const timeZone = await resolveInterviewEmailTimeZone(null, actorUserId);
+  const kind = `interview.${action}` as InterviewEmailKind;
+  // The API has no request zone. Reschedule and cancel keep the original
+  // invite's zone; a new invite uses the acting user's profile zone, then UTC.
+  const timeZone = await resolveInterviewEmailZoneFor({
+    workspaceId,
+    kind,
+    interviewId: interview.id,
+    requested: null,
+    actorId: actorUserId,
+    database,
+  });
+  const revision = interview.updatedAt.getTime();
+  const scheduledAt = interview.scheduledAt.toISOString();
   const outboxId = await enqueueEmailOutbox(
     workspaceId,
-    `interview.${action}`,
+    kind,
     {
+      interviewId: interview.id,
+      revision,
       candidateEmail: context.email,
       candidateName: `${context.firstName} ${context.lastName}`.trim(),
       companyName: context.companyName,
       jobTitle: context.jobTitle,
       interviewType: TYPE_LABEL[interview.type] ?? "Interview",
-      scheduledAt: interview.scheduledAt.toISOString(),
+      scheduledAt,
       timeZone,
       mode: MODE_LABEL[interview.mode] ?? interview.mode,
       location: interview.meetLink ?? interview.location ?? undefined,
@@ -167,7 +184,7 @@ async function sendInterviewEmail(
       replyTo,
       interviewerName: context.interviewerEmail ?? undefined,
     },
-    undefined,
+    interviewEmailDedupeKey({ interviewId: interview.id, kind, scheduledAt, revision }),
     actorUserId,
     database,
   );

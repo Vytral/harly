@@ -10,21 +10,28 @@ export const dynamic = "force-dynamic";
 
 const CRON_KEY = "email-outbox";
 /**
- * Rows per run. The scheduler's timeout for this job must cover a full batch
- * (see tooling/runtime `timeoutMs`); keep the two in step when changing this.
+ * Maximum rows claimed per run. The run budget below bounds the time; a run
+ * that hits the budget hands unstarted rows back to the queue.
  */
 const BATCH_SIZE = 100;
+/**
+ * No new row starts after this budget. Worst-case provider waits are bounded
+ * (see packages/emails SMTP timeouts), so the run finishes before the
+ * scheduler gives up at 150 seconds and holds no lock past its end.
+ */
+const RUN_BUDGET_MS = 120_000;
 
 export async function POST(request: NextRequest) {
   const auth = await authorizeCron(request, CRON_KEY);
   if (!auth.ok) return auth.response;
   const run = startCronRun(CRON_KEY);
+  const deadlineAt = Date.now() + RUN_BUDGET_MS;
   try {
     const [pending] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(emailOutbox)
       .where(eq(emailOutbox.status, "pending"));
-    const result = await processEmailOutbox({ limit: BATCH_SIZE });
+    const result = await processEmailOutbox({ limit: BATCH_SIZE, deadlineAt });
     const counters = { ...result, eligible: Number(pending?.count ?? 0) };
     await run.finish("succeeded", counters);
     return NextResponse.json({ ok: true, ...counters });

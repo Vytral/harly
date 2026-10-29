@@ -23,6 +23,7 @@ import {
 } from "@/lib/email/interview-time";
 import {
   queueInterviewEmail,
+  resolveInterviewEmailZoneFor,
   type InterviewEmailQueueResult,
 } from "@/features/interviews/email-queue";
 import {
@@ -64,7 +65,11 @@ import { generateInterviewBriefWithAI } from "@/lib/ai/surfaces/generate-intervi
 import { summarizeInterviewNotesWithAI } from "@/lib/ai/surfaces/summarize-interview-notes";
 import type { InterviewBrief, InterviewNotesSummary } from "@/lib/ai/schemas";
 import { createLogger } from "@/lib/logger";
-import { deriveMeetLink, parseScheduledAt } from "@/features/interviews/shared";
+import {
+  deriveMeetLink,
+  NonexistentLocalTimeError,
+  parseScheduledAt,
+} from "@/features/interviews/shared";
 import { extractResumeText } from "@/lib/resume/extract-text";
 import { resumeKeyFromUrl } from "@/lib/resume/storage-key";
 import { storage } from "@/lib/storage";
@@ -138,6 +143,24 @@ async function hasInterviewerConflict(
 
 function formatInterviewWhen(when: Date, timeZone?: string | null): string {
   return formatInterviewWhenText(when, timeZone);
+}
+
+/**
+ * Parse a scheduling time for an action result. A time the zone skips is a
+ * validation error for the recruiter, not a silent shift.
+ */
+function parseInterviewTime(
+  value: string,
+  timeZone: string | null | undefined,
+): { ok: true; when: Date } | { ok: false; error: string } {
+  try {
+    return { ok: true, when: parseScheduledAt(value, timeZone) };
+  } catch (error) {
+    if (error instanceof NonexistentLocalTimeError) {
+      return { ok: false, error: error.message };
+    }
+    throw error;
+  }
 }
 
 const interviewTypes = [
@@ -272,7 +295,9 @@ export async function scheduleInterview(
     );
 
     const data = parsed.data;
-    const when = parseScheduledAt(data.scheduledAt, data.timeZone);
+    const parsedWhen = parseInterviewTime(data.scheduledAt, data.timeZone);
+    if (!parsedWhen.ok) return { success: false, error: parsedWhen.error };
+    const when = parsedWhen.when;
 
     if (isPastWhen(when)) {
       return {
@@ -291,6 +316,13 @@ export async function scheduleInterview(
       };
     }
 
+    // The in-app confirmation and the candidate email show the same zone.
+    const displayZone = await resolveInterviewEmailZoneFor({
+      workspaceId: workspace.id,
+      kind: "interview.scheduled",
+      requested: data.timeZone ?? null,
+      actorId: user.id,
+    });
     const scheduledEvent: { current: PersistedDomainEvent | null } = {
       current: null,
     };
@@ -362,7 +394,7 @@ export async function scheduleInterview(
           meetLink: deriveMeetLink(data.mode, data.location),
           notes: data.notes ?? null,
         })
-        .returning({ id: interviews.id });
+        .returning({ id: interviews.id, updatedAt: interviews.updatedAt });
 
       if (!interview) {
         throw new Error("Interview could not be created.");
@@ -387,7 +419,7 @@ export async function scheduleInterview(
         candidateId: data.candidateId,
         type: "interview_scheduled",
         title: "Interview scheduled",
-        body: `Your interview is scheduled for ${formatInterviewWhen(when, data.timeZone)}.`,
+        body: `Your interview is scheduled for ${formatInterviewWhen(when, displayZone)}.`,
         href: `/portal/applications/${application.id}`,
         metadata: { interviewId: interview.id, applicationId: application.id },
       });
@@ -413,7 +445,11 @@ export async function scheduleInterview(
         },
       });
 
-      return { success: true as const, interviewId: interview.id };
+      return {
+        success: true as const,
+        interviewId: interview.id,
+        revision: interview.updatedAt.getTime(),
+      };
     });
 
     let warning: string | undefined;
@@ -726,6 +762,8 @@ export async function scheduleInterview(
           workspace.id,
           "interview.scheduled",
           {
+            interviewId: result.interviewId,
+            revision: result.revision,
             candidateEmail: recipient.email,
             candidateName: `${recipient.firstName} ${recipient.lastName}`,
             companyName: recipient.companyName,
@@ -741,6 +779,7 @@ export async function scheduleInterview(
             interviewerName,
           },
           user.id,
+          displayZone,
         );
         emailStatus = queuedEmail.status;
         emailWarning = queuedEmail.warning;
@@ -1010,6 +1049,8 @@ export async function setInterviewStatus(input: {
           workspace.id,
           "interview.canceled",
           {
+            interviewId: parsed.data.interviewId,
+            revision: updatedInterview?.updatedAt?.getTime() ?? Date.now(),
             candidateEmail: info.email,
             candidateName: info.firstName,
             companyName: info.companyName,
@@ -1108,7 +1149,9 @@ export async function rescheduleInterview(input: {
 
     const { organization: workspace, user } = await getWorkspaceContext();
     const data = parsed.data;
-    const when = parseScheduledAt(data.scheduledAt, data.timeZone);
+    const parsedWhen = parseInterviewTime(data.scheduledAt, data.timeZone);
+    if (!parsedWhen.ok) return { success: false, error: parsedWhen.error };
+    const when = parsedWhen.when;
 
     await requireInterviewPermission(
       "interviews:manage",
@@ -1121,6 +1164,15 @@ export async function rescheduleInterview(input: {
         error: "Interview time must be in the future.",
       };
     }
+
+    // The in-app text and the reschedule email both use the original invite's zone.
+    const displayZone = await resolveInterviewEmailZoneFor({
+      workspaceId: workspace.id,
+      kind: "interview.rescheduled",
+      interviewId: data.interviewId,
+      requested: data.timeZone ?? null,
+      actorId: user.id,
+    });
 
     // Load the current interview first so the provider meeting is recreated
     // BEFORE we mutate the row. If the provider call fails, the database keeps
@@ -1385,11 +1437,12 @@ export async function rescheduleInterview(input: {
       Boolean(row.teamsMeetingId) ||
       Boolean(row.zoomMeetingId) ||
       Boolean(row.jitsiRoom);
+    const revisionAt = new Date();
     const rescheduleSet: Record<string, unknown> = {
       scheduledAt: when,
       durationMins: data.durationMins,
       location: data.location ?? null,
-      updatedAt: new Date(),
+      updatedAt: revisionAt,
     };
     if (!hasProviderMeeting) {
       rescheduleSet.meetLink = deriveMeetLink(row.mode, data.location);
@@ -1436,7 +1489,7 @@ export async function rescheduleInterview(input: {
         candidateId: row.candidateId,
         type: "interview_rescheduled",
         title: "Interview rescheduled",
-        body: `Your interview is now scheduled for ${formatInterviewWhen(when, data.timeZone)}.`,
+        body: `Your interview is now scheduled for ${formatInterviewWhen(when, displayZone)}.`,
         href: info?.applicationId
           ? `/portal/applications/${info.applicationId}`
           : null,
@@ -1490,6 +1543,8 @@ export async function rescheduleInterview(input: {
         workspace.id,
         "interview.rescheduled",
         {
+          interviewId: data.interviewId,
+          revision: revisionAt.getTime(),
           candidateEmail: info.email,
           candidateName: info.firstName,
           companyName: info.companyName,
@@ -1503,6 +1558,7 @@ export async function rescheduleInterview(input: {
           replyTo,
         },
         user.id,
+        displayZone,
       )).warning;
     }
 
@@ -1638,10 +1694,12 @@ export async function updateInterview(input: {
     // Parse the new time with the recruiter's timezone (same wall-clock
     // interpretation as scheduleInterview). Previously this used new Date()
     // directly, which interpreted naive strings as UTC and shifted the time.
-    const when =
-      data.scheduledAt && data.scheduledAt !== ""
-        ? parseScheduledAt(data.scheduledAt, data.timeZone)
-        : undefined;
+    let when: Date | undefined;
+    if (data.scheduledAt && data.scheduledAt !== "") {
+      const parsedWhen = parseInterviewTime(data.scheduledAt, data.timeZone);
+      if (!parsedWhen.ok) return { success: false, error: parsedWhen.error };
+      when = parsedWhen.when;
+    }
     if (when && isPastWhen(when)) {
       return {
         success: false,
@@ -1650,7 +1708,8 @@ export async function updateInterview(input: {
     }
 
     // Build the update payload , only set fields that were explicitly provided.
-    const set: Record<string, unknown> = { updatedAt: new Date() };
+    const revisionAt = new Date();
+    const set: Record<string, unknown> = { updatedAt: revisionAt };
     if (data.type !== undefined) set.type = data.type;
     if (data.mode !== undefined) set.mode = data.mode;
     if (data.title !== undefined) set.title = data.title;
@@ -2136,6 +2195,8 @@ export async function updateInterview(input: {
         workspace.id,
         "interview.rescheduled",
         {
+          interviewId: data.interviewId,
+          revision: revisionAt.getTime(),
           candidateEmail: info.email,
           candidateName: info.firstName,
           companyName: info.companyName,

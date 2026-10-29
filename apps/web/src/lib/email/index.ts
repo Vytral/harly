@@ -4,6 +4,7 @@ import type React from "react";
 
 import {
   createEmailSender,
+  DeliveryOutcomeUnknownError,
   type EmailSender,
   type EmailAttachment,
   type SendEmailResult,
@@ -68,6 +69,15 @@ export async function getWorkspaceEmailSender(
   return createEmailSender(resolved);
 }
 
+export type SendWorkspaceEmailOptions = {
+  /**
+   * Let an unknown delivery outcome (the provider may have accepted the message)
+   * propagate as `DeliveryOutcomeUnknownError` instead of collapsing into `false`.
+   * Only callers that can record "do not resend" should set this.
+   */
+  rethrowUnknownOutcome?: boolean;
+};
+
 /**
  * Send an email on behalf of a workspace, using its own provider when
  * configured or the platform default otherwise. Returns whether the email
@@ -77,6 +87,7 @@ export async function sendWorkspaceEmail(
   workspaceId: string,
   options: SendEmailOptions,
   actorUserId?: string | null,
+  sendOptions?: SendWorkspaceEmailOptions,
 ): Promise<SendEmailResult | false> {
   // Public demo: swallow all workspace-scoped outbound email.
   if (isDemoMode()) {
@@ -92,6 +103,9 @@ export async function sendWorkspaceEmail(
   try {
     return await sender.send(options);
   } catch (error) {
+    if (sendOptions?.rethrowUnknownOutcome && error instanceof DeliveryOutcomeUnknownError) {
+      throw error;
+    }
     log.error(error, "[email] Failed to send workspace email");
     return false;
   }

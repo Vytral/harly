@@ -40,3 +40,22 @@ export function normalizeCronRunCounts(rows: readonly CronRunCountRow[]): Array<
     (a, b) => a.job.localeCompare(b.job) || a.status.localeCompare(b.status),
   );
 }
+
+const CRON_ERROR_MAX_LENGTH = 500;
+const CRON_ERROR_EMAIL = /[^\s@<>"',;()]+@[^\s@<>"',;()]+/g;
+
+/**
+ * Single-line, bounded error text for `cron_runs.error`. Driver messages append
+ * the query's bound parameters, which include recipient addresses, so the
+ * parameter list and every address are removed. Stacks are never stored.
+ */
+export function sanitizeCronErrorText(message: string): string {
+  const cleaned = message
+    .replace(/\bparams:[\s\S]*$/i, "")
+    .replace(CRON_ERROR_EMAIL, "[email]")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, CRON_ERROR_MAX_LENGTH);
+  return cleaned || "unknown error";
+}
+

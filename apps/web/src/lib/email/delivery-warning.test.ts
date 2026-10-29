@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { unshownEmailWarning, emailDeliveryWarning } from "./delivery-warning";
+import {
+  offerSendOutcomeMessage,
+  sanitizeDeliveryError,
+  unshownEmailWarning,
+  emailDeliveryWarning,
+} from "./delivery-warning";
 
 describe("emailDeliveryWarning", () => {
   it("promises an automatic retry only when the outbox still holds the row", () => {
@@ -53,5 +58,37 @@ describe("unshownEmailWarning", () => {
 
   it("is silent when there is no email warning", () => {
     expect(unshownEmailWarning({ warning: "Calendar conflict." })).toBeUndefined();
+  });
+});
+
+describe("sanitizeDeliveryError", () => {
+  it("removes query parameters and addresses before an error is stored on the outbox row", () => {
+    const stored = sanitizeDeliveryError(
+      'Failed query: insert into "mail_messages" ("to") values ($1)\nparams: casey@example.test',
+    );
+    expect(stored).not.toContain("casey@example.test");
+    expect(stored).not.toContain("params");
+    expect(stored).toContain("Failed query");
+  });
+
+  it("bounds the stored length", () => {
+    expect(sanitizeDeliveryError("x".repeat(2000)).length).toBeLessThanOrEqual(500);
+  });
+});
+
+describe("offerSendOutcomeMessage", () => {
+  it("says queued for retry only while the outbox still holds the row", () => {
+    expect(offerSendOutcomeMessage("pending")).toBe("Offer delivery failed. It has been queued for retry.");
+    expect(offerSendOutcomeMessage("processing")).toBe("Offer delivery failed. It has been queued for retry.");
+  });
+
+  it("does not promise a retry after a terminal failure, and points at the delivery log", () => {
+    const message = offerSendOutcomeMessage("failed");
+    expect(message).toContain("Delivery log");
+    expect(message).not.toContain("retried");
+  });
+
+  it("says plainly when the offer was already sent", () => {
+    expect(offerSendOutcomeMessage("sent")).toBe("This offer was already sent to the candidate.");
   });
 });

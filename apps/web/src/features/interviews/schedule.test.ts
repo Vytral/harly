@@ -76,9 +76,9 @@ vi.mock("@harly/db", () => ({
     select: vi.fn(makeQuery),
     insert: vi.fn(() => ({
       values: () => ({
-        returning: async () => [{ id: "iv-1" }],
+        returning: async () => [{ id: "iv-1", updatedAt: new Date("2099-01-01T00:00:00.000Z") }],
         onConflictDoNothing: () => ({
-          returning: async () => [{ id: "iv-1" }],
+          returning: async () => [{ id: "iv-1", updatedAt: new Date("2099-01-01T00:00:00.000Z") }],
         }),
       }),
     })),
@@ -240,14 +240,14 @@ function txMock(application: unknown[], conflict: unknown[]) {
         select: () => txQuery(step++ === 0 ? application : conflict),
         insert: () => ({
           values: () => ({
-            returning: async () => [{ id: "iv-1" }],
+            returning: async () => [{ id: "iv-1", updatedAt: new Date("2099-01-01T00:00:00.000Z") }],
             onConflictDoNothing: () => ({
-              returning: async () => [{ id: "iv-1" }],
+              returning: async () => [{ id: "iv-1", updatedAt: new Date("2099-01-01T00:00:00.000Z") }],
             }),
           }),
         }),
         update: () => ({
-          set: () => ({ where: () => ({ returning: async () => [{ id: "iv-1" }] }) }),
+          set: () => ({ where: () => ({ returning: async () => [{ id: "iv-1", updatedAt: new Date("2099-01-01T00:00:00.000Z") }] }) }),
         }),
       };
       return fn(tx);
@@ -294,6 +294,9 @@ describe("F1-10 single video provider", () => {
       ],
       [{ meetLink: "https://zoom.us/j/1" }],
     );
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([]);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -328,6 +331,9 @@ describe("F1-10 single video provider", () => {
       ],
       [{ meetLink: "https://meet.jit.si/abc-defg-hij" }],
     );
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([]);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -364,6 +370,9 @@ describe("F1-10 single video provider", () => {
       ],
       [{ meetLink: "https://zoom.us/j/1" }],
     );
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([]);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -398,6 +407,9 @@ describe("F1-10 single video provider", () => {
       ],
       [{ meetLink: null }],
     );
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([]);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -432,6 +444,9 @@ describe("F1-10 single video provider", () => {
       ],
       [{ meetLink: null }],
     );
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([]);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -468,10 +483,10 @@ describe("interview invitation delivery", () => {
         },
       ],
       [{ meetLink: null }],
-      // Scheduler profile zone lookup, then the outbox row's final state.
-      [{ timezone: null }],
       [{ status: "failed" }],
     );
+    // The profile zone is read before the transaction, ahead of the queued rows.
+    mocks.selectQueue.unshift([]);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -502,6 +517,9 @@ describe("interview invitation delivery", () => {
       ],
       [{ meetLink: null }],
     );
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([]);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -551,6 +569,9 @@ describe("F1-11 reschedule recreates provider meeting", () => {
       ],
       [{ meetLink: "https://teams.microsoft.com/1" }],
     );
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([], []);
 
     const result = await rescheduleInterview({
       interviewId: "iv-1",
@@ -691,6 +712,9 @@ describe("AI scheduling resilience", () => {
       ],
       [{ meetLink: null }],
     );
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([]);
 
     const result = await scheduleInterview({
       workspaceId: "ws-1",
@@ -767,6 +791,9 @@ describe("F1-12c reschedule re-validates interviewer conflict", () => {
       [{ email: "i@example.com" }], // interviewer email
       [{ id: "other-iv" }], // conflict found
     );
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([], []);
 
     const result = await rescheduleInterview({
       interviewId: "iv-1",
@@ -811,6 +838,9 @@ describe("F1-12d reschedule honours the recruiter timezone", () => {
       ],
       [{ meetLink: null }], // synced meetLink lookup
     );
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([]);
 
     const result = await rescheduleInterview({
       interviewId: "iv-1",
@@ -851,6 +881,9 @@ describe("interview business state guards", () => {
         type: "screening",
       },
     ]);
+    // Zone lookups before the transaction: the original invite\'s zone (rescheduling) and the profile zone.
+
+    mocks.selectQueue.unshift([], []);
 
     const result = await rescheduleInterview({
       interviewId: "iv-canceled",

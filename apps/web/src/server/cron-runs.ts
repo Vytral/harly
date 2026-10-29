@@ -3,14 +3,12 @@ import "server-only";
 import { cronRuns, db } from "@harly/db";
 import { randomUUID } from "node:crypto";
 import { recordCronRun } from "@/server/observability/metrics";
-import type { CronRunStatus } from "@/server/cron-status";
+import { sanitizeCronErrorText, type CronRunStatus } from "@/server/cron-status";
 
 export type { CronRunStatus } from "@/server/cron-status";
 export { normalizeCronRunStatus } from "@/server/cron-status";
 
-const MAX_ERROR_LENGTH = 500;
-
-/** Short, single-line error text. Never store stacks or payloads. */
+/** Short, single-line error text. Never store stacks, parameters or addresses. */
 export function sanitizeCronError(error: unknown): string {
   const message =
     error instanceof Error
@@ -18,7 +16,7 @@ export function sanitizeCronError(error: unknown): string {
       : typeof error === "string"
         ? error
         : "unknown error";
-  return message.replace(/\s+/g, " ").trim().slice(0, MAX_ERROR_LENGTH) || "unknown error";
+  return sanitizeCronErrorText(message);
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   organization,
 } from "@harly/db";
 import {
+  DeliveryOutcomeUnknownError,
   ApplicationReceivedCandidate,
   ApplicationReceivedRecruiter,
   applicationReceivedCandidateSubject,
@@ -40,6 +41,7 @@ import { isSampleEmailAddress } from "@/features/sample-data/constants";
 import { sendWorkspaceEmail, type SendEmailOptions } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { getWorkspaceEmailConfig } from "@/lib/email/config";
+import { sanitizeDeliveryError } from "@/lib/email/delivery-warning";
 import {
   formatInterviewWhen,
   resolveInterviewTimeZone,
@@ -67,6 +69,21 @@ const MAX_ATTEMPTS = 5;
 /** A `processing` lock older than this belongs to a stalled worker. */
 const STALE_LOCK_SQL = sql.raw("interval '5 minutes'");
 const RECORD_ACCEPTANCE_ATTEMPTS = 5;
+/**
+ * Writes that record the outcome of an accepted or unknown send. A dropped
+ * connection usually clears within seconds; these retries cover that window.
+ */
+const BOOKKEEPING_ATTEMPTS = 6;
+const BOOKKEEPING_MAX_DELAY_MS = 4_000;
+
+/** Held on a row the provider accepted but whose success write never landed. */
+const ACCEPTED_HELD_NOTE =
+  "The provider accepted this email, but its delivery record could not be saved, so the row is held and was not sent again.";
+/** Stored in `last_error` for an unknown SMTP outcome. Operators can match on this prefix. */
+export const UNKNOWN_OUTCOME_PREFIX = "Delivery outcome unknown";
+/** Held on a row whose SMTP outcome is unknown. Retrying is an explicit operator choice. */
+const UNKNOWN_OUTCOME_NOTE =
+  "Delivery outcome unknown: the mail server stopped responding after the message was handed over. It was not sent again. Check the sent folder before retrying from the Delivery log.";
 /**
  * Stored on rows that were never sent because a recipient is sample data.
  * `cancelled` is an existing terminal status: the row is never claimed again,
@@ -112,6 +129,8 @@ export type ProcessResult = {
   failed: number;
   /** Rows deliberately not sent (sample recipients). Never retried. */
   skipped?: number;
+  /** Claimed rows handed back because the deadline passed before they started. */
+  deferred?: number;
 };
 
 /** Deterministic Message-ID for a row; the same id is used for SMTP headers. */
@@ -131,8 +150,15 @@ export async function processEmailOutbox(opts?: {
   workerId?: string;
   /** Explicit database boundary for isolated workers and native signing. */
   database?: typeof db;
+  /**
+   * Wall-clock time (ms since epoch) after which no new row is started. Claimed
+   * rows that were not started yet go back to the queue untouched.
+   */
+  deadlineAt?: number;
 }): Promise<ProcessResult> {
   const database = opts?.database ?? db;
+  const pastDeadline = () => opts?.deadlineAt !== undefined && Date.now() >= opts.deadlineAt;
+  if (pastDeadline()) return { processed: 0, sent: 0, failed: 0, skipped: 0 };
   const workerId = opts?.workerId ?? randomUUID();
   const idsFilter = opts?.ids?.length
     ? sql`and "id" in (${sql.join(
@@ -207,13 +233,48 @@ export async function processEmailOutbox(opts?: {
   let sent = 0;
   let failed = 0;
   let skipped = 0;
+  let deferred = 0;
   for (const row of rows) {
+    if (pastDeadline()) {
+      await releaseUnstarted(row.id, workerId, database);
+      deferred += 1;
+      continue;
+    }
     const ok = await deliverRow(row, database, workerId);
     if (ok === "skipped") skipped += 1;
     else if (ok) sent += 1;
     else failed += 1;
   }
-  return { processed: rows.length, sent, failed, skipped };
+  return {
+    processed: rows.length - deferred,
+    sent,
+    failed,
+    skipped,
+    ...(deferred > 0 ? { deferred } : {}),
+  };
+}
+
+/**
+ * Hands back a claim that was never started. The attempt was not used, so the
+ * claim's increment is undone and the row is eligible again at once.
+ */
+async function releaseUnstarted(id: string, workerId: string, database: typeof db) {
+  await database
+    .update(emailOutbox)
+    .set({
+      status: "pending",
+      lockedAt: null,
+      lockedBy: null,
+      attempts: sql`greatest(${emailOutbox.attempts} - 1, 0)`,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(emailOutbox.id, id),
+        eq(emailOutbox.status, "processing"),
+        eq(emailOutbox.lockedBy, workerId),
+      ),
+    );
 }
 
 type OutboxState = {
@@ -247,12 +308,87 @@ async function finalizeAccepted(id: string, database: typeof db) {
     .set({
       status: "sent",
       sentAt: sql`coalesce(${emailOutbox.sentAt}, now())`,
+      providerMessageId: sql`coalesce(${emailOutbox.providerMessageId}, ${outboxMessageId(id)})`,
       nextRetryAt: null,
       lockedAt: null,
       lockedBy: null,
       lastError: null,
     })
     .where(eq(emailOutbox.id, id));
+}
+
+/** Rows the provider accepted during this process. A later failure must never make them retryable. */
+const acceptedInFlight = new Set<string>();
+/** Rows whose SMTP outcome is unknown. They are settled as failed and never retried automatically. */
+const unknownOutcomeInFlight = new Set<string>();
+
+/**
+ * Write one bookkeeping statement, retrying with a capped backoff. Returns
+ * false when every attempt failed; the caller decides what that means.
+ */
+async function settleRow(
+  id: string,
+  values: Record<string, unknown>,
+  database: typeof db,
+  attempts: number = BOOKKEEPING_ATTEMPTS,
+): Promise<boolean> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await database.update(emailOutbox).set(values).where(eq(emailOutbox.id, id));
+      return true;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(250 * 2 ** attempt, BOOKKEEPING_MAX_DELAY_MS)),
+        );
+      }
+    }
+  }
+  log.error({ error: lastError, outboxRowId: id }, "email_outbox bookkeeping failed after retries");
+  return false;
+}
+
+/**
+ * The provider accepted this row, so it is finalized and never retried. If the
+ * success write keeps failing, the row is held as `failed` with the provider
+ * Message-ID: no claim path picks `failed` rows, and retries and cancels refuse
+ * rows that carry a provider id.
+ */
+async function settleAccepted(id: string, database: typeof db) {
+  const finalized = await settleRow(
+    id,
+    {
+      status: "sent",
+      sentAt: sql`coalesce(${emailOutbox.sentAt}, now())`,
+      providerMessageId: sql`coalesce(${emailOutbox.providerMessageId}, ${outboxMessageId(id)})`,
+      nextRetryAt: null,
+      lockedAt: null,
+      lockedBy: null,
+      lastError: null,
+    },
+    database,
+  );
+  if (finalized) return;
+  // Best effort, and short: this runs inside a scheduler-bounded batch.
+  await settleRow(
+    id,
+    {
+      status: "failed",
+      providerMessageId: sql`coalesce(${emailOutbox.providerMessageId}, ${outboxMessageId(id)})`,
+      nextRetryAt: null,
+      lockedAt: null,
+      lockedBy: null,
+      lastError: ACCEPTED_HELD_NOTE,
+    },
+    database,
+    2,
+  );
+  log.error(
+    { outboxRowId: id },
+    "provider accepted email but its delivery record could not be saved; row held and not sent again",
+  );
 }
 
 /**
@@ -292,9 +428,34 @@ async function sendRecorded(
   database: typeof db,
   options: SendEmailOptions,
   actorUserId?: string | null,
-) {
-  const delivered = await sendWorkspaceEmail(row.workspaceId, options, actorUserId);
+): Promise<Awaited<ReturnType<typeof sendWorkspaceEmail>>> {
+  let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>>;
+  try {
+    delivered = await sendWorkspaceEmail(row.workspaceId, options, actorUserId, {
+      rethrowUnknownOutcome: true,
+    });
+  } catch (error) {
+    if (!(error instanceof DeliveryOutcomeUnknownError)) throw error;
+    // The message may already be with the recipient's mail server. Settle the
+    // row now so no retry path can send it again.
+    unknownOutcomeInFlight.add(row.id);
+    log.error({ error, outboxRowId: row.id }, "email delivery outcome is unknown; not sent again automatically");
+    await settleRow(
+      row.id,
+      {
+        status: "failed",
+        lastError: UNKNOWN_OUTCOME_NOTE,
+        nextRetryAt: null,
+        lockedAt: null,
+        lockedBy: null,
+      },
+      database,
+    );
+    return false;
+  }
   if (delivered) {
+    // Recorded before anything else can fail: from here on this row is accepted.
+    acceptedInFlight.add(row.id);
     try {
       await recordAcceptance(row.id, delivered.messageId, database);
     } catch (error) {
@@ -337,12 +498,26 @@ async function deliverRow(
   workerId?: string,
 ): Promise<boolean | "skipped"> {
   try {
+    return await deliverRowOnce(row, database, workerId);
+  } finally {
+    acceptedInFlight.delete(row.id);
+    unknownOutcomeInFlight.delete(row.id);
+  }
+}
+
+async function deliverRowOnce(
+  row: OutboxRow,
+  database: typeof db,
+  workerId?: string,
+): Promise<boolean | "skipped"> {
+  try {
     const current = await readOutboxState(row.id, database);
     if (!current) return false;
     if (current.providerMessageId || current.sentAt) {
       // An earlier attempt already got the provider to accept this email.
       // Only the bookkeeping may run; the send must never repeat.
-      await finalizeAccepted(row.id, database);
+      acceptedInFlight.add(row.id);
+      await settleAccepted(row.id, database);
       return true;
     }
     if (current.status !== "processing" || (workerId && current.lockedBy !== workerId)) {
@@ -392,6 +567,12 @@ async function deliverRow(
     }
   } catch (error) {
     log.error(error, "email_outbox delivery threw");
+    if (acceptedInFlight.has(row.id)) {
+      // Never a retry: the provider has the message.
+      await settleAccepted(row.id, database);
+      return true;
+    }
+    if (unknownOutcomeInFlight.has(row.id)) return false;
     if (await finalizeIfAccepted(row.id, database)) return true;
     await markFailed(
       row.id,
@@ -538,6 +719,7 @@ export async function enqueueEmailOutbox(
   dedupeKey?: string,
   actorId?: string,
   database: typeof db = db,
+  options?: EnqueueOptions,
 ): Promise<string> {
   const resolvedDedupeKey =
     dedupeKey ??
@@ -569,8 +751,41 @@ export async function enqueueEmailOutbox(
     )
     .limit(1);
   if (!existing) throw new Error("Email outbox deduplication failed.");
+  if (options?.resetTerminal) {
+    // An explicit send after a terminal outcome starts a fresh attempt. A row
+    // the provider accepted is never reset: resetting it could send it twice.
+    await database
+      .update(emailOutbox)
+      .set({
+        status: "pending",
+        attempts: 0,
+        nextRetryAt: null,
+        lastError: null,
+        lockedAt: null,
+        lockedBy: null,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(emailOutbox.id, existing.id),
+          inArray(emailOutbox.status, ["failed", "cancelled"]),
+          isNull(emailOutbox.providerMessageId),
+          isNull(emailOutbox.sentAt),
+          // An unknown outcome may already be delivered: only an operator's explicit retry may send it again.
+          sql`coalesce(${emailOutbox.lastError}, '') not like ${`${UNKNOWN_OUTCOME_PREFIX}%`}`,
+        ),
+      );
+  }
   return existing.id;
 }
+
+export type EnqueueOptions = {
+  /**
+   * Set by an explicit user send. A conflicting row that ended `failed` or
+   * `cancelled` is reset and sent again instead of being returned as-is.
+   */
+  resetTerminal?: boolean;
+};
 
 function deliveryOptions(row: OutboxRow) {
   return {
@@ -1518,10 +1733,12 @@ async function markSent(
  * claimed, so this only decides between backoff and a terminal failure.
  */
 async function markFailed(id: string, message: string, database: typeof db = db) {
+  // A row the provider accepted, or whose outcome is unknown, is never made retryable here.
+  if (acceptedInFlight.has(id) || unknownOutcomeInFlight.has(id)) return;
   await database
     .update(emailOutbox)
     .set({
-      lastError: message,
+      lastError: sanitizeDeliveryError(message),
       nextRetryAt: sql`CASE
         WHEN ${emailOutbox.attempts} >= ${MAX_ATTEMPTS} THEN NULL
         ELSE now() + (${emailOutbox.attempts} * interval '1 minute')
@@ -1541,7 +1758,7 @@ async function markStale(id: string, message: string, database: typeof db = db) 
     .update(emailOutbox)
     .set({
       status: "failed",
-      lastError: message,
+      lastError: sanitizeDeliveryError(message),
       nextRetryAt: null,
       lockedAt: null,
       lockedBy: null,

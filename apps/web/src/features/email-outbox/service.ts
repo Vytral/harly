@@ -107,15 +107,45 @@ export async function listDeliveryLog(input: {
   };
 }
 
+/** Why a row the operator asked to change cannot be changed, in operator words. */
+async function refusalFor(
+  workspaceId: string,
+  id: string,
+  verb: "retried" | "cancelled",
+): Promise<string> {
+  const [row] = await db
+    .select({ status: emailOutbox.status, providerMessageId: emailOutbox.providerMessageId, sentAt: emailOutbox.sentAt })
+    .from(emailOutbox)
+    .where(and(eq(emailOutbox.id, id), eq(emailOutbox.workspaceId, workspaceId)))
+    .limit(1);
+  if (row && (row.providerMessageId || row.sentAt)) {
+    return `The email provider already accepted this email, so it cannot be ${verb}.`;
+  }
+  if (row?.status === "sent") return `This email was already sent, so it cannot be ${verb}.`;
+  return `This email can no longer be ${verb}.`;
+}
+
 /**
  * Re-queue one failed or pending row and try it immediately. Only rows the
  * provider has not accepted can be retried; the stored key is reused, so a
- * retry cannot send a second copy of an accepted message.
+ * retry cannot send a second copy of an accepted message. The previous attempt
+ * count and error are kept in the row's payload so an operator reset leaves a trail.
  */
 export async function retryDelivery(input: {
   workspaceId: string;
   id: string;
 }): Promise<{ ok: true; status: string } | { ok: false; error: string }> {
+  const [previous] = await db
+    .select({
+      attempts: emailOutbox.attempts,
+      lastError: emailOutbox.lastError,
+      payload: emailOutbox.payload,
+    })
+    .from(emailOutbox)
+    .where(and(eq(emailOutbox.id, input.id), eq(emailOutbox.workspaceId, input.workspaceId)))
+    .limit(1);
+  const previousPayload = (previous?.payload ?? {}) as Record<string, unknown>;
+  const priorRetries = Array.isArray(previousPayload.operatorRetries) ? previousPayload.operatorRetries : [];
   const [queued] = await db
     .update(emailOutbox)
     .set({
@@ -124,6 +154,17 @@ export async function retryDelivery(input: {
       nextRetryAt: null,
       lockedAt: null,
       lockedBy: null,
+      payload: {
+        ...previousPayload,
+        operatorRetries: [
+          ...priorRetries,
+          {
+            at: new Date().toISOString(),
+            previousAttempts: previous?.attempts ?? 0,
+            previousError: previous?.lastError ?? null,
+          },
+        ],
+      },
     })
     .where(
       and(
@@ -136,7 +177,7 @@ export async function retryDelivery(input: {
     )
     .returning({ id: emailOutbox.id });
   if (!queued) {
-    return { ok: false, error: "This email can no longer be retried." };
+    return { ok: false, error: await refusalFor(input.workspaceId, input.id, "retried") };
   }
   await processEmailOutbox({ ids: [queued.id], workspaceId: input.workspaceId });
   const [after] = await db
@@ -171,7 +212,7 @@ export async function cancelDelivery(input: {
     )
     .returning({ id: emailOutbox.id });
   if (!cancelled) {
-    return { ok: false, error: "This email can no longer be cancelled." };
+    return { ok: false, error: await refusalFor(input.workspaceId, input.id, "cancelled") };
   }
   return { ok: true };
 }

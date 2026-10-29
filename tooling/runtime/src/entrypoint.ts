@@ -7,7 +7,12 @@ import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
 import { pruneCache } from "./cache";
-import { describeSchedulerRuns as describeSchedulerRunsForJobs } from "./scheduler-health";
+import {
+  describeSchedulerRuns as describeSchedulerRunsForJobs,
+  FRESH_RUN_STATUSES,
+  sanitizeRunError,
+  shouldRecordSchedulerFallback,
+} from "./scheduler-health";
 import { evaluateEmailOutboxHealth } from "./outbox-health";
 
 import {
@@ -304,6 +309,7 @@ async function scheduler() {
     let status: CronStatus = "succeeded";
     let counters: Record<string, unknown> = {};
     let errorText: string | null = null;
+    let timedOut = false;
     try {
       const response = await fetch(`${appOrigin}${job.path}`, {
         method: "POST",
@@ -336,30 +342,33 @@ async function scheduler() {
       });
     } catch (error) {
       status = "failed";
-      errorText = (error instanceof Error ? error.message : "unknown error")
-        .replace(/\s+/g, " ")
-        .slice(0, 500);
+      timedOut = error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError");
+      errorText = sanitizeRunError(error instanceof Error ? error.message : "unknown error");
       jsonLog("error", "scheduler.run", {
         job: job.name,
         runId,
-        status,
+        status: timedOut ? "timed_out" : status,
         durationMs: Date.now() - started,
         error: errorText,
       });
     }
     // The app records the runs it executes itself (with its own error text).
     // This fallback row is written only when the app recorded nothing since
-    // this run started: skipped (409), unreachable, timed out, or rejected
-    // before the route reached its own bookkeeping.
-    await database`
-      insert into cron_runs (job, run_id, status, duration_ms, counters, error)
-      select ${job.name}, ${runId}::uuid, ${status}::text, ${Date.now() - started}::int,
-             ${database.json(counters)}, ${errorText}::text
-      where not exists (
-        select 1 from cron_runs
-        where job = ${job.name} and created_at >= ${new Date(started)}
-      )
-    `.catch(() => undefined);
+    // this run started: skipped (409), unreachable, or rejected before the
+    // route reached its own bookkeeping. A timed-out request is not recorded
+    // here: the app may still finish and record it, and a second row would
+    // count the same batch twice.
+    if (shouldRecordSchedulerFallback({ timedOut, appRecorded: false })) {
+      await database`
+        insert into cron_runs (job, run_id, status, duration_ms, counters, error)
+        select ${job.name}, ${runId}::uuid, ${status}::text, ${Date.now() - started}::int,
+               ${database.json(counters)}, ${errorText}::text
+        where not exists (
+          select 1 from cron_runs
+          where job = ${job.name} and created_at >= ${new Date(started)}
+        )
+      `.catch(() => undefined);
+    }
   };
 
   const pruneCronRuns = () =>
@@ -462,7 +471,7 @@ async function doctor() {
         (
           select coalesce(json_object_agg(job, last_run), '{}'::json)
           from (
-            select job, max(created_at) filter (where status in ('succeeded', 'success', 'skipped')) as last_run
+            select job, max(created_at) filter (where status = any(${[...FRESH_RUN_STATUSES]}::text[])) as last_run
             from cron_runs
             where job = any(${expectedJobNames})
             group by job
