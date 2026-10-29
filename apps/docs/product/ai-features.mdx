@@ -75,16 +75,22 @@ Resume anonymization is a workspace setting in **Settings → AI**. When it is o
   handles, street addresses and location are removed from what is sent. Names
   are also removed from the candidate's résumé, headline, application answers
   and interview notes.
+- The chat assistant also receives the page you are on as "Candidate profile"
+  or "Workspace section", never the candidate's name.
 - The chat assistant's tool results get the same treatment. Each candidate is
   shown as "Candidate" with a short code that stays the same for that candidate
   within one conversation, and ids are kept so the assistant can still act on
   the right record. Names, email addresses, phone numbers, links, avatars,
   addresses, locations and mail-header addresses are removed from what the model
   receives. Names in free text are masked wherever a known candidate's name
-  appears. Only the candidates whose identity the result carries (or that it
-  names by id) are recognized, so a name that appears in a result with no
-  candidate record is not masked. If redaction fails, the assistant receives a
-  withheld notice instead of the result. The screen still shows the results.
+  appears. A candidate is recognized when the result or the tool call names
+  them by id, links to their profile, or gives their email address. A name that
+  appears with no such reference is not masked. A single-word name is masked only
+  when it starts with a capital letter and is not followed by a day number, so
+  "May 12" stays a date. If redaction fails, the assistant receives a withheld
+  notice instead of the result. If a tool call fails, the assistant receives a
+  generic failure notice instead of the error message. The screen still shows the
+  results and errors.
 - Features that cannot work without knowing who the candidate is are paused,
   and the screen says so: duplicate detection, email drafting, mailbox
   assistance, AI resume autofill on the apply form, AI resume summaries on

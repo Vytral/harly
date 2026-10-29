@@ -10,7 +10,8 @@ import {
   permanentlyDeleteCandidate,
   trashCandidate,
 } from "@/features/candidates/data";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import { candidateScopeSql, type WorkspaceSearchActor } from "@/features/search/scope";
+import { getRolePolicy, requirePermission } from "@/features/workspaces/permissions-server";
 import { logAuditEvent } from "@/lib/audit-log";
 import {
   enqueueCandidateDeletionJob,
@@ -40,6 +41,15 @@ export type DsarRequestListItem = {
 
 export async function getDsarRequests(): Promise<DsarRequestListItem[]> {
   const context = await requirePermission("dsar:manage");
+  // A request names and contacts one candidate, so a restricted role sees only the
+  // requests for candidates it can already view.
+  const policy = await getRolePolicy(context.organization.id, context.roleKey);
+  const actor: WorkspaceSearchActor = {
+    workspaceId: context.organization.id,
+    userId: context.user.id,
+    permissions: policy.permissions,
+    scope: policy.scope,
+  };
 
   const requests = await db
     .select({
@@ -69,7 +79,12 @@ export async function getDsarRequests(): Promise<DsarRequestListItem[]> {
         isNull(candidates.deletedAt),
       ),
     )
-    .where(eq(dsarRequests.workspaceId, context.organization.id))
+    .where(
+      and(
+        eq(dsarRequests.workspaceId, context.organization.id),
+        candidateScopeSql(actor, dsarRequests.candidateId),
+      ),
+    )
     .orderBy(desc(dsarRequests.createdAt));
 
   return requests.map((request) => ({

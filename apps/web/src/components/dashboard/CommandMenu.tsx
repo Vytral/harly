@@ -37,10 +37,11 @@ import {
   visibleRecentsAction,
 } from "@/features/search/actions";
 import {
+  browserLocalStorage,
   browserRecentsStorage,
   filterRecentsByPermission,
   pruneExpiredRecents,
-  purgeLegacyRecents,
+  purgeRecentsNotOwnedBy,
   readRecents,
   recentFromHit,
   recordRecent,
@@ -55,6 +56,9 @@ import type { Permission } from "@/features/workspaces/permissions";
 
 /** Id of the header button that opens the palette; focus returns here on close. */
 export const COMMAND_MENU_TRIGGER_ID = "command-menu-trigger";
+
+/** Set once this page load has purged other users' recents. */
+let recentsPurgedThisLoad = false;
 
 const GROUP_ORDER: readonly SearchGroupKey[] = [
   "jobs",
@@ -125,6 +129,23 @@ export function CommandMenu({
     controller.reset();
   }, [open, controller]);
 
+  // On app start, drop recents that belong to another user, so a session that ended
+  // without signing out leaves nothing readable behind. Retried until it succeeds.
+  useEffect(() => {
+    if (recentsPurgedThisLoad) return;
+    let cancelled = false;
+    recentsViewerAction()
+      .then((result) => {
+        if (cancelled || !result.ok || recentsPurgedThisLoad) return;
+        recentsPurgedThisLoad = true;
+        purgeRecentsNotOwnedBy(browserLocalStorage(), result.userId);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Asked on first open, so pages that never open the palette pay nothing.
   useEffect(() => {
     if (!open || viewerId) return;
@@ -146,7 +167,6 @@ export function CommandMenu({
     if (!open || !viewerId) return;
     const storage = browserRecentsStorage();
     const scope: RecentsScope = { userId: viewerId, workspaceId };
-    purgeLegacyRecents(storage, workspaceId);
     pruneExpiredRecents(storage, scope);
     const stored = readRecents(storage, scope);
     const permitted = filterRecentsByPermission(

@@ -7,6 +7,9 @@ import {
   filterRecentsByPermission,
   pruneExpiredRecents,
   purgeLegacyRecents,
+  purgeRecentsNotOwnedBy,
+  RECENTS_OWNER_KEY,
+  recordRecentsOwner,
   readRecents,
   recentFromHit,
   recentsStorageKey,
@@ -95,7 +98,7 @@ describe("recents storage", () => {
   });
 
   it("does not throw when purging legacy storage fails", () => {
-    expect(() => purgeLegacyRecents(throwingStorage, "ws-1")).not.toThrow();
+    expect(() => purgeLegacyRecents(throwingStorage as unknown as ClearableStorage)).not.toThrow();
   });
 
   it("puts the newest result first and removes duplicates", () => {
@@ -193,15 +196,16 @@ describe("recents storage", () => {
     expect(entry).not.toHaveProperty("secondary");
   });
 
-  it("purges the workspace-only recents written before user keying", () => {
+  it("purges the pre-user-keyed recents of every workspace, not only the current one", () => {
     const storage = new MemoryStorage();
     storage.setItem(
       "harly.search.recents.v1:ws-1",
       JSON.stringify([{ group: "candidates", id: "c", primary: "Ada", secondary: "ada@example.test", href: "/x" }]),
     );
     storage.setItem("harly.search.recents.v1:ws-2", "[]");
-    purgeLegacyRecents(storage, "ws-1");
-    expect(storage.keys()).toEqual(["harly.search.recents.v1:ws-2"]);
+    storage.setItem("theme", "dark");
+    purgeLegacyRecents(storage);
+    expect(storage.keys()).toEqual(["theme"]);
   });
 
   it("removes one entry and leaves the rest in order", () => {
@@ -383,3 +387,66 @@ describe("clearAllSearchRecents", () => {
     expect(storage.keys()).toEqual(["harly.search.recents.v2:stuck"]);
   });
 });
+
+describe("purgeRecentsNotOwnedBy", () => {
+  const ada = { userId: "user-ada", workspaceId: "ws-1" };
+  const adaOtherWorkspace = { userId: "user-ada", workspaceId: "ws-2" };
+  const grace = { userId: "user-grace", workspaceId: "ws-1" };
+
+  it("keeps the signed-in user's recents in every workspace and removes everyone else's", () => {
+    const storage = new MemoryStorage();
+    recordRecent(storage, ada, item(1));
+    recordRecent(storage, adaOtherWorkspace, item(2));
+    recordRecent(storage, grace, item(3));
+
+    purgeRecentsNotOwnedBy(storage, "user-ada");
+
+    expect(readRecents(storage, ada)).toHaveLength(1);
+    expect(readRecents(storage, adaOtherWorkspace)).toHaveLength(1);
+    expect(readRecents(storage, grace)).toEqual([]);
+    expect(storage.getItem(RECENTS_OWNER_KEY)).toBe("user-ada");
+  });
+
+  it("removes every recent when no one is signed in", () => {
+    const storage = new MemoryStorage();
+    recordRecent(storage, ada, item(1));
+    storage.setItem("harly.search.recents.v1:ws-9", "[]");
+
+    purgeRecentsNotOwnedBy(storage, null);
+
+    expect(storage.keys()).toEqual([]);
+  });
+
+  it("drops keys it cannot attribute to a user", () => {
+    const storage = new MemoryStorage();
+    storage.setItem("harly.search.recents.v2:not-a-scope", "[]");
+    purgeRecentsNotOwnedBy(storage, "user-ada");
+    expect(storage.getItem("harly.search.recents.v2:not-a-scope")).toBeNull();
+  });
+
+  it("leaves unrelated keys alone", () => {
+    const storage = new MemoryStorage();
+    storage.setItem("harly-legal-draft", "{}");
+    purgeRecentsNotOwnedBy(storage, "user-ada");
+    expect(storage.getItem("harly-legal-draft")).toBe("{}");
+  });
+
+  it("does not throw when storage is unavailable", () => {
+    expect(() => purgeRecentsNotOwnedBy(null, "user-ada")).not.toThrow();
+    expect(() => purgeRecentsNotOwnedBy(throwingStorage as unknown as ClearableStorage & Pick<Storage, "setItem">, "user-ada")).not.toThrow();
+  });
+});
+
+describe("recordRecentsOwner", () => {
+  it("records the signed-in user id in the owner key", () => {
+    const storage = new MemoryStorage();
+    recordRecentsOwner(storage, "user-ada");
+    expect(storage.getItem("harly.search.recents.owner")).toBe("user-ada");
+    expect(RECENTS_OWNER_KEY).toBe("harly.search.recents.owner");
+  });
+
+  it("does not throw when storage throws on write", () => {
+    expect(() => recordRecentsOwner(throwingStorage, "user-ada")).not.toThrow();
+  });
+});
+

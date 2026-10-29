@@ -116,4 +116,38 @@ describe("consent report export", () => {
       expect.objectContaining({ action: "consent_report.exported", actorId: "user-1" }),
     );
   });
+
+  it("marks a JSON export that reached the row cap as truncated", async () => {
+    mocks.getWorkspaceContext.mockResolvedValue(contextFor("owner"));
+    const rows = Array.from({ length: 50_001 }, (_, index) => ({ ...consentRow, id: `consent-${index}` }));
+    mocks.select.mockReturnValue(selectReturning(rows));
+
+    const response = await GET(new NextRequest("https://app.example.test/api/security/consent-report"));
+
+    const body = await response.json();
+    expect(body.truncated).toBe(true);
+    expect(body.records).toHaveLength(50_000);
+  });
+
+  it("reports a complete JSON export as not truncated", async () => {
+    mocks.getWorkspaceContext.mockResolvedValue(contextFor("owner"));
+    mocks.select.mockReturnValue(selectReturning([consentRow]));
+
+    const body = await (await GET(new NextRequest("https://app.example.test/api/security/consent-report"))).json();
+    expect(body.truncated).toBe(false);
+  });
+
+  it("flags a truncated CSV export in a header and a closing line", async () => {
+    mocks.getWorkspaceContext.mockResolvedValue(contextFor("owner"));
+    const rows = Array.from({ length: 50_001 }, (_, index) => ({ ...consentRow, id: `consent-${index}` }));
+    mocks.select.mockReturnValue(selectReturning(rows));
+
+    const response = await GET(
+      new NextRequest("https://app.example.test/api/security/consent-report?format=csv"),
+    );
+
+    expect(response.headers.get("X-Harly-Truncated")).toBe("true");
+    const lines = (await response.text()).trimEnd().split("\r\n");
+    expect(lines.at(-1)).toMatch(/truncated/i);
+  });
 });

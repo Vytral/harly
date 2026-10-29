@@ -10,8 +10,10 @@ import {
 export { authClient, signIn, useSession } from "@harly/auth/client";
 
 /**
- * Every sign-out path goes through here so per-browser conveniences such as
- * search palette recents never outlive the session they were created in.
+ * Signing out from the app clears per-browser search palette recents here. Other
+ * ways a session ends (expiry, revoking another session, a redirect from the
+ * proxy) do not pass through this function. The palette covers those on app
+ * start, by removing recents that belong to any other user.
  */
 export const signOut: typeof authSignOut = (...args) => {
   clearAllSearchRecents(browserLocalStorage());

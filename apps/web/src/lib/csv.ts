@@ -65,11 +65,21 @@ export function toCsv(rows: string[][]): string {
  * value while preventing formula evaluation.
  */
 export function toSafeCsv(rows: string[][]): string {
-  return toCsv(rows.map((row) => row.map(sanitizeSpreadsheetCell)));
+  return toCsv(rows.map((row) => row.map(neutralizeSpreadsheetFormula)));
 }
 
-function sanitizeSpreadsheetCell(value: string): string {
-  return /^[=+\-@]/.test(value) ? `'${value}` : value;
+/**
+ * A cell that a spreadsheet may read as a formula: a leading `=`, `+`, `-` or `@`,
+ * optionally after spaces, or a leading tab, carriage return or line feed.
+ */
+const FORMULA_START_RE = /^(?: *[=+\-@\t\r\n]|[\t\r\n])/;
+
+/**
+ * Prefixes a formula-capable cell with an apostrophe so spreadsheet applications
+ * show the value as text. Shared by every CSV export.
+ */
+export function neutralizeSpreadsheetFormula(value: string): string {
+  return FORMULA_START_RE.test(value) ? `'${value}` : value;
 }
 
 function escapeCsvField(value: string): string {

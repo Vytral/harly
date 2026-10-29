@@ -165,7 +165,91 @@ describe("audit log export", () => {
     expect(response.status).toBe(200);
     expect(mocks.getWorkspaceAuditLogs).toHaveBeenCalledWith(
       "ws-1",
-      expect.objectContaining({ limit: 50_000 }),
+      expect.objectContaining({ limit: 50_001 }),
     );
+  });
+
+  it("refuses the workspace audit log to a scope-restricted role that holds both export permissions", async () => {
+    mocks.getWorkspaceContext.mockResolvedValue({
+      organization: { id: "ws-1" },
+      roleKey: "scoped-auditor",
+      user: { id: "user-1", email: "auditor@example.com" },
+    });
+    mocks.select.mockReturnValue(
+      selectReturning([
+        {
+          permissions: ["dsar:manage", "security:manage"],
+          scope: { jobAccess: "assigned", departments: [], regions: [] },
+        },
+      ]),
+    );
+
+    const response = await GET(new NextRequest("https://app.example.test/api/security/audit-logs/export"));
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toEqual({
+      error: "Exporting the audit log requires an unrestricted role scope.",
+    });
+    expect(mocks.getWorkspaceAuditLogs).not.toHaveBeenCalled();
+  });
+
+  it("marks a JSON audit export that reached the row cap as truncated", async () => {
+    mocks.getWorkspaceContext.mockResolvedValue({
+      organization: { id: "ws-1" },
+      roleKey: "admin",
+      user: { id: "user-1", email: "admin@example.com" },
+    });
+    const entry = {
+      id: "log-1",
+      actorEmail: "admin@example.com",
+      action: "member.updated",
+      resourceType: "member",
+      resourceId: "m-1",
+      ipAddress: null,
+      userAgent: null,
+      metadata: null,
+      severity: "info",
+      createdAt: "2026-06-01T12:00:00.000Z",
+    };
+    mocks.getWorkspaceAuditLogs.mockResolvedValue(
+      Array.from({ length: 50_001 }, (_, index) => ({ ...entry, id: `log-${index}` })),
+    );
+
+    const response = await GET(
+      new NextRequest("https://app.example.test/api/security/audit-logs/export?format=json"),
+    );
+
+    expect(mocks.getWorkspaceAuditLogs).toHaveBeenCalledWith("ws-1", expect.objectContaining({ limit: 50_001 }));
+    const body = await response.json();
+    expect(body.truncated).toBe(true);
+    expect(body.logs).toHaveLength(50_000);
+  });
+
+  it("flags a truncated CSV audit export in a header", async () => {
+    mocks.getWorkspaceContext.mockResolvedValue({
+      organization: { id: "ws-1" },
+      roleKey: "admin",
+      user: { id: "user-1", email: "admin@example.com" },
+    });
+    mocks.getWorkspaceAuditLogs.mockResolvedValue(
+      Array.from({ length: 50_001 }, (_, index) => ({
+        id: `log-${index}`,
+        actorEmail: null,
+        action: "member.updated",
+        resourceType: "member",
+        resourceId: null,
+        ipAddress: null,
+        userAgent: null,
+        metadata: null,
+        severity: "info",
+        createdAt: "2026-06-01T12:00:00.000Z",
+      })),
+    );
+
+    const response = await GET(new NextRequest("https://app.example.test/api/security/audit-logs/export"));
+
+    expect(response.headers.get("X-Harly-Truncated")).toBe("true");
+    const lines = (await response.text()).trimEnd().split("\r\n");
+    expect(lines.at(-1)).toMatch(/truncated/i);
   });
 });

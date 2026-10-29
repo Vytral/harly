@@ -2030,11 +2030,11 @@ function buildReadTools(ctx: HarlyToolContext) {
           count: rows.length,
           interviews: rows.slice(0, 20).map((r) => ({
             id: r.id,
-            candidate: (r as { candidate?: string }).candidate ?? null,
-            job: (r as { job?: string }).job ?? null,
-            type: (r as { type?: string }).type ?? null,
-            scheduledAt:
-              (r as { scheduledAt?: Date | string }).scheduledAt ?? null,
+            candidateId: r.candidateId,
+            candidateName: r.candidateName,
+            job: r.jobTitle,
+            type: r.type,
+            scheduledAt: r.scheduledAt,
           })),
         };
       },
@@ -2145,6 +2145,7 @@ function buildReadTools(ctx: HarlyToolContext) {
             priority: t.priority,
             dueDate: t.dueDate,
             owner: t.ownerName,
+            candidateId: t.candidateId,
             candidate: t.candidateName,
             job: t.jobTitle,
           })),
@@ -2192,6 +2193,7 @@ function buildReadTools(ctx: HarlyToolContext) {
             status: t.status,
             priority: t.priority,
             dueDate: t.dueDate,
+            candidateId: t.candidateId,
             candidate: t.candidateName,
             job: t.jobTitle,
           })),

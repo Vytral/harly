@@ -195,16 +195,76 @@ export function pruneExpiredRecents(
   }
 }
 
-/** Drop the pre-user-keyed recents for a workspace, which may hold contact details. */
-export function purgeLegacyRecents(
-  storage: RecentsStorage | null,
-  workspaceId: string,
-): void {
+/** Every key under the recents prefix. Blocked storage yields none. */
+function recentsKeys(storage: ClearableStorage): string[] {
+  const keys: string[] = [];
+  try {
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key !== null && key.startsWith(RECENTS_KEY_PREFIX)) keys.push(key);
+    }
+  } catch {
+    // Storage blocked: nothing readable was stored.
+  }
+  return keys;
+}
+
+/** Removes each key on its own, so one failing removal does not stop the sweep. */
+function removeKeys(storage: ClearableStorage, keys: readonly string[]): void {
+  for (const key of keys) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // This key could not be removed; the rest still should be.
+    }
+  }
+}
+
+/**
+ * Drop every pre-user-keyed recent, in every workspace. Those entries may hold
+ * contact details and were never tied to a user, so none of them is kept.
+ */
+export function purgeLegacyRecents(storage: ClearableStorage | null): void {
+  if (!storage) return;
+  removeKeys(storage, recentsKeys(storage).filter((key) => key.startsWith(LEGACY_KEY_PREFIX)));
+}
+
+/** Marks which user this browser's recents were last shown to. */
+export const RECENTS_OWNER_KEY = `${RECENTS_KEY_PREFIX}owner`;
+
+export function recordRecentsOwner(storage: Pick<Storage, "setItem"> | null, userId: string): void {
   if (!storage) return;
   try {
-    storage.removeItem(`${LEGACY_KEY_PREFIX}${workspaceId}`);
+    storage.setItem(RECENTS_OWNER_KEY, userId);
   } catch {
-    // Storage blocked: nothing was readable to begin with.
+    // Storage blocked: the marker is informational, so nothing else depends on it.
+  }
+}
+
+/**
+ * Run when the app starts for a signed-in user (or with `null` when no user is
+ * signed in). Removes every recent that belongs to another user, legacy entries
+ * included, and keeps the signed-in user's own recents in every workspace. This
+ * covers sessions that ended without the sign-out path, such as an expired
+ * session or a revoked one, where the next person at this browser would
+ * otherwise find the previous user's entries still in storage.
+ */
+export function purgeRecentsNotOwnedBy(
+  storage: (ClearableStorage & Pick<Storage, "setItem">) | null,
+  userId: string | null,
+): void {
+  if (!storage) return;
+  const ownPrefix = userId === null ? null : `${KEY_PREFIX}${encodeURIComponent(userId)}/`;
+  const stale = recentsKeys(storage).filter((key) => {
+    if (key === RECENTS_OWNER_KEY) return false;
+    if (key.startsWith(LEGACY_KEY_PREFIX)) return true;
+    return ownPrefix === null || !key.startsWith(ownPrefix);
+  });
+  removeKeys(storage, stale);
+  if (userId === null) {
+    removeKeys(storage, [RECENTS_OWNER_KEY]);
+  } else {
+    recordRecentsOwner(storage, userId);
   }
 }
 
@@ -215,23 +275,7 @@ export function purgeLegacyRecents(
  */
 export function clearAllSearchRecents(storage: ClearableStorage | null): void {
   if (!storage) return;
-  const keys: string[] = [];
-  try {
-    for (let index = 0; index < storage.length; index += 1) {
-      const key = storage.key(index);
-      if (key !== null && key.startsWith(RECENTS_KEY_PREFIX)) keys.push(key);
-    }
-  } catch {
-    // Storage blocked: nothing readable was stored.
-    return;
-  }
-  for (const key of keys) {
-    try {
-      storage.removeItem(key);
-    } catch {
-      // This key could not be removed; the rest still should be.
-    }
-  }
+  removeKeys(storage, recentsKeys(storage));
 }
 
 /** Keep only recents whose group the viewer's permissions still allow. */

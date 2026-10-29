@@ -154,3 +154,55 @@ describe("anonymize: adversarial identity inputs", () => {
     expect(out).not.toContain("github.com/x");
   });
 });
+
+describe("anonymize: date and time values survive intact", () => {
+  it("keeps ISO dates, date-times and UTC stamps unchanged", () => {
+    const stamps = [
+      "2026-11-02",
+      "2026-11-02T10:30:00.000Z",
+      "2026-11-02T10:30:00+01:00",
+      "2026-11-02 10:30",
+      "02/11/2026",
+    ];
+    for (const stamp of stamps) {
+      expect(redactText(`Slot ${stamp} confirmed.`, identity), stamp).toBe(`Slot ${stamp} confirmed.`);
+    }
+  });
+
+  it("still masks real phone numbers next to a date", () => {
+    const out = redactText("Call +44 7700 900123 on 2026-11-02.", identity);
+    expect(out).not.toContain("7700 900123");
+    expect(out).toContain("2026-11-02");
+  });
+});
+
+describe("anonymize: single-word names", () => {
+  const may = { firstName: "May", lastName: "Lee", fullName: "May Lee" };
+
+  it("does not turn a month and day into a redaction when the first name is May", () => {
+    const out = redactText("Interview on May 12 with the team.", may);
+    expect(out).toContain("May 12");
+  });
+
+  it("still masks a capitalized first name that is not followed by a day number", () => {
+    const out = redactText("May shipped the migration.", may);
+    expect(out).not.toMatch(/^May /);
+  });
+
+  it("masks the full name even when it is followed by a day number", () => {
+    const out = redactText("May Lee 12 years of experience", may);
+    expect(out).not.toContain("May Lee");
+  });
+});
+
+describe("anonymize: precomputed name redactor", () => {
+  it("matches the single-identity behaviour for each identity", async () => {
+    const { createNameRedactor } = await import("./anonymize");
+    const redact = createNameRedactor([
+      { firstName: "Ada", lastName: "Lovelace", fullName: "Ada Lovelace" },
+      { firstName: "Grace", lastName: "Hopper", fullName: "Grace Hopper" },
+    ]);
+    const out = redact("Ada Lovelace and grace hopper compared notes.");
+    expect(out).not.toMatch(/Lovelace|hopper/i);
+  });
+});

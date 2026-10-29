@@ -178,8 +178,13 @@ local storage, separately for each user and workspace on that browser.
 - Entries are also dropped when you no longer have access to that type of
   result, or when the record is no longer visible to you.
 - Clearing site data in your browser removes them at any time.
+- When the app starts, recents that belong to another user are removed, and so
+  are recents saved by earlier versions of Harly. This covers a session that
+  ended without signing out, such as an expired or revoked session.
 
-Recents are a per-browser convenience. They are never sent to the server.
+Recents stay in your browser. To show them, the palette sends the ids of your
+recent results to the server, which checks that you can still see each one and
+returns only those. Recents are not stored on the server.
 
 ## Audit log
 

@@ -32,3 +32,20 @@ describe("candidateExportCsv", () => {
     expect(csv).toContain('"[""Math""]"');
   });
 });
+
+describe("candidateExportCsv leading characters", () => {
+  it("neutralizes a tab, carriage return or spaced formula in a candidate field", () => {
+    const csv = candidateExportCsv({
+      candidate: {
+        firstName: "\t=HYPERLINK(\"x\")",
+        lastName: " =cmd",
+        email: "\r+1",
+      },
+      applications: [],
+    });
+    expect(csv).toContain('"\'\t=HYPERLINK(""x"")"');
+    expect(csv).toContain('"\' =cmd"');
+    expect(csv).toContain('"\'\r+1"');
+  });
+});
+

@@ -47,10 +47,17 @@ const STREET_RE =
 const PHONE_CANDIDATE_RE = /\+?\(?\d[\d\s().-]{5,}\d/g;
 const LOCAL_PHONE_RE = /(?<!\d)\d{3}[\s.-]\d{4}(?!\d)/;
 
-function isPhoneLike(match: string): boolean {
+/** A calendar date at the start of a candidate: "2026-11-02", "2026-11-02 10". */
+const ISO_DATE_PREFIX_RE = /^\d{4}[-/.]\d{1,2}[-/.]\d{1,2}/;
+
+function isPhoneLike(match: string, offset: number, whole: string): boolean {
+  const trimmed = match.trim();
+  // Scheduling values survive: an ISO date (optionally followed by a time) or a
+  // time component directly after the match ("2026-11-02 10" + ":30") is not a phone.
+  if (ISO_DATE_PREFIX_RE.test(trimmed)) return false;
+  if (whole.charAt(offset + match.length) === ":") return false;
   const digits = match.replace(/\D/g, "").length;
   if (digits < 7) return false;
-  const trimmed = match.trim();
   if (trimmed.startsWith("+") || /[()]/.test(trimmed)) return true;
   if (digits >= 10) return true;
   // "2019-2021" is a date range: eight digits in two groups stays intact.
@@ -60,10 +67,6 @@ function isPhoneLike(match: string): boolean {
 }
 
 // ── Name matching ──────────────────────────────────────────────────────────
-
-/** Separator between name words: spaces, hyphens, dots and underscores. */
-const NAME_SEPARATOR = "[\\s\\-._]+";
-const ALPHANUMERIC = "\\p{L}\\p{N}_";
 
 /** Letters that do not decompose under NFD and fold to a single base letter. */
 const FOLD_OVERRIDES: Record<string, string> = {
@@ -77,72 +80,16 @@ const FOLD_OVERRIDES: Record<string, string> = {
 };
 
 /** Letters that fold to more than one character. Matched as either form. */
-const EXPANSIONS: Record<string, string> = { ß: "ss", æ: "ae", œ: "oe" };
+/** Lowercase, accent-free and expansion-folded: the form every name word is compared in. */
+const PREFILTER_SPECIAL_RE = /[łøđħŧıŀßæœ]/gu;
+const PREFILTER_SPECIAL: Record<string, string> = { ...FOLD_OVERRIDES, ß: "ss", æ: "ae", œ: "oe" };
 
-function baseLetter(lowerChar: string): string {
-  const stripped = lowerChar.normalize("NFD").replace(/\p{M}/gu, "");
-  return FOLD_OVERRIDES[stripped] ?? stripped;
-}
-
-/**
- * For each base Latin letter, every accented or case variant that folds to it.
- * Built once from the Latin-1, Latin Extended-A/B and Latin Extended Additional
- * blocks, so "e" also matches "é", "è", "ê", "ë", "ē", "ę", "ẹ" and so on.
- */
-const LETTER_VARIANTS: Map<string, Set<string>> = (() => {
-  const map = new Map<string, Set<string>>();
-  const add = (ch: string) => {
-    const lower = ch.toLowerCase();
-    const base = baseLetter(lower);
-    if (base.length !== 1 || !/\p{L}/u.test(base)) return;
-    if (EXPANSIONS[lower]) return;
-    const set = map.get(base) ?? new Set<string>();
-    set.add(lower);
-    map.set(base, set);
-  };
-  const ranges: Array<[number, number]> = [
-    [0x00c0, 0x024f],
-    [0x1e00, 0x1eff],
-  ];
-  for (const [from, to] of ranges) {
-    for (let cp = from; cp <= to; cp++) add(String.fromCodePoint(cp));
-  }
-  for (const key of Object.keys(FOLD_OVERRIDES)) add(key);
-  for (let cp = 97; cp <= 122; cp++) add(String.fromCodePoint(cp));
-  return map;
-})();
-
-function escapeLiteral(value: string): string {
-  return value.replace(/[\^$\\.*+?()[\]{}|/]/g, "\\$&");
-}
-
-function charPattern(ch: string): string {
-  const lower = ch.toLowerCase();
-  const expansion = EXPANSIONS[lower];
-  if (expansion) return `(?:${escapeLiteral(lower)}|${expansion})`;
-  if (lower === "'" || lower === "’") return "['’]";
-  const base = baseLetter(lower);
-  const variants = base.length === 1 ? LETTER_VARIANTS.get(base) : undefined;
-  if (variants) return `[${[...variants].join("")}]`;
-  return escapeLiteral(lower);
-}
-
-/** Regex source matching one name value, tolerant of case, accents and separators. */
-function tokenPattern(value: string): string {
-  let out = "";
-  let pendingSeparator = false;
-  for (const ch of value.normalize("NFC")) {
-    if (/[\s\-._]/u.test(ch)) {
-      pendingSeparator = out.length > 0;
-      continue;
-    }
-    if (pendingSeparator) {
-      out += NAME_SEPARATOR;
-      pendingSeparator = false;
-    }
-    out += charPattern(ch);
-  }
-  return out;
+function prefilterFold(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .replace(PREFILTER_SPECIAL_RE, (ch) => PREFILTER_SPECIAL[ch] ?? ch);
 }
 
 function cleanPart(value: string | null | undefined): string | null {
@@ -182,15 +129,144 @@ function nameVariants(identity: CandidateIdentity): string[] {
   return [...variants].sort((a, b) => b.length - a.length);
 }
 
-function namePattern(identity: CandidateIdentity): RegExp | null {
-  const alternatives = nameVariants(identity)
-    .map(tokenPattern)
-    .filter((source) => source.length > 0);
-  if (alternatives.length === 0) return null;
-  return new RegExp(
-    `(?<![${ALPHANUMERIC}])(?:${alternatives.join("|")})(?![${ALPHANUMERIC}])`,
-    "giu",
-  );
+/** Words of a name: letters, digits and combining marks. Separators are never part of a word. */
+const WORD_TOKEN_RE = /[\p{L}\p{M}\p{N}]+/gu;
+/** Text allowed between two words of one name: spaces, hyphens, dots, underscores, commas, apostrophes. */
+const NAME_GAP_RE = /^[\s\-._,'’]+$/u;
+/** A day number after a month name, such as "May 12" or "May 1st". */
+const DAY_NUMBER_RE = /^\d{1,2}(?:st|nd|rd|th)?$/iu;
+
+type NameToken = { start: number; end: number; raw: string; folded: string };
+type NameVariantWords = { words: string[]; singleWord: boolean };
+
+function tokenize(text: string): NameToken[] {
+  const tokens: NameToken[] = [];
+  for (const match of text.matchAll(WORD_TOKEN_RE)) {
+    const start = match.index ?? 0;
+    tokens.push({
+      start,
+      end: start + match[0].length,
+      raw: match[0],
+      folded: prefilterFold(match[0]),
+    });
+  }
+  return tokens;
+}
+
+/** Whether `variant` matches the words starting at token `at`, as whole words. */
+function variantMatchesAt(
+  text: string,
+  tokens: readonly NameToken[],
+  at: number,
+  variant: NameVariantWords,
+): boolean {
+  const count = variant.words.length;
+  if (at + count > tokens.length) return false;
+  for (let offset = 0; offset < count; offset++) {
+    if (tokens[at + offset]!.folded !== variant.words[offset]) return false;
+  }
+  for (let offset = 0; offset < count - 1; offset++) {
+    const gap = text.slice(tokens[at + offset]!.end, tokens[at + offset + 1]!.start);
+    if (!NAME_GAP_RE.test(gap)) return false;
+  }
+  if (variant.singleWord) {
+    // "May 12" is a date, not the name May: a day number right after masks nothing.
+    const next = tokens[at + 1];
+    if (next && /^\s+$/u.test(text.slice(tokens[at]!.end, next.start)) && DAY_NUMBER_RE.test(next.raw)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * A single-word name is ambiguous ("May" is a month, "Will" a verb), so it is
+ * masked only when it starts capitalised. Full names (two or more words) are
+ * always masked.
+ */
+function isMaskableMatch(raw: string, singleWord: boolean): boolean {
+  return !singleWord || /^\p{Lu}|^[^\p{Ll}]/u.test(raw);
+}
+
+/**
+ * Builds a name redactor for a fixed set of identities. Names are compared word by
+ * word in folded form (case, accents and separators ignored). A word index picks
+ * the few identities whose words occur in a given text, so redacting many rows
+ * stays linear in the text size.
+ */
+export function createNameRedactor(
+  identities: readonly CandidateIdentity[],
+): (text: string) => string {
+  const matchers: Array<{ variants: NameVariantWords[] }> = [];
+  for (const identity of identities) {
+    const variants: NameVariantWords[] = [];
+    for (const variant of nameVariants(identity)) {
+      const words = prefilterFold(variant).split(/[\s\-._,'’]+/u).filter((word) => word.length > 0);
+      if (words.length === 0) continue;
+      variants.push({ words, singleWord: !/[\s\-._,'’]/u.test(variant.trim()) });
+    }
+    if (variants.length > 0) matchers.push({ variants });
+  }
+  if (matchers.length === 0) return (text) => text;
+
+  // Longest variants first, so "Ada Lovelace" wins over "Ada" at the same position.
+  for (const matcher of matchers) {
+    matcher.variants.sort((a, b) => b.words.length - a.words.length);
+  }
+
+  const byWord = new Map<string, number[]>();
+  const always: number[] = [];
+  matchers.forEach((matcher, index) => {
+    const words = new Set(matcher.variants.flatMap((variant) => variant.words).filter((word) => word.length >= 2));
+    if (words.size === 0) always.push(index);
+    for (const word of words) {
+      const list = byWord.get(word);
+      if (list) list.push(index);
+      else byWord.set(word, [index]);
+    }
+  });
+
+  return (text) => {
+    if (!text) return text;
+    const tokens = tokenize(text);
+    const selected = new Set<number>(always);
+    for (const token of tokens) {
+      const list = byWord.get(token.folded);
+      if (list) for (const index of list) selected.add(index);
+    }
+    if (selected.size === 0) return text;
+
+    const spans: Array<[number, number]> = [];
+    for (const index of selected) {
+      const { variants } = matchers[index]!;
+      for (let at = 0; at < tokens.length; at++) {
+        for (const variant of variants) {
+          if (!variantMatchesAt(text, tokens, at, variant)) continue;
+          const last = tokens[at + variant.words.length - 1]!;
+          if (isMaskableMatch(text.slice(tokens[at]!.start, last.end), variant.singleWord)) {
+            spans.push([tokens[at]!.start, last.end]);
+            at += variant.words.length - 1;
+          }
+          break;
+        }
+      }
+    }
+    if (spans.length === 0) return text;
+
+    spans.sort((a, b) => a[0] - b[0]);
+    let out = "";
+    let cursor = 0;
+    for (const [start, end] of spans) {
+      if (start < cursor) {
+        // Overlapping match from another identity: extend the masked span.
+        if (end > cursor) cursor = end;
+        continue;
+      }
+      out += text.slice(cursor, start) + REDACTED_PLACEHOLDER;
+      cursor = end;
+    }
+    return out + text.slice(cursor);
+  };
 }
 
 // ── Public API ─────────────────────────────────────────────────────────────
@@ -225,19 +301,17 @@ export function redactText(
   identity: CandidateIdentity,
 ): string | null {
   if (!text) return text ?? null;
-  let out = text
+  const generic = text
     .replace(EMAIL_RE, REDACTED_PLACEHOLDER)
     .replace(OBFUSCATED_EMAIL_RE, REDACTED_PLACEHOLDER)
     .replace(URL_RE, REDACTED_PLACEHOLDER)
     .replace(BARE_DOMAIN_RE, REDACTED_PLACEHOLDER)
     .replace(HANDLE_RE, REDACTED_PLACEHOLDER)
     .replace(STREET_RE, REDACTED_PLACEHOLDER)
-    .replace(PHONE_CANDIDATE_RE, (match) =>
-      isPhoneLike(match) ? REDACTED_PLACEHOLDER : match,
+    .replace(PHONE_CANDIDATE_RE, (match, offset: number, whole: string) =>
+      isPhoneLike(match, offset, whole) ? REDACTED_PLACEHOLDER : match,
     );
-  const names = namePattern(identity);
-  if (names) out = out.replace(names, REDACTED_PLACEHOLDER);
-  return out;
+  return createNameRedactor([identity])(generic);
 }
 
 /** Redact an array of free-text lines, dropping any that become empty. */

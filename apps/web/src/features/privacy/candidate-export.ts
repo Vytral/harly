@@ -18,6 +18,7 @@ import {
   jobs,
   mailMessages,
 } from "@harly/db";
+import { neutralizeSpreadsheetFormula } from "@/lib/csv";
 
 export type CandidateExportFormat = "json" | "csv";
 
@@ -312,7 +313,7 @@ function csvCell(value: unknown): string {
         ? value.toISOString()
         : JSON.stringify(value);
   // Prevent spreadsheet formula execution when the portable CSV is opened.
-  const safeText = /^[=+\-@]/.test(text) ? `'${text}` : text;
+  const safeText = neutralizeSpreadsheetFormula(text);
   return `"${safeText.replaceAll('"', '""')}"`;
 }
 
