@@ -504,8 +504,8 @@ function ResultIcon({
     <UserAvatar
       name={name}
       src={avatarUrl}
-      size="sm"
-      className="size-9 shrink-0 text-sm"
+      size="md"
+      className="shrink-0"
     />
   );
 }

@@ -118,9 +118,11 @@ export function TopBar({
           </div>
         ) : null}
 
-        {/* Centered regardless of how wide the two side clusters are. */}
-        <div className="pointer-events-none absolute inset-x-0 flex h-[var(--spacing-topbar)] items-center justify-center">
-          <div className="pointer-events-auto">
+        {/* Desktop: centered on the bar regardless of how wide the side clusters are.
+            Narrow screens: a flexible slot between the clusters, so the pill
+            truncates instead of sliding under the account and action buttons. */}
+        <div className="pointer-events-none flex min-w-0 flex-1 items-center justify-center md:absolute md:inset-x-0 md:h-[var(--spacing-topbar)]">
+          <div className="pointer-events-auto min-w-0 max-w-full">
             <NotificationIsland
               workspace={workspace}
               workspaceOptions={workspaceOptions}
@@ -129,7 +131,7 @@ export function TopBar({
           </div>
         </div>
 
-        <div className="z-10 ml-auto flex items-center gap-1">
+        <div className="z-10 ml-auto flex shrink-0 items-center gap-1">
           <AiSignalButton />
           <UserMenu
             user={user}

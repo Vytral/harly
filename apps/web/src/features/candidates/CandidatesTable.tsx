@@ -470,8 +470,8 @@ export function CandidatesTable({
   return (
     <div className="space-y-4">
       {/* Search */}
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative min-w-0 basis-full sm:flex-1 sm:basis-0">
           <Search aria-hidden className="absolute left-4 top-1/2 size-4.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
@@ -486,7 +486,7 @@ export function CandidatesTable({
         </div>
         <Button
           variant="outline"
-          className="h-11 rounded-lg"
+          className="h-11 shrink-0 rounded-lg"
           onClick={exportCsv}
         >
           <Download className="size-4" />

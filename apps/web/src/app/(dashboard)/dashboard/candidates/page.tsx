@@ -203,7 +203,7 @@ const initialImportSource: ImportSource | undefined =
             title="No candidates yet"
             description="Share your public job board or import candidates from another ATS."
           />
-          <div className="flex justify-center gap-2">
+          <div className="flex flex-wrap justify-center gap-2">
             {canCreateCandidates ? (
               <AddCandidateDrawer
                 workspaceId={workspaceContext.organization.id}

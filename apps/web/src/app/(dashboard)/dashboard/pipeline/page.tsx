@@ -48,11 +48,11 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
   }
 
   const toolbar = (
-    <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-wrap items-center justify-between gap-3">
       <Suspense>
         <PipelineJobSelect jobs={data.jobs} selectedJobId={data.selectedJob.id} />
       </Suspense>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {canEditJobs ? (
           <StageEditorTrigger
             key={data.selectedJob.id}
