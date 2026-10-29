@@ -147,6 +147,15 @@ changes. Before enabling:
   suggestion without human review.
 </Info>
 
+## Candidate avatars and Gravatar
+
+When a candidate has no uploaded photo, Harly may show an avatar from
+[Gravatar](https://gravatar.com). To look one up, Harly sends a SHA-256 hash of
+the candidate's email address to `www.gravatar.com`. The image request is made
+by the viewer's browser, so Gravatar also receives that browser's IP address.
+If no Gravatar image exists, Harly shows initials instead. There is no workspace
+setting to turn this off yet; upload a photo to replace it.
+
 ## Audit log
 
 Every access, mutation, export, and deletion is captured with the acting member,

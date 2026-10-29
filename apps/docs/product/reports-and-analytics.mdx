@@ -71,6 +71,74 @@ you can see bottlenecks before they become stale candidates.
   rather than free-form text.
 </Tip>
 
+## Metric definitions
+
+Every report, the dashboard, scheduled report emails, the AI assistant, and the
+API read the same definitions, so a figure means the same thing wherever it
+appears.
+
+### Population
+
+Counts include applications whose job and candidate are both still present
+(not soft-deleted). Closed and draft jobs stay in historical figures.
+
+### Applications received
+
+Applications in the population whose application date falls inside the report
+window.
+
+### Hire
+
+An application whose current status is **hired**. Its hire date is the most
+recent move into a stage whose **kind** is hired. Harly reads the stage kind,
+not the stage name, so a stage renamed "Welcome aboard" still counts. Hires
+recorded before stage kinds existed fall back to the earliest "hired" activity
+event, and then to the last update time. Each application counts once, in the
+window that contains its hire date.
+
+### Time to hire
+
+Hire date minus application date, in days, for hires in the window. Averages
+and the median are shown to one decimal place. The distribution buckets are
+0–14, 15–30, 31–60, 61–90 and 90+ days, using whole days.
+
+### Offer acceptance
+
+Accepted offers divided by the sum of accepted and declined offers, where the
+decision date falls in the window. Offers still pending are not counted. When
+nothing was decided in the window there is no rate, rather than a rate of zero.
+
+### Funnel
+
+For applications received in the window, the number that ever reached each
+stage kind, either in their stage history or in their current stage: Applied,
+Screening, Interview, Offer, Hired. Conversion is measured against applications
+received, not against the stage named "Applied", so renaming a stage does not
+change the funnel.
+
+### Source effectiveness
+
+For each application source, the number of applications and hires, and hires
+per application as a whole percentage. A source with no applications shows no
+conversion rather than zero.
+
+### Windows and time zone
+
+- A window is made of whole calendar days in the reporting time zone, so
+  "Last 30 days" means 30 calendar days, the same on the dashboard, the Reports
+  page and the scheduled email.
+- The presets are **Last 30 days**, **Last 90 days** and **Last 12 months**.
+- Days and months are measured in the workspace's reporting time zone, set in
+  workspace settings. If no zone is set, or the saved zone is not recognised,
+  Harly uses UTC. Changing the zone changes which day a late-evening event
+  falls on, and is reflected in every report immediately.
+
+### Small groups are hidden in diversity reports
+
+Diversity breakdowns count applicants received in the window. A group with
+fewer than **5 applicants** is shown as suppressed, with no counts, so that
+individuals cannot be picked out of a small group.
+
 ## Export and API
 
 For custom analysis or dashboards outside Harly, use the API:

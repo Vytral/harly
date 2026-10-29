@@ -127,7 +127,7 @@ export const CHECKLIST_DEFINITIONS: readonly ItemDefinition[] = [
     key: "automate_workflow",
     title: "Automate a workflow",
     value: "Start from one of ten recipes for tagging, alerts and stage moves.",
-    href: "/dashboard/automations",
+    href: "/dashboard/automations?recipes=1",
     optional: true,
     done: (facts) => facts.automationCount > 0,
   },

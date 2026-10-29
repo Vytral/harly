@@ -36,6 +36,7 @@ import {
 } from "@harly/emails";
 
 import { renderActiveEmailTemplate } from "@/features/email-templates/data";
+import { isSampleEmailAddress } from "@/features/sample-data/constants";
 import { sendWorkspaceEmail, type SendEmailOptions } from "@/lib/email";
 import { getWorkspaceEmailBranding } from "@/lib/email/branding";
 import { getWorkspaceEmailConfig } from "@/lib/email/config";
@@ -66,6 +67,13 @@ const MAX_ATTEMPTS = 5;
 /** A `processing` lock older than this belongs to a stalled worker. */
 const STALE_LOCK_SQL = sql.raw("interval '5 minutes'");
 const RECORD_ACCEPTANCE_ATTEMPTS = 5;
+/**
+ * Stored on rows that were never sent because a recipient is sample data.
+ * `cancelled` is an existing terminal status: the row is never claimed again,
+ * and it carries no failure noise in the delivery log or the recruiter toast.
+ */
+export const SAMPLE_RECIPIENT_NOTE =
+  "Not sent: the recipient is sample data (sample.invalid). Sample data never receives email.";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
   year: "numeric",
@@ -102,6 +110,8 @@ export type ProcessResult = {
   processed: number;
   sent: number;
   failed: number;
+  /** Rows deliberately not sent (sample recipients). Never retried. */
+  skipped?: number;
 };
 
 /** Deterministic Message-ID for a row; the same id is used for SMTP headers. */
@@ -196,12 +206,14 @@ export async function processEmailOutbox(opts?: {
 
   let sent = 0;
   let failed = 0;
+  let skipped = 0;
   for (const row of rows) {
     const ok = await deliverRow(row, database, workerId);
-    if (ok) sent += 1;
+    if (ok === "skipped") skipped += 1;
+    else if (ok) sent += 1;
     else failed += 1;
   }
-  return { processed: rows.length, sent, failed };
+  return { processed: rows.length, sent, failed, skipped };
 }
 
 type OutboxState = {
@@ -295,11 +307,35 @@ async function sendRecorded(
   return delivered;
 }
 
+/** Closes a row addressed to sample data. The provider is never called and the row is never claimed again. */
+async function skipAsSampleRecipient(row: OutboxRow, database: typeof db): Promise<"skipped"> {
+  await database
+    .update(emailOutbox)
+    .set({
+      status: "cancelled",
+      lastError: SAMPLE_RECIPIENT_NOTE,
+      nextRetryAt: null,
+      lockedAt: null,
+      lockedBy: null,
+    })
+    .where(eq(emailOutbox.id, row.id));
+  log.info({ outboxRowId: row.id, kind: row.kind }, "email skipped: sample recipient");
+  return "skipped";
+}
+
+/** Addresses readable from the payload alone. Offers resolve their candidate in `deliverOffer`. */
+function payloadRecipientEmails(row: OutboxRow): string[] {
+  const payload = (row.payload ?? {}) as Record<string, unknown>;
+  return ["to", "candidateEmail", "recipientEmail"]
+    .map((key) => payload[key])
+    .filter((value): value is string => typeof value === "string" && value.trim() !== "");
+}
+
 async function deliverRow(
   row: OutboxRow,
   database: typeof db = db,
   workerId?: string,
-): Promise<boolean> {
+): Promise<boolean | "skipped"> {
   try {
     const current = await readOutboxState(row.id, database);
     if (!current) return false;
@@ -312,6 +348,9 @@ async function deliverRow(
     if (current.status !== "processing" || (workerId && current.lockedBy !== workerId)) {
       // Cancelled by an operator, or re-claimed by another worker.
       return false;
+    }
+    if (payloadRecipientEmails(row).some(isSampleEmailAddress)) {
+      return skipAsSampleRecipient(row, database);
     }
     switch (row.kind) {
       case "offer.extended":
@@ -619,7 +658,7 @@ async function hasActiveCandidateRecipient(
   return Boolean(candidate);
 }
 
-async function deliverOffer(row: OutboxRow, database: typeof db = db): Promise<boolean> {
+async function deliverOffer(row: OutboxRow, database: typeof db = db): Promise<boolean | "skipped"> {
   const payload = row.payload as {
     offerId?: string;
     terms?: unknown;
@@ -717,6 +756,9 @@ async function deliverOffer(row: OutboxRow, database: typeof db = db): Promise<b
   if (!recipient?.email) {
     await markFailed(row.id, "The candidate does not have an email address.", database);
     return false;
+  }
+  if (isSampleEmailAddress(recipient.email)) {
+    return skipAsSampleRecipient(row, database);
   }
 
   let delivered: Awaited<ReturnType<typeof sendWorkspaceEmail>> = false;

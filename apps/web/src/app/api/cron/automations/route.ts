@@ -73,7 +73,7 @@ export async function POST(request: NextRequest) {
     await run.finish("succeeded", counters);
     return NextResponse.json({ ok: true, ...counters });
   } catch (error) {
-    await run.finish("failed");
+    await run.finish("failed", {}, error);
     throw error;
   } finally {
     await auth.release();

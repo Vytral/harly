@@ -480,6 +480,7 @@ export async function sendWorkflowTelegramMessage(
     chatId: config.chatId,
     text: telegramText(event, data),
     signal: options.signal,
+    workspaceId,
   });
   return { provider: "telegram" };
 }
@@ -528,6 +529,7 @@ export async function notifyTelegramEvent(
       botToken: config.botToken,
       chatId: config.chatId,
       text: telegramText(event, data),
+      workspaceId,
     });
   } catch (error) {
     console.error("[notify] telegram notify failed", {

@@ -38,6 +38,15 @@ vi.mock("./config", () => ({
   getZoomCredentials: mocks.getZoomCredentials,
 }));
 
+// The lock itself is covered by oauth.refresh-lock.integration.test.ts.
+vi.mock("@/server/provider-refresh-lock", () => ({
+  withProviderRefreshLock: async (
+    _workspaceId: string,
+    _provider: string,
+    critical: (tx: unknown) => Promise<unknown>,
+  ) => critical({ select: mocks.select, update: mocks.update }),
+}));
+
 vi.mock("@/features/integrations/health/repository", () => ({
   recordIntegrationSuccess: mocks.recordSuccess,
   recordIntegrationFailure: mocks.recordFailure,
@@ -48,9 +57,14 @@ vi.stubGlobal("fetch", mocks.fetch);
 import { refreshZoomAccessToken } from "./oauth";
 
 function storedRefreshToken(value: string | null) {
-  const row = value
-    ? { ciphertext: `enc:${value}`, iv: "iv", tag: "tag" }
-    : { ciphertext: null, iv: null, tag: null };
+  const row = {
+    accessCiphertext: null,
+    accessIv: null,
+    accessTag: null,
+    refreshCiphertext: value ? `enc:${value}` : null,
+    refreshIv: value ? "iv" : null,
+    refreshTag: value ? "tag" : null,
+  };
   mocks.select.mockReturnValue({
     from: () => ({ where: () => ({ limit: async () => [row] }) }),
   });

@@ -31,6 +31,9 @@ export async function scheduleAutoDuplicateCheck(
 
     const aiConfig = await getWorkspaceAiConfig(workspaceId);
     if (!aiConfig) return;
+    // Duplicate detection compares names and emails, which anonymization removes
+    // by design. Skip quietly instead of failing on every application.
+    if (aiConfig.resumeAnonymization) return;
 
     const matches = await detectCandidateDuplicatesForWorkspace({
       workspaceId,

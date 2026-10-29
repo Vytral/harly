@@ -136,6 +136,7 @@ export function TopBar({
             role={role}
             workspace={workspace}
             workspaceOptions={workspaceOptions}
+            demoMode={demoMode}
           />
           <IconButton
             id={COMMAND_MENU_TRIGGER_ID}

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyChecklistAction,
   buildSetupChecklist,
+  CHECKLIST_DEFINITIONS,
   CHECKLIST_ITEM_KEYS,
   type ChecklistFacts,
   type ChecklistPreferences,
@@ -205,5 +206,12 @@ describe("applyChecklistAction", () => {
   it("rejects skipping a required or unknown step", () => {
     expect(applyChecklistAction(NONE, { type: "skip", key: "create_job" }).ok).toBe(false);
     expect(applyChecklistAction(NONE, { type: "skip", key: "nope" }).ok).toBe(false);
+  });
+});
+
+describe("automation checklist step", () => {
+  it("links to the recipes picker so the step lands on the recipes, not the empty list", () => {
+    const step = CHECKLIST_DEFINITIONS.find((item) => item.key === "automate_workflow");
+    expect(step?.href).toBe("/dashboard/automations?recipes=1");
   });
 });

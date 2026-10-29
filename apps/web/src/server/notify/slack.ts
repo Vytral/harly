@@ -16,6 +16,7 @@ import {
 
 import { isDemoMode } from "@harly/config";
 
+import { recordIntegrationFailure, recordIntegrationSuccess } from "@/features/integrations/health/repository";
 import { getWorkspaceSlackConfig } from "@/lib/slack/config";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { createLogger } from "@/lib/logger";
@@ -231,6 +232,9 @@ export async function deliverSlack(
   const responseStatus: number | null = null;
   let slackError: string | null = null;
   let failure: unknown = null;
+  // Set only once Slack itself was called, so local skips never count as a
+  // failing connection.
+  let providerCalled = false;
 
   try {
     const config = await getWorkspaceSlackConfig(delivery.workspaceId, database);
@@ -262,6 +266,7 @@ export async function deliverSlack(
       } else {
         const message = { text: payload.text, blocks: payload.blocks };
         const client = new WebClient(config.botToken);
+        providerCalled = true;
         await client.chat.postMessage({
           channel: delivery.channelId,
           ...message,
@@ -273,6 +278,9 @@ export async function deliverSlack(
     failure = error;
     slackError = errorMessage(error);
     status = classify(error);
+    if (providerCalled) {
+      await recordIntegrationFailure(delivery.workspaceId, "slack", error);
+    }
     if (status === "dead_letter" && AUTH_ERRORS.has(slackErrorCode(error) ?? "")) {
       await markSlackRevoked(delivery.workspaceId, database).catch((revokeError) =>
         log.error({ workspaceId: delivery.workspaceId, error: revokeError }, "failed to mark Slack revoked"),
@@ -281,6 +289,9 @@ export async function deliverSlack(
   }
 
   if (status === "failed" && attempt >= MAX_ATTEMPTS) status = "dead_letter";
+  if (status === "success" && providerCalled) {
+    await recordIntegrationSuccess(delivery.workspaceId, "slack");
+  }
   await database.insert(slackDeliveryAttempts).values({
     workspaceId: delivery.workspaceId,
     deliveryId: delivery.id,

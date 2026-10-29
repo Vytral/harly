@@ -6,6 +6,8 @@ import { AlertTriangle } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { rescheduleInterview } from "@/features/interviews/actions";
+import { unshownEmailWarning } from "@/lib/email/delivery-warning";
+
 import { checkAvailability } from "@/lib/gcal/availability";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -97,6 +99,8 @@ export function RescheduleDrawer({
         return;
       }
       if (result.warning) toast.warning(result.warning);
+      const emailNote = unshownEmailWarning(result);
+      if (emailNote) toast.warning(emailNote);
       toast.success("Interview rescheduled");
       setOpen(false);
       router.refresh();

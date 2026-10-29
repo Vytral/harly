@@ -4,6 +4,8 @@ import { encryptSecret } from "@/lib/crypto";
 import { db, workspaceSettings } from "@harly/db";
 import { eq } from "drizzle-orm";
 
+import { sealOutlookAccessToken } from "./token-envelope";
+
 const GRAPH_API = "https://graph.microsoft.com/v1.0";
 
 type OutlookCalendar = {
@@ -54,34 +56,42 @@ export async function outlookFetch<T>(
   return res.json() as Promise<T>;
 }
 
+const OUTLOOK_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token";
+/** Short on purpose: refreshes run inside a DB transaction holding the refresh lock. */
+const OUTLOOK_REFRESH_TIMEOUT_MS = 10_000;
+
+export type OutlookTokenPair = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: Date | null;
+};
+
 /**
- * Exchange the refresh token for a new access token. Microsoft may rotate the
- * refresh token, so the new pair is persisted encrypted and returned.
+ * One refresh-token exchange with Microsoft. Persists nothing: the caller must
+ * store the rotated pair while it holds the refresh lock.
  */
-export async function refreshOutlookToken(opts: {
-  workspaceId: string;
+export async function requestOutlookRefresh(opts: {
   clientId: string;
   clientSecret: string;
   refreshToken: string;
-}): Promise<{ accessToken: string; refreshToken: string }> {
-  const res = await fetch(
-    "https://login.microsoftonline.com/common/oauth2/v2.0/token",
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        client_id: opts.clientId,
-        client_secret: opts.clientSecret,
-        refresh_token: opts.refreshToken,
-        grant_type: "refresh_token",
-        scope: "Cal.ReadWrite Mail.Send offline_access User.Read OnlineMeetings.ReadWrite",
-      }),
-    },
-  );
+}): Promise<OutlookTokenPair> {
+  const res = await fetch(OUTLOOK_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: opts.clientId,
+      client_secret: opts.clientSecret,
+      refresh_token: opts.refreshToken,
+      grant_type: "refresh_token",
+      scope: "Cal.ReadWrite Mail.Send offline_access User.Read OnlineMeetings.ReadWrite",
+    }),
+    signal: AbortSignal.timeout(OUTLOOK_REFRESH_TIMEOUT_MS),
+  });
 
   const data = (await res.json()) as {
     access_token?: string;
     refresh_token?: string;
+    expires_in?: number;
     error?: string;
     error_description?: string;
   };
@@ -92,12 +102,25 @@ export async function refreshOutlookToken(opts: {
     );
   }
 
-  // Update stored tokens (refresh token may rotate)
-  const newRefreshToken = data.refresh_token ?? opts.refreshToken;
-  const encryptedAccess = encryptSecret(data.access_token);
-  const encryptedRefresh = encryptSecret(newRefreshToken);
+  const expiresInMs = typeof data.expires_in === "number" ? data.expires_in * 1000 : null;
+  return {
+    accessToken: data.access_token,
+    // Microsoft may rotate the refresh token; keep the old one when it does not.
+    refreshToken: data.refresh_token ?? opts.refreshToken,
+    expiresAt: expiresInMs ? new Date(Date.now() + expiresInMs) : null,
+  };
+}
 
-  await db
+/** Store a token pair encrypted. Pass a transaction to write under a held lock. */
+export async function persistOutlookTokens(
+  workspaceId: string,
+  tokens: OutlookTokenPair,
+  executor: Pick<typeof db, "update"> = db,
+): Promise<void> {
+  const encryptedAccess = encryptSecret(sealOutlookAccessToken(tokens.accessToken, tokens.expiresAt));
+  const encryptedRefresh = encryptSecret(tokens.refreshToken);
+
+  await executor
     .update(workspaceSettings)
     .set({
       outlookAccessTokenCiphertext: encryptedAccess.ciphertext,
@@ -108,9 +131,7 @@ export async function refreshOutlookToken(opts: {
       outlookRefreshTokenTag: encryptedRefresh.tag,
       updatedAt: new Date(),
     })
-    .where(eq(workspaceSettings.organizationId, opts.workspaceId));
-
-  return { accessToken: data.access_token, refreshToken: newRefreshToken };
+    .where(eq(workspaceSettings.organizationId, workspaceId));
 }
 
 /** Get the authenticated user's profile. */

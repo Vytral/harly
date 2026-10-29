@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
     if (!owner) {
       log.error({ email }, "demo-reset: demo login user not found");
-      await run.finish("failed", { reason: "owner_not_found" });
+      await run.finish("failed", { reason: "owner_not_found" }, "Demo login user not found.");
       return NextResponse.json({ error: "Demo owner not found." }, { status: 503 });
     }
 
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       .limit(1);
     if (!membership) {
       log.error({ email }, "demo-reset: demo workspace not found");
-      await run.finish("failed", { reason: "workspace_not_found" });
+      await run.finish("failed", { reason: "workspace_not_found" }, "Demo workspace not found for the demo owner.");
       return NextResponse.json({ error: "Demo workspace not found." }, { status: 503 });
     }
 
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
         { email, pinned, actual: membership.organizationId },
         "demo-reset: workspace id does not match DEMO_WORKSPACE_ID",
       );
-      await run.finish("failed", { reason: "workspace_pin_mismatch" });
+      await run.finish("failed", { reason: "workspace_pin_mismatch" }, "Demo workspace does not match DEMO_WORKSPACE_ID.");
       return NextResponse.json({ error: "Demo workspace pin mismatch." }, { status: 503 });
     }
 
@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, ...counters });
   } catch (error) {
     log.error(error, "demo-reset: reseed failed");
-    await run.finish("failed", { durationMs: Date.now() - startedAt });
+    await run.finish("failed", { durationMs: Date.now() - startedAt }, error);
     throw error;
   } finally {
     await auth.release();

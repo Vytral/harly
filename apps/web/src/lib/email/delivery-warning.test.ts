@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { emailDeliveryWarning } from "./delivery-warning";
+import { unshownEmailWarning, emailDeliveryWarning } from "./delivery-warning";
 
 describe("emailDeliveryWarning", () => {
   it("promises an automatic retry only when the outbox still holds the row", () => {
@@ -31,5 +31,27 @@ describe("emailDeliveryWarning", () => {
     expect(emailDeliveryWarning("candidate email", [{ status: "sent" }])).toBeUndefined();
     expect(emailDeliveryWarning("candidate email", [{ status: "cancelled" }])).toBeUndefined();
     expect(emailDeliveryWarning("candidate email", [])).toBeUndefined();
+  });
+});
+
+describe("unshownEmailWarning", () => {
+  it("returns the email warning when the action did not already report it", () => {
+    expect(unshownEmailWarning({ emailWarning: "The invitation could not be sent right now." })).toBe(
+      "The invitation could not be sent right now.",
+    );
+  });
+
+  it("does not repeat copy that scheduling already folded into warning", () => {
+    const emailWarning = "The invitation could not be sent right now.";
+    expect(
+      unshownEmailWarning({
+        warning: `The interview was scheduled. ${emailWarning}`,
+        emailWarning,
+      }),
+    ).toBeUndefined();
+  });
+
+  it("is silent when there is no email warning", () => {
+    expect(unshownEmailWarning({ warning: "Calendar conflict." })).toBeUndefined();
   });
 });

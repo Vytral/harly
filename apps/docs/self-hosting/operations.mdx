@@ -175,6 +175,35 @@ pnpm dev:web
 
 It lives at `tooling/docker/compose.dev.yml`. Development needs Node 22+, pnpm, Docker, about 4 GB of available RAM, and 10 GB of free disk for a comfortable full-monorepo workflow. Turbopack's persistent filesystem cache is disabled to prevent multi-gigabyte `.next` growth. `pnpm clean` removes generated workspace caches without touching PostgreSQL volumes.
 
+### Seeding the demo workspace
+
+`pnpm db:seed:demo` replaces every workspace-scoped row of the target workspace
+with synthetic demo data. The CLI refuses to run until you name that workspace
+in the confirmation, so an accidental run cannot wipe real hiring data:
+
+```bash
+SEED_CONFIRM_WIPE=<workspace-slug> pnpm db:seed:demo
+```
+
+`--confirm-wipe=<workspace-slug>` works too. The slug must match exactly. A
+workspace with more real-looking records than the guard allows must also be
+pinned with `DEMO_WORKSPACE_ID`. Never run this against a production database
+that holds real candidates.
+
+## Database extensions
+
+### Workspace search and the `pg_trgm` extension
+
+Workspace search uses trigram indexes when PostgreSQL has the `pg_trgm`
+extension. The migration that creates them tries to install the extension and
+never fails the upgrade if it cannot: managed PostgreSQL plans sometimes refuse
+`CREATE EXTENSION`. Without the extension search still works, but name, email
+and title lookups scan the tables.
+
+Install `pg_trgm` before you upgrade, with a role that may create extensions, or
+ask your provider to enable it. The migration only runs once, so if the
+extension is added later the trigram indexes are not created retroactively.
+
 ## Troubleshooting
 
 ### Scheduler doctor reports a stale job

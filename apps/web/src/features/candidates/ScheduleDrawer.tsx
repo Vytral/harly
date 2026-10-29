@@ -6,6 +6,8 @@ import { AlertTriangle, Link2, MapPin, Phone, Video } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { scheduleInterview } from "@/features/interviews/actions";
+import { unshownEmailWarning } from "@/lib/email/delivery-warning";
+
 import { checkAvailability } from "@/lib/gcal/availability";
 import { buildCalBookingLink } from "@/lib/cal/link";
 import { Button } from "@/components/ui/button";
@@ -210,6 +212,8 @@ export function ScheduleDrawer({
         return;
       }
       if (result.warning) toast.warning(result.warning);
+      const emailNote = unshownEmailWarning(result);
+      if (emailNote) toast.warning(emailNote);
       toast.success("Interview scheduled");
       setOpen(false);
       reset();

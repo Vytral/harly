@@ -2,7 +2,6 @@
 
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, isNull, ne, sql } from "drizzle-orm";
-import { Output, generateText } from "ai";
 import { z } from "zod";
 
 import { db } from "@harly/db";
@@ -61,13 +60,9 @@ import {
   requireInterviewPermission,
 } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
-import { getModel } from "@/lib/ai/registry";
+import { generateInterviewBriefWithAI } from "@/lib/ai/surfaces/generate-interview-brief";
 import { summarizeInterviewNotesWithAI } from "@/lib/ai/surfaces/summarize-interview-notes";
-import {
-  interviewBriefSchema,
-  type InterviewBrief,
-  type InterviewNotesSummary,
-} from "@/lib/ai/schemas";
+import type { InterviewBrief, InterviewNotesSummary } from "@/lib/ai/schemas";
 import { createLogger } from "@/lib/logger";
 import { deriveMeetLink, parseScheduledAt } from "@/features/interviews/shared";
 import { extractResumeText } from "@/lib/resume/extract-text";
@@ -2314,68 +2309,41 @@ export async function generateInterviewBriefAction(input: {
       .trim();
   }
 
-  const candidateBlock = [
-    `Name: ${briefRow.candidateFirst} ${briefRow.candidateLast}`,
-    briefRow.candidateHeadline
-      ? `Headline: ${briefRow.candidateHeadline}`
-      : null,
-    briefRow.candidateLocation
-      ? `Location: ${briefRow.candidateLocation}`
-      : null,
-    briefRow.candidateExperienceYears != null
-      ? `Experience: ${briefRow.candidateExperienceYears} years`
-      : null,
-    Array.isArray(briefRow.candidateSkills) &&
-    (briefRow.candidateSkills as string[]).length > 0
-      ? `Skills: ${(briefRow.candidateSkills as string[]).slice(0, 20).join(", ")}`
-      : null,
-    resumeText
-      ? `Resume:\n"""\n${resumeText.slice(0, 8000)}\n"""`
-      : "Resume: not available",
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const jobBlock = [
-    `Title: ${briefRow.jobTitle}`,
-    `Description: ${stripHtml(briefRow.jobDescription).slice(0, 3000)}`,
-    briefRow.jobRequirements
-      ? `Requirements: ${stripHtml(briefRow.jobRequirements).slice(0, 1500)}`
-      : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  const interviewBlock = [
-    `Interview type: ${INTERVIEW_TYPE_LABEL[briefRow.type] ?? briefRow.type}`,
-    `Duration: ${briefRow.durationMins} min`,
-    briefRow.notes ? `Interviewer notes: ${briefRow.notes}` : null,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
   try {
-    const { output: briefOutput } = await generateText({
-      model: getModel(aiConfig),
-      system:
-        "You are an expert recruiter coach. Generate a focused pre-interview brief for " +
-        "the interviewer. Be specific and practical. `candidateSummary` is 2-4 sentences. " +
-        "`keyAreasToProbe` is 3-6 concise themes. `suggestedQuestions` is 4-8 concrete, " +
-        "open-ended questions. `redFlags` lists concerns worth watching, leave empty when " +
-        "there are none. Use plain text only, no markdown.",
-      prompt:
-        `Prepare an interview brief.\n\n## Candidate\n${candidateBlock}\n\n` +
-        `## Job\n${jobBlock}\n\n## Interview\n${interviewBlock}`,
-      output: Output.object({ schema: interviewBriefSchema }),
+    // The AI surface owns the prompt, so candidate identity follows the
+    // workspace anonymization setting exactly as it does everywhere else.
+    const brief = await generateInterviewBriefWithAI(aiConfig, {
+      candidate: {
+        fullName: `${briefRow.candidateFirst} ${briefRow.candidateLast}`.trim(),
+        headline: briefRow.candidateHeadline,
+        location: briefRow.candidateLocation,
+        skills: Array.isArray(briefRow.candidateSkills)
+          ? (briefRow.candidateSkills as string[])
+          : [],
+        experienceYears: briefRow.candidateExperienceYears,
+        resumeText,
+      },
+      job: {
+        title: briefRow.jobTitle,
+        description: stripHtml(briefRow.jobDescription),
+        requirements: briefRow.jobRequirements
+          ? stripHtml(briefRow.jobRequirements)
+          : null,
+        keywords: [],
+      },
+      interview: {
+        type: INTERVIEW_TYPE_LABEL[briefRow.type] ?? briefRow.type,
+        scheduledAt: briefRow.scheduledAt,
+        interviewerName: null,
+        durationMins: briefRow.durationMins,
+        notes: briefRow.notes,
+      },
+      existingScore: null,
     });
-
-    if (!briefOutput) {
-      return { success: false, error: "AI returned no structured output." };
-    }
 
     await db
       .update(interviews)
-      .set({ briefContent: briefOutput, updatedAt: new Date() })
+      .set({ briefContent: brief, updatedAt: new Date() })
       .where(
         and(
           eq(interviews.id, parsed.data.interviewId),
@@ -2384,7 +2352,7 @@ export async function generateInterviewBriefAction(input: {
       );
 
     revalidatePath(`/dashboard/candidates/${briefRow.candidateId}`);
-    return { success: true, brief: briefOutput };
+    return { success: true, brief };
   } catch (briefError) {
     log.error(briefError, "generateInterviewBriefAction failed");
     return {

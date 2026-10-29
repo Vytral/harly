@@ -15,7 +15,17 @@ import { decryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 import { isWebhookEvent, type WebhookEvent } from "@/server/webhooks/events";
 
-import { refreshOutlookToken } from "./client";
+import { withProviderRefreshLock } from "@/server/provider-refresh-lock";
+
+import {
+  persistOutlookTokens,
+  requestOutlookRefresh,
+  type OutlookTokenPair,
+} from "./client";
+import {
+  openOutlookAccessToken,
+  outlookTokenNeedsRefresh,
+} from "./token-envelope";
 
 const log = createLogger("outlook-config");
 
@@ -132,14 +142,6 @@ export async function getWorkspaceOutlookCredentials(
   return null;
 }
 
-type OutlookTokenPair = { accessToken: string; refreshToken: string };
-
-/**
- * Concurrent callers share one refresh per workspace, so a burst of
- * notifications does not rotate the refresh token several times at once.
- */
-const inflightOutlookRefreshes = new Map<string, Promise<OutlookTokenPair | null>>();
-
 /**
  * Clear a dead Outlook connection exactly like the manual settings actions do
  * (disable, drop both tokens) and record the reason for the UI.
@@ -186,14 +188,14 @@ export async function recordOutlookCallFailure(
 }
 
 /**
- * Microsoft access tokens last about an hour and the stored one is never
- * refreshed on its own, so every config read exchanges the refresh token.
- * Returns null when Microsoft revoked the grant (the connection is cleared and
- * flagged). A transient failure falls back to the stored access token.
+ * Concurrent callers in this process share one refresh per workspace. Other
+ * processes are covered by the advisory lock in `refreshUnderLock`.
  */
+const inflightOutlookRefreshes = new Map<string, Promise<OutlookTokenPair | null>>();
+
 async function freshOutlookTokens(
   workspaceId: string,
-  stored: OutlookTokenPair,
+  stored: StoredOutlookTokens,
 ): Promise<OutlookTokenPair | null> {
   const inflight = inflightOutlookRefreshes.get(workspaceId);
   if (inflight) return inflight;
@@ -204,39 +206,73 @@ async function freshOutlookTokens(
   return refresh;
 }
 
-async function refreshStoredOutlookTokens(
-  workspaceId: string,
-  stored: OutlookTokenPair,
-): Promise<OutlookTokenPair | null> {
-  const credentials = await getWorkspaceOutlookCredentials(workspaceId);
-  if (!credentials) return stored;
+type StoredOutlookTokens = {
+  accessToken: string;
+  accessExpiresAt: Date | null;
+  refreshToken: string;
+  calendarId: string | null;
+  events: WebhookEvent[];
+};
 
-  try {
-    const fresh = await refreshOutlookToken({
-      workspaceId,
+/**
+ * Refresh under the cross-process lock. Microsoft rotates the refresh token on
+ * every use, so the token is re-read after the lock is taken: if another
+ * process already refreshed while this one waited, its result is used and no
+ * second exchange is made.
+ */
+async function refreshUnderLock(
+  workspaceId: string,
+  credentials: OutlookCredentials,
+): Promise<{ kind: "disconnected" } | { kind: "current"; tokens: OutlookTokenPair } | { kind: "refreshed"; tokens: OutlookTokenPair }> {
+  return withProviderRefreshLock(workspaceId, "outlook", async (tx) => {
+    const current = await readStoredOutlookTokens(workspaceId, tx);
+    if (!current) return { kind: "disconnected" as const };
+    if (!outlookTokenNeedsRefresh(current.accessExpiresAt)) {
+      return { kind: "current" as const, tokens: toPair(current) };
+    }
+    const tokens = await requestOutlookRefresh({
       clientId: credentials.clientId,
       clientSecret: credentials.clientSecret,
-      refreshToken: stored.refreshToken,
+      refreshToken: current.refreshToken,
     });
+    await persistOutlookTokens(workspaceId, tokens, tx);
+    return { kind: "refreshed" as const, tokens };
+  });
+}
+
+function toPair(tokens: StoredOutlookTokens): OutlookTokenPair {
+  return {
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    expiresAt: tokens.accessExpiresAt,
+  };
+}
+
+async function refreshStoredOutlookTokens(
+  workspaceId: string,
+  stored: StoredOutlookTokens,
+): Promise<OutlookTokenPair | null> {
+  const credentials = await getWorkspaceOutlookCredentials(workspaceId);
+  if (!credentials) return toPair(stored);
+
+  try {
+    const outcome = await refreshUnderLock(workspaceId, credentials);
+    if (outcome.kind === "disconnected") return null;
     await recordIntegrationSuccess(workspaceId, "outlook");
-    return fresh;
+    return outcome.tokens;
   } catch (error) {
     log.error({ err: error }, "Outlook token refresh failed");
     const revoked = await recordOutlookCallFailure(workspaceId, error);
-    return revoked ? null : stored;
+    return revoked ? null : toPair(stored);
   }
 }
 
-/**
- * Resolve a usable Outlook config (fresh access token + decrypted refresh
- * token) for a workspace, or null when disabled, unconfigured or revoked.
- */
-export async function getWorkspaceOutlookConfig(
+/** Read and decrypt the stored Outlook pair. Null when disabled, incomplete or unreadable. */
+async function readStoredOutlookTokens(
   workspaceId: string,
-): Promise<OutlookConfig | null> {
-  if (!isEncryptionConfigured()) return null;
-
-  const [row] = await db
+  executor: Pick<typeof db, "select">,
+): Promise<StoredOutlookTokens | null> {
+  const [row] = await executor
     .select({
       outlookEnabled: workspaceSettings.outlookEnabled,
       outlookAccessTokenCiphertext: workspaceSettings.outlookAccessTokenCiphertext,
@@ -265,31 +301,53 @@ export async function getWorkspaceOutlookConfig(
     return null;
   }
 
-  let stored: OutlookTokenPair;
   try {
-    stored = {
-      accessToken: decryptSecret({
+    const access = openOutlookAccessToken(
+      decryptSecret({
         ciphertext: row.outlookAccessTokenCiphertext,
         iv: row.outlookAccessTokenIv,
         tag: row.outlookAccessTokenTag,
       }),
+    );
+    return {
+      accessToken: access.accessToken,
+      accessExpiresAt: access.expiresAt,
       refreshToken: decryptSecret({
         ciphertext: row.outlookRefreshTokenCiphertext,
         iv: row.outlookRefreshTokenIv,
         tag: row.outlookRefreshTokenTag,
       }),
+      calendarId: row.outlookCalendarId,
+      events: toEvents(row.outlookEvents),
     };
   } catch {
     return null;
   }
+}
 
-  const fresh = await freshOutlookTokens(workspaceId, stored);
+/**
+ * Resolve a usable Outlook config (fresh access token + decrypted refresh
+ * token) for a workspace, or null when disabled, unconfigured or revoked.
+ * Refreshes only when the stored access token is near expiry or its expiry is
+ * unknown; a valid token is used as stored, with no network call.
+ */
+export async function getWorkspaceOutlookConfig(
+  workspaceId: string,
+): Promise<OutlookConfig | null> {
+  if (!isEncryptionConfigured()) return null;
+
+  const stored = await readStoredOutlookTokens(workspaceId, db);
+  if (!stored) return null;
+
+  const fresh = outlookTokenNeedsRefresh(stored.accessExpiresAt)
+    ? await freshOutlookTokens(workspaceId, stored)
+    : toPair(stored);
   if (!fresh) return null;
 
   return {
     accessToken: fresh.accessToken,
     refreshToken: fresh.refreshToken,
-    calendarId: row.outlookCalendarId,
-    events: toEvents(row.outlookEvents),
+    calendarId: stored.calendarId,
+    events: stored.events,
   };
 }

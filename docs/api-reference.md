@@ -33,7 +33,20 @@ Response conventions:
 | POST | `/jobs/{id}/publish` | `jobs:write` |
 | POST | `/jobs/{id}/close` | `jobs:write` |
 | GET | `/jobs/{id}/stages` | `stages:read` |
+| POST | `/jobs/{id}/stages` | `stages:write` |
 | PATCH | `/jobs/{id}/stages/{stageId}` | `stages:write` |
+| POST | `/jobs/{id}/stages/reorder` | `stages:write` |
+| POST | `/jobs/{id}/stages/{stageId}/archive` | `stages:write` |
+| DELETE | `/jobs/{id}/stages/{stageId}` | `stages:write` |
+
+Stage lifecycle:
+
+- Listing omits archived stages unless `includeArchived=true`.
+- A new stage without `position` is inserted before the first hired, rejected or withdrawn stage. Several stages may share a kind.
+- Changing the kind of a stage is refused when it would move applications between outcomes (for example active to hired). Archive the stage instead, which merges its applications into a stage of the same outcome.
+- Archiving keeps the stage's history. Applications in it move to `mergeIntoStageId`.
+- Deleting is permanent and is refused for any stage that has held an application or appears in history, a scorecard, a document requirement or an automation. Archive those instead.
+- Reorder takes every active stage exactly once in `stageIds`.
 
 ## Candidates
 

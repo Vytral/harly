@@ -155,6 +155,7 @@ export async function replaceInterviewToTeams(opts: {
 
   try {
     await deleteTeamsMeeting(config.accessToken, opts.previousMeetingId);
+    await recordIntegrationSuccess(opts.workspaceId, "outlook");
     return {
       ok: true,
       joinUrl: replacement.joinUrl,
@@ -162,6 +163,7 @@ export async function replaceInterviewToTeams(opts: {
     };
   } catch (error) {
     log.error(error, "[teams-sync] Failed to delete previous meeting");
+    await recordOutlookCallFailure(opts.workspaceId, error);
     try {
       const restored = await db
         .update(interviews)

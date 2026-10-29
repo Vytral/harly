@@ -15,7 +15,9 @@ import {
 import { decryptSecret, encryptSecret, isEncryptionConfigured } from "@/lib/crypto";
 import { createLogger } from "@/lib/logger";
 
-import { getZoomCredentials } from "./config";
+import { withProviderRefreshLock } from "@/server/provider-refresh-lock";
+
+import { getZoomCredentials, type ZoomCredentials } from "./config";
 
 const log = createLogger("zoom-oauth");
 
@@ -59,23 +61,67 @@ export function refreshZoomAccessToken(workspaceId: string): Promise<ZoomRefresh
   return refresh;
 }
 
+type StoredZoomTokens = { accessToken: string | null; refreshToken: string | null };
+
+type ExchangeOutcome =
+  | { ok: true; accessToken: string; refreshToken: string }
+  | { ok: false; error: unknown };
+
 async function performZoomRefresh(workspaceId: string): Promise<ZoomRefreshResult> {
   const credentials = await getZoomCredentials(workspaceId);
   if (!credentials) {
     return { ok: false, reason: "no_credentials", error: "Zoom credentials are not configured." };
   }
 
-  const refreshToken = await readStoredRefreshToken(workspaceId);
-  if (!refreshToken) {
+  // The pair read before waiting for the lock. If the stored refresh token
+  // changes while this process waits, another process already rotated it.
+  const observed = await readStoredZoomTokens(workspaceId, db);
+  if (!observed.refreshToken) {
     const error = "Zoom refresh token is missing. Reconnect Zoom.";
     await recordIntegrationFailure(workspaceId, "zoom", error, { kind: "auth" });
     return { ok: false, reason: "no_refresh_token", error };
   }
 
-  let response: Response;
-  let body: ZoomTokenResponse | null;
+  const outcome = await withProviderRefreshLock(workspaceId, "zoom", async (tx) => {
+    const current = await readStoredZoomTokens(workspaceId, tx);
+    if (!current.refreshToken) {
+      return { kind: "missing" as const };
+    }
+    if (current.refreshToken !== observed.refreshToken && current.accessToken) {
+      return { kind: "rotated_elsewhere" as const, accessToken: current.accessToken };
+    }
+    const exchanged = await exchangeZoomRefreshToken(credentials, current.refreshToken);
+    if (!exchanged.ok) return { kind: "exchange_failed" as const, error: exchanged.error };
+    try {
+      await persistZoomTokens(workspaceId, exchanged.accessToken, exchanged.refreshToken, tx);
+    } catch (error) {
+      // The rotated pair is already issued; without persisting it the
+      // connection cannot refresh again, so surface it as a failure.
+      log.error({ err: error }, "Failed to persist rotated Zoom tokens");
+      return { kind: "exchange_failed" as const, error };
+    }
+    return { kind: "rotated" as const, accessToken: exchanged.accessToken };
+  });
+
+  if (outcome.kind === "missing") {
+    const error = "Zoom refresh token is missing. Reconnect Zoom.";
+    await recordIntegrationFailure(workspaceId, "zoom", error, { kind: "auth" });
+    return { ok: false, reason: "no_refresh_token", error };
+  }
+  if (outcome.kind === "exchange_failed") {
+    return failRefresh(workspaceId, outcome.error);
+  }
+  await recordIntegrationSuccess(workspaceId, "zoom");
+  return { ok: true, accessToken: outcome.accessToken };
+}
+
+/** One network exchange of a refresh token. Never persists anything. */
+async function exchangeZoomRefreshToken(
+  credentials: ZoomCredentials,
+  refreshToken: string,
+): Promise<ExchangeOutcome> {
   try {
-    response = await fetch(ZOOM_TOKEN_URL, {
+    const response = await fetch(ZOOM_TOKEN_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -87,34 +133,25 @@ async function performZoomRefresh(workspaceId: string): Promise<ZoomRefreshResul
       }),
       signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
     });
-    body = (await response.json().catch(() => null)) as ZoomTokenResponse | null;
+    const body = (await response.json().catch(() => null)) as ZoomTokenResponse | null;
+    if (!response.ok || !body?.access_token) {
+      const detail = body?.error ?? body?.reason ?? "unknown";
+      return {
+        ok: false,
+        error: Object.assign(
+          new Error(`Zoom token refresh failed (${response.status}): ${detail}`),
+          { status: response.status },
+        ),
+      };
+    }
+    return {
+      ok: true,
+      accessToken: body.access_token,
+      refreshToken: body.refresh_token ?? refreshToken,
+    };
   } catch (error) {
-    return failRefresh(workspaceId, error);
+    return { ok: false, error };
   }
-
-  if (!response.ok || !body?.access_token) {
-    const detail = body?.error ?? body?.reason ?? "unknown";
-    return failRefresh(
-      workspaceId,
-      Object.assign(
-        new Error(`Zoom token refresh failed (${response.status}): ${detail}`),
-        { status: response.status },
-      ),
-    );
-  }
-
-  const nextRefreshToken = body.refresh_token ?? refreshToken;
-  try {
-    await persistZoomTokens(workspaceId, body.access_token, nextRefreshToken);
-  } catch (error) {
-    // The rotated pair is already issued; without persisting it the
-    // connection cannot refresh again, so surface it as a failure.
-    log.error({ err: error }, "Failed to persist rotated Zoom tokens");
-    return failRefresh(workspaceId, error);
-  }
-
-  await recordIntegrationSuccess(workspaceId, "zoom");
-  return { ok: true, accessToken: body.access_token };
 }
 
 async function failRefresh(workspaceId: string, error: unknown): Promise<ZoomRefreshResult> {
@@ -128,20 +165,37 @@ async function failRefresh(workspaceId: string, error: unknown): Promise<ZoomRef
   };
 }
 
-async function readStoredRefreshToken(workspaceId: string): Promise<string | null> {
-  if (!isEncryptionConfigured()) return null;
-  const [row] = await db
+async function readStoredZoomTokens(
+  workspaceId: string,
+  executor: Pick<typeof db, "select">,
+): Promise<StoredZoomTokens> {
+  if (!isEncryptionConfigured()) return { accessToken: null, refreshToken: null };
+  const [row] = await executor
     .select({
-      ciphertext: workspaceSettings.zoomRefreshTokenCiphertext,
-      iv: workspaceSettings.zoomRefreshTokenIv,
-      tag: workspaceSettings.zoomRefreshTokenTag,
+      accessCiphertext: workspaceSettings.zoomTokenCiphertext,
+      accessIv: workspaceSettings.zoomTokenIv,
+      accessTag: workspaceSettings.zoomTokenTag,
+      refreshCiphertext: workspaceSettings.zoomRefreshTokenCiphertext,
+      refreshIv: workspaceSettings.zoomRefreshTokenIv,
+      refreshTag: workspaceSettings.zoomRefreshTokenTag,
     })
     .from(workspaceSettings)
     .where(eq(workspaceSettings.organizationId, workspaceId))
     .limit(1);
-  if (!row?.ciphertext || !row.iv || !row.tag) return null;
+  return {
+    accessToken: openSecret(row?.accessCiphertext, row?.accessIv, row?.accessTag),
+    refreshToken: openSecret(row?.refreshCiphertext, row?.refreshIv, row?.refreshTag),
+  };
+}
+
+function openSecret(
+  ciphertext: string | null | undefined,
+  iv: string | null | undefined,
+  tag: string | null | undefined,
+): string | null {
+  if (!ciphertext || !iv || !tag) return null;
   try {
-    return decryptSecret({ ciphertext: row.ciphertext, iv: row.iv, tag: row.tag });
+    return decryptSecret({ ciphertext, iv, tag });
   } catch {
     return null;
   }
@@ -151,10 +205,11 @@ async function persistZoomTokens(
   workspaceId: string,
   accessToken: string,
   refreshToken: string,
+  executor: Pick<typeof db, "update">,
 ): Promise<void> {
   const encryptedAccess = encryptSecret(accessToken);
   const encryptedRefresh = encryptSecret(refreshToken);
-  await db
+  await executor
     .update(workspaceSettings)
     .set({
       zoomTokenCiphertext: encryptedAccess.ciphertext,

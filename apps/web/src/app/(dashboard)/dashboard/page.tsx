@@ -3,6 +3,7 @@ import { isDemoMode } from "@harly/config";
 import { CandidatesNeedingReview } from "@/components/dashboard/widgets/CandidatesNeedingReview";
 import { HiringPerformance } from "@/components/dashboard/widgets/HiringPerformance";
 import { InboxCard } from "@/components/dashboard/widgets/InboxCard";
+import { IntegrationAttentionCard } from "@/components/dashboard/widgets/IntegrationAttentionCard";
 import { MyTasksCard } from "@/components/dashboard/widgets/MyTasksCard";
 import { PipelineOverviewCard } from "@/components/dashboard/widgets/PipelineOverviewCard";
 import { SetupChecklistCard } from "@/components/dashboard/widgets/SetupChecklistCard";
@@ -143,6 +144,8 @@ export default async function DashboardPage({
           <TriageStrip items={triage} />
         </div>
       ) : null}
+
+      <IntegrationAttentionCard />
 
       {/* The work itself , decisions first, and the widest column gets them. */}
       {reviewVisible || interviewsVisible ? (

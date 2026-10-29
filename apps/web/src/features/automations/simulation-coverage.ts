@@ -62,7 +62,7 @@ export type ScenarioResult = {
  *   `simulation.mode === "unsupported"`, or whose action type/version has no
  *   manifest at all — there is no simulated evidence for it whatsoever.
  * - `live_verified`: reserved for a future controlled dry-run against a real
- *   provider (see docs/harly-ai-automations-integration-audit-2026-09-16.md
+ *   provider (see docs/archive/harly-ai-automations-integration-audit-2026-09-16.md
  *   §9, "live test"). `runBranchCoverageSimulation` never calls a real
  *   provider, so no node reaches this level through it today.
  */

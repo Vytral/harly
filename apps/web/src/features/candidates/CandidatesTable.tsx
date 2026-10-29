@@ -305,9 +305,12 @@ export function CandidatesTable({
         status: next,
       });
       if (result.success) {
-        toast.success(
-          `Updated ${applicationIds.length} candidate${applicationIds.length === 1 ? "" : "s"}.`,
-        );
+        const count = `Updated ${applicationIds.length} candidate${applicationIds.length === 1 ? "" : "s"}.`;
+        if (result.emailWarning) {
+          toast.warning(`${count} ${result.emailWarning}`);
+        } else {
+          toast.success(count);
+        }
         setSelected(new Set());
         router.refresh();
       } else {
@@ -330,7 +333,11 @@ export function CandidatesTable({
         status: next,
       });
       if (result.success) {
-        toast.success(`${row.fullName} updated.`);
+        if (result.emailWarning) {
+          toast.warning(`${row.fullName} updated. ${result.emailWarning}`);
+        } else {
+          toast.success(`${row.fullName} updated.`);
+        }
         router.refresh();
       } else {
         toast.error(result.error ?? "Could not update candidate.");

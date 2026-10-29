@@ -12,6 +12,7 @@ import {
   mailUnificationMigrations,
 } from "@harly/db";
 import { getWorkspaceEmailSender } from "@/lib/email";
+import { isSampleEmailAddress } from "@/features/sample-data/constants";
 import {
   insertCanonicalMessage,
   type CanonicalAttachment,
@@ -45,6 +46,14 @@ export type SendCanonicalEmailInput = {
   sourceHint?: "provider" | "smtp";
   replyTo?: string | null;
 };
+
+/** Thrown before any reservation or provider call: sample recipients never receive mail. */
+export class SampleRecipientError extends Error {
+  constructor() {
+    super("This recipient is sample data. Sample candidates cannot receive email.");
+    this.name = "SampleRecipientError";
+  }
+}
 
 export type SendCanonicalEmailResult = {
   /** True once the provider accepted the message (even if local persistence failed). */
@@ -377,6 +386,7 @@ async function assertCandidateAndApplication(input: SendCanonicalEmailInput) {
 export async function sendCanonicalEmail(
   input: SendCanonicalEmailInput,
 ): Promise<SendCanonicalEmailResult> {
+  if (isSampleEmailAddress(input.toEmail)) throw new SampleRecipientError();
   const enabled = await isMailUnificationEnabled(input.workspaceId);
   if (!enabled)
     throw new Error(

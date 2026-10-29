@@ -150,7 +150,7 @@ describe("email_outbox worker", () => {
 
     const result = await processEmailOutbox({ workerId: WORKER });
 
-    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+    expect(result).toEqual({ processed: 1, sent: 1, failed: 0, skipped: 0 });
     expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
     const sentUpdates = mocks.updateCalls.filter((c) => c.set.status === "sent");
     expect(sentUpdates.length).toBeGreaterThan(0);
@@ -161,7 +161,7 @@ describe("email_outbox worker", () => {
 
     const result = await processEmailOutbox({ workerId: WORKER });
 
-    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+    expect(result).toEqual({ processed: 1, sent: 1, failed: 0, skipped: 0 });
     expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
   });
 
@@ -171,7 +171,7 @@ describe("email_outbox worker", () => {
 
     const result = await processEmailOutbox({ workerId: WORKER });
 
-    expect(result).toEqual({ processed: 1, sent: 0, failed: 1 });
+    expect(result).toEqual({ processed: 1, sent: 0, failed: 1, skipped: 0 });
     expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
     // No success path; the failing row must carry a retry error + attempt bump.
     const failedUpdate = mocks.updateCalls.find((c) => c.set.lastError !== undefined);
@@ -186,7 +186,7 @@ describe("email_outbox worker", () => {
 
     const result = await processEmailOutbox({ workerId: WORKER });
 
-    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+    expect(result).toEqual({ processed: 1, sent: 1, failed: 0, skipped: 0 });
     expect(mocks.insertCanonicalMessage).toHaveBeenCalledTimes(1);
     const call = mocks.insertCanonicalMessage.mock.calls[0][0] as Record<string, unknown>;
     expect(call).toMatchObject({
@@ -205,7 +205,7 @@ describe("email_outbox worker", () => {
 
     const result = await processEmailOutbox({ workerId: WORKER });
 
-    expect(result).toEqual({ processed: 1, sent: 0, failed: 1 });
+    expect(result).toEqual({ processed: 1, sent: 0, failed: 1, skipped: 0 });
     expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
   });
 
@@ -216,7 +216,7 @@ describe("email_outbox worker", () => {
 
     const result = await processEmailOutbox({ workerId: WORKER });
 
-    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+    expect(result).toEqual({ processed: 1, sent: 1, failed: 0, skipped: 0 });
     expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
     expect(mocks.insertCanonicalMessage).not.toHaveBeenCalled();
   });
@@ -243,7 +243,7 @@ describe("email_outbox duplicate-send protection", () => {
 
     const result = await processEmailOutbox({ workerId: WORKER });
 
-    expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+    expect(result).toEqual({ processed: 1, sent: 1, failed: 0, skipped: 0 });
     expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
     expect(mocks.updateCalls.some((c) => c.set.status === "sent")).toBe(true);
   });
@@ -253,7 +253,7 @@ describe("email_outbox duplicate-send protection", () => {
 
     const result = await processEmailOutbox({ workerId: WORKER });
 
-    expect(result).toEqual({ processed: 1, sent: 0, failed: 1 });
+    expect(result).toEqual({ processed: 1, sent: 0, failed: 1, skipped: 0 });
     expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
   });
 
@@ -262,7 +262,7 @@ describe("email_outbox duplicate-send protection", () => {
 
     const result = await processEmailOutbox({ workerId: WORKER });
 
-    expect(result).toEqual({ processed: 1, sent: 0, failed: 1 });
+    expect(result).toEqual({ processed: 1, sent: 0, failed: 1, skipped: 0 });
     expect(mocks.sendWorkspaceEmail).not.toHaveBeenCalled();
   });
 
@@ -303,7 +303,7 @@ describe("email_outbox duplicate-send protection", () => {
     };
     try {
       const result = await processEmailOutbox({ workerId: WORKER });
-      expect(result).toEqual({ processed: 1, sent: 1, failed: 0 });
+      expect(result).toEqual({ processed: 1, sent: 1, failed: 0, skipped: 0 });
       expect(failedOnce).toBe(true);
       expect(mocks.sendWorkspaceEmail).toHaveBeenCalledTimes(1);
     } finally {

@@ -198,6 +198,39 @@ describe("generate-interview-brief prompt", () => {
     await generateInterviewBriefWithAI(OFF, input);
     expect(sentPrompt()).toContain("Name: Ada Lovelace");
   });
+
+  const withNotes = {
+    ...input,
+    interview: {
+      ...input.interview,
+      durationMins: 45,
+      notes: "Ada Lovelace mentioned ada@example.com and asked about the Analytical Engine.",
+    },
+    existingScore: null,
+  };
+
+  it("redacts the candidate from interviewer notes when anonymization is on", async () => {
+    vi.mocked(generateText).mockResolvedValueOnce({ output: brief, usage } as never);
+    await generateInterviewBriefWithAI(ON, withNotes);
+    const prompt = sentPrompt();
+    expectNoIdentity(prompt);
+    expect(prompt).toContain("Interviewer notes:");
+    expect(prompt).toContain("Duration: 45 min");
+    expect(prompt).toContain("Analytical Engine");
+  });
+
+  it("keeps the notes verbatim when anonymization is off", async () => {
+    vi.mocked(generateText).mockResolvedValueOnce({ output: brief, usage } as never);
+    await generateInterviewBriefWithAI(OFF, withNotes);
+    expect(sentPrompt()).toContain("Interviewer notes: Ada Lovelace mentioned ada@example.com");
+  });
+
+  it("omits the score section when no score is passed", async () => {
+    vi.mocked(generateText).mockResolvedValueOnce({ output: brief, usage } as never);
+    await generateInterviewBriefWithAI(ON, withNotes);
+    expect(sentPrompt()).not.toContain("Existing AI Score");
+    expect(sentPrompt()).not.toContain("No AI score available yet.");
+  });
 });
 
 describe("parse-resume prompts", () => {

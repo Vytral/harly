@@ -7,6 +7,7 @@ import { auth } from "@/lib/auth";
 import { encryptSecret } from "@/lib/crypto";
 import { getWorkspaceSlackCredentials } from "@/lib/slack/config";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { recordIntegrationSuccess } from "@/features/integrations/health/repository";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 import { logAuditEvent } from "@/lib/audit-log";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
@@ -143,6 +144,7 @@ export async function GET(req: NextRequest) {
     .insert(workspaceSettings)
     .values({ organizationId: wsId, ...set })
     .onConflictDoUpdate({ target: workspaceSettings.organizationId, set });
+  await recordIntegrationSuccess(wsId, "slack");
 
   await logAuditEvent({
     workspaceId: wsId,

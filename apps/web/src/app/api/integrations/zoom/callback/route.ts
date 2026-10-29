@@ -9,6 +9,7 @@ import { createLogger } from "@/lib/logger";
 import { getZoomCredentials } from "@/lib/zoom/config";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { requirePermission } from "@/features/workspaces/permissions-server";
+import { recordIntegrationSuccess } from "@/features/integrations/health/repository";
 import { verifyAndConsumeOauthStateNonce } from "@/server/oauth-state";
 
 const log = createLogger("api-zoom-callback");
@@ -147,6 +148,7 @@ export async function GET(req: NextRequest) {
     .insert(workspaceSettings)
     .values({ organizationId: wsId, ...set })
     .onConflictDoUpdate({ target: workspaceSettings.organizationId, set });
+  await recordIntegrationSuccess(wsId, "zoom");
 
   return NextResponse.redirect(
     `${appUrl}/settings/integrations?zoom=connected`,

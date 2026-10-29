@@ -2,7 +2,8 @@ import "server-only";
 
 import { isDemoMode } from "@harly/config";
 
-import { getWorkspaceOutlookConfig } from "@/lib/outlook/config";
+import { recordIntegrationSuccess } from "@/features/integrations/health/repository";
+import { getWorkspaceOutlookConfig, recordOutlookCallFailure } from "@/lib/outlook/config";
 import { sendMail } from "@/lib/outlook/client";
 import { WEBHOOK_EVENT_LABELS, type WebhookEvent } from "@/server/webhooks/events";
 
@@ -84,11 +85,17 @@ export async function notifyOutlookEvent(
     // We don't have the user's email directly, so we send to ourselves
     // via the authenticated account. For real use, this would send to
     // the workspace admin or configured recipients.
-    await sendMail(config.accessToken, {
-      to: [config.calendarId], // calendarId doubles as notification target
-      subject: `[Harly] ${subject}`,
-      body,
-    });
+    try {
+      await sendMail(config.accessToken, {
+        to: [config.calendarId], // calendarId doubles as notification target
+        subject: `[Harly] ${subject}`,
+        body,
+      });
+    } catch (sendError) {
+      await recordOutlookCallFailure(workspaceId, sendError);
+      throw sendError;
+    }
+    await recordIntegrationSuccess(workspaceId, "outlook");
   } catch (error) {
     console.error("[notify] outlook send failed", {
       workspaceId,

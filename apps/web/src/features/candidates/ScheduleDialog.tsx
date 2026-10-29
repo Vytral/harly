@@ -6,6 +6,8 @@ import { AlertTriangle, Link2, MapPin, Phone, Video } from "lucide-react";
 import { toast } from "@/lib/notification-island/toast";
 
 import { scheduleInterview } from "@/features/interviews/actions";
+import { unshownEmailWarning } from "@/lib/email/delivery-warning";
+
 import { checkAvailability } from "@/lib/gcal/availability";
 import { buildCalBookingLink } from "@/lib/cal/link";
 import { InterviewerSelect } from "./InterviewerSelect";
@@ -235,6 +237,8 @@ export function ScheduleDialog({
       } else {
         toast.success("Interview scheduled");
       }
+      const emailNote = unshownEmailWarning(result);
+      if (emailNote) toast.warning(emailNote);
       setOpen(false);
       reset();
       router.refresh();

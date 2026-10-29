@@ -29,3 +29,16 @@ export function emailDeliveryWarning(
   }
   return undefined;
 }
+
+/**
+ * The email warning to show after a successful action, unless the action's
+ * `warning` already says the same thing (scheduling folds email copy into it).
+ */
+export function unshownEmailWarning(result: {
+  warning?: string;
+  emailWarning?: string;
+}): string | undefined {
+  if (!result.emailWarning) return undefined;
+  if (result.warning?.includes(result.emailWarning)) return undefined;
+  return result.emailWarning;
+}

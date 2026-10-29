@@ -11,6 +11,7 @@ import {
 } from "@harly/db";
 
 import { createLogger } from "@/lib/logger";
+import { recordIntegrationSuccess } from "@/features/integrations/health/repository";
 import { decideOfferForApi } from "@/features/offers/service";
 import { freshEsignContext, getSubmission } from "@/lib/esign/client";
 import { syncDocumentsForEnvelope } from "@/lib/esign/webhook-sync";
@@ -100,6 +101,10 @@ export async function POST(request: NextRequest) {
     log.warn({ submissionId, wsParam: workspaceId, metaWorkspaceId }, "docuseal webhook: workspace mismatch");
     return NextResponse.json({ ok: true, skipped: "workspace mismatch" });
   }
+
+  // A correctly signed delivery is the provider reaching us: record it as a
+  // healthy connection before any local processing can fail.
+  await recordIntegrationSuccess(workspaceId, "docuseal");
 
   const eventKey = webhookEventKey(event);
   const internalEvent = eventForDocusealWebhook(eventType, webhookSubmissionStatus(event));

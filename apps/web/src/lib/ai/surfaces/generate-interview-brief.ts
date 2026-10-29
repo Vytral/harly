@@ -31,6 +31,9 @@ export type InterviewBriefInput = {
     type: string;
     scheduledAt: Date;
     interviewerName: string | null;
+    durationMins?: number | null;
+    /** Interviewer's own notes. Free text that may name the candidate, so it is redacted. */
+    notes?: string | null;
   };
   existingScore: {
     score: number;
@@ -96,13 +99,19 @@ export async function generateInterviewBriefWithAI(
 
   const interviewBlock = [
     `Interview type: ${interview.type}`,
+    interview.durationMins ? `Duration: ${interview.durationMins} min` : null,
     interview.interviewerName
       ? `Interviewer: ${interview.interviewerName}`
+      : null,
+    interview.notes?.trim()
+      ? `Interviewer notes: ${redactNote(interview.notes.trim())}`
       : null,
   ]
     .filter(Boolean)
     .join("\n");
 
+  // Without an existing score the section is left out, rather than claiming
+  // that no score exists.
   const scoreBlock = existingScore
     ? `AI fit score: ${existingScore.score}/100\n` +
       (existingScore.gaps.length > 0
@@ -116,12 +125,14 @@ export async function generateInterviewBriefWithAI(
             )
             .join("; ")}`
         : "")
-    : "No AI score available yet.";
+    : null;
 
   const { output } = await generateText({
     model: getModel(config),
     system: SYSTEM_PROMPT,
-    prompt: `Generate an interview brief.\n\n## Candidate\n${candidateBlock}\n\n## Job\n${jobBlock}\n\n## Interview\n${interviewBlock}\n\n## Existing AI Score\n${scoreBlock}`,
+    prompt:
+      `Generate an interview brief.\n\n## Candidate\n${candidateBlock}\n\n## Job\n${jobBlock}\n\n## Interview\n${interviewBlock}` +
+      (scoreBlock ? `\n\n## Existing AI Score\n${scoreBlock}` : ""),
     output: Output.object({
       schema: interviewBriefSchema,
       name: "interview_brief",

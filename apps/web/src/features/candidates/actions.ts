@@ -25,7 +25,9 @@ import {
 } from "@harly/db";
 import type { ResumeEducationItem, ResumeExperienceItem } from "@harly/db";
 import { getWorkspaceAiConfig } from "@/lib/ai/config";
+import { isAiAnonymizationBlockedError } from "@/lib/ai/candidate-context";
 import { parseResumeStructured } from "@/lib/ai/surfaces/parse-resume";
+import { isSampleEmailAddress } from "@/features/sample-data/constants";
 import {
   composerAttachmentsSchema,
   decodeComposerAttachments,
@@ -164,7 +166,7 @@ export async function exportCandidateDirectoryAction(input: CandidateDirectoryFi
 export async function bulkUpdateCandidateStatusAction(input: {
   applicationIds: string[];
   status: "active" | "hired" | "rejected" | "withdrawn";
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; emailWarning?: string }> {
   const parsed = bulkStatusSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: "Invalid selection." };
@@ -285,6 +287,8 @@ async function parseCandidateFileDetails(input: {
   fileName: string;
   fileType: string;
   fileSize: number;
+  /** The candidate's name, so the AI profile can strip it when anonymization is on. */
+  identity: { firstName: string | null; lastName: string | null };
 }): Promise<ParsedResumeDetails> {
   const empty = {
     summary: null,
@@ -323,7 +327,16 @@ async function parseCandidateFileDetails(input: {
     const aiConfig = await getWorkspaceAiConfig(input.workspaceId);
     if (aiConfig) {
       try {
-        const structured = await parseResumeStructured(aiConfig, text);
+        const fullName = [input.identity.firstName, input.identity.lastName]
+          .filter(Boolean)
+          .join(" ");
+        const structured = await parseResumeStructured(aiConfig, text, {
+          identity: {
+            firstName: input.identity.firstName,
+            lastName: input.identity.lastName,
+            fullName: fullName || null,
+          },
+        });
         return {
           summary: structured.summary ?? summarizeResumeText(text),
           skills: structured.skills,
@@ -931,12 +944,27 @@ export async function attachCandidateFile(input: {
       return { success: false, error: "File upload is invalid." };
     }
 
+    const [candidateName] = await db
+      .select({ firstName: candidates.firstName, lastName: candidates.lastName })
+      .from(candidates)
+      .where(
+        and(
+          eq(candidates.id, input.candidateId),
+          eq(candidates.workspaceId, input.workspaceId),
+        ),
+      )
+      .limit(1);
+
     const parsedDetails = await parseCandidateFileDetails({
       workspaceId: input.workspaceId,
       fileUrl: parsed.data.fileUrl,
       fileName: parsed.data.fileName,
       fileType: parsed.data.fileType,
       fileSize: parsed.data.fileSize,
+      identity: {
+        firstName: candidateName?.firstName ?? null,
+        lastName: candidateName?.lastName ?? null,
+      },
     });
     const parsedAt =
       parsedDetails.summary ||
@@ -1419,6 +1447,9 @@ export async function sendBulkCandidateEmail(input: {
   let failed = 0;
 
   for (const candidate of rows) {
+    // Sample candidates use a reserved domain that cannot receive mail. They are
+    // skipped here, so they are neither sent nor reported as failures.
+    if (isSampleEmailAddress(candidate.email)) continue;
     const values = {
       candidate_first_name: candidate.firstName,
       candidate_last_name: candidate.lastName,
@@ -1721,6 +1752,9 @@ export async function generateEmailDraftAction(input: {
     });
     return { ok: true, subject: draft.subject, body: draft.body };
   } catch (error) {
+    if (isAiAnonymizationBlockedError(error)) {
+      return { ok: false, error: error.message };
+    }
     console.error("Email draft AI failed", error);
     return {
       ok: false,
@@ -2115,6 +2149,9 @@ export async function refineScorecardTextAction(input: {
     });
     return { ok: true, refined: result.refined };
   } catch (error) {
+    if (isAiAnonymizationBlockedError(error)) {
+      return { ok: false, error: error.message };
+    }
     console.error("Scorecard refine AI failed", error);
     return { ok: false, error: "Refinement failed. Check your AI settings." };
   }

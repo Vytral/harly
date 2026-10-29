@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     await run.finish(result.failed > 0 ? "failed" : "succeeded", result);
     return NextResponse.json({ ok: result.failed === 0, ...result });
   } catch (error) {
-    await run.finish("failed");
+    await run.finish("failed", {}, error);
     throw error;
   } finally {
     await auth.release();

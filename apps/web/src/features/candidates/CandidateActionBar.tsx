@@ -189,7 +189,11 @@ function RejectButton({
         status,
       });
       if (result.success) {
-        toast.success(`${name} ${pastTense}.`);
+        if (result.emailWarning) {
+          toast.warning(`${name} ${pastTense}. ${result.emailWarning}`);
+        } else {
+          toast.success(`${name} ${pastTense}.`);
+        }
         (router as { refresh?: () => void }).refresh?.();
       } else {
         toast.error(result.error ?? "Could not update candidate.");
@@ -276,7 +280,11 @@ function CandidateStatusMenu({
         status,
       });
       if (result.success) {
-        toast.success(`${name} ${label.toLowerCase()}.`);
+        if (result.emailWarning) {
+          toast.warning(`${name} ${label.toLowerCase()}. ${result.emailWarning}`);
+        } else {
+          toast.success(`${name} ${label.toLowerCase()}.`);
+        }
         (router as { refresh?: () => void }).refresh?.();
       } else {
         toast.error(result.error ?? "Could not update candidate status.");
