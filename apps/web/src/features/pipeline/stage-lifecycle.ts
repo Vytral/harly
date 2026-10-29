@@ -118,6 +118,49 @@ async function countApplicationsInStage(
   return Number(row?.total ?? 0);
 }
 
+/** SQLSTATE codes for a transaction Postgres aborted to break a lock cycle or lose a serialization race. */
+const RETRYABLE_ABORT_CODES = new Set(["40P01", "40001"]);
+
+function sqlStateOf(error: unknown): string | undefined {
+  let current: unknown = error;
+  for (let depth = 0; depth < 4 && typeof current === "object" && current !== null; depth += 1) {
+    const code = (current as { code?: unknown }).code;
+    if (typeof code === "string" && /^[0-9A-Z]{5}$/.test(code)) return code;
+    current = (current as { cause?: unknown }).cause;
+  }
+  return undefined;
+}
+
+/**
+ * Re-run a whole transaction when Postgres aborts it as a deadlock victim or a
+ * serialization failure. Each attempt starts from a fresh read, so retrying is
+ * safe. After the last attempt the caller gets a 409 to retry later instead of
+ * a driver error.
+ */
+export async function retryOnTransactionAbort<T>(
+  run: () => Promise<T>,
+  options: { attempts?: number; baseDelayMs?: number } = {},
+): Promise<T> {
+  const attempts = options.attempts ?? 3;
+  const baseDelayMs = options.baseDelayMs ?? 25;
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await run();
+    } catch (error) {
+      const code = sqlStateOf(error);
+      if (!code || !RETRYABLE_ABORT_CODES.has(code)) throw error;
+      if (attempt >= attempts) {
+        throw ApiError.conflict(
+          "This pipeline is busy with other changes. Retry in a moment.",
+        );
+      }
+      // Jittered backoff so two competing transactions do not collide again.
+      const delay = baseDelayMs * attempt * (0.5 + Math.random());
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
 /**
  * Serialize concurrent lifecycle operations on one job. Also verifies the job
  * belongs to the workspace and has not been soft-deleted.
@@ -230,12 +273,30 @@ function describeShapeIssue(issue: PipelineShapeIssue): string {
   }
 }
 
-/** Throws 409 when the given active stage list would break a pipeline invariant. */
-function assertPipelineShape(
-  stages: readonly (Pick<JobStage, "name" | "kind" | "archivedAt">)[],
+type ShapeStage = Pick<JobStage, "name" | "kind" | "archivedAt">;
+
+function shapeIssueKey(issue: PipelineShapeIssue): string {
+  return issue.code === "duplicate_name"
+    ? `duplicate_name:${issue.name.toLowerCase()}`
+    : issue.code;
+}
+
+/**
+ * Throws 409 only when an operation introduces a pipeline invariant violation
+ * that the job did not already have. Jobs created before 0.3.0 can carry
+ * legacy duplicate names; an operation that leaves those untouched (a colour
+ * change, an unrelated archive) must still succeed, and one that resolves them
+ * (renaming or archiving a duplicate) must too.
+ */
+function assertNoNewPipelineShapeIssue(
+  before: readonly ShapeStage[],
+  after: readonly ShapeStage[],
 ): void {
-  const [issue] = validatePipelineShape(stages);
-  if (issue) throw ApiError.conflict(describeShapeIssue(issue));
+  const existing = new Set(validatePipelineShape(before).map(shapeIssueKey));
+  const introduced = validatePipelineShape(after).find(
+    (issue) => !existing.has(shapeIssueKey(issue)),
+  );
+  if (introduced) throw ApiError.conflict(describeShapeIssue(introduced));
 }
 
 /**
@@ -391,7 +452,7 @@ export async function createStage(
     const ordered = active.map((stage) => stage.id);
     ordered.splice(position, 0, created.id);
     await writeActiveOrder(tx, input, ordered);
-    assertPipelineShape([...active, { ...created, kind }]);
+    assertNoNewPipelineShapeIssue(active, [...active, { ...created, kind }]);
 
     await recordJobActivity(tx, input, "job.stage_created", {
       stageId: created.id,
@@ -425,6 +486,11 @@ export async function updateStage(
 
   return db.transaction(async (tx) => {
     await lockJob(tx, input);
+    // Lock the stage row before reading its kind and counting its applications.
+    // An in-flight placement holds this row FOR SHARE until it commits, so the
+    // count below sees its application, and a placement that starts later reads
+    // the kind this update commits.
+    await lockStageRows(tx, input, [input.stageId]);
     const stages = await loadStages(tx, input);
     const stage = findStage(stages, input.stageId);
     if (stage.archivedAt) {
@@ -453,7 +519,7 @@ export async function updateStage(
       }
     }
 
-    assertPipelineShape([
+    assertNoNewPipelineShapeIssue(active, [
       ...active.filter((candidate) => candidate.id !== stage.id),
       { ...stage, name: nextName, kind: nextKind, archivedAt: null },
     ]);
@@ -515,7 +581,7 @@ export async function reorderStages(
     }
 
     await writeActiveOrder(tx, input, requested);
-    assertPipelineShape(active);
+    assertNoNewPipelineShapeIssue(active, active);
     await recordJobActivity(tx, input, "job.stage_reordered", {
       stageIds: [...requested],
     });
@@ -536,6 +602,12 @@ export async function reorderStages(
  * application status events are produced by a merge.
  */
 export async function archiveStage(
+  input: ActorScope & { stageId: string; mergeIntoStageId?: string | null },
+): Promise<ArchiveStageResult> {
+  return retryOnTransactionAbort(() => archiveStageOnce(input));
+}
+
+async function archiveStageOnce(
   input: ActorScope & { stageId: string; mergeIntoStageId?: string | null },
 ): Promise<ArchiveStageResult> {
   return db.transaction(async (tx) => {
@@ -580,7 +652,10 @@ export async function archiveStage(
       }
     }
 
-    assertPipelineShape(active.filter((candidate) => candidate.id !== stage.id));
+    assertNoNewPipelineShapeIssue(
+      active,
+      active.filter((candidate) => candidate.id !== stage.id),
+    );
 
     if (applicationCount > 0 && targetId) {
       await tx.execute(sql`
@@ -781,8 +856,10 @@ export async function deleteStage(
 
     // Removing an active stage must not leave the pipeline without an entry stage.
     if (!stage.archivedAt) {
-      assertPipelineShape(
-        activeStages(stages).filter((candidate) => candidate.id !== stage.id),
+      const active = activeStages(stages);
+      assertNoNewPipelineShapeIssue(
+        active,
+        active.filter((candidate) => candidate.id !== stage.id),
       );
     }
 

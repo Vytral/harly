@@ -32,6 +32,11 @@ import { persistDomainEvent, type PersistedDomainEvent } from "@/server/events/e
 import { finalizeNativeSignatureEffects } from "./finalize-effects";
 import { isNativeOfferAcceptanceAvailable } from "./fields";
 import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
+import {
+  publishSiblingWithdrawals,
+  withdrawSiblingApplicationsForHire,
+  type SiblingWithdrawal,
+} from "@/features/offers/withdraw-siblings";
 import { documentAutomationContext } from "@/lib/esign/document-automation-context";
 import {
   purgeExpiredSignatureData,
@@ -47,6 +52,8 @@ type FinalizedNativeSignature = {
   recipientId: string;
   artifacts: Array<{ id: string; kind: string }>;
   applicationHiredEvent: PersistedDomainEvent | null;
+  siblingWithdrawals: SiblingWithdrawal[];
+  hiredActorId: string;
   documentSignatureEvent: PersistedDomainEvent;
   documentTargetContext: Record<string, unknown>;
   complete: boolean;
@@ -293,6 +300,7 @@ export async function finalizeNativeSignature(input: {
         }
       | undefined;
     let applicationHiredEvent: PersistedDomainEvent | null = null;
+    let siblingWithdrawals: SiblingWithdrawal[] = [];
 
     // Lock both business rows before any signed state is persisted. This is
     // the reservation: a concurrent withdraw/reject either waits and observes
@@ -525,6 +533,12 @@ export async function finalizeNativeSignature(input: {
         type: "offer.accepted",
         metadata: { title: nativeOffer.title, via: "native_signature" },
       });
+      siblingWithdrawals = await withdrawSiblingApplicationsForHire(tx, {
+        workspaceId: input.workspaceId,
+        candidateId: nativeOffer.candidateId,
+        hiredApplicationId: nativeApplication.id,
+        actorUserId: input.actorId ?? nativeOffer.createdById,
+      });
       applicationHiredEvent = await persistDomainEvent(tx, {
         name: "application.hired",
         workspaceId: input.workspaceId,
@@ -546,6 +560,8 @@ export async function finalizeNativeSignature(input: {
         recipientId: recipient.id,
         artifacts,
         applicationHiredEvent,
+        siblingWithdrawals,
+        hiredActorId: input.actorId ?? nativeOffer?.createdById ?? "",
         documentSignatureEvent,
         documentTargetContext,
         complete,
@@ -586,5 +602,17 @@ export async function finalizeNativeSignature(input: {
     documentSignatureEvent: result.documentSignatureEvent,
     applicationHiredEvent: result.applicationHiredEvent,
   });
+
+  if (result.siblingWithdrawals.length > 0) {
+    try {
+      await publishSiblingWithdrawals({
+        workspaceId: input.workspaceId,
+        actorUserId: result.hiredActorId,
+        withdrawals: result.siblingWithdrawals,
+      });
+    } catch (error) {
+      log.error({ error, workspaceId: input.workspaceId, documentId: input.documentId }, "native signature sibling withdrawal follow-up failed after commit");
+    }
+  }
   return result;
 }

@@ -47,7 +47,11 @@ import {
 import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { ensureStageOfKind } from "@/features/pipeline/stage-resolver";
-import { withdrawSiblingApplicationsForHire } from "./withdraw-siblings";
+import {
+  publishSiblingWithdrawals,
+  withdrawSiblingApplicationsForHire,
+  type SiblingWithdrawal,
+} from "./withdraw-siblings";
 import {
   assertOfferTerms,
   getOfferRecipient,
@@ -854,6 +858,7 @@ export async function decideOffer(input: {
   const hiredEvent: { current: Awaited<ReturnType<typeof persistDomainEvent>> | null } = {
     current: null,
   };
+  const siblingWithdrawals: { current: SiblingWithdrawal[] } = { current: [] };
   await db.transaction(async (tx) => {
     const [updatedOffer] = await tx
       .update(offers)
@@ -936,7 +941,7 @@ export async function decideOffer(input: {
           });
         }
 
-        await withdrawSiblingApplicationsForHire(tx, {
+        siblingWithdrawals.current = await withdrawSiblingApplicationsForHire(tx, {
           workspaceId,
           candidateId: offer.candidateId,
           hiredApplicationId: application.id,
@@ -979,6 +984,11 @@ export async function decideOffer(input: {
     });
   });
 
+  await publishSiblingWithdrawals({
+    workspaceId,
+    actorUserId: context.user.id,
+    withdrawals: siblingWithdrawals.current,
+  });
   if (hiredEvent.current) {
     await publishPersistedDomainEvents([hiredEvent.current]);
     await emitWebhookEvent(workspaceId, "application.hired", {

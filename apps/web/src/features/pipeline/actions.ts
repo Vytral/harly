@@ -19,6 +19,7 @@ import {
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
   requireApplicationPermission,
+  requireJobPermission,
   requirePermission,
 } from "@/features/workspaces/permissions-server";
 import { emitWebhookEvent } from "@/server/webhooks/emit";
@@ -30,6 +31,7 @@ import {
 import { normalizeStageEmailConfig } from "@/features/pipeline/data";
 import { type PipelineApplicationStatus } from "@/features/pipeline/state";
 import { stageForApplicationStatus } from "@/features/applications/service";
+import { lockStageForPlacement } from "@/features/pipeline/stage-resolver";
 import {
   sendPipelineEmails,
   type PipelineEmail,
@@ -190,6 +192,17 @@ export async function moveApplicationInPipeline(
         stageEvents.length = 0;
         domainEvents.length = 0;
         return db.transaction<PipelineEmail[]>(async (tx) => {
+          // Lock the target stage before anything else. The outcome below is
+          // derived from this locked row, so a concurrent kind change either
+          // commits first or waits until this move has committed.
+          const lockedTarget = await lockStageForPlacement(tx, {
+            workspaceId: input.workspaceId,
+            stageId: input.toStageId,
+          });
+          if (!lockedTarget) {
+            throw new Error("Application or target stage not found.");
+          }
+
           const [application] = await tx
             .select({
               id: applications.id,
@@ -203,7 +216,6 @@ export async function moveApplicationInPipeline(
               jobTitle: jobs.title,
               workspaceName: organization.name,
               toStageName: jobStages.name,
-              toStageKind: jobStages.kind,
               toStageEmailConfig: jobStages.emailConfig,
             })
             .from(applications)
@@ -253,10 +265,7 @@ export async function moveApplicationInPipeline(
 
           const now = new Date();
           const changedStage = application.currentStageId !== input.toStageId;
-          const nextStatus = applicationStatusForStage({
-            kind: application.toStageKind,
-            name: application.toStageName,
-          });
+          const nextStatus = applicationStatusForStage(lockedTarget);
           const changedStatus = application.status !== nextStatus;
 
           const [updatedApplication] = await tx
@@ -600,6 +609,16 @@ export async function bulkMoveApplications(
         stageEvents.length = 0;
         domainEvents.length = 0;
         return db.transaction<PipelineEmail[]>(async (tx) => {
+          // Lock the target FOR SHARE first; the outcome is derived from the
+          // locked row so a concurrent kind change cannot make it stale.
+          const lockedTarget = await lockStageForPlacement(tx, {
+            workspaceId: input.workspaceId,
+            stageId: input.toStageId,
+          });
+          if (!lockedTarget) {
+            throw new Error("Target stage not found.");
+          }
+
           const [targetStage] = await tx
             .select({
               id: jobStages.id,
@@ -630,7 +649,7 @@ export async function bulkMoveApplications(
           }
 
           const toStageName = targetStage.name;
-          const nextStatus = applicationStatusForStage(targetStage);
+          const nextStatus = applicationStatusForStage(lockedTarget);
           const stageEmailConfig = normalizeStageEmailConfig(
             targetStage.emailConfig,
           );
@@ -1350,6 +1369,9 @@ export async function updateStageEmailSettings(
 ): Promise<{ success: boolean; error?: string }> {
   try {
     await requirePermission("settings:edit");
+    // Same job-scoped check the stage editor uses: the stage belongs to a job
+    // the user may edit, not just any job in the workspace.
+    await requireJobPermission("jobs:edit", input.jobId);
     const { organization: workspace } = await getWorkspaceContext();
 
     if (workspace.id !== input.workspaceId) {
@@ -1369,12 +1391,13 @@ export async function updateStageEmailSettings(
           eq(jobStages.id, input.stageId),
           eq(jobStages.workspaceId, input.workspaceId),
           eq(jobStages.jobId, input.jobId),
+          isNull(jobStages.archivedAt),
         ),
       )
       .returning({ id: jobStages.id });
 
     if (!updatedStage) {
-      return { success: false, error: "Stage not found." };
+      return { success: false, error: "Stage not found, or it is archived." };
     }
 
     revalidatePath("/dashboard/pipeline");

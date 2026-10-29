@@ -46,7 +46,11 @@ import {
 } from "@/lib/esign/native/offer-signing";
 import { isSignableNativeFieldsSnapshot } from "@/lib/esign/native/fields";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
-import { withdrawSiblingApplicationsForHire } from "./withdraw-siblings";
+import {
+  publishSiblingWithdrawals,
+  withdrawSiblingApplicationsForHire,
+  type SiblingWithdrawal,
+} from "./withdraw-siblings";
 
 /** Workspace-scoped offer service for REST API. Never reads session state. */
 
@@ -513,6 +517,7 @@ export async function decideOfferForApi(input: {
     );
   }
 
+  let siblingWithdrawals: SiblingWithdrawal[] = [];
   const decided = await db.transaction(async (tx) => {
     const [updated] = await tx
       .update(offers)
@@ -597,7 +602,7 @@ export async function decideOfferForApi(input: {
           movedById: input.actorUserId,
         });
       }
-      await withdrawSiblingApplicationsForHire(tx, {
+      siblingWithdrawals = await withdrawSiblingApplicationsForHire(tx, {
         workspaceId: input.workspaceId,
         candidateId: offer.candidateId,
         hiredApplicationId: application.id,
@@ -641,6 +646,11 @@ export async function decideOfferForApi(input: {
     };
   });
 
+  await publishSiblingWithdrawals({
+    workspaceId: input.workspaceId,
+    actorUserId: input.actorUserId,
+    withdrawals: siblingWithdrawals,
+  });
   if (decided.event) {
     await publishPersistedDomainEvents([decided.event]);
     await emitWebhookEvent(input.workspaceId, "application.hired", {

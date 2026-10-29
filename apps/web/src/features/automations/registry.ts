@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -24,6 +24,7 @@ import {
   workspaceSecrets,
   workflowDocumentTemplates,
   workspaceSettings,
+  normalizeStageName,
 } from "@harly/db";
 
 import { decryptSecret } from "@/lib/crypto";
@@ -673,12 +674,14 @@ const moveStageSchema = z
     message: "Either toStageId or toStageName must be provided.",
   });
 
+type ResolvedStage = { stageId: string } | { error: string } | null;
+
 async function resolveStageId(
   workspaceId: string,
   applicationId: string,
   config: z.infer<typeof moveStageSchema>,
   database: typeof db = db,
-): Promise<string | null> {
+): Promise<ResolvedStage> {
   if (config.toStageId) {
     const [stage] = await database
       .select({ id: jobStages.id })
@@ -699,13 +702,15 @@ async function resolveStageId(
         ),
       )
       .limit(1);
-    if (stage?.id) return stage.id;
+    if (stage?.id) return { stageId: stage.id };
   }
   if (config.toStageName) {
     // The name is the user's own input, so it is matched against active stages
-    // only. Terminal behaviour then follows the matched stage's kind.
-    const [stage] = await database
-      .select({ id: jobStages.id })
+    // only. Terminal behaviour then follows the matched stage's kind. Legacy
+    // jobs can hold case variants of one name; an exact match wins, and when
+    // only variants match the workflow refuses rather than guess.
+    const candidates = await database
+      .select({ id: jobStages.id, name: jobStages.name })
       .from(jobStages)
       .innerJoin(
         applications,
@@ -722,8 +727,19 @@ async function resolveStageId(
           sql`lower(trim(${jobStages.name})) = lower(trim(${config.toStageName}))`,
         ),
       )
-      .limit(1);
-    return stage?.id ?? null;
+      .orderBy(asc(jobStages.order));
+
+    const wanted = normalizeStageName(config.toStageName);
+    const exact = candidates.filter((stage) => normalizeStageName(stage.name) === wanted);
+    const matches = exact.length > 0 ? exact : candidates;
+    if (matches.length === 1) return { stageId: matches[0]!.id };
+    if (matches.length > 1) {
+      const names = matches.map((stage) => `"${normalizeStageName(stage.name)}"`).join(", ");
+      return {
+        error: `Stage name "${wanted}" is ambiguous: it matches more than one stage on this job (${names}). Use toStageId to pick one.`,
+      };
+    }
+    return null;
   }
   return null;
 }
@@ -738,8 +754,10 @@ const moveStageHandler: ActionHandler<z.infer<typeof moveStageSchema>> = {
     const { applicationId } = effectiveTarget(ctx);
     if (!applicationId) return { success: false, error: "No application in trigger payload." };
 
-    const stageId = await resolveStageId(ctx.workspaceId, applicationId, input, ctx.database);
-    if (!stageId) return { success: false, error: "Target stage not found for this job." };
+    const resolved = await resolveStageId(ctx.workspaceId, applicationId, input, ctx.database);
+    if (!resolved) return { success: false, error: "Target stage not found for this job." };
+    if ("error" in resolved) return { success: false, error: resolved.error };
+    const stageId = resolved.stageId;
 
     const updated = await moveApplicationStageForApi({
       workspaceId: ctx.workspaceId,

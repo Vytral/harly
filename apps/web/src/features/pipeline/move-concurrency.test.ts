@@ -90,6 +90,9 @@ const APPLICATION_ROW = {
   workspaceName: "Acme",
   toStageName: "Interview",
   toStageEmailConfig: { candidateUpdatesEnabled: false },
+  // The locked target stage row read by lockStageForPlacement (same mock row).
+  name: "Interview",
+  kind: "interview",
 };
 
 function makeTx(firstUpdateRows: unknown[]) {
@@ -98,6 +101,7 @@ function makeTx(firstUpdateRows: unknown[]) {
     innerJoin: () => selectBuilder,
     where: () => selectBuilder,
     limit: () => selectBuilder,
+    for: () => selectBuilder,
     then: (_resolve: (v: unknown) => void) => _resolve([APPLICATION_ROW]),
   };
 
@@ -132,6 +136,7 @@ function makeTxWithFailures(failures: number) {
     innerJoin: () => selectBuilder,
     where: () => selectBuilder,
     limit: () => selectBuilder,
+    for: () => selectBuilder,
     then: (_resolve: (v: unknown) => void) => {
       // Each read returns the row with a *current* updatedAt, proving the
       // retry re-reads fresh state instead of reusing the first snapshot.

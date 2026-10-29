@@ -134,8 +134,18 @@ describe("moveApplicationStageForApi concurrency retry", () => {
       from: () => stageSelect,
       where: () => stageSelect,
       limit: () => stageSelect,
+      for: () => stageSelect,
       then: (_resolve: (v: unknown) => void) =>
-        _resolve([{ id: "stage-target", name: "Screening" }]),
+        _resolve([
+          {
+            id: "stage-target",
+            name: "Screening",
+            kind: "custom",
+            jobId: "job-1",
+            workspaceId: "ws-1",
+            archivedAt: null,
+          },
+        ]),
     };
     const updateBuilder: Record<string, unknown> = {
       set: () => updateBuilder,

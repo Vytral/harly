@@ -224,6 +224,8 @@ describe("decideOffer guards", () => {
       mocks.selectQueue.push([
         { id: "app-1", status: "active", currentStageId: "stage-old" },
       ]);
+      // ensureStageOfKind locks the job row first (FOR UPDATE).
+      mocks.selectQueue.push([{ id: "job-1" }]);
       // Active stages of the job, resolved by kind (the stage is named "Hired").
       mocks.selectQueue.push([
         { id: "stage-hired", name: "Hired", kind: "hired", order: 4, archivedAt: null },
@@ -285,8 +287,9 @@ describe("decideOffer guards", () => {
       mocks.selectQueue.push([
         { id: "app-1", status: "active", currentStageId: "stage-old" },
       ]);
-      // No active stage of kind hired: ensureStageOfKind lists the stages,
-      // then reads the current maximum order before inserting.
+      // No active stage of kind hired: ensureStageOfKind locks the job, lists
+      // the stages, then reads the current maximum order before inserting.
+      mocks.selectQueue.push([{ id: "job-1" }]);
       mocks.selectQueue.push([
         { id: "stage-old", name: "Interview", kind: "interview", order: 2, archivedAt: null },
       ]);
