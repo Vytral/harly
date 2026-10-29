@@ -24,5 +24,9 @@ export function decideSignedInRootRoute(
     return input.onboardingCompleted ? null : "/onboarding";
   }
 
-  return input.onboardingCompleted ? "/dashboard" : "/onboarding";
+  // Anyone who already belongs to a workspace goes straight to the app. The
+  // onboarding flag is NOT consulted here: it was added later without a
+  // backfill, so established users have it unset and would otherwise be sent
+  // through the setup wizard after upgrading.
+  return "/dashboard";
 }

@@ -36,7 +36,10 @@ describe("decideSignedInRootRoute", () => {
     ).toBe("/dashboard");
   });
 
-  it("sends a member who has not finished onboarding to onboarding", () => {
+  it("does not push existing members into onboarding just because the flag is unset", () => {
+    // `user.onboarding_completed_at` was added without a backfill, so every account
+    // that predates it has NULL. Those people already have a workspace and must land
+    // on the dashboard, not in the setup wizard, after an upgrade.
     expect(
       decideSignedInRootRoute({
         demo: false,
@@ -44,7 +47,7 @@ describe("decideSignedInRootRoute", () => {
         hasWorkspace: true,
         onboardingCompleted: false,
       }),
-    ).toBe("/onboarding");
+    ).toBe("/dashboard");
   });
 
   it("sends a signed-in user with no workspace yet to onboarding", () => {
