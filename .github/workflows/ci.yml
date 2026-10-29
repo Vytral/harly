@@ -302,6 +302,12 @@ jobs:
           src/features/pipeline/pipeline-large-load.integration.test.ts
           src/server/api/ratelimit.database.integration.test.ts
 
+      - name: Run stage lifecycle, scope, metrics, search, sample-data and email integration suites
+        run: >-
+          RUN_PIPELINE_STAGE_INTEGRATION=1
+          RUN_MAILBOX_INTEGRATION=1
+          pnpm --filter web exec vitest run .integration.test.ts
+
   hiring-e2e:
     name: Browser hiring and signing flows
     runs-on: ubuntu-latest
