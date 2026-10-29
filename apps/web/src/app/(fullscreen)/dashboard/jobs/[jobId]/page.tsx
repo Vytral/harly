@@ -37,10 +37,16 @@ export default async function DashboardJobPage({
 }: DashboardJobPageProps) {
   await requirePagePermission("jobs:view");
   const { jobId } = await params;
+  // Resolve the job first. getDashboardJob applies the caller's job scope, so a
+  // job outside it is not found and nothing job-specific (such as its hiring
+  // team) is loaded for it.
+  const result = await getDashboardJob(jobId);
+  if (!result) {
+    notFound();
+  }
   const { organization: workspace } = await getWorkspaceContext();
-  const [result, departments, hiringTeam, workspaceMembers, aiStatus, candidatePoolCount, careerPageData, canEditJobs] =
+  const [departments, hiringTeam, workspaceMembers, aiStatus, candidatePoolCount, careerPageData, canEditJobs] =
     await Promise.all([
-      getDashboardJob(jobId),
       listWorkspaceDepartments(),
       listJobHiringTeam(jobId),
       listWorkspaceMembers(),
@@ -49,10 +55,6 @@ export default async function DashboardJobPage({
       getCareerPageData(workspace.slug),
       can("jobs:edit"),
     ]);
-
-  if (!result) {
-    notFound();
-  }
 
   const { job } = result;
   const appUrl = getHarlyPublicOrigin();

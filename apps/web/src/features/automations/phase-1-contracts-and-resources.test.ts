@@ -29,6 +29,7 @@ vi.mock("@/features/workspaces/integrations-registry", () => ({
     jitsi: { enabled: false, baseUrl: null },
     docuseal: { enabled: false, hasToken: false },
     captcha: { enabled: false },
+    health: { docuseal: { connected: false, configured: false } },
   }),
 }));
 
@@ -216,6 +217,37 @@ describe("Phase 1 — Declarative Contracts V2, Deduplication & Resource Resolut
       expect(email?.metadata?.connected).toBe(true);
       const meetingProvider = result.items.find((i) => i.id === "meeting_provider");
       expect(meetingProvider?.metadata?.connected).toBe(true);
+    });
+
+    it("reports DocuSeal as connected only when its health state is connected", async () => {
+      const { getIntegrationStatuses } = await import("@/features/workspaces/integrations-registry");
+      const base = await getIntegrationStatuses("ws-1");
+
+      // A token is stored but the provider needs reconnecting: not connected.
+      vi.mocked(getIntegrationStatuses).mockResolvedValueOnce({
+        ...base,
+        docuseal: { enabled: true, hasToken: true },
+        health: { ...base.health, docuseal: { connected: false, configured: true } },
+      } as never);
+      const degraded = await resolveAutomationResources({
+        workspaceId: "ws-1",
+        actorId: "usr-1",
+        resourceType: "integration",
+      });
+      expect(degraded.items.find((i) => i.id === "docuseal")?.metadata?.connected).toBe(false);
+
+      // Health says connected, even though the enabled flag is off: connected.
+      vi.mocked(getIntegrationStatuses).mockResolvedValueOnce({
+        ...base,
+        docuseal: { enabled: false, hasToken: false },
+        health: { ...base.health, docuseal: { connected: true, configured: true } },
+      } as never);
+      const healthy = await resolveAutomationResources({
+        workspaceId: "ws-1",
+        actorId: "usr-1",
+        resourceType: "integration",
+      });
+      expect(healthy.items.find((i) => i.id === "docuseal")?.metadata?.connected).toBe(true);
     });
 
     it("resolves team members", async () => {

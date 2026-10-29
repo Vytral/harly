@@ -60,6 +60,17 @@ vi.mock("@/features/applications/service", () => ({
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: vi.fn(),
   getActorPermissions: mocks.getActorPermissions,
+  // The target scope gate: these unit tests cover write mechanics, so every
+  // record is in scope for an unrestricted caller.
+  getRolePolicy: vi.fn(async () => ({
+    permissions: [],
+    scope: { jobAccess: "all", departments: [], regions: [] },
+  })),
+  requireApplicationPermission: vi.fn(async () => ({})),
+  requireCandidatePermission: vi.fn(async () => ({})),
+  requireInterviewPermission: vi.fn(async () => ({})),
+  requireJobPermission: vi.fn(async () => ({})),
+  requireOfferPermission: vi.fn(async () => ({})),
 }));
 vi.mock("@/lib/audit-log", () => ({ logAuditEvent: vi.fn() }));
 vi.mock("./action-receipts", () => ({

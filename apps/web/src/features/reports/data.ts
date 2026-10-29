@@ -1,6 +1,7 @@
 import "server-only";
 
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import { getWorkspaceContext } from "@/features/workspaces/context";
+import { getRolePolicy, requirePermission } from "@/features/workspaces/permissions-server";
 import {
   getHireStats,
   getHiringKpis,
@@ -12,6 +13,7 @@ import {
   type FunnelKind,
 } from "./canonical";
 import { normalizeReportRange, reportRangeLabel, type ReportRangeDays } from "./ranges";
+import { assertUnrestrictedReportsActor, type ReportsActor } from "./scope";
 import {
   monthLabel,
   percentChange,
@@ -110,17 +112,22 @@ export type ReportsData = {
 
 /**
  * Builds the report for a workspace at an instant. This is the one assembly
- * path: the Reports page, the scheduled email and tests all call it.
+ * path: the Reports page, the scheduled email and tests all call it. The actor
+ * is whoever the report is built for; a role limited to specific jobs is refused
+ * here, so no caller can get workspace-wide metrics through this function.
  */
 export async function loadReportsData({
   workspaceId,
   days,
   now = new Date(),
+  actor,
 }: {
   workspaceId: string;
   days: number;
   now?: Date;
+  actor: ReportsActor;
 }): Promise<ReportsData> {
+  assertUnrestrictedReportsActor(actor);
   const rangeDays = normalizeReportRange(days);
   const timeZone = await getWorkspaceTimeZone(workspaceId);
   const window = resolveWindow(rangeDays, timeZone, now);
@@ -208,12 +215,18 @@ function comparisonOf(current: number, previous: number): PeriodComparison {
   return { current, previous, deltaPct: percentChange(current, previous) };
 }
 
-/** Reports data for the signed-in user's workspace. Requires reports:read. */
+/**
+ * Reports data for the signed-in user's workspace. Requires reports:read and an
+ * unrestricted role scope; a role limited to specific jobs gets a ReportsScopeError.
+ */
 export async function getReportsData(rangeDays = 30): Promise<ReportsData> {
   const { organization } = await requirePermission("reports:read");
+  const context = await getWorkspaceContext();
+  const policy = await getRolePolicy(organization.id, context.roleKey);
   return loadReportsData({
     workspaceId: organization.id,
     days: normalizeReportRange(rangeDays),
     now: new Date(),
+    actor: { scope: policy.scope },
   });
 }

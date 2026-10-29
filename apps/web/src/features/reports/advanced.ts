@@ -17,6 +17,7 @@ import {
   hireCtesSql,
   type ScopedWindow,
 } from "./canonical";
+import { assertUnrestrictedReportsActor, type ReportsActor } from "./scope";
 
 /**
  * Advanced hiring analytics: stage SLA, diversity and source of hire.
@@ -207,11 +208,16 @@ async function getDiversity({ workspaceId, window }: ScopedWindow): Promise<Dive
   return rows;
 }
 
-/** Stage SLA, diversity and source of hire for applications in the window. */
+/**
+ * Stage SLA, diversity and source of hire for applications in the window. The
+ * actor must have an unrestricted role scope; the analytics are workspace-wide.
+ */
 export async function getAdvancedHiringAnalytics({
   workspaceId,
   window,
-}: ScopedWindow): Promise<AdvancedHiringAnalytics> {
+  actor,
+}: ScopedWindow & { actor: ReportsActor }): Promise<AdvancedHiringAnalytics> {
+  assertUnrestrictedReportsActor(actor);
   const [stageSla, diversity, sources] = await Promise.all([
     getStageSla({ workspaceId, window }),
     getDiversity({ workspaceId, window }),

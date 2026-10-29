@@ -70,6 +70,8 @@ const WINDOW: ReportWindow = {
   timeZone: "UTC",
   days: null,
 };
+const UNRESTRICTED_ACTOR = { scope: { jobAccess: "all" as const, departments: [], regions: [] } };
+
 const day = (d: number, hour = 12) => new Date(Date.UTC(2026, 0, d, hour));
 
 describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", () => {
@@ -413,7 +415,7 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
     const c = await application({ stageId: stages.offer!.id, appliedAt: day(1) });
     await offer({ applicationId: c.applicationId, candidateId: c.candidateId, status: "accepted", decidedAt: day(22) });
 
-    const reports = await loadReportsData({ workspaceId: fx.workspaceId, days: 30, now });
+    const reports = await loadReportsData({ workspaceId: fx.workspaceId, days: 30, now, actor: UNRESTRICTED_ACTOR });
     const dashboard = await getHiringPerformance();
 
     expect(reports.summary.offerAcceptRate).toBe(67);
@@ -496,7 +498,7 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
       });
     }
 
-    const analytics = await getAdvancedHiringAnalytics({ workspaceId: fx.workspaceId, window: WINDOW });
+    const analytics = await getAdvancedHiringAnalytics({ workspaceId: fx.workspaceId, window: WINDOW, actor: UNRESTRICTED_ACTOR });
     const female = analytics.diversity.find((row) => row.dimension === "gender" && row.value === "female");
     const male = analytics.diversity.find((row) => row.dimension === "gender" && row.value === "male");
     expect(female).toMatchObject({ suppressed: false, applicants: 5, hires: 0 });
@@ -517,7 +519,7 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
       await application({ candidateId, stageId: stages.applied!.id, appliedAt: day(3 + i) , jobId: (await fx.addJob()).jobId });
     }
 
-    const analytics = await getAdvancedHiringAnalytics({ workspaceId: fx.workspaceId, window: WINDOW });
+    const analytics = await getAdvancedHiringAnalytics({ workspaceId: fx.workspaceId, window: WINDOW, actor: UNRESTRICTED_ACTOR });
     const cell = analytics.diversity.find((row) => row.dimension === "gender" && row.value === "nonbinary");
     expect(cell).toEqual({ dimension: "gender", value: "nonbinary", suppressed: true });
   });
@@ -540,7 +542,7 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
       consentAt: day(1),
     });
 
-    const analytics = await getAdvancedHiringAnalytics({ workspaceId: fx.workspaceId, window: WINDOW });
+    const analytics = await getAdvancedHiringAnalytics({ workspaceId: fx.workspaceId, window: WINDOW, actor: UNRESTRICTED_ACTOR });
     const cell = analytics.diversity.find((row) => row.dimension === "gender" && row.value === "female");
     expect(cell).toMatchObject({ suppressed: false, people: 7, hires: null, conversion: null });
   });
@@ -580,6 +582,7 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
       name: "Weekly",
       reportType: "hiring_overview",
       now,
+      actor: UNRESTRICTED_ACTOR,
     });
 
     expect(scheduled.data.summary).toEqual(page.summary);

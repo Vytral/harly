@@ -574,7 +574,7 @@ export async function resolveAutomationResources(
           name: "DocuSeal",
           description: "E-signature provider",
           metadata: {
-            connected: statuses.docuseal.enabled && statuses.docuseal.hasToken,
+            connected: statuses.health.docuseal.connected,
           },
         },
         {

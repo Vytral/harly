@@ -11,6 +11,7 @@ import {
   jobStages,
   jobs,
   offers,
+  tasks,
 } from "@harly/db";
 
 import { getWorkspaceContextOrNull } from "@/features/workspaces/context";
@@ -48,8 +49,15 @@ import { isAgentWriteTool, type AgentWriteTool } from "./write-tool-names";
 import { AGENT_WRITE_TOOL_PERMISSIONS } from "./tool-permissions";
 import { createJobForApi } from "@/features/jobs/service";
 import { getApplicationForApi } from "@/features/applications/service";
+import { isUnrestrictedScope, taskScopeSql, type WorkspaceSearchActor } from "@/features/search/scope";
 import {
   getActorPermissions,
+  getRolePolicy,
+  requireApplicationPermission,
+  requireCandidatePermission,
+  requireInterviewPermission,
+  requireJobPermission,
+  requireOfferPermission,
   requirePermission,
 } from "@/features/workspaces/permissions-server";
 import { logAuditEvent } from "@/lib/audit-log";
@@ -599,6 +607,90 @@ async function resolveAgentWritePreview(
   return { ok: true, canonical: false, title: "Review action", details: [] };
 }
 
+const OUT_OF_SCOPE_MESSAGE = "The selected record is not available to you.";
+
+type WriteCaller = { workspaceId: string; userId: string; roleKey: string };
+
+/**
+ * Whether a task is inside the caller's scope, by the same rule the task list
+ * uses (taskScopeSql). A task that does not exist, or that the caller cannot
+ * see, is not in scope.
+ */
+async function taskInCallerScope(caller: WriteCaller, taskId: string): Promise<boolean> {
+  const policy = await getRolePolicy(caller.workspaceId, caller.roleKey);
+  // An unrestricted caller sees every task in the workspace (no scope predicate).
+  if (isUnrestrictedScope(policy.scope)) return true;
+  const actor: WorkspaceSearchActor = {
+    workspaceId: caller.workspaceId,
+    userId: caller.userId,
+    permissions: policy.permissions,
+    scope: policy.scope,
+  };
+  try {
+    const [row] = await db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.workspaceId, caller.workspaceId), eq(tasks.id, taskId), taskScopeSql(actor)))
+      .limit(1);
+    return Boolean(row);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Every record a write names must be inside the caller's role scope, judged
+ * under the tool's own permission. Previews and confirmations both run this, so
+ * a job-limited caller cannot read another job's candidate or job details from
+ * a preview, and a crafted confirm call cannot write to one. Returns the
+ * refusal message, or null when every named record is in scope.
+ */
+async function writeTargetRefusal(
+  tool: AgentWriteTool,
+  input: Record<string, unknown>,
+  caller: WriteCaller,
+): Promise<string | null> {
+  const permission = AGENT_WRITE_TOOL_PERMISSIONS[tool];
+  const idOf = (key: string): string | null => {
+    const value = input[key];
+    return typeof value === "string" && value.length > 0 ? value : null;
+  };
+  try {
+    const applicationId = idOf("applicationId");
+    if (applicationId) await requireApplicationPermission(permission, applicationId);
+    const candidateId = idOf("candidateId");
+    if (candidateId) await requireCandidatePermission(permission, candidateId);
+    const jobId = idOf("jobId");
+    if (jobId) await requireJobPermission(permission, jobId);
+    const offerId = idOf("offerId");
+    if (offerId) await requireOfferPermission(permission, offerId);
+    const interviewId = idOf("interviewId");
+    if (interviewId) await requireInterviewPermission(permission, interviewId);
+  } catch {
+    return OUT_OF_SCOPE_MESSAGE;
+  }
+
+  const taskId = idOf("taskId");
+  if (taskId && !(await taskInCallerScope(caller, taskId))) return OUT_OF_SCOPE_MESSAGE;
+
+  if (tool === "createJob") {
+    // The agent cannot set a region, so a region-limited role would create a job
+    // it cannot see; a department-limited role may only create in its departments.
+    const policy = await getRolePolicy(caller.workspaceId, caller.roleKey);
+    if (policy.scope.regions.length > 0) {
+      return "Jobs can't be created from a role limited to specific regions.";
+    }
+    if (!isUnrestrictedScope(policy.scope) && policy.scope.departments.length > 0) {
+      const department = typeof input.department === "string" ? input.department.trim().toLocaleLowerCase() : "";
+      const allowed = policy.scope.departments.some(
+        (name) => name.trim().toLocaleLowerCase() === department,
+      );
+      if (!allowed) return "New jobs must be in a department inside your scope.";
+    }
+  }
+  return null;
+}
+
 export async function prepareAgentWriteAction(
   tool: string,
   rawInput: unknown,
@@ -642,6 +734,19 @@ export async function prepareAgentWriteAction(
       title: "Action unavailable",
       details: [],
       error: "The action details are invalid.",
+    };
+  }
+  const refusal = await writeTargetRefusal(tool, parsed.data as Record<string, unknown>, {
+    workspaceId: context.organization.id,
+    userId: context.user.id,
+    roleKey: context.roleKey,
+  });
+  if (refusal) {
+    return {
+      ok: false,
+      title: "Action unavailable",
+      details: [],
+      error: refusal,
     };
   }
   try {
@@ -1669,6 +1774,15 @@ export async function confirmAgentWriteAction(
     };
   }
 
+  const refusal = await writeTargetRefusal(tool, parsed.data as Record<string, unknown>, {
+    workspaceId: context.organization.id,
+    userId: context.user.id,
+    roleKey: context.roleKey,
+  });
+  if (refusal) {
+    return { success: false, error: refusal };
+  }
+
   const receipt = actionId
     ? await reserveAgentAction({
         workspaceId: context.organization.id,
@@ -1788,6 +1902,20 @@ export async function undoAgentWriteAction(
   });
   const undo = parseAgentActionUndo(receipt?.result?.undo);
   if (!receipt || !undo) {
+    return { success: false, error: "This action cannot be undone." };
+  }
+
+  if (
+    undo.kind === "deleteTask" &&
+    !(await taskInCallerScope(
+      {
+        workspaceId: context.organization.id,
+        userId: context.user.id,
+        roleKey: context.roleKey,
+      },
+      undo.taskId,
+    ))
+  ) {
     return { success: false, error: "This action cannot be undone." };
   }
 

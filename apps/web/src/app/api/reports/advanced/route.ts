@@ -26,6 +26,6 @@ export async function GET(request: NextRequest) {
   const workspaceId = context.organization.id;
   const timeZone = await getWorkspaceTimeZone(workspaceId);
   const window = resolveWindow(days, timeZone, new Date());
-  const data = await getAdvancedHiringAnalytics({ workspaceId, window });
+  const data = await getAdvancedHiringAnalytics({ workspaceId, window, actor: { scope: policy.scope } });
   return NextResponse.json({ data });
 }

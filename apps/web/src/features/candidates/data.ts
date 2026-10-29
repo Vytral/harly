@@ -942,6 +942,27 @@ export async function listCandidateDirectoryFacets(): Promise<CandidateDirectory
   };
 }
 
+/** The jobs, among `jobIds`, that a restricted actor's job scope lets it see. */
+async function jobIdsInScope(
+  actor: WorkspaceSearchActor,
+  jobIds: readonly string[],
+): Promise<Set<string>> {
+  const unique = [...new Set(jobIds)];
+  if (unique.length === 0) return new Set();
+  const rows = await db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.workspaceId, actor.workspaceId),
+        inArray(jobs.id, unique),
+        isNull(jobs.deletedAt),
+        jobScopeSql(actor),
+      ),
+    );
+  return new Set(rows.map((row) => row.id));
+}
+
 export async function getCandidateProfile(candidateId: string) {
   const { organization: workspace } = await getWorkspaceContext();
   const actor = await resolveSearchActor();
@@ -1328,6 +1349,28 @@ export async function getCandidateProfile(candidateId: string) {
       application.jobTitle,
     ]),
   );
+  // Candidate-level activity can name an application or a job in its metadata
+  // (a document request, a referral). A restricted actor keeps such an event
+  // only when every link it carries is inside the actor's scope; an event with
+  // no link is candidate-level and stays.
+  const eventJobsInScope = restricted
+    ? await jobIdsInScope(
+        actor,
+        events.flatMap((event) => {
+          const jobId = textFromMetadata(event.metadata, "jobId");
+          return jobId ? [jobId] : [];
+        }),
+      )
+    : null;
+  const visibleEvents = restricted
+    ? events.filter((event) => {
+        const applicationId = textFromMetadata(event.metadata, "applicationId");
+        if (applicationId && !scopedApplicationIds.has(applicationId)) return false;
+        const jobId = textFromMetadata(event.metadata, "jobId");
+        return !jobId || eventJobsInScope!.has(jobId);
+      })
+    : events;
+
   const stageIds = events
     .map((event) => textFromMetadata(event.metadata, "toStageId"))
     .filter((stageId): stageId is string => Boolean(stageId));
@@ -1345,7 +1388,7 @@ export async function getCandidateProfile(candidateId: string) {
       : [];
   const stageNames = new Map(stageRows.map((stage) => [stage.id, stage.name]));
 
-  const activity: CandidateActivityItem[] = events.map((event) => {
+  const activity: CandidateActivityItem[] = visibleEvents.map((event) => {
     const mapped = (() => {
     if (event.type === "application.created") {
       const jobTitle = applicationJobTitles.get(event.entityId) ?? "a job";
@@ -1611,7 +1654,17 @@ export async function getCandidateProfile(candidateId: string) {
     )
     .orderBy(desc(candidateReferrals.featured), desc(candidateReferrals.createdAt));
 
-  const referrals = referralRows.map((row) => ({
+  // A referral to a job outside the actor's scope names that job, so it is
+  // hidden from a restricted actor. A referral with no job is candidate-level.
+  const referralJobsInScope = restricted
+    ? await jobIdsInScope(
+        actor,
+        referralRows.flatMap((row) => (row.jobId ? [row.jobId] : [])),
+      )
+    : null;
+  const referrals = referralRows
+    .filter((row) => !restricted || !row.jobId || referralJobsInScope!.has(row.jobId))
+    .map((row) => ({
     id: row.id,
     note: row.note,
     featured: row.featured,

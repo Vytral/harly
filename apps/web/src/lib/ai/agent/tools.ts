@@ -1499,8 +1499,8 @@ function buildReadTools(ctx: HarlyToolContext) {
               name: "DocuSeal",
               slug: "docuseal",
               status: state(
-                statuses.docuseal.enabled && statuses.docuseal.hasToken,
-                statuses.docuseal.enabled || statuses.docuseal.hasToken,
+                statuses.health.docuseal.connected,
+                statuses.health.docuseal.configured,
               ),
             },
             {

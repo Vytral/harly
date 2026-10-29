@@ -25,8 +25,9 @@ import { AddCandidateDrawer } from "@/features/candidates/AddCandidateDrawer";
 import { listEmailTemplates } from "@/features/email-templates/data";
 import { listJobOptions } from "@/features/jobs/data";
 import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
+import { isUnrestrictedScope } from "@/features/search/scope";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { can, requirePagePermission } from "@/features/workspaces/permissions-server";
+import { can, getRolePolicy, requirePagePermission } from "@/features/workspaces/permissions-server";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
 import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 import { formatRelative, formatShort } from "@/lib/date";
@@ -93,6 +94,8 @@ const initialImportSource: ImportSource | undefined =
     page: Number.isFinite(Number(pageRaw)) ? Number(pageRaw) : 1,
     pageSize: 50,
   };
+  const workspaceContext = await getWorkspaceContext();
+  const policy = await getRolePolicy(workspaceContext.organization.id, workspaceContext.roleKey);
   const [
     directory,
     facets,
@@ -100,16 +103,16 @@ const initialImportSource: ImportSource | undefined =
     emailTemplates,
     jobOptions,
     members,
-    workspaceContext,
     canCreateCandidates,
   ] = await Promise.all([
     listCandidateDirectory(directoryFilters),
     listCandidateDirectoryFacets(),
-    listTrashedCandidates(),
+    // The trash is not filtered by job scope, so a role limited to specific jobs
+    // does not load it (its names and emails cannot be scoped per candidate here).
+    isUnrestrictedScope(policy.scope) ? listTrashedCandidates() : Promise.resolve([]),
     listEmailTemplates(),
     listJobOptions(),
     listWorkspaceMembers(),
-    getWorkspaceContext(),
     can("candidates:edit"),
   ]);
   const gravatarEnabled = await getWorkspaceGravatarEnabled(workspaceContext.organization.id);
