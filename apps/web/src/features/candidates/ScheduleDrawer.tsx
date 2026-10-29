@@ -24,6 +24,7 @@ import { SidePanel } from "@/components/ui/side-panel";
 import { Textarea } from "@/components/ui/textarea";
 import {
   getBrowserTimeZone,
+  NonexistentLocalTimeError,
   parseScheduledAt,
 } from "@/features/interviews/shared";
 
@@ -129,6 +130,7 @@ export function ScheduleDrawer({
         interviewerId: interviewer ?? (interviewerId || undefined),
       });
       const warnings: string[] = [];
+      const calendarUnchecked = result.gcalAvailability === "unknown";
       if (result.gcalBusy.length > 0) {
         warnings.push(
           `${result.gcalBusy.length} existing calendar event${result.gcalBusy.length > 1 ? "s" : ""}`,
@@ -141,10 +143,16 @@ export function ScheduleDrawer({
       }
       setAvailabilityWarning(
         warnings.length > 0
-          ? `This time conflicts with ${warnings.join(" and ")}.`
-          : null,
+          ? `This time conflicts with ${warnings.join(" and ")}.${calendarUnchecked ? " Google Calendar could not be checked." : ""}`
+          : calendarUnchecked
+            ? "Google Calendar availability could not be checked for this time."
+            : null,
       );
-    } catch {
+    } catch (error) {
+      if (error instanceof NonexistentLocalTimeError) {
+        setAvailabilityWarning(error.message);
+        return;
+      }
       // Silently fail , don't block scheduling on availability check.
     } finally {
       setCheckingAvailability(false);

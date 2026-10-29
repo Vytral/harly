@@ -21,6 +21,7 @@ import {
 import { SidePanel } from "@/components/ui/side-panel";
 import {
   getBrowserTimeZone,
+  NonexistentLocalTimeError,
   parseScheduledAt,
 } from "@/features/interviews/shared";
 
@@ -66,6 +67,10 @@ export function RescheduleDrawer({
       const start = parseScheduledAt(`${newDate}T${newTime}`, timeZone);
       const end = new Date(start.getTime() + Number(duration) * 60_000);
       const result = await checkAvailability({ timeMin: start, timeMax: end, excludeInterviewId: interviewId });
+      if (result.gcalAvailability === "unknown") {
+        setAvailabilityWarning("Google Calendar availability could not be checked for this time.");
+        return;
+      }
       if (result.gcalBusy.length > 0) {
         setAvailabilityWarning(
           `This time overlaps with ${result.gcalBusy.length} existing event${result.gcalBusy.length > 1 ? "s" : ""} on your calendar.`,
@@ -73,7 +78,11 @@ export function RescheduleDrawer({
       } else {
         setAvailabilityWarning(null);
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof NonexistentLocalTimeError) {
+        setAvailabilityWarning(error.message);
+        return;
+      }
       // Silently fail , don't block rescheduling on availability check.
     } finally {
       setCheckingAvailability(false);

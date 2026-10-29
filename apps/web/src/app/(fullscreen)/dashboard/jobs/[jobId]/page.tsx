@@ -22,7 +22,7 @@ import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getHarlyPublicOrigin } from "@/lib/public-origin";
 import { countCandidatePool } from "@/features/matching/data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { can } from "@/features/workspaces/permissions-server";
+import { can, requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +35,7 @@ type DashboardJobPageProps = {
 export default async function DashboardJobPage({
   params,
 }: DashboardJobPageProps) {
+  await requirePagePermission("jobs:view");
   const { jobId } = await params;
   const { organization: workspace } = await getWorkspaceContext();
   const [result, departments, hiringTeam, workspaceMembers, aiStatus, candidatePoolCount, careerPageData, canEditJobs] =

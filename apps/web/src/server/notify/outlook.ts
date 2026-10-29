@@ -3,6 +3,7 @@ import "server-only";
 import { isDemoMode } from "@harly/config";
 
 import { recordIntegrationSuccess } from "@/features/integrations/health/repository";
+import { safeErrorFields } from "@/features/integrations/health/model";
 import { getWorkspaceOutlookConfig, recordOutlookCallFailure } from "@/lib/outlook/config";
 import { sendMail } from "@/lib/outlook/client";
 import { WEBHOOK_EVENT_LABELS, type WebhookEvent } from "@/server/webhooks/events";
@@ -92,7 +93,7 @@ export async function notifyOutlookEvent(
         body,
       });
     } catch (sendError) {
-      await recordOutlookCallFailure(workspaceId, sendError);
+      await recordOutlookCallFailure(workspaceId, sendError, config.refreshTokenCiphertext);
       throw sendError;
     }
     await recordIntegrationSuccess(workspaceId, "outlook");
@@ -100,7 +101,7 @@ export async function notifyOutlookEvent(
     console.error("[notify] outlook send failed", {
       workspaceId,
       event,
-      error,
+      ...safeErrorFields(error),
     });
   }
 }
