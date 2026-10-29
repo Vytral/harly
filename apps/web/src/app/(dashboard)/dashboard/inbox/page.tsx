@@ -2,6 +2,7 @@ import { isDemoMode } from "@harly/config";
 
 import { RecruitingInbox } from "@/features/mailbox/RecruitingInbox";
 import { getInboxData, normalizeInboxFilter } from "@/features/mailbox/data";
+import { requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
@@ -10,6 +11,7 @@ type InboxPageProps = {
 };
 
 export default async function InboxPage({ searchParams }: InboxPageProps) {
+  await requirePagePermission("candidates:view");
   const query = await searchParams;
   const filter = Array.isArray(query.filter) ? query.filter[0] : query.filter;
   const page = Number.isFinite(Number(query.page)) ? Math.max(0, Number(query.page)) : 0;

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { getWorkspaceContext } from "@/features/workspaces/context";
+import { ApiError } from "@harly/api";
+
+import type { WorkspaceContext } from "@/features/workspaces/context";
+import { requireOwnerOrAdmin } from "@/features/workspaces/permissions-server";
 import {
   getWorkspaceAuditLogs,
   type AuditLogFilters,
@@ -26,12 +29,19 @@ function csvValue(value: unknown) {
 
 export async function GET(request: Request) {
   try {
-    const context = await getWorkspaceContext();
-    if (context.roleKey !== "owner" && context.roleKey !== "admin") {
-      return NextResponse.json(
-        { error: "Only workspace owners and admins can export audit logs." },
-        { status: 403 },
+    let context: WorkspaceContext;
+    try {
+      context = await requireOwnerOrAdmin(
+        "Only workspace owners and admins can export audit logs.",
       );
+    } catch (error) {
+      if (error instanceof ApiError) {
+        return NextResponse.json(
+          { error: error.message },
+          { status: error.status },
+        );
+      }
+      throw error;
     }
 
     const url = new URL(request.url);

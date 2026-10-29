@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, desc, eq, exists, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
+import { ApiError } from "@harly/api";
+
 import {
   activityEvents,
   applications,
@@ -28,7 +30,7 @@ import {
 import { getDocumentAccessForUser } from "./access";
 import { slugifyDocumentCategory } from "./shared";
 import { verifyUploadedDocument as verifyUploadedDocumentShared } from "./verify";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import { requireOwnerOrAdmin, requirePermission } from "@/features/workspaces/permissions-server";
 import { isExternallyManagedSignatureProvider } from "@/lib/esign/signature-state";
 import { sendDocumentForEnvelope } from "@/lib/esign/document-signing";
 import { archiveSubmission, freshEsignContext } from "@/lib/esign/client";
@@ -310,14 +312,24 @@ export async function setDocumentStatus(input: { documentId: string; status: "ac
   return { ok: true };
 }
 
+/** Owner/admin gate for document actions: a denial becomes an action result. */
+async function requireOwnerOrAdminResult(message: string): Promise<DocumentActionResult | null> {
+  try {
+    await requireOwnerOrAdmin(message);
+    return null;
+  } catch (error) {
+    if (error instanceof ApiError) return { ok: false, error: error.message };
+    throw error;
+  }
+}
+
 /** Permanently remove a document and every stored derivative. Owner/admin only. */
 export async function deleteDocument(input: { documentId: string }): Promise<DocumentActionResult> {
   const permission = await documentContext("documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
+  const denied = await requireOwnerOrAdminResult("Only workspace owners and admins can delete documents.");
+  if (denied) return denied;
   const { context } = permission;
-  if (context.roleKey !== "owner" && context.roleKey !== "admin") {
-    return { ok: false, error: "Only workspace owners and admins can delete documents." };
-  }
   const parsed = documentIdSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid document." };
   const access = await getDocumentAccessForUser({
@@ -1029,10 +1041,9 @@ export async function bulkSetDocumentCategory(input: {
 export async function bulkDeleteDocuments(input: { documentIds: string[] }): Promise<DocumentActionResult> {
   const permission = await documentContext("documents:manage");
   if (permission.error) return { ok: false, error: permission.error };
+  const denied = await requireOwnerOrAdminResult("Only workspace owners and admins can delete documents.");
+  if (denied) return denied;
   const { context } = permission;
-  if (context.roleKey !== "owner" && context.roleKey !== "admin") {
-    return { ok: false, error: "Only workspace owners and admins can delete documents." };
-  }
   const parsed = bulkIdsSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Invalid bulk delete request." };
 

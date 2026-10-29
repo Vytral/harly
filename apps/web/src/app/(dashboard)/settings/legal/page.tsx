@@ -4,11 +4,12 @@ import { LegalSettings } from "@/features/workspaces/LegalSettingsCard";
 import { DsarRequestsSection } from "@/features/workspaces/DsarRequestsSection";
 import { getDsarRequests } from "@/features/workspaces/dsar-actions";
 import { getLegalSettingsData } from "@/features/workspaces/legal-settings-actions";
-import { can } from "@/features/workspaces/permissions-server";
+import { can, requireAnyPagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function LegalSettingsPage() {
+  await requireAnyPagePermission(["settings:edit", "dsar:manage"]);
   const [canEditSettings, canManageDsar] = await Promise.all([
     can("settings:edit"),
     can("dsar:manage"),

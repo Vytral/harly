@@ -14,7 +14,7 @@ import {
   getTodayInterviews,
   getInbox,
 } from "@/features/dashboard/widgets";
-import { searchWorkspace } from "@/features/search/data";
+import { searchWorkspace, workspaceSearchAccess } from "@/features/search/data";
 import {
   listCandidates,
   getCandidateProfile,
@@ -1180,8 +1180,21 @@ function buildReadTools(ctx: HarlyToolContext) {
           .describe("Name, email, or job title."),
       }),
       execute: async ({ query }) => {
+        const access = await workspaceSearchAccess();
+        if (!access.candidates && !access.jobs) {
+          return {
+            permitted: false,
+            message:
+              "You do not have permission to search candidates or jobs in this workspace.",
+            candidateCount: 0,
+            jobCount: 0,
+            candidates: [],
+            jobs: [],
+          };
+        }
         const results = await searchWorkspace(query);
         return {
+          permitted: true,
           ...evidence("live workspace search results", [
             "Search results are limited to the returned discovery window; resolve a named record before acting.",
           ]),

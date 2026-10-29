@@ -12,9 +12,10 @@ import {
   buildSubline,
   GreetingHeader,
 } from "@/features/dashboard/GreetingHeader";
-import { TriageStrip } from "@/features/dashboard/TriageStrip";
+import { TriageStrip, type TriageItem } from "@/features/dashboard/TriageStrip";
 import {
   getCandidatesNeedingReview,
+  getDashboardWidgetAccess,
   getHiringPerformance,
   getInbox,
   getMyDashboardTasks,
@@ -56,6 +57,10 @@ export default async function DashboardPage({
   // setup checklist would only send visitors to screens they cannot change.
   const demo = isDemoMode();
 
+  // A widget is rendered only when the caller holds its permission. Each data
+  // function also gates itself and returns nothing for a caller without access;
+  // hiring performance is not requested at all, since it has no empty form.
+  const access = await getDashboardWidgetAccess();
   const [inbox, interviews, pipeline, review, myTasks, performance, setup] =
     await Promise.all([
       getInbox(),
@@ -63,7 +68,7 @@ export default async function DashboardPage({
       getPipelineOverview(job),
       getCandidatesNeedingReview(),
       getMyDashboardTasks(),
-      getHiringPerformance(),
+      access.performance ? getHiringPerformance() : null,
       demo ? null : getSetupChecklist(),
     ]);
 
@@ -72,6 +77,39 @@ export default async function DashboardPage({
     (total, stage) => total + stage.count,
     0,
   );
+  const reviewVisible = access.reviewCandidates;
+  const interviewsVisible = access.todayInterviews;
+  const triage: TriageItem[] = [];
+  if (access.reviewCandidates) {
+    triage.push({
+      label: "Awaiting your review",
+      value: review.length,
+      href: "/dashboard/candidates",
+      urgent: true,
+    });
+  }
+  if (access.inbox) {
+    triage.push({
+      label: "Overdue replies",
+      value: overdue,
+      href: "/dashboard/inbox",
+      urgent: true,
+    });
+  }
+  if (access.todayInterviews) {
+    triage.push({
+      label: "Interviews today",
+      value: interviews.length,
+      href: "/dashboard/calendars",
+    });
+  }
+  if (access.pipeline) {
+    triage.push({
+      label: "Candidates in pipeline",
+      value: activeCandidates,
+      href: "/dashboard/pipeline",
+    });
+  }
 
   return (
     <div className="mx-auto w-full max-w-[1440px] pb-4">
@@ -100,52 +138,65 @@ export default async function DashboardPage({
         </div>
       ) : null}
 
-      <div className="mt-5">
-        <TriageStrip
-          items={[
-            {
-              label: "Awaiting your review",
-              value: review.length,
-              href: "/dashboard/candidates",
-              urgent: true,
-            },
-            {
-              label: "Overdue replies",
-              value: overdue,
-              href: "/dashboard/inbox",
-              urgent: true,
-            },
-            {
-              label: "Interviews today",
-              value: interviews.length,
-              href: "/dashboard/calendars",
-            },
-            {
-              label: "Candidates in pipeline",
-              value: activeCandidates,
-              href: "/dashboard/pipeline",
-            },
-          ]}
-        />
-      </div>
+      {triage.length > 0 ? (
+        <div className="mt-5">
+          <TriageStrip items={triage} />
+        </div>
+      ) : null}
 
       {/* The work itself , decisions first, and the widest column gets them. */}
-      <section className="mt-4 grid gap-4 lg:grid-cols-5">
-        <CandidatesNeedingReview candidates={review} className="lg:col-span-3" />
-        <TodayInterviews interviews={interviews} className="lg:col-span-2" />
-      </section>
+      {reviewVisible || interviewsVisible ? (
+        <section className="mt-4 grid gap-4 lg:grid-cols-5">
+          {access.reviewCandidates ? (
+            <CandidatesNeedingReview
+              candidates={review}
+              className={interviewsVisible ? "lg:col-span-3" : "lg:col-span-5"}
+            />
+          ) : null}
+          {access.todayInterviews ? (
+            <TodayInterviews
+              interviews={interviews}
+              className={reviewVisible ? "lg:col-span-2" : "lg:col-span-5"}
+            />
+          ) : null}
+        </section>
+      ) : null}
 
       {/* Context for those decisions. */}
-      <section className="mt-4 grid gap-4 lg:grid-cols-5">
-        <PipelineOverviewCard data={pipeline} className="lg:col-span-3" />
-        <InboxCard items={inbox} className="lg:col-span-2" />
-      </section>
+      {access.pipeline || access.inbox ? (
+        <section className="mt-4 grid gap-4 lg:grid-cols-5">
+          {access.pipeline ? (
+            <PipelineOverviewCard
+              data={pipeline}
+              className={access.inbox ? "lg:col-span-3" : "lg:col-span-5"}
+            />
+          ) : null}
+          {access.inbox ? (
+            <InboxCard
+              items={inbox}
+              className={access.pipeline ? "lg:col-span-2" : "lg:col-span-5"}
+            />
+          ) : null}
+        </section>
+      ) : null}
 
       {/* Useful, never urgent , so it sits where the eye arrives last. */}
-      <section className="mt-4 grid gap-4 lg:grid-cols-5">
-        <MyTasksCard tasks={myTasks} className="lg:col-span-2" />
-        <HiringPerformance data={performance} className="lg:col-span-3" />
-      </section>
+      {access.tasks || performance ? (
+        <section className="mt-4 grid gap-4 lg:grid-cols-5">
+          {access.tasks ? (
+            <MyTasksCard
+              tasks={myTasks}
+              className={performance ? "lg:col-span-2" : "lg:col-span-5"}
+            />
+          ) : null}
+          {performance ? (
+            <HiringPerformance
+              data={performance}
+              className={access.tasks ? "lg:col-span-3" : "lg:col-span-5"}
+            />
+          ) : null}
+        </section>
+      ) : null}
     </div>
   );
 }

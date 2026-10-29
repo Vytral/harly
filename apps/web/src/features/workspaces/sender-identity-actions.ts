@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 
+import { ApiError } from "@harly/api";
+
 import {
   db,
   member as authMembers,
@@ -11,6 +13,7 @@ import {
   user as authUsers,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { requireOwner } from "@/features/workspaces/permissions-server";
 import { provisionMemberSenderIdentity } from "@/features/workspaces/sender-identity";
 import { logAuditEvent } from "@/lib/audit-log";
 import { createLogger } from "@/lib/logger";
@@ -27,6 +30,17 @@ const localPartSchema = z
 
 type Result = { success: boolean; error?: string };
 
+/** Owner-only gate: a denial becomes the action's error result. */
+async function requireOwnerResult(): Promise<Result | null> {
+  try {
+    await requireOwner("Only the workspace owner can do this.");
+    return null;
+  } catch (error) {
+    if (error instanceof ApiError) return { success: false, error: error.message };
+    throw error;
+  }
+}
+
 /** Owner-only: edit a recruiter's virtual sender local-part/display name. */
 export async function updateMemberSenderIdentityAction(input: {
   memberId: string;
@@ -35,9 +49,8 @@ export async function updateMemberSenderIdentityAction(input: {
 }): Promise<Result> {
   try {
     const context = await getWorkspaceContext();
-    if (context.roleKey !== "owner") {
-      return { success: false, error: "Only the workspace owner can do this." };
-    }
+    const denied = await requireOwnerResult();
+    if (denied) return denied;
 
     const parsedLocalPart = localPartSchema.safeParse(input.localPart);
     if (!parsedLocalPart.success) {
@@ -121,9 +134,8 @@ export async function generateMemberSenderIdentityAction(input: {
 }): Promise<Result> {
   try {
     const context = await getWorkspaceContext();
-    if (context.roleKey !== "owner") {
-      return { success: false, error: "Only the workspace owner can do this." };
-    }
+    const denied = await requireOwnerResult();
+    if (denied) return denied;
 
     const [target] = await db
       .select({

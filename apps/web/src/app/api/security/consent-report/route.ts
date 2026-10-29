@@ -1,15 +1,22 @@
 import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
+import { ApiError } from "@harly/api";
 import { consentRecords, candidates, db } from "@harly/db";
-import { getWorkspaceContext } from "@/features/workspaces/context";
+import type { WorkspaceContext } from "@/features/workspaces/context";
+import { requireOwnerOrAdmin } from "@/features/workspaces/permissions-server";
 import { extractRequestMeta, logAuditEvent } from "@/lib/audit-log";
 import { toSafeCsv } from "@/lib/csv";
 
 export async function GET(request: Request) {
-  const context = await getWorkspaceContext();
-  if (context.roleKey !== "owner" && context.roleKey !== "admin") {
-    return NextResponse.json({ error: "Only workspace owners and admins can export consent reports." }, { status: 403 });
+  let context: WorkspaceContext;
+  try {
+    context = await requireOwnerOrAdmin("Only workspace owners and admins can export consent reports.");
+  } catch (error) {
+    if (error instanceof ApiError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    throw error;
   }
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim();

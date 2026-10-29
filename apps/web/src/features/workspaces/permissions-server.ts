@@ -417,6 +417,57 @@ export async function requirePagePermission(permission: Permission) {
 }
 
 /**
+ * Page-level guard for pages reachable through more than one permission: passes
+ * when the current user holds at least one of `permissions`, otherwise redirects
+ * like {@link requirePagePermission}.
+ */
+export async function requireAnyPagePermission(
+  permissions: readonly Permission[],
+) {
+  const context = await getWorkspaceContext();
+  if (roleIsAllPowerful(context.roleKey)) return context;
+  const perms = await getRolePermissions(
+    context.organization.id,
+    context.roleKey,
+  );
+  if (!permissions.some((permission) => perms.includes(permission))) {
+    redirect("/dashboard" as Route);
+  }
+  return context;
+}
+
+/**
+ * Throw unless the current user is a workspace owner or admin. The inline
+ * role checks this replaces used exactly these two roles; `message` lets each
+ * call site keep its own user-facing text. Throws `ApiError.forbidden`, so a
+ * caller maps it to its own response shape.
+ */
+export async function requireOwnerOrAdmin(
+  message = "Only workspace owners and admins can do this.",
+) {
+  const context = await getWorkspaceContext();
+  if (context.roleKey !== "owner" && context.roleKey !== "admin") {
+    throw ApiError.forbidden(message);
+  }
+  return context;
+}
+
+/**
+ * Throw unless the current user is the workspace owner. Owner-only actions
+ * (for example, editing another member's sender identity) stay owner-only:
+ * admins are rejected here, unlike {@link requireOwnerOrAdmin}.
+ */
+export async function requireOwner(
+  message = "Only the workspace owner can do this.",
+) {
+  const context = await getWorkspaceContext();
+  if (context.roleKey !== "owner") {
+    throw ApiError.forbidden(message);
+  }
+  return context;
+}
+
+/**
  * Privilege-ceiling guard for assigning a role to a member (invite, invite
  * link, role change). Returns a user-facing error string, or `null` when the
  * assignment is allowed. Rules for anyone who is not the owner:

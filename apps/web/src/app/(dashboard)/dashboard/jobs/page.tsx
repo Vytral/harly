@@ -13,6 +13,7 @@ import { JobsTable } from "@/features/jobs/JobsTable";
 import { JobIdentity } from "@/features/jobs/JobIdentity";
 import { TrashJobActions } from "@/features/jobs/TrashJobActions";
 import { cn } from "@/lib/utils";
+import { requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,7 @@ const tileClass =
   "rounded-2xl border border-border/70 bg-card p-4 shadow-[0_1px_2px_rgba(28,27,22,0.04)]";
 
 export default async function DashboardJobsPage({ searchParams }: JobsPageProps) {
+  await requirePagePermission("jobs:view");
   const { view } = await searchParams;
   const isTrash = view === "trash";
 

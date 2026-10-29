@@ -5,7 +5,7 @@ import { DocumentsHub } from "@/features/documents/DocumentsHub";
 import { getDocumentHubData } from "@/features/documents/data";
 import { listWorkflowDocumentTemplates } from "@/features/document-templates/data";
 import { DocumentTemplatesManager } from "@/features/document-templates/DocumentTemplatesManager";
-import { can } from "@/features/workspaces/permissions-server";
+import { can, requireAnyPagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +18,7 @@ export default async function DocumentsPage({
     view?: string;
   }>;
 }) {
+  await requireAnyPagePermission(["documents:read", "templates:manage"]);
   const [canReadDocuments, canManageTemplates] = await Promise.all([
     can("documents:read"),
     can("templates:manage"),

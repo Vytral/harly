@@ -169,6 +169,31 @@ legacy rows whose `kind` is NULL. Do not add other name checks.
 - Write a test for every new outcome path that proves the behavior with a stage
   whose name would have led a name-based check to the wrong answer.
 
+## Authorization rules
+
+Every page under `apps/web/src/app/(dashboard)` declares who may open it. A
+page calls a guard from `features/workspaces/permissions-server.ts` at the top of
+its server component: `requirePagePermission(permission)` for one permission,
+`requireAnyPagePermission([...])` when several permissions qualify. A page that
+handles a single record also calls its record guard, such as
+`requireCandidatePermission`. The matrix test
+(`features/workspaces/page-permission-matrix.test.ts`) fails when a page has no
+guard and is not on its short allowlist with a stated reason. It also checks
+that a nav entry's `requiredPermission` matches the guard of the page it links to.
+
+- Data functions enforce permission too. A list, count, facet, export, or AI
+  tool that reads records must require the permission itself, so a page guard
+  is never the only check.
+- Role scope applies to every candidate, job, application, interview, and task
+  read. Reuse the predicates in `features/search/scope.ts` (`jobScopeSql`,
+  `candidateScopeSql`, `taskScopeSql`) rather than writing a new filter.
+- Canonical metrics (`features/reports/canonical.ts`) are workspace-wide. A
+  restricted caller must not see them until they can be filtered by job.
+- A check that only the owner or an admin may pass uses
+  `requireOwnerOrAdmin()`; use `requireOwner()` when admins are excluded too.
+- Keep responses for denied and unknown records identical when that protects
+  against account enumeration.
+
 ## Documentation, configuration, and release changes
 
 - Add new environment variables to `.env.example` with safe placeholders and

@@ -3,10 +3,12 @@ import { UserRound } from "lucide-react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { listPeopleAction } from "@/features/people/actions";
 import { PeopleTable, type PersonListRow } from "@/features/people/PeopleTable";
+import { requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function PeoplePage() {
+  await requirePagePermission("members:read");
   const rows = await listPeopleAction();
 
   const people: PersonListRow[] = rows.map((row) => ({

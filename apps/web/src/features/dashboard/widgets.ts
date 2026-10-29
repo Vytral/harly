@@ -1,7 +1,7 @@
 import "server-only";
 
 import { cache } from "react";
-import { and, asc, count, desc, eq, exists, gte, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from "drizzle-orm";
 
 import {
   applications,
@@ -26,7 +26,15 @@ import {
   getWorkspaceTimeZone,
 } from "@/features/reports/canonical";
 import { dayLabel, allTimeWindow, previousWindow, resolveWindow } from "@/features/reports/window";
-import { can } from "@/features/workspaces/permissions-server";
+import {
+  actorHasPermission,
+  isUnrestrictedScope,
+  jobScopeSql,
+  taskScopeSql,
+  type WorkspaceSearchActor,
+} from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
+import type { Permission } from "@/features/workspaces/permissions";
 import { taskDueState } from "@/features/tasks/shared";
 import { daysSince } from "@/lib/date";
 
@@ -35,6 +43,44 @@ const PERF_DAYS = 14;
 /** Review-stage logic keys off stage kind, never the display name. */
 const REVIEW_KINDS = ["screening", "interview"] as const;
 const RISK_WINDOW_DAYS = 30;
+
+/**
+ * The caller's permissions and role scope, resolved once per request. Every
+ * widget gates on this: a widget the caller cannot see returns nothing (or is
+ * omitted by the page) instead of raising an error.
+ */
+const widgetActor = cache(() => resolveSearchActor());
+
+function hasAnyPermission(actor: WorkspaceSearchActor, permissions: readonly Permission[]) {
+  return permissions.some((permission) => actorHasPermission(actor, permission));
+}
+
+/**
+ * Which home widgets the caller may see. The page renders a widget only when
+ * its flag is set, so the data for an omitted widget is never requested.
+ */
+export type DashboardWidgetAccess = {
+  reviewCandidates: boolean;
+  todayInterviews: boolean;
+  pipeline: boolean;
+  inbox: boolean;
+  tasks: boolean;
+  /** Canonical hiring metrics are workspace-wide, so only unrestricted actors see them. */
+  performance: boolean;
+};
+
+export const getDashboardWidgetAccess = cache(async (): Promise<DashboardWidgetAccess> => {
+  const actor = await widgetActor();
+  const has = (permission: Permission) => actorHasPermission(actor, permission);
+  return {
+    reviewCandidates: has("candidates:view"),
+    todayInterviews: hasAnyPermission(actor, ["interviews:manage", "interviews:feedback"]),
+    pipeline: has("candidates:view"),
+    inbox: has("candidates:view") || has("jobs:approve"),
+    tasks: has("tasks:read"),
+    performance: has("reports:read") && isUnrestrictedScope(actor.scope),
+  };
+});
 
 function interviewTypeLabel(type: string): string {
   switch (type) {
@@ -55,6 +101,10 @@ function interviewTypeLabel(type: string): string {
 
 export const getPipelineOverview = cache(async (jobId?: string) => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  if (!actorHasPermission(actor, "candidates:view")) {
+    return { jobs: [], selected: null, stages: [], total: 0 };
+  }
 
   const openJobs = await db
     .select({ id: jobs.id, title: jobs.title })
@@ -64,6 +114,7 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
         eq(jobs.workspaceId, workspace.id),
         eq(jobs.status, "open"),
         isNull(jobs.deletedAt),
+        jobScopeSql(actor),
       ),
     )
     .orderBy(asc(jobs.title));
@@ -84,6 +135,7 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
         and(
           eq(applications.workspaceId, workspace.id),
           eq(applications.status, "active"),
+          inArray(applications.jobId, openJobs.map((job) => job.id)),
           exists(
             db
               .select({ id: candidates.id })
@@ -138,6 +190,7 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
       and(
         eq(jobStages.workspaceId, workspace.id),
         eq(jobStages.jobId, selected.id),
+        isNull(jobStages.archivedAt),
       ),
     )
     .groupBy(jobStages.id)
@@ -165,6 +218,8 @@ export const getPipelineOverview = cache(async (jobId?: string) => {
 
 export const getTodayInterviews = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  if (!hasAnyPermission(actor, ["interviews:manage", "interviews:feedback"])) return [];
   // "Today" is the workspace's local day, not the server's.
   const timeZone = await getWorkspaceTimeZone(workspace.id);
   const today = resolveWindow(1, timeZone, new Date());
@@ -207,6 +262,7 @@ export const getTodayInterviews = cache(async () => {
         eq(interviews.workspaceId, workspace.id),
         gte(interviews.scheduledAt, start),
         lt(interviews.scheduledAt, end),
+        jobScopeSql(actor),
       ),
     )
     .orderBy(asc(interviews.scheduledAt));
@@ -228,6 +284,8 @@ export const getTodayInterviews = cache(async () => {
 
 export const getCandidatesNeedingReview = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  if (!actorHasPermission(actor, "candidates:view")) return [];
 
   const [rows, enteredRows] = await Promise.all([
     db
@@ -285,6 +343,7 @@ export const getCandidatesNeedingReview = cache(async () => {
         eq(applications.workspaceId, workspace.id),
         eq(applications.status, "active"),
         isNull(candidates.deletedAt),
+        jobScopeSql(actor),
         ),
       ),
     db
@@ -323,6 +382,8 @@ export const getCandidatesNeedingReview = cache(async () => {
 
 export const getJobsAtRisk = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  if (!actorHasPermission(actor, "reports:read")) return [];
   const timeZone = await getWorkspaceTimeZone(workspace.id);
   const now = new Date();
   const recentWindow = resolveWindow(RISK_WINDOW_DAYS, timeZone, now);
@@ -362,6 +423,7 @@ export const getJobsAtRisk = cache(async () => {
           eq(jobs.workspaceId, workspace.id),
           eq(jobs.status, "open"),
           isNull(jobs.deletedAt),
+          jobScopeSql(actor),
         ),
       )
       .groupBy(jobs.id)
@@ -425,6 +487,12 @@ function pctDelta(cur: number, prev: number): number | null {
  */
 export const getHiringPerformance = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  // The canonical metrics cannot be filtered by job, so a restricted actor
+  // must not see them at all. Callers check getDashboardWidgetAccess first.
+  if (!actorHasPermission(actor, "reports:read") || !isUnrestrictedScope(actor.scope)) {
+    throw new Error("You do not have access to hiring performance.");
+  }
   const timeZone = await getWorkspaceTimeZone(workspace.id);
   const now = new Date();
   const current = resolveWindow(PERF_DAYS, timeZone, now);
@@ -494,9 +562,14 @@ type InboxIcon = "feedback" | "schedule" | "screen" | "approve";
 
 export const getInbox = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await widgetActor();
+  const seesCandidates = actorHasPermission(actor, "candidates:view");
+  // Draft-job approvals are an approver's item, so they need jobs:approve.
+  const seesDraftJobs = actorHasPermission(actor, "jobs:approve");
+  if (!seesCandidates && !seesDraftJobs) return [];
 
   const [rows, scorecardKeys, interviewedRows, draftJobs] = await Promise.all([
-    db
+    !seesCandidates ? [] : db
       .select({
         applicationId: applications.id,
         candidateId: candidates.id,
@@ -537,20 +610,21 @@ export const getInbox = cache(async () => {
         and(
           eq(applications.workspaceId, workspace.id),
           eq(applications.status, "active"),
+          jobScopeSql(actor),
         ),
       ),
-    db
+    !seesCandidates ? [] : db
       .select({
         candidateId: scorecards.candidateId,
         stageName: scorecards.stageName,
       })
       .from(scorecards)
       .where(eq(scorecards.workspaceId, workspace.id)),
-    db
+    !seesCandidates ? [] : db
       .select({ applicationId: interviews.applicationId })
       .from(interviews)
       .where(eq(interviews.workspaceId, workspace.id)),
-    db
+    !seesDraftJobs ? [] : db
       .select({ id: jobs.id, title: jobs.title })
       .from(jobs)
       .where(
@@ -558,6 +632,7 @@ export const getInbox = cache(async () => {
           eq(jobs.workspaceId, workspace.id),
           eq(jobs.status, "draft"),
           isNull(jobs.deletedAt),
+          jobScopeSql(actor),
         ),
       ),
   ]);
@@ -658,7 +733,8 @@ export type InboxItem = Awaited<ReturnType<typeof getInbox>>[number];
 // ── My tasks (dashboard widget) ─────────────────────────────────────────────
 
 export const getMyDashboardTasks = cache(async () => {
-  if (!(await can("tasks:read"))) return [];
+  const actor = await widgetActor();
+  if (!actorHasPermission(actor, "tasks:read")) return [];
   const { organization: workspace, user: currentUser } = await getWorkspaceContext();
   const now = new Date();
 
@@ -697,6 +773,7 @@ export const getMyDashboardTasks = cache(async () => {
         isNull(tasks.deletedAt),
         eq(tasks.ownerId, currentUser.id),
         or(eq(tasks.status, "pending"), eq(tasks.status, "in_progress")),
+        taskScopeSql(actor),
       ),
     )
     .orderBy(

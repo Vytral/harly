@@ -63,6 +63,13 @@ import type {
   CandidateExperienceEntry,
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import {
+  actorHasPermission,
+  candidateScopeSql,
+  jobScopeSql,
+  type WorkspaceSearchActor,
+} from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import { deleteConversationsForCandidate } from "@/features/ai-chat/data";
 import {
   interviewTypeLabel,
@@ -342,8 +349,47 @@ export function workspaceStorageKeyFromUrl(
   return key && isWorkspaceStorageKey(workspaceId, key, "images") ? key : null;
 }
 
+/**
+ * The caller as a search actor, after requiring `candidates:view`. Every
+ * candidate read in this module goes through it, so the permission and the
+ * role scope (jobAccess, departments, regions) are applied in one place.
+ */
+async function requireCandidateReadActor(): Promise<WorkspaceSearchActor> {
+  const actor = await resolveSearchActor();
+  if (!actorHasPermission(actor, "candidates:view")) {
+    throw new Error("You do not have permission to view candidates.");
+  }
+  return actor;
+}
+
+/** Ids of the jobs inside the actor's scope, as a subquery. */
+function scopedJobIdsSubquery(actor: WorkspaceSearchActor) {
+  return db
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.workspaceId, actor.workspaceId),
+        isNull(jobs.deletedAt),
+        jobScopeSql(actor),
+      ),
+    );
+}
+
+/**
+ * Applications the actor may see, as a predicate on `applications.jobId`.
+ * Undefined for unrestricted actors. For a restricted actor the subquery holds
+ * only the jobs inside their scope, so out-of-scope applications drop out.
+ */
+function scopedApplicationJobPredicate(actor: WorkspaceSearchActor) {
+  if (!jobScopeSql(actor)) return undefined;
+  return inArray(applications.jobId, scopedJobIdsSubquery(actor));
+}
+
 export async function listCandidates() {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await requireCandidateReadActor();
+  const workspace = { id: actor.workspaceId };
+  const applicationScope = scopedApplicationJobPredicate(actor);
 
   const rows = await db
     .select({
@@ -391,6 +437,10 @@ export async function listCandidates() {
       and(
         eq(candidates.workspaceId, workspace.id),
         isNull(candidates.deletedAt),
+        candidateScopeSql(actor, candidates.id),
+        applicationScope
+          ? or(isNull(applications.id), applicationScope)
+          : undefined,
       ),
     )
     .orderBy(desc(candidates.createdAt), desc(applications.appliedAt));
@@ -559,7 +609,9 @@ export async function listCandidates() {
 export async function listCandidateDirectory(
   input: CandidateDirectoryFilters = {},
 ): Promise<CandidateDirectoryPage> {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await requireCandidateReadActor();
+  const workspace = { id: actor.workspaceId };
+  const applicationScope = scopedApplicationJobPredicate(actor);
   const pageSize = Math.min(Math.max(input.pageSize ?? 50, 10), 100);
   const page = Math.max(Math.floor(input.page ?? 1), 1);
   const query = input.query?.trim().replace(/\s+/g, " ").slice(0, 100) ?? "";
@@ -577,7 +629,7 @@ export async function listCandidateDirectory(
       currentStageId: applications.currentStageId,
     })
     .from(applications)
-    .where(eq(applications.workspaceId, workspace.id))
+    .where(and(eq(applications.workspaceId, workspace.id), applicationScope))
     .orderBy(
       asc(applications.candidateId),
       desc(applications.appliedAt),
@@ -591,7 +643,7 @@ export async function listCandidateDirectory(
       value: sql<number>`count(*)::int`.as("value"),
     })
     .from(applications)
-    .where(eq(applications.workspaceId, workspace.id))
+    .where(and(eq(applications.workspaceId, workspace.id), applicationScope))
     .groupBy(applications.candidateId)
     .as("application_counts");
 
@@ -599,6 +651,9 @@ export async function listCandidateDirectory(
     eq(candidates.workspaceId, workspace.id),
     isNull(candidates.deletedAt),
   ];
+  // A restricted actor only sees candidates with an application in scope.
+  const visibleCandidate = candidateScopeSql(actor, candidates.id);
+  if (visibleCandidate) predicates.push(visibleCandidate);
 
   if (query) {
     predicates.push(
@@ -830,33 +885,48 @@ export async function listCandidateDirectory(
 }
 
 export async function listCandidateDirectoryFacets(): Promise<CandidateDirectoryFacets> {
-  const { organization: workspace } = await getWorkspaceContext();
+  const actor = await requireCandidateReadActor();
+  const workspace = { id: actor.workspaceId };
   const [departmentRows, roleRows, stageRows, sourceRows, tagRows] = await Promise.all([
     db
       .selectDistinct({ value: jobs.department })
       .from(jobs)
-      .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt), isNotNull(jobs.department)))
+      .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt), isNotNull(jobs.department), jobScopeSql(actor)))
       .orderBy(asc(jobs.department)),
     db
       .selectDistinct({ value: jobs.title })
       .from(jobs)
-      .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)))
+      .where(and(eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt), jobScopeSql(actor)))
       .orderBy(asc(jobs.title)),
     db
       .selectDistinct({ value: jobStages.name })
       .from(jobStages)
-      .where(eq(jobStages.workspaceId, workspace.id))
+      .where(
+        and(
+          eq(jobStages.workspaceId, workspace.id),
+          isNull(jobStages.archivedAt),
+          jobScopeSql(actor)
+            ? inArray(jobStages.jobId, scopedJobIdsSubquery(actor))
+            : undefined,
+        ),
+      )
       .orderBy(asc(jobStages.name)),
     db
       .selectDistinct({ value: applications.source })
       .from(applications)
       .innerJoin(jobs, and(eq(jobs.id, applications.jobId), eq(jobs.workspaceId, workspace.id), isNull(jobs.deletedAt)))
-      .where(and(eq(applications.workspaceId, workspace.id), isNotNull(applications.source)))
+      .where(and(eq(applications.workspaceId, workspace.id), isNotNull(applications.source), jobScopeSql(actor)))
       .orderBy(asc(applications.source)),
     db
       .selectDistinct({ value: candidateTags.label })
       .from(candidateTags)
-      .where(and(eq(candidateTags.workspaceId, workspace.id), isNotNull(candidateTags.label)))
+      .where(
+        and(
+          eq(candidateTags.workspaceId, workspace.id),
+          isNotNull(candidateTags.label),
+          candidateScopeSql(actor, candidateTags.candidateId),
+        ),
+      )
       .orderBy(asc(candidateTags.label)),
   ]);
 

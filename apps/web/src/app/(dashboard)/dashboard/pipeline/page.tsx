@@ -9,6 +9,7 @@ import { PipelineViewToggle } from "@/features/pipeline/PipelineViewToggle";
 import { getPipelineData, type PipelineData } from "@/features/pipeline/data";
 import { getWorkspaceAiStatus } from "@/lib/ai/config";
 import { getWorkspaceContext } from "@/features/workspaces/context";
+import { requirePagePermission } from "@/features/workspaces/permissions-server";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,7 @@ type PipelinePageProps = {
 };
 
 export default async function PipelinePage({ searchParams }: PipelinePageProps) {
+  await requirePagePermission("candidates:view");
   const { job, jobId, view: rawView } = await searchParams;
   const view = rawView === "board" ? "board" : "list";
   const { organization: workspace } = await getWorkspaceContext();
