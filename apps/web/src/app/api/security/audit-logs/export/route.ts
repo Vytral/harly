@@ -33,7 +33,8 @@ export async function GET(request: Request) {
     try {
       context = (
         await requireDsarExport(
-          "Exporting audit logs requires the Review privacy requests permission.",
+          "Exporting audit logs requires the Review privacy requests and Manage security permissions.",
+          { alsoRequire: "security:manage" },
         )
       ).context;
     } catch (error) {

@@ -130,7 +130,7 @@ describe("owner and admin export routes", () => {
     const response = await GET(new Request("https://app.example.test/api/security/audit-logs/export"));
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({
-      error: "Exporting audit logs requires the Review privacy requests permission.",
+      error: "Exporting audit logs requires the Review privacy requests and Manage security permissions.",
     });
     expect(mocks.getWorkspaceAuditLogs).not.toHaveBeenCalled();
   });

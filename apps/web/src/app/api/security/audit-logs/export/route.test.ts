@@ -109,6 +109,21 @@ describe("audit log export", () => {
     expect(mocks.getWorkspaceAuditLogs).not.toHaveBeenCalled();
   });
 
+  it("refuses a DSAR reviewer that lacks security:manage", async () => {
+    mocks.getWorkspaceAuditLogs.mockClear();
+    mocks.getWorkspaceContext.mockResolvedValue({
+      organization: { id: "ws-1" },
+      roleKey: "dsar-only",
+      user: { id: "user-5", email: "dsaronly@example.com" },
+    });
+    mocks.select.mockReturnValue(selectReturning([{ permissions: ["dsar:manage"], scope: {} }]));
+
+    const response = await GET(new NextRequest("http://localhost/api/security/audit-logs/export"));
+
+    expect(response.status).toBe(403);
+    expect(mocks.getWorkspaceAuditLogs).not.toHaveBeenCalled();
+  });
+
   it("refuses a custom role with settings and security access but no dsar:manage", async () => {
     mocks.getWorkspaceAuditLogs.mockClear();
     mocks.getWorkspaceContext.mockResolvedValue({
@@ -126,13 +141,13 @@ describe("audit log export", () => {
 
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({
-      error: "Exporting audit logs requires the Review privacy requests permission.",
+      error: "Exporting audit logs requires the Review privacy requests and Manage security permissions.",
     });
     expect(mocks.getWorkspaceAuditLogs).not.toHaveBeenCalled();
     expect(mocks.logAuditEvent).not.toHaveBeenCalled();
   });
 
-  it("admits a custom role that holds dsar:manage", async () => {
+  it("admits a custom role that holds dsar:manage and security:manage", async () => {
     mocks.getWorkspaceAuditLogs.mockResolvedValue([]);
     mocks.getWorkspaceContext.mockResolvedValue({
       organization: { id: "ws-1" },
@@ -140,7 +155,7 @@ describe("audit log export", () => {
       user: { id: "user-4", email: "dsar@example.com" },
     });
     mocks.select.mockReturnValue(
-      selectReturning([{ permissions: ["dsar:manage"], scope: {} }]),
+      selectReturning([{ permissions: ["dsar:manage", "security:manage"], scope: {} }]),
     );
 
     const response = await GET(
