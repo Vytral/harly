@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { ApiError } from "@harly/api";
 
 import type { WorkspaceContext } from "@/features/workspaces/context";
-import { requireOwnerOrAdmin } from "@/features/workspaces/permissions-server";
+import { requireDsarExport } from "@/features/privacy/export-access";
 import {
   getWorkspaceAuditLogs,
   type AuditLogFilters,
@@ -31,9 +31,11 @@ export async function GET(request: Request) {
   try {
     let context: WorkspaceContext;
     try {
-      context = await requireOwnerOrAdmin(
-        "Only workspace owners and admins can export audit logs.",
-      );
+      context = (
+        await requireDsarExport(
+          "Exporting audit logs requires the Review privacy requests permission.",
+        )
+      ).context;
     } catch (error) {
       if (error instanceof ApiError) {
         return NextResponse.json(

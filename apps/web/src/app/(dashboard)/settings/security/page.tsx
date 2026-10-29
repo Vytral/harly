@@ -1,6 +1,6 @@
 import { isDemoMode } from "@harly/config";
 import { getWorkspaceContext } from "@/features/workspaces/context";
-import { requirePagePermission } from "@/features/workspaces/permissions-server";
+import { can, requirePagePermission } from "@/features/workspaces/permissions-server";
 import { getWorkspaceAuditLogs, getWorkspaceSecuritySettings } from "@/features/security/data";
 import { getOAuthProviderStatus, listOAuthProvidersAction, getEnabledLoginMethodsAction } from "@/features/security/actions";
 import { listSSOProvidersAction } from "@/features/security/sso-actions";
@@ -35,6 +35,7 @@ export default async function SecuritySettingsPage() {
   const isOwner = roleKey === "owner";
   const demoLocked = isDemoMode();
   const canMutate = isOwner && !demoLocked;
+  const canExportAuditLog = await can("dsar:manage");
 
   return (
     <div className="space-y-6">
@@ -58,7 +59,7 @@ export default async function SecuritySettingsPage() {
       <ScimProvisioningCard tokens={scimTokens} workspaceId={organization.id} isOwner={canMutate} />
       <AuditLogsCard
         logs={auditLogRows}
-        canExport={roleKey === "owner" || roleKey === "admin"}
+        canExport={canExportAuditLog}
       />
     </div>
   );

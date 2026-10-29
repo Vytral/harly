@@ -124,25 +124,25 @@ describe("owner and admin export routes", () => {
     mocks.select.mockReturnValue(selectReturning([]));
   });
 
-  it("rejects a recruiter from the audit log export with the existing 403 body", async () => {
-    mocks.getWorkspaceContext.mockResolvedValue(contextFor("recruiter"));
+  it("rejects a hiring manager from the audit log export, which needs dsar:manage", async () => {
+    mocks.getWorkspaceContext.mockResolvedValue(contextFor("hiring_manager"));
     const { GET } = await import("@/app/api/security/audit-logs/export/route");
     const response = await GET(new Request("https://app.example.test/api/security/audit-logs/export"));
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({
-      error: "Only workspace owners and admins can export audit logs.",
+      error: "Exporting audit logs requires the Review privacy requests permission.",
     });
     expect(mocks.getWorkspaceAuditLogs).not.toHaveBeenCalled();
   });
 
-  it("rejects a hiring manager from the consent report with the existing 403 body", async () => {
+  it("rejects a hiring manager from the consent report, which needs dsar:manage", async () => {
     mocks.getWorkspaceContext.mockResolvedValue(contextFor("hiring_manager"));
     const { GET } = await import("@/app/api/security/consent-report/route");
     const response = await GET(new Request("https://app.example.test/api/security/consent-report"));
     expect(response.status).toBe(403);
     await expect(response.json()).resolves.toEqual({
-      error: "Only workspace owners and admins can export consent reports.",
+      error: "Exporting consent records requires the Review privacy requests permission.",
     });
-    expect(mocks.select).not.toHaveBeenCalled();
+    expect(mocks.logAuditEvent).not.toHaveBeenCalled();
   });
 });

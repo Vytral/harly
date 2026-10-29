@@ -3,21 +3,22 @@ import { NextResponse } from "next/server";
 
 import { ApiError } from "@harly/api";
 import { consentRecords, candidates, db } from "@harly/db";
-import type { WorkspaceContext } from "@/features/workspaces/context";
-import { requireOwnerOrAdmin } from "@/features/workspaces/permissions-server";
+import { requireDsarExport, type DsarExportAccess } from "@/features/privacy/export-access";
+import { candidateScopeSql } from "@/features/search/scope";
 import { extractRequestMeta, logAuditEvent } from "@/lib/audit-log";
 import { toSafeCsv } from "@/lib/csv";
 
 export async function GET(request: Request) {
-  let context: WorkspaceContext;
+  let access: DsarExportAccess;
   try {
-    context = await requireOwnerOrAdmin("Only workspace owners and admins can export consent reports.");
+    access = await requireDsarExport("Exporting consent records requires the Review privacy requests permission.");
   } catch (error) {
     if (error instanceof ApiError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
     throw error;
   }
+  const { context, actor } = access;
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim();
   const format = url.searchParams.get("format") ?? "json";
@@ -46,6 +47,7 @@ export async function GET(request: Request) {
     .where(and(
       eq(consentRecords.workspaceId, context.organization.id),
       query ? or(ilike(candidates.email, `%${query}%`), ilike(consentRecords.consentType, `%${query}%`)) : undefined,
+      candidateScopeSql(actor, consentRecords.candidateId),
     ))
     .orderBy(desc(consentRecords.createdAt))
     .limit(50_000);

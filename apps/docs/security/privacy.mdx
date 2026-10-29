@@ -80,6 +80,9 @@ When a request comes in:
 
 Harly tracks consent with timestamps and withdrawal events. Consent records are
 available in **Settings → Legal** and through the API (`activity:read` scope).
+The consent report export (`GET /api/security/consent-report`, JSON or CSV)
+requires the `dsar:manage` permission and covers only candidates inside the
+caller's job scope.
 
 | Record | What it captures |
 | --- | --- |
@@ -163,7 +166,8 @@ timestamp, and affected resource. The audit log is available in
 **Settings → Security → Audit log**.
 
 Export the audit log before deleting records that may be needed for an active
-investigation or regulatory response.
+investigation or regulatory response. Exporting requires the `dsar:manage`
+permission; see [access control](/security/access-control#who-can-export-sensitive-records).
 
 | Severity | Examples |
 | --- | --- |

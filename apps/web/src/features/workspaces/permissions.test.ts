@@ -18,6 +18,12 @@ describe("workspace permissions", () => {
     expect(BUILTIN_ROLE_PERMISSIONS.admin).toEqual(PERMISSIONS);
   });
 
+  it("grants dsar:manage by default to owner and admin, the roles that export consent and audit records", () => {
+    expect(BUILTIN_ROLE_PERMISSIONS.owner).toContain("dsar:manage");
+    expect(BUILTIN_ROLE_PERMISSIONS.admin).toContain("dsar:manage");
+    expect(BUILTIN_ROLE_PERMISSIONS.hiring_manager).not.toContain("dsar:manage");
+  });
+
   it("gives recruiters DSAR review access but not member mutation permissions", () => {
     expect(BUILTIN_ROLE_PERMISSIONS.recruiter).toContain("members:read");
     expect(BUILTIN_ROLE_PERMISSIONS.recruiter).not.toContain("members:invite");
