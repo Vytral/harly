@@ -58,6 +58,8 @@ import {
   serializeReferral as serializeCandidateReferral,
 } from "./referrals/service";
 import { updateApplicationStatus } from "@/features/pipeline/actions";
+import { candidateScopeSql, jobScopeSql } from "@/features/search/scope";
+import { resolveSearchActor } from "@/features/search/workspace-search";
 import {
   permanentlyDeleteCandidate,
   restoreCandidate,
@@ -411,7 +413,7 @@ export async function createCandidateNote(input: {
       };
     }
 
-    await requirePermission("collab:write");
+    await requireCandidatePermission("collab:write", input.candidateId);
 
     // Only keep mentions that resolve to real members of this workspace.
     const memberRows = await db
@@ -1299,12 +1301,16 @@ export async function removeCandidateTag(input: {
       return { success: false, error: "Workspace access denied." };
     }
     await requireCandidatePermission("candidates:edit", input.candidateId);
+    // Match the tag to the candidate the caller was checked against. Without
+    // the candidate predicate, a caller scoped to one candidate could delete a
+    // tag on a candidate outside their scope.
     await db
       .delete(candidateTags)
       .where(
         and(
           eq(candidateTags.id, input.tagId),
           eq(candidateTags.workspaceId, input.workspaceId),
+          eq(candidateTags.candidateId, input.candidateId),
         ),
       );
     revalidatePath(`/dashboard/candidates/${input.candidateId}`);
@@ -1366,8 +1372,11 @@ export async function sendBulkCandidateEmail(input: {
   const { interpolateTemplate } =
     await import("@/features/email-templates/interpolate");
   const { organization: workspace, user } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
 
   // Workspace-scoped fetch , ids from the client are never trusted directly.
+  // Candidates outside the caller's scope are dropped here, so they are never
+  // emailed and never reveal a name or address in the result.
   const rows = await db
     .select({
       id: candidates.id,
@@ -1380,6 +1389,7 @@ export async function sendBulkCandidateEmail(input: {
       and(
         eq(candidates.workspaceId, workspace.id),
         inArray(candidates.id, parsed.data.candidateIds),
+        candidateScopeSql(actor, candidates.id),
       ),
     );
 
@@ -1404,7 +1414,11 @@ export async function sendBulkCandidateEmail(input: {
     .from(applications)
     .innerJoin(
       jobs,
-      and(eq(jobs.workspaceId, workspace.id), eq(jobs.id, applications.jobId)),
+      and(
+        eq(jobs.workspaceId, workspace.id),
+        eq(jobs.id, applications.jobId),
+        jobScopeSql(actor),
+      ),
     )
     .where(
       and(

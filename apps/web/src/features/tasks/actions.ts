@@ -7,7 +7,16 @@ import { z } from "zod";
 import { ApiError } from "@harly/api";
 import { db } from "@harly/db";
 import { activityEvents, notifications, tasks } from "@harly/db";
-import { requirePermission } from "@/features/workspaces/permissions-server";
+import type { Permission } from "@/features/workspaces/permissions";
+import {
+  getRolePolicy,
+  requireApplicationPermission,
+  requireCandidatePermission,
+  requireInterviewPermission,
+  requireJobPermission,
+  requirePermission,
+} from "@/features/workspaces/permissions-server";
+import { taskScopeSql, type WorkspaceSearchActor } from "@/features/search/scope";
 import { createLogger } from "@/lib/logger";
 import { logAuditEvent } from "@/lib/audit-log";
 import { assertTaskReferences, serializeTask } from "./service";
@@ -43,6 +52,47 @@ const taskDateInput = z
     return date;
   });
 
+const OUT_OF_SCOPE_MESSAGE = "The selected record is not available to you.";
+
+type TaskLinks = {
+  candidateId?: string | null;
+  applicationId?: string | null;
+  jobId?: string | null;
+  interviewId?: string | null;
+};
+
+/**
+ * Every link a task write names must be inside the caller's role scope under
+ * the task permission. This is the same rule the AI write tools apply, so the
+ * UI and the agent refuse the same records. An absent or null link is skipped.
+ */
+async function linksInCallerScope(permission: Permission, links: TaskLinks): Promise<boolean> {
+  try {
+    if (links.applicationId) await requireApplicationPermission(permission, links.applicationId);
+    if (links.candidateId) await requireCandidatePermission(permission, links.candidateId);
+    if (links.jobId) await requireJobPermission(permission, links.jobId);
+    if (links.interviewId) await requireInterviewPermission(permission, links.interviewId);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The caller's scope in the shape the task visibility predicate takes. */
+async function callerTaskActor(context: {
+  organization: { id: string };
+  user: { id: string };
+  roleKey: string;
+}): Promise<WorkspaceSearchActor> {
+  const policy = await getRolePolicy(context.organization.id, context.roleKey);
+  return {
+    workspaceId: context.organization.id,
+    userId: context.user.id,
+    permissions: policy.permissions,
+    scope: policy.scope,
+  };
+}
+
 const createSchema = z.object({
   title: z.string().trim().min(1, "Title is required.").max(200),
   description: z.string().trim().max(2000).optional(),
@@ -72,9 +122,17 @@ export async function createTask(input: CreateTaskInput): Promise<{
       return { success: false, error: parsed.error.issues[0]?.message };
     }
 
-    const { organization: workspace, user } =
-      await requirePermission("tasks:write");
+    const context = await requirePermission("tasks:write");
+    const { organization: workspace, user } = context;
     const data = parsed.data;
+
+    const linkedInScope = await linksInCallerScope("tasks:write", {
+      candidateId: data.candidateId,
+      applicationId: data.applicationId,
+      jobId: data.jobId,
+      interviewId: data.interviewId,
+    });
+    if (!linkedInScope) return { success: false, error: OUT_OF_SCOPE_MESSAGE };
 
     await assertTaskReferences({
       workspaceId: workspace.id,
@@ -212,10 +270,13 @@ export async function updateTask(
       return { success: false, error: parsed.error.issues[0]?.message };
     }
 
-    const { organization: workspace, user } =
-      await requirePermission("tasks:write");
+    const context = await requirePermission("tasks:write");
+    const { organization: workspace, user } = context;
     const { taskId, ...fields } = parsed.data;
+    const actor = await callerTaskActor(context);
 
+    // A task the caller cannot see is treated as missing, so its existence is
+    // not revealed either.
     const [existing] = await db
       .select({
         ownerId: tasks.ownerId,
@@ -230,11 +291,16 @@ export async function updateTask(
           eq(tasks.id, taskId),
           eq(tasks.workspaceId, workspace.id),
           isNull(tasks.deletedAt),
+          taskScopeSql(actor),
         ),
       )
       .limit(1);
 
     if (!existing) return { success: false, error: "Task not found." };
+
+    if (!(await linksInCallerScope("tasks:write", fields))) {
+      return { success: false, error: OUT_OF_SCOPE_MESSAGE };
+    }
 
     const ownerId = fields.ownerId ?? existing.ownerId;
     const links = {
@@ -294,6 +360,7 @@ export async function updateTask(
             eq(tasks.id, taskId),
             eq(tasks.workspaceId, workspace.id),
             isNull(tasks.deletedAt),
+            taskScopeSql(actor),
           ),
         )
         .returning();
@@ -472,8 +539,9 @@ export async function deleteTask(
   expectedUpdatedAt?: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const { organization: workspace, user } =
-      await requirePermission("tasks:write");
+    const context = await requirePermission("tasks:write");
+    const { organization: workspace, user } = context;
+    const actor = await callerTaskActor(context);
 
     let domainEvent: PersistedDomainEvent | undefined;
     const deleted = await db.transaction(async (tx) => {
@@ -485,6 +553,7 @@ export async function deleteTask(
             eq(tasks.id, taskId),
             eq(tasks.workspaceId, workspace.id),
             isNull(tasks.deletedAt),
+            taskScopeSql(actor),
             expectedUpdatedAt
               ? sql`${tasks.updatedAt} = ${expectedUpdatedAt}::timestamptz`
               : undefined,

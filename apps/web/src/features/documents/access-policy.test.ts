@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveDocumentAccessLevel } from "./access-policy";
+import { documentAccessIsExplicit, resolveDocumentAccessLevel } from "./access-policy";
 
 describe("document access policy", () => {
   it("gives a matching explicit member rule precedence over a role rule", () => {
@@ -61,5 +61,34 @@ describe("document access policy", () => {
         roleRules: [],
       }),
     ).toBe("read");
+  });
+});
+
+describe("documentAccessIsExplicit", () => {
+  const base = { ownerId: "owner-1", userId: "reviewer-1", roleKey: "recruiter", memberRules: [], roleRules: [] };
+
+  it("is not explicit for a viewer with only the workspace-wide default", () => {
+    expect(documentAccessIsExplicit(base)).toBe(false);
+  });
+
+  it("is explicit for the owner, an admin, and the owner role", () => {
+    expect(documentAccessIsExplicit({ ...base, ownerId: "reviewer-1" })).toBe(true);
+    expect(documentAccessIsExplicit({ ...base, roleKey: "admin" })).toBe(true);
+    expect(documentAccessIsExplicit({ ...base, roleKey: "owner" })).toBe(true);
+  });
+
+  it("is explicit when a member or role rule names the viewer", () => {
+    expect(documentAccessIsExplicit({ ...base, memberRules: [{ userId: "reviewer-1" }] })).toBe(true);
+    expect(documentAccessIsExplicit({ ...base, roleRules: [{ roleKey: "recruiter" }] })).toBe(true);
+  });
+
+  it("is not explicit when rules exist but none names the viewer", () => {
+    expect(
+      documentAccessIsExplicit({
+        ...base,
+        memberRules: [{ userId: "someone-else" }],
+        roleRules: [{ roleKey: "manager" }],
+      }),
+    ).toBe(false);
   });
 });

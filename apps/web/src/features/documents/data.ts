@@ -21,14 +21,25 @@ import {
   workspaceSettings,
 } from "@harly/db";
 
+import { candidateScopeSql, jobScopeSql, type WorkspaceSearchActor } from "@/features/search/scope";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import {
   can,
   getRolePermissions,
+  getRolePolicy,
 } from "@/features/workspaces/permissions-server";
 import { getWorkspaceEsignStatus } from "@/lib/esign/config";
 import { getDocumentAccessForUser, type DocumentAccess } from "./access";
-import { resolveDocumentAccessLevel } from "./access-policy";
+import {
+  documentAccessIsExplicit,
+  resolveDocumentAccessLevel,
+} from "./access-policy";
+import {
+  documentHiddenByAssociationScope,
+  isAssociationVisible,
+  visibleAssociationTargets,
+  type DocumentAssociationTarget,
+} from "./association-scope";
 import type {
   DocumentCategoryItem,
   DocumentHubData,
@@ -36,6 +47,21 @@ import type {
   DocumentMember,
 } from "./shared";
 
+/** The caller's role scope, in the shape the scope predicates take. */
+async function callerActor(
+  workspaceId: string,
+  userId: string,
+  roleKey: string,
+): Promise<WorkspaceSearchActor> {
+  const policy = await getRolePolicy(workspaceId, roleKey);
+  return { workspaceId, userId, permissions: policy.permissions, scope: policy.scope };
+}
+
+/**
+ * ACL resolution plus the association rule: access that comes only from the
+ * workspace-wide default is withdrawn when every association of the document
+ * is outside the caller's scope. Explicit access stays authoritative.
+ */
 export async function getDocumentAccess(
   documentId: string,
   input?: { workspaceId?: string; userId?: string; roleKey?: string },
@@ -47,7 +73,34 @@ export async function getDocumentAccess(
   const workspaceId = input?.workspaceId ?? context!.organization.id;
   const userId = input?.userId ?? context!.user.id;
   const roleKey = input?.roleKey ?? context!.roleKey;
-  return getDocumentAccessForUser({ documentId, workspaceId, userId, roleKey });
+  const access = await getDocumentAccessForUser({ documentId, workspaceId, userId, roleKey });
+  if (!access) return null;
+  if (!access.aclGranted) {
+    const associations = await db
+      .select({
+        targetType: documentAssociations.targetType,
+        targetId: documentAssociations.targetId,
+      })
+      .from(documentAssociations)
+      .where(
+        and(
+          eq(documentAssociations.workspaceId, workspaceId),
+          eq(documentAssociations.documentId, documentId),
+        ),
+      );
+    const actor = await callerActor(workspaceId, userId, roleKey);
+    const visibleTargets = await visibleAssociationTargets(actor, associations);
+    if (
+      documentHiddenByAssociationScope({
+        associations,
+        visibleTargets,
+        aclGranted: false,
+      })
+    ) {
+      return null;
+    }
+  }
+  return { document: access.document, level: access.level };
 }
 
 export async function listDocumentCategories(): Promise<
@@ -167,6 +220,7 @@ export async function listDocumentsForSigning() {
 
 export async function getDocumentHubData(): Promise<DocumentHubData> {
   const { organization, user, roleKey } = await getWorkspaceContext();
+  const actor = await callerActor(organization.id, user.id, roleKey);
   const manualSigners = alias(authUsers, "manual_signers");
   const [
     rows,
@@ -224,13 +278,20 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
         and(
           eq(candidates.workspaceId, organization.id),
           isNull(candidates.deletedAt),
+          candidateScopeSql(actor, candidates.id),
         ),
       )
       .orderBy(candidates.lastName, candidates.firstName),
     db
       .select({ id: jobs.id, label: jobs.title })
       .from(jobs)
-      .where(and(eq(jobs.workspaceId, organization.id), isNull(jobs.deletedAt)))
+      .where(
+        and(
+          eq(jobs.workspaceId, organization.id),
+          isNull(jobs.deletedAt),
+          jobScopeSql(actor),
+        ),
+      )
       .orderBy(jobs.title),
     db
       .select({
@@ -355,9 +416,18 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
           .orderBy(desc(documentLegalHolds.placedAt)),
       ])
     : [[], [], [], [], [], []];
+  const visibleTargets = await visibleAssociationTargets(actor, associationRows);
+  const associationsByDocument = new Map<string, DocumentAssociationTarget[]>();
+  for (const row of associationRows) {
+    const current = associationsByDocument.get(row.documentId) ?? [];
+    current.push({ targetType: row.targetType, targetId: row.targetId });
+    associationsByDocument.set(row.documentId, current);
+  }
+  // Labels and candidate ids come only from associations the caller can see.
   const labels = new Map<string, string[]>();
   const candidateIdsByDocument = new Map<string, string[]>();
   for (const row of associationRows) {
+    if (!isAssociationVisible(row, visibleTargets)) continue;
     const current = labels.get(row.documentId) ?? [];
     current.push(row.targetType[0]?.toUpperCase() + row.targetType.slice(1));
     labels.set(row.documentId, current);
@@ -460,14 +530,29 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
     legalHoldsByDocument.set(row.documentId, current);
   }
   const visible = rows.map((row): DocumentListItem | null => {
+    const memberRules = accessMembersByDocument.get(row.id) ?? [];
+    const roleRules = accessRolesByDocument.get(row.id) ?? [];
     const currentAccessLevel = resolveDocumentAccessLevel({
       ownerId: row.ownerId,
       userId: user.id,
       roleKey,
-      memberRules: accessMembersByDocument.get(row.id) ?? [],
-      roleRules: accessRolesByDocument.get(row.id) ?? [],
+      memberRules,
+      roleRules,
     });
     if (!currentAccessLevel) return null;
+    const associations = associationsByDocument.get(row.id) ?? [];
+    const aclGranted = documentAccessIsExplicit({
+      ownerId: row.ownerId,
+      userId: user.id,
+      roleKey,
+      memberRules,
+      roleRules,
+    });
+    if (
+      documentHiddenByAssociationScope({ associations, visibleTargets, aclGranted })
+    ) {
+      return null;
+    }
     return {
       ...row,
       currentAccessLevel,
@@ -477,7 +562,14 @@ export async function getDocumentHubData(): Promise<DocumentHubData> {
       category: row.categoryId
         ? (categoryById.get(row.categoryId) ?? null)
         : null,
-      associationLabels: [...new Set(labels.get(row.id) ?? ["Workspace"])],
+      // A document whose associations are all hidden from the caller keeps no
+      // label. The "Workspace" fallback is only for documents with none.
+      associationLabels: [
+        ...new Set(
+          labels.get(row.id) ??
+            (associations.length > 0 ? [] : ["Workspace"]),
+        ),
+      ],
       candidateIds: candidateIdsByDocument.get(row.id) ?? [],
       accessRoles: accessRolesByDocument.get(row.id) ?? [],
       accessMembers: accessMembersByDocument.get(row.id) ?? [],

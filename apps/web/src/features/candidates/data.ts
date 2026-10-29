@@ -1820,6 +1820,7 @@ export type TrashedCandidateItem = {
 /** Candidates moved to the trash (soft-deleted), most recently deleted first. */
 export async function listTrashedCandidates(): Promise<TrashedCandidateItem[]> {
   const { organization: workspace } = await getWorkspaceContext();
+  const actor = await resolveSearchActor();
 
   const rows = await db
     .select({
@@ -1835,6 +1836,7 @@ export async function listTrashedCandidates(): Promise<TrashedCandidateItem[]> {
       and(
         eq(candidates.workspaceId, workspace.id),
         isNotNull(candidates.deletedAt),
+        candidateScopeSql(actor, candidates.id),
       ),
     )
     .orderBy(desc(candidates.deletedAt));

@@ -37,6 +37,14 @@ vi.mock("@harly/db", () => ({
 }));
 vi.mock("@/features/workspaces/permissions-server", () => ({
   requirePermission: mocks.requirePermission,
+  getRolePolicy: vi.fn(async () => ({
+    permissions: ["tasks:write"],
+    scope: { jobAccess: "all", departments: [], regions: [] },
+  })),
+  requireApplicationPermission: vi.fn(async () => undefined),
+  requireCandidatePermission: vi.fn(async () => undefined),
+  requireInterviewPermission: vi.fn(async () => undefined),
+  requireJobPermission: vi.fn(async () => undefined),
 }));
 vi.mock("./service", () => ({
   assertTaskReferences: mocks.assertTaskReferences,

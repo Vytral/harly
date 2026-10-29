@@ -8,7 +8,7 @@ import {
   documentAccessRoles,
   documents,
 } from "@harly/db";
-import { resolveDocumentAccessLevel } from "./access-policy";
+import { documentAccessIsExplicit, resolveDocumentAccessLevel } from "./access-policy";
 
 export type DocumentAccess = "read" | "manage";
 
@@ -22,6 +22,8 @@ export async function getDocumentAccessForUser(input: {
 }): Promise<{
   document: typeof documents.$inferSelect;
   level: DocumentAccess;
+  /** True when access comes from ownership, an admin role, or an ACL rule naming the viewer. */
+  aclGranted: boolean;
 } | null> {
   const [document] = await db
     .select()
@@ -39,7 +41,7 @@ export async function getDocumentAccessForUser(input: {
     input.roleKey === "admin" ||
     document.ownerId === input.userId
   ) {
-    return { document, level: "manage" };
+    return { document, level: "manage", aclGranted: true };
   }
   const [memberRules, roleRules] = await Promise.all([
     db
@@ -70,5 +72,16 @@ export async function getDocumentAccessForUser(input: {
       accessLevel: rule.accessLevel as "read" | "manage",
     })),
   });
-  return level ? { document, level } : null;
+  if (!level) return null;
+  return {
+    document,
+    level,
+    aclGranted: documentAccessIsExplicit({
+      ownerId: document.ownerId,
+      userId: input.userId,
+      roleKey: input.roleKey,
+      memberRules: memberRules.map((rule) => ({ userId: rule.userId })),
+      roleRules: roleRules.map((rule) => ({ roleKey: rule.roleKey })),
+    }),
+  };
 }
