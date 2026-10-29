@@ -19,6 +19,7 @@ import {
 } from "@harly/db";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
+import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 import {
   getDailySeries,
   getHiresByJob,
@@ -286,6 +287,7 @@ export const getCandidatesNeedingReview = cache(async () => {
   const { organization: workspace } = await getWorkspaceContext();
   const actor = await widgetActor();
   if (!actorHasPermission(actor, "candidates:view")) return [];
+  const gravatarEnabled = await getWorkspaceGravatarEnabled(workspace.id);
 
   const [rows, enteredRows] = await Promise.all([
     db
@@ -367,7 +369,7 @@ export const getCandidatesNeedingReview = cache(async () => {
         candidateId: r.candidateId,
         name: `${r.first} ${r.last}`,
         avatarUrl: r.avatarUrl,
-        avatarFallbackSrcs: candidateAvatarFallbackSrcs(r.email, r.githubUrl),
+        avatarFallbackSrcs: candidateAvatarFallbackSrcs(r.email, r.githubUrl, { gravatarEnabled }),
         job: r.jobTitle,
         stage: r.stageName,
         action: r.stageKind === "interview" ? "Interview feedback" : "Resume review",

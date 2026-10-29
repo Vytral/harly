@@ -10,6 +10,7 @@ import {
   jobs,
 } from "@harly/db";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
+import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 import {
   candidateScopeSql,
   jobScopeSql,
@@ -63,6 +64,7 @@ export async function listPoolCandidates(filters?: {
 }): Promise<PoolCandidate[]> {
   const actor = await resolveSearchActor();
   const workspace = { id: actor.workspaceId };
+  const gravatarEnabled = await getWorkspaceGravatarEnabled(workspace.id);
 
   const conditions: SQL[] = [
     eq(poolEntries.workspaceId, workspace.id),
@@ -179,7 +181,7 @@ export async function listPoolCandidates(filters?: {
     lastName: row.lastName,
     email: row.email,
     avatarUrl: row.avatarUrl,
-    avatarFallbackSrcs: candidateAvatarFallbackSrcs(row.email, row.githubUrl),
+    avatarFallbackSrcs: candidateAvatarFallbackSrcs(row.email, row.githubUrl, { gravatarEnabled }),
     headline: row.headline,
     location: row.location,
     skills: (row.skills as string[]) ?? [],

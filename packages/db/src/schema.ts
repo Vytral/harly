@@ -654,6 +654,10 @@ export const workspaceSettings = pgTable("workspace_settings", {
   // When true, product emails omit the "Powered by Harly" footer credit and
   // system emails (invites, welcome) show the workspace name instead of Harly.
   hideHarlyBranding: boolean("hide_harly_branding").default(false).notNull(),
+  // Show Gravatar profile pictures for candidates without an uploaded photo.
+  // Off by default: enabling it sends a hash of each candidate's email address
+  // to gravatar.com, so only a workspace admin can turn it on.
+  gravatarEnabled: boolean("gravatar_enabled").default(false).notNull(),
   // IANA time zone (e.g. "America/Los_Angeles") that day and month buckets in
   // hiring reports and the dashboard are computed in. NULL means UTC.
   timezone: text("timezone"),

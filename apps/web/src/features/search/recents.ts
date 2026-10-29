@@ -19,9 +19,18 @@ import {
 
 export const RECENTS_LIMIT = 8;
 
-const KEY_PREFIX = "harly.search.recents.v2:";
+/**
+ * A recent is dropped once it has not been opened for this long. Recents are a
+ * convenience, not a history, so the browser should not keep an opened record
+ * indefinitely.
+ */
+export const RECENTS_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** Every key this module writes starts with this prefix, current and legacy. */
+export const RECENTS_KEY_PREFIX = "harly.search.recents.";
+const KEY_PREFIX = `${RECENTS_KEY_PREFIX}v2:`;
 /** Pre-user-keyed storage. It held contact details, so it is purged, never read. */
-const LEGACY_KEY_PREFIX = "harly.search.recents.v1:";
+const LEGACY_KEY_PREFIX = `${RECENTS_KEY_PREFIX}v1:`;
 const MAX_TEXT_LENGTH = 300;
 const GROUPS: readonly SearchGroupKey[] = [
   "jobs",
@@ -45,17 +54,26 @@ export type RecentsScope = {
 
 export type RecentsStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
 
+/** Enough of a Storage to enumerate and remove keys, for sign-out. */
+export type ClearableStorage = Pick<Storage, "key" | "length" | "removeItem">;
+
+type StoredRecent = RecentSearchItem & { visitedAt: number };
+
 export function recentsStorageKey(scope: RecentsScope): string {
   return `${KEY_PREFIX}${encodeURIComponent(scope.userId)}/${encodeURIComponent(scope.workspaceId)}`;
 }
 
 /** The browser's localStorage, or null when the accessor itself throws. */
-export function browserRecentsStorage(): RecentsStorage | null {
+export function browserLocalStorage(): Storage | null {
   try {
     return typeof window === "undefined" ? null : window.localStorage;
   } catch {
     return null;
   }
+}
+
+export function browserRecentsStorage(): RecentsStorage | null {
+  return browserLocalStorage();
 }
 
 export function sameRecent(
@@ -90,7 +108,17 @@ function isSafeHref(href: unknown): href is string {
   );
 }
 
-function parseItem(value: unknown): RecentSearchItem | null {
+/** A visit is live while it is strictly newer than the window. Entries without a usable time are expired. */
+function isLive(visitedAt: unknown, now: number): visitedAt is number {
+  return (
+    typeof visitedAt === "number" &&
+    Number.isFinite(visitedAt) &&
+    now - visitedAt >= 0 &&
+    now - visitedAt < RECENTS_MAX_AGE_MS
+  );
+}
+
+function parseItem(value: unknown, now: number): StoredRecent | null {
   if (typeof value !== "object" || value === null) return null;
   const item = value as Record<string, unknown>;
   if (!GROUPS.includes(item.group as SearchGroupKey)) return null;
@@ -101,28 +129,31 @@ function parseItem(value: unknown): RecentSearchItem | null {
     return null;
   }
   if (!isSafeHref(item.href)) return null;
+  if (!isLive(item.visitedAt, now)) return null;
   return {
     group: item.group as SearchGroupKey,
     id: item.id,
     primary: item.primary,
     href: item.href,
+    visitedAt: item.visitedAt,
   };
 }
 
-/** Recents for a user in a workspace, newest first. Corrupt or unreadable storage yields []. */
-export function readRecents(
+/** Live recents with their visit times, newest first. Corrupt or unreadable storage yields []. */
+function readStored(
   storage: RecentsStorage | null,
   scope: RecentsScope,
-): RecentSearchItem[] {
+  now: number,
+): StoredRecent[] {
   if (!storage) return [];
   try {
     const raw = storage.getItem(recentsStorageKey(scope));
     if (!raw) return [];
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    const items: RecentSearchItem[] = [];
+    const items: StoredRecent[] = [];
     for (const entry of parsed) {
-      const item = parseItem(entry);
+      const item = parseItem(entry, now);
       if (item && !items.some((existing) => sameRecent(existing, item))) {
         items.push(item);
       }
@@ -131,6 +162,36 @@ export function readRecents(
     return items;
   } catch {
     return [];
+  }
+}
+
+/**
+ * Recents for a user in a workspace, newest first. Recents not opened within
+ * {@link RECENTS_MAX_AGE_MS} are dropped. Corrupt or unreadable storage yields [].
+ */
+export function readRecents(
+  storage: RecentsStorage | null,
+  scope: RecentsScope,
+  now: number = Date.now(),
+): RecentSearchItem[] {
+  return readStored(storage, scope, now).map(storedRecent);
+}
+
+/**
+ * Rewrites the viewer's stored recents without the expired ones, so they do not
+ * linger in the browser. Writes nothing when the viewer has no recents key.
+ */
+export function pruneExpiredRecents(
+  storage: RecentsStorage | null,
+  scope: RecentsScope,
+  now: number = Date.now(),
+): void {
+  if (!storage) return;
+  try {
+    if (storage.getItem(recentsStorageKey(scope)) === null) return;
+    persist(storage, scope, readStored(storage, scope, now));
+  } catch {
+    // Storage blocked: nothing readable, so nothing to prune.
   }
 }
 
@@ -147,6 +208,32 @@ export function purgeLegacyRecents(
   }
 }
 
+/**
+ * Removes every stored recent, for every user and workspace on this browser.
+ * Called on sign-out so the next person at this browser cannot see them. Each
+ * removal is guarded on its own, so one failing key does not stop the sweep.
+ */
+export function clearAllSearchRecents(storage: ClearableStorage | null): void {
+  if (!storage) return;
+  const keys: string[] = [];
+  try {
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+      if (key !== null && key.startsWith(RECENTS_KEY_PREFIX)) keys.push(key);
+    }
+  } catch {
+    // Storage blocked: nothing readable was stored.
+    return;
+  }
+  for (const key of keys) {
+    try {
+      storage.removeItem(key);
+    } catch {
+      // This key could not be removed; the rest still should be.
+    }
+  }
+}
+
 /** Keep only recents whose group the viewer's permissions still allow. */
 export function filterRecentsByPermission(
   items: readonly RecentSearchItem[],
@@ -160,7 +247,7 @@ export function filterRecentsByPermission(
 function persist(
   storage: RecentsStorage | null,
   scope: RecentsScope,
-  items: RecentSearchItem[],
+  items: StoredRecent[],
 ): void {
   if (!storage) return;
   try {
@@ -178,24 +265,26 @@ export function recordRecent(
   storage: RecentsStorage | null,
   scope: RecentsScope,
   item: RecentSearchItem,
+  now: number = Date.now(),
 ): RecentSearchItem[] {
-  const current = readRecents(storage, scope);
-  const next = [
-    storedRecent(item),
+  const current = readStored(storage, scope, now);
+  const next: StoredRecent[] = [
+    { ...storedRecent(item), visitedAt: now },
     ...current.filter((existing) => !sameRecent(existing, item)),
   ].slice(0, RECENTS_LIMIT);
   persist(storage, scope, next);
-  return next;
+  return next.map(storedRecent);
 }
 
 export function removeRecent(
   storage: RecentsStorage | null,
   scope: RecentsScope,
   target: Pick<RecentSearchItem, "group" | "id">,
+  now: number = Date.now(),
 ): RecentSearchItem[] {
-  const next = readRecents(storage, scope).filter(
+  const next = readStored(storage, scope, now).filter(
     (existing) => !sameRecent(existing, target),
   );
   persist(storage, scope, next);
-  return next;
+  return next.map(storedRecent);
 }

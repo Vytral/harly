@@ -62,9 +62,7 @@ export default function RootLayout({
     >
       <head>
         <link rel="preconnect" href="https://lh3.googleusercontent.com" />
-        <link rel="preconnect" href="https://www.gravatar.com" />
         <link rel="dns-prefetch" href="https://lh3.googleusercontent.com" />
-        <link rel="dns-prefetch" href="https://www.gravatar.com" />
       </head>
       <body className="min-h-full">
         <ThemeProvider

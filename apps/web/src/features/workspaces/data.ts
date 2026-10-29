@@ -53,6 +53,8 @@ export type WorkspaceBranding = {
   sidebarLogoUrl?: string | null;
   sidebarLogoDarkUrl?: string | null;
   hideHarlyBranding: boolean;
+  /** Gravatar pictures for candidates; off unless an admin enabled them. */
+  gravatarEnabled: boolean;
   /** IANA reporting time zone; null means UTC. */
   timezone: string | null;
 };
@@ -159,6 +161,7 @@ async function getWorkspaceBranding(
     sidebarLogoUrl: settings?.sidebarLogoUrl ?? null,
     sidebarLogoDarkUrl: settings?.sidebarLogoDarkUrl ?? null,
     hideHarlyBranding: settings?.hideHarlyBranding ?? false,
+    gravatarEnabled: settings?.gravatarEnabled ?? false,
     timezone: settings?.timezone ?? null,
   };
 }

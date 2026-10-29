@@ -1,0 +1,1 @@
+ALTER TABLE "workspace_settings" ADD COLUMN "gravatar_enabled" boolean DEFAULT false NOT NULL;

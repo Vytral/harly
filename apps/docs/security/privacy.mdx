@@ -152,12 +152,34 @@ changes. Before enabling:
 
 ## Candidate avatars and Gravatar
 
-When a candidate has no uploaded photo, Harly may show an avatar from
-[Gravatar](https://gravatar.com). To look one up, Harly sends a SHA-256 hash of
-the candidate's email address to `www.gravatar.com`. The image request is made
-by the viewer's browser, so Gravatar also receives that browser's IP address.
-If no Gravatar image exists, Harly shows initials instead. There is no workspace
-setting to turn this off yet; upload a photo to replace it.
+Gravatar is off by default. When a candidate has no uploaded photo, Harly
+shows initials. A workspace owner or admin can turn on **Settings → Gravatar
+profile pictures** to show pictures from [Gravatar](https://gravatar.com)
+instead. When it is on, Harly sends a SHA-256 hash of each candidate's email
+address to `www.gravatar.com`. The image request is made by the viewer's
+browser, so Gravatar also receives that browser's IP address. While the setting
+is off, no email hash is sent to Gravatar and the page does not connect to
+Gravatar. Turning it on applies only from that point. Workspaces that existed
+before this setting was added start with it off. Upload a photo to replace
+any avatar.
+
+## Search recents in the browser
+
+The search palette (⌘K) remembers the last eight results you opened, so you can
+reopen them quickly. Each entry stores only what is needed to reopen it: the
+result type, its id, its display name, and the in-app link. It does not store
+contact details, headlines, or stage names. Recents are kept in the browser's
+local storage, separately for each user and workspace on that browser.
+
+- An entry is dropped 30 days after you last opened it. The palette removes
+  expired entries when it next opens.
+- Entries are removed when you sign out from the account menu, for every user
+  and workspace on that browser.
+- Entries are also dropped when you no longer have access to that type of
+  result, or when the record is no longer visible to you.
+- Clearing site data in your browser removes them at any time.
+
+Recents are a per-browser convenience. They are never sent to the server.
 
 ## Audit log
 

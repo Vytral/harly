@@ -39,6 +39,7 @@ import {
 import {
   browserRecentsStorage,
   filterRecentsByPermission,
+  pruneExpiredRecents,
   purgeLegacyRecents,
   readRecents,
   recentFromHit,
@@ -138,14 +139,15 @@ export function CommandMenu({
     };
   }, [open, viewerId]);
 
-  // Each time the palette opens, show this user's recents only when the viewer
-  // still has the group's permission and the server confirms each record is
-  // still visible. Anything else is removed from storage.
+  // Each time the palette opens, show this user's recents only when they are
+  // recent enough, the viewer still has the group's permission and the server
+  // confirms each record is still visible. Anything else is removed from storage.
   useEffect(() => {
     if (!open || !viewerId) return;
     const storage = browserRecentsStorage();
     const scope: RecentsScope = { userId: viewerId, workspaceId };
     purgeLegacyRecents(storage, workspaceId);
+    pruneExpiredRecents(storage, scope);
     const stored = readRecents(storage, scope);
     const permitted = filterRecentsByPermission(
       stored,

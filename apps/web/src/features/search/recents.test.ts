@@ -2,13 +2,17 @@ import { describe, expect, it } from "vitest";
 
 import {
   RECENTS_LIMIT,
+  RECENTS_MAX_AGE_MS,
+  clearAllSearchRecents,
   filterRecentsByPermission,
+  pruneExpiredRecents,
   purgeLegacyRecents,
   readRecents,
   recentFromHit,
   recentsStorageKey,
   recordRecent,
   removeRecent,
+  type ClearableStorage,
   type RecentSearchItem,
   type RecentsScope,
   type RecentsStorage,
@@ -32,6 +36,12 @@ class MemoryStorage implements RecentsStorage {
   keys() {
     return [...this.values.keys()];
   }
+  get length() {
+    return this.values.size;
+  }
+  key(index: number) {
+    return [...this.values.keys()][index] ?? null;
+  }
 }
 
 const throwingStorage: RecentsStorage = {
@@ -48,6 +58,19 @@ const throwingStorage: RecentsStorage = {
 
 const alice: RecentsScope = { userId: "user-alice", workspaceId: "ws-1" };
 const bob: RecentsScope = { userId: "user-bob", workspaceId: "ws-1" };
+const NOW = Date.UTC(2026, 9, 29, 12, 0, 0);
+const DAY = 24 * 60 * 60 * 1000;
+
+/** Storage whose removal fails for one named key, to prove the sweep keeps going. */
+class StubbornStorage extends MemoryStorage {
+  constructor(private readonly stuckKey: string) {
+    super();
+  }
+  override removeItem(key: string) {
+    if (key === this.stuckKey) throw new Error("QuotaExceededError");
+    super.removeItem(key);
+  }
+}
 
 function item(n: number, overrides: Partial<RecentSearchItem> = {}): RecentSearchItem {
   return {
@@ -122,7 +145,13 @@ describe("recents storage", () => {
     });
     const raw = storage.raw(recentsStorageKey(alice)) ?? "";
     const stored = JSON.parse(raw) as Record<string, unknown>[];
-    expect(Object.keys(stored[0]).sort()).toEqual(["group", "href", "id", "primary"]);
+    expect(Object.keys(stored[0]).sort()).toEqual([
+      "group",
+      "href",
+      "id",
+      "primary",
+      "visitedAt",
+    ]);
     expect(raw).not.toMatch(/@|headline|stage|Engineering/i);
   });
 
@@ -155,10 +184,12 @@ describe("recents storage", () => {
           primary: "Ada",
           secondary: "ada@example.test",
           href: "/dashboard/candidates/cand-1",
+          visitedAt: NOW,
         },
       ]),
     );
-    const [entry] = readRecents(storage, alice);
+    const [entry] = readRecents(storage, alice, NOW);
+    expect(entry).toBeDefined();
     expect(entry).not.toHaveProperty("secondary");
   });
 
@@ -194,10 +225,10 @@ describe("recents storage", () => {
         null,
         { group: "unknown", id: "x", primary: "x", href: "/x" },
         { group: "jobs", id: 7, primary: "x", href: "/x" },
-        { group: "jobs", id: "ok", primary: "Good", href: "/dashboard/jobs/ok" },
+        { group: "jobs", id: "ok", primary: "Good", href: "/dashboard/jobs/ok", visitedAt: NOW },
       ]),
     );
-    expect(readRecents(storage, alice).map((entry) => entry.id)).toEqual(["ok"]);
+    expect(readRecents(storage, alice, NOW).map((entry) => entry.id)).toEqual(["ok"]);
   });
 
   it("drops entries whose href would leave the origin", () => {
@@ -208,10 +239,10 @@ describe("recents storage", () => {
         { group: "jobs", id: "a", primary: "A", href: "https://evil.example" },
         { group: "jobs", id: "b", primary: "B", href: "//evil.example" },
         { group: "jobs", id: "c", primary: "C", href: "javascript:alert(1)" },
-        { group: "jobs", id: "d", primary: "D", href: "/dashboard/jobs/d" },
+        { group: "jobs", id: "d", primary: "D", href: "/dashboard/jobs/d", visitedAt: NOW },
       ]),
     );
-    expect(readRecents(storage, alice).map((entry) => entry.id)).toEqual(["d"]);
+    expect(readRecents(storage, alice, NOW).map((entry) => entry.id)).toEqual(["d"]);
   });
 
   it("treats a non-array payload as empty", () => {
@@ -232,5 +263,123 @@ describe("recents permission filter", () => {
       filterRecentsByPermission(items, ["jobs:view", "tasks:read"]).map((entry) => entry.group),
     ).toEqual(["jobs", "tasks"]);
     expect(filterRecentsByPermission(items, [])).toEqual([]);
+  });
+});
+
+describe("recents expiry", () => {
+  it("drops recents not visited within the last 30 days on read", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      recentsStorageKey(alice),
+      JSON.stringify([
+        { group: "jobs", id: "old", primary: "Old", href: "/dashboard/jobs/old", visitedAt: NOW - 31 * DAY },
+        { group: "jobs", id: "fresh", primary: "Fresh", href: "/dashboard/jobs/fresh", visitedAt: NOW - DAY },
+      ]),
+    );
+    expect(readRecents(storage, alice, NOW).map((entry) => entry.id)).toEqual(["fresh"]);
+  });
+
+  it("uses a 30 day window: one millisecond inside is kept, the boundary is dropped", () => {
+    expect(RECENTS_MAX_AGE_MS).toBe(30 * DAY);
+    const storage = new MemoryStorage();
+    storage.setItem(
+      recentsStorageKey(alice),
+      JSON.stringify([
+        { group: "jobs", id: "inside", primary: "In", href: "/dashboard/jobs/inside", visitedAt: NOW - RECENTS_MAX_AGE_MS + 1 },
+        { group: "jobs", id: "edge", primary: "Edge", href: "/dashboard/jobs/edge", visitedAt: NOW - RECENTS_MAX_AGE_MS },
+      ]),
+    );
+    expect(readRecents(storage, alice, NOW).map((entry) => entry.id)).toEqual(["inside"]);
+  });
+
+  it("treats entries without a visit time as expired", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      recentsStorageKey(alice),
+      JSON.stringify([
+        { group: "jobs", id: "untimed", primary: "Untimed", href: "/dashboard/jobs/untimed" },
+        { group: "jobs", id: "bad", primary: "Bad", href: "/dashboard/jobs/bad", visitedAt: "yesterday" },
+      ]),
+    );
+    expect(readRecents(storage, alice, NOW)).toEqual([]);
+  });
+
+  it("stamps the visit time when a result is opened", () => {
+    const storage = new MemoryStorage();
+    recordRecent(storage, alice, item(1), NOW);
+    const stored = JSON.parse(storage.raw(recentsStorageKey(alice)) ?? "[]") as Array<{ visitedAt: number }>;
+    expect(stored[0].visitedAt).toBe(NOW);
+    expect(readRecents(storage, alice, NOW + DAY)).toEqual([item(1)]);
+  });
+
+  it("re-opening a recent refreshes its visit time so it stays", () => {
+    const storage = new MemoryStorage();
+    recordRecent(storage, alice, item(1), NOW - 29 * DAY);
+    recordRecent(storage, alice, item(1), NOW - DAY);
+    expect(readRecents(storage, alice, NOW)).toEqual([item(1)]);
+  });
+
+  it("removes expired entries from storage, not only from the returned list", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      recentsStorageKey(alice),
+      JSON.stringify([
+        { group: "jobs", id: "old", primary: "Old", href: "/dashboard/jobs/old", visitedAt: NOW - 40 * DAY },
+        { group: "jobs", id: "fresh", primary: "Fresh", href: "/dashboard/jobs/fresh", visitedAt: NOW },
+      ]),
+    );
+    pruneExpiredRecents(storage, alice, NOW);
+    const stored = JSON.parse(storage.raw(recentsStorageKey(alice)) ?? "[]") as Array<{ id: string }>;
+    expect(stored.map((entry) => entry.id)).toEqual(["fresh"]);
+  });
+
+  it("does not create a key when there is nothing to prune", () => {
+    const storage = new MemoryStorage();
+    pruneExpiredRecents(storage, alice, NOW);
+    expect(storage.keys()).toEqual([]);
+    expect(() => pruneExpiredRecents(throwingStorage, alice, NOW)).not.toThrow();
+    expect(() => pruneExpiredRecents(null, alice, NOW)).not.toThrow();
+  });
+});
+
+describe("clearAllSearchRecents", () => {
+  it("removes recents for every user and workspace, including legacy keys, and nothing else", () => {
+    const storage = new MemoryStorage();
+    recordRecent(storage, alice, item(1));
+    recordRecent(storage, bob, item(2));
+    recordRecent(storage, { userId: "user-alice", workspaceId: "ws-2" }, item(3));
+    storage.setItem("harly.search.recents.v1:ws-1", "[]");
+    storage.setItem("harly-legal-draft", "{}");
+    storage.setItem("theme", "dark");
+
+    clearAllSearchRecents(storage);
+
+    expect(storage.keys().sort()).toEqual(["harly-legal-draft", "theme"]);
+    expect(readRecents(storage, alice)).toEqual([]);
+    expect(readRecents(storage, bob)).toEqual([]);
+  });
+
+  it("does nothing, and does not throw, when storage is unavailable or throws", () => {
+    const throwingClearable: ClearableStorage = {
+      get length(): number {
+        throw new Error("SecurityError: storage is disabled");
+      },
+      key() {
+        throw new Error("SecurityError: storage is disabled");
+      },
+      removeItem() {
+        throw new Error("SecurityError: storage is disabled");
+      },
+    };
+    expect(() => clearAllSearchRecents(null)).not.toThrow();
+    expect(() => clearAllSearchRecents(throwingClearable)).not.toThrow();
+  });
+
+  it("keeps sweeping the other keys when one cannot be removed", () => {
+    const storage = new StubbornStorage("harly.search.recents.v2:stuck");
+    storage.setItem("harly.search.recents.v2:stuck", "[]");
+    storage.setItem("harly.search.recents.v2:free", "[]");
+    expect(() => clearAllSearchRecents(storage)).not.toThrow();
+    expect(storage.keys()).toEqual(["harly.search.recents.v2:stuck"]);
   });
 });

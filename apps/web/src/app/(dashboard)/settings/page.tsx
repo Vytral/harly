@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 
 import { CompanyBrandingSection } from "@/features/workspaces/CompanyBrandingSection";
+import { GravatarSettingsCard } from "@/features/workspaces/GravatarSettingsCard";
 import { getWorkspaceSettingsData } from "@/features/workspaces/data";
 import { can, requirePagePermission } from "@/features/workspaces/permissions-server";
 
@@ -16,6 +17,9 @@ export default async function SettingsPage() {
   const { context, branding } = await getWorkspaceSettingsData();
 
   return (
-    <CompanyBrandingSection workspace={branding} currentRole={context.role} />
+    <div className="space-y-6">
+      <CompanyBrandingSection workspace={branding} currentRole={context.role} />
+      <GravatarSettingsCard enabled={branding.gravatarEnabled} />
+    </div>
   );
 }

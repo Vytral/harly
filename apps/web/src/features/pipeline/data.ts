@@ -30,6 +30,7 @@ import { getWorkspaceContext } from "@/features/workspaces/context";
 import { jobScopeSql, type WorkspaceSearchActor } from "@/features/search/scope";
 import { resolveSearchActor } from "@/features/search/workspace-search";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
+import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 
 export type PipelineJobOption = {
   id: string;
@@ -369,6 +370,7 @@ export async function getPipelineData(
   const featuredReferralCandidateIds = new Set(
     featuredReferralRows.map((row) => row.candidateId),
   );
+  const gravatarEnabled = await getWorkspaceGravatarEnabled(workspace.id);
 
   return {
     kind: "ready",
@@ -386,6 +388,7 @@ export async function getPipelineData(
       candidateAvatarFallbackSrcs: candidateAvatarFallbackSrcs(
         application.candidateEmail,
         candidateGithubUrl,
+        { gravatarEnabled },
       ),
       appliedAt: application.appliedAt.toISOString(),
       createdAt: application.createdAt.toISOString(),

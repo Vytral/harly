@@ -28,6 +28,7 @@ import { listWorkspaceMembers } from "@/features/jobs/hiring-team-data";
 import { getWorkspaceContext } from "@/features/workspaces/context";
 import { can, requirePagePermission } from "@/features/workspaces/permissions-server";
 import { candidateAvatarFallbackSrcs } from "@/lib/candidate-avatar";
+import { getWorkspaceGravatarEnabled } from "@/lib/gravatar";
 import { formatRelative, formatShort } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
@@ -111,6 +112,7 @@ const initialImportSource: ImportSource | undefined =
     getWorkspaceContext(),
     can("candidates:edit"),
   ]);
+  const gravatarEnabled = await getWorkspaceGravatarEnabled(workspaceContext.organization.id);
 
   const rows: CandidateRow[] = directory.rows.map((candidate) => {
     const applied = candidate.latestApplication?.appliedAt ?? null;
@@ -120,7 +122,7 @@ const initialImportSource: ImportSource | undefined =
       email: candidate.email,
       phone: candidate.phone,
       avatarUrl: candidate.avatarUrl,
-      avatarFallbackSrcs: candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl),
+      avatarFallbackSrcs: candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl, { gravatarEnabled }),
       inPool: candidate.inPool,
       hasOpenPrivacyRequest: candidate.hasOpenPrivacyRequest,
       isReferred: candidate.isReferred,
@@ -165,7 +167,7 @@ const initialImportSource: ImportSource | undefined =
                   <UserAvatar
                     name={candidate.fullName}
                     src={null}
-                    fallbackSrcs={candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl)}
+                    fallbackSrcs={candidateAvatarFallbackSrcs(candidate.email, candidate.githubUrl, { gravatarEnabled })}
                     size="lg"
                   />
                   <span className="min-w-0">
