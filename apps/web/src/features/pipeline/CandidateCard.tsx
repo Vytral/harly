@@ -23,7 +23,8 @@ import { cn } from "@/lib/utils";
 type CandidateCardProps = {
   application: PipelineApplication;
   selected: boolean;
-  disabled?: boolean;
+  /** A write for this candidate is waiting or in flight. Only this card is busy. */
+  pending?: boolean;
   onSelect: (applicationId: string, selected: boolean) => void;
 };
 
@@ -107,7 +108,7 @@ function StageAge({ value }: { value: string }) {
 export function CandidateCard({
   application,
   selected,
-  disabled = false,
+  pending = false,
   onSelect,
 }: CandidateCardProps) {
   const router = useRouter();
@@ -132,6 +133,7 @@ export function CandidateCard({
       role="link"
       tabIndex={0}
       aria-label={`Open ${fullName} profile`}
+      aria-busy={pending || undefined}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       onPointerDownCapture={(event) => {
         pointerStartRef.current = { x: event.clientX, y: event.clientY };
@@ -164,6 +166,7 @@ export function CandidateCard({
           ? "border-near-ink/20 bg-row-wash"
           : "border-hairline hover:bg-row-wash",
         isDragging && "opacity-40",
+        pending && "opacity-70",
       )}
     >
       <div className="flex items-center gap-2.5">
@@ -178,7 +181,6 @@ export function CandidateCard({
         >
           <Checkbox
             checked={selected}
-            disabled={disabled}
             onCheckedChange={(checked) =>
               onSelect(application.id, checked === true)
             }
@@ -240,7 +242,7 @@ export function CandidateCard({
           type="button"
           {...attributes}
           {...listeners}
-          disabled={disabled}
+          data-pipeline-handle={application.id}
           onClick={(event) => event.stopPropagation()}
           className="shrink-0 touch-none cursor-grab rounded-md p-1 text-quiet-mist opacity-0 transition hover:text-near-ink group-hover:opacity-100 active:cursor-grabbing"
           aria-label={`Drag ${fullName} to another stage`}

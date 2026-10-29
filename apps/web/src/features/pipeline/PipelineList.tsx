@@ -56,12 +56,16 @@ export function PipelineList({
   const [isPending, startTransition] = useTransition();
 
   const workspaceId = applications[0]?.workspaceId ?? "";
-  const stageNameById = useMemo(
-    () => new Map(stages.map((s) => [s.id, s.name])),
+  const stageById = useMemo(
+    () => new Map(stages.map((s) => [s.id, s])),
     [stages],
   );
-  const orderedStageNames = useMemo(
-    () => stages.slice().sort((a, b) => a.order - b.order).map((s) => s.name),
+  const orderedSpineStages = useMemo(
+    () =>
+      stages
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((s) => ({ id: s.id, name: s.name, kind: s.kind })),
     [stages],
   );
 
@@ -255,7 +259,8 @@ export function PipelineList({
           {filtered.map((a) => {
             const fullName = `${a.candidateFirstName} ${a.candidateLastName}`;
             const isSelected = selected.has(a.id);
-            const stageName = stageNameById.get(a.currentStageId) ?? "Unknown stage";
+            const currentStage = stageById.get(a.currentStageId);
+            const stageName = currentStage?.name ?? "Unknown stage";
             return (
               <div
                 key={a.id}
@@ -305,7 +310,9 @@ export function PipelineList({
                   <p className="text-xs font-medium text-foreground">{stageName}</p>
                   <PipelineSpine
                     current={stageName}
-                    stages={orderedStageNames}
+                    currentId={a.currentStageId}
+                    currentKind={currentStage?.kind ?? null}
+                    stages={orderedSpineStages}
                     className="mt-1.5 max-w-40"
                   />
                   <p className="mt-1 text-xs text-muted-foreground">

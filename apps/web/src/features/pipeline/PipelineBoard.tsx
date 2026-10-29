@@ -1,6 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   DndContext,
   DragOverlay,
@@ -15,13 +21,31 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
+import { updateStageEmailSettings } from "@/features/pipeline/actions";
 import {
-  bulkMoveApplications,
-  moveApplicationInPipeline,
-  updateApplicationStatus,
-  updateStageEmailSettings,
-} from "@/features/pipeline/actions";
+  boardWriteQueueFor,
+  showSettledToast,
+} from "@/features/pipeline/board-write-queue";
+import {
+  buildColumns,
+  CARD_PAGE_SIZE,
+  deriveColumns,
+  displayName,
+  failureMessage,
+  FALLBACK_FAILURE_MESSAGE,
+  findApplicationStage,
+  getOverTarget,
+  limitToReveal,
+  matchesSearch,
+  nextPageSize,
+  pendingApplicationIds,
+  planDropOperation,
+  visibleApplications,
+  type BoardOperation,
+  type Settlement,
+} from "@/features/pipeline/board-state";
 import { bulkDecisionConfirmationMessage } from "@/features/pipeline/confirmation";
 import {
   CandidateCard,
@@ -56,6 +80,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { outcomeForStage } from "@/lib/stage-visuals";
 
 type PipelineBoardProps = {
   jobs: PipelineJobOption[];
@@ -66,117 +91,50 @@ type PipelineBoardProps = {
 
 type StatusFilter = "all" | PipelineApplication["status"];
 
-function buildColumns(
-  stages: PipelineStage[],
-  applications: PipelineApplication[],
-) {
-  const nextColumns = new Map<string, PipelineApplication[]>();
+/**
+ * A successful write refreshes the server data, which remounts the board (the
+ * page keys it on the data). Focus on a keyboard-moved card would be lost in that
+ * remount, so the id is handed to the next instance here.
+ */
+let pendingFocusHandoff: string | null = null;
 
-  for (const stage of stages) {
-    nextColumns.set(stage.id, []);
-  }
+function newOperationId() {
+  return globalThis.crypto?.randomUUID?.() ??
+    `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
 
-  for (const application of applications) {
-    const stageApplications = nextColumns.get(application.currentStageId);
-
-    if (stageApplications) {
-      stageApplications.push(application);
+function focusHandle(applicationId: string) {
+  const handles = document.querySelectorAll<HTMLElement>(
+    `[data-pipeline-handle="${applicationId}"]`,
+  );
+  for (const handle of handles) {
+    // The desktop and mobile trees are both mounted; focus the visible one.
+    if (handle.offsetParent !== null) {
+      handle.focus();
+      return;
     }
   }
-
-  return nextColumns;
 }
 
-function cloneColumns(columns: Map<string, PipelineApplication[]>) {
-  return new Map(
-    Array.from(columns.entries()).map(([stageId, applications]) => [
-      stageId,
-      [...applications],
-    ]),
+function ShowMoreButton({
+  count,
+  stageName,
+  onClick,
+}: {
+  count: number;
+  stageName: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={`Show ${count} more candidates in ${stageName}`}
+      className="font-chrome rounded-[var(--radius-md)] px-2 py-2 text-center text-[12px] text-soft-ink transition-colors hover:bg-row-wash hover:text-near-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-near-ink"
+    >
+      Show {count} more
+    </button>
   );
-}
-
-function findApplicationStage(
-  columns: Map<string, PipelineApplication[]>,
-  applicationId: string,
-) {
-  for (const [stageId, applications] of columns) {
-    const index = applications.findIndex((item) => item.id === applicationId);
-
-    if (index >= 0) {
-      return { stageId, application: applications[index], index };
-    }
-  }
-
-  return null;
-}
-
-function removeApplication(
-  columns: Map<string, PipelineApplication[]>,
-  stageId: string,
-  applicationId: string,
-) {
-  const applications = columns.get(stageId) ?? [];
-  columns.set(
-    stageId,
-    applications.filter((application) => application.id !== applicationId),
-  );
-}
-
-function insertApplication(
-  columns: Map<string, PipelineApplication[]>,
-  stageId: string,
-  application: PipelineApplication,
-  index: number,
-) {
-  const applications = [...(columns.get(stageId) ?? [])];
-  const boundedIndex = Math.max(0, Math.min(index, applications.length));
-  applications.splice(boundedIndex, 0, application);
-  columns.set(stageId, applications);
-}
-
-function getOverTarget(
-  columns: Map<string, PipelineApplication[]>,
-  stages: PipelineStage[],
-  overId: string,
-) {
-  const stage = stages.find((item) => item.id === overId);
-
-  if (stage) {
-    return {
-      stageId: stage.id,
-      index: columns.get(stage.id)?.length ?? 0,
-    };
-  }
-
-  const application = findApplicationStage(columns, overId);
-
-  if (application) {
-    return {
-      stageId: application.stageId,
-      index: application.index,
-    };
-  }
-
-  return null;
-}
-
-function matchesSearch(application: PipelineApplication, query: string) {
-  if (!query.trim()) {
-    return true;
-  }
-
-  const haystack = [
-    application.candidateFirstName,
-    application.candidateLastName,
-    application.candidateEmail,
-    application.jobTitle,
-    application.source ?? "",
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  return haystack.includes(query.trim().toLowerCase());
 }
 
 export function PipelineBoard({
@@ -186,17 +144,37 @@ export function PipelineBoard({
 }: PipelineBoardProps) {
   const router = useRouter();
   const [stages, setStages] = useState(initialStages);
-  const [columns, setColumns] = useState<Map<string, PipelineApplication[]>>(
-    () => buildColumns(initialStages, applications),
+  const baseColumns = useMemo(
+    () => buildColumns(stages, applications),
+    [stages, applications],
   );
+
+  // Writes in flight or waiting, shared per job and kept across remounts. The
+  // board shows the server data plus these, in order.
+  const queue = useMemo(() => boardWriteQueueFor(selectedJob.id), [selectedJob.id]);
+  const entries = useSyncExternalStore(
+    queue.subscribe,
+    queue.getEntries,
+    queue.getEntries,
+  );
+  const columns = useMemo(
+    () => deriveColumns(baseColumns, entries),
+    [baseColumns, entries],
+  );
+  const pendingIds = useMemo(() => pendingApplicationIds(entries), [entries]);
+
   const [activeApplication, setActiveApplication] =
     useState<PipelineApplication | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [error, setError] = useState<string | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  // Set when focus should move to a card once the board shows it (after a
+  // rollback or a keyboard move, the card may have changed column).
+  const focusRequestRef = useRef<string | null>(null);
+  const [limits, setLimits] = useState<Record<string, number>>({});
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [hideEmptyColumns, setHideEmptyColumns] = useState(false);
-  const [mutationPending, setMutationPending] = useState(false);
   const [mobileStage, setMobileStage] = useState<string>(
     initialStages[0]?.id ?? "",
   );
@@ -214,6 +192,7 @@ export function PipelineBoard({
     }),
     useSensor(KeyboardSensor),
   );
+
   const selectedApplications = useMemo(() => {
     const applicationsById = new Map(
       Array.from(columns.values())
@@ -227,6 +206,7 @@ export function PipelineBoard({
         Boolean(application),
       );
   }, [columns, selectedIds]);
+
   const filteredColumns = useMemo(
     () =>
       new Map(
@@ -244,13 +224,12 @@ export function PipelineBoard({
   const visibleStages = hideEmptyColumns
     ? stages.filter((stage) => (filteredColumns.get(stage.id)?.length ?? 0) > 0)
     : stages;
-  const mobileApplications = filteredColumns.get(mobileStage) ?? [];
+  const mobileAll = filteredColumns.get(mobileStage) ?? [];
+  const mobileLimit = limits[mobileStage] ?? CARD_PAGE_SIZE;
 
   function candidateLabel(applicationId: string) {
     const found = findApplicationStage(columns, applicationId);
-    return found
-      ? `${found.application.candidateFirstName} ${found.application.candidateLastName}`
-      : "Candidate";
+    return found ? displayName(found.application) : "Candidate";
   }
 
   function stageLabel(stageId: string) {
@@ -278,6 +257,83 @@ export function PipelineBoard({
     },
   };
 
+  function revealUpTo(stageId: string, index: number) {
+    setLimits((current) => {
+      const have = current[stageId] ?? CARD_PAGE_SIZE;
+      const need = limitToReveal(index);
+      return need > have ? { ...current, [stageId]: need } : current;
+    });
+  }
+
+  function showMore(stageId: string) {
+    setLimits((current) => ({
+      ...current,
+      [stageId]: (current[stageId] ?? CARD_PAGE_SIZE) + CARD_PAGE_SIZE,
+    }));
+  }
+
+  function enqueueOperation(operation: BoardOperation) {
+    setError(null);
+    queue.enqueue(operation);
+  }
+
+  /** Shows the outcome of a write this board started (or inherited). */
+  function handleSettled(settlement: Settlement) {
+    setAnnouncement(settlement.announcement);
+    setError(settlement.error);
+    for (const item of settlement.toasts) showSettledToast(item);
+    if (settlement.deselect.length > 0) {
+      const done = new Set(settlement.deselect);
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const id of done) next.delete(id);
+        return next;
+      });
+    }
+    if (settlement.focusApplicationId) {
+      focusRequestRef.current = settlement.focusApplicationId;
+    }
+    if (settlement.handoffFocusApplicationId) {
+      const applicationId = settlement.handoffFocusApplicationId;
+      pendingFocusHandoff = applicationId;
+      // Only a remount consumes the handoff. If none happens, do not let a
+      // later, unrelated mount steal focus.
+      window.setTimeout(() => {
+        if (pendingFocusHandoff === applicationId) pendingFocusHandoff = null;
+      }, 3000);
+    }
+    if (settlement.refresh) {
+      router.refresh();
+    }
+  }
+
+  // Report outcomes to whichever board is mounted now. Re-attached every render
+  // so the handler always sees current state; a remount attaches its own.
+  useEffect(() => {
+    return queue.attach({
+      onSettled: (_operation, settlement) => handleSettled(settlement),
+    });
+  });
+
+  // Saved writes are now part of the server data, so the overlay can drop them.
+  useEffect(() => {
+    queue.pruneSaved();
+  }, [applications, queue]);
+
+  useEffect(() => {
+    const applicationId = focusRequestRef.current;
+    if (!applicationId) return;
+    focusRequestRef.current = null;
+    focusHandle(applicationId);
+  }, [columns, entries]);
+
+  useEffect(() => {
+    const applicationId = pendingFocusHandoff;
+    if (!applicationId) return;
+    pendingFocusHandoff = null;
+    focusHandle(applicationId);
+  }, []);
+
   function handleSelect(applicationId: string, selected: boolean) {
     setSelectedIds((current) => {
       const next = new Set(current);
@@ -293,208 +349,104 @@ export function PipelineBoard({
   }
 
   function handleDragStart(event: DragStartEvent) {
-    const applicationId = String(event.active.id);
-    const current = findApplicationStage(columns, applicationId);
-
-    setActiveApplication(current?.application ?? null);
+    setActiveApplication(findApplicationStage(columns, String(event.active.id))?.application ?? null);
     setError(null);
   }
 
-  async function handleDragEnd(event: DragEndEvent) {
-    if (mutationPending) return;
-    const applicationId = String(event.active.id);
-    const overId = event.over ? String(event.over.id) : null;
-
+  function handleDragEnd(event: DragEndEvent) {
     setActiveApplication(null);
 
-    if (!overId) {
-      return;
-    }
+    if (!event.over) return;
 
-    const current = findApplicationStage(columns, applicationId);
-    const target = getOverTarget(columns, stages, overId);
+    const operation = planDropOperation({
+      id: newOperationId(),
+      columns,
+      stages,
+      applicationId: String(event.active.id),
+      overId: String(event.over.id),
+      issuedAt: new Date().toISOString(),
+      keyboard: event.activatorEvent instanceof KeyboardEvent,
+    });
 
-    if (!current || !target) {
-      return;
-    }
+    if (!operation) return;
 
-    const previousColumns = cloneColumns(columns);
-    const optimisticColumns = cloneColumns(columns);
-    const movedApplication = {
-      ...current.application,
-      currentStageId: target.stageId,
-      lastStageMovedAt:
-        current.stageId === target.stageId
-          ? current.application.lastStageMovedAt
-          : new Date().toISOString(),
-    };
-
-    removeApplication(optimisticColumns, current.stageId, applicationId);
-    insertApplication(
-      optimisticColumns,
-      target.stageId,
-      movedApplication,
-      current.stageId === target.stageId && target.index > current.index
-        ? target.index - 1
-        : target.index,
-    );
-
-    const orderedApplicationIds =
-      optimisticColumns.get(target.stageId)?.map((application) => application.id) ??
-      [];
-
-    setColumns(optimisticColumns);
-    setError(null);
-    setMutationPending(true);
-
-    try {
-      const result = await moveApplicationInPipeline({
-        applicationId,
-        fromStageId: current.stageId,
-        toStageId: target.stageId,
-        workspaceId: current.application.workspaceId,
-        orderedApplicationIds,
-      });
-
-      if (!result.success) {
-        setColumns(previousColumns);
-        setError(result.error ?? "Unable to update pipeline.");
-      } else {
-        router.refresh();
-      }
-    } finally {
-      setMutationPending(false);
-    }
+    // Dropping into a capped column appends the card, so the column opens far
+    // enough to show it.
+    revealUpTo(operation.toStageId, operation.index);
+    enqueueOperation(operation);
   }
 
-  async function handleStatusChange(
+  function handleStatusChange(
     applicationIds: string[],
     status: PipelineApplication["status"],
   ) {
-    if (mutationPending) return;
-    const allApplications = Array.from(columns.values()).flat();
-    const firstApplication = allApplications.find((application) =>
-      applicationIds.includes(application.id),
-    );
+    const targets = Array.from(columns.values())
+      .flat()
+      .filter((application) => applicationIds.includes(application.id));
 
-    if (!firstApplication) {
+    if (targets.length === 0) {
       return;
     }
 
     if (
-      applicationIds.length > 1 &&
+      targets.length > 1 &&
       (status === "hired" || status === "rejected") &&
-      !window.confirm(
-        bulkDecisionConfirmationMessage(status, applicationIds.length),
-      )
+      !window.confirm(bulkDecisionConfirmationMessage(status, targets.length))
     ) {
       return;
     }
 
-    const previousColumns = cloneColumns(columns);
-    const optimisticColumns = cloneColumns(columns);
-
-    for (const [stageId, stageApplications] of optimisticColumns) {
-      optimisticColumns.set(
-        stageId,
-        stageApplications.map((application) =>
-          applicationIds.includes(application.id)
-            ? { ...application, status }
-            : application,
-        ),
-      );
-    }
-
-    setColumns(optimisticColumns);
-    setError(null);
-    setMutationPending(true);
-
-    try {
-      const result = await updateApplicationStatus({
-        applicationIds,
-        workspaceId: firstApplication.workspaceId,
-        status,
-      });
-
-      if (!result.success) {
-        setColumns(previousColumns);
-        setError(result.error ?? "Unable to update application status.");
-        return;
-      }
-
-      setSelectedIds((current) => {
-        const next = new Set(current);
-        for (const applicationId of applicationIds) {
-          next.delete(applicationId);
-        }
-        return next;
-      });
-      router.refresh();
-    } finally {
-      setMutationPending(false);
-    }
+    enqueueOperation({
+      kind: "status",
+      id: newOperationId(),
+      workspaceId: targets[0].workspaceId,
+      subject:
+        targets.length === 1 ? displayName(targets[0]) : `${targets.length} candidates`,
+      issuedAt: new Date().toISOString(),
+      applicationIds: targets.map((application) => application.id),
+      status,
+    });
   }
 
-  async function handleBulkMove(toStageId: string) {
-    if (mutationPending || selectedApplications.length === 0) {
+  function handleBulkMove(toStageId: string) {
+    const toStage = stages.find((stage) => stage.id === toStageId);
+    if (!toStage || selectedApplications.length === 0) {
       return;
     }
 
-    const previousColumns = cloneColumns(columns);
-    const optimisticColumns = cloneColumns(columns);
-    const workspaceId = selectedApplications[0].workspaceId;
-    const movedIds = selectedApplications.map((application) => application.id);
+    const applicationIds = selectedApplications.map((application) => application.id);
 
-    for (const application of selectedApplications) {
-      removeApplication(
-        optimisticColumns,
-        application.currentStageId,
-        application.id,
-      );
-      insertApplication(
-        optimisticColumns,
-        toStageId,
-        {
-          ...application,
-          currentStageId: toStageId,
-          lastStageMovedAt: new Date().toISOString(),
-        },
-        optimisticColumns.get(toStageId)?.length ?? 0,
-      );
-    }
-
-    setColumns(optimisticColumns);
-    setError(null);
-    setMutationPending(true);
-
-    try {
-      const result = await bulkMoveApplications({
-        applicationIds: movedIds,
-        toStageId,
-        workspaceId,
-      });
-
-      if (!result.success) {
-        setColumns(previousColumns);
-        setError(result.error ?? "Unable to move selected candidates.");
-        return;
-      }
-
-      setSelectedIds(new Set());
-      router.refresh();
-    } finally {
-      setMutationPending(false);
-    }
+    enqueueOperation({
+      kind: "bulkMove",
+      id: newOperationId(),
+      workspaceId: selectedApplications[0].workspaceId,
+      subject: `${applicationIds.length} candidates`,
+      issuedAt: new Date().toISOString(),
+      applicationIds,
+      toStageId,
+      toStageName: toStage.name,
+      outcome: outcomeForStage(toStage),
+    });
+    revealUpTo(
+      toStageId,
+      (columns.get(toStageId)?.length ?? 0) + applicationIds.length - 1,
+    );
   }
 
   async function handleToggleStageEmail(stageId: string, enabled: boolean) {
-    if (mutationPending) return;
-    const previousStages = stages;
     const stage = stages.find((item) => item.id === stageId);
 
     if (!stage) {
       return;
     }
+
+    const previous = stage.emailConfig;
+    const restore = () =>
+      setStages((current) =>
+        current.map((item) =>
+          item.id === stageId ? { ...item, emailConfig: previous } : item,
+        ),
+      );
 
     setStages((current) =>
       current.map((item) =>
@@ -506,7 +458,6 @@ export function PipelineBoard({
           : item,
       ),
     );
-    setMutationPending(true);
 
     try {
       const result = await updateStageEmailSettings({
@@ -517,11 +468,15 @@ export function PipelineBoard({
       });
 
       if (!result.success) {
-        setStages(previousStages);
-        setError(result.error ?? "Unable to update stage email settings.");
+        restore();
+        toast.error(failureMessage(result.error));
       }
-    } finally {
-      setMutationPending(false);
+    } catch (caught) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error("[pipeline-board] stage email update failed", caught);
+      }
+      restore();
+      toast.error(FALLBACK_FAILURE_MESSAGE);
     }
   }
 
@@ -531,6 +486,7 @@ export function PipelineBoard({
         <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           type="search"
+          aria-label="Search candidates"
           value={searchQuery}
           onChange={(event) => {
             setSearchQuery(event.target.value);
@@ -547,7 +503,7 @@ export function PipelineBoard({
           setSelectedIds(new Set());
         }}
       >
-        <SelectTrigger className="w-full sm:w-36">
+        <SelectTrigger className="w-full sm:w-36" aria-label="Filter by status">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -576,7 +532,7 @@ export function PipelineBoard({
       <div className="flex flex-wrap gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-          <Button variant="outline" size="sm" disabled={mutationPending}>
+            <Button variant="outline" size="sm">
               Move to stage
               <CaretDownIcon className="size-4" />
             </Button>
@@ -585,7 +541,7 @@ export function PipelineBoard({
             {stages.map((stage) => (
               <DropdownMenuItem
                 key={stage.id}
-                onClick={() => void handleBulkMove(stage.id)}
+                onClick={() => handleBulkMove(stage.id)}
               >
                 {stage.name}
               </DropdownMenuItem>
@@ -594,9 +550,8 @@ export function PipelineBoard({
         </DropdownMenu>
         <Button
           size="sm"
-          disabled={mutationPending}
           onClick={() =>
-            void handleStatusChange(
+            handleStatusChange(
               selectedApplications.map((application) => application.id),
               "hired",
             )
@@ -608,9 +563,8 @@ export function PipelineBoard({
         <Button
           size="sm"
           variant="destructive"
-          disabled={mutationPending}
           onClick={() =>
-            void handleStatusChange(
+            handleStatusChange(
               selectedApplications.map((application) => application.id),
               "rejected",
             )
@@ -635,6 +589,11 @@ export function PipelineBoard({
       {filterBar}
       {bulkBar}
 
+      {/* Polite live region for moves and saves; errors use the alert below. */}
+      <div role="status" aria-live="polite" className="sr-only">
+        {announcement}
+      </div>
+
       {error ? (
         <div
           role="alert"
@@ -648,7 +607,7 @@ export function PipelineBoard({
       {/* Mobile: stage selector + vertical card list */}
       <div className="sm:hidden">
         <Select value={mobileStage} onValueChange={setMobileStage}>
-          <SelectTrigger className="w-full">
+          <SelectTrigger className="w-full" aria-label="Select stage">
             <SelectValue placeholder="Select stage" />
           </SelectTrigger>
           <SelectContent>
@@ -669,16 +628,23 @@ export function PipelineBoard({
           </SelectContent>
         </Select>
         <div className="mt-3 space-y-2">
-          {mobileApplications.map((application) => (
+          {visibleApplications(mobileAll, mobileLimit).map((application) => (
             <CandidateCard
               key={application.id}
               application={application}
               selected={selectedIds.has(application.id)}
-              disabled={mutationPending}
+              pending={pendingIds.has(application.id)}
               onSelect={handleSelect}
             />
           ))}
-          {mobileApplications.length === 0 ? (
+          {mobileAll.length > mobileLimit ? (
+            <ShowMoreButton
+              count={nextPageSize(mobileAll.length, mobileLimit)}
+              stageName={stageLabel(mobileStage)}
+              onClick={() => showMore(mobileStage)}
+            />
+          ) : null}
+          {mobileAll.length === 0 ? (
             <div className="flex items-center justify-center rounded-[var(--radius-md)] bg-warm-paper p-8 text-center text-[13px] text-soft-ink">
               No candidates in this stage
             </div>
@@ -700,21 +666,29 @@ export function PipelineBoard({
           {/* 17rem, not 15: a name plus the fit note plus the stage age has to
               fit on one line, or every card truncates its own meta. */}
           <div className="group/board grid grid-flow-col auto-cols-[minmax(17rem,1fr)] gap-2 overflow-x-auto overscroll-x-contain pb-2">
-            {visibleStages.map((stage, index) => (
-              <StageColumn
-                key={stage.id}
-                stage={stage}
-                applications={filteredColumns.get(stage.id) ?? []}
-                selectedIds={selectedIds}
-                disabled={mutationPending}
-                index={index}
-                total={visibleStages.length}
-                onSelect={handleSelect}
-                onToggleStageEmail={(stageId, enabled) => {
-                  void handleToggleStageEmail(stageId, enabled);
-                }}
-              />
-            ))}
+            {visibleStages.map((stage, index) => {
+              const stageApplications = filteredColumns.get(stage.id) ?? [];
+              const limit = limits[stage.id] ?? CARD_PAGE_SIZE;
+              return (
+                <StageColumn
+                  key={stage.id}
+                  stage={stage}
+                  applications={visibleApplications(stageApplications, limit)}
+                  totalCount={stageApplications.length}
+                  remainingCount={Math.max(0, stageApplications.length - limit)}
+                  revealCount={nextPageSize(stageApplications.length, limit)}
+                  selectedIds={selectedIds}
+                  pendingIds={pendingIds}
+                  index={index}
+                  total={visibleStages.length}
+                  onSelect={handleSelect}
+                  onShowMore={showMore}
+                  onToggleStageEmail={(stageId, enabled) => {
+                    void handleToggleStageEmail(stageId, enabled);
+                  }}
+                />
+              );
+            })}
           </div>
           <DragOverlay>
             {activeApplication ? (

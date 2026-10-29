@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toneBadgeVariant } from "@/components/ui/StatusBadge";
 import { UserAvatar } from "@/components/ui/UserAvatar";
 import {
   ProhibitIcon,
@@ -15,6 +16,11 @@ import {
   UserPlusIcon,
 } from "@/components/ui/icons/phosphor";
 import type { InboxApplication, InboxCandidate, InboxMember, InboxThread } from "@/features/mailbox/data";
+import {
+  isApplicationOutcome,
+  outcomeLabel,
+  outcomeTone,
+} from "@/lib/stage-visuals";
 
 type AiSummary = { summary: string; lastIntent: string; nextStep: string; openQuestions: string[] };
 
@@ -55,19 +61,18 @@ export function InboxActionsPanel({
     ? applications.filter((application) => application.candidateId === thread.candidateId)
     : [];
 
-  // Pipeline stage shown under the candidate's email. Terminal statuses win
-  // over the stage name; otherwise fall back to the current stage or "Applied".
+  // Pipeline stage shown under the candidate's email. The application outcome
+  // wins when it is terminal (it is what the stage kind decided); otherwise the
+  // stage's own display name is shown, with no meaning read from it.
+  const outcome = isApplicationOutcome(thread.applicationStatus)
+    ? thread.applicationStatus
+    : "active";
   const stageLabel = !thread.applicationId
     ? null
-    : thread.applicationStatus === "rejected"
-      ? "Rejected"
-      : thread.applicationStatus === "withdrawn"
-        ? "Withdrawn"
-        : thread.applicationStatus === "hired"
-          ? "Hired"
-          : thread.applicationStageName ?? "Applied";
-  const stageVariant: "success" | "danger" | "neutral" | "secondary" =
-    stageLabel === "Hired" ? "success" : stageLabel === "Rejected" || stageLabel === "Withdrawn" ? "danger" : "secondary";
+    : outcome !== "active"
+      ? outcomeLabel(outcome)
+      : thread.applicationStageName || outcomeLabel("active");
+  const stageVariant = toneBadgeVariant(outcomeTone(outcome));
 
   function runAi(
     action: () => Promise<{ ok: boolean; summary?: AiSummary; draft?: { body: string }; error?: string }>,
