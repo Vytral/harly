@@ -280,7 +280,7 @@ export function ReportsDashboard({ data, canViewCandidates = false, canViewJobs 
       ["Applications received", "Previous period", String(comparison.applications.previous)],
       ["Hires", scope, String(comparison.hires.current)],
       ["Hires", "Previous period", String(comparison.hires.previous)],
-      ["Average time to hire (days)", scope, comparison.avgTimeToHireDays.current > 0 ? String(comparison.avgTimeToHireDays.current) : ""],
+      ["Average time to hire (days)", scope, data.timeToHireStats.measured > 0 ? String(comparison.avgTimeToHireDays.current) : ""],
       ["Median time to hire (days)", scope, data.timeToHireStats.medianDays == null ? "" : String(data.timeToHireStats.medianDays)],
       ["Offer acceptance (%)", scope, summary.offerAcceptRate == null ? "" : String(summary.offerAcceptRate)],
       ["Offers accepted", scope, String(summary.offers.accepted)],

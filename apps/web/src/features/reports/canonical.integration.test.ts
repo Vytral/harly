@@ -9,6 +9,7 @@ import {
   candidateDemographics,
   candidates,
   db,
+  interviews,
   jobs,
   jobStages,
   offers,
@@ -16,6 +17,7 @@ import {
   type JobStage,
   type StageKind,
 } from "@harly/db";
+import { archiveStage, createStage } from "@/features/pipeline/stage-lifecycle";
 import {
   createPipelineFixture,
   runPipelineIntegration,
@@ -41,6 +43,7 @@ vi.mock("@/lib/email/outbox-processor", () => ({
 import {
   getApplicationsReceived,
   getHireStats,
+  getDailySeries,
   getHiresByJob,
   getHiringKpis,
   getJobFunnel,
@@ -181,6 +184,42 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
     const stats = await getHireStats({ workspaceId: fx.workspaceId, window: WINDOW });
     expect(stats.hires).toBe(1);
     expect(stats.averageDays).toBe(15);
+  });
+
+  it("does not re-date a hire when its stage is merged into another hired stage", async () => {
+    const actor = { workspaceId: fx.workspaceId, jobId: fx.jobId, actorUserId: fx.userId };
+    const joined = await createStage({ ...actor, name: "Joined", kind: "hired" });
+    await hire({ appliedAt: day(2), hiredAt: day(10) });
+
+    // Archiving "Hired" into "Joined" writes a hired -> hired history row stamped "now",
+    // which is bookkeeping, not a new hire.
+    await archiveStage({ ...actor, stageId: stages.hired!.id, mergeIntoStageId: joined.id });
+
+    const stats = await getHireStats({ workspaceId: fx.workspaceId, window: WINDOW });
+    expect(stats.hires).toBe(1);
+    expect(stats.averageDays).toBe(8);
+  });
+
+  it("does not count canceled interviews in the interview series", async () => {
+    const { applicationId, candidateId } = await application({
+      stageId: stages.interview!.id,
+      appliedAt: day(2),
+    });
+    for (const [status, d] of [["scheduled", 10], ["completed", 11], ["canceled", 12]] as const) {
+      await db.insert(interviews).values({
+        workspaceId: fx.workspaceId,
+        applicationId,
+        candidateId,
+        jobId: fx.jobId,
+        status,
+        scheduledAt: day(d),
+      });
+    }
+
+    const series = await getDailySeries({ workspaceId: fx.workspaceId, window: { ...WINDOW, days: 31 } }, "interviews");
+    const total = series.reduce((sum, point) => sum + point.count, 0);
+    expect(total).toBe(2);
+    expect(series.find((point) => point.key === "2026-01-12")?.count).toBe(0);
   });
 
   it("still recognises the Hired stage after it is renamed, because the kind is what counts", async () => {
@@ -427,6 +466,47 @@ describe.skipIf(!runPipelineIntegration)("canonical hiring metrics (database)", 
     expect(female).toMatchObject({ suppressed: false, applicants: 5, hires: 0 });
     expect(male).toEqual({ dimension: "gender", value: "male", suppressed: true });
     expect(male).not.toHaveProperty("applicants");
+  });
+
+  it("applies the diversity size threshold to people, not to applications", async () => {
+    // One candidate who applied five times is one person, not a five-person group.
+    const candidateId = await candidate();
+    await db.insert(candidateDemographics).values({
+      workspaceId: fx.workspaceId,
+      candidateId,
+      gender: "nonbinary",
+      consentAt: day(1),
+    });
+    for (let i = 0; i < 5; i++) {
+      await application({ candidateId, stageId: stages.applied!.id, appliedAt: day(3 + i) , jobId: (await fx.addJob()).jobId });
+    }
+
+    const analytics = await getAdvancedHiringAnalytics({ workspaceId: fx.workspaceId, window: WINDOW });
+    const cell = analytics.diversity.find((row) => row.dimension === "gender" && row.value === "nonbinary");
+    expect(cell).toEqual({ dimension: "gender", value: "nonbinary", suppressed: true });
+  });
+
+  it("hides a small non-zero hire count inside an otherwise large group", async () => {
+    for (let i = 0; i < 6; i++) {
+      const { candidateId } = await application({ stageId: stages.applied!.id, appliedAt: day(3 + i) });
+      await db.insert(candidateDemographics).values({
+        workspaceId: fx.workspaceId,
+        candidateId,
+        gender: "female",
+        consentAt: day(1),
+      });
+    }
+    const hired = await hire({ appliedAt: day(4), hiredAt: day(12) });
+    await db.insert(candidateDemographics).values({
+      workspaceId: fx.workspaceId,
+      candidateId: hired.candidateId,
+      gender: "female",
+      consentAt: day(1),
+    });
+
+    const analytics = await getAdvancedHiringAnalytics({ workspaceId: fx.workspaceId, window: WINDOW });
+    const cell = analytics.diversity.find((row) => row.dimension === "gender" && row.value === "female");
+    expect(cell).toMatchObject({ suppressed: false, people: 7, hires: null, conversion: null });
   });
 
   // ── time zone ──────────────────────────────────────────────────────────────

@@ -9,6 +9,8 @@ import {
   scheduledReports,
 } from "@harly/db";
 import { enqueueEmailOutbox } from "@/lib/email/outbox-processor";
+
+import { nextRun } from "./cadence";
 import { getAdvancedHiringAnalytics, type AdvancedHiringAnalytics } from "@/features/reports/advanced";
 import { getWorkspaceTimeZone } from "@/features/reports/canonical";
 import { loadReportsData, type ReportsData } from "@/features/reports/data";
@@ -23,14 +25,6 @@ function escapeHtml(value: unknown): string {
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
-}
-
-function nextRun(frequency: string, from = new Date()): Date {
-  const result = new Date(from);
-  if (frequency === "daily") result.setUTCDate(result.getUTCDate() + 1);
-  else if (frequency === "weekly") result.setUTCDate(result.getUTCDate() + 7);
-  else result.setUTCMonth(result.getUTCMonth() + 1);
-  return result;
 }
 
 export async function createScheduledReport(input: {

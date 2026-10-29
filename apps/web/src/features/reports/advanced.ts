@@ -47,14 +47,18 @@ export type DiversityRow =
       dimension: DiversityDimension;
       value: string;
       suppressed: false;
+      /** Applications received in the window. */
       applicants: number;
-      hires: number;
+      /** Distinct candidates behind those applications; this is what the size threshold applies to. */
+      people: number;
+      /** Null when 1 to MIN_DIVERSITY_CELL_SIZE - 1 hires would single out individuals. */
+      hires: number | null;
       conversion: number | null;
     }
   | {
       dimension: DiversityDimension;
       value: string;
-      /** Set when the cell is below MIN_DIVERSITY_CELL_SIZE. No counts are returned. */
+      /** Set when the cell has fewer than MIN_DIVERSITY_CELL_SIZE distinct people. No counts are returned. */
       suppressed: true;
     };
 
@@ -160,6 +164,7 @@ async function getDiversity({ workspaceId, window }: ScopedWindow): Promise<Dive
       select
         ${column} as value,
         count(distinct cohort.id)::int as applicants,
+        count(distinct cohort.candidate_id)::int as people,
         count(distinct cohort.id) filter (
           where cohort.id in (
             select application_id from hires
@@ -172,22 +177,29 @@ async function getDiversity({ workspaceId, window }: ScopedWindow): Promise<Dive
         and candidate_demographics.workspace_id = ${workspaceId}
       where ${column} is not null and ${column} <> ''
       group by ${column}
-    `)) as unknown as Array<{ value: string; applicants: number; hires: number }>;
+    `)) as unknown as Array<{ value: string; applicants: number; people: number; hires: number }>;
 
     for (const cell of cells) {
       const applicants = Number(cell.applicants);
-      if (applicants < MIN_DIVERSITY_CELL_SIZE) {
+      const people = Number(cell.people);
+      // The threshold is about how many PEOPLE could be identified, not how many
+      // applications they filed: one candidate applying five times is still one person.
+      if (people < MIN_DIVERSITY_CELL_SIZE) {
         rows.push({ dimension, value: cell.value, suppressed: true });
         continue;
       }
       const hires = Number(cell.hires);
+      // A handful of hires in a group reveals individual outcomes just as a small
+      // group does, so report only zero or at least the threshold.
+      const hiresDisclosed = hires === 0 || hires >= MIN_DIVERSITY_CELL_SIZE;
       rows.push({
         dimension,
         value: cell.value,
         suppressed: false,
         applicants,
-        hires,
-        conversion: Math.round((hires / applicants) * 100),
+        people,
+        hires: hiresDisclosed ? hires : null,
+        conversion: hiresDisclosed ? Math.round((hires / applicants) * 100) : null,
       });
     }
   }

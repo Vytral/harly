@@ -107,6 +107,16 @@ export function zonedMidnight(date: CalendarDate, timeZone: string): Date {
   let result = guess - firstOffset;
   const secondOffset = zoneOffsetMs(new Date(result), timeZone);
   if (secondOffset !== firstOffset) result = guess - secondOffset;
+
+  // When local midnight falls inside a DST gap (for example America/Santiago on
+  // the first Sunday of September, where 00:00 jumps to 01:00) the two passes
+  // can land one hour BEFORE midnight, on the previous calendar day. Verify the
+  // wall clock and, if it is early, advance by exactly the missing amount to
+  // the first instant at or after local midnight.
+  const wall = zonedParts(new Date(result), timeZone);
+  const wallAsUtc = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second);
+  if (wallAsUtc < guess) result += guess - wallAsUtc;
+
   return new Date(result);
 }
 

@@ -2,6 +2,7 @@ import "server-only";
 
 import { cache } from "react";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import {
   candidates,
@@ -121,6 +122,9 @@ export function activeAppsSql(workspaceId: string): SQL {
     )`;
 }
 
+/** The stage an application moved FROM, used to ignore hired-to-hired moves. */
+const fromStage = alias(jobStages, "from_stage");
+
 /** CTE bodies for `active_apps`, the hired applications and `hires`. */
 export function hireCtesSql(workspaceId: string): SQL {
   return sql`
@@ -131,12 +135,17 @@ export function hireCtesSql(workspaceId: string): SQL {
       where status = 'hired'
     ),
     stage_hire as (
+      -- A transition from one hired-kind stage to another (a stage merge, or a
+      -- recruiter moving between two "hired" stages) is bookkeeping, not a new
+      -- hire, so it must not move the hire date.
       select h.application_id, max(h.created_at) as hired_at
       from application_stage_history h
       inner join job_stages on job_stages.id = h.to_stage_id
+      left join job_stages from_stage on from_stage.id = h.from_stage_id
       where h.workspace_id = ${workspaceId}
         and h.application_id in (select id from hired_apps)
         and ${stageIsKindSql(jobStages, "hired")}
+        and (h.from_stage_id is null or not ${stageIsKindSql(fromStage, "hired")})
       group by h.application_id
     ),
     activity_hire as (
@@ -588,6 +597,7 @@ async function computeDailyCounts(
       inner join jobs j
         on j.id = i.job_id and j.workspace_id = i.workspace_id and j.deleted_at is null
       where i.workspace_id = ${workspaceId}
+        and i.status <> 'canceled'
         and i.scheduled_at >= ${at(window.from)} and i.scheduled_at < ${at(window.to)}
       group by 1
     `);

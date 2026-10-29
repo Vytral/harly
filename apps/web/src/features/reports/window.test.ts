@@ -6,6 +6,7 @@ import {
   dayLabel,
   isInWindow,
   isValidTimeZone,
+  dayKeysInWindow,
   localDateKey,
   localMonthKey,
   monthLabel,
@@ -79,6 +80,32 @@ describe("zoned wall clock", () => {
     expect(zonedMidnight({ year: 2026, month: 9, day: 28 }, AUCKLAND).toISOString()).toBe(
       "2026-09-27T11:00:00.000Z",
     );
+  });
+
+  it("returns the first instant after a DST gap when local midnight does not exist", () => {
+    // Chile moves clocks from 00:00 to 01:00 on 2026-09-06, so that day starts at 01:00 (04:00Z).
+    const SANTIAGO = "America/Santiago";
+    const start = zonedMidnight({ year: 2026, month: 9, day: 6 }, SANTIAGO);
+    expect(start.toISOString()).toBe("2026-09-06T04:00:00.000Z");
+    expect(localDateKey(start, SANTIAGO)).toBe("2026-09-06");
+    // The day before still starts at ordinary midnight (UTC-4).
+    expect(zonedMidnight({ year: 2026, month: 9, day: 5 }, SANTIAGO).toISOString()).toBe(
+      "2026-09-05T04:00:00.000Z",
+    );
+    // And the day after starts at midnight in the new offset (UTC-3).
+    expect(zonedMidnight({ year: 2026, month: 9, day: 7 }, SANTIAGO).toISOString()).toBe(
+      "2026-09-07T03:00:00.000Z",
+    );
+  });
+
+  it("builds a complete daily series for a window that starts inside a DST gap", () => {
+    const SANTIAGO = "America/Santiago";
+    const now = new Date("2026-09-19T12:00:00.000Z");
+    const window = resolveWindow(14, SANTIAGO, now);
+    const keys = dayKeysInWindow(window);
+    expect(keys).toHaveLength(14);
+    expect(keys[0]).toBe("2026-09-06");
+    expect(keys[keys.length - 1]).toBe("2026-09-19");
   });
 
   it("adds calendar days without any time-of-day arithmetic", () => {
