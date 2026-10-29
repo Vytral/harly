@@ -590,7 +590,7 @@ export function CandidateActionBar({
       {reject}
 
       {/* Everything rare , status, pool, edit, resume, delete , lives here. */}
-      <div className="ml-auto flex items-center gap-1">
+      <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center gap-1">
         {applicationSelector}
         <CandidateStatusMenu
           name={name}
