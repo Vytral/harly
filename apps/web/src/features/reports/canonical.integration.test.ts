@@ -26,7 +26,8 @@ import {
 
 const context = vi.hoisted(() => ({ workspaceId: "" }));
 
-vi.mock("@/features/workspaces/permissions-server", () => ({
+vi.mock("@/features/workspaces/permissions-server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/workspaces/permissions-server")>()),
   requirePermission: vi.fn(async () => ({ organization: { id: context.workspaceId } })),
   can: vi.fn(async () => true),
 }));
@@ -34,6 +35,7 @@ vi.mock("@/features/workspaces/context", () => ({
   getWorkspaceContext: vi.fn(async () => ({
     organization: { id: context.workspaceId },
     user: { id: "viewer" },
+    roleKey: "owner",
   })),
 }));
 vi.mock("@/lib/email/outbox-processor", () => ({
