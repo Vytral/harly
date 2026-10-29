@@ -123,6 +123,7 @@ describe("SQL scope predicates", () => {
     expect(text).toContain("'candidate.created'");
     expect(text).toContain('"audit_logs"."resource_id" = "candidates"."id"::text');
     expect(text).toContain('"audit_logs"."actor_id" =');
+    expect(text).toContain('not exists (select 1 from "applications"');
   });
 
   it("keeps owned and created tasks visible alongside the linked-job paths", () => {

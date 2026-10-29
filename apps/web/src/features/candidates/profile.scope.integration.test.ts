@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
-import { activityEvents, auditLogs, candidateReferrals, candidates, db, scorecards } from "@harly/db";
+import { activityEvents, applications, auditLogs, candidateReferrals, candidates, db, scorecards } from "@harly/db";
 
 import {
   createAuthorizationFixture,
@@ -194,5 +194,30 @@ describe.skipIf(!runPipelineIntegration)("candidate profile: role scope (databas
     actAs("scoped");
     expect(await getCandidateProfile(mine[0].id)).not.toBeNull();
     expect(await getCandidateProfile(theirs[0].id)).toBeNull();
+  });
+
+  it("stops showing a created candidate once someone adds them to an out-of-scope job", async () => {
+    const created = await db
+      .insert(candidates)
+      .values({ workspaceId: fx.workspaceId, firstName: "Moved", lastName: "Away", email: `moved-${fx.workspaceId}@example.test` })
+      .returning({ id: candidates.id });
+    await db.insert(auditLogs).values({
+      workspaceId: fx.workspaceId,
+      actorId: fx.users.scoped,
+      action: "candidate.created",
+      resourceType: "candidate",
+      resourceId: created[0].id,
+    });
+    actAs("scoped");
+    expect(await getCandidateProfile(created[0].id)).not.toBeNull();
+
+    // Another recruiter attaches the candidate to a job outside the scoped role.
+    await db.insert(applications).values({
+      workspaceId: fx.workspaceId,
+      candidateId: created[0].id,
+      jobId: fx.jobB,
+      currentStageId: fx.stagesB.applied!.id,
+    });
+    expect(await getCandidateProfile(created[0].id)).toBeNull();
   });
 });
