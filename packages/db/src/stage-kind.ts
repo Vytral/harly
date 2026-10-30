@@ -8,7 +8,7 @@ import { sql, type AnyColumn, type SQL } from "drizzle-orm";
  * needs to know "is this the hired stage?" must go through this module and
  * never compare stage names. Stage names are display text.
  *
- * `job_stages.kind` is nullable on purpose: rows written by a pre-0.3.0 build
+ * `job_stages.kind` is nullable on purpose: rows written by a pre-0.2.4 build
  * carry NULL, and an operator may roll the application image back after
  * upgrading. {@link effectiveStageKind} and {@link effectiveStageKindSql}
  * classify such rows by their legacy name, so both application and reporting

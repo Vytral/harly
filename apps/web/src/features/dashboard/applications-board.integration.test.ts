@@ -40,7 +40,7 @@ describe.skipIf(!runPipelineIntegration)("dashboard applications board stages", 
       .set({ name: "Phone screen" })
       .where(eq(jobStages.id, screening.id));
 
-    // A pre-0.3.0 row with no kind is classified by its legacy name.
+    // A pre-0.2.4 row with no kind is classified by its legacy name.
     await db
       .update(jobStages)
       .set({ kind: null })

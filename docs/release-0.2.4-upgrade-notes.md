@@ -1,6 +1,6 @@
-# Upgrading to Harly 0.3.0
+# Upgrading to Harly 0.2.4
 
-0.3.0 changes how pipeline stages are modelled, how reports are computed, and
+0.2.4 changes how pipeline stages are modelled, how reports are computed, and
 who can see what. Existing installations upgrade in place. Read this page
 before upgrading a production installation, and take a database backup first
 (see [backups](backups.md)).
@@ -74,7 +74,7 @@ The container applies six additive migrations (`0153`–`0158`) on start.
   has been archived or reclassified. 0.2.x does not understand archived
   stages, so archived stages would reappear on boards. Restore from backup if
   you must roll back after using the stage editor.
-* **Legacy hire dates.** Hires made before 0.3.0 without a stage-history row
+* **Legacy hire dates.** Hires made before 0.2.4 without a stage-history row
   are dated by their last activity event (or `updated_at`). Their dates in
   reports may differ from the real hire date. Hires after the upgrade are
   dated by the transition into the hired stage.

@@ -17,7 +17,7 @@ import {
 } from "./stage-lifecycle";
 
 /**
- * Jobs created before 0.3.0 can hold "Interview" and "interview " side by side
+ * Jobs created before 0.2.4 can hold "Interview" and "interview " side by side
  * (the old name index was case-sensitive). Those duplicates must not freeze
  * unrelated edits; only an operation that introduces a duplicate is refused.
  */
